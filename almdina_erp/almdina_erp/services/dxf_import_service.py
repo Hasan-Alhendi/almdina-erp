@@ -118,9 +118,14 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     PartGeometry,
     PlacedPartGeometry,
     ResolvedTopology,
+    containing_hole,
     diagnostic_piece_contours,
+    polygon_strictly_contains_polygon,
     resolve_contour_ownership,
     validate_material_layout,
+)
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    GLASS_HOST_PIECE_ID,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
@@ -1359,6 +1364,18 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
             arbitrary_outline=piece["piece_type"] == "Special",
             source_piece_no=int(piece["source_piece_no"]),
             copy_no=int(piece["copy_no"]),
+            is_glass=piece["piece_type"] == "Glass",
+            glass_margin_mm=(
+                None
+                if piece.get("glass_margin_mm") in (None, "")
+                else _num(piece.get("glass_margin_mm"))
+            ),
+            long_left_mm=_side_band_mm(piece, "edge_long_left", "edge_long_thickness_mm"),
+            long_right_mm=_side_band_mm(piece, "edge_long_right", "edge_long_thickness_mm"),
+            width_bottom_mm=_side_band_mm(
+                piece, "edge_width_bottom", "edge_width_thickness_mm"
+            ),
+            width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
         )
         for piece in _expected_order_pieces(order)
     )
@@ -1708,7 +1725,50 @@ def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dic
     glass_issues = _glass_opening_issues(labeled)
     if glass_issues:
         raise DxfImportError(issues=glass_issues)
+    _assign_nested_glass_hosts(labeled)
     return labeled
+
+
+def _assign_nested_glass_hosts(labeled: list[dict[str, Any]]) -> None:
+    """Record the innermost Glass host for pieces that sit in a proven opening."""
+
+    geometries = {
+        int(piece["id"]): _piece_material_geometry(piece, units="mm")
+        for piece in labeled
+    }
+    for piece in labeled:
+        piece_id = int(piece["id"])
+        guest = geometries[piece_id]
+        hosts = [
+            other
+            for other in labeled
+            if int(other["id"]) != piece_id
+            and str(other.get("piece_type") or "") == "Glass"
+            and containing_hole(
+                geometries[int(other["id"])],
+                guest.outer,
+                tolerance=GEOMETRY_TOLERANCE_MM,
+            )
+            is not None
+        ]
+        if not hosts:
+            continue
+        tight = [
+            host
+            for host in hosts
+            if not any(
+                int(other["id"]) != int(host["id"])
+                and polygon_strictly_contains_polygon(
+                    geometries[int(host["id"])].outer,
+                    geometries[int(other["id"])].outer,
+                    tolerance=GEOMETRY_TOLERANCE_MM,
+                )
+                for other in hosts
+            )
+        ]
+        if len(tight) != 1:
+            continue
+        piece[GLASS_HOST_PIECE_ID] = int(tight[0]["id"])
 
 
 def _validate_sheet_contours(

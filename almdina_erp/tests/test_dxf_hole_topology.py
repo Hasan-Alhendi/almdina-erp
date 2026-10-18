@@ -279,3 +279,136 @@ def test_legacy_no_hole_topology_keeps_original_contour_order():
     assert topology.actual_contour_keys == (1, 2)
     assert topology.hole_contour_keys == ()
     assert all(part.geometry.holes == () for part in topology.parts)
+
+
+def _glass_expected(width, height, margin_mm, **kwargs):
+    return ExpectedPieceEvidence(
+        width=width,
+        height=height,
+        allow_rotation=False,
+        is_glass=True,
+        glass_margin_mm=margin_mm,
+        **kwargs,
+    )
+
+
+def test_three_regulars_inside_glass_opening_keep_opening_as_hole():
+    topology = resolve_contour_ownership(
+        [
+            _candidate(1, 0, 0, 850, 850),
+            _candidate(2, 50, 50, 800, 800),
+            _candidate(3, 80, 80, 230, 230),
+            _candidate(4, 280, 80, 400, 200),
+            _candidate(5, 80, 280, 180, 380),
+        ],
+        [
+            _glass_expected(850, 850, 50),
+            _expected(150, 150),
+            _expected(120, 120),
+            _expected(100, 100),
+        ],
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert topology.actual_contour_keys == (1, 3, 4, 5)
+    assert topology.hole_contour_keys == (2,)
+    owner = next(part for part in topology.parts if part.contour_key == 1)
+    assert owner.hole_contour_keys == (2,)
+
+
+def test_opening_matching_regular_size_demotes_when_margin_proves_unique_hole():
+    topology = resolve_contour_ownership(
+        [
+            _candidate(1, 0, 0, 850, 850),
+            _candidate(2, 50, 50, 800, 800),  # opening 750×750
+            _candidate(3, 900, 0, 1650, 750),  # independent Regular 750×750
+        ],
+        [_glass_expected(850, 850, 50), _expected(750, 750)],
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert topology.actual_contour_keys == (1, 3)
+    assert topology.hole_contour_keys == (2,)
+
+
+def test_opening_matching_regular_size_stays_ambiguous_without_margin_evidence():
+    with pytest.raises(DxfTopologyError) as exc_info:
+        resolve_contour_ownership(
+            [
+                _candidate(1, 0, 0, 850, 850),
+                _candidate(2, 50, 50, 800, 800),
+                _candidate(3, 900, 0, 1650, 750),
+            ],
+            [
+                ExpectedPieceEvidence(
+                    width=850,
+                    height=850,
+                    allow_rotation=False,
+                    is_glass=True,
+                ),
+                _expected(750, 750),
+            ],
+            dimension_tolerance=0.2,
+            geometry_tolerance=0.01,
+        )
+
+    assert exc_info.value.code == "AMBIGUOUS_CONTOUR_OWNERSHIP"
+
+
+def test_glass_inside_glass_assigns_each_opening_to_innermost_host():
+    topology = resolve_contour_ownership(
+        [
+            _candidate(1, 0, 0, 1000, 1000),
+            _candidate(2, 50, 50, 950, 950),
+            _candidate(3, 100, 100, 600, 600),
+            _candidate(4, 150, 150, 550, 550),
+            _candidate(5, 200, 200, 300, 300),
+        ],
+        [
+            _glass_expected(1000, 1000, 50),
+            _glass_expected(500, 500, 50),
+            _expected(100, 100),
+        ],
+        dimension_tolerance=0.2,
+        geometry_tolerance=0.01,
+    )
+
+    assert topology.actual_contour_keys == (1, 3, 5)
+    assert topology.hole_contour_keys == (2, 4)
+    by_key = {part.contour_key: part for part in topology.parts}
+    assert by_key[1].hole_contour_keys == (2,)
+    assert by_key[3].hole_contour_keys == (4,)
+    assert by_key[5].hole_contour_keys == ()
+
+    validate_material_layout(
+        [PlacedPartGeometry(key=part.contour_key, geometry=part.geometry) for part in topology.parts],
+        required_clearance=3.0,
+        geometry_tolerance=0.01,
+    )
+
+
+def test_glass_in_glass_in_glass_exceeds_nesting_depth():
+    with pytest.raises(DxfTopologyError) as exc_info:
+        resolve_contour_ownership(
+            [
+                _candidate(1, 0, 0, 1200, 1200),
+                _candidate(2, 50, 50, 1150, 1150),
+                _candidate(3, 100, 100, 800, 800),
+                _candidate(4, 150, 150, 750, 750),
+                _candidate(5, 200, 200, 500, 500),
+                _candidate(6, 250, 250, 450, 450),
+                _candidate(7, 300, 300, 350, 350),
+            ],
+            [
+                _glass_expected(1200, 1200, 50),
+                _glass_expected(700, 700, 50),
+                _glass_expected(300, 300, 50),
+                _expected(50, 50),
+            ],
+            dimension_tolerance=0.2,
+            geometry_tolerance=0.01,
+        )
+
+    assert exc_info.value.code == "UNRESOLVED_CONTOUR_OWNERSHIP"
