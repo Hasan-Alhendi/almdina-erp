@@ -147,6 +147,7 @@ test("active stage context accepts the Frappe thenable and keeps its document vi
     assert.equal(await pendingB, true);
     assert.equal(frm.__almdina_stage_type, "Drawing");
     assert.equal(frm.__almdina_actor_is_current_assignee, true);
+    assert.equal(frm.__almdina_actor_can_operate_current_stage, true);
     assert.equal(frm.__almdina_stage_context_ready, true);
     assert.equal(frm.__almdinaStageContextPromise, null);
     assert.equal(events.includes("almdina:stage-context-ready"), true);
@@ -156,4 +157,23 @@ test("active stage context accepts the Frappe thenable and keeps its document vi
     const beforeNew = calls.length;
     assert.equal(await owner.ensureStageContext(frm), false);
     assert.equal(calls.length, beforeNew);
+});
+
+test("stage operation context allows Administrator without changing assignee identity", async () => {
+    const { window, calls } = environment("core/door_cutting_order_document_context.js");
+    const frm = form("DCO-ADMIN", "DRAWING-ADMIN");
+    window.cur_frm = frm;
+    const owner = window.AlmdinaDocumentContext;
+    owner.synchronize(frm);
+    const pending = owner.ensureStageContext(frm);
+    calls[0].resolve({ message: {
+        active_stage_type: "Drawing",
+        active_stage_assigned_to: "designer@example.com",
+        actor_is_current_assignee: false,
+        actor_can_operate_current_stage: true,
+    } });
+    assert.equal(await pending, true);
+    assert.equal(frm.__almdina_actor_is_current_assignee, false);
+    assert.equal(owner.isCurrentStageAssignee(frm), false);
+    assert.equal(owner.canMutateCurrentStage(frm), true);
 });
