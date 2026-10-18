@@ -850,6 +850,50 @@ if __name__ == "__main__":
         TRACE_PATH = evidence_dir / "dco-desk-trace.json"
         browser = playwright.chromium.launch()
         context = browser.new_context()
+        # Instrument the first native Form creation in every new document.
+        # Hooks installed after login are lost on full navigation; this
+        # init script observes the pinned Form lifecycle before the route loads.
+        context.add_init_script(script="""(() => {
+            const events = [];
+            window.__al131NativeFormTrace = events;
+            const record = (phase, frm, error) => {
+                if (frm?.doctype !== 'Door Cutting Order') return;
+                events.push({
+                    phase, name: String(frm.docname || ''),
+                    setupDone: Boolean(frm.setup_done),
+                    formLayout: Boolean(frm.layout),
+                    hasRead: Boolean(frm.perm?.[0]?.read),
+                    opened: Boolean(frm.opendocs?.[frm.docname]),
+                    error: error ? String(error?.stack || error).slice(0, 800) : null
+                });
+                if (events.length > 32) events.shift();
+            };
+            const install = () => {
+                const proto = window.frappe?.ui?.form?.Form?.prototype;
+                if (!proto) return false;
+                if (proto.__al131TraceInstalled) return true;
+                proto.__al131TraceInstalled = true;
+                for (const name of ['refresh', 'setup', 'check_doctype_conflict', 'check_reload']) {
+                    const original = proto[name];
+                    if (typeof original !== 'function') continue;
+                    proto[name] = function (...args) {
+                        record(name + ':enter', this);
+                        try {
+                            const value = original.apply(this, args);
+                            record(name + ':return', this);
+                            return value;
+                        } catch (error) {
+                            record(name + ':throw', this, error);
+                            throw error;
+                        }
+                    };
+                }
+                return true;
+            };
+            const interval = setInterval(() => {
+                if (install()) clearInterval(interval);
+            }, 10);
+        })();""")
         page = context.new_page()
         page.set_default_timeout(30_000)
         page.set_default_navigation_timeout(30_000)
