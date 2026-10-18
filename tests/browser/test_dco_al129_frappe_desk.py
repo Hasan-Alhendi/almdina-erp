@@ -1910,9 +1910,10 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
             expect(addons).to_be_visible()
             addons.locator("[data-addon-tab='extra_liner']").click()
             addons.locator("[data-addon-enable]").click()
-            sides = addons.locator("[data-liner-sides] [data-liner-side]")
-            expect(sides.first).to_be_visible()
-            sides.first.click()
+            # The first piece is 35 wide x 75 long; choose the long edge.
+            long_side = addons.locator("[data-liner-sides] [data-liner-side='edge_long_left']")
+            expect(long_side).to_be_visible()
+            long_side.click()
             addons.locator("[data-liner-offset]").fill("0")
             addons.locator("[data-liner-width]").fill("18")
             addons.locator("[data-liner-start]").fill("0")
