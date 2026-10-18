@@ -2283,8 +2283,8 @@ def test_real_desk_100_piece_checkpoint_restore_and_lost_save_response() -> None
                 timeout=30_000,
             ):
                 retry_page.evaluate(
-                    "async () => { try { await cur_frm.save(); } catch (_) {"
-                    " /* native validation denies the uncertain INSERT */ } }"
+                    "() => { Promise.resolve(cur_frm.save()).catch(() => {});"
+                    " return true; }"
                 )
             assert "NOT_FOUND" in retry_reconciliation_statuses
             assert len(save_posts) == first_save_attempts + 1, (
