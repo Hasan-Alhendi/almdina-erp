@@ -95,6 +95,16 @@ def test_cutting_plan_print_uses_landscape_dynamic_pages_of_at_most_ten_boards()
     for label in ("Order number", "Customer name", "Board color", "Board count", "Piece count", "Board size"):
         assert label in source
 
+    meta = source.split("function printOrderMetaHtml", 1)[1].split(
+        "function boardAspectFromCards", 1
+    )[0]
+    assert 'translate("Plan name")' not in meta
+    assert 'translate("Plan revision")' not in meta
+    assert 'data-resource-kind="OFFCUT"] .dco-sheet-board' in source
+    assert "background: #E5E7EB !important" in source
+    assert "stripPrintOnlyBoardChrome" in source
+    assert "printCardHtml" in source
+
 
 def test_section_scoped_settings_save_does_not_require_unrelated_mandatory_fields() -> None:
     """Extra/pricing saves must not fail when print identity columns are empty.

@@ -32,7 +32,7 @@ app_include_css = [
     # inherit page direction so the checkbox stays at the logical start, and
     # isolate only ID text as LTR.
     "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2",
-    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=43b0eed83bf2",
+    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=43b0eed83bf3",
     "/assets/almdina_erp/css/door_cutting_order_glass_shape.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
     "/assets/almdina_erp/css/notes.css?v=1",
