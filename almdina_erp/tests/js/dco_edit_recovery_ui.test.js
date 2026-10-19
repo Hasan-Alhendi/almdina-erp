@@ -975,6 +975,38 @@ async function settle() {
     assert.equal(coordinatorStarts, startsBeforeForcedDismiss, "permission revocation does not open an edit session");
     assert.equal(coordinatorCancels, cancelsBeforeForcedDismiss, "permission revocation does not cancel an unrelated edit session");
 
+    const dismissedVisitForm = form();
+    fakeWindow.cur_frm = dismissedVisitForm;
+    permission = true;
+    selectedRecord = makeRecord();
+    await handlers["Door Cutting Order"].onload(dismissedVisitForm);
+    const dismissedDialog = dialogs.at(-1);
+    dismissedDialog.wrapper.fire("dismiss");
+    assert.equal(dismissedDialog.hidden, true);
+    const discoveriesAfterDismiss = recoveryDiscoveries;
+    const dialogsAfterDismiss = dialogs.length;
+    await handlers["Door Cutting Order"].refresh(dismissedVisitForm);
+    await handlers["Door Cutting Order"].onload(dismissedVisitForm);
+    assert.equal(recoveryDiscoveries, discoveriesAfterDismiss,
+        "ordinary refresh in the same visit must respect an explicit dismissal");
+    assert.equal(dialogs.length, dialogsAfterDismiss,
+        "an explicitly dismissed recovery choice must not reopen in the same visit");
+
+    const dismissedVisit = DocumentContext.capture(dismissedVisitForm);
+    cleanups.get(dismissedVisitForm).cleanup();
+    dismissedVisitForm.doc = { ...form().doc, name: "DCO-DISMISS-REUSED-B" };
+    documentTokens.set(dismissedVisitForm, {
+        identity: "Door Cutting Order::DCO-DISMISS-REUSED-B",
+        generation: dismissedVisit.generation + 1,
+    });
+    selectedRecord = makeRecord({ target_name: "DCO-DISMISS-REUSED-B" });
+    await handlers["Door Cutting Order"].onload(dismissedVisitForm);
+    assert.equal(recoveryDiscoveries, discoveriesAfterDismiss + 1,
+        "dismissing A must not suppress B's valid draft discovery when Frappe reuses its Form");
+    assert.equal(dialogs.length, dialogsAfterDismiss + 1,
+        "B receives its own explicit recovery choice after A's visit cleanup");
+    assert.equal(dialogs.at(-1).shown, true);
+
     console.log("DCO EDIT recovery presentation simulation passed");
 })().catch((error) => {
     console.error(error);

@@ -6,7 +6,7 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import Page, expect, sync_playwright
 
@@ -271,7 +271,7 @@ def wait_for_function(page: Page, step: str, expression: str, *, arg=None, timeo
     _trace_event("wait_completed", step=step)
 
 
-def open_dco(page: Page, name: str) -> None:
+def open_dco(page: Page, name: str, *, wait_for_route: bool = True) -> None:
     target_url = f"{DESK_URL}/app/door-cutting-order/{name}"
     _trace_event("open_dco_started", url=_safe_url(target_url))
     # The initial Form must be opened through the same native Desk entry
@@ -314,7 +314,11 @@ def open_dco(page: Page, name: str) -> None:
     else:
         evaluate(
             page, f"route to DCO {name} through Frappe Desk",
-            "name => frappe.set_route('Form', 'Door Cutting Order', name)",
+            # Frappe's route promise also waits for outstanding AJAX. A test
+            # deliberately holding A's request must still be able to visit B.
+            # The exact Form/readiness checks below acknowledge the navigation.
+            "name => frappe.set_route('Form', 'Door Cutting Order', name)" if wait_for_route else
+            "name => { void frappe.set_route('Form', 'Door Cutting Order', name); return true; }",
             name,
         )
     try:
@@ -1109,10 +1113,17 @@ def certify_edit_late_responses(page: Page) -> None:
     original = checkpoint_record(page, name)
     other_baseline = server_document(page, other_name)
     held = []
+    paused_once = False
 
     def pause_real_request(route) -> None:
         # Delay delivery only. continue_ below sends this exact original request
         # to Frappe; no response, permission result or server data is fabricated.
+        nonlocal paused_once
+        query = parse_qs(urlsplit(route.request.url).query)
+        if paused_once or (route.request.method == "GET" and query.get("name") != [name]):
+            route.continue_()
+            return
+        paused_once = True
         held.append(route)
         page.evaluate("() => { window.__al131RequestPaused = true; }")
 
@@ -1124,7 +1135,7 @@ def certify_edit_late_responses(page: Page) -> None:
         button.click()
         page.wait_for_function("() => window.__al131RequestPaused === true")
         assert len(held) == 1
-        open_dco(page, other_name)
+        open_dco(page, other_name, wait_for_route=False)
         with page.expect_response(lambda response: "frappe.client.get?" in response.url) as late:
             held.pop().continue_()
         assert late.value.status == 200
@@ -1139,15 +1150,18 @@ def certify_edit_late_responses(page: Page) -> None:
         assert retained["recovery_revision"] == original["recovery_revision"]
         record_scenario("late_restore_api_response_after_navigation", source_draft_retained=True, other_document_unchanged=True)
     finally:
+        # Removing the handler can release pending routes. Release our owned
+        # request first and remove it from the list so it is continued once.
+        while held:
+            held.pop().continue_()
         page.unroute(pattern, pause_real_request)
-        for route in held:
-            route.continue_()
 
     name = FIXTURES["pending_checkpoint"]
     open_dco(page, name)
     start_edit_and_set_note(page, name, "Internal checkpoint with unacknowledged request", checkpoint=True)
     original = checkpoint_record(page, name)
     held = []
+    paused_once = False
     pattern = "**/api/method/frappe.desk.form.save.savedocs"
     page.route(pattern, pause_real_request)
     try:
@@ -1166,7 +1180,7 @@ def certify_edit_late_responses(page: Page) -> None:
         assert unacknowledged["session_origin_modified"] == original["session_origin_modified"]
         assert unacknowledged["expected_server_modified"] == original["expected_server_modified"]
         assert server_document(page, name)["modified"] == original["expected_server_modified"]
-        open_dco(page, other_name)
+        open_dco(page, other_name, wait_for_route=False)
         with page.expect_response(lambda response: "frappe.desk.form.save.savedocs" in response.url) as late:
             held.pop().continue_()
         assert late.value.status == 200
@@ -1180,9 +1194,9 @@ def certify_edit_late_responses(page: Page) -> None:
         record_scenario("unacknowledged_internal_checkpoint_and_late_save_response",
                         no_premature_version_advance=True, other_document_unchanged=True)
     finally:
+        while held:
+            held.pop().continue_()
         page.unroute(pattern, pause_real_request)
-        for route in held:
-            route.continue_()
 
 
 def certify_assignment_change(admin_page: Page) -> None:

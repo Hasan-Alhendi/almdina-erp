@@ -44,8 +44,8 @@
     const unownedErrorStatuses = new WeakMap();
     const initializations = new WeakMap();
     const editInitializations = new WeakMap();
-    const editDismissed = new WeakSet();
-    const editIneligibleNotified = new WeakSet();
+    const editDismissed = new WeakMap();
+    const editIneligibleNotified = new WeakMap();
     const editRestoreInProgress = new WeakMap();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
@@ -1135,7 +1135,7 @@
 
     function notifyRetainedEditDraft(frm) {
         if (!lifecycleIneligibleForEditRecovery(frm)
-            || editIneligibleNotified.has(frm)
+            || Boolean(editIneligibleNotified.get(frm)?.())
             || !root.EditRecovery) return Promise.resolve(null);
         const documentToken = documentContext() && documentContext().capture(frm);
         const identity = {
@@ -1143,7 +1143,7 @@
             target_name: String(frm.doc.name || "").trim(),
         };
         if (!identity.site || !identity.user || !identity.target_name) return Promise.resolve(null);
-        editIneligibleNotified.add(frm);
+        editIneligibleNotified.set(frm, activeDocumentGuard(frm));
         return root.EditRecovery.discover(repository(), identity)
             .then((result) => {
                 const context = documentContext();
@@ -1234,7 +1234,7 @@
         if (!initialization || editInitializations.get(frm) === initialization) {
             editInitializations.delete(frm);
         }
-        if (markDismissed) editDismissed.add(frm);
+        if (markDismissed) editDismissed.set(frm, activeDocumentGuard(frm));
         return true;
     }
 
@@ -1882,7 +1882,7 @@
             notifyRetainedEditDraft(frm);
             return Promise.resolve(null);
         }
-        if (!frm || isNew(frm) || currentState(frm) || editDismissed.has(frm) || !editRecoveryPermission(frm)) {
+        if (!frm || isNew(frm) || currentState(frm) || Boolean(editDismissed.get(frm)?.()) || !editRecoveryPermission(frm)) {
             return Promise.resolve(currentState(frm));
         }
         const active = editInitializations.get(frm);

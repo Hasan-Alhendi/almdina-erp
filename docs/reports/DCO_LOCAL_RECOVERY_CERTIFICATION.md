@@ -17,6 +17,9 @@
 4. **Test assumptions drifted.** Arabic EDIT harness now loads its real catalog entry; print-source assertions check selected geometry after the approved removal of plan IDs from headers; Link browser test supports configured/system/bundled Chromium. No business changes were made to satisfy these tests.
 5. **Pinned Permission Type baseline debt.** Existing repair updates only generated visibility metadata to Frappe's native expressions. Stronger integration coverage corrupts all three targets, checks exact repair, unchanged capability grants, and a second idempotent synchronization. Real pinned execution remains required.
 
+6. **Internal checkpoint intent outlived its source visit.** An early Save-promise settlement erased preserve-edit intent before deferred `after_save`; simply retaining a Form-wide boolean also let A preserve B's normal Save, or let A's late failure clear B's newer checkpoint. The existing Revision owner now binds intent to DocumentContext and Edit Session generation, takes positive acknowledgement from its native Save callback's matching `response.docs`, and uses exact-owner cleanup. Its native EDIT before/after-save hooks reject stale or unacknowledged visits; consumed checkpoint-version metadata makes duplicate late hooks idempotent. Ordinary later Save still locks, and NEW promotion still removes its CREATE-only input projection. Thirteen actual-owner lifecycle regressions pass, including incorrect/missing response data, replacement sessions, both late-event orders, and NEW promotion.
+7. **Discovery dismissal leaked across reused Forms.** Dismissal and retained-draft notification were instance-wide WeakSets. A RED regression proved dismissing A suppressed B discovery after generation cleanup. They now use captured visit guards; same-visit dismissal remains effective while B can discover its own draft.
+
 Existing NEW token uniqueness/reconciliation, local atomic IndexedDB/CAS/hash/schema handling, DocumentContext identity, Edit Session ownership and Frappe persistence remain in place. `NOT_FOUND` does not authorize retry of an uncertain INSERT; contradictory reference wording was corrected. No new state framework, server draft DocType or remote recovery was introduced.
 
 ## Ownership and evidence gaps
@@ -48,6 +51,12 @@ Current performance evidence for **07f4c826 only**, Base `67238492`, Chromium 14
 | Native IndexedDB write transaction | 320.9 / 346.5 | 318.9 / 346.4 |
 
 Payload is 105,355 bytes. Input and acknowledgment P95 changed by -6.09% and -0.45%; projection P95 increased by 2.1 ms (+23.08%) and serialization by 0.3 ms (+18.75%). This is comparative evidence from an isolated CI runner, not a speedup guarantee or an absolute performance rating; no product acceptance threshold was specified. Fresh final-head measurements are still required.
+
+### Intermediate native-hook candidate
+
+[Run 39253510254](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39253510254) on `3d0143a91418eec2b846340a46906cb6c64eab9b` passed both Full variants, NEW, Customer, backend and Desk; performance was still running when this continuation was prepared. EDIT now passed the acknowledged internal pre-plan checkpoint and two-tab conflict as well as its first three scenarios. The next actual late-request test exposed a test-orchestration deadlock: its route promise awaited the intentionally held AJAX request even though the trace showed B had loaded. Cleanup then attempted `continue_` after `unroute` had already handled the pending route, masking the primary timeout. The test now initiates native routing without awaiting its global AJAX promise only in held-request scenarios, retains exact B Form/readiness checks, delays only the first source-DCO request, and releases owned routes before removing their handler. All responses still come from Frappe. Later EDIT assignment/restart/history scenarios remain unproven until they execute.
+
+Independent actual-owner review also exposed cross-visit checkpoint-intent and dismissal leaks on that intermediate candidate; the focused corrections and RED/GREEN evidence above are included in the next candidate. A prior candidate's green results never certify this later tree.
 
 ### Previous candidate
 

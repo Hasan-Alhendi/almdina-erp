@@ -169,6 +169,17 @@ recovery neither calls it nor creates a cadence around it. The presentation adap
 only observes its acknowledged `after_save` result and records the advanced expected
 token.
 
+Frappe may settle `frm.save()` before its serial `after_save` handlers finish.
+The existing Order Revision owner binds internal-checkpoint intent to its
+DocumentContext visit, Edit Session generation, and the source DCO/version in
+the native Save callback's `response.docs`. A clean form alone is not proof of
+that request's acknowledgement. The existing handler consumes the preserve-edit
+flag and retains its acknowledged version for idempotent late hooks; a later
+ordinary Save still closes editing. Stale completion/cleanup cannot consume a
+replacement visit's intent. NEW name promotion keeps its existing permission
+projection cleanup. EDIT discovery dismissal and retained-draft notices are also
+scoped to their originating document visit, rather than the reusable Form object.
+
 For a first insert, ALMADINA-129 flushes the latest checkpoint and marks the local
 record pending before the existing explicit Frappe Save proceeds. A hidden unique
 technical creation token on the DCO is the atomic binding; acknowledged or
