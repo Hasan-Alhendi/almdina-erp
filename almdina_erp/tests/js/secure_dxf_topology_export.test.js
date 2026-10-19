@@ -9,6 +9,10 @@ const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/secure_dxf_export.js"),
     "utf8"
 );
+const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
 
 let nextPlan = null;
 let originalUpload = null;
@@ -1265,6 +1269,61 @@ async function run() {
         fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved"),
         /overlaps an adjacent piece/
     );
+
+    // Kerf-clear door 5 with a neighbour whose order width_cm is larger than
+    // placed w (missing rotation) must still export — obstacle uses w/h.
+    nextPlan = linerEndPlan([
+        linerDoor({
+            id: 5,
+            label: "5",
+            x: 40.5,
+            y: 0,
+            w: 30,
+            h: 50,
+            width_cm: 30,
+            length_cm: 50,
+            liner_reference_side: "edge_long_left",
+        }),
+        linerDoor({
+            id: 4,
+            label: "4",
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 50,
+            width_cm: 50,
+            length_cm: 40,
+            rotated: 0,
+            extra_liner: 0,
+            liner_reference_side: "",
+        }),
+    ]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "approved");
+    assert.ok(cutPathLineCount(downloadedDxf) > 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+
+    // Real persisted regression CP-2026-00092 / DCO 26-00112: door 5.1 is
+    // nested inside the opening of Glass door 1.1. The 3 mm Kerf leaves its
+    // liner extension exactly one cutter radius (1.5 mm) from the Glass
+    // material, so the opening must remain void rather than a solid obstacle.
+    nextPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-00112", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-00112", "approved");
+    assert.ok(cutPathLineCount(downloadedDxf) > 0);
+    const nestedLinerDxfPoints = polylinePoints(downloadedDxf, "Liner");
+    assert.ok(nestedLinerDxfPoints.length >= 2);
+    assert.ok(nestedLinerDxfPoints.some(point => (
+        Math.abs(point[0] - 85.5) < 0.001 && Math.abs(point[1] - 1942.5) < 0.001
+    )));
 
     nextPlan = linerEndPlan([linerDoor({
         w: 122,
