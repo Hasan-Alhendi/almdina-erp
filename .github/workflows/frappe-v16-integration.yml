@@ -19,6 +19,7 @@ on:
         default: full
         type: choice
         options:
+          - all
           - full
           - full_pinned
           - full_pinned_base_permission
@@ -65,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["full","full_pinned","full_pinned_base_permission","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
+        suite: ${{ fromJSON((github.event_name == 'pull_request' || inputs.suite == 'all') && '["full","full_pinned","full_pinned_base_permission","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
 
     services:
