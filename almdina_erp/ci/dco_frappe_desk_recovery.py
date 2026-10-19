@@ -861,10 +861,24 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
         dispatch_name,
     )
     assert returned_doc["modified"] != dispatch_checkpoint["expectedServerModified"]
-    page.wait_for_selector('[data-edit-recovery-action="continue"]', timeout=30_000)
+    # The operator reopens the returned Draft before reviewing a checkpoint
+    # retained from its earlier production session. Keep the SAME Chromium
+    # profile/IndexedDB, but use a fresh Frappe Form lifecycle so a previously
+    # dismissed dialog cannot masquerade as the current recovery offer.
+    response = page.goto(
+        f"{DESK_URL}/desk/door-cutting-order/{dispatch_name}",
+        wait_until="domcontentloaded",
+        timeout=60_000,
+    )
+    assert response is not None and response.status == 200
+    open_dco(page, dispatch_name)
+    continue_button = page.locator(
+        '.modal.show [data-edit-recovery-action="continue"]'
+    )
+    expect(continue_button).to_be_visible(timeout=30_000)
     # Continue is explicit after Return-to-Draft; a changed official modified
     # value must produce a conflict without applying any recovered field.
-    page.locator('[data-edit-recovery-action="continue"]').click()
+    continue_button.click()
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
     _trace_event("certification_completed")
