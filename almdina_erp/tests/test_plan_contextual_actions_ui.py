@@ -90,7 +90,12 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("api.cancelApproval(frm.doc.name)", context)
         self.assertIn("tabs.printActivePlan(frm)", context)
         self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm), {", context)
-        self.assertIn("hasOriginalFile: hasOriginalDxfFile(rowForTab(frm))", context)
+        # Active plan row is captured once and passed to all manufacturing
+        # decision helpers; match the current Develop contract.
+        self.assertIn("const row = rowForTab(frm);", context)
+        self.assertIn("hasOriginalFile: hasOriginalDxfFile(row)", context)
+        self.assertIn("originalIsManufacturingReady: originalIsManufacturingReady(row)", context)
+        self.assertIn("preferOriginalUpload: preferOriginalUpload(frm, row)", context)
         self.assertIn("upload_production_dxf(frm)", context)
         self.assertIn("dco-plan-context-chip is-boards", context)
         self.assertIn("margin-inline-start: auto", context)
