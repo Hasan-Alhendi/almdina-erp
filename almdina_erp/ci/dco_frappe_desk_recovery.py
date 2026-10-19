@@ -803,7 +803,10 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     # The informational Frappe toast can be localized or expire before the
     # assertion. Safety is established by the authoritative dispatch stage,
     # no offered recovery action, a retained checkpoint and rejected Save.
-    expect(page.locator('[data-edit-recovery-action="continue"]')).to_have_count(0)
+    # frappe.ui.Dialog.hide() retains its markup in the DOM. It must be
+    # invisible and unavailable to the operator after real dispatch, not
+    # necessarily removed from the document entirely.
+    expect(page.locator('[data-edit-recovery-action="continue"]')).to_be_hidden()
     retained = evaluate(page, "verify retained EDIT snapshot after dispatch",
         """async name => {
             const result = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository()
