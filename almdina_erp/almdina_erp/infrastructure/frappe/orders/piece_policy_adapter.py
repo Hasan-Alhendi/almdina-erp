@@ -12,6 +12,8 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS_BY_KIND,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    L_SHAPED_CORNER_TYPE,
+    SIDE_BREAK,
     LinerGeometryError,
     LinerPiece,
     available_liner_sides,
@@ -50,6 +52,8 @@ from almdina_erp.almdina_erp.services.special_shape_service import (
 )
 
 from .document_access import FrappeOrderDocumentAccess
+
+_NUMERIC_TOLERANCE_MM = 1e-7
 
 
 class FrappeOrderPiecePolicyAdapter:
@@ -391,6 +395,15 @@ class FrappeOrderPiecePolicyAdapter:
             start_cm,
             length_cm_input,
         )
+        if (
+            not span_error
+            and length_cm_input > 0
+            and piece.piece_type == L_SHAPED_CORNER_TYPE
+            and side == SIDE_BREAK
+            and start_mm + (length_cm_input * 10)
+            > nominal_liner_reference_length_mm(piece, side) + _NUMERIC_TOLERANCE_MM
+        ):
+            span_error = "liner_span_exceeds_edge"
         if span_error == "liner_span_exceeds_edge":
             available_cm = nominal_liner_reference_length_mm(piece, side) / 10
             maximum_cm = max(0.0, available_cm - start_mm / 10)

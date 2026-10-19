@@ -142,12 +142,11 @@ assert.equal(geometry.nominalReferenceLengthMm(innerBandLiner, "edge_break"), 60
 const actualLPath = geometry.edgePaths(innerBandLiner).edge_break;
 assert.equal(actualLPath.slice(1).reduce((total, point, index) => total + segmentLength(actualLPath[index], point), 0), 602);
 assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60).length, 3);
+assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60.2).length, 3,
+    "effective geometry remains available to manufacturing consumers");
 for (const length of [60.001, 60.01, 60.025, 60.1, 60.2]) {
-    assert.throws(
-        () => geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, length),
-        error => error.code === "liner_span_exceeds_edge",
-        `nominal L span must reject ${length} cm without applying geometry tolerance`
-    );
+    assert.equal(geometry.nominalSpanExceeds(innerBandLiner, "edge_break", 0, length), true,
+        `editable nominal span rejects ${length} cm without changing effective geometry`);
 }
 for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
     const draft = editor.draftFromRow({

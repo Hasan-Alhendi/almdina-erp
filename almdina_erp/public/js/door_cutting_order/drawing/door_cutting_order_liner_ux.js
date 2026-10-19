@@ -178,7 +178,14 @@
             return { code: "liner_length_invalid", field: "length", fields: ["length"], message: localize(MESSAGES.liner_length_invalid, draft.kind) };
         }
         const spanToleranceCm = geometry().toleranceMm / 10;
-        if (!draft.fullLength && draft.lengthCm > maximumLengthCm + spanToleranceCm) {
+        const nominalSpanExceeded = geometry().nominalSpanExceeds(
+            draft.piece,
+            draft.side,
+            draft.startCm,
+            draft.fullLength ? 0 : draft.lengthCm
+        );
+        if (!draft.fullLength
+            && (draft.lengthCm > maximumLengthCm + spanToleranceCm || nominalSpanExceeded)) {
             const issueText = __(MESSAGES.liner_span_exceeds_edge_detail, [
                 noun(draft.kind),
                 formatInput(availableLengthCm, 3),

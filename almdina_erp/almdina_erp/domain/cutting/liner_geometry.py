@@ -39,7 +39,6 @@ SIDE_BREAK = "edge_break"
 SIDE_BREAK_ONLY = "edge_break_only"
 OUTER_SIDES = (SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT)
 CM_TO_MM = 10.0
-NUMERIC_TOLERANCE_MM = 1e-7
 
 LINER_OFFSET_MISMATCH = "liner_offset_mismatch"
 LINER_WIDTH_MISMATCH = "liner_width_mismatch"
@@ -721,7 +720,6 @@ def resolved_liner_span_mm(
         return 0.0, 0.0, "liner_start_invalid"
     start = max(0.0, start)
     legacy_full = length_cm in (None, "")
-    explicit_length = False
     if not legacy_full:
         try:
             length = float(length_cm) * CM_TO_MM
@@ -731,18 +729,12 @@ def resolved_liner_span_mm(
             return start, 0.0, "liner_length_invalid"
         if length <= GEOMETRY_TOLERANCE_MM:
             length = edge - start
-        else:
-            explicit_length = True
     else:
         length = edge - start
     if length <= GEOMETRY_TOLERANCE_MM:
         return start, length, "liner_length_invalid"
     if start + length > edge + GEOMETRY_TOLERANCE_MM:
         return start, length, "liner_span_exceeds_edge"
-    if explicit_length and piece.piece_type == L_SHAPED_CORNER_TYPE and side == SIDE_BREAK:
-        nominal_edge = nominal_liner_reference_length_mm(piece, side)
-        if start + length > nominal_edge + NUMERIC_TOLERANCE_MM:
-            return start, length, "liner_span_exceeds_edge"
     return start, min(length, max(0.0, edge - start)), ""
 
 

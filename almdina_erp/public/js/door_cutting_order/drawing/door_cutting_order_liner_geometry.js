@@ -15,7 +15,6 @@
     const SIDE_BREAK_ONLY = "edge_break_only";
     const OUTER_SIDES = [SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT];
     const TOLERANCE_MM = 0.25;
-    const NUMERIC_TOLERANCE_MM = 1e-7;
     const BOARD_EDGE_TOLERANCE_MM = 0.05;
     const SIDE_LABELS = {
         [SIDE_TOP]: "أعلى",
@@ -450,19 +449,16 @@
         return { start, end: start + Math.min(length, edge - start), edge };
     }
 
-    function validateNominalSpan(piece, side, startCm, lengthCm) {
-        if (!piece || piece.pieceType !== L_SHAPED || side !== SIDE_BREAK) return;
+    function nominalSpanExceeds(piece, side, startCm, lengthCm) {
+        if (!piece || piece.pieceType !== L_SHAPED || side !== SIDE_BREAK) return false;
         const start = Math.max(0, num(startCm) * 10);
         const explicit = !(lengthCm == null || lengthCm === "" || !(num(lengthCm) > 0));
-        if (explicit && start + (num(lengthCm) * 10) > nominalReferenceLengthMm(piece, side) + NUMERIC_TOLERANCE_MM) {
-            fail("liner_span_exceeds_edge");
-        }
+        return explicit && start + (num(lengthCm) * 10) > nominalReferenceLengthMm(piece, side) + 1e-7;
     }
 
     function preparedReference(piece, side, startCm, lengthCm) {
         const reference = edgePaths(piece)[side];
         if (!reference) fail("side_unavailable");
-        validateNominalSpan(piece, side, startCm, lengthCm);
         const span = resolvedSpanMm(reference, startCm, lengthCm);
         if (spanHitsBend(reference, span.start, span.end)) fail("liner_span_on_corner");
         return {
@@ -968,6 +964,7 @@
         piecePolygonMm,
         edgePaths,
         nominalReferenceLengthMm,
+        nominalSpanExceeds,
         validationCode,
         stripPolygonMm,
         regionPolygonMm,

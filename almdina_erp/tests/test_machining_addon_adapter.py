@@ -176,7 +176,14 @@ class TestMachiningAddonAdapter(FrappeTestCase):
 
     def test_l_inner_span_limit_matches_nominal_finished_notch_for_all_addons(self) -> None:
         for addon in MACHINING_ADDONS:
-            for length, expected_error in ((60, False), (60.2, True)):
+            for length, expected_error in (
+                (60, False),
+                (60.001, True),
+                (60.01, True),
+                (60.025, True),
+                (60.1, True),
+                (60.2, True),
+            ):
                 with self.subTest(addon=addon.kind, length=length):
                     adapter, _row = self._adapter(
                         piece_type="L-Shaped Corner",

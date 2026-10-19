@@ -312,13 +312,14 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
     assert not compare_liner_path(strip, finished_piece, "edge_break", 1, 0.8).ok
 
 
-def test_l_edge_break_explicit_span_uses_nominal_notch_length_but_zero_keeps_full_path():
+def test_l_edge_break_keeps_effective_path_separate_from_nominal_input_length():
     piece = LinerPiece(
         "L-Shaped Corner", 60, 60, "Top Right", 30.1, 30.1, 30, 30
     )
-    assert resolved_liner_span_mm(piece, "edge_break", 0, 60)[2] == ""
-    for length in (60.001, 60.01, 60.025, 60.1, 60.2):
-        assert resolved_liner_span_mm(piece, "edge_break", 0, length)[2] == "liner_span_exceeds_edge"
+    assert nominal_liner_reference_length_mm(piece, "edge_break") == pytest.approx(600)
+    _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
+    assert effective_length == pytest.approx(602)
+    assert error == ""
     start, length, error = resolved_liner_span_mm(piece, "edge_break", 0, 0)
     assert (start, length) == pytest.approx((0, 602))
     assert error == ""
