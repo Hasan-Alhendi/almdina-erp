@@ -94,23 +94,26 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
         )
 
     def test_direct_crud_import_and_set_value_are_rejected(self) -> None:
+        from almdina_erp.almdina_erp.domain.customer_bot.phone_access import StoredPhoneAccess
+
         customer = self._customer(self._unused_phone())
-        requested = self._unused_phone()
-        claimed = frappe.db.get_value("Customer", customer, "mobile_no")
-        created = submit_additional_phone_request(
-            requested_phone=requested,
-            claimed_primary_phone=claimed,
-            requester_ref_value=f"cbot-{self.suffix}",
-            now=NOW,
+        requested = normalize_customer_phone(self._unused_phone())
+        self.phones.append(requested)
+        access = FrappePhoneAccessStore().insert_access(
+            StoredPhoneAccess(
+                access_id="",
+                customer_id=customer,
+                normalized_phone=requested,
+                status="Active",
+                approved_by="Administrator",
+                approved_on=NOW,
+                revoked_by=None,
+                revoked_on=None,
+                revoke_reason="",
+                events=(),
+            )
         )
-        approved = approve_additional_phone_request(
-            actor_id="Administrator",
-            request_id=created.request_id,
-            now=NOW,
-            decision_note="synthetic approval",
-        )
-        self.assertEqual(approved.code, "approved")
-        access_id = approved.access_id
+        access_id = access.access_id
         self.assertTrue(access_id)
 
         document = frappe.get_doc(PHONE_ACCESS_DOCTYPE, access_id)
@@ -134,7 +137,7 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
                     {
                         "doctype": PHONE_REQUEST_DOCTYPE,
                         "requested_phone": self._unused_phone(),
-                        "claimed_primary_phone": claimed,
+                        "claimed_primary_phone": frappe.db.get_value("Customer", customer, "mobile_no"),
                         "status": "Pending",
                         "requester_ref": "import",
                     }
@@ -142,126 +145,84 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
         finally:
             frappe.flags.in_import = False
 
-        reader = self._user_with({Capability.MANAGE_CUSTOMER_BOT_ACCESS: True, Capability.VIEW_CUSTOMERS: True})
-        frappe.set_user(reader)
-        self.assertTrue(frappe.has_permission(PHONE_ACCESS_DOCTYPE, ptype="read", user=reader))
-        self.assertFalse(frappe.has_permission(PHONE_ACCESS_DOCTYPE, ptype="write", user=reader))
-        self.assertFalse(frappe.has_permission(PHONE_REQUEST_DOCTYPE, ptype="import", user=reader))
-        with self.assertRaises(frappe.PermissionError):
-            frappe.get_doc(PHONE_ACCESS_DOCTYPE, access_id).save()
-        visible = frappe.get_list(PHONE_ACCESS_DOCTYPE, filters={"name": access_id}, pluck="name")
-        self.assertEqual(visible, [access_id])
-
-        blocked = self._user_with({Capability.MANAGE_CUSTOMER_BOT_ACCESS: True})
-        frappe.set_user(blocked)
-        self.assertFalse(
-            frappe.has_permission(PHONE_ACCESS_DOCTYPE, ptype="read", doc=access_id, user=blocked)
-        )
-        self.assertEqual(
-            frappe.get_list(PHONE_ACCESS_DOCTYPE, filters={"name": access_id}, pluck="name"),
-            [],
-        )
-
-    def test_system_manager_and_whatsapp_capabilities_cannot_approve(self) -> None:
-        customer = self._customer(self._unused_phone())
-        requested = self._unused_phone()
-        claimed = frappe.db.get_value("Customer", customer, "mobile_no")
-        created = submit_additional_phone_request(
-            requested_phone=requested,
-            claimed_primary_phone=claimed,
-            requester_ref_value=f"cbot-{self.suffix}",
-            now=NOW,
-        )
-        system_manager = self._user_with_roles(["System Manager"])
-        whatsapp = self._user_with(
-            {
-                Capability.MANAGE_WHATSAPP_SESSION: True,
-                Capability.EDIT_WHATSAPP_MESSAGES: True,
-                Capability.VIEW_CUSTOMERS: True,
-            }
-        )
-        for actor in (system_manager, whatsapp):
-            decision = approve_additional_phone_request(
-                actor_id=actor,
-                request_id=created.request_id,
-                now=NOW,
-                decision_note="should not apply",
-            )
-            self.assertEqual(decision.code, "forbidden", actor)
-        self.assertFalse(frappe.db.exists(PHONE_ACCESS_DOCTYPE, {"normalized_phone": normalize_customer_phone(requested)}))
-        self.assertEqual(frappe.db.get_value(PHONE_REQUEST_DOCTYPE, created.request_id, "status"), "Pending")
-
-    def test_capability_without_customer_read_cannot_approve(self) -> None:
-        customer = self._customer(self._unused_phone())
-        requested = self._unused_phone()
-        created = submit_additional_phone_request(
-            requested_phone=requested,
-            claimed_primary_phone=frappe.db.get_value("Customer", customer, "mobile_no"),
-            requester_ref_value=f"cbot-{self.suffix}",
-            now=NOW,
-        )
-        actor = self._user_with({Capability.MANAGE_CUSTOMER_BOT_ACCESS: True})
-        decision = approve_additional_phone_request(
-            actor_id=actor,
-            request_id=created.request_id,
-            now=NOW,
-        )
-        self.assertEqual(decision.code, "forbidden")
-        self.assertEqual(frappe.db.get_value(PHONE_REQUEST_DOCTYPE, created.request_id, "status"), "Pending")
-
-    def test_authorized_employee_can_approve_reject_and_revoke(self) -> None:
-        customer = self._customer(self._unused_phone())
-        actor = self._user_with(
+        holder = self._user_with(
             {Capability.MANAGE_CUSTOMER_BOT_ACCESS: True, Capability.VIEW_CUSTOMERS: True}
         )
-        rejected_phone = self._unused_phone()
-        rejected = submit_additional_phone_request(
-            requested_phone=rejected_phone,
-            claimed_primary_phone=frappe.db.get_value("Customer", customer, "mobile_no"),
-            requester_ref_value=f"cbot-reject-{self.suffix}",
-            now=NOW,
-        )
-        rejection = reject_additional_phone_request(
-            actor_id=actor,
-            request_id=rejected.request_id,
-            now=NOW,
-            decision_note="synthetic rejection",
-        )
-        self.assertEqual(rejection.code, "rejected")
+        frappe.set_user(holder)
+        self.assertFalse(frappe.has_permission(PHONE_ACCESS_DOCTYPE, ptype="read", user=holder))
+        self.assertFalse(frappe.has_permission(PHONE_ACCESS_DOCTYPE, ptype="write", user=holder))
+        with self.assertRaises(frappe.PermissionError):
+            frappe.get_list(PHONE_ACCESS_DOCTYPE, filters={"name": access_id}, pluck="name")
+        frappe.set_user("Administrator")
+        self.assertTrue(frappe.db.exists(PHONE_ACCESS_DOCTYPE, access_id))
 
-        requested = self._unused_phone()
-        created = submit_additional_phone_request(
-            requested_phone=requested,
-            claimed_primary_phone=frappe.db.get_value("Customer", customer, "mobile_no"),
-            requester_ref_value=f"cbot-approve-{self.suffix}",
-            now=NOW,
+    def test_retired_commands_do_not_write_and_grants_do_not_identify(self) -> None:
+        from almdina_erp.almdina_erp.application.customer_bot.phone_access_commands import (
+            PhoneAccessRetired,
         )
-        approved = approve_additional_phone_request(
-            actor_id=actor,
-            request_id=created.request_id,
-            now=NOW,
-            decision_note="synthetic approval",
+        from almdina_erp.almdina_erp.domain.customer_bot.phone_access import StoredPhoneAccess
+
+        customer = self._customer(self._unused_phone())
+        primary = frappe.db.get_value("Customer", customer, "mobile_no")
+        additional = self._unused_phone()
+        normalized_additional = normalize_customer_phone(additional)
+        for call in (
+            lambda: submit_additional_phone_request(
+                requested_phone=additional,
+                claimed_primary_phone=primary,
+                requester_ref_value=f"cbot-{self.suffix}",
+                now=NOW,
+            ),
+            lambda: approve_additional_phone_request(
+                actor_id="Administrator",
+                request_id="CBPR-00050",
+                now=NOW,
+                decision_note="retired",
+            ),
+            lambda: reject_additional_phone_request(
+                actor_id="Administrator",
+                request_id="CBPR-00050",
+                now=NOW,
+                decision_note="retired",
+            ),
+            lambda: revoke_additional_phone(
+                actor_id="Administrator",
+                phone=additional,
+                now=NOW,
+                reason="retired",
+            ),
+        ):
+            with self.assertRaises(PhoneAccessRetired):
+                call()
+        self.assertFalse(
+            frappe.db.exists(PHONE_REQUEST_DOCTYPE, {"requester_ref": f"cbot-{self.suffix}"})
         )
-        self.assertEqual(approved.code, "approved")
-        identity = resolve_customer_phone(requested)
-        self.assertEqual(identity.code, "allowed")
-        self.assertEqual(identity.customer_id, customer)
-        self.assertEqual(identity.access_basis, "additional")
-        self.assertEqual(
-            {item.name for item in identity.__dataclass_fields__.values()},
-            {"code", "customer_id", "access_basis"},
+
+        FrappePhoneAccessStore().insert_access(
+            StoredPhoneAccess(
+                access_id="",
+                customer_id=customer,
+                normalized_phone=normalized_additional,
+                status="Active",
+                approved_by="Administrator",
+                approved_on=NOW,
+                revoked_by=None,
+                revoked_on=None,
+                revoke_reason="",
+                events=(),
+            )
         )
-        revoked = revoke_additional_phone(
-            actor_id=actor,
-            phone=requested,
-            now=NOW,
-            reason="synthetic revoke",
-        )
-        self.assertEqual(revoked.code, "revoked")
-        hidden = resolve_customer_phone(requested)
-        self.assertEqual(hidden.code, "unknown")
-        self.assertIsNone(hidden.customer_id)
-        self.assertEqual(frappe.db.get_value(PHONE_ACCESS_DOCTYPE, approved.access_id, "status"), "Revoked")
+        granted = resolve_customer_phone(additional)
+        self.assertEqual(granted.code, "unknown")
+        self.assertIsNone(granted.customer_id)
+        primary_identity = resolve_customer_phone(primary)
+        self.assertEqual(primary_identity.code, "allowed")
+        self.assertEqual(primary_identity.customer_id, customer)
+        self.assertEqual(primary_identity.access_basis, "primary")
+        frappe.db.set_value("Customer", customer, "mobile_no", self._unused_phone(), update_modified=False)
+        moved = resolve_customer_phone(primary)
+        self.assertEqual(moved.code, "unknown")
+        self.assertIsNone(moved.customer_id)
 
     def test_directory_matches_stored_variants_and_reports_conflict(self) -> None:
         first = self._unused_phone()
@@ -283,53 +244,6 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
         unknown = resolve_customer_phone(normalized)
         self.assertEqual(unknown.code, "unknown")
         self.assertIsNone(unknown.customer_id)
-
-    def test_concurrent_pending_inserts_leave_one_row(self) -> None:
-        requested = self._unused_phone()
-        claimed = self._unused_phone()
-        self._customer(claimed)
-        frappe.db.commit()
-        self.committed = True
-        results = self._race(
-            lambda: submit_additional_phone_request(
-                requested_phone=requested,
-                claimed_primary_phone=claimed,
-                requester_ref_value=f"cbot-race-{self.suffix}-{threading.get_ident()}",
-                now=NOW,
-            ).code
-        )
-        frappe.db.rollback()
-        self.assertEqual(sorted(results), ["pending_exists", "review_requested"])
-        count = frappe.db.count(PHONE_REQUEST_DOCTYPE, {"requested_phone": normalize_customer_phone(requested)})
-        self.assertEqual(count, 1)
-
-    def test_concurrent_approvals_leave_one_access_row(self) -> None:
-        customer = self._customer(self._unused_phone())
-        requested = self._unused_phone()
-        created = submit_additional_phone_request(
-            requested_phone=requested,
-            claimed_primary_phone=frappe.db.get_value("Customer", customer, "mobile_no"),
-            requester_ref_value=f"cbot-approve-race-{self.suffix}",
-            now=NOW,
-        )
-        frappe.db.commit()
-        self.committed = True
-        request_id = created.request_id
-        results = self._race(
-            lambda: approve_additional_phone_request(
-                actor_id="Administrator",
-                request_id=request_id,
-                now=NOW,
-                decision_note="synthetic concurrent approval",
-            ).code
-        )
-        frappe.db.rollback()
-        self.assertEqual(sorted(results), ["already_applied", "approved"])
-        count = frappe.db.count(
-            PHONE_ACCESS_DOCTYPE,
-            {"normalized_phone": normalize_customer_phone(requested)},
-        )
-        self.assertEqual(count, 1)
 
     def test_gateway_functions_are_not_guest_endpoints(self) -> None:
         from almdina_erp.almdina_erp.infrastructure.frappe import customer_bot_access_gateway as gateway

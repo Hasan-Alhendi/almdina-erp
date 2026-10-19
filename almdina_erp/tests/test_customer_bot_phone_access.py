@@ -10,6 +10,7 @@ from __future__ import annotations
 import inspect
 import socket
 import unittest
+from pathlib import Path
 import urllib.request
 from contextlib import contextmanager
 from dataclasses import fields
@@ -19,6 +20,7 @@ from typing import Iterator
 from unittest.mock import patch
 
 from almdina_erp.almdina_erp.application.customer_bot.phone_access_commands import (
+    PhoneAccessRetired,
     approve_phone_access_request,
     reject_phone_access_request,
     request_additional_phone_access,
@@ -217,12 +219,11 @@ class CustomerBotPhoneAccessTests(unittest.TestCase):
     def test_resolve_signature_has_no_verified_flag(self) -> None:
         parameters = inspect.signature(resolve_customer_identity).parameters
         self.assertNotIn("verified", parameters)
-        self.assertEqual(tuple(parameters), ("directory", "store", "phone"))
+        self.assertEqual(tuple(parameters), ("directory", "phone"))
 
     def test_one_primary_match_is_allowed_without_orders_or_costs(self) -> None:
         identity = resolve_customer_identity(
             MemoryDirectory({PRIMARY: ("CUST-1",)}),
-            MemoryStore(),
             "0944 111 111",
         )
         self.assertEqual(identity.code, IdentityCode.ALLOWED)
@@ -232,10 +233,9 @@ class CustomerBotPhoneAccessTests(unittest.TestCase):
         self.assertEqual(names, {"code", "customer_id", "access_basis"})
 
     def test_unknown_and_duplicate_primary_reveal_no_customer(self) -> None:
-        unknown = resolve_customer_identity(MemoryDirectory({}), MemoryStore(), "0944111111")
+        unknown = resolve_customer_identity(MemoryDirectory({}), "0944111111")
         conflict = resolve_customer_identity(
             MemoryDirectory({PRIMARY: ("CUST-1", "CUST-2")}),
-            MemoryStore(),
             PRIMARY,
         )
         self.assertEqual(unknown.code, IdentityCode.UNKNOWN)
@@ -244,318 +244,101 @@ class CustomerBotPhoneAccessTests(unittest.TestCase):
         self.assertIsNone(conflict.customer_id)
         self.assertIsNone(conflict.access_basis)
 
-    def test_request_does_not_grant_access_until_approval(self) -> None:
+    def test_active_additional_grant_does_not_authorize(self) -> None:
         directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        created = request_additional_phone_access(
-            directory,
-            store,
-            requested_phone="0955 222 222",
-            claimed_primary_phone="0944111111",
-            requester_ref_value="gateway-event-1",
-            now=NOW,
-        )
-        self.assertEqual(created.code, RequestCode.REVIEW_REQUESTED)
-        self.assertIsNotNone(created.request_id)
-        self.assertIsNone(getattr(created, "customer_id", None))
-        self.assertEqual(store.requests[created.request_id].status, RequestStatus.PENDING)
-        self.assertEqual(store.requests[created.request_id].proposed_customer_id, "CUST-1")
-        self.assertEqual(store.access_rows, {})
-        before = resolve_customer_identity(directory, store, ADDITIONAL)
-        self.assertEqual(before.code, IdentityCode.UNKNOWN)
-        self.assertIsNone(before.customer_id)
-
-    def test_approve_reject_and_revoke(self) -> None:
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        policy = MemoryPolicy({"employee-1"}, {"employee-1": {"CUST-1"}})
-        created = self._request(directory, store)
-        rejected = reject_phone_access_request(
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=NOW,
-            decision_note="لم يتطابق الاسم",
-        )
-        self.assertEqual(rejected.code, DecisionCode.REJECTED)
-        self.assertEqual(store.access_rows, {})
-        again = reject_phone_access_request(
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=LATER,
-            decision_note="مرة ثانية",
-        )
-        self.assertEqual(again.code, DecisionCode.ALREADY_APPLIED)
-
-        second = self._request(directory, store, source="gateway-event-2")
-        approved = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=second.request_id or "",
-            now=NOW,
-            decision_note="تم التحقق هاتفيًا",
-        )
-        self.assertEqual(approved.code, DecisionCode.APPROVED)
-        self.assertEqual(len(store.access_rows), 1)
-        access = store.get_access_by_phone(ADDITIONAL)
-        assert access is not None
-        self.assertEqual(access.status, AccessStatus.ACTIVE)
-        self.assertEqual(access.customer_id, "CUST-1")
-        allowed = resolve_customer_identity(directory, store, "00963 955 222 222")
-        self.assertEqual(allowed.code, IdentityCode.ALLOWED)
-        self.assertEqual(allowed.access_basis, AccessBasis.ADDITIONAL)
-        self.assertEqual(allowed.customer_id, "CUST-1")
-
-        revoked = revoke_phone_access(
-            store,
-            policy,
-            actor_id="employee-1",
-            phone=ADDITIONAL,
-            now=LATER,
-            reason="الزبون طلب الإيقاف",
-        )
-        self.assertEqual(revoked.code, DecisionCode.REVOKED)
-        access = store.get_access_by_phone(ADDITIONAL)
-        assert access is not None
-        self.assertEqual(access.status, AccessStatus.REVOKED)
-        self.assertEqual(access.revoked_by, "employee-1")
-        after = resolve_customer_identity(directory, store, ADDITIONAL)
-        self.assertEqual(after.code, IdentityCode.UNKNOWN)
-        self.assertIsNone(after.customer_id)
-        repeated = revoke_phone_access(
-            store,
-            policy,
-            actor_id="employee-1",
-            phone=ADDITIONAL,
-            now=LATER,
-            reason="محاولة ثانية",
-        )
-        self.assertEqual(repeated.code, DecisionCode.ALREADY_APPLIED)
-        self.assertEqual(len(store.get_access_by_phone(ADDITIONAL).events), 2)
-
-    def test_repeat_request_and_repeat_approval_do_not_duplicate_rows(self) -> None:
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        policy = MemoryPolicy({"employee-1"}, {"employee-1": {"*"}})
-        first = self._request(directory, store)
-        second = self._request(directory, store, source="gateway-event-2")
-        self.assertEqual(second.code, RequestCode.ALREADY_PENDING)
-        self.assertEqual(second.request_id, first.request_id)
-        self.assertEqual(len(store.requests), 1)
-        different_claim = request_additional_phone_access(
-            directory,
-            store,
-            requested_phone=ADDITIONAL,
-            claimed_primary_phone="+963944333333",
-            requester_ref_value="gateway-event-3",
-            now=NOW,
-        )
-        self.assertEqual(different_claim.code, RequestCode.PENDING_EXISTS)
-        self.assertEqual(len(store.requests), 1)
-
-        approved = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=first.request_id or "",
-            now=NOW,
-        )
-        repeated = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=first.request_id or "",
-            now=LATER,
-        )
-        self.assertEqual(approved.code, DecisionCode.APPROVED)
-        self.assertEqual(repeated.code, DecisionCode.ALREADY_APPLIED)
-        self.assertEqual(len(store.access_rows), 1)
-        self.assertEqual(repeated.access_id, approved.access_id)
-
-    def test_additional_phone_conflicts_with_another_customers_primary(self) -> None:
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",), ADDITIONAL: ("CUST-2",)})
-        store = MemoryStore()
-        policy = MemoryPolicy({"employee-1"}, {"employee-1": {"*"}})
-        created = self._request(directory, store)
-        decision = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=NOW,
-        )
-        self.assertEqual(decision.code, DecisionCode.CONFLICT)
-        self.assertIsNone(decision.access_id)
-        self.assertEqual(store.access_rows, {})
-        self.assertEqual(store.requests[created.request_id].status, RequestStatus.PENDING)
-        identity = resolve_customer_identity(directory, store, ADDITIONAL)
-        self.assertEqual(identity.code, IdentityCode.ALLOWED)
-        self.assertEqual(identity.customer_id, "CUST-2")
-        self.assertEqual(identity.access_basis, AccessBasis.PRIMARY)
-
-    def test_customer_data_is_rechecked_at_approval(self) -> None:
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        policy = MemoryPolicy({"employee-1"}, {"employee-1": {"*"}})
-        created = self._request(directory, store)
-        directory.phones[PRIMARY] = ("CUST-9",)
-        changed = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=NOW,
-        )
-        self.assertEqual(changed.code, DecisionCode.CUSTOMER_CHANGED)
-        self.assertEqual(store.access_rows, {})
-        self.assertEqual(store.requests[created.request_id].status, RequestStatus.PENDING)
-
-        directory.phones[PRIMARY] = ()
-        missing = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=LATER,
-        )
-        self.assertEqual(missing.code, DecisionCode.CUSTOMER_CHANGED)
+        identity = resolve_customer_identity(directory, ADDITIONAL)
+        self.assertEqual(identity.code, IdentityCode.UNKNOWN)
+        self.assertIsNone(identity.customer_id)
+        self.assertIsNone(identity.access_basis)
+        with self.assertRaises(ValueError):
+            from almdina_erp.almdina_erp.domain.customer_bot.identity import CustomerIdentity
+            CustomerIdentity(IdentityCode.ALLOWED, "CUST-1", AccessBasis.ADDITIONAL)
 
     def test_primary_change_invalidates_an_earlier_match(self) -> None:
         directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        before = resolve_customer_identity(directory, store, "0944111111")
+        before = resolve_customer_identity(directory, "0944111111")
         self.assertEqual(before.customer_id, "CUST-1")
+        self.assertEqual(before.access_basis, AccessBasis.PRIMARY)
         directory.phones = {"+963944999999": ("CUST-1",)}
-        after = resolve_customer_identity(directory, store, PRIMARY)
+        after = resolve_customer_identity(directory, PRIMARY)
         self.assertEqual(after.code, IdentityCode.UNKNOWN)
         self.assertIsNone(after.customer_id)
 
-    def test_revoked_grant_stays_revoked_until_a_new_approval(self) -> None:
+    def test_additional_phone_commands_are_retired(self) -> None:
         directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
         store = MemoryStore()
-        policy = MemoryPolicy({"employee-1"}, {"employee-1": {"CUST-1"}})
-        created = self._request(directory, store)
-        approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=NOW,
+        calls = (
+            lambda: request_additional_phone_access(
+                directory,
+                store,
+                requested_phone=ADDITIONAL,
+                claimed_primary_phone=PRIMARY,
+                requester_ref_value="gateway-event-1",
+                now=NOW,
+            ),
+            lambda: approve_phone_access_request(
+                directory,
+                store,
+                MemoryPolicy({"employee-1"}, {"employee-1": {"*"}}),
+                actor_id="employee-1",
+                request_id="REQ-1",
+                now=NOW,
+                decision_note="تحقق",
+            ),
+            lambda: reject_phone_access_request(
+                store,
+                MemoryPolicy({"employee-1"}, {"employee-1": {"*"}}),
+                actor_id="employee-1",
+                request_id="REQ-1",
+                now=NOW,
+                decision_note="رفض",
+            ),
+            lambda: revoke_phone_access(
+                store,
+                MemoryPolicy({"employee-1"}, {"employee-1": {"*"}}),
+                actor_id="employee-1",
+                phone=ADDITIONAL,
+                now=NOW,
+                reason="إيقاف",
+            ),
         )
-        revoke_phone_access(
-            store,
-            policy,
-            actor_id="employee-1",
-            phone=ADDITIONAL,
-            now=LATER,
-            reason="إيقاف",
-        )
-        stale = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=created.request_id or "",
-            now=LATER,
-        )
-        self.assertEqual(stale.code, DecisionCode.ALREADY_DECIDED)
-        self.assertEqual(store.get_access_by_phone(ADDITIONAL).status, AccessStatus.REVOKED)
-
-        renewed = self._request(directory, store, source="gateway-event-9")
-        decision = approve_phone_access_request(
-            directory,
-            store,
-            policy,
-            actor_id="employee-1",
-            request_id=renewed.request_id or "",
-            now=LATER,
-            decision_note="تحقق جديد",
-        )
-        self.assertEqual(decision.code, DecisionCode.APPROVED)
-        self.assertEqual(len(store.access_rows), 1)
-        access = store.get_access_by_phone(ADDITIONAL)
-        assert access is not None
-        self.assertEqual(access.status, AccessStatus.ACTIVE)
-        self.assertEqual(access.approved_by, "employee-1")
-        self.assertEqual(access.revoked_by, "employee-1")
-        self.assertEqual(access.revoke_reason, "إيقاف")
-        self.assertEqual([event.event_type for event in access.events], ["Approved", "Revoked", "Reactivated"])
+        for call in calls:
+            with self.assertRaises(PhoneAccessRetired):
+                call()
+        self.assertEqual(store.requests, {})
+        self.assertEqual(store.access_rows, {})
 
     def test_manage_capability_is_not_implied_by_role_or_whatsapp_settings(self) -> None:
         self.assertNotIn(Capability.MANAGE_CUSTOMER_BOT_ACCESS, FACTORY_SETTINGS_CAPABILITIES)
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        created = self._request(directory, store)
-        system_manager = MemoryPolicy(set(), {})
-        whatsapp_only = MemoryPolicy(set(), {"whatsapp-user": {"CUST-1"}})
-        for policy, actor in (
-            (system_manager, "System Manager"),
-            (whatsapp_only, "whatsapp-user"),
-            (MemoryPolicy({"employee-1"}, {}), "employee-1"),
-        ):
-            decision = approve_phone_access_request(
-                directory,
-                store,
-                policy,
-                actor_id=actor,
-                request_id=created.request_id or "",
-                now=NOW,
-            )
-            self.assertEqual(decision.code, DecisionCode.FORBIDDEN)
-            self.assertEqual(store.access_rows, {})
-        guest = approve_phone_access_request(
-            directory,
-            store,
-            MemoryPolicy({"Guest"}, {"Guest": {"*"}}),
-            actor_id="Guest",
-            request_id=created.request_id or "",
-            now=NOW,
+        from almdina_erp.almdina_erp.application.security.permission_matrix import (
+            CAPABILITY_PRESENTATION,
         )
-        self.assertEqual(guest.code, DecisionCode.FORBIDDEN)
+        label = CAPABILITY_PRESENTATION[Capability.MANAGE_CUSTOMER_BOT_ACCESS]["label"]
+        self.assertIn("retired", label.lower())
 
-    def test_projection_keeps_bot_records_read_only(self) -> None:
+    def test_projection_keeps_retired_bot_records_closed(self) -> None:
         for doctype in (CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE, CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE):
             granted = standard_permission_projection(doctype, {Capability.MANAGE_CUSTOMER_BOT_ACCESS: True})
             denied = standard_permission_projection(doctype, {})
-            self.assertEqual(granted, {"read": True, "select": True, "create": False, "write": False, "delete": False})
-            self.assertEqual(denied["read"], False)
-            self.assertEqual(denied["write"], False)
+            closed = {"read": False, "select": False, "create": False, "write": False, "delete": False}
+            self.assertEqual(granted, closed)
+            self.assertEqual(denied, closed)
 
-    def test_duplicate_constraint_signal_does_not_create_a_second_request(self) -> None:
-        directory = MemoryDirectory({PRIMARY: ("CUST-1",)})
-        store = MemoryStore()
-        store.fail_next_request_insert = True
-        result = self._request(directory, store)
-        self.assertEqual(result.code, RequestCode.PENDING_EXISTS)
-        self.assertEqual(store.requests, {})
-
-    def test_same_number_as_primary_is_not_a_request(self) -> None:
-        result = request_additional_phone_access(
-            MemoryDirectory({PRIMARY: ("CUST-1",)}),
-            MemoryStore(),
-            requested_phone="0944111111",
-            claimed_primary_phone="+963944111111",
-            requester_ref_value="gateway-event-1",
-            now=NOW,
-        )
-        self.assertEqual(result.code, RequestCode.SAME_AS_PRIMARY)
-        self.assertIsNone(result.request_id)
+    def test_no_active_phone_approval_endpoint_or_panel(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        self.assertFalse((root / "almdina_erp" / "services" / "customer_bot_access_service.py").exists())
+        self.assertFalse((root / "public" / "js" / "factory_production_settings" / "customer_bot_access_panel.js").exists())
+        self.assertFalse((root / "public" / "js" / "factory_production_settings" / "customer_bot_access_api.js").exists())
+        gateway = (
+            root / "almdina_erp" / "infrastructure" / "frappe" / "customer_bot_access_gateway.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("@frappe.whitelist", gateway)
+        self.assertNotIn("allow_guest", gateway)
 
     def test_socket_module_is_not_used_by_the_decision(self) -> None:
         self.assertIs(socket.create_connection, _forbid_network)
         self.assertIs(urllib.request.urlopen, _forbid_network)
-        resolve_customer_identity(MemoryDirectory({}), MemoryStore(), "not a phone")
+        resolve_customer_identity(MemoryDirectory({}), "not a phone")
 
     def _request(self, directory: MemoryDirectory, store: MemoryStore, source: str = "gateway-event-1") -> object:
         return request_additional_phone_access(

@@ -1,23 +1,12 @@
-"""Native read limits for customer-bot records.
+"""Closed access for retired customer-bot phone records.
 
-Mutations stay closed here. Approval and revocation go through the use cases.
-The hook can only narrow a grant; it does not create one.
+The DocTypes remain for migration compatibility. No product grant, including
+``manage_customer_bot_access``, opens them. Mutations stay closed.
 """
 
 from __future__ import annotations
 
 from typing import Any
-
-import frappe
-
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    doctype_has_capability,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_records import (
-    _MUTATION_TYPES,
-)
-from almdina_erp.resource_permissions import customer_has_permission
 
 
 def customer_bot_phone_access_query(user: str | None = None) -> str:
@@ -47,12 +36,8 @@ def customer_bot_phone_request_has_permission(
 
 
 def _query(user: str | None) -> str:
-    resolved = user or frappe.session.user
-    if resolved == "Administrator":
-        return ""
-    if not _can_read(resolved, None):
-        return "1=0"
-    return ""
+    del user
+    return "1=0"
 
 
 def _has_permission(
@@ -62,22 +47,8 @@ def _has_permission(
     permission_type: str | None,
     customer_field: str,
 ) -> bool:
-    resolved = user or frappe.session.user
-    resolved_type = ptype if ptype is not None else permission_type
-    if resolved_type in _MUTATION_TYPES:
-        return False
-    customer_id = ""
-    if doc is not None and not isinstance(doc, str):
-        customer_id = str(getattr(doc, customer_field, "") or "")
-    return _can_read(resolved, customer_id or None)
-
-
-def _can_read(user: str, customer_id: str | None) -> bool:
-    if user == "Administrator":
-        return True
-    if not doctype_has_capability(Capability.MANAGE_CUSTOMER_BOT_ACCESS, user=user):
-        return False
-    return bool(customer_has_permission(customer_id, user=user, ptype="read"))
+    del doc, user, ptype, permission_type, customer_field
+    return False
 
 
 __all__ = [

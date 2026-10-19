@@ -112,7 +112,7 @@ flowchart LR
 
 `view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل)، `manage_backups` (الإعداد والجدولة والنسخ اليدوي واختبار SSH والسجل)، و`restore_backups` (الاستعادة المؤكدة فقط). عرض الإعدادات لا يمنح ربط الجلسة أو إدارة النسخ، و`manage_backups` لا يمنح الاستعادة. لا يحصل `System Manager` على أي منهما تلقائيًا؛ `Administrator` هو الاستثناء الصريح.
 
-`manage_customer_bot_access` صلاحية مستقلة لاعتماد رقم إضافي لمتابعة العميل أو رفضه أو إلغاء اعتماده. لا تُستنتج من `manage_whatsapp_session` أو `edit_whatsapp_messages`، ولا تُمنح تلقائيًا لدور أو لـ`System Manager`. سجلات الطلب والوصول لا تُعدَّل من CRUD عام؛ القرار يمر بحالة الاستخدام، والقراءة تبقى مشروطة بهذه الصلاحية وبنطاق قراءة العميل.
+`manage_customer_bot_access` صلاحية متقاعدة. لا تُستنتج من `manage_whatsapp_session` أو `edit_whatsapp_messages`، ولا تفتح سجلات طلب الربط أو منح الأرقام الإضافية. تلك السجلات تبقى في قاعدة البيانات لتوافق الترحيل، والقراءة والكتابة العامة مغلقتان. التعرف إلى عميل البوت يعتمد على `Customer.mobile_no` الحالي فقط.
 
 اختيار نسخة للاستعادة يكون بمعرّف عملية محلية مكتملة من السجل، وليس بمسار يرسله العميل. يتحقق الخادم من نطاق ملفات النسخة وحجمها وchecksum، وينشئ نسخة أمان قبل استدعاء Frappe Restore. حقول SSH الحساسة من نوع `Password` وتبقى في مخزن Frappe المشفر؛ لا تُعاد قيمها إلى المتصفح أو السجل أو رسائل الخطأ.
 

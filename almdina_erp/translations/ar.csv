@@ -2714,8 +2714,12 @@ Edit print identity,تعديل هوية الطباعة
 "Edit the factory name, tagline, address, and contact numbers shown on printed sheets. Does not include WhatsApp messages or session linking.",تعديل اسم المعمل ولمحته وعنوانه وأرقام التواصل الظاهرة على أوراق الطباعة. لا يشمل رسائل واتساب ولا ربط الجلسة.
 Manage WhatsApp session,إدارة جلسة واتساب
 Manage customer bot access,إدارة وصول بوت العملاء
+Manage customer bot access (retired),إدارة وصول بوت العملاء (متقاعد)
+Retired. Additional phone linking is no longer part of the customer bot. Holding this grant does not open the historical records or authorize a decision.,متقاعد. ربط الأرقام الإضافية لم يعد جزءاً من بوت العملاء. امتلاك هذه المنحة لا يفتح السجلات التاريخية ولا يخوّل قراراً.
 "Review, approve, reject, and revoke an additional phone linked to a customer. Does not grant WhatsApp session control, message editing, or customer file sending.",مراجعة طلب ربط رقم إضافي واعتماده أو رفضه أو إلغاء اعتماده. لا تمنح التحكم بجلسة واتساب ولا تعديل رسائلها ولا إرسال ملفات الزبون.
 Customer bot access,وصول بوت العملاء
+Customer bot access (retired),وصول بوت العملاء (متقاعد)
+Retired. Additional phone linking is closed. This category does not open customer follow-up.,متقاعد. ربط الأرقام الإضافية مغلق. هذه الفئة لا تفتح متابعة العميل.
 Review additional phone numbers that ask to follow a customer's orders.,مراجعة أرقام إضافية تطلب متابعة طلبات عميل.
 Customer bot access records are service-managed.,سجلات وصول بوت العملاء تُدار من الخدمة المخصصة فقط.
 Customer Bot Phone Access,سجل وصول بوت العملاء

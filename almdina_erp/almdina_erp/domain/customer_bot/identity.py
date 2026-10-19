@@ -1,16 +1,13 @@
-"""Match one normalized phone to at most one customer.
+"""Match one normalized phone to at most one current customer primary number.
 
-The result carries the customer id and why access is allowed or refused.
-It does not carry orders, prices, or a display name. A conflict refuses
-every match instead of keeping the first row.
+The result carries the customer id only when exactly one current
+``Customer.mobile_no`` matches. It does not carry orders, prices, or a
+display name. A historical additional-phone grant is not an access basis.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from .phone_access import AccessStatus, StoredPhoneAccess
-
 
 class IdentityCode:
     ALLOWED = "allowed"
@@ -22,6 +19,8 @@ class IdentityCode:
 
 class AccessBasis:
     PRIMARY = "primary"
+    # Kept so older callers can name the retired basis. It is not a valid
+    # result: an additional-phone grant never authorizes identity.
     ADDITIONAL = "additional"
 
 
@@ -33,11 +32,8 @@ class CustomerIdentity:
 
     def __post_init__(self) -> None:
         if self.code == IdentityCode.ALLOWED:
-            if not self.customer_id or self.access_basis not in {
-                AccessBasis.PRIMARY,
-                AccessBasis.ADDITIONAL,
-            }:
-                raise ValueError("an allowed identity needs a customer and a basis")
+            if not self.customer_id or self.access_basis != AccessBasis.PRIMARY:
+                raise ValueError("an allowed identity needs the current primary customer")
             return
         if self.customer_id is not None or self.access_basis is not None:
             raise ValueError("a refused identity cannot carry a customer")
@@ -45,15 +41,11 @@ class CustomerIdentity:
 
 def decide_customer_identity(
     primary_customer_ids: tuple[str, ...] | list[str],
-    access: StoredPhoneAccess | None,
-    *,
-    grant_customer_exists: bool,
 ) -> CustomerIdentity:
-    """Resolve access from the current customer phones and one grant row.
+    """Resolve access from every current primary-phone match.
 
-    ``primary_customer_ids`` must already be every current match. Revoked
-    grants do not authorize. An active grant for a different customer than
-    the current primary match is a conflict.
+    Zero matches are unknown. More than one match is a conflict. Neither
+    result includes a customer id. Additional-phone grants are ignored.
     """
 
     distinct: list[str] = []
@@ -62,26 +54,11 @@ def decide_customer_identity(
             distinct.append(customer_id)
     if len(distinct) > 1:
         return CustomerIdentity(IdentityCode.CONFLICT)
-
-    primary_id = distinct[0] if distinct else None
-    active_grant = (
-        access is not None
-        and access.status == AccessStatus.ACTIVE
-        and grant_customer_exists
-    )
-    if active_grant and primary_id is not None and access is not None and access.customer_id != primary_id:
-        return CustomerIdentity(IdentityCode.CONFLICT)
-    if primary_id is not None:
+    if len(distinct) == 1:
         return CustomerIdentity(
             IdentityCode.ALLOWED,
-            primary_id,
+            distinct[0],
             AccessBasis.PRIMARY,
-        )
-    if active_grant and access is not None:
-        return CustomerIdentity(
-            IdentityCode.ALLOWED,
-            access.customer_id,
-            AccessBasis.ADDITIONAL,
         )
     return CustomerIdentity(IdentityCode.UNKNOWN)
 

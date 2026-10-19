@@ -33,11 +33,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_directory impo
 
 
 def resolve_customer_phone(phone: str) -> CustomerIdentity:
-    return resolve_customer_identity(
-        FrappeCustomerPhoneDirectory(),
-        FrappePhoneAccessStore(),
-        phone,
-    )
+    return resolve_customer_identity(FrappeCustomerPhoneDirectory(), phone)
 
 
 def submit_additional_phone_request(
