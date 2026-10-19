@@ -107,7 +107,7 @@ unused token.
 |---|---|
 | Client/server validation or definite responded failure | Return to `ACTIVE`; retain the draft. |
 | Transport failure with unknown outcome | Remain `PENDING_RECONCILIATION`; do not retry or delete. |
-| Reconciliation says `NOT_FOUND` | Server has proved absence; return to `ACTIVE`; the next explicit Save may reuse the same token. |
+| Reconciliation says `NOT_FOUND` | Retain `PENDING_RECONCILIATION`; a still-running insert may not yet be visible. Do not hydrate or retry the insert. |
 | Acknowledged insert or reconciliation says `CREATED` | Enter `COMPLETED`, then delete the local draft/assets, and use the server-returned permanent DCO. |
 | Reconciliation unavailable | Do not hydrate a pending draft and do not retry insert; retain local state. |
 
@@ -115,12 +115,14 @@ Cleanup ordering is server proof, `COMPLETED`, then local delete. A failed local
 delete leaves a discoverable pending record that resolves idempotently next time.
 An exact same-revision retry preserves a stored `PENDING_RECONCILIATION` marker;
 higher checkpoint revisions are refused while that insert attempt is pending, so
-the attempted payload cannot move underneath an acknowledged result. Only the
-explicit server-proven `NOT_FOUND` transition may return the record to `ACTIVE`.
-That transition is compare-and-set against both the recovery revision and the exact
+the attempted payload cannot move underneath an acknowledged result. A narrow
+token lookup returning `NOT_FOUND` does not prove that an earlier insert finished
+without committing and never returns the record to `ACTIVE`. Only a definite
+responded failure or cancellation proven before native insert can release the
+originating pending attempt. That transition is compare-and-set against both the recovery revision and the exact
 `official_save_attempted_at` it reconciled. The timestamp is retained as the last
 attempt fence while `ACTIVE`, and each later attempt advances it monotonically, so
-a late `NOT_FOUND` cannot clear a newer pending attempt from another tab.
+a late failure/cancellation cannot clear a newer pending attempt from another tab.
 Pending reconciliation and hydration also retain the source DocumentContext token,
 and require `AlmdinaDocumentContext.isCurrent`, so a late response cannot mutate a
 departed form, change global Save validation, delete its checkpoint, or route the

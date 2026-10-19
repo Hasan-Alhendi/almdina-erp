@@ -46,7 +46,7 @@
     const editInitializations = new WeakMap();
     const editDismissed = new WeakSet();
     const editIneligibleNotified = new WeakSet();
-    const editRestoreInProgress = new WeakSet();
+    const editRestoreInProgress = new WeakMap();
     const dialogs = new WeakMap();
     const observedSaves = new WeakMap();
     const observedSaveOperations = new WeakMap();
@@ -116,6 +116,11 @@
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
+    }
+
+    function editRestoreOwnsDocument(frm) {
+        const restore = editRestoreInProgress.get(frm);
+        return Boolean(restore && restore.isCurrent());
     }
 
     function ownErrorStatusForGeneration(frm, element) {
@@ -1485,7 +1490,8 @@
         const rollback = captureEditRestoreSnapshot(frm);
         const addedRows = [];
         const pendingPieceKeys = [];
-        editRestoreInProgress.add(frm);
+        const restoreOwnership = { isCurrent: guards.isCurrent };
+        editRestoreInProgress.set(frm, restoreOwnership);
         try {
 
         // Match Frappe GridRow.remove's documented lifecycle while keeping it awaitable.
@@ -1599,7 +1605,7 @@
             }
             throw error;
         } finally {
-            editRestoreInProgress.delete(frm);
+            if (editRestoreInProgress.get(frm) === restoreOwnership) editRestoreInProgress.delete(frm);
         }
     }
 
@@ -1946,6 +1952,9 @@
     }
 
     function flushState(frm, state = currentState(frm)) {
+        // Native child hooks and previously queued frame/unload work can run
+        // while EDIT hydration still owns an unverified, rollbackable model.
+        if (editRestoreOwnsDocument(frm)) return Promise.resolve({ ok: true, value: null });
         if (!state) return Promise.resolve({ ok: true, value: null });
         return state.session.flush()
             .catch((error) => ({
@@ -1971,6 +1980,7 @@
     }
 
     function markDirty(frm, dirtyScope = "DCO") {
+        if (editRestoreOwnsDocument(frm)) return false;
         if (!isEligible(frm, dirtyScope)) return false;
         let state = currentState(frm);
         if (!state && isNew(frm)) {
@@ -2239,6 +2249,15 @@
     }
 
     async function beforeSave(frm) {
+        if (editRestoreInProgress.has(frm) && !activeDocumentGuard(frm)()) abortInactiveSave();
+        if (editRestoreOwnsDocument(frm)) {
+            frappe.validated = false;
+            frappe.show_alert({
+                message: translate("Restoring the local draft…"),
+                indicator: "blue",
+            });
+            return;
+        }
         let state = currentState(frm);
         if (!state && isNew(frm) && !initializations.has(frm)) initializeNewForm(frm);
         const initialization = !state && isNew(frm) ? initializations.get(frm) : null;

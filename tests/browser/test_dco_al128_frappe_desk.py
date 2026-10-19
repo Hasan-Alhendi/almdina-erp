@@ -649,10 +649,20 @@ def _publish_benchmark_progress(result: dict[str, Any]) -> None:
             f"({result['keyboard_samples']} samples).\n"
         )
         output.write(
-            f"- IndexedDB checkpoint acknowledgement: "
+            f"- Input → checkpoint acknowledgement (includes debounce, projection, hash and storage): "
             f"P50 {checkpoint['p50']} ms, P95 {checkpoint['p95']} ms "
             f"({result['checkpoint_ack_samples']} samples).\n"
         )
+        for key, label in (
+            ("live_projection_capture_ms", "Live DCO projection capture"),
+            ("live_projection_serialize_ms", "Canonical serialization of live DCO projection"),
+            ("indexeddb_transaction_ms", "Last completed IndexedDB write transaction per acknowledged edit"),
+        ):
+            metric = result[key]
+            output.write(
+                f"- {label}: P50 {metric['p50']} ms, P95 {metric['p95']} ms "
+                f"({metric['samples']} samples).\n"
+            )
         output.write(
             f"- Phase durations: `{json.dumps(result['phase_durations_seconds'], sort_keys=True)}`\n"
         )
@@ -738,6 +748,23 @@ def _benchmark_order(
                 const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
                 window.__al128KeyboardFrameSamples = [];
                 window.__al128CheckpointSamples = [];
+                window.__al128TransactionSamples = [];
+                // Observe real transactions; preserve their arguments, result and errors.
+                const transaction = IDBDatabase.prototype.transaction;
+                IDBDatabase.prototype.transaction = function (...args) {
+                    const startedAt = performance.now();
+                    const tx = Reflect.apply(transaction, this, args);
+                    const action = window.__al128AckAction;
+                    const indexed = AlmdinaDcoRecovery.IndexedDb;
+                    if (action && action.started && args[1] === "readwrite"
+                        && this.name === indexed.DATABASE_NAME
+                        && tx.objectStoreNames.contains(indexed.DRAFT_STORE)) {
+                        tx.addEventListener("complete", () => {
+                            action.storageTransactions.push(performance.now() - startedAt);
+                        }, {once: true});
+                    }
+                    return tx;
+                };
                 window.__al128KeyboardAction = null;
                 window.__al128AckAction = null;
                 root.addEventListener("input", () => {
@@ -759,6 +786,9 @@ def _benchmark_order(
                                 && state.saved_revision > ackAction.savedRevision) {
                                 window.__al128CheckpointSamples.push(
                                     performance.now() - ackAction.startedAt
+                                );
+                                window.__al128TransactionSamples.push(
+                                    ackAction.storageTransactions.at(-1) ?? null
                                 );
                                 ackAction.completed = true;
                                 return;
@@ -820,7 +850,7 @@ def _benchmark_order(
                 "() => {"
                 " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
                 " window.__al128AckAction = {"
-                "   started: false, completed: false, savedRevision: state.saved_revision"
+                "   started: false, completed: false, storageTransactions: [], savedRevision: state.saved_revision"
                 " };"
                 "}"
             )
@@ -836,14 +866,44 @@ def _benchmark_order(
             page.evaluate("() => { window.__al128AckAction = null; }")
         phase_durations["checkpoint_ack_samples"] = round(time.monotonic() - phase_started, 2)
 
+        # This phase times the actual canonical projection functions on the live
+        # 100-piece form, outside input/ACK collection so it adds no ACK work.
+        # It is a repeated warm projection microbenchmark, not session overhead.
+        phase = "live_projection_samples"
+        projection_samples = page.evaluate(
+            """sampleCount => {
+                const projection = AlmdinaDcoRecovery.Projection;
+                const capture = [], serialize = [];
+                let bytes = 0;
+                for (let index = 0; index < sampleCount; index++) {
+                    const startedAt = performance.now();
+                    const payload = projection.createPayload({
+                        dco: projection.createDcoInput(cur_frm.doc), dirtyScope: "DCO"
+                    });
+                    capture.push(performance.now() - startedAt);
+                    const serializeAt = performance.now();
+                    const serialized = projection.serialize(payload);
+                    serialize.push(performance.now() - serializeAt);
+                    bytes = new TextEncoder().encode(serialized).byteLength;
+                }
+                return {capture, serialize, bytes};
+            }""",
+            sample_count,
+        )
         samples = page.evaluate(
             "() => ({"
             " keyboard: window.__al128KeyboardFrameSamples.slice(-40),"
-            " checkpoint: window.__al128CheckpointSamples.slice(-40)"
+            " checkpoint: window.__al128CheckpointSamples.slice(-40),"
+            " transaction: window.__al128TransactionSamples.slice(-40)"
             "})"
         )
         frame_ms = samples["keyboard"]
         checkpoint_ms = samples["checkpoint"]
+        transaction_ms = samples["transaction"]
+        assert len(transaction_ms) == sample_count
+        assert all(value is not None and value >= 0 for value in transaction_ms), (
+            "Each acknowledged edit must include an observed completed real write transaction"
+        )
         assert len(frame_ms) == sample_count, (
             f"Expected {sample_count} key-to-paint samples, got {len(frame_ms)}"
         )
@@ -866,6 +926,19 @@ def _benchmark_order(
             "checkpoint_ack_ms": {
                 "p50": _percentile(checkpoint_ms, 0.50),
                 "p95": _percentile(checkpoint_ms, 0.95),
+            },
+            "checkpoint_ack_method": "first input to LOCAL_SAVED; includes debounce/projection/hash/storage/polling",
+            "indexeddb_transaction_method": "native transaction creation to complete event; last successful draft-store readwrite per acknowledged edit; excludes projection/hash/open",
+            "projection_method": "40 repeated warm createDcoInput/createPayload and serialize calls on the live form after input/ACK collection; excludes session async work",
+            "projection_payload_bytes": projection_samples["bytes"],
+            **{
+                metric: {"p50": _percentile(values, 0.50),
+                         "p95": _percentile(values, 0.95), "samples": len(values)}
+                for metric, values in (
+                    ("live_projection_capture_ms", projection_samples["capture"]),
+                    ("live_projection_serialize_ms", projection_samples["serialize"]),
+                    ("indexeddb_transaction_ms", transaction_ms),
+                )
             },
             "base_assets_replaced": sorted(replaced),
             "official_save_requests": len(save_requests),
@@ -951,13 +1024,17 @@ def test_actual_measurement_entry_performance_100_before_after() -> None:
                     2,
                 ),
             }
-            for metric in ("input_to_second_animation_frame_ms", "checkpoint_ack_ms")
+            for metric in (
+                "input_to_second_animation_frame_ms", "checkpoint_ack_ms",
+                "live_projection_capture_ms", "live_projection_serialize_ms",
+                "indexeddb_transaction_ms",
+            )
         }
     evidence = {
         "interaction_run": "PASS",
         "performance_rating": "NOT_ASSESSED_NO_ACCEPTANCE_THRESHOLD_DEFINED",
         "performance_metrics_are_comparative_evidence": True,
-        "sample_method": "40 independent samples per metric, Base and HEAD, for each row count",
+        "sample_method": "40 input samples, 40 acknowledged edits with observed real write transactions, and 40 warm live-projection calls per variant on 100 pieces",
         "performance_test_budget_minutes": 10,
         "versions": fixture["versions"],
         "base_sha": base_sha,

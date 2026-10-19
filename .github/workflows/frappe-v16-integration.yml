@@ -30,6 +30,10 @@ on:
           - al129_new
           - al131_edit
           - al129_backend
+      baseline_sha:
+        description: Exact Develop commit for manual permission-baseline reproduction
+        required: false
+        type: string
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
@@ -68,6 +72,8 @@ jobs:
       matrix:
         suite: ${{ fromJSON((github.event_name == 'pull_request' || inputs.suite == 'all') && '["full","full_pinned","full_pinned_base_permission","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
+    env:
+      EXPECTED_APP_SHA: ${{ matrix.suite == 'full_pinned_base_permission' && (github.event.pull_request.base.sha || inputs.baseline_sha) || github.event.pull_request.head.sha || github.sha }}
 
     services:
       mariadb:
@@ -91,13 +97,23 @@ jobs:
           - 11000:6379
 
     steps:
+      - name: Require explicit baseline revision for manual reproduction
+        if: matrix.suite == 'full_pinned_base_permission' && github.event_name != 'pull_request'
+        env:
+          BASELINE_SHA: ${{ inputs.baseline_sha }}
+        run: |
+          [[ "$BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Manual permission-baseline reproduction requires an exact baseline_sha." >&2
+            exit 1
+          }
+
       - name: Checkout Almdina ERP
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Independent pinned baseline: the exact Develop code, not a mock,
-          # is installed into its own Frappe/MariaDB site.
-          ref: ${{ matrix.suite == 'full_pinned_base_permission' && 'Develop' || '' }}
+          # Acceptance certifies the PR artifact itself. The independent
+          # baseline installs the exact base commit into a separate site.
+          ref: ${{ env.EXPECTED_APP_SHA }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -204,11 +220,19 @@ jobs:
           TARGET_SUITE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
+          CHECKOUT_SHA="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          test "$CHECKOUT_SHA" = "$EXPECTED_APP_SHA"
           cd "$RUNNER_TEMP/frappe-bench"
+          APP_SHA="$(git -C apps/almdina_erp rev-parse HEAD)"
+          test "$APP_SHA" = "$EXPECTED_APP_SHA"
           FRAPPE_SHA="$(git -C apps/frappe rev-parse HEAD)"
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
-          printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
-            "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
+          {
+            printf 'Suite=%s\nExpected app=%s\nCheckout=%s\nInstalled app=%s\n' \
+              "$TARGET_SUITE" "$EXPECTED_APP_SHA" "$CHECKOUT_SHA" "$APP_SHA"
+            printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
+              "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
+          } | tee "$RUNNER_TEMP/application-source-refs.log" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
@@ -220,6 +244,14 @@ jobs:
               test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
             fi
           fi
+
+      - name: Upload verified application source refs
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-source-refs-${{ matrix.suite }}
+          path: ${{ runner.temp }}/application-source-refs.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Configure Redis URLs
         run: |

@@ -11,6 +11,7 @@ const cleanups = new WeakMap();
 const dialogs = [];
 const writes = [];
 const scriptEvents = [];
+const checkpointFrames = new WeakMap();
 let selectedRecord = null;
 let permission = true;
 let officialSaves = 0;
@@ -159,7 +160,7 @@ const DocumentContext = {
     isSameDocument(frm, token) { return this.isCurrent(frm, token); },
     formIdentity(frm) { return `Door Cutting Order::${frm.doc.name}`; },
     registerCleanup(frm, key, cleanup) { cleanups.set(frm, { key, cleanup }); return true; },
-    scheduleFrame() {},
+    scheduleFrame(frm, key, callback) { checkpointFrames.set(frm, callback); },
 };
 fakeWindow.AlmdinaDocumentContext = DocumentContext;
 
@@ -271,6 +272,13 @@ const context = vm.createContext({
     Blob,
     structuredClone,
     locals: {},
+    __(message) {
+        // This harness asserts an Arabic notice; exercise its actual catalog entry.
+        const prefix = `${message},`;
+        const entry = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8")
+            .split(/\r?\n/).find((line) => line.startsWith(prefix));
+        return entry ? entry.slice(prefix.length) : message;
+    },
 });
 
 function run(relative) {
@@ -354,9 +362,9 @@ function form() {
         refresh_field() {},
         script_manager: { async trigger(event, doctype, name) {
             scriptEvents.push({ event, doctype, name });
-            if (event === "pieces_remove" && handlers["Door Cutting Order Detail"]
-                && typeof handlers["Door Cutting Order Detail"].pieces_remove === "function") {
-                handlers["Door Cutting Order Detail"].pieces_remove(frm);
+            if (["pieces_add", "pieces_remove"].includes(event) && handlers["Door Cutting Order Detail"]
+                && typeof handlers["Door Cutting Order Detail"][event] === "function") {
+                handlers["Door Cutting Order Detail"][event](frm);
             }
             if (event === "pieces_remove" && pauseRemovalHook) {
                 fakeFrappe.model.locals[doctype].UNRELATED_LOADED_DURING_HOOK = {
@@ -477,6 +485,143 @@ async function settle() {
     assert.ok(!structuralForm.doc.pieces.includes(removedRow), "rows removed by the saved draft leave the live child model");
     assert.ok(scriptEvents.some((event) => event.event === "before_pieces_remove" && event.name === "EDIT-ROW-3"));
     assert.ok(scriptEvents.some((event) => event.event === "pieces_remove" && event.name === "EDIT-ROW-3"));
+
+    const successfulRestoreWrites = writes.length;
+    assert.equal(typeof checkpointFrames.get(structuralForm), "function",
+        "successful restore schedules the completed DCO projection");
+    checkpointFrames.get(structuralForm)();
+    await settle();
+    assert.equal(writes.length, successfulRestoreWrites + 1,
+        "successful hydration checkpoints once through the existing owner");
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(structuralForm);
+    assert.equal(fakeFrappe.validated, true,
+        "completed hydration keeps the next explicit native Save available");
+    const completedProjection = writes.at(-1).payload.dco;
+    assert.equal(completedProjection.customer, "STRUCTURAL-CUSTOMER");
+    assert.deepEqual(completedProjection.pieces.map((piece) => piece.piece_key), [
+        "EDIT-ROW-2", addedPieceKey, "EDIT-ROW-1",
+    ], "only the completed row set and stable recovery identities are persisted");
+    assert.equal(completedProjection.pieces[1].width_cm, 35);
+
+    const interruptedStructuralForm = form();
+    interruptedStructuralForm.doc.pieces.push({
+        doctype: "Door Cutting Order Detail", name: "EDIT-ROW-3", idx: 3, width_cm: 30,
+    });
+    fakeWindow.cur_frm = interruptedStructuralForm;
+    selectedRecord = makeRecord({ payload: fakeWindow.AlmdinaDcoRecovery.Projection.createPayload({
+        dco: structuralDco, dirtyScope: "DCO",
+    }) });
+    const retainedRecord = JSON.stringify(selectedRecord);
+    const retainedRevision = selectedRecord.recovery_revision;
+    await handlers["Door Cutting Order"].onload(interruptedStructuralForm);
+    let signalStructuralRebuild;
+    const structuralRebuildStarted = new Promise((resolve) => { signalStructuralRebuild = resolve; });
+    let resumeStructuralRebuild;
+    const structuralRebuildWait = new Promise((resolve) => { resumeStructuralRebuild = resolve; });
+    pauseDerivedRebuild = { started: signalStructuralRebuild, wait: structuralRebuildWait };
+    const writesBeforeInterruptedStructure = writes.length;
+    dialogs.at(-1).wrapper.fire("continue");
+    await structuralRebuildStarted;
+    assert.equal(fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(interruptedStructuralForm)
+        .recovery_revision, retainedRevision,
+    "native child lifecycle callbacks must not advance the checkpoint during hydration");
+    // Also emulate a previously queued visibility/pagehide/frame flush while the
+    // same model is being restored; it must not persist even fully applied data
+    // until the final authoritative ownership check acknowledges the operation.
+    await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(interruptedStructuralForm);
+    assert.equal(writes.length, writesBeforeInterruptedStructure,
+        "flushes during hydration cannot overwrite the acknowledged source checkpoint");
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(interruptedStructuralForm);
+    assert.equal(fakeFrappe.validated, false,
+        "native Save must not publish a model while hydration still awaits its final ownership check");
+    assert.ok(recoveryAlerts.at(-1).message.includes("استعادة المسودة المحلية"),
+        "the active operator is told that local restoration is still in progress");
+    assert.equal(writes.length, writesBeforeInterruptedStructure);
+    const alertsBeforeDepartedSave = recoveryAlerts.length;
+    fakeWindow.cur_frm = form();
+    fakeFrappe.validated = true;
+    await assert.rejects(
+        handlers["Door Cutting Order"].before_save(interruptedStructuralForm),
+        (error) => error.code === "recovery_document_inactive",
+        "a departed hydration owner rejects only its originating Save",
+    );
+    assert.equal(fakeFrappe.validated, true,
+        "departed recovery must not alter the replacement form's process-global validation flag");
+    assert.equal(recoveryAlerts.length, alertsBeforeDepartedSave,
+        "departed recovery must not show its Save notice on the replacement document");
+    fakeWindow.cur_frm = interruptedStructuralForm;
+    latestServerDocument = {
+        ...interruptedStructuralForm.doc,
+        current_production_stage: "DYNAMIC-DISPATCH-DURING-STRUCTURAL-RESTORE",
+    };
+    resumeStructuralRebuild();
+    pauseDerivedRebuild = null;
+    await settle();
+    assert.equal(interruptedStructuralForm.doc.customer, "SERVER-CUSTOMER");
+    assert.deepEqual(interruptedStructuralForm.doc.pieces.map((row) => row.name), [
+        "EDIT-ROW-1", "EDIT-ROW-2", "EDIT-ROW-3",
+    ], "a failed final ownership check rolls back additions, removals and order");
+    assert.equal(writes.length, writesBeforeInterruptedStructure);
+    assert.equal(JSON.stringify(selectedRecord), retainedRecord,
+        "failed hydration retains the exact acknowledged source checkpoint");
+    latestServerDocument = null;
+
+    const reusedRestoreForm = form();
+    fakeWindow.cur_frm = reusedRestoreForm;
+    selectedRecord = makeRecord();
+    await handlers["Door Cutting Order"].onload(reusedRestoreForm);
+    let signalOldRestore;
+    const oldRestoreStarted = new Promise((resolve) => { signalOldRestore = resolve; });
+    let resumeOldRestore;
+    const oldRestoreWait = new Promise((resolve) => { resumeOldRestore = resolve; });
+    pauseDerivedRebuild = { started: signalOldRestore, wait: oldRestoreWait };
+    dialogs.at(-1).wrapper.fire("continue");
+    await oldRestoreStarted;
+    const oldRestoreCleanup = cleanups.get(reusedRestoreForm);
+    const oldVisit = DocumentContext.capture(reusedRestoreForm);
+    reusedRestoreForm.doc = { ...form().doc, name: "DCO-REUSED-B" };
+    documentTokens.set(reusedRestoreForm, {
+        identity: "Door Cutting Order::DCO-REUSED-B", generation: oldVisit.generation + 1,
+    });
+    oldRestoreCleanup.cleanup();
+    reusedRestoreForm.doc.customer = "CURRENT-B-INPUT";
+    assert.equal(fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.markDirty(reusedRestoreForm), true,
+        "unfinished A hydration must not suppress mutations on B reusing the same Form object");
+    const writesBeforeReusedB = writes.length;
+    await fakeWindow.AlmdinaDcoRecovery.LocalCheckpoint.flush(reusedRestoreForm);
+    assert.equal(writes.length, writesBeforeReusedB + 1);
+    assert.equal(writes.at(-1).target_name, "DCO-REUSED-B");
+    assert.equal(writes.at(-1).payload.dco.customer, "CURRENT-B-INPUT");
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(reusedRestoreForm);
+    assert.equal(fakeFrappe.validated, true, "unfinished A hydration cannot block B's explicit Save");
+
+    cleanups.get(reusedRestoreForm).cleanup();
+    reusedRestoreForm.coordinatorEditing = false;
+    reusedRestoreForm.dirtyState = false;
+    selectedRecord = makeRecord({ target_name: "DCO-REUSED-B" });
+    await handlers["Door Cutting Order"].onload(reusedRestoreForm);
+    let signalNewRestore;
+    const newRestoreStarted = new Promise((resolve) => { signalNewRestore = resolve; });
+    let resumeNewRestore;
+    const newRestoreWait = new Promise((resolve) => { resumeNewRestore = resolve; });
+    pauseDerivedRebuild = { started: signalNewRestore, wait: newRestoreWait };
+    dialogs.at(-1).wrapper.fire("continue");
+    await newRestoreStarted;
+    resumeOldRestore();
+    await settle();
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(reusedRestoreForm);
+    assert.equal(fakeFrappe.validated, false,
+        "stale A finalization must not clear B's own unfinished restore guard");
+    resumeNewRestore();
+    pauseDerivedRebuild = null;
+    await settle();
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(reusedRestoreForm);
+    assert.equal(fakeFrappe.validated, true, "B's own completed restore releases only B's Save guard");
 
     // 10/50/100 local piece additions must use bounded server calls.
     // Keep the actual Frappe Desk timings as a separate required gate.

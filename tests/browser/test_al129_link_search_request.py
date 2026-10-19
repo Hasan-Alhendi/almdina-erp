@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from urllib.parse import urlencode
 
 import pytest
@@ -200,7 +202,8 @@ def test_locator_evaluate_passes_search_text_after_the_dom_element() -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(executable_path="/usr/bin/chromium", headless=True)
+        executable = os.environ.get("CHROMIUM_PATH") or shutil.which("chromium")
+        browser = playwright.chromium.launch(executable_path=executable, headless=True)
         try:
             page = browser.new_page()
             page.set_content(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -22,6 +23,18 @@ BROWSER_TRACE: list[dict[str, str | int | float | None]] = []
 PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 TRACE_PATH: Path | None = None
 ACTIVE_STEP: str | None = None
+CERTIFIED_SCENARIOS: dict[str, dict] = {}
+
+
+def record_scenario(name: str, **evidence) -> None:
+    """Persist individual proven scenarios, even if a later scenario fails."""
+    CERTIFIED_SCENARIOS[name] = {"result": "PASS", **evidence}
+    destination = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / "edit-scenario-results.json").write_text(
+        json.dumps(CERTIFIED_SCENARIOS, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    _trace_event("scenario_passed", scenario=name)
 
 
 def _redact_text(value: str, limit: int = 1000) -> str:
@@ -766,7 +779,6 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     dispatch_checkpoint = start_edit_and_set_note(
         page, dispatch_name, "Must remain local after dispatch", checkpoint=True
     )
-    page.wait_for_timeout(1100)
     dispatch_result = evaluate(page, "dispatch DCO",
         """async ({name, route, worker}) => {
             try {
@@ -842,7 +854,6 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     ).json()["message"]
     assert persisted["order_notes"] == dispatch_baseline
 
-    page.wait_for_timeout(1100)
     evaluate(page, "return DCO to Draft",
         """async name => frappe.xcall(
             'almdina_erp.almdina_erp.services.order_lifecycle_service.return_order_to_draft',
@@ -881,7 +892,452 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     continue_button.click()
     expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
     assert evaluate(page, "verify conflict preserved DCO notes", "() => window.cur_frm.doc.order_notes") == dispatch_baseline
-    _trace_event("certification_completed")
+    record_scenario("edit_restore_save_cancel_permission_dispatch_return_to_draft", explicit_conflict=True)
+
+
+def server_document(page: Page, name: str) -> dict:
+    response = page.request.get(
+        f"{DESK_URL}/api/method/frappe.client.get",
+        params={"doctype": "Door Cutting Order", "name": name},
+    )
+    assert response.ok, f"Authoritative DCO read failed: HTTP {response.status}"
+    return response.json()["message"]
+
+
+def checkpoint_record(page: Page, name: str) -> dict:
+    return evaluate(page, "read durable EDIT checkpoint", """async name => {
+        const found = await AlmdinaDcoRecovery.LocalCheckpoint.repository().discover({
+            site: String(frappe.boot.sitename || frappe.boot.site_name || location.host).trim(),
+            user: String(frappe.session.user).trim(),
+            target_doctype: 'Door Cutting Order', target_name: name, mode: 'EDIT',
+        });
+        if (!found.ok || found.value.records.length !== 1) {
+            throw new Error('Expected exactly one verified EDIT checkpoint for the scenario');
+        }
+        return found.value.records[0];
+    }""", name)
+
+
+def flush_edit_checkpoint(page: Page) -> dict:
+    return evaluate(page, "acknowledge real EDIT checkpoint", """async () => {
+        const recovery = AlmdinaDcoRecovery.LocalCheckpoint;
+        if (!recovery.markDirty(cur_frm, 'DCO')) throw new Error('Dirty EDIT not accepted');
+        const result = await recovery.flush(cur_frm);
+        if (!result || !result.ok) throw new Error('Durable EDIT transaction failed');
+        const state = recovery.snapshot(cur_frm);
+        if (state.state !== 'LOCAL_SAVED' || state.saved_revision !== state.recovery_revision) {
+            throw new Error('Checkpoint was not durably acknowledged');
+        }
+        return state;
+    }""")
+
+
+def continue_edit_checkpoint(page: Page, name: str, notes: str) -> None:
+    button = page.locator('.modal.show [data-edit-recovery-action="continue"]')
+    expect(button).to_be_visible(timeout=30_000)
+    expect(button).to_be_enabled()
+    button.click()
+    wait_for_function(page, "explicit EDIT restore completes", """({name, notes}) =>
+        cur_frm?.doc?.name === name && cur_frm.doc.order_notes === notes
+        && cur_frm.is_dirty() && AlmdinaDcoEditSessionCoordinator.isEditing(cur_frm, 'order')
+        && !document.querySelector('.modal.show [data-edit-recovery-action="continue"]')
+    """, arg={"name": name, "notes": notes})
+
+
+def save_other_tab(context, name: str, notes: str) -> dict:
+    """An independent browser session commits an actual native Desk Save."""
+    browser = context.browser
+    if browser is None:
+        raise RuntimeError("External-edit certification requires a Chromium browser")
+    external_context = browser.new_context(locale="en-US")
+    other = external_context.new_page()
+    attach_browser_diagnostics(other)
+    try:
+        login_to_desk(other, "Administrator", "admin")
+        open_dco(other, name)
+        start_edit_and_set_note(other, name, notes, checkpoint=False)
+        evaluate(other, "native Save in independent Desk tab",
+                 "() => AlmdinaOrderRevisionUX.commitEditSession(cur_frm)")
+        wait_for_function(other, "external native Save is acknowledged", """notes =>
+            cur_frm.doc.order_notes === notes && !cur_frm.is_dirty()
+            && !AlmdinaDcoEditSessionCoordinator.isEditing(cur_frm, 'order')
+        """, arg=notes)
+        result = server_document(other, name)
+        assert result["order_notes"] == notes
+        return result
+    finally:
+        external_context.close()
+
+
+def certify_edit_conflicts_and_internal_checkpoint(page: Page) -> None:
+    name = FIXTURES["external_conflict"]
+    open_dco(page, name)
+    original = server_document(page, name)
+    start_edit_and_set_note(page, name, "Retain local input during external conflict", checkpoint=True)
+    before = checkpoint_record(page, name)
+    external = save_other_tab(page.context, name, "New official input from another browser tab")
+    assert external["modified"] != original["modified"]
+    page.reload(wait_until="domcontentloaded")
+    open_dco(page, name)
+    button = page.locator('.modal.show [data-edit-recovery-action="continue"]')
+    expect(button).to_be_visible()
+    button.click()
+    expect(page.locator("body")).to_contain_text("تغير الطلب على الخادم")
+    assert page.evaluate("() => cur_frm.doc.order_notes") == external["order_notes"]
+    after = checkpoint_record(page, name)
+    assert after["payload_hash"] == before["payload_hash"]
+    assert after["recovery_revision"] == before["recovery_revision"]
+    record_scenario("external_server_edit_before_restore", draft_retained=True, auto_merge=False)
+
+    name = FIXTURES["save_conflict"]
+    open_dco(page, name)
+    local_notes = "Local restored edit must not overwrite a later server edit"
+    start_edit_and_set_note(page, name, local_notes, checkpoint=True)
+    page.reload(wait_until="domcontentloaded")
+    open_dco(page, name)
+    continue_edit_checkpoint(page, name, local_notes)
+    flush_edit_checkpoint(page)
+    before = checkpoint_record(page, name)
+    external = save_other_tab(page.context, name, "Official update after restore, before Save")
+    with page.expect_response(
+        lambda response: "frappe.desk.form.save.savedocs" in response.url,
+        timeout=30_000,
+    ) as save_response:
+        evaluate(page, "initiate stale native Save", """() => {
+            window.__al131StaleSave = 'pending';
+            Promise.resolve(cur_frm.save()).then(
+                () => { window.__al131StaleSave = 'settled'; },
+                () => { window.__al131StaleSave = 'rejected'; }
+            );
+            return true;
+        }""")
+    response = save_response.value
+    payload = response.json()
+    assert response.status >= 400, "A stale restored EDIT must be rejected by native Frappe Save"
+    assert payload.get("exc_type") == "TimestampMismatchError", payload.get("exc_type")
+    assert server_document(page, name)["order_notes"] == external["order_notes"]
+    retained = checkpoint_record(page, name)
+    assert retained["draft_id"] == before["draft_id"]
+    assert retained["payload"]["dco"]["order_notes"] == local_notes
+    record_scenario("server_edit_between_restore_and_native_save", native_error=payload["exc_type"], draft_retained=True)
+
+    name = FIXTURES["internal_checkpoint"]
+    open_dco(page, name)
+    start_edit_and_set_note(page, name, "Native internal pre-plan checkpoint", checkpoint=True)
+    before = checkpoint_record(page, name)
+    result = evaluate(page, "acknowledge native internal pre-plan Save",
+                      "() => AlmdinaOrderRevisionUX.persistOrderEditCheckpoint(cur_frm)")
+    assert result is True
+    wait_for_function(page, "internal checkpoint keeps active EDIT", """() =>
+        !cur_frm.is_dirty() && AlmdinaDcoEditSessionCoordinator.isEditing(cur_frm, 'order')
+    """)
+    official = server_document(page, name)
+    assert official["modified"] != before["expected_server_modified"]
+    evaluate(page, "input after acknowledged internal checkpoint",
+             "() => cur_frm.set_value('order_notes', 'Unsaved input after pre-plan checkpoint')")
+    flush_edit_checkpoint(page)
+    after = checkpoint_record(page, name)
+    assert after["session_origin_modified"] == before["session_origin_modified"]
+    assert after["expected_server_modified"] == official["modified"]
+    page.reload(wait_until="domcontentloaded")
+    open_dco(page, name)
+    continue_edit_checkpoint(page, name, "Unsaved input after pre-plan checkpoint")
+    assert server_document(page, name)["order_notes"] == "Native internal pre-plan checkpoint"
+    record_scenario("acknowledged_internal_preplan_checkpoint", origin_immutable=True, expected_version_advanced=True)
+
+
+def certify_edit_two_tab_revision_fence(page: Page) -> None:
+    name = FIXTURES["two_tabs"]
+    open_dco(page, name)
+    notes = "Shared EDIT checkpoint before two-tab conflict"
+    start_edit_and_set_note(page, name, notes, checkpoint=True)
+    page.reload(wait_until="domcontentloaded")
+    open_dco(page, name)
+    continue_edit_checkpoint(page, name, notes)
+    flush_edit_checkpoint(page)
+    other = page.context.new_page()
+    attach_browser_diagnostics(other)
+    try:
+        open_dco(other, name)
+        continue_edit_checkpoint(other, name, notes)
+        flush_edit_checkpoint(other)
+        # Reopen only the first tab to acknowledge the second tab's durable
+        # revision. The second tab then retains that older base while A writes.
+        page.reload(wait_until="domcontentloaded")
+        open_dco(page, name)
+        continue_edit_checkpoint(page, name, notes)
+        flush_edit_checkpoint(page)
+        evaluate(page, "first tab writes a newer local revision",
+                 "() => cur_frm.set_value('order_notes', 'Newer checkpoint owned by first tab')")
+        flush_edit_checkpoint(page)
+        newer = checkpoint_record(page, name)
+        evaluate(other, "stale second tab attempts checkpoint", """async () => {
+            await cur_frm.set_value('order_notes', 'Stale second tab must not overwrite');
+            AlmdinaDcoRecovery.LocalCheckpoint.markDirty(cur_frm, 'DCO');
+            await AlmdinaDcoRecovery.LocalCheckpoint.flush(cur_frm);
+        }""")
+        wait_for_function(other, "stale second tab is quarantined", """() => {
+            const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);
+            return state?.state === 'ERROR'
+                && ['stale_revision', 'revision_conflict'].includes(state.error?.code)
+                && AlmdinaDcoRecovery.LocalCheckpoint.markDirty(cur_frm, 'DCO') === false;
+        }""")
+        retained = checkpoint_record(page, name)
+        assert retained["payload_hash"] == newer["payload_hash"]
+        assert retained["recovery_revision"] == newer["recovery_revision"]
+        assert retained["payload"]["dco"]["order_notes"] == "Newer checkpoint owned by first tab"
+        record_scenario("two_tab_revision_conflict", newer_revision_preserved=True)
+    finally:
+        other.close()
+
+
+def certify_edit_late_responses(page: Page) -> None:
+    name = FIXTURES["late_restore"]
+    other_name = FIXTURES["identity_b"]
+    open_dco(page, name)
+    start_edit_and_set_note(page, name, "Late restore must remain bound to its source DCO", checkpoint=True)
+    page.reload(wait_until="domcontentloaded")
+    open_dco(page, name)
+    original = checkpoint_record(page, name)
+    other_baseline = server_document(page, other_name)
+    held = []
+
+    def pause_real_request(route) -> None:
+        # Delay delivery only. continue_ below sends this exact original request
+        # to Frappe; no response, permission result or server data is fabricated.
+        held.append(route)
+        page.evaluate("() => { window.__al131RequestPaused = true; }")
+
+    pattern = "**/api/method/frappe.client.get?**"
+    page.route(pattern, pause_real_request)
+    try:
+        button = page.locator('.modal.show [data-edit-recovery-action="continue"]')
+        expect(button).to_be_enabled()
+        button.click()
+        page.wait_for_function("() => window.__al131RequestPaused === true")
+        assert len(held) == 1
+        open_dco(page, other_name)
+        with page.expect_response(lambda response: "frappe.client.get?" in response.url) as late:
+            held.pop().continue_()
+        assert late.value.status == 200
+        late.value.finished()
+        wait_for_function(page, "late restore response settles without changing B", """({name, notes}) =>
+            frappe.request.ajax_count === 0 && cur_frm.doc.name === name
+            && cur_frm.doc.order_notes === notes
+        """, arg={"name": other_name, "notes": other_baseline["order_notes"]})
+        expect(page.locator('.modal.show [data-edit-recovery-action="continue"]')).to_have_count(0)
+        retained = checkpoint_record(page, name)
+        assert retained["payload_hash"] == original["payload_hash"]
+        assert retained["recovery_revision"] == original["recovery_revision"]
+        record_scenario("late_restore_api_response_after_navigation", source_draft_retained=True, other_document_unchanged=True)
+    finally:
+        page.unroute(pattern, pause_real_request)
+        for route in held:
+            route.continue_()
+
+    name = FIXTURES["pending_checkpoint"]
+    open_dco(page, name)
+    start_edit_and_set_note(page, name, "Internal checkpoint with unacknowledged request", checkpoint=True)
+    original = checkpoint_record(page, name)
+    held = []
+    pattern = "**/api/method/frappe.desk.form.save.savedocs"
+    page.route(pattern, pause_real_request)
+    try:
+        evaluate(page, "start actual internal checkpoint without pretending acknowledgement", """() => {
+            window.__al131RequestPaused = false;
+            window.__al131CheckpointSettled = false;
+            Promise.resolve(AlmdinaOrderRevisionUX.persistOrderEditCheckpoint(cur_frm)).then(
+                () => { window.__al131CheckpointSettled = true; },
+                () => { window.__al131CheckpointSettled = true; }
+            );
+            return true;
+        }""")
+        page.wait_for_function("() => window.__al131RequestPaused === true")
+        assert len(held) == 1
+        unacknowledged = checkpoint_record(page, name)
+        assert unacknowledged["session_origin_modified"] == original["session_origin_modified"]
+        assert unacknowledged["expected_server_modified"] == original["expected_server_modified"]
+        assert server_document(page, name)["modified"] == original["expected_server_modified"]
+        open_dco(page, other_name)
+        with page.expect_response(lambda response: "frappe.desk.form.save.savedocs" in response.url) as late:
+            held.pop().continue_()
+        assert late.value.status == 200
+        late.value.finished()
+        wait_for_function(page, "late internal checkpoint completion remains bound to A", """({name, notes}) =>
+            frappe.request.ajax_count === 0 && window.__al131CheckpointSettled
+            && cur_frm.doc.name === name && cur_frm.doc.order_notes === notes
+        """, arg={"name": other_name, "notes": other_baseline["order_notes"]})
+        assert server_document(page, name)["order_notes"] == "Internal checkpoint with unacknowledged request"
+        assert server_document(page, other_name)["modified"] == other_baseline["modified"]
+        record_scenario("unacknowledged_internal_checkpoint_and_late_save_response",
+                        no_premature_version_advance=True, other_document_unchanged=True)
+    finally:
+        page.unroute(pattern, pause_real_request)
+        for route in held:
+            route.continue_()
+
+
+def certify_assignment_change(admin_page: Page) -> None:
+    browser = admin_page.context.browser
+    if browser is None:
+        raise RuntimeError("Assignment certification requires Chromium")
+    context = browser.new_context(locale="en-US")
+    worker_page = context.new_page()
+    attach_browser_diagnostics(worker_page)
+    name = FIXTURES["assignment"]
+    try:
+        login_to_desk(worker_page, FIXTURES["worker"], "dco-test-worker-password")
+        open_dco(worker_page, name)
+        start_edit_and_set_note(worker_page, name, "Retained original-worker draft", checkpoint=True)
+        original = checkpoint_record(worker_page, name)
+        baseline = server_document(admin_page, name)
+        evaluate(admin_page, "dispatch assignment fixture", """args => frappe.xcall(
+            'almdina_erp.almdina_erp.services.order_dispatch_service.dispatch_order', args
+        )""", {"order_name": name, "path": FIXTURES["route"], "assignee": FIXTURES["worker"]})
+        dispatched = server_document(admin_page, name)
+        assert dispatched["current_assignee"] == FIXTURES["worker"]
+        evaluate(admin_page, "reassign stage through actual production command", """args => frappe.xcall(
+            'almdina_erp.almdina_erp.services.shop_floor_commands.reassign_worker', args
+        )""", {"stage_name": dispatched["current_production_stage"], "assignee": FIXTURES["replacement_worker"]})
+        reassigned = server_document(admin_page, name)
+        assert reassigned["current_assignee"] == FIXTURES["replacement_worker"]
+        result = evaluate(worker_page, "original worker cannot save after reassignment", """async () => {
+            const doc = JSON.parse(JSON.stringify(cur_frm.doc));
+            doc.order_notes = 'Forbidden original-worker mutation';
+            try { await frappe.xcall('frappe.client.save', {doc: JSON.stringify(doc)}); return {rejected: false}; }
+            catch (error) { return {rejected: true, type: frappe.last_response?.exc_type || null}; }
+        }""")
+        assert result["rejected"] is True
+        assert server_document(admin_page, name)["order_notes"] == baseline["order_notes"]
+        retained = checkpoint_record(worker_page, name)
+        assert retained["payload_hash"] == original["payload_hash"]
+        # This is an authoritative lifecycle/scope transition. A fresh native
+        # Form navigation may show permission denial, but may never offer EDIT.
+        with worker_page.expect_response(
+            lambda response: "frappe.desk.form.load.getdoc" in response.url,
+            timeout=60_000,
+        ) as loaded:
+            worker_page.reload(wait_until="domcontentloaded")
+        assert loaded.value.status in {200, 403}, loaded.value.status
+        loaded.value.finished()
+        wait_for_function(worker_page, "reassignment navigation settles", """() =>
+            window.frappe?.boot && frappe.request.ajax_count === 0
+        """)
+        expect(worker_page.locator('.modal.show [data-edit-recovery-action="continue"]')).to_have_count(0)
+        record_scenario("assignment_change_after_dispatch", old_worker_save_rejected=True, local_draft_retained=True)
+    finally:
+        context.close()
+
+
+def certify_edit_restart_rows_and_offline(playwright_instance) -> None:
+    """Close/reopen a tab and restart real Chromium with the same disk profile."""
+    name = FIXTURES["rows_restart"]
+    notes = "Offline EDIT with added, deleted and reordered rows"
+    with tempfile.TemporaryDirectory(prefix="al131-chromium-profile-") as profile:
+        context = playwright_instance.chromium.launch_persistent_context(profile, locale="en-US")
+        page = context.new_page()
+        attach_browser_diagnostics(page)
+        try:
+            login_to_desk(page, "Administrator", "admin")
+            open_dco(page, name)
+            original = server_document(page, name)
+            start_edit_and_set_note(page, name, notes, checkpoint=False)
+            context.set_offline(True)
+            expected = evaluate(page, "real offline child-row lifecycle", """async edgeType => {
+                const frm = cur_frm;
+                const removed = frm.doc.pieces[1];
+                await frm.script_manager.trigger('before_pieces_remove', removed.doctype, removed.name);
+                frappe.model.clear_doc(removed.doctype, removed.name);
+                await frm.script_manager.trigger('pieces_remove', removed.doctype, removed.name);
+                const added = frm.add_child('pieces', {
+                    piece_type: 'Regular', width_cm: 47, length_cm: 87, qty: 2,
+                    notes: 'New unsaved row returns after real browser restart',
+                });
+                await frm.script_manager.trigger('pieces_add', added.doctype, added.name);
+                const last = frm.doc.pieces.pop();
+                frm.doc.pieces.unshift(last);
+                frm.doc.pieces.forEach((row, index) => { row.idx = index + 1; row.piece_no = index + 1; });
+                const row = frm.doc.pieces[1];
+                await frappe.model.set_value(row.doctype, row.name, {
+                    edge_long_left: 1, edge_long_left_type_override: edgeType,
+                    extra_full_door_double: 1, extra_liner: 1,
+                    liner_reference_side: 'edge_long_left', liner_offset_cm: 0,
+                    liner_width_cm: 1.8, liner_start_cm: 0, liner_length_cm: 100,
+                    notes: 'Edges and extras survive EDIT hydration',
+                });
+                frm.refresh_field('pieces');
+                frm.dirty();
+                return {
+                    removedName: removed.name,
+                    retainedNames: frm.doc.pieces.filter(item => item !== added).map(item => item.name),
+                    rowNotes: frm.doc.pieces.map(item => item.notes),
+                    widths: frm.doc.pieces.map(item => Number(item.width_cm)),
+                };
+            }""", FIXTURES["edge_type"])
+            ack = flush_edit_checkpoint(page)
+            durable = checkpoint_record(page, name)
+            assert durable["payload"]["dco"]["order_notes"] == notes
+            assert len(durable["payload"]["dco"]["pieces"]) == 3
+            context.set_offline(False)
+            assert server_document(page, name)["modified"] == original["modified"]
+            record_scenario("offline_edit_checkpoint", acknowledged_revision=ack["saved_revision"], server_unchanged=True)
+
+            page.close()
+            page = context.new_page()
+            attach_browser_diagnostics(page)
+            open_dco(page, name)
+            continue_edit_checkpoint(page, name, notes)
+            flush_edit_checkpoint(page)
+            record_scenario("edit_tab_close_reopen", same_profile=True, explicit_continue=True)
+        finally:
+            context.set_offline(False)
+            context.close()
+
+        # Closing the persistent context above terminates its Chromium process;
+        # the next launch reuses its real on-disk IndexedDB and session cookies.
+        context = playwright_instance.chromium.launch_persistent_context(profile, locale="en-US")
+        page = context.new_page()
+        attach_browser_diagnostics(page)
+        try:
+            open_dco(page, name)
+            continue_edit_checkpoint(page, name, notes)
+            result = evaluate(page, "verify actual child-row hydration after browser restart", """() => ({
+                names: cur_frm.doc.pieces.map(row => row.name),
+                notes: cur_frm.doc.pieces.map(row => row.notes),
+                widths: cur_frm.doc.pieces.map(row => Number(row.width_cm)),
+                edge: cur_frm.doc.pieces[1].edge_long_left,
+                override: cur_frm.doc.pieces[1].edge_long_left_type_override,
+                double: cur_frm.doc.pieces[1].extra_full_door_double,
+                liner: cur_frm.doc.pieces[1].extra_liner,
+                linerWidth: cur_frm.doc.pieces[1].liner_width_cm,
+            })""")
+            assert result["notes"] == expected["rowNotes"]
+            assert result["widths"] == expected["widths"]
+            assert expected["removedName"] not in result["names"]
+            assert result["names"][1:] == expected["retainedNames"]
+            assert len(result["names"]) == len(set(result["names"])) == 3
+            assert int(result["edge"]) == int(result["double"]) == int(result["liner"]) == 1
+            assert result["override"] == FIXTURES["edge_type"]
+            assert float(result["linerWidth"]) == 1.8
+            assert server_document(page, name)["modified"] == original["modified"]
+            record_scenario("edit_full_browser_restart_rows_edges_extras", browser=context.browser.version,
+                            deleted_row_absent=True, retained_identity_preserved=True, no_duplicate_rows=True)
+
+            # Native history navigation must never apply A's dirty projection to B.
+            other_name = FIXTURES["identity_b"]
+            other_baseline = server_document(page, other_name)["order_notes"]
+            open_dco(page, other_name)
+            page.go_back(wait_until="domcontentloaded")
+            wait_for_function(page, "browser Back returns exact DCO", "name => cur_frm?.doc?.name === name", arg=name)
+            page.go_forward(wait_until="domcontentloaded")
+            wait_for_function(page, "browser Forward returns isolated DCO", """({name, notes}) =>
+                cur_frm?.doc?.name === name && cur_frm.doc.order_notes === notes
+            """, arg={"name": other_name, "notes": other_baseline})
+            expect(page.locator('.modal.show [data-edit-recovery-action="continue"]')).to_have_count(0)
+            assert server_document(page, other_name)["order_notes"] == other_baseline
+            record_scenario("edit_browser_back_forward_isolation", other_document_unchanged=True)
+        finally:
+            context.close()
 
 
 if __name__ == "__main__":
@@ -944,6 +1400,13 @@ if __name__ == "__main__":
         attach_browser_diagnostics(page)
         try:
             certify_actual_frappe_desk_edit_recovery(page)
+            certify_edit_conflicts_and_internal_checkpoint(page)
+            certify_edit_two_tab_revision_fence(page)
+            certify_edit_late_responses(page)
+            certify_assignment_change(page)
+            certify_edit_restart_rows_and_offline(playwright)
+            _trace_event("certification_completed")
+            print("AL131_REAL_DESK_EVIDENCE " + json.dumps(CERTIFIED_SCENARIOS, ensure_ascii=False))
         except BaseException as failure:
             evidence_dir.mkdir(parents=True, exist_ok=True)
             screenshot = evidence_dir / "dco-desk-failure.png"

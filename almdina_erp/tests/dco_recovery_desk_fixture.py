@@ -138,7 +138,7 @@ def _worker(suffix: str, role: str) -> str:
     return str(user.name)
 
 
-def _order(suffix: str, customer: str, edge_type: str) -> str:
+def _order(suffix: str, customer: str, edge_type: str, *, piece_count: int = 1) -> str:
     order = frappe.get_doc(
         {
             "doctype": "Door Cutting Order",
@@ -153,10 +153,12 @@ def _order(suffix: str, customer: str, edge_type: str) -> str:
             "pieces": [
                 {
                     "piece_type": "Regular",
-                    "width_cm": 60,
+                    "width_cm": 60 + index,
                     "length_cm": 100,
                     "qty": 1,
+                    "notes": f"Official piece {index + 1}",
                 }
+                for index in range(piece_count)
             ],
         }
     )
@@ -272,6 +274,7 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         {Capability.VIEW_ORDERS: True, Capability.EDIT_ORDER: True},
     )
     worker = _worker(suffix, str(role.name))
+    replacement_worker = _worker(f"replacement-{suffix}", str(role.name))
     customer = _customer(suffix)
     edge_type = _edge_type(suffix)
     route = _route(suffix, str(role.name))
@@ -284,7 +287,17 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
         "route": route,
         "role": str(role.name),
         "worker": worker,
+        "replacement_worker": replacement_worker,
+        "edge_type": edge_type,
     }
+    for scenario in (
+        "rows_restart", "external_conflict", "save_conflict", "two_tabs",
+        "internal_checkpoint", "late_restore", "pending_checkpoint", "assignment",
+    ):
+        fixtures[scenario] = _order(
+            f"{scenario}-{suffix}", customer, edge_type,
+            piece_count=3 if scenario == "rows_restart" else 1,
+        )
     destination = os.environ.get("DCO_DESK_FIXTURE_FILE")
     if not destination:
         frappe.throw("DCO_DESK_FIXTURE_FILE must point to an isolated CI temp file.")
