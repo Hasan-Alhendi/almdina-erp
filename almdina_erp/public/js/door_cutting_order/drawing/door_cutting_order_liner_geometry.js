@@ -604,7 +604,7 @@
         const width = linerPiece.widthCm * 10;
         const height = linerPiece.lengthCm * 10;
         const mirrored = Boolean(piece.corner_mirrored);
-        const turns = piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         function endSawn(atStart, boundary) {
             if (!boundary) return false;
             const clipped = prepared.clipped;
@@ -725,11 +725,51 @@
         ];
     }
 
+    function pieceQuarterTurns(piece) {
+        if (!piece) return 0;
+        if (Number.isInteger(piece.rotation_quarter_turns)) {
+            return ((piece.rotation_quarter_turns % 4) + 4) % 4;
+        }
+        if (Number.isInteger(piece.corner_rotation_quarter_turns)) {
+            return ((piece.corner_rotation_quarter_turns % 4) + 4) % 4;
+        }
+        return piece.rotated ? 1 : 0;
+    }
+
+    function samePlacedPiece(left, right) {
+        if (!left || !right) return false;
+        if (left === right) return true;
+        if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
+            return true;
+        }
+        const leftInstance = String(left.piece_instance_id || "").trim();
+        const rightInstance = String(right.piece_instance_id || "").trim();
+        if (leftInstance && leftInstance === rightInstance) return true;
+        return Boolean(left.label)
+            && String(left.label) === String(right.label || "")
+            && Number(left.x) === Number(right.x)
+            && Number(left.y) === Number(right.y);
+    }
+
+    function placementRingMm(piece) {
+        const x = num(piece && piece.x) * 10;
+        const y = num(piece && piece.y) * 10;
+        const width = num(piece && piece.w) * 10;
+        const height = num(piece && piece.h) * 10;
+        if (!(width > 0) || !(height > 0)) return [];
+        return [
+            [x, y],
+            [x + width, y],
+            [x + width, y + height],
+            [x, y + height],
+        ];
+    }
+
     function placedPolygonMm(piece) {
         const linerPiece = pieceFromRow(piece);
         const polygon = piecePolygonMm(linerPiece);
         if (!polygon) return [];
-        const turns = piece && piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         const mirrored = Boolean(piece && piece.corner_mirrored);
         const originX = num(piece && piece.x) * 10;
         const originY = num(piece && piece.y) * 10;
@@ -743,6 +783,23 @@
             );
             return [placed[0] + originX, placed[1] + originY];
         });
+    }
+
+    function obstaclePolygonMm(piece) {
+        // Persisted usable-sheet outer is the manufacturing outline when present.
+        const outer = piece && piece.geometry && piece.geometry.outer;
+        if (Array.isArray(outer) && outer.length >= 3) {
+            return outer.map(point => [num(point[0]), num(point[1])]);
+        }
+        const type = String((piece && piece.piece_type) || "Regular");
+        // Regular doors: the optimizer/DXF placement box is authoritative. Parametric
+        // width_cm without the matching rotation flag can invent an oversized ring
+        // that falsely collides with a kerf-clear liner extension on a neighbour.
+        if (type !== CLIPPED && type !== L_SHAPED) {
+            const ring = placementRingMm(piece);
+            if (ring.length >= 3) return ring;
+        }
+        return placedPolygonMm(piece);
     }
 
     function transformPoint(point, mirrored, quarterTurns, width, height) {
@@ -867,7 +924,7 @@
     }
 
     function placeLocalPath(piece, linerPiece, local) {
-        const turns = piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         const mirrored = Boolean(piece.corner_mirrored);
         const originX = num(piece.x) * 10;
         const originY = num(piece.y) * 10;
@@ -959,7 +1016,11 @@
         generateToolpath,
         buildMachiningOverlay,
         extensionConflict,
+        pieceQuarterTurns,
+        samePlacedPiece,
+        placementRingMm,
         placedPolygonMm,
+        obstaclePolygonMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,

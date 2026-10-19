@@ -10,11 +10,14 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     has_self_intersection,
     point_in_polygon,
+    point_to_polygon_distance,
+    polygon_segments,
+    segment_distance,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
@@ -1483,6 +1486,142 @@ def localize_path(path: Sequence[Point], outline: Sequence[Point]) -> list[Point
     return [(point[0] - min_x, point[1] - min_y) for point in path]
 
 
+def piece_quarter_turns(piece: Mapping[str, Any] | None) -> int:
+    """Resolve clockwise quarter turns for a placed plan/DXF piece."""
+
+    if not piece:
+        return 0
+    if isinstance(piece.get("rotation_quarter_turns"), int):
+        return int(piece["rotation_quarter_turns"]) % 4
+    if isinstance(piece.get("corner_rotation_quarter_turns"), int):
+        return int(piece["corner_rotation_quarter_turns"]) % 4
+    return 1 if piece.get("rotated") else 0
+
+
+def placement_ring_mm(piece: Mapping[str, Any]) -> list[Point]:
+    x = float(piece.get("x") or 0) * CM_TO_MM
+    y = float(piece.get("y") or 0) * CM_TO_MM
+    width = float(piece.get("w") or 0) * CM_TO_MM
+    height = float(piece.get("h") or 0) * CM_TO_MM
+    if not (width > 0 and height > 0):
+        return []
+    return [
+        (x, y),
+        (x + width, y),
+        (x + width, y + height),
+        (x, y + height),
+    ]
+
+
+def placed_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
+    liner = LinerPiece(
+        str(piece.get("piece_type") or "Regular"),
+        float(
+            piece.get("cut_width_cm")
+            or piece.get("width_cm")
+            or piece.get("original_w")
+            or piece.get("w")
+            or 0
+        ),
+        float(
+            piece.get("cut_length_cm")
+            or piece.get("length_cm")
+            or piece.get("original_h")
+            or piece.get("h")
+            or 0
+        ),
+        str(piece.get("clipped_corner_position") or "Top Right"),
+        float(piece.get("clipped_corner_width_cm") or 0),
+        float(piece.get("clipped_corner_length_cm") or 0),
+    )
+    local = piece_polygon_mm(liner)
+    turns = piece_quarter_turns(piece)
+    mirrored = bool(piece.get("corner_mirrored"))
+    origin_x = float(piece.get("x") or 0) * CM_TO_MM
+    origin_y = float(piece.get("y") or 0) * CM_TO_MM
+    width = _mm(liner.width_cm)
+    height = _mm(liner.length_cm)
+    placed: list[Point] = []
+    for point in local:
+        moved = transform_point(
+            point,
+            mirrored=mirrored,
+            quarter_turns=turns,
+            width=width,
+            height=height,
+        )
+        placed.append((moved[0] + origin_x, moved[1] + origin_y))
+    return placed
+
+
+def obstacle_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
+    """Obstacle ring for liner extension clearance — mirrors the JS export rule."""
+
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
+    outer = geometry.get("outer") if geometry else None
+    if isinstance(outer, Sequence) and len(outer) >= 3:
+        return [(float(point[0]), float(point[1])) for point in outer]
+    kind = str(piece.get("piece_type") or "Regular")
+    if kind not in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        ring = placement_ring_mm(piece)
+        if len(ring) >= 3:
+            return ring
+    return placed_polygon_mm(piece)
+
+
+def _segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool:
+    def side(p: Point, q: Point, r: Point) -> float:
+        return ((q[0] - p[0]) * (r[1] - p[1])) - ((q[1] - p[1]) * (r[0] - p[0]))
+
+    return side(a, b, c) * side(a, b, d) < -1e-8 and side(c, d, a) * side(c, d, b) < -1e-8
+
+
+def extension_conflict(
+    path: Sequence[Point],
+    diameter_mm: float,
+    board: Sequence[float] | Mapping[str, float] | None,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+) -> str:
+    """Return ``liner_extension_hits_piece`` when the cutter body invades a neighbour.
+
+    ``board`` is accepted for API parity with the JS port; clearance is decided
+    against obstacle rings only (off-board extensions remain allowed).
+    """
+
+    del board  # reserved for callers that still pass usable-sheet bounds
+    radius = float(diameter_mm) / 2.0
+
+    for index in range(len(path) - 1):
+        start = (float(path[index][0]), float(path[index][1]))
+        end = (float(path[index + 1][0]), float(path[index + 1][1]))
+        for obstacle in obstacles or ():
+            if isinstance(obstacle, Mapping) and "polygon" in obstacle:
+                ring = [(float(p[0]), float(p[1])) for p in obstacle["polygon"]]
+            elif isinstance(obstacle, Mapping):
+                ring = [
+                    (float(obstacle.get("minX") or 0), float(obstacle.get("minY") or 0)),
+                    (float(obstacle.get("maxX") or 0), float(obstacle.get("minY") or 0)),
+                    (float(obstacle.get("maxX") or 0), float(obstacle.get("maxY") or 0)),
+                    (float(obstacle.get("minX") or 0), float(obstacle.get("maxY") or 0)),
+                ]
+            else:
+                ring = [(float(p[0]), float(p[1])) for p in obstacle]
+            if len(ring) < 3:
+                continue
+            if point_in_polygon(start, ring) or point_in_polygon(end, ring):
+                return "liner_extension_hits_piece"
+            segments = polygon_segments(ring)
+            if any(_segments_cross(start, end, seg[0], seg[1]) for seg in segments):
+                return "liner_extension_hits_piece"
+            gap = min(
+                [point_to_polygon_distance(start, ring), point_to_polygon_distance(end, ring)]
+                + [segment_distance((start, end), seg) for seg in segments]
+            )
+            if gap < radius - GEOMETRY_TOLERANCE_MM:
+                return "liner_extension_hits_piece"
+    return ""
+
+
 def canonical_path(
     path: Sequence[Point],
     *,
@@ -1529,10 +1668,15 @@ __all__ = [
     "inverse_transform_point",
     "liner_parameters_active",
     "cutter_center_offsets_mm",
+    "extension_conflict",
     "liner_toolpath_mm",
     "liner_strip_polygon_mm",
     "localize_path",
+    "obstacle_polygon_mm",
     "piece_polygon_mm",
+    "piece_quarter_turns",
+    "placed_polygon_mm",
+    "placement_ring_mm",
     "reference_polyline_mm",
     "sawn_liner_ends",
     "transform_point",

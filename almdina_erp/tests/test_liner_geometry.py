@@ -657,6 +657,38 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     assert break_end is True
 
 
+def test_obstacle_polygon_uses_placement_box_for_regular_doors():
+    from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+        extension_conflict,
+        obstacle_polygon_mm,
+        placed_polygon_mm,
+    )
+
+    mismatched = {
+        "piece_type": "Regular",
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 50,
+        "width_cm": 50,
+        "length_cm": 40,
+        "rotated": 0,
+    }
+    assert obstacle_polygon_mm(mismatched) == [
+        (0.0, 0.0),
+        (400.0, 0.0),
+        (400.0, 500.0),
+        (0.0, 500.0),
+    ]
+    assert placed_polygon_mm(mismatched)[1][0] == pytest.approx(500.0)
+    path = [(407.5, 0.0), (407.5, 500.0)]
+    assert extension_conflict(path, 5.0, None, [{"polygon": obstacle_polygon_mm(mismatched)}]) == ""
+    assert (
+        extension_conflict(path, 5.0, None, [{"polygon": placed_polygon_mm(mismatched)}])
+        == "liner_extension_hits_piece"
+    )
+
+
 def test_previously_exported_board_edge_liner_still_matches():
     full = LinerPiece("Regular", 122, 244)
     legacy = liner_toolpath_mm(

@@ -1266,6 +1266,43 @@ async function run() {
         /overlaps an adjacent piece/
     );
 
+    // Kerf-clear door 5 with a neighbour whose order width_cm is larger than
+    // placed w (missing rotation) must still export — obstacle uses w/h.
+    nextPlan = linerEndPlan([
+        linerDoor({
+            id: 5,
+            label: "5",
+            x: 40.5,
+            y: 0,
+            w: 30,
+            h: 50,
+            width_cm: 30,
+            length_cm: 50,
+            liner_reference_side: "edge_long_left",
+        }),
+        linerDoor({
+            id: 4,
+            label: "4",
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 50,
+            width_cm: 50,
+            length_cm: 40,
+            rotated: 0,
+            extra_liner: 0,
+            liner_reference_side: "",
+        }),
+    ]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "system");
+    assert.equal(cutPathLineCount(downloadedDxf), 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "approved");
+    assert.ok(cutPathLineCount(downloadedDxf) > 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+
     nextPlan = linerEndPlan([linerDoor({
         w: 122,
         width_cm: 122,

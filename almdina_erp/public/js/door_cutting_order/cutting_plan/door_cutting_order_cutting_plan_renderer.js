@@ -554,6 +554,10 @@
     });
 
     function samePlacedPiece(left, right) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.samePlacedPiece === "function") {
+            return liner.samePlacedPiece(left, right);
+        }
         if (!left || !right) return false;
         if (left === right) return true;
         if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
@@ -563,6 +567,22 @@
             && String(left.label) === String(right.label || "")
             && Number(left.x) === Number(right.x)
             && Number(left.y) === Number(right.y);
+    }
+
+    function overlayObstacles(sheet, piece) {
+        const liner = window.AlmdinaLinerGeometry;
+        return (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
+            const polygon = liner && typeof liner.obstaclePolygonMm === "function"
+                ? liner.obstaclePolygonMm(other)
+                : (liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : []);
+            if (polygon.length >= 3) return { polygon };
+            return {
+                minX: num(other.x) * 10,
+                minY: num(other.y) * 10,
+                maxX: (num(other.x) + num(other.w)) * 10,
+                maxY: (num(other.y) + num(other.h)) * 10,
+            };
+        });
     }
 
     function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
@@ -581,16 +601,7 @@
                 board,
                 kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
             }));
-            const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
-                const polygon = liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
-                if (polygon.length >= 3) return { polygon };
-                return {
-                    minX: num(other.x) * 10,
-                    minY: num(other.y) * 10,
-                    maxX: (num(other.x) + num(other.w)) * 10,
-                    maxY: (num(other.y) + num(other.h)) * 10,
-                };
-            });
+            const obstacles = overlayObstacles(sheet, piece);
             const result = kept.slice();
             tools.forEach(tool => {
                 if (!tool) return;
@@ -627,25 +638,20 @@
         if (tool.error) {
             return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
         }
-        if (typeof liner.extensionConflict !== "function" || !tool.geometry) return kept;
-        const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
-            const polygon = typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
-            if (polygon.length >= 3) return { polygon };
-            return {
-                minX: num(other.x) * 10,
-                minY: num(other.y) * 10,
-                maxX: (num(other.x) + num(other.w)) * 10,
-                maxY: (num(other.y) + num(other.h)) * 10,
-            };
-        });
+        if (typeof liner.extensionConflict !== "function" || !tool.geometry) {
+            return kept.concat(tool);
+        }
+        const obstacles = overlayObstacles(sheet, piece);
         const conflict = liner.extensionConflict(
             tool.geometry.path,
             num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
             board,
             obstacles
         );
-        if (!conflict) return kept;
-        return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
+        if (conflict) {
+            return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
+        }
+        return kept.concat(tool);
     }
 
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {

@@ -847,28 +847,41 @@
         let extmaxX = 0;
         let extmaxY = 0;
 
+        function overlayObstacles(sheet, piece) {
+            const liner = window.AlmdinaLinerGeometry;
+            const samePiece = liner && typeof liner.samePlacedPiece === "function"
+                ? liner.samePlacedPiece
+                : ((left, right) => left === right);
+            return (sheet.pieces || []).filter(other => !samePiece(other, piece)).map(other => {
+                const polygon = liner && typeof liner.obstaclePolygonMm === "function"
+                    ? liner.obstaclePolygonMm(other)
+                    : (liner && typeof liner.placedPolygonMm === "function"
+                        ? liner.placedPolygonMm(other)
+                        : []);
+                if (polygon.length >= 3) return { polygon };
+                return {
+                    minX: num(other.x) * 10,
+                    minY: num(other.y) * 10,
+                    maxX: (num(other.x) + num(other.w)) * 10,
+                    maxY: (num(other.y) + num(other.h)) * 10,
+                };
+            });
+        }
+
         function emitOverlayEntity(overlay, transform, sheet, piece) {
             const points = topologyDxfPoints(overlay.path, transform);
             if (!overlay.toolpath) return overlayPath(overlay.layer, points, overlay.closed);
             const liner = window.AlmdinaLinerGeometry;
+            // Design and manufacturing both refuse unsafe liner extensions.
+            // CUT_PATH separation/trim stays manufacturing-only via includeSawCenters.
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
                 const conflict = liner.extensionConflict(
                     overlay.path,
                     cutterMm,
                     usableBoardMm(plan, sheet, trim),
-                    (sheet.pieces || []).filter(other => other !== piece).map(other => {
-                    const polygon = typeof liner.placedPolygonMm === "function"
-                        ? liner.placedPolygonMm(other)
-                        : [];
-                    if (polygon.length >= 3) return { polygon };
-                    return {
-                        minX: num(other.x) * 10,
-                        minY: num(other.y) * 10,
-                        maxX: (num(other.x) + num(other.w)) * 10,
-                        maxY: (num(other.y) + num(other.h)) * 10,
-                    };
-                }));
+                    overlayObstacles(sheet, piece)
+                );
                 if (conflict) throw linerExportError(piece, conflict);
             }
             return lwpolyline(overlay.layer, points);

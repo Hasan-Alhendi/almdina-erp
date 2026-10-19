@@ -484,6 +484,50 @@ assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard
 ]), "");
 const crowded = geometry.placedPolygonMm(placedLiner({ x: 40.1, width_cm: 30, length_cm: 50 }));
 assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, [{ polygon: crowded }]), "liner_extension_hits_piece");
+// Door 5 regression: Regular obstacle rings follow placed w/h, not an oversized
+// width_cm that forgot the matching rotation flag (false positive into kerf).
+const doorFive = geometry.syntheticOverlay(placedLiner({
+    id: 5,
+    label: "5",
+    x: 40.5,
+    y: 0,
+    w: 30,
+    h: 50,
+    width_cm: 30,
+    length_cm: 50,
+    liner_reference_side: "edge_long_left",
+}));
+assert.equal(doorFive.error, undefined);
+const mismatchedNeighbor = {
+    id: 4,
+    label: "4",
+    piece_type: "Regular",
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 50,
+    width_cm: 50,
+    length_cm: 40,
+    rotated: 0,
+};
+assert.deepEqual(copy(geometry.obstaclePolygonMm(mismatchedNeighbor)), [
+    [0, 0], [400, 0], [400, 500], [0, 500],
+]);
+assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
+    { polygon: geometry.obstaclePolygonMm(mismatchedNeighbor) },
+]), "");
+assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
+    { polygon: geometry.placedPolygonMm(mismatchedNeighbor) },
+]), "liner_extension_hits_piece");
+const doorFivePiece = placedLiner({
+    id: 5, label: "5", x: 40.5, y: 0, w: 30, h: 50, width_cm: 30, length_cm: 50,
+});
+const selfCopy = Object.assign({}, doorFivePiece);
+assert.equal(doorFivePiece === selfCopy, false);
+assert.equal(geometry.samePlacedPiece(doorFivePiece, selfCopy), true);
+assert.equal(geometry.samePlacedPiece(doorFivePiece, mismatchedNeighbor), false);
+assert.equal(geometry.pieceQuarterTurns({ rotation_quarter_turns: 3, rotated: 0 }), 3);
+assert.equal(geometry.pieceQuarterTurns({ rotated: 1 }), 1);
 const partial = geometry.syntheticOverlay(placedLiner({
     liner_start_cm: 5,
     liner_length_cm: 20,
