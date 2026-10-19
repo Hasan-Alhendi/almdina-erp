@@ -27,7 +27,6 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     liner_toolpath_mm,
     sawn_liner_ends,
     liner_strip_polygon_mm,
-    nominal_liner_reference_length_mm,
     piece_polygon_mm,
     resolved_liner_span_mm,
     transform_point,
@@ -312,11 +311,10 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
     assert not compare_liner_path(strip, finished_piece, "edge_break", 1, 0.8).ok
 
 
-def test_l_edge_break_keeps_effective_path_separate_from_nominal_input_length():
+def test_l_edge_break_uses_effective_path_for_input_length():
     piece = LinerPiece(
         "L-Shaped Corner", 60, 60, "Top Right", 30.1, 30.1, 30, 30
     )
-    assert nominal_liner_reference_length_mm(piece, "edge_break") == pytest.approx(600)
     _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
     assert effective_length == pytest.approx(602)
     assert error == ""
@@ -326,9 +324,11 @@ def test_l_edge_break_keeps_effective_path_separate_from_nominal_input_length():
 
 
 @pytest.mark.parametrize("position", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"])
-def test_l_nominal_inner_reference_length_is_orientation_independent(position):
+def test_l_inner_reference_length_is_orientation_independent(position):
     piece = LinerPiece("L-Shaped Corner", 60, 60, position, 30.1, 30.1, 30, 30)
-    assert nominal_liner_reference_length_mm(piece, "edge_break") == pytest.approx(600)
+    _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
+    assert effective_length == pytest.approx(602)
+    assert error == ""
 
 
 def test_cutter_centers_cover_width_without_crossing_it():

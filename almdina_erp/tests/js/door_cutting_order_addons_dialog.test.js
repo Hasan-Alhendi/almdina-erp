@@ -239,6 +239,10 @@ for (const [kind, width] of [
     assert.ok(saveIssue.message.includes(String(valid.edgeCm - valid.startCm)));
 }
 
+fakeWindow.AlmdinaMultiEdgeBanding = {
+    calculate() { return { cutWidth: 60, cutLength: 60, sides: {} }; },
+    thicknessForType() { return 1; },
+};
 for (const [kind, enabled, side, offset, width, start, length] of [
     ["liner", "extra_liner", "liner_reference_side", "liner_offset_cm", "liner_width_cm", "liner_start_cm", "liner_length_cm"],
     ["back_groove", "extra_back_groove", "back_groove_reference_side", "back_groove_offset_cm", "back_groove_width_cm", "back_groove_start_cm", "back_groove_length_cm"],
@@ -255,6 +259,7 @@ for (const [kind, enabled, side, offset, width, start, length] of [
         clipped_corner_width_cm: 30,
         clipped_corner_length_cm: 30,
         edge_break: 1,
+        default_edge_type: "Default 1mm",
         [enabled]: 1,
         [side]: "edge_break",
         [offset]: 1,
@@ -262,11 +267,13 @@ for (const [kind, enabled, side, offset, width, start, length] of [
         [start]: 0,
         [length]: 60,
     };
-    assert.equal(dialog.createSession({ doc: {} }, lRow).drafts[enabled].edgeCm, 60);
-    assert.equal(dialog.validateOrder({ doc: { pieces: [lRow] } }), null, `${kind} accepts the 60 cm nominal L span`);
+    assert.equal(dialog.createSession({ doc: { default_edge_type: "Default 1mm" } }, lRow).drafts[enabled].edgeCm, 60.2);
     lRow[length] = 60.2;
-    assert.equal(dialog.validateOrder({ doc: { pieces: [lRow] } }).code, "liner_span_exceeds_edge", `${kind} rejects 60.2 cm`);
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }), null, `${kind} accepts the 60.2 cm effective L span`);
+    lRow[length] = 60.226;
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }).code, "liner_span_exceeds_edge", `${kind} rejects lengths beyond the effective L path`);
 }
+delete fakeWindow.AlmdinaMultiEdgeBanding;
 
 fakeWindow.AlmdinaMultiEdgeBanding = {
     calculate() {

@@ -12,15 +12,12 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS_BY_KIND,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
-    L_SHAPED_CORNER_TYPE,
-    SIDE_BREAK,
     LinerGeometryError,
     LinerPiece,
     available_liner_sides,
     contour_notch_cm,
     liner_activation_error,
     liner_centerline_mm,
-    nominal_liner_reference_length_mm,
     resolved_liner_span_mm,
     validation_code,
 )
@@ -44,6 +41,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+    FrappeEdgeProfileRepository,
+)
 from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
     validate_special_shape_drawing,
 )
@@ -52,9 +52,6 @@ from almdina_erp.almdina_erp.services.special_shape_service import (
 )
 
 from .document_access import FrappeOrderDocumentAccess
-
-_NUMERIC_TOLERANCE_MM = 1e-7
-
 
 class FrappeOrderPiecePolicyAdapter:
     """Translate Frappe child rows to pure piece-policy decisions."""
@@ -77,9 +74,11 @@ class FrappeOrderPiecePolicyAdapter:
         self,
         document: Any,
         access: FrappeOrderDocumentAccess,
+        edge_profiles: FrappeEdgeProfileRepository,
     ) -> None:
         self.document = document
         self.access = access
+        self.edge_profiles = edge_profiles
 
     @staticmethod
     def _geometry_snapshot(row: Any | None) -> PieceGeometry | None:
@@ -261,6 +260,16 @@ class FrappeOrderPiecePolicyAdapter:
         setattr(row, addon.length_field, 0)
 
     def _liner_notch_cm(self, row: Any) -> tuple[float, float]:
+        edge_break = bool(cint(getattr(row, "edge_break", 0)))
+        edge_break_thickness_mm = None
+        if edge_break:
+            edge_type = str(
+                getattr(row, "edge_type", None)
+                or getattr(self.document, "default_edge_type", None)
+                or ""
+            ).strip()
+            profile = self.edge_profiles.profiles().get(edge_type) if edge_type else None
+            edge_break_thickness_mm = profile.thickness_mm if profile else None
         return contour_notch_cm(
             piece_type=row.piece_type or "Regular",
             finished_width_cm=flt(row.width_cm),
@@ -269,8 +278,8 @@ class FrappeOrderPiecePolicyAdapter:
             notch_length_cm=flt(getattr(row, "clipped_corner_length_cm", 0)),
             position=str(getattr(row, "clipped_corner_position", "") or ""),
             side_thickness_mm=self._liner_side_thickness_mm(row),
-            edge_break=bool(cint(getattr(row, "edge_break", 0))),
-            edge_break_thickness_mm=getattr(row, "edge_break_thickness_mm", None),
+            edge_break=edge_break,
+            edge_break_thickness_mm=edge_break_thickness_mm,
         )
 
     def _liner_side_thickness_mm(self, row: Any) -> dict[str, float]:
@@ -371,12 +380,6 @@ class FrappeOrderPiecePolicyAdapter:
             clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
             clipped_corner_width_cm=notch_width_cm,
             clipped_corner_length_cm=notch_length_cm,
-            nominal_clipped_corner_width_cm=flt(
-                getattr(row, "clipped_corner_width_cm", 0)
-            ),
-            nominal_clipped_corner_length_cm=flt(
-                getattr(row, "clipped_corner_length_cm", 0)
-            ),
         )
         start_raw = getattr(row, addon.start_field, 0)
         length_raw = getattr(row, addon.length_field, 0)
@@ -395,17 +398,14 @@ class FrappeOrderPiecePolicyAdapter:
             start_cm,
             length_cm_input,
         )
-        if (
-            not span_error
-            and length_cm_input > 0
-            and piece.piece_type == L_SHAPED_CORNER_TYPE
-            and side == SIDE_BREAK
-            and start_mm + (length_cm_input * 10)
-            > nominal_liner_reference_length_mm(piece, side) + _NUMERIC_TOLERANCE_MM
-        ):
-            span_error = "liner_span_exceeds_edge"
         if span_error == "liner_span_exceeds_edge":
-            available_cm = nominal_liner_reference_length_mm(piece, side) / 10
+            _edge_start_mm, edge_mm, _edge_error = resolved_liner_span_mm(
+                piece,
+                side,
+                0,
+                None,
+            )
+            available_cm = edge_mm / 10
             maximum_cm = max(0.0, available_cm - start_mm / 10)
             frappe.throw(
                 _(

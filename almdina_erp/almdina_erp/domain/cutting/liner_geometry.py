@@ -61,8 +61,6 @@ class LinerPiece:
     clipped_corner_position: str = "Top Right"
     clipped_corner_width_cm: float = 0.0
     clipped_corner_length_cm: float = 0.0
-    nominal_clipped_corner_width_cm: float | None = None
-    nominal_clipped_corner_length_cm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -670,28 +668,6 @@ def _span_hits_bend(path: Sequence[Point], start_mm: float, end_mm: float) -> bo
         ):
             return True
     return False
-
-
-def nominal_liner_reference_length_mm(piece: LinerPiece, side: str) -> float:
-    """Return the editable span in the finished L-corner input frame.
-
-    The inner strap can extend the effective cut path beyond the finished
-    corner distances. Explicit machining lengths remain in the finished frame;
-    zero continues to resolve to the full effective path.
-    """
-    if piece.piece_type == L_SHAPED_CORNER_TYPE and side == SIDE_BREAK:
-        width = (
-            piece.clipped_corner_width_cm
-            if piece.nominal_clipped_corner_width_cm is None
-            else piece.nominal_clipped_corner_width_cm
-        )
-        length = (
-            piece.clipped_corner_length_cm
-            if piece.nominal_clipped_corner_length_cm is None
-            else piece.nominal_clipped_corner_length_cm
-        )
-        return (float(width) + float(length)) * CM_TO_MM
-    return _polyline_length(reference_polyline_mm(piece, side))
 
 
 def resolved_liner_span_mm(

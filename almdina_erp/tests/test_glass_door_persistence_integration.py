@@ -12,6 +12,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.orders.document_access import
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.piece_policy_adapter import (
     FrappeOrderPiecePolicyAdapter,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+    FrappeEdgeProfileRepository,
+)
 
 
 class TestGlassDoorPersistenceIntegration(FrappeTestCase):
@@ -104,6 +107,7 @@ class TestGlassDoorPersistenceIntegration(FrappeTestCase):
         FrappeOrderPiecePolicyAdapter(
             order,
             FrappeOrderDocumentAccess(order),
+            FrappeEdgeProfileRepository(order),
         ).validate_rows()
         row.db_update()
         return frappe.get_doc("Door Cutting Order", self.order_name)

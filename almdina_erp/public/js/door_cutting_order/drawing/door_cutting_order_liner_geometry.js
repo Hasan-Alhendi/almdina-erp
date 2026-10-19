@@ -61,8 +61,6 @@
             position: source.clipped_corner_position || "Top Right",
             cutWidthCm: num(source.clipped_corner_width_cm),
             cutLengthCm: num(source.clipped_corner_length_cm),
-            nominalCutWidthCm: num(source.clipped_corner_width_cm),
-            nominalCutLengthCm: num(source.clipped_corner_length_cm),
         };
     }
 
@@ -158,14 +156,8 @@
         return paths;
     }
 
-    function nominalReferenceLengthMm(piece, side) {
-        if (piece && piece.pieceType === L_SHAPED && side === SIDE_BREAK) {
-            const width = Number.isFinite(piece.nominalCutWidthCm) ? piece.nominalCutWidthCm : piece.cutWidthCm;
-            const length = Number.isFinite(piece.nominalCutLengthCm) ? piece.nominalCutLengthCm : piece.cutLengthCm;
-            return (width + length) * 10;
-        }
-        const path = (edgePaths(piece) || {})[side] || [];
-        return polylineLength(path);
+    function edgeLengthMm(piece, side) {
+        return polylineLength((edgePaths(piece) || {})[side] || []);
     }
 
     function onSegment(point, start, end, tolerance) {
@@ -447,13 +439,6 @@
         if (!(length > TOLERANCE_MM)) fail("liner_length_invalid");
         if (start + length > edge + TOLERANCE_MM) fail("liner_span_exceeds_edge");
         return { start, end: start + Math.min(length, edge - start), edge };
-    }
-
-    function nominalSpanExceeds(piece, side, startCm, lengthCm) {
-        if (!piece || piece.pieceType !== L_SHAPED || side !== SIDE_BREAK) return false;
-        const start = Math.max(0, num(startCm) * 10);
-        const explicit = !(lengthCm == null || lengthCm === "" || !(num(lengthCm) > 0));
-        return explicit && start + (num(lengthCm) * 10) > nominalReferenceLengthMm(piece, side) + 1e-7;
     }
 
     function preparedReference(piece, side, startCm, lengthCm) {
@@ -963,8 +948,7 @@
         pieceFromRow,
         piecePolygonMm,
         edgePaths,
-        nominalReferenceLengthMm,
-        nominalSpanExceeds,
+        edgeLengthMm,
         validationCode,
         stripPolygonMm,
         regionPolygonMm,

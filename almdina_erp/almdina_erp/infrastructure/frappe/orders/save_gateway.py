@@ -28,6 +28,7 @@ class FrappeDoorCuttingOrderSaveGateway:
         self.piece_policy = FrappeOrderPiecePolicyAdapter(
             document,
             self.access,
+            self.edge_profiles,
         )
         self.cut_dimensions = FrappeOrderCutDimensionAdapter(
             document,

@@ -17,6 +17,12 @@ class FakeOrderAccess:
         return {}
 
 
+class FakeEdgeProfiles:
+    @staticmethod
+    def profiles() -> dict[str, SimpleNamespace]:
+        return {"Default 1mm": SimpleNamespace(thickness_mm=1)}
+
+
 class TestMachiningAddonAdapter(FrappeTestCase):
     def _adapter(self, **updates: object) -> tuple[FrappeOrderPiecePolicyAdapter, SimpleNamespace]:
         values = {
@@ -58,8 +64,8 @@ class TestMachiningAddonAdapter(FrappeTestCase):
         }
         values.update(updates)
         row = SimpleNamespace(**values)
-        document = SimpleNamespace(pieces=[row])
-        return FrappeOrderPiecePolicyAdapter(document, FakeOrderAccess()), row
+        document = SimpleNamespace(pieces=[row], default_edge_type="Default 1mm")
+        return FrappeOrderPiecePolicyAdapter(document, FakeOrderAccess(), FakeEdgeProfiles()), row
 
     def test_all_addons_use_the_current_calculated_piece_dimensions(self) -> None:
         for addon in MACHINING_ADDONS:
@@ -174,15 +180,11 @@ class TestMachiningAddonAdapter(FrappeTestCase):
         adapter.validate_machining_rows()
         self.assertEqual(getattr(row, addon.length_field), 0)
 
-    def test_l_inner_span_limit_matches_nominal_finished_notch_for_all_addons(self) -> None:
+    def test_l_inner_span_uses_effective_notch_for_all_addons(self) -> None:
         for addon in MACHINING_ADDONS:
             for length, expected_error in (
-                (60, False),
-                (60.001, True),
-                (60.01, True),
-                (60.025, True),
-                (60.1, True),
-                (60.2, True),
+                (60.2, False),
+                (60.226, True),
             ):
                 with self.subTest(addon=addon.kind, length=length):
                     adapter, _row = self._adapter(
@@ -194,7 +196,6 @@ class TestMachiningAddonAdapter(FrappeTestCase):
                         clipped_corner_width_cm=30,
                         clipped_corner_length_cm=30,
                         edge_break=1,
-                        edge_break_thickness_mm=1,
                         **{
                             addon.enabled_field: 1,
                             addon.side_field: "edge_break",
@@ -207,7 +208,7 @@ class TestMachiningAddonAdapter(FrappeTestCase):
                     if expected_error:
                         with self.assertRaises(frappe.ValidationError) as raised:
                             adapter.validate_machining_rows()
-                        self.assertIn("available 60 cm", str(raised.exception))
-                        self.assertIn("maximum 60 cm", str(raised.exception))
+                        self.assertIn("available 60.2 cm", str(raised.exception))
+                        self.assertIn("maximum 60.2 cm", str(raised.exception))
                     else:
                         adapter.validate_machining_rows()

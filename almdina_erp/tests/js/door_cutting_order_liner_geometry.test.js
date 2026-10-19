@@ -127,7 +127,6 @@ const lInputContract = geometry.pieceFromRow({
     clipped_corner_width_cm: 30,
     clipped_corner_length_cm: 30,
 });
-assert.equal(geometry.nominalReferenceLengthMm(lInputContract, "edge_break"), 600);
 const innerBandLiner = geometry.pieceFromRow({
     piece_type: "L-Shaped Corner",
     width_cm: 60,
@@ -138,16 +137,11 @@ const innerBandLiner = geometry.pieceFromRow({
 });
 innerBandLiner.cutWidthCm = 30.1;
 innerBandLiner.cutLengthCm = 30.1;
-assert.equal(geometry.nominalReferenceLengthMm(innerBandLiner, "edge_break"), 600);
 const actualLPath = geometry.edgePaths(innerBandLiner).edge_break;
 assert.equal(actualLPath.slice(1).reduce((total, point, index) => total + segmentLength(actualLPath[index], point), 0), 602);
 assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60).length, 3);
 assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60.2).length, 3,
     "effective geometry remains available to manufacturing consumers");
-for (const length of [60.001, 60.01, 60.025, 60.1, 60.2]) {
-    assert.equal(geometry.nominalSpanExceeds(innerBandLiner, "edge_break", 0, length), true,
-        `editable nominal span rejects ${length} cm without changing effective geometry`);
-}
 for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
     const draft = editor.draftFromRow({
         piece_type: "L-Shaped Corner",
@@ -162,11 +156,11 @@ for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
     draft.offsetCm = 1;
     draft.widthCm = 1;
     draft.startCm = 0;
-    draft.lengthCm = 60;
-    draft.fullLength = false;
-    assert.equal(editor.validationIssue(draft), null, `${kind} must accept the 60 cm nominal span`);
     draft.lengthCm = 60.2;
-    assert.equal(editor.validationIssue(draft).code, "liner_span_exceeds_edge", `${kind} must reject 60.2 cm before Apply`);
+    draft.fullLength = false;
+    assert.equal(editor.validationIssue(draft), null, `${kind} must accept the 60.2 cm effective span`);
+    draft.lengthCm = 60.226;
+    assert.equal(editor.validationIssue(draft).code, "liner_span_exceeds_edge", `${kind} must reject lengths beyond the effective path`);
 }
 
 assert.equal(geometry.validationCode(regular, "edge_width_top", -1, 1), "offset_invalid");
