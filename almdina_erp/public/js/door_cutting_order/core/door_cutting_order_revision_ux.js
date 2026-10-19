@@ -889,12 +889,17 @@
         if (!documentIsDirty(frm)) return true;
         markEditSessionSticky(frm);
         frm.__almdina_preserve_edit_session_after_save = true;
+        let acknowledged = false;
         try {
             await frm.save();
+            acknowledged = !documentIsDirty(frm);
+            return acknowledged;
         } finally {
-            frm.__almdina_preserve_edit_session_after_save = false;
+            // Native Save can settle before the serial after_save handlers.
+            // On success, that existing handler consumes the one-shot intent;
+            // clearing it here would make the checkpoint close Edit instead.
+            if (!acknowledged) frm.__almdina_preserve_edit_session_after_save = false;
         }
-        return !documentIsDirty(frm);
     }
 
     function confirmEditSession(frm) {

@@ -33,6 +33,24 @@ New actual Desk coverage exercises refresh, offline checkpoint, tab reopen, full
 
 ## Latest integrated runtime evidence
 
+[Run 39251552396](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39251552396) tested exact HEAD `07f4c826e562f0da1e3cbe89de26775292ddee9e`: **8/9 PASS**, including both `full` and `full_pinned` (1,594 tests plus 91 integration tests each), baseline diagnostic, Desk, NEW, Customer, backend, and performance. [Cross-order runtime 39251552473](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39251552473) also passed both identity and pinned Desk/print jobs. All 14 other required workflows passed. EDIT remains **FAIL**, so the Local Gate is still blocked.
+
+EDIT passed restore/Save/Cancel/permission/dispatch/Return-to-Draft, external server conflict before restore, and native TimestampMismatch rejection between restore and Save. It then rejected the next local mutation after the internal pre-plan Save. Read-only review of the required Frappe source confirms Save dispatches `after_save` without awaiting its serial handlers. The revision owner cleared its preserve-edit marker as soon as `frm.save()` settled, allowing its deferred `after_save` to close the session. A focused actual-owner regression reproduced this ordering (RED) and passes after the minimal correction: the existing handler consumes successful checkpoint intent, while failed/unclean Save clears it. The same regression verifies the next explicit Save still closes editing. A new integrated run is mandatory after this correction, including all later EDIT scenarios that this failure prevented from running.
+
+Current performance evidence for **07f4c826 only**, Base `67238492`, Chromium 140.0.7339.16 / Playwright 1.55.0, Frappe 16.17.5 / ERPNext 16.17.0: 100 pieces, 40 samples per metric and variant, no official Save requests. The transaction observer matched all 40 acknowledged revisions. Each cell is P50 / P95 in milliseconds.
+
+| Measurement | Base | HEAD |
+| --- | --- | --- |
+| Input to second animation frame | 94.9 / 103.4 | 91.4 / 97.1 |
+| Input to durable local acknowledgment | 436.9 / 467.0 | 440.5 / 464.9 |
+| Warm live projection capture | 8.8 / 9.1 | 8.9 / 11.2 |
+| Warm serialization | 1.3 / 1.6 | 1.4 / 1.9 |
+| Native IndexedDB write transaction | 320.9 / 346.5 | 318.9 / 346.4 |
+
+Payload is 105,355 bytes. Input and acknowledgment P95 changed by -6.09% and -0.45%; projection P95 increased by 2.1 ms (+23.08%) and serialization by 0.3 ms (+18.75%). This is comparative evidence from an isolated CI runner, not a speedup guarantee or an absolute performance rating; no product acceptance threshold was specified. Fresh final-head measurements are still required.
+
+### Previous candidate
+
 [Run 39242239422](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39242239422) tested exact HEAD `f6ee3580120bec7c314446e13c52cd88c83bf7cc`: **PASS** for `full_pinned`, `full_pinned_base_permission` (independent negative baseline diagnostic), `al128_desk`, `al129_new`, `al129_customer`, `al129_backend`; **FAIL** for rolling `full`, `al128_performance`, and `al131_edit`. All application-source artifacts confirm the expected SHA and pinned framework sources. These results are evidence for that commit, not acceptance of later fixes.
 
 - EDIT screenshot proves the version conflict retained the draft and refused hydration; the test expected Arabic while its user session was English. Isolated EDIT users now explicitly use Arabic, and the scenario asserts the real acceptance locale.

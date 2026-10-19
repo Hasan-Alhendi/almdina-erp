@@ -922,7 +922,14 @@ def checkpoint_record(page: Page, name: str) -> dict:
 def flush_edit_checkpoint(page: Page) -> dict:
     return evaluate(page, "acknowledge real EDIT checkpoint", """async () => {
         const recovery = AlmdinaDcoRecovery.LocalCheckpoint;
-        if (!recovery.markDirty(cur_frm, 'DCO')) throw new Error('Dirty EDIT not accepted');
+        if (!recovery.markDirty(cur_frm, 'DCO')) {
+            throw new Error('Dirty EDIT not accepted: ' + JSON.stringify({
+                checkpoint: recovery.snapshot(cur_frm),
+                editActive: AlmdinaOrderRevisionUX.isEditSessionActive(cur_frm),
+                coordinator: AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                dirty: cur_frm.is_dirty(),
+            }));
+        }
         const result = await recovery.flush(cur_frm);
         if (!result || !result.ok) throw new Error('Durable EDIT transaction failed');
         const state = recovery.snapshot(cur_frm);
