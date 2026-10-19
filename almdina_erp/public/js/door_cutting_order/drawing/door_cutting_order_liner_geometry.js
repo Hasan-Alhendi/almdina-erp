@@ -680,36 +680,85 @@
         return ab < -1e-8 && cd < -1e-8;
     }
 
-    function extensionConflict(path, diameterMm, board, obstacles) {
+    function ringGapToSegment(ring, start, end) {
+        return Math.min(
+            ...ring.map(corner => pointSegDist(corner, start, end)),
+            ...ring.map((corner, cornerIndex) => Math.min(
+                pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
+                pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
+            ))
+        );
+    }
+
+    function pointInMaterial(point, outer, holes) {
+        if (!pointInPolygon(point, outer)) return false;
+        return !(holes || []).some(hole => pointInPolygon(point, hole));
+    }
+
+    function obstacleMaterial(obstacle) {
+        const outer = obstacleRing(obstacle);
+        const holes = obstacle && Array.isArray(obstacle.holes)
+            ? obstacle.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+            : [];
+        return { outer, holes };
+    }
+
+    function extensionConflictDetails(path, diameterMm, board, obstacles) {
         const radius = num(diameterMm) / 2;
         const blocks = obstacles || [];
         for (let index = 0; index < path.length - 1; index += 1) {
             const start = path[index];
             const end = path[index + 1];
             for (let obstacleIndex = 0; obstacleIndex < blocks.length; obstacleIndex += 1) {
-                const ring = obstacleRing(blocks[obstacleIndex]);
-                if (ring.length < 3) continue;
-                if (pointInPolygon(start, ring) || pointInPolygon(end, ring)) {
-                    return "liner_extension_hits_piece";
-                }
-                const crossing = ring.some((corner, cornerIndex) => segmentsCross(
-                    start,
-                    end,
-                    corner,
-                    ring[(cornerIndex + 1) % ring.length]
-                ));
-                if (crossing) return "liner_extension_hits_piece";
-                const gap = Math.min(
-                    ...ring.map(corner => pointSegDist(corner, start, end)),
-                    ...ring.map((corner, cornerIndex) => Math.min(
-                        pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
-                        pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
-                    ))
+                const obstacle = blocks[obstacleIndex];
+                const material = obstacleMaterial(obstacle);
+                if (material.outer.length < 3) continue;
+                const boundaries = [material.outer].concat(material.holes);
+                const minimumDistanceMm = Math.min(
+                    ...boundaries.map(ring => ringGapToSegment(ring, start, end))
                 );
-                if (gap < radius - TOLERANCE_MM) return "liner_extension_hits_piece";
+                let rejectCondition = "";
+                if (
+                    pointInMaterial(start, material.outer, material.holes)
+                    || pointInMaterial(end, material.outer, material.holes)
+                ) {
+                    rejectCondition = "endpoint_in_material";
+                } else {
+                    const crossing = boundaries.some(ring => ring.some((corner, cornerIndex) => segmentsCross(
+                        start,
+                        end,
+                        corner,
+                        ring[(cornerIndex + 1) % ring.length]
+                    )));
+                    if (crossing) rejectCondition = "segment_crosses_material_boundary";
+                    else if (minimumDistanceMm < radius - TOLERANCE_MM) {
+                        rejectCondition = "clearance_below_cutter_radius";
+                    }
+                }
+                if (rejectCondition) {
+                    return {
+                        code: "liner_extension_hits_piece",
+                        segmentIndex: index,
+                        obstacleIndex,
+                        start: start.slice(),
+                        end: end.slice(),
+                        minimumDistanceMm,
+                        cutterRadiusMm: radius,
+                        rejectionThresholdMm: radius - TOLERANCE_MM,
+                        rejectCondition,
+                        obstacle: obstacle && obstacle.diagnostic ? obstacle.diagnostic : null,
+                    };
+                }
             }
         }
-        return "";
+        return null;
+    }
+
+    function extensionConflict(path, diameterMm, board, obstacles, onConflict) {
+        void board; // Off-board extensions remain valid; obstacles own material clearance.
+        const details = extensionConflictDetails(path, diameterMm, board, obstacles);
+        if (details && typeof onConflict === "function") onConflict(details);
+        return details ? details.code : "";
     }
 
     function obstacleRing(obstacle) {
@@ -786,10 +835,23 @@
     }
 
     function obstaclePolygonMm(piece) {
-        // Persisted usable-sheet outer is the manufacturing outline when present.
+        return obstacleGeometryMm(piece).outer;
+    }
+
+    function obstacleGeometryMm(piece) {
+        // Persisted usable-sheet geometry is already placed and rotated. Preserve
+        // its holes: a nested door may safely machine inside a Glass opening.
         const outer = piece && piece.geometry && piece.geometry.outer;
         if (Array.isArray(outer) && outer.length >= 3) {
-            return outer.map(point => [num(point[0]), num(point[1])]);
+            const holes = Array.isArray(piece.geometry.holes)
+                ? piece.geometry.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+                    .map(hole => hole.map(point => [num(point[0]), num(point[1])]))
+                : [];
+            return {
+                outer: outer.map(point => [num(point[0]), num(point[1])]),
+                holes,
+                source: "persisted_geometry",
+            };
         }
         const type = String((piece && piece.piece_type) || "Regular");
         // Regular doors: the optimizer/DXF placement box is authoritative. Parametric
@@ -797,9 +859,20 @@
         // that falsely collides with a kerf-clear liner extension on a neighbour.
         if (type !== CLIPPED && type !== L_SHAPED) {
             const ring = placementRingMm(piece);
-            if (ring.length >= 3) return ring;
+            if (ring.length >= 3) {
+                const originX = num(piece && piece.x) * 10;
+                const originY = num(piece && piece.y) * 10;
+                const glassHole = piece && piece.glass_hole_local_mm;
+                const holes = type === "Glass" && Array.isArray(glassHole) && glassHole.length >= 3
+                    ? [glassHole.map(point => [
+                        originX + num(point[0]),
+                        originY + num(point[1]),
+                    ])]
+                    : [];
+                return { outer: ring, holes, source: holes.length ? "placement_with_glass_hole" : "placement_box" };
+            }
         }
-        return placedPolygonMm(piece);
+        return { outer: placedPolygonMm(piece), holes: [], source: "placed_parametric_polygon" };
     }
 
     function transformPoint(point, mirrored, quarterTurns, width, height) {
@@ -1016,11 +1089,13 @@
         generateToolpath,
         buildMachiningOverlay,
         extensionConflict,
+        extensionConflictDetails,
         pieceQuarterTurns,
         samePlacedPiece,
         placementRingMm,
         placedPolygonMm,
         obstaclePolygonMm,
+        obstacleGeometryMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,

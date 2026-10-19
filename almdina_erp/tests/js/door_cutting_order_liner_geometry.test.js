@@ -519,6 +519,21 @@ assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
 assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
     { polygon: geometry.placedPolygonMm(mismatchedNeighbor) },
 ]), "liner_extension_hits_piece");
+const crowdedDetails = geometry.extensionConflictDetails(doorFive.geometry.path, 5, openBoard, [
+    {
+        polygon: geometry.placedPolygonMm(mismatchedNeighbor),
+        diagnostic: { label: "4", geometrySource: "placed_parametric_polygon" },
+    },
+]);
+assert.equal(crowdedDetails.code, "liner_extension_hits_piece");
+assert.equal(crowdedDetails.obstacle.label, "4");
+assert.equal(crowdedDetails.cutterRadiusMm, 2.5);
+assert.ok(Number.isFinite(crowdedDetails.minimumDistanceMm));
+assert.ok([
+    "endpoint_in_material",
+    "segment_crosses_material_boundary",
+    "clearance_below_cutter_radius",
+].includes(crowdedDetails.rejectCondition));
 const doorFivePiece = placedLiner({
     id: 5, label: "5", x: 40.5, y: 0, w: 30, h: 50, width_cm: 30, length_cm: 50,
 });
@@ -528,6 +543,68 @@ assert.equal(geometry.samePlacedPiece(doorFivePiece, selfCopy), true);
 assert.equal(geometry.samePlacedPiece(doorFivePiece, mismatchedNeighbor), false);
 assert.equal(geometry.pieceQuarterTurns({ rotation_quarter_turns: 3, rotated: 0 }), 3);
 assert.equal(geometry.pieceQuarterTurns({ rotated: 1 }), 1);
+
+// Real persisted regression CP-2026-00092 / DCO 26-00112.
+const nestedGlassSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
+const nestedPieces = nestedGlassSnapshot.sheets[0].pieces;
+const nestedGlass = nestedPieces.find(piece => piece.label === "1.1");
+const nestedDoorFive = nestedPieces.find(piece => piece.label === "5.1");
+const nestedToolpath = geometry.syntheticOverlay(Object.assign({}, nestedDoorFive, {
+    kerf_mm: 3,
+    board: { minX: -5, minY: -5, maxX: 1215, maxY: 2435 },
+}));
+assert.equal(nestedToolpath.error, undefined);
+assert.deepEqual(copy(nestedToolpath.geometry.path), [
+    [80.5, 492.5], [80.5, 1075.5], [663.5, 1075.5], [663.5, 1078.5],
+    [77.5, 1078.5], [77.5, 492.5], [74.5, 492.5], [74.5, 1081.5],
+    [663.5, 1081.5], [663.5, 1084.5], [71.5, 1084.5], [71.5, 492.5],
+    [68.5, 492.5], [68.5, 1087.5], [663.5, 1087.5], [663.5, 1090.5],
+    [65.5, 1090.5], [65.5, 492.5],
+]);
+const glassObstacle = geometry.obstacleGeometryMm(nestedGlass);
+assert.equal(glassObstacle.source, "placement_with_glass_hole");
+assert.deepEqual(copy(glassObstacle.holes[0].map(point => point.map(value => Math.round(value * 1000) / 1000))), [
+    [59, 491], [939, 491], [939, 2371], [59, 2371],
+]);
+const falseSolidDiagnostic = geometry.extensionConflictDetails(
+    nestedToolpath.geometry.path,
+    3,
+    openBoard,
+    [{ polygon: glassObstacle.outer, diagnostic: { label: "1.1" } }]
+);
+assert.equal(falseSolidDiagnostic.obstacle.label, "1.1");
+assert.equal(falseSolidDiagnostic.rejectCondition, "endpoint_in_material");
+assert.equal(falseSolidDiagnostic.segmentIndex, 0);
+assert.ok(Math.abs(falseSolidDiagnostic.minimumDistanceMm - 60.5) < 1e-6);
+assert.equal(falseSolidDiagnostic.cutterRadiusMm, 1.5);
+assert.equal(geometry.extensionConflict(
+    nestedToolpath.geometry.path,
+    3,
+    openBoard,
+    [{ polygon: glassObstacle.outer, holes: glassObstacle.holes }]
+), "");
+const persistedUsableSheetObstacle = geometry.obstacleGeometryMm({
+    piece_type: "Regular",
+    x: 90,
+    y: 80,
+    w: 20,
+    h: 10,
+    rotated: true,
+    geometry: {
+        outer: [[100, 200], [300, 200], [300, 300], [100, 300]],
+        holes: [[[140, 220], [260, 220], [260, 280], [140, 280]]],
+    },
+});
+assert.equal(persistedUsableSheetObstacle.source, "persisted_geometry");
+assert.deepEqual(copy(persistedUsableSheetObstacle.outer), [
+    [100, 200], [300, 200], [300, 300], [100, 300],
+]);
+assert.deepEqual(copy(persistedUsableSheetObstacle.holes), [[
+    [140, 220], [260, 220], [260, 280], [140, 280],
+]]);
 const partial = geometry.syntheticOverlay(placedLiner({
     liner_start_cm: 5,
     liner_length_cm: 20,

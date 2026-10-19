@@ -853,17 +853,40 @@
                 ? liner.samePlacedPiece
                 : ((left, right) => left === right);
             return (sheet.pieces || []).filter(other => !samePiece(other, piece)).map(other => {
-                const polygon = liner && typeof liner.obstaclePolygonMm === "function"
-                    ? liner.obstaclePolygonMm(other)
-                    : (liner && typeof liner.placedPolygonMm === "function"
-                        ? liner.placedPolygonMm(other)
-                        : []);
-                if (polygon.length >= 3) return { polygon };
+                const geometry = liner && typeof liner.obstacleGeometryMm === "function"
+                    ? liner.obstacleGeometryMm(other)
+                    : null;
+                const polygon = geometry && Array.isArray(geometry.outer)
+                    ? geometry.outer
+                    : (liner && typeof liner.obstaclePolygonMm === "function"
+                        ? liner.obstaclePolygonMm(other)
+                        : (liner && typeof liner.placedPolygonMm === "function"
+                            ? liner.placedPolygonMm(other)
+                            : []));
+                const diagnostic = {
+                    pieceId: other && other.id,
+                    label: String((other && other.label) || ""),
+                    positionCm: {
+                        x: num(other && other.x),
+                        y: num(other && other.y),
+                        w: num(other && other.w),
+                        h: num(other && other.h),
+                    },
+                    geometrySource: (geometry && geometry.source) || "fallback_rectangle",
+                };
+                if (polygon.length >= 3) {
+                    return {
+                        polygon,
+                        holes: (geometry && geometry.holes) || [],
+                        diagnostic,
+                    };
+                }
                 return {
                     minX: num(other.x) * 10,
                     minY: num(other.y) * 10,
                     maxX: (num(other.x) + num(other.w)) * 10,
                     maxY: (num(other.y) + num(other.h)) * 10,
+                    diagnostic,
                 };
             });
         }
@@ -876,13 +899,39 @@
             // CUT_PATH separation/trim stays manufacturing-only via includeSawCenters.
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
+                let conflictDetails = null;
                 const conflict = liner.extensionConflict(
                     overlay.path,
                     cutterMm,
                     usableBoardMm(plan, sheet, trim),
-                    overlayObstacles(sheet, piece)
+                    overlayObstacles(sheet, piece),
+                    details => { conflictDetails = details; }
                 );
-                if (conflict) throw linerExportError(piece, conflict);
+                if (conflict) {
+                    const diagnostic = {
+                        host: {
+                            pieceId: piece && piece.id,
+                            label: String((piece && piece.label) || ""),
+                            positionCm: {
+                                x: num(piece && piece.x),
+                                y: num(piece && piece.y),
+                                w: num(piece && piece.w),
+                                h: num(piece && piece.h),
+                            },
+                        },
+                        neighbour: conflictDetails && conflictDetails.obstacle,
+                        linerPathMm: overlay.path.map(point => point.slice()),
+                        minimumDistanceMm: conflictDetails && conflictDetails.minimumDistanceMm,
+                        cutterRadiusMm: conflictDetails && conflictDetails.cutterRadiusMm,
+                        rejectionThresholdMm: conflictDetails && conflictDetails.rejectionThresholdMm,
+                        rejectCondition: conflictDetails && conflictDetails.rejectCondition,
+                        segmentIndex: conflictDetails && conflictDetails.segmentIndex,
+                    };
+                    console.error("[liner-extension-conflict]", diagnostic);
+                    const error = linerExportError(piece, conflict);
+                    error.diagnostic = diagnostic;
+                    throw error;
+                }
             }
             return lwpolyline(overlay.layer, points);
         }
