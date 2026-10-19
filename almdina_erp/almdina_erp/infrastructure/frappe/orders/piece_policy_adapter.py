@@ -41,6 +41,9 @@ from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+    FrappeEdgeProfileRepository,
+)
 from almdina_erp.almdina_erp.services.special_shape_drawing_validation_service import (
     validate_special_shape_drawing,
 )
@@ -49,7 +52,6 @@ from almdina_erp.almdina_erp.services.special_shape_service import (
 )
 
 from .document_access import FrappeOrderDocumentAccess
-
 
 class FrappeOrderPiecePolicyAdapter:
     """Translate Frappe child rows to pure piece-policy decisions."""
@@ -72,9 +74,11 @@ class FrappeOrderPiecePolicyAdapter:
         self,
         document: Any,
         access: FrappeOrderDocumentAccess,
+        edge_profiles: FrappeEdgeProfileRepository,
     ) -> None:
         self.document = document
         self.access = access
+        self.edge_profiles = edge_profiles
 
     @staticmethod
     def _geometry_snapshot(row: Any | None) -> PieceGeometry | None:
@@ -256,6 +260,16 @@ class FrappeOrderPiecePolicyAdapter:
         setattr(row, addon.length_field, 0)
 
     def _liner_notch_cm(self, row: Any) -> tuple[float, float]:
+        edge_break = bool(cint(getattr(row, "edge_break", 0)))
+        edge_break_thickness_mm = None
+        if edge_break:
+            edge_type = str(
+                getattr(row, "edge_type", None)
+                or getattr(self.document, "default_edge_type", None)
+                or ""
+            ).strip()
+            profile = self.edge_profiles.profiles().get(edge_type) if edge_type else None
+            edge_break_thickness_mm = profile.thickness_mm if profile else None
         return contour_notch_cm(
             piece_type=row.piece_type or "Regular",
             finished_width_cm=flt(row.width_cm),
@@ -264,8 +278,8 @@ class FrappeOrderPiecePolicyAdapter:
             notch_length_cm=flt(getattr(row, "clipped_corner_length_cm", 0)),
             position=str(getattr(row, "clipped_corner_position", "") or ""),
             side_thickness_mm=self._liner_side_thickness_mm(row),
-            edge_break=bool(cint(getattr(row, "edge_break", 0))),
-            edge_break_thickness_mm=getattr(row, "edge_break_thickness_mm", None),
+            edge_break=edge_break,
+            edge_break_thickness_mm=edge_break_thickness_mm,
         )
 
     def _liner_side_thickness_mm(self, row: Any) -> dict[str, float]:

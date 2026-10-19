@@ -58,12 +58,7 @@
     };
 
     function edgeCm(piece, side) {
-        const path = (geometry().edgePaths(piece) || {})[side] || [];
-        let length = 0;
-        for (let index = 1; index < path.length; index += 1) {
-            length += Math.hypot(path[index][0] - path[index - 1][0], path[index][1] - path[index - 1][1]);
-        }
-        return length / 10;
+        return geometry().edgeLengthMm(piece, side) / 10;
     }
 
     function num(value) {
@@ -270,11 +265,23 @@
         } catch (error) {
             center = "";
         }
-        const polygon = api.stripPolygonMm(piece, draft.side, draft.offsetCm, draft.widthCm)
+        const polygon = api.regionPolygonMm(
+            piece,
+            draft.side,
+            draft.offsetCm,
+            draft.widthCm,
+            draft.startCm,
+            draft.fullLength ? 0 : draft.lengthCm
+        )
             .map(point => mapPoint(point, frame, piece));
         const strip = `<polygon class="dco-liner-strip" data-liner-strip="1" data-machining-kind="${esc(draft.kind)}" data-machining-role="${esc(role)}" points="${pointsAttr(polygon)}" fill="${tone.fill}" stroke="${tone.stroke}" stroke-width="${width}"/>`;
         if (role === "quiet") return `${strip}${center}`;
-        const reference = paths[draft.side].map(point => mapPoint(point, frame, piece));
+        const reference = api.regionReferenceMm(
+            piece,
+            draft.side,
+            draft.startCm,
+            draft.fullLength ? 0 : draft.lengthCm
+        ).map(point => mapPoint(point, frame, piece));
         const near = polygon.slice(0, reference.length);
         const far = polygon.slice(reference.length).slice().reverse();
         const anchor = Math.floor(reference.length / 2);
@@ -368,19 +375,19 @@
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
                         <label>${esc(__("Edge Offset"))}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.001" data-liner-offset value="${formatInput(draft.offsetCm, 3)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-offset value="${formatInput(draft.offsetCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(widthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.01" step="0.01" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(startLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.001" data-liner-start value="${formatInput(draft.startCm, 3)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-start value="${formatInput(draft.startCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(lengthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.001" step="0.001" data-liner-length value="${formatInput(draft.lengthCm, 3)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-length value="${formatInput(draft.lengthCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                 </div>
                 <div class="dco-corner-help" data-liner-available>${esc(__("Available Length"))}: ${rounded(draft.edgeCm)} ${esc(__("cm"))}</div>

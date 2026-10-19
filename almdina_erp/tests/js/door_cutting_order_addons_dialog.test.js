@@ -187,6 +187,13 @@ const handleControls = editor.controlsHtml(editor.draftFromRow(machiningRow("rec
 assert.match(handleControls, /data-liner-width value="15"/);
 assert.match(handleControls, /data-liner-offset value="0.5"/);
 assert.match(handleControls, /data-liner-length value="12"/);
+for (const controls of [linerControls, grooveControls, handleControls]) {
+    for (const field of ["offset", "width", "start", "length"]) {
+        const input = controls.match(new RegExp(`<input[^>]*data-liner-${field}[^>]*>`))?.[0];
+        assert.ok(input, `${field} input should exist`);
+        assert.match(input, /step="1"/, `${field} spinner should move one displayed unit`);
+    }
+}
 
 for (const [kind, width] of [
     ["liner", 1.8],
@@ -231,6 +238,42 @@ for (const [kind, width] of [
     assert.ok(saveIssue.message.includes("999"));
     assert.ok(saveIssue.message.includes(String(valid.edgeCm - valid.startCm)));
 }
+
+fakeWindow.AlmdinaMultiEdgeBanding = {
+    calculate() { return { cutWidth: 60, cutLength: 60, sides: {} }; },
+    thicknessForType() { return 1; },
+};
+for (const [kind, enabled, side, offset, width, start, length] of [
+    ["liner", "extra_liner", "liner_reference_side", "liner_offset_cm", "liner_width_cm", "liner_start_cm", "liner_length_cm"],
+    ["back_groove", "extra_back_groove", "back_groove_reference_side", "back_groove_offset_cm", "back_groove_width_cm", "back_groove_start_cm", "back_groove_length_cm"],
+    ["recessed_handle_cutout", "extra_recessed_handle_cutout", "recessed_handle_reference_side", "recessed_handle_offset_cm", "recessed_handle_width_cm", "recessed_handle_start_cm", "recessed_handle_length_cm"],
+]) {
+    const lRow = {
+        name: `l-${kind}`,
+        piece_no: 1,
+        qty: 1,
+        piece_type: "L-Shaped Corner",
+        width_cm: 60,
+        length_cm: 60,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 30,
+        clipped_corner_length_cm: 30,
+        edge_break: 1,
+        default_edge_type: "Default 1mm",
+        [enabled]: 1,
+        [side]: "edge_break",
+        [offset]: 1,
+        [width]: 1,
+        [start]: 0,
+        [length]: 60,
+    };
+    assert.equal(dialog.createSession({ doc: { default_edge_type: "Default 1mm" } }, lRow).drafts[enabled].edgeCm, 60.2);
+    lRow[length] = 60.2;
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }), null, `${kind} accepts the 60.2 cm effective L span`);
+    lRow[length] = 60.226;
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }).code, "liner_span_exceeds_edge", `${kind} rejects lengths beyond the effective L path`);
+}
+delete fakeWindow.AlmdinaMultiEdgeBanding;
 
 fakeWindow.AlmdinaMultiEdgeBanding = {
     calculate() {

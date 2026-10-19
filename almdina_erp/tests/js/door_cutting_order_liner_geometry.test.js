@@ -119,6 +119,50 @@ const shaped = geometry.pieceFromRow({
 assert.equal(geometry.validationCode(shaped, "edge_break", 1, 1), "");
 assert.equal(geometry.validationCode(shaped, "edge_break_only", 1, 1), "side_unavailable");
 
+const lInputContract = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 60,
+    length_cm: 60,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 30,
+    clipped_corner_length_cm: 30,
+});
+const innerBandLiner = geometry.pieceFromRow({
+    piece_type: "L-Shaped Corner",
+    width_cm: 60,
+    length_cm: 60,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 30,
+    clipped_corner_length_cm: 30,
+});
+innerBandLiner.cutWidthCm = 30.1;
+innerBandLiner.cutLengthCm = 30.1;
+const actualLPath = geometry.edgePaths(innerBandLiner).edge_break;
+assert.equal(actualLPath.slice(1).reduce((total, point, index) => total + segmentLength(actualLPath[index], point), 0), 602);
+assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60).length, 3);
+assert.equal(geometry.centerlineMm(innerBandLiner, "edge_break", 1, 1, 0, 60.2).length, 3,
+    "effective geometry remains available to manufacturing consumers");
+for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
+    const draft = editor.draftFromRow({
+        piece_type: "L-Shaped Corner",
+        width_cm: 60,
+        length_cm: 60,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 30,
+        clipped_corner_length_cm: 30,
+    }, kind);
+    draft.piece = innerBandLiner;
+    draft.side = "edge_break";
+    draft.offsetCm = 1;
+    draft.widthCm = 1;
+    draft.startCm = 0;
+    draft.lengthCm = 60.2;
+    draft.fullLength = false;
+    assert.equal(editor.validationIssue(draft), null, `${kind} must accept the 60.2 cm effective span`);
+    draft.lengthCm = 60.226;
+    assert.equal(editor.validationIssue(draft).code, "liner_span_exceeds_edge", `${kind} must reject lengths beyond the effective path`);
+}
+
 assert.equal(geometry.validationCode(regular, "edge_width_top", -1, 1), "offset_invalid");
 assert.equal(geometry.validationCode(regular, "edge_width_top", 0, 0), "width_invalid");
 assert.equal(geometry.validationCode(regular, "edge_width_top", 50, 20), "strip_outside");
@@ -240,6 +284,25 @@ for (const [side, expected] of Object.entries(expectedBandCoordinates)) {
     ];
     if (referenceMachining === null) referenceMachining = machining;
     else assert.deepEqual(machining, referenceMachining, "edge preview styling must not move machining overlays");
+}
+
+for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
+    const partial = editor.previewSvg({
+        piece: geometry.pieceFromRow({ piece_type: "Regular", width_cm: 30, length_cm: 30 }),
+        row: {},
+        kind,
+        side: "edge_long_left",
+        offsetCm: 2,
+        widthCm: 1.5,
+        startCm: 5,
+        lengthCm: 20,
+        enabled: true,
+    });
+    const points = partial.match(/data-liner-strip="1"[^>]*points="([^"]+)"/)[1]
+        .split(" ").map(point => point.split(",").map(Number));
+    assert.ok(Math.abs(segmentLength(points[0], points[1]) - 120) < 0.1, `${kind} visible area must span only the selected 20 cm region`);
+    assert.ok(Math.abs(points[0][1] - 60) < 0.1, `${kind} visible area must start at 5 cm`);
+    assert.ok(Math.abs(points[1][1] - 180) < 0.1, `${kind} visible area must end at 25 cm`);
 }
 
 const operator = fs.readFileSync(
