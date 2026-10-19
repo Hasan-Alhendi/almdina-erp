@@ -1120,11 +1120,11 @@
         return theme.headerCss();
     }
 
-    function printOrderMetaHtml(frm, plan, totalSheets, source) {
+    function printOrderMetaHtml(frm, plan, totalSheets, _source) {
+        // Plan name / revision stay in the verified print source for freshness
+        // checks, but are intentionally omitted from the printed header.
         const items = [
             [translate("Order number"), frm.doc.name || "—"],
-            [translate("Plan name"), source.planName],
-            [translate("Plan revision"), source.revision == null ? "—" : source.revision],
             [translate("Customer name"), frm.doc.customer || "—"],
             [translate("Board color"), frm.doc.board_description || "—"],
             [translate("Board count"), totalSheets],
@@ -1134,6 +1134,28 @@
         return `<div class="dco-print-order-meta">${items.map(([label, value]) => `
             <div><b>${escape_html(label)}</b><span>${escape_html(value)}</span></div>
         `).join("")}</div>`;
+    }
+
+    function stripPrintOnlyBoardChrome(card) {
+        // OFFCUT source/execution labels remain in the in-app preview; print
+        // drops them entirely so they cannot occupy space or leak into PDF text.
+        card.querySelectorAll(".dco-offcut-business-context").forEach(node => {
+            if (typeof node.remove === "function") {
+                node.remove();
+                return;
+            }
+            if (node.parentNode && typeof node.parentNode.removeChild === "function") {
+                node.parentNode.removeChild(node);
+            }
+        });
+        return card;
+    }
+
+    function printCardHtml(card) {
+        return String(card.outerHTML || "").replace(
+            /<div class="dco-offcut-business-context\b[^>]*>[\s\S]*?<\/div>/g,
+            ""
+        );
     }
 
     function boardAspectFromCards(cards, frm, plan) {
@@ -1180,6 +1202,7 @@
 
         let boardIndex = 0;
         cards.forEach(card => {
+            stripPrintOnlyBoardChrome(card);
             const board = card.querySelector(".dco-sheet-board");
             const title = card.querySelector(".dco-sheet-title");
             const isOffcut = card.dataset.resourceKind === "OFFCUT";
@@ -1222,11 +1245,12 @@
                 const rowCards = cards.slice(cardOffset, cardOffset + rowSize);
                 cardOffset += rowSize;
                 const rowHtml = rowCards.map(card => {
+                    stripPrintOnlyBoardChrome(card);
                     const title = card.querySelector(".dco-sheet-title");
                     const isOffcut = card.dataset.resourceKind === "OFFCUT";
                     if (!isOffcut) globalBoardIndex += 1;
                     if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? htmlText("Offcut") : htmlText("Board {0}", [globalBoardIndex])}</div>`;
-                    return card.outerHTML;
+                    return printCardHtml(card);
                 }).join("");
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
             }).join("");
@@ -1420,6 +1444,24 @@ ${printHeaderCss()}
     background: #fff !important;
     overflow: hidden !important;
     box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+}
+.dco-sheet-card[data-resource-kind="OFFCUT"] .dco-sheet-board {
+    background: #E5E7EB !important;
+}
+.dco-sheet-card[data-resource-kind="OFFCUT"] .dco-board-waste-hatch {
+    display: none !important;
+    background: none !important;
+    background-image: none !important;
+}
+.dco-offcut-business-context {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
 }
 .dco-usable-sheet {
     position: absolute !important;
