@@ -17,6 +17,12 @@ class FakeOrderAccess:
         return {}
 
 
+class FakeEdgeProfiles:
+    @staticmethod
+    def profiles() -> dict[str, SimpleNamespace]:
+        return {"Default 1mm": SimpleNamespace(thickness_mm=1)}
+
+
 class TestMachiningAddonAdapter(FrappeTestCase):
     def _adapter(self, **updates: object) -> tuple[FrappeOrderPiecePolicyAdapter, SimpleNamespace]:
         values = {
@@ -58,8 +64,8 @@ class TestMachiningAddonAdapter(FrappeTestCase):
         }
         values.update(updates)
         row = SimpleNamespace(**values)
-        document = SimpleNamespace(pieces=[row])
-        return FrappeOrderPiecePolicyAdapter(document, FakeOrderAccess()), row
+        document = SimpleNamespace(pieces=[row], default_edge_type="Default 1mm")
+        return FrappeOrderPiecePolicyAdapter(document, FakeOrderAccess(), FakeEdgeProfiles()), row
 
     def test_all_addons_use_the_current_calculated_piece_dimensions(self) -> None:
         for addon in MACHINING_ADDONS:
@@ -173,3 +179,36 @@ class TestMachiningAddonAdapter(FrappeTestCase):
         )
         adapter.validate_machining_rows()
         self.assertEqual(getattr(row, addon.length_field), 0)
+
+    def test_l_inner_span_uses_effective_notch_for_all_addons(self) -> None:
+        for addon in MACHINING_ADDONS:
+            for length, expected_error in (
+                (60.2, False),
+                (60.226, True),
+            ):
+                with self.subTest(addon=addon.kind, length=length):
+                    adapter, _row = self._adapter(
+                        piece_type="L-Shaped Corner",
+                        width_cm=60,
+                        length_cm=60,
+                        cut_width_cm=60,
+                        cut_length_cm=60,
+                        clipped_corner_width_cm=30,
+                        clipped_corner_length_cm=30,
+                        edge_break=1,
+                        **{
+                            addon.enabled_field: 1,
+                            addon.side_field: "edge_break",
+                            addon.offset_field: 1,
+                            addon.width_field: 1,
+                            addon.start_field: 0,
+                            addon.length_field: length,
+                        },
+                    )
+                    if expected_error:
+                        with self.assertRaises(frappe.ValidationError) as raised:
+                            adapter.validate_machining_rows()
+                        self.assertIn("available 60.2 cm", str(raised.exception))
+                        self.assertIn("maximum 60.2 cm", str(raised.exception))
+                    else:
+                        adapter.validate_machining_rows()
