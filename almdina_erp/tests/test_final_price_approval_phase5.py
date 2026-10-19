@@ -54,27 +54,28 @@ class TestFinalPriceApprovalPhase5(unittest.TestCase):
         self.assertNotIn("get_list(\"Door Cutting Price Approval\"", source)
         self.assertNotIn("Door Cutting Price Approval", source)
 
-    def test_list_badge_is_independent_of_operational_status(self) -> None:
+    def test_list_price_filter_survives_intentional_badge_removal(self) -> None:
+        # Follow current Develop: the list keeps filtering, while the obsolete
+        # approval badges are absent and the operational pill stays separate.
         source = _read(LIST_JS)
-        self.assertIn("applyDesktopPriceApprovalBadges", source)
-        self.assertIn("renderPriceApprovalBadge", source)
-        self.assertIn("dco-list-price-approval", source)
-        self.assertIn("priceApprovalStatus", source)
-        # Operational pill remains separate from price badge.
+        self.assertIn('priceApprovalFilterConfig({ localize: false })', source)
+        self.assertIn('"price_approval_status"', source)
         self.assertIn("renderStatusPill(model.state)", source)
-        self.assertIn("renderPriceApprovalBadge(model)", source)
+        self.assertNotIn("applyDesktopPriceApprovalBadges", source)
+        self.assertNotIn("renderPriceApprovalBadge", source)
+        self.assertNotIn("dco-list-price-approval", source)
 
-    def test_filter_slot_and_badge_styles_are_list_scoped(self) -> None:
+    def test_filter_slot_styles_remain_scoped_without_retired_badges(self) -> None:
         css = _read(LIST_CSS)
         mobile = _read(MOBILE_CSS)
         self.assertIn(
             '.dco-order-list .dco-status-filter-slot [data-fieldname="price_approval_status"]',
             css,
         )
-        self.assertIn(".dco-order-list .dco-list-price-approval.is-approved", css)
-        self.assertIn(".dco-order-list .dco-list-price-approval.is-unapproved", css)
+        self.assertNotIn("dco-list-price-approval", css)
+        self.assertNotIn("dco-list-price-approval", mobile)
         self.assertIn(
-            ".dco-order-list.dco-order-card-layout .dco-list-price-approval.is-approved",
+            ".dco-order-list.dco-order-card-layout .dco-card-state-pill",
             mobile,
         )
 
