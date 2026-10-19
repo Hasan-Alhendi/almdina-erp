@@ -380,12 +380,65 @@
         return options;
     }
 
+    function queryFilterFact(filter, doctype) {
+        if (!Array.isArray(filter)) return null;
+        if (filter.length >= 4) {
+            if (filter[0] !== doctype) return null;
+            return { field: filter[1], operator: String(filter[2] || "=").toLowerCase(), value: filter[3] };
+        }
+        if (filter.length === 3) {
+            return { field: filter[0], operator: String(filter[1] || "=").toLowerCase(), value: filter[2] };
+        }
+        if (filter.length === 2) {
+            return { field: filter[0], operator: "=", value: filter[1] };
+        }
+        return null;
+    }
+
+    function filterIncludesValue(fact, expected) {
+        if (!fact) return false;
+        if (fact.operator === "=") return String(fact.value || "").trim() === expected;
+        if (fact.operator === "in" && Array.isArray(fact.value)) {
+            return fact.value.some(value => String(value || "").trim() === expected);
+        }
+        return false;
+    }
+
+    function applyPriceApprovalScopeFilter(args, doctype) {
+        // This is a ListView query policy, not a mutation of commercial approval history.
+        // All-price views retain cancellations; price-filtered views omit them unless
+        // the user explicitly requested Cancelled through a status filter.
+        if (!args || doctype !== METHODS.doctype || !Array.isArray(args.filters)) return args;
+        const facts = args.filters.map(filter => queryFilterFact(filter, doctype));
+        const priceFiltered = facts.some(fact =>
+            fact && fact.field === PRICE_APPROVAL_FILTER_FIELDNAME
+            && (filterIncludesValue(fact, PRICE_APPROVAL_STATUS_APPROVED)
+                || filterIncludesValue(fact, PRICE_APPROVAL_STATUS_UNAPPROVED))
+        );
+        if (!priceFiltered) return args;
+
+        const statusFilters = [
+            ...facts,
+            ...(Array.isArray(args.or_filters)
+                ? args.or_filters.map(filter => queryFilterFact(filter, doctype)) : []),
+        ].filter(fact => fact && fact.field === STATUS_FILTER_FIELDNAME);
+        if (statusFilters.some(fact =>
+            filterIncludesValue(fact, "Cancelled")
+            || (fact.operator === "!=" && String(fact.value || "").trim() === "Cancelled")
+        )) return args;
+
+        return {
+            ...args,
+            filters: [...args.filters, [doctype, STATUS_FILTER_FIELDNAME, "!=", "Cancelled"]],
+        };
+    }
+
     function installCombinedSearch(listview) {
         if (!listview || listview._dcoCombinedSearchInstalled || typeof listview.get_args !== "function") return;
         const originalGetArgs = listview.get_args.bind(listview);
 
         listview.get_args = function dcoCombinedSearchArgs() {
-            const args = originalGetArgs();
+            const args = applyPriceApprovalScopeFilter(originalGetArgs(), this.doctype);
             const field = searchField(this);
             const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
             if (!term) return args;
@@ -1813,6 +1866,8 @@
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
+        installCombinedSearch,
+        applyPriceApprovalScopeFilter,
         installOverviewDefaultSort,
         isOverviewDefaultSortActive,
         overviewDefaultSortField: OVERVIEW_DEFAULT_SORT_FIELD,
