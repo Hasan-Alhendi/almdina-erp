@@ -31,7 +31,19 @@ Existing NEW token uniqueness/reconciliation, local atomic IndexedDB/CAS/hash/sc
 
 New actual Desk coverage exercises refresh, offline checkpoint, tab reopen, full browser restart with a persistent profile, child identity/add/delete/reorder, edges/extras, external version conflict, server edit between restore and Save, pre-plan acknowledged/unacknowledged versions, two-tab CAS, real delayed requests, Back/Forward, dynamic permission revoke, dispatch, reassignment, explicit Return to Draft and Save/Cancel. Individual completed scenarios write `edit-scenario-results.json`; completion is emitted only after every scenario passes. No fabricated API response is used by these scenarios.
 
-## Evidence
+## Latest integrated runtime evidence
+
+[Run 39242239422](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39242239422) tested exact HEAD `f6ee3580120bec7c314446e13c52cd88c83bf7cc`: **PASS** for `full_pinned`, `full_pinned_base_permission` (independent negative baseline diagnostic), `al128_desk`, `al129_new`, `al129_customer`, `al129_backend`; **FAIL** for rolling `full`, `al128_performance`, and `al131_edit`. All application-source artifacts confirm the expected SHA and pinned framework sources. These results are evidence for that commit, not acceptance of later fixes.
+
+- EDIT screenshot proves the version conflict retained the draft and refused hydration; the test expected Arabic while its user session was English. Isolated EDIT users now explicitly use Arabic, and the scenario asserts the real acceptance locale.
+- Rolling Frappe now upserts generated Custom Fields on every native `create_custom_field`, changing timestamps on repeated sync. The repair now creates only missing fields and repairs existing metadata without repeated native upsert; grant/idempotency assertions remain unchanged.
+- The performance observer now joins actual committed writes by exact draft/revision, and registers completion observation before the gateway acknowledgement. A local real Chromium probe observed all 40 acknowledged writes. No storage result or missing sample is fabricated.
+- Cross-order runtime run [39242239408](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39242239408) failed cold-start global readiness and obsolete print-plan-ID assertions. Readiness now guards `window.frappe`; print acceptance verifies source plan/revision, order, board, sheet count and geometry, preserving the approved omission of technical IDs/OFFCUT business routing from printed output. The runtime workflow now checks exact application HEAD.
+- Its EDIT diagnostic also exposed a real jqXHR `.finally` failure in the production revert-target loader. A regression reproduced the exact error; the existing owner now normalizes the transport with `Promise.resolve`, preserving its identity and cleanup fences.
+
+A new final integrated run is mandatory after these corrections.
+
+## Earlier evidence
 
 Latest historical integration [39216134747](https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/39216134747), ancestor `611004ab`, is **not** final-head acceptance:
 

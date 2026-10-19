@@ -217,7 +217,7 @@ def read_page_state(page: Page) -> dict:
                     nativeFormTrace: (window.__al131NativeFormTrace || []).slice(-12),
                     form: window.cur_frm && window.cur_frm.doc && window.cur_frm.doc.name,
                     readiness: {
-                        docContext: Boolean(window.AlmdinaDcoDocumentContext),
+                        docContext: Boolean(window.AlmdinaDocumentContext),
                         coordinator: Boolean(window.AlmdinaDcoEditSessionCoordinator),
                         recovery: Boolean(window.AlmdinaDcoRecovery),
                         checkpoint: Boolean(window.AlmdinaDcoRecovery?.LocalCheckpoint),
@@ -577,12 +577,13 @@ def certify_actual_frappe_desk_edit_recovery(page: Page) -> None:
     _trace_event("certification_started")
     login_to_desk(page, "Administrator", "admin")
 
-
     # Phase B is intentionally limited to Desk startup and loading one real
     # DCO form. Recovery scenarios must never run when this smoke fails.
     name = FIXTURES["restore"]
     _trace_event("phase_b_desk_smoke_started", target_doctype="Door Cutting Order")
     open_dco(page, name)
+    assert evaluate(page, "verify Arabic recovery acceptance locale",
+                    "() => AlmdinaLocale.currentLanguage()") == "ar"
     wait_for_function(page, "DCO form is ready",
         "name => window.cur_frm && window.cur_frm.doc && "
         "window.cur_frm.doc.name === name && window.cur_frm.doctype === 'Door Cutting Order'",

@@ -265,8 +265,8 @@ in isolated browser contexts. Each variant records 40 keyboard input-to-second-
 animation-frame samples and 40 input-to-checkpoint-acknowledgement samples.
 Acknowledgement includes debounce, projection, hashing, storage and polling.
 A native IndexedDB observer preserves the real transaction and records creation-
-to-complete latency for the last completed draft-store write transaction belonging
-to each acknowledged edit; this excludes projection, hashing and database open.
+to-complete latency for the draft-store write matching the exact draft identity
+and acknowledged recovery revision; this excludes projection, hashing and database open.
 After interaction collection, 40 repeated warm calls to the canonical projection
 and serialization functions time the live 100-piece form separately. These direct
 calls do not represent the complete session capture lifecycle or add work inside

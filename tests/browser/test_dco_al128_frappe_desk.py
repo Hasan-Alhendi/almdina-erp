@@ -749,21 +749,37 @@ def _benchmark_order(
                 window.__al128KeyboardFrameSamples = [];
                 window.__al128CheckpointSamples = [];
                 window.__al128TransactionSamples = [];
+                window.__al128CompletedWrites = [];
                 // Observe real transactions; preserve their arguments, result and errors.
+                const transactions = new WeakMap();
                 const transaction = IDBDatabase.prototype.transaction;
                 IDBDatabase.prototype.transaction = function (...args) {
                     const startedAt = performance.now();
                     const tx = Reflect.apply(transaction, this, args);
-                    const action = window.__al128AckAction;
-                    const indexed = AlmdinaDcoRecovery.IndexedDb;
-                    if (action && action.started && args[1] === "readwrite"
-                        && this.name === indexed.DATABASE_NAME
-                        && tx.objectStoreNames.contains(indexed.DRAFT_STORE)) {
-                        tx.addEventListener("complete", () => {
-                            action.storageTransactions.push(performance.now() - startedAt);
-                        }, {once: true});
-                    }
+                    const sample = { startedAt, record: null };
+                    transactions.set(tx, sample);
+                    // Register before the gateway's oncomplete handler so the
+                    // exact revision timing exists before its write is ACKed.
+                    tx.addEventListener("complete", () => {
+                        if (sample.record) window.__al128CompletedWrites.push({
+                            ...sample.record, duration: performance.now() - sample.startedAt,
+                        });
+                    }, {once: true});
                     return tx;
+                };
+                const put = IDBObjectStore.prototype.put;
+                IDBObjectStore.prototype.put = function (record, ...args) {
+                    const request = Reflect.apply(put, this, [record, ...args]);
+                    const indexed = AlmdinaDcoRecovery.IndexedDb;
+                    if (this.name === indexed.DRAFT_STORE && record?.draft_id
+                        && Number.isSafeInteger(record.recovery_revision)) {
+                        const sample = transactions.get(this.transaction);
+                        if (sample) sample.record = {
+                            draft_id: record.draft_id,
+                            revision: record.recovery_revision,
+                        };
+                    }
+                    return request;
                 };
                 window.__al128KeyboardAction = null;
                 window.__al128AckAction = null;
@@ -788,7 +804,9 @@ def _benchmark_order(
                                     performance.now() - ackAction.startedAt
                                 );
                                 window.__al128TransactionSamples.push(
-                                    ackAction.storageTransactions.at(-1) ?? null
+                                    window.__al128CompletedWrites.findLast(write =>
+                                        write.draft_id === state.draft_id
+                                        && write.revision === state.saved_revision)?.duration ?? null
                                 );
                                 ackAction.completed = true;
                                 return;
@@ -850,7 +868,7 @@ def _benchmark_order(
                 "() => {"
                 " const state = AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm);"
                 " window.__al128AckAction = {"
-                "   started: false, completed: false, storageTransactions: [], savedRevision: state.saved_revision"
+                "   started: false, completed: false, savedRevision: state.saved_revision"
                 " };"
                 "}"
             )
@@ -928,7 +946,7 @@ def _benchmark_order(
                 "p95": _percentile(checkpoint_ms, 0.95),
             },
             "checkpoint_ack_method": "first input to LOCAL_SAVED; includes debounce/projection/hash/storage/polling",
-            "indexeddb_transaction_method": "native transaction creation to complete event; last successful draft-store readwrite per acknowledged edit; excludes projection/hash/open",
+            "indexeddb_transaction_method": "native transaction creation to complete event; draft-store write matching exact draft_id and acknowledged recovery revision; excludes projection/hash/open",
             "projection_method": "40 repeated warm createDcoInput/createPayload and serialize calls on the live form after input/ACK collection; excludes session async work",
             "projection_payload_bytes": projection_samples["bytes"],
             **{

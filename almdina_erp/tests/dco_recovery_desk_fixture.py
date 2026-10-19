@@ -126,6 +126,7 @@ def _worker(suffix: str, role: str) -> str:
             "email": email,
             "first_name": f"DCO Recovery {suffix}",
             "user_type": "System User",
+            "language": "ar",
             "enabled": 1,
             "send_welcome_email": 0,
             "new_password": "dco-test-worker-password",
@@ -261,6 +262,10 @@ def create_desk_edit_recovery_fixtures() -> dict[str, str]:
     site_state = assert_desk_test_site_preflight()
     if not site_state["setup_complete"]:
         frappe.throw("Run prepare_desk_test_site() before creating Desk recovery fixtures.")
+    # Certify the requested Arabic/RTL recovery surface; the setup wizard uses
+    # English only while provisioning its isolated company.
+    frappe.db.set_value("User", "Administrator", "language", "ar")
+    frappe.clear_cache(user="Administrator")
     role = frappe.get_doc(
         {
             "doctype": "Role",
