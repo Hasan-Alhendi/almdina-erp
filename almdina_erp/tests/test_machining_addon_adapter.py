@@ -198,7 +198,9 @@ class TestMachiningAddonAdapter(FrappeTestCase):
                         },
                     )
                     if expected_error:
-                        with self.assertRaises(frappe.ValidationError):
+                        with self.assertRaises(frappe.ValidationError) as raised:
                             adapter.validate_machining_rows()
+                        self.assertIn("available 60 cm", str(raised.exception))
+                        self.assertIn("maximum 60 cm", str(raised.exception))
                     else:
                         adapter.validate_machining_rows()
