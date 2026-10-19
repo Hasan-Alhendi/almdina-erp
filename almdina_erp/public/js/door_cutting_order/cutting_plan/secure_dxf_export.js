@@ -849,6 +849,9 @@
 
         function overlayObstacles(sheet, piece) {
             const liner = window.AlmdinaLinerGeometry;
+            if (liner && typeof liner.sheetObstaclesMm === "function") {
+                return liner.sheetObstaclesMm(sheet, piece);
+            }
             const samePiece = liner && typeof liner.samePlacedPiece === "function"
                 ? liner.samePlacedPiece
                 : ((left, right) => left === right);

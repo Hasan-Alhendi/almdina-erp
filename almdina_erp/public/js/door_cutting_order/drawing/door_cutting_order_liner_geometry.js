@@ -875,6 +875,39 @@
         return { outer: placedPolygonMm(piece), holes: [], source: "placed_parametric_polygon" };
     }
 
+    function sheetObstaclesMm(sheet, hostPiece) {
+        return ((sheet && sheet.pieces) || [])
+            .filter(piece => !samePlacedPiece(piece, hostPiece))
+            .map(piece => {
+                const geometry = obstacleGeometryMm(piece);
+                const diagnostic = {
+                    pieceId: piece && piece.id,
+                    label: String((piece && piece.label) || ""),
+                    positionCm: {
+                        x: num(piece && piece.x),
+                        y: num(piece && piece.y),
+                        w: num(piece && piece.w),
+                        h: num(piece && piece.h),
+                    },
+                    geometrySource: geometry.source || "fallback_rectangle",
+                };
+                if (geometry.outer.length >= 3) {
+                    return {
+                        polygon: geometry.outer,
+                        holes: geometry.holes,
+                        diagnostic,
+                    };
+                }
+                return {
+                    minX: num(piece && piece.x) * 10,
+                    minY: num(piece && piece.y) * 10,
+                    maxX: (num(piece && piece.x) + num(piece && piece.w)) * 10,
+                    maxY: (num(piece && piece.y) + num(piece && piece.h)) * 10,
+                    diagnostic,
+                };
+            });
+    }
+
     function transformPoint(point, mirrored, quarterTurns, width, height) {
         let x = point[0];
         let y = point[1];
@@ -1096,6 +1129,7 @@
         placedPolygonMm,
         obstaclePolygonMm,
         obstacleGeometryMm,
+        sheetObstaclesMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,

@@ -485,6 +485,17 @@
     }
 
     function pieceWithLinerSpec(frm, piece) {
+        // A plan snapshot is frozen manufacturing evidence. Do not let later
+        // edits in the live order rewrite its machining path in Preview while
+        // DXF continues to consume the persisted piece. Old snapshots without
+        // add-on fields retain the order-row compatibility fallback below.
+        if (piece && [
+            "extra_liner",
+            "extra_back_groove",
+            "extra_recessed_handle_cutout",
+        ].some(field => Object.prototype.hasOwnProperty.call(piece, field))) {
+            return piece;
+        }
         const row = extraOrderRowForPiece(frm, piece);
         if (!row) return piece;
         const engine = window.AlmdinaMachiningOverlay;
@@ -517,6 +528,14 @@
             copy.clipped_corner_length_cm = notch.cutLengthCm;
         }
         return copy;
+    }
+
+    function planCutterDiameterMm(plan, frm) {
+        const millimetres = num(plan && plan.kerf_mm);
+        if (millimetres > 0) return millimetres;
+        const centimetres = num(plan && plan.kerf_cm);
+        if (centimetres > 0) return centimetres * 10;
+        return num(frm && frm.doc && frm.doc.kerf_mm);
     }
 
     function drawingOverlays(piece) {
@@ -571,11 +590,19 @@
 
     function overlayObstacles(sheet, piece) {
         const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.sheetObstaclesMm === "function") {
+            return liner.sheetObstaclesMm(sheet, piece);
+        }
         return (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
-            const polygon = liner && typeof liner.obstaclePolygonMm === "function"
-                ? liner.obstaclePolygonMm(other)
-                : (liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : []);
-            if (polygon.length >= 3) return { polygon };
+            const geometry = liner && typeof liner.obstacleGeometryMm === "function"
+                ? liner.obstacleGeometryMm(other)
+                : null;
+            const polygon = geometry && Array.isArray(geometry.outer)
+                ? geometry.outer
+                : (liner && typeof liner.obstaclePolygonMm === "function"
+                    ? liner.obstaclePolygonMm(other)
+                    : (liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : []));
+            if (polygon.length >= 3) return { polygon, holes: (geometry && geometry.holes) || [] };
             return {
                 minX: num(other.x) * 10,
                 minY: num(other.y) * 10,
@@ -585,8 +612,31 @@
         });
     }
 
+    function logLinerConflict(piece, path, details) {
+        console.error("[liner-extension-conflict]", {
+            host: {
+                pieceId: piece && piece.id,
+                label: String((piece && piece.label) || ""),
+                positionCm: {
+                    x: num(piece && piece.x),
+                    y: num(piece && piece.y),
+                    w: num(piece && piece.w),
+                    h: num(piece && piece.h),
+                },
+            },
+            neighbour: details && details.obstacle,
+            linerPathMm: path.map(point => point.slice()),
+            minimumDistanceMm: details && details.minimumDistanceMm,
+            cutterRadiusMm: details && details.cutterRadiusMm,
+            rejectionThresholdMm: details && details.rejectionThresholdMm,
+            rejectCondition: details && details.rejectCondition,
+            segmentIndex: details && details.segmentIndex,
+        });
+    }
+
     function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
         const liner = window.AlmdinaLinerGeometry;
+        const cutterMm = num(frame && frame.cutterMm) || num(piece && piece.kerf_mm);
         const kept = overlays.filter(overlay => !(overlay && overlay.geometry && overlay.geometry.toolpath));
         const engine = window.AlmdinaMachiningOverlay;
         if (engine && typeof engine.syntheticOverlays === "function" && sheet && frame) {
@@ -599,7 +649,7 @@
             };
             const tools = engine.syntheticOverlays(Object.assign({}, piece, {
                 board,
-                kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                kerf_mm: cutterMm,
             }));
             const obstacles = overlayObstacles(sheet, piece);
             const result = kept.slice();
@@ -610,13 +660,16 @@
                     return;
                 }
                 if (liner && typeof liner.extensionConflict === "function" && tool.geometry) {
+                    let conflictDetails = null;
                     const conflict = liner.extensionConflict(
                         tool.geometry.path,
-                        num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                        cutterMm,
                         board,
-                        obstacles
+                        obstacles,
+                        details => { conflictDetails = details; }
                     );
                     if (conflict) {
+                        logLinerConflict(piece, tool.geometry.path, conflictDetails);
                         result.push({ kind: tool.kind, layer: tool.layer, synthetic: true, error: conflict });
                         return;
                     }
@@ -642,13 +695,16 @@
             return kept.concat(tool);
         }
         const obstacles = overlayObstacles(sheet, piece);
+        let conflictDetails = null;
         const conflict = liner.extensionConflict(
             tool.geometry.path,
-            num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+            cutterMm,
             board,
-            obstacles
+            obstacles,
+            details => { conflictDetails = details; }
         );
         if (conflict) {
+            logLinerConflict(piece, tool.geometry.path, conflictDetails);
             return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
         }
         return kept.concat(tool);
@@ -895,7 +951,7 @@
         return ["right", "left", "top", "bottom"].filter(edge => Math.abs(margins[edge]) <= 0.001);
     }
 
-    function sheetBoardFrame(plan, sheet) {
+    function sheetBoardFrame(plan, sheet, frm) {
         const fullW = num(sheet && sheet.full_width_cm) || num(plan.full_board_width_cm);
         const fullH = num(sheet && sheet.full_length_cm) || num(plan.full_board_length_cm);
         const usableW = num(sheet && sheet.usable_width_cm) || num(sheet && sheet.w) || num(plan.usable_board_width_cm) || fullW;
@@ -917,6 +973,7 @@
             insetY,
             innerW: innerW > 0 ? innerW : usableW,
             innerH: innerH > 0 ? innerH : usableH,
+            cutterMm: planCutterDiameterMm(plan, frm),
         };
     }
 
@@ -962,7 +1019,7 @@
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
-            const frame = sheetBoardFrame(plan, sheet);
+            const frame = sheetBoardFrame(plan, sheet, frm);
             const board_height_px = Math.max(260, Math.round(board_width_px * (frame.drawH / frame.drawW)));
             const usableLeft = frame.drawW ? (frame.insetX / frame.drawW) * 100 : 0;
             const usableTop = frame.drawH ? (frame.insetY / frame.drawH) * 100 : 0;
