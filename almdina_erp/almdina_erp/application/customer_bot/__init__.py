@@ -14,6 +14,10 @@ from .phone_access_commands import (
     revoke_phone_access,
 )
 from .ports import BotTextReplyPort
+from .read_customer_orders import (
+    list_current_customer_orders,
+    select_customer_order_by_name,
+)
 from .resolve_customer_identity import resolve_customer_identity
 
 __all__ = [
@@ -22,8 +26,10 @@ __all__ = [
     "PhoneAccessRetired",
     "approve_phone_access_request",
     "dispatch_text_reply",
+    "list_current_customer_orders",
     "reject_phone_access_request",
     "request_additional_phone_access",
     "resolve_customer_identity",
+    "select_customer_order_by_name",
     "revoke_phone_access",
 ]

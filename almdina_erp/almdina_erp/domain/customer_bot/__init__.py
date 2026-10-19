@@ -7,6 +7,10 @@ to a provider name or session id.
 
 from .gateway_capabilities import BotGatewayCapabilities
 from .inbound_message import InboundCustomerMessage, InboundMessageKind, build_inbound_customer_message
+from .order_followup import (
+    PublicOrderStatus,
+    classify_public_order_status,
+)
 from .text_reply import (
     SendDisposition,
     TextReplyRequest,
@@ -20,6 +24,8 @@ __all__ = [
     "BotGatewayCapabilities",
     "InboundCustomerMessage",
     "InboundMessageKind",
+    "PublicOrderStatus",
+    "classify_public_order_status",
     "SendDisposition",
     "TextReplyRequest",
     "TextSendResult",
