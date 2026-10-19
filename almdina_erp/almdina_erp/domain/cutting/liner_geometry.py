@@ -39,6 +39,7 @@ SIDE_BREAK = "edge_break"
 SIDE_BREAK_ONLY = "edge_break_only"
 OUTER_SIDES = (SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT)
 CM_TO_MM = 10.0
+NUMERIC_TOLERANCE_MM = 1e-7
 
 LINER_OFFSET_MISMATCH = "liner_offset_mismatch"
 LINER_WIDTH_MISMATCH = "liner_width_mismatch"
@@ -61,6 +62,8 @@ class LinerPiece:
     clipped_corner_position: str = "Top Right"
     clipped_corner_width_cm: float = 0.0
     clipped_corner_length_cm: float = 0.0
+    nominal_clipped_corner_width_cm: float | None = None
+    nominal_clipped_corner_length_cm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -670,6 +673,28 @@ def _span_hits_bend(path: Sequence[Point], start_mm: float, end_mm: float) -> bo
     return False
 
 
+def nominal_liner_reference_length_mm(piece: LinerPiece, side: str) -> float:
+    """Return the editable span in the finished L-corner input frame.
+
+    The inner strap can extend the effective cut path beyond the finished
+    corner distances. Explicit machining lengths remain in the finished frame;
+    zero continues to resolve to the full effective path.
+    """
+    if piece.piece_type == L_SHAPED_CORNER_TYPE and side == SIDE_BREAK:
+        width = (
+            piece.clipped_corner_width_cm
+            if piece.nominal_clipped_corner_width_cm is None
+            else piece.nominal_clipped_corner_width_cm
+        )
+        length = (
+            piece.clipped_corner_length_cm
+            if piece.nominal_clipped_corner_length_cm is None
+            else piece.nominal_clipped_corner_length_cm
+        )
+        return (float(width) + float(length)) * CM_TO_MM
+    return _polyline_length(reference_polyline_mm(piece, side))
+
+
 def resolved_liner_span_mm(
     piece: LinerPiece,
     side: str,
@@ -696,6 +721,7 @@ def resolved_liner_span_mm(
         return 0.0, 0.0, "liner_start_invalid"
     start = max(0.0, start)
     legacy_full = length_cm in (None, "")
+    explicit_length = False
     if not legacy_full:
         try:
             length = float(length_cm) * CM_TO_MM
@@ -705,12 +731,18 @@ def resolved_liner_span_mm(
             return start, 0.0, "liner_length_invalid"
         if length <= GEOMETRY_TOLERANCE_MM:
             length = edge - start
+        else:
+            explicit_length = True
     else:
         length = edge - start
     if length <= GEOMETRY_TOLERANCE_MM:
         return start, length, "liner_length_invalid"
     if start + length > edge + GEOMETRY_TOLERANCE_MM:
         return start, length, "liner_span_exceeds_edge"
+    if explicit_length and piece.piece_type == L_SHAPED_CORNER_TYPE and side == SIDE_BREAK:
+        nominal_edge = nominal_liner_reference_length_mm(piece, side)
+        if start + length > nominal_edge + NUMERIC_TOLERANCE_MM:
+            return start, length, "liner_span_exceeds_edge"
     return start, min(length, max(0.0, edge - start)), ""
 
 

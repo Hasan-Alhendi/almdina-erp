@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_activation_error,
     liner_centerline_mm,
+    nominal_liner_reference_length_mm,
     resolved_liner_span_mm,
     validation_code,
 )
@@ -366,6 +367,12 @@ class FrappeOrderPiecePolicyAdapter:
             clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
             clipped_corner_width_cm=notch_width_cm,
             clipped_corner_length_cm=notch_length_cm,
+            nominal_clipped_corner_width_cm=flt(
+                getattr(row, "clipped_corner_width_cm", 0)
+            ),
+            nominal_clipped_corner_length_cm=flt(
+                getattr(row, "clipped_corner_length_cm", 0)
+            ),
         )
         start_raw = getattr(row, addon.start_field, 0)
         length_raw = getattr(row, addon.length_field, 0)
@@ -385,13 +392,7 @@ class FrappeOrderPiecePolicyAdapter:
             length_cm_input,
         )
         if span_error == "liner_span_exceeds_edge":
-            _edge_start_mm, edge_mm, _edge_error = resolved_liner_span_mm(
-                piece,
-                side,
-                0,
-                None,
-            )
-            available_cm = edge_mm / 10
+            available_cm = nominal_liner_reference_length_mm(piece, side) / 10
             maximum_cm = max(0.0, available_cm - start_mm / 10)
             frappe.throw(
                 _(

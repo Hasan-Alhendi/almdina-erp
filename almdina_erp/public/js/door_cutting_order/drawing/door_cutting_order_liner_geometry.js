@@ -15,6 +15,7 @@
     const SIDE_BREAK_ONLY = "edge_break_only";
     const OUTER_SIDES = [SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT];
     const TOLERANCE_MM = 0.25;
+    const NUMERIC_TOLERANCE_MM = 1e-7;
     const BOARD_EDGE_TOLERANCE_MM = 0.05;
     const SIDE_LABELS = {
         [SIDE_TOP]: "أعلى",
@@ -61,6 +62,8 @@
             position: source.clipped_corner_position || "Top Right",
             cutWidthCm: num(source.clipped_corner_width_cm),
             cutLengthCm: num(source.clipped_corner_length_cm),
+            nominalCutWidthCm: num(source.clipped_corner_width_cm),
+            nominalCutLengthCm: num(source.clipped_corner_length_cm),
         };
     }
 
@@ -154,6 +157,16 @@
             delete paths[SIDE_BREAK_ONLY];
         }
         return paths;
+    }
+
+    function nominalReferenceLengthMm(piece, side) {
+        if (piece && piece.pieceType === L_SHAPED && side === SIDE_BREAK) {
+            const width = Number.isFinite(piece.nominalCutWidthCm) ? piece.nominalCutWidthCm : piece.cutWidthCm;
+            const length = Number.isFinite(piece.nominalCutLengthCm) ? piece.nominalCutLengthCm : piece.cutLengthCm;
+            return (width + length) * 10;
+        }
+        const path = (edgePaths(piece) || {})[side] || [];
+        return polylineLength(path);
     }
 
     function onSegment(point, start, end, tolerance) {
@@ -306,6 +319,10 @@
         return near.concat(far.slice().reverse());
     }
 
+    function regionReferenceMm(piece, side, startCm, lengthCm) {
+        return preparedReference(piece, side, startCm, lengthCm).clipped;
+    }
+
     function stripPolygonMm(piece, side, offsetCm, widthCm) {
         return regionPolygonMm(piece, side, offsetCm, widthCm, 0, null);
     }
@@ -433,9 +450,19 @@
         return { start, end: start + Math.min(length, edge - start), edge };
     }
 
+    function validateNominalSpan(piece, side, startCm, lengthCm) {
+        if (!piece || piece.pieceType !== L_SHAPED || side !== SIDE_BREAK) return;
+        const start = Math.max(0, num(startCm) * 10);
+        const explicit = !(lengthCm == null || lengthCm === "" || !(num(lengthCm) > 0));
+        if (explicit && start + (num(lengthCm) * 10) > nominalReferenceLengthMm(piece, side) + NUMERIC_TOLERANCE_MM) {
+            fail("liner_span_exceeds_edge");
+        }
+    }
+
     function preparedReference(piece, side, startCm, lengthCm) {
         const reference = edgePaths(piece)[side];
         if (!reference) fail("side_unavailable");
+        validateNominalSpan(piece, side, startCm, lengthCm);
         const span = resolvedSpanMm(reference, startCm, lengthCm);
         if (spanHitsBend(reference, span.start, span.end)) fail("liner_span_on_corner");
         return {
@@ -940,9 +967,11 @@
         pieceFromRow,
         piecePolygonMm,
         edgePaths,
+        nominalReferenceLengthMm,
         validationCode,
         stripPolygonMm,
         regionPolygonMm,
+        regionReferenceMm,
         cutterCenterOffsetsMm,
         centerlineMm,
         toolpathMm,

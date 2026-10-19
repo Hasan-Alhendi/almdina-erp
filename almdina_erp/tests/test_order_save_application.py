@@ -61,6 +61,12 @@ class ExplodingPlanGateway(FakeOrderSaveGateway):
         raise AttributeError(name)
 
 
+class RejectingMachiningGateway(FakeOrderSaveGateway):
+    def validate_machining_rows(self) -> None:
+        self.calls.append("validate_machining_rows")
+        raise ValueError("liner_span_exceeds_edge")
+
+
 class TestOrderSaveApplication(unittest.TestCase):
     def test_validation_and_piece_derivation_order_is_stable(self) -> None:
         gateway = FakeOrderSaveGateway()
@@ -97,6 +103,19 @@ class TestOrderSaveApplication(unittest.TestCase):
                 "calculate_extra_addon_prices",
             ],
         )
+
+    def test_invalid_machining_span_stops_save_before_cost_derivation(self) -> None:
+        gateway = RejectingMachiningGateway()
+
+        with self.assertRaisesRegex(ValueError, "liner_span_exceeds_edge"):
+            process_order_save(gateway)
+
+        self.assertEqual(
+            gateway.calls[-2:],
+            ["calculate_cut_dimensions", "validate_machining_rows"],
+        )
+        self.assertNotIn("calculate_piece_costs", gateway.calls)
+        self.assertNotIn("calculate_extra_addon_prices", gateway.calls)
 
 
 if __name__ == "__main__":

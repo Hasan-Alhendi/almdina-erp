@@ -173,3 +173,32 @@ class TestMachiningAddonAdapter(FrappeTestCase):
         )
         adapter.validate_machining_rows()
         self.assertEqual(getattr(row, addon.length_field), 0)
+
+    def test_l_inner_span_limit_matches_nominal_finished_notch_for_all_addons(self) -> None:
+        for addon in MACHINING_ADDONS:
+            for length, expected_error in ((60, False), (60.2, True)):
+                with self.subTest(addon=addon.kind, length=length):
+                    adapter, _row = self._adapter(
+                        piece_type="L-Shaped Corner",
+                        width_cm=60,
+                        length_cm=60,
+                        cut_width_cm=60,
+                        cut_length_cm=60,
+                        clipped_corner_width_cm=30,
+                        clipped_corner_length_cm=30,
+                        edge_break=1,
+                        edge_break_thickness_mm=1,
+                        **{
+                            addon.enabled_field: 1,
+                            addon.side_field: "edge_break",
+                            addon.offset_field: 1,
+                            addon.width_field: 1,
+                            addon.start_field: 0,
+                            addon.length_field: length,
+                        },
+                    )
+                    if expected_error:
+                        with self.assertRaises(frappe.ValidationError):
+                            adapter.validate_machining_rows()
+                    else:
+                        adapter.validate_machining_rows()
