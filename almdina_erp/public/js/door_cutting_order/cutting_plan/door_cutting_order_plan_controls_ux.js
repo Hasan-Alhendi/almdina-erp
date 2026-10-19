@@ -173,6 +173,9 @@
             return !String(frm.doc.production_path || "").trim();
         }
         const stage = frm.__almdina_stage_context || {};
+        if (stage.actor_can_operate_current_stage !== undefined) {
+            return Boolean(stage.actor_can_operate_current_stage);
+        }
         if (stage.actor_is_current_assignee !== undefined) {
             return Boolean(stage.actor_is_current_assignee);
         }
@@ -224,7 +227,8 @@
                 : "";
         }
         const stage = frm.__almdina_stage_context || {};
-        if (stage.actor_is_current_assignee === true) return "";
+        if (stage.actor_can_operate_current_stage === true) return "";
+        if (stage.actor_can_operate_current_stage === undefined && stage.actor_is_current_assignee === true) return "";
         if (stage.active_stage_assigned_to) {
             return "You can only view the plan because the current stage is assigned to another user.";
         }

@@ -42,6 +42,9 @@ class _NoopOrderSaveGateway:
     def calculate_cut_dimensions(self) -> None:
         pass
 
+    def validate_machining_rows(self) -> None:
+        pass
+
     def calculate_piece_costs(self) -> None:
         pass
 

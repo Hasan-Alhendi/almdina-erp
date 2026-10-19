@@ -61,6 +61,8 @@ stateDiagram-v2
 - المرحلة مسندة لنفس المستخدم.
 - Stage status يسمح بـStart، عادة `Pending`.
 
+`Administrator` يتجاوز شرط مطابقة الإسناد للمرحلة الحالية فقط. يسجله النظام كمنفذ (`started_by` / سجل الحدث)، مع إبقاء العامل المسند كما هو؛ وإذا كانت المرحلة غير مسندة فلا ينشئ بدءها إسنادًا إلى Administrator. تبقى حالة المرحلة والانتقال الصحيح شرطًا على الجميع.
+
 ### Handoff / Finish
 
 العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المسار الطبيعي للإنهاء يبقى من `In Progress` أو `Paused` إلى `Completed`.

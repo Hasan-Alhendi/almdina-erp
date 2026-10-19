@@ -833,7 +833,8 @@
         return topologyDxfPoints(placed, placement);
     }
 
-    function buildDxf(plan) {
+    function buildDxf(plan, options) {
+        const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
         assertRequiredGlassOpenings(plan);
@@ -954,9 +955,12 @@
                 maxX: offsetX + fullWidth,
                 maxY: offsetY + fullHeight,
             };
-            cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
-                entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
-            });
+            // Separation/trim CUT_PATH is manufacturing-only after plan approval.
+            if (includeSawCenters) {
+                cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
+                    entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
+                });
+            }
         });
 
         let dxf = "";
@@ -1012,11 +1016,29 @@
         }
     }
 
+    function preferOriginalUpload(options) {
+        // Server workspace contract is authoritative. Missing flag keeps the
+        // historical "download attached bytes" path for older payloads.
+        if (options && Object.prototype.hasOwnProperty.call(options, "preferOriginalUpload")) {
+            return options.preferOriginalUpload !== false;
+        }
+        if (options && options.originalIsManufacturingReady === false) {
+            return false;
+        }
+        return true;
+    }
+
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
-        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) return true;
+        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
+            // Custom/uploaded tab: original design file before approval, or when
+            // the approved upload already embeds manufacturing-ready cut paths.
+            // After approval with Absent saw centers, regenerate instead.
+            return preferOriginalUpload(options);
+        }
         if (normalized === "approved") {
-            return Boolean(options && options.hasOriginalFile);
+            if (!(options && options.hasOriginalFile)) return false;
+            return preferOriginalUpload(options);
         }
         return false;
     }
@@ -1126,7 +1148,9 @@
 
         let dxf;
         try {
-            dxf = buildDxf(plan);
+            dxf = buildDxf(plan, {
+                includeSawCenters: Boolean(data && data.include_saw_centers),
+            });
             validateDxfText(dxf);
         } catch (error) {
             if (error && (error.linerExport || error.glassOpening)) {

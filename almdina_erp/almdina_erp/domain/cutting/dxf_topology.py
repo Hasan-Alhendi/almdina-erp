@@ -6,6 +6,7 @@ from typing import Sequence
 from .dxf_geometry import (
     EPSILON,
     bbox,
+    is_axis_aligned_rectangle,
     point_in_polygon,
     polygon_distance,
     polygons_overlap,
@@ -72,6 +73,14 @@ class ExpectedPieceEvidence:
     arbitrary_outline: bool = False
     source_piece_no: int | None = None
     copy_no: int | None = None
+    # Optional Glass evidence used only to demote a uniquely proven opening
+    # contour that otherwise matches another piece size (fail-closed otherwise).
+    is_glass: bool = False
+    glass_margin_mm: float | None = None
+    long_left_mm: float = 0.0
+    long_right_mm: float = 0.0
+    width_bottom_mm: float = 0.0
+    width_top_mm: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -760,6 +769,301 @@ def _validate_part_topology(
     return True
 
 
+# Matches glass_opening_nesting.MAX_NESTING_DEPTH: outer Glass → inner Glass →
+# one more guest. Contour ownership must not invent deeper hole chains.
+_MAX_HOLE_NESTING_DEPTH = 2
+
+
+def _innermost_owners(
+    owners: Sequence[ContourCandidate],
+    *,
+    geometry_tolerance: float,
+) -> tuple[ContourCandidate, ...]:
+    """Owners that do not themselves contain another candidate owner."""
+
+    return tuple(
+        owner
+        for owner in owners
+        if not any(
+            other.key != owner.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                other.polygon,
+                tolerance=geometry_tolerance,
+            )
+            for other in owners
+        )
+    )
+
+
+def _contour_bbox_area(contour: ContourCandidate) -> float:
+    min_x, min_y, max_x, max_y = bbox(contour.polygon)
+    return max(0.0, max_x - min_x) * max(0.0, max_y - min_y)
+
+
+def _measured_axis_insets(
+    outer: Polygon,
+    hole: Polygon,
+    *,
+    tolerance: float,
+) -> dict[str, float] | None:
+    if not is_axis_aligned_rectangle(outer, tolerance) or not is_axis_aligned_rectangle(
+        hole, tolerance
+    ):
+        return None
+    outer_box = bbox(outer)
+    hole_box = bbox(hole)
+    return {
+        "left": hole_box[0] - outer_box[0],
+        "right": outer_box[2] - hole_box[2],
+        "bottom": hole_box[1] - outer_box[1],
+        "top": outer_box[3] - hole_box[3],
+    }
+
+
+def _expected_glass_insets(evidence: ExpectedPieceEvidence) -> dict[str, float] | None:
+    margin = evidence.glass_margin_mm
+    if margin is None:
+        return None
+    return {
+        "left": float(margin) - float(evidence.long_left_mm or 0.0),
+        "right": float(margin) - float(evidence.long_right_mm or 0.0),
+        "bottom": float(margin) - float(evidence.width_bottom_mm or 0.0),
+        "top": float(margin) - float(evidence.width_top_mm or 0.0),
+    }
+
+
+def _proven_glass_opening_pair(
+    host: ContourCandidate,
+    hole: ContourCandidate,
+    evidence: ExpectedPieceEvidence,
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> bool:
+    """True when hole is the unique finished Glass opening of host."""
+
+    if not evidence.is_glass:
+        return False
+    if not _dimensions_match(
+        host, evidence, dimension_tolerance=dimension_tolerance
+    ):
+        return False
+    expected_insets = _expected_glass_insets(evidence)
+    if expected_insets is None:
+        return False
+    if any(value <= geometry_tolerance for value in expected_insets.values()):
+        return False
+    if not polygon_strictly_contains_polygon(
+        host.polygon, hole.polygon, tolerance=geometry_tolerance
+    ):
+        return False
+    if validate_polygon(hole.polygon, geometry_tolerance):
+        return False
+    measured = _measured_axis_insets(
+        host.polygon,
+        hole.polygon,
+        tolerance=geometry_tolerance,
+    )
+    if measured is None:
+        return False
+    # Direct orientation and 180° share axis pairs; 90° swaps width/length hosts
+    # are already filtered by _dimensions_match when rotation is allowed.
+    direct = all(
+        abs(measured[side] - expected_insets[side]) <= geometry_tolerance
+        for side in ("left", "right", "bottom", "top")
+    )
+    flipped = all(
+        abs(measured[side] - expected_insets[pair]) <= geometry_tolerance
+        for side, pair in (
+            ("left", "right"),
+            ("right", "left"),
+            ("bottom", "top"),
+            ("top", "bottom"),
+        )
+    )
+    return direct or flipped
+
+
+def _demote_proven_glass_openings(
+    selected: Sequence[ContourCandidate],
+    leftovers: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> tuple[tuple[ContourCandidate, ...], tuple[ContourCandidate, ...]] | None:
+    """Demote nested piece-like contours that uniquely prove to be Glass openings.
+
+    Used only when selected count exceeds expected count. Never guesses: each
+    demoted contour must match exactly one Glass host's finished opening, and
+    the resulting selected set must match the expected inventory exactly.
+    """
+
+    excess = len(selected) - len(expected)
+    if excess <= 0:
+        return None
+    glass_evidence = tuple(item for item in expected if item.is_glass)
+    if not glass_evidence:
+        return None
+
+    nested = tuple(
+        contour
+        for contour in selected
+        if any(
+            owner.key != contour.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                contour.polygon,
+                tolerance=geometry_tolerance,
+            )
+            for owner in selected
+        )
+    )
+    if len(nested) < excess:
+        return None
+
+    proposals: list[tuple[ContourCandidate, ContourCandidate, ExpectedPieceEvidence]] = []
+    for hole in nested:
+        containers = [
+            owner
+            for owner in selected
+            if owner.key != hole.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                hole.polygon,
+                tolerance=geometry_tolerance,
+            )
+        ]
+        tight = _innermost_owners(containers, geometry_tolerance=geometry_tolerance)
+        if len(tight) != 1:
+            continue
+        host = tight[0]
+        matches = [
+            evidence
+            for evidence in glass_evidence
+            if _proven_glass_opening_pair(
+                host,
+                hole,
+                evidence,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            )
+        ]
+        if len(matches) != 1:
+            continue
+        proposals.append((hole, host, matches[0]))
+
+    if len(proposals) < excess:
+        return None
+
+    # Prefer larger demoted openings first so a host keeps its finished hole
+    # rather than a smaller nested piece of the same size class.
+    proposals = sorted(
+        proposals,
+        key=lambda item: (-_contour_bbox_area(item[0]), item[0].key, item[1].key),
+    )
+    chosen: list[ContourCandidate] = []
+    used_hosts: set[int] = set()
+    used_evidence: set[int] = set()
+    for hole, host, evidence in proposals:
+        if len(chosen) >= excess:
+            break
+        evidence_id = id(evidence)
+        if host.key in used_hosts or evidence_id in used_evidence:
+            continue
+        # A Glass row owns at most one opening.
+        used_hosts.add(host.key)
+        used_evidence.add(evidence_id)
+        chosen.append(hole)
+
+    if len(chosen) != excess:
+        return None
+    demote_keys = {contour.key for contour in chosen}
+    next_selected = tuple(
+        contour for contour in selected if contour.key not in demote_keys
+    )
+    if len(next_selected) != len(expected):
+        return None
+    if (
+        _inventory_assignment(
+            next_selected,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+        )
+        is None
+    ):
+        return None
+    next_leftovers = tuple(
+        sorted(
+            (*leftovers, *chosen),
+            key=_contour_sort_key,
+        )
+    )
+    return next_selected, next_leftovers
+
+
+def _hole_nesting_depth_ok(
+    parts: Sequence[ResolvedPartGeometry],
+    *,
+    geometry_tolerance: float,
+) -> bool:
+    """Reject host chains deeper than the optimizer nesting contract."""
+
+    by_key = {part.contour_key: part for part in parts}
+
+    def host_of(part: ResolvedPartGeometry) -> int | None:
+        containers = [
+            other
+            for other in parts
+            if other.contour_key != part.contour_key
+            and any(
+                polygon_strictly_contains_polygon(
+                    hole,
+                    part.geometry.outer,
+                    tolerance=geometry_tolerance,
+                )
+                for hole in other.geometry.holes
+            )
+        ]
+        if not containers:
+            return None
+        # Innermost host among parts that own a containing hole.
+        tight = [
+            owner
+            for owner in containers
+            if not any(
+                other.contour_key != owner.contour_key
+                and polygon_strictly_contains_polygon(
+                    owner.geometry.outer,
+                    other.geometry.outer,
+                    tolerance=geometry_tolerance,
+                )
+                for other in containers
+            )
+        ]
+        if len(tight) != 1:
+            return None
+        return tight[0].contour_key
+
+    for part in parts:
+        depth = 0
+        cursor: int | None = part.contour_key
+        seen: set[int] = set()
+        while cursor is not None:
+            if cursor in seen:
+                return False
+            seen.add(cursor)
+            host = host_of(by_key[cursor])
+            if host is None:
+                break
+            depth += 1
+            if depth > _MAX_HOLE_NESTING_DEPTH:
+                return False
+            cursor = host
+    return True
+
+
 def _classify_selection(
     selected: Sequence[ContourCandidate],
     leftovers: Sequence[ContourCandidate],
@@ -769,9 +1073,10 @@ def _classify_selection(
 ) -> ResolvedTopology | None:
     """Attach each proven hole to exactly one selected outer contour.
 
-    This function resolves structural ownership only. Material overlap and Kerf
-    remain a separate domain validation step so classification never hides a
-    placement error behind a generic ownership failure.
+    When several selected outers contain the same leftover (Glass inside Glass),
+    ownership goes to the innermost outer. Material overlap and Kerf remain a
+    separate domain validation step so classification never hides a placement
+    error behind a generic ownership failure.
     """
     holes_by_owner: dict[int, list[ContourCandidate]] = {
         contour.key: [] for contour in selected
@@ -786,9 +1091,10 @@ def _classify_selection(
                 tolerance=geometry_tolerance,
             )
         ]
-        if len(owners) != 1:
+        tight = _innermost_owners(owners, geometry_tolerance=geometry_tolerance)
+        if len(tight) != 1:
             return None
-        holes_by_owner[owners[0].key].append(hole)
+        holes_by_owner[tight[0].key].append(hole)
 
     parts: list[ResolvedPartGeometry] = []
     for contour in selected:
@@ -919,13 +1225,22 @@ def resolve_contour_ownership(
             raise diagnostic
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
     if len(selected) > len(expected):
-        if _inventory_assignment(
-            roots,
+        demoted = _demote_proven_glass_openings(
+            selected,
+            leftovers,
             expected,
             dimension_tolerance=dimension_tolerance,
-        ) is None:
-            raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
-        raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+            geometry_tolerance=geometry_tolerance,
+        )
+        if demoted is None:
+            if _inventory_assignment(
+                roots,
+                expected,
+                dimension_tolerance=dimension_tolerance,
+            ) is None:
+                raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
+            raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+        selected, leftovers = demoted
     assignment = _inventory_assignment(
         selected,
         expected,
@@ -953,6 +1268,11 @@ def resolve_contour_ownership(
         raise DxfTopologyError(
             "UNRESOLVED_CONTOUR_OWNERSHIP" if leftovers else "INVALID_PART_TOPOLOGY"
         )
+    if not _hole_nesting_depth_ok(
+        topology.parts,
+        geometry_tolerance=geometry_tolerance,
+    ):
+        raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
     return topology
 
 

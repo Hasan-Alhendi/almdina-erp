@@ -1174,6 +1174,46 @@
         renderFastMeasurements(frm);
     }
 
+    function validateMachiningAddonsBeforeSave(frm) {
+        const addons = window.AlmdinaDoorAddonsDialog;
+        if (!addons || typeof addons.validateOrder !== "function") return Promise.resolve();
+        const context = window.AlmdinaDocumentContext;
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const edgeBanding = window.AlmdinaMultiEdgeBanding;
+        const shouldLoadProfiles = typeof addons.hasEnabledMachining !== "function"
+            || addons.hasEnabledMachining(frm);
+        const ready = shouldLoadProfiles
+            && edgeBanding
+            && typeof edgeBanding.ensureProfiles === "function"
+            ? edgeBanding.ensureProfiles(frm)
+            : Promise.resolve();
+        return Promise.resolve(ready).then(() => {
+            if (context && token && typeof context.isCurrent === "function"
+                && !context.isCurrent(frm, token)) {
+                const message = __("Order changed while validating machining add-ons. Try saving again.");
+                if (window.cur_frm === frm) {
+                    frappe.msgprint({
+                        title: __("Check machining add-ons"),
+                        message,
+                        indicator: "orange",
+                    });
+                }
+                return Promise.reject(new Error(message));
+            }
+            const issue = addons.validateOrder(frm);
+            if (!issue) return undefined;
+            const message = issue.message || __("Check the machining add-on settings before saving.");
+            frappe.msgprint({
+                title: __("Check machining add-ons"),
+                message,
+                indicator: "orange",
+            });
+            return Promise.reject(new Error(message));
+        });
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
@@ -1198,6 +1238,7 @@
         before_save(frm) {
             flushMeasurementInputs(frm);
             pruneEmptyTrailingRows(frm);
+            return validateMachiningAddonsBeforeSave(frm);
         },
     });
 

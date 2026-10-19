@@ -14,7 +14,11 @@ const context = vm.createContext({
     window: fakeWindow,
     document: { documentElement: { lang: "ar" } },
     frappe: { utils: { escape_html(value) { return String(value ?? ""); } } },
-    __(value) { return Array.isArray(value) ? value[0] : value; },
+    __(value, values) {
+        let text = Array.isArray(value) ? value[0] : String(value ?? "");
+        if (Array.isArray(values)) values.forEach((item, index) => { text = text.replaceAll(`{${index}}`, String(item)); });
+        return text;
+    },
     Object,
     Array,
     Boolean,
@@ -183,6 +187,172 @@ const handleControls = editor.controlsHtml(editor.draftFromRow(machiningRow("rec
 assert.match(handleControls, /data-liner-width value="15"/);
 assert.match(handleControls, /data-liner-offset value="0.5"/);
 assert.match(handleControls, /data-liner-length value="12"/);
+for (const controls of [linerControls, grooveControls, handleControls]) {
+    for (const field of ["offset", "width", "start", "length"]) {
+        const input = controls.match(new RegExp(`<input[^>]*data-liner-${field}[^>]*>`))?.[0];
+        assert.ok(input, `${field} input should exist`);
+        assert.match(input, /step="1"/, `${field} spinner should move one displayed unit`);
+    }
+}
+
+for (const [kind, width] of [
+    ["liner", 1.8],
+    ["back_groove", 0.8],
+    ["recessed_handle_cutout", 1],
+]) {
+    const valid = editor.draftFromRow(machiningRow(kind, width), kind);
+    assert.equal(editor.validationMessage(valid), "", `${kind} valid dimensions`);
+    assert.match(editor.validationMessage({ ...valid, lengthCm: 999 }), /exceeds|maximum/i, `${kind} excessive length`);
+    assert.equal(
+        editor.validationMessage({ ...valid, lengthCm: valid.edgeCm - valid.startCm + 0.024 }),
+        "",
+        `${kind} must retain the existing 0.25 mm span tolerance`,
+    );
+    assert.ok(
+        editor.validationMessage({ ...valid, lengthCm: valid.edgeCm - valid.startCm + 0.026 }),
+        `${kind} span beyond the existing tolerance must be rejected`,
+    );
+    assert.ok(editor.validationMessage({ ...valid, offsetCm: -0.1 }), `${kind} negative offset`);
+    assert.ok(editor.validationMessage({ ...valid, widthCm: 0 }), `${kind} invalid width`);
+    assert.ok(editor.validationMessage({ ...valid, side: "edge_break_only" }), `${kind} invalid side`);
+    assert.ok(editor.validationMessage({ ...valid, startCm: -0.01 }), `${kind} negative start`);
+    assert.ok(editor.validationMessage({ ...valid, startCm: NaN }), `${kind} non-finite start`);
+    assert.ok(editor.validationMessage({ ...valid, lengthCm: NaN }), `${kind} non-finite length`);
+    const addon = kind === "liner" ? "extra_liner"
+        : kind === "back_groove" ? "extra_back_groove"
+            : "extra_recessed_handle_cutout";
+    const lengthField = kind === "liner" ? "liner_length_cm"
+        : kind === "back_groove" ? "back_groove_length_cm"
+            : "recessed_handle_length_cm";
+    const saveIssue = dialog.validateOrder({ doc: { pieces: [{
+        ...machiningRow(kind, width),
+        [addon]: 1,
+        [lengthField]: 999,
+        piece_no: 17,
+    }] } });
+    assert.equal(saveIssue.code, "liner_span_exceeds_edge", `${kind} invalid saved value must block normal save`);
+    assert.match(saveIssue.message, /17/);
+    assert.match(saveIssue.message, /maximum allowed length is/);
+    assert.ok(saveIssue.message.includes(String(valid.edgeCm)));
+    assert.ok(saveIssue.message.includes(String(valid.startCm)));
+    assert.ok(saveIssue.message.includes("999"));
+    assert.ok(saveIssue.message.includes(String(valid.edgeCm - valid.startCm)));
+}
+
+fakeWindow.AlmdinaMultiEdgeBanding = {
+    calculate() { return { cutWidth: 60, cutLength: 60, sides: {} }; },
+    thicknessForType() { return 1; },
+};
+for (const [kind, enabled, side, offset, width, start, length] of [
+    ["liner", "extra_liner", "liner_reference_side", "liner_offset_cm", "liner_width_cm", "liner_start_cm", "liner_length_cm"],
+    ["back_groove", "extra_back_groove", "back_groove_reference_side", "back_groove_offset_cm", "back_groove_width_cm", "back_groove_start_cm", "back_groove_length_cm"],
+    ["recessed_handle_cutout", "extra_recessed_handle_cutout", "recessed_handle_reference_side", "recessed_handle_offset_cm", "recessed_handle_width_cm", "recessed_handle_start_cm", "recessed_handle_length_cm"],
+]) {
+    const lRow = {
+        name: `l-${kind}`,
+        piece_no: 1,
+        qty: 1,
+        piece_type: "L-Shaped Corner",
+        width_cm: 60,
+        length_cm: 60,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 30,
+        clipped_corner_length_cm: 30,
+        edge_break: 1,
+        default_edge_type: "Default 1mm",
+        [enabled]: 1,
+        [side]: "edge_break",
+        [offset]: 1,
+        [width]: 1,
+        [start]: 0,
+        [length]: 60,
+    };
+    assert.equal(dialog.createSession({ doc: { default_edge_type: "Default 1mm" } }, lRow).drafts[enabled].edgeCm, 60.2);
+    lRow[length] = 60.2;
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }), null, `${kind} accepts the 60.2 cm effective L span`);
+    lRow[length] = 60.226;
+    assert.equal(dialog.validateOrder({ doc: { default_edge_type: "Default 1mm", pieces: [lRow] } }).code, "liner_span_exceeds_edge", `${kind} rejects lengths beyond the effective L path`);
+}
+delete fakeWindow.AlmdinaMultiEdgeBanding;
+
+fakeWindow.AlmdinaMultiEdgeBanding = {
+    calculate() {
+        return { cutWidth: 20, cutLength: 60, sides: {} };
+    },
+};
+const staleDimensionIssue = dialog.validateOrder({ doc: { pieces: [{
+    ...machiningRow("liner", 3),
+    edge_long_right: 1,
+    liner_reference_side: "edge_long_right",
+    width_cm: 40,
+    cut_width_cm: 39,
+    liner_offset_cm: 18,
+    liner_width_cm: 3,
+    liner_start_cm: 0,
+    liner_length_cm: 0,
+}] } });
+assert.equal(staleDimensionIssue.code, "strip_outside", "save preflight must use current edge deductions");
+delete fakeWindow.AlmdinaMultiEdgeBanding;
+
+const legacyFull = editor.draftFromRow({
+    ...machiningRow("liner", 1.8),
+    liner_start_cm: 4.125,
+    liner_length_cm: 0,
+}, "liner");
+assert.equal(legacyFull.fullLength, true);
+assert.equal(legacyFull.lengthCm, legacyFull.edgeCm - legacyFull.startCm);
+assert.equal(editor.valuesFor("liner", legacyFull, true).liner_length_cm, 0);
+const negativeStoredLength = editor.draftFromRow({
+    ...machiningRow("liner", 1.8),
+    liner_length_cm: -1,
+}, "liner");
+assert.equal(negativeStoredLength.fullLength, false);
+assert.equal(editor.validationIssue(negativeStoredLength).code, "liner_length_invalid");
+const nonFiniteStoredLength = editor.draftFromRow({
+    ...machiningRow("liner", 1.8),
+    liner_length_cm: NaN,
+}, "liner");
+assert.equal(nonFiniteStoredLength.fullLength, false);
+assert.equal(editor.validationIssue(nonFiniteStoredLength).code, "liner_length_invalid");
+const precisePartial = editor.draftFromRow({
+    ...machiningRow("back_groove", 0.8),
+    back_groove_length_cm: 20.123,
+}, "back_groove");
+assert.equal(editor.controlsHtml(precisePartial).match(/data-liner-length value="([^"]+)"/)[1], "20.123");
+assert.equal(editor.valuesFor("back_groove", precisePartial, true).back_groove_length_cm, 20.123);
+
+const incompleteNewRow = {
+    name: "new-incomplete-machining-row",
+    __islocal: true,
+    ...machiningRow("liner", 0),
+    extra_liner: 1,
+    liner_reference_side: "",
+    liner_offset_cm: 0,
+    liner_width_cm: 0,
+};
+assert.equal(
+    editor.validationIssue(editor.draftFromRow(incompleteNewRow, "liner", { blankWhenMissing: true })).code,
+    "choose_side",
+    "new incomplete machining cannot be treated as a historical checkbox-only row",
+);
+const historicalCheckboxOnly = {
+    name: "historical-checkbox-only",
+    extra_liner: 1,
+    liner_reference_side: "",
+    liner_offset_cm: 0,
+    liner_width_cm: 0,
+};
+assert.equal(editor.validationIssue(editor.draftFromRow(historicalCheckboxOnly, "liner", { blankWhenMissing: true })), null);
+
+const retainedPartial = editor.draftFromRow({
+    ...machiningRow("liner", 1.8),
+    liner_start_cm: 5,
+    liner_length_cm: 100,
+}, "liner");
+editor.selectSide(retainedPartial, retainedPartial.piece, "edge_width_top");
+assert.equal(retainedPartial.lengthCm, 100, "a partial length must not be silently clamped when the side changes");
+assert.ok(editor.validationMessage(retainedPartial));
+
 const dialogSource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_addons_dialog.js"),
     "utf8"
@@ -573,7 +743,9 @@ async function interactionChecks() {
     length.value = "9999";
     length.dispatch("input");
     const apply = ui.root.querySelector("[data-addons-apply]");
-    assert.equal(apply.disabled, false);
+    assert.equal(apply.disabled, true);
+    assert.equal(length.getAttribute("aria-invalid"), "true");
+    assert.equal(length.closest(".dco-corner-input-wrap").classList.contains("is-error"), true);
     const beforeInvalid = writes.length;
     apply.dispatch("click");
     await tick();
@@ -582,6 +754,81 @@ async function interactionChecks() {
     assert.equal(ui.root.querySelector("[data-addons-error]").hidden, false);
     assert.equal(ui.root.querySelector("[data-addons-preview] [data-machining-kind]"), null);
     assert.equal(invalid.extra_liner, undefined);
+    length.value = "30.123";
+    length.dispatch("input");
+    assert.equal(apply.disabled, false, "correcting the field must re-enable Apply immediately");
+    assert.equal(length.getAttribute("aria-invalid"), null);
+    assert.equal(length.closest(".dco-corner-input-wrap").classList.contains("is-error"), false);
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(ui.ui.hidden, true);
+
+    const crossTabInvalid = blankRow({
+        name: "piece-cross-tab-invalid",
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: 40,
+        extra_back_groove: 1,
+        back_groove_reference_side: "edge_width_top",
+        back_groove_offset_cm: 1,
+        back_groove_width_cm: 0.8,
+        back_groove_start_cm: 0,
+        back_groove_length_cm: 999,
+    });
+    dialog.open({ doc: { pieces: [crossTabInvalid] }, dirty() {} }, crossTabInvalid);
+    ui = latest();
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, true);
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, true, "another enabled tab's invalid draft blocks Apply");
+    ui.root.querySelector('[data-addon-tab="extra_back_groove"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, true);
+    ui.root.querySelector("[data-addons-remove]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, false, "the invalid enabled add-on can be removed");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(crossTabInvalid.extra_back_groove, 0);
+
+    const precision = blankRow({
+        name: "piece-precision",
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 4.125,
+        liner_length_cm: 30.123,
+    });
+    dialog.open({ doc: { pieces: [precision] }, dirty() {} }, precision);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "4.125");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "30.123");
+    ui.root.querySelector("[data-liner-offset]").value = "2.125";
+    ui.root.querySelector("[data-liner-offset]").dispatch("input");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(writes.at(-1).liner_start_cm, 4.125);
+    assert.equal(writes.at(-1).liner_length_cm, 30.123);
+
+    const legacyLength = blankRow({
+        name: "piece-legacy-full",
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 4.125,
+        liner_length_cm: 0,
+    });
+    dialog.open({ doc: { pieces: [legacyLength] }, dirty() {} }, legacyLength);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "75.875");
+    ui.root.querySelector("[data-liner-offset]").value = "2.125";
+    ui.root.querySelector("[data-liner-offset]").dispatch("input");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(writes.at(-1).liner_length_cm, 0, "opening and editing another field must retain the legacy full-edge sentinel");
 
     const retained = blankRow({ name: "piece-4" });
     dialog.open({ doc: { pieces: [retained] }, dirty() {} }, retained);
@@ -705,6 +952,8 @@ async function interactionChecks() {
         view.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
         view.root.querySelector("[data-addon-enable]").dispatch("click");
         assert.equal(view.root.querySelector("[data-addon-enable]").classList.contains("is-on"), true);
+        assert.equal(view.root.querySelector("[data-addons-apply]").disabled, true);
+        view.root.querySelector("[data-liner-side]").dispatch("click");
         assert.equal(view.root.querySelector("[data-addons-apply]").disabled, false);
         assert.equal(view.root.querySelector("polygon") !== null, true);
     });
@@ -729,7 +978,7 @@ async function interactionChecks() {
     assert.equal(ui.ui.hidden, false);
     assert.equal(writes.length, beforeMissingSide);
     assert.match(ui.root.querySelector("[data-addons-error]").textContent, /reference side/);
-    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, false);
+    assert.equal(ui.root.querySelector("[data-addons-apply]").disabled, true);
     ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
     ui.root.querySelector("[data-liner-length]").value = "9999";
     ui.root.querySelector("[data-liner-length]").dispatch("input");

@@ -135,6 +135,33 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertIn("order_name", download)
         self.assertIn("plan_source", download)
 
+    def test_current_approved_absent_upload_rejects_original_bytes(self) -> None:
+        self.order.approved_plan = "PLAN-1"
+        approved_absent = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Approved",
+            saw_center_status="Absent",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        with self.assertRaises(_FakeThrow) as exc_info:
+            self._run(plan_source="custom", plan=approved_absent)
+
+        self.assertIn("مسارات قص جاهزة للتصنيع", str(exc_info.exception))
+
+    def test_current_approved_present_upload_keeps_original_bytes(self) -> None:
+        self.order.approved_plan = "PLAN-1"
+        approved_present = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Approved",
+            saw_center_status="Present",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        result = self._run(plan_source="custom", plan=approved_present)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,12 +27,12 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_form_sidebar.css",
     # Raw /assets paths are not content-fingerprinted by Frappe; bump the bounded
     # DCO list revision when its presentation contract changes.
-    "/assets/almdina_erp/css/door_cutting_order_list.css?v=17",
+    "/assets/almdina_erp/css/door_cutting_order_list.css?v=18",
     # Subject-direction correction must load after the list presentation owner:
     # inherit page direction so the checkbox stays at the logical start, and
     # isolate only ID text as LTR.
     "/assets/almdina_erp/css/door_cutting_order_list_rtl_subject.css?v=2",
-    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=43b0eed83bf2",
+    "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=43b0eed83bf3",
     "/assets/almdina_erp/css/door_cutting_order_glass_shape.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
     "/assets/almdina_erp/css/notes.css?v=1",

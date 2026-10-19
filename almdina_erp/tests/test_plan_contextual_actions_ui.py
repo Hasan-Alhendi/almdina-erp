@@ -90,8 +90,8 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("api.cancelApproval(frm.doc.name)", context)
         self.assertIn("tabs.printActivePlan(frm)", context)
         self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm), {", context)
-        # Active plan row is captured once and passed to all manufacturing
-        # decision helpers; match the current Develop contract.
+        # Export uses the active plan row once, with the server-owned
+        # preference for original uploaded bytes vs manufacturing regeneration.
         self.assertIn("const row = rowForTab(frm);", context)
         self.assertIn("hasOriginalFile: hasOriginalDxfFile(row)", context)
         self.assertIn("originalIsManufacturingReady: originalIsManufacturingReady(row)", context)

@@ -148,6 +148,58 @@ class TestProductionAuthorizationDomain(unittest.TestCase):
         self.assertTrue(role_mismatch.allowed)
         self.assertEqual(role_mismatch.code, "allowed")
 
+    def test_administrator_bypasses_only_stage_assignment(self) -> None:
+        start = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor="Administrator", is_admin=True),
+        )
+        self.assertTrue(start.allowed)
+
+        handoff = decide_production_action(
+            Capability.HANDOFF_ASSIGNED_STAGE,
+            capabilities={Capability.HANDOFF_ASSIGNED_STAGE},
+            facts=self.facts(
+                actor="Administrator",
+                is_admin=True,
+                stage_status="In Progress",
+            ),
+        )
+        self.assertTrue(handoff.allowed)
+
+        invalid_transition = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(
+                actor="Administrator",
+                is_admin=True,
+                stage_status="Completed",
+            ),
+        )
+        self.assertFalse(invalid_transition.allowed)
+        self.assertEqual(invalid_transition.code, "stage_not_startable")
+
+        worker = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(actor="Administrator", is_admin=False),
+        )
+        self.assertFalse(worker.allowed)
+        self.assertEqual(worker.code, "not_assigned")
+
+    def test_administrator_cannot_start_a_non_current_stage(self) -> None:
+        decision = decide_production_action(
+            Capability.START_ASSIGNED_STAGE,
+            capabilities={Capability.START_ASSIGNED_STAGE},
+            facts=self.facts(
+                actor="Administrator",
+                is_admin=True,
+                current_stage_name="PST-2",
+            ),
+        )
+        self.assertFalse(decision.allowed)
+        self.assertEqual(decision.code, "inactive_stage")
+
     def test_handoff_policy_is_independent_from_drawing_and_dxf_metadata(self) -> None:
         for dxf_status in (None, "Uploaded", "Approved by Drawing"):
             with self.subTest(dxf_status=dxf_status):

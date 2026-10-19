@@ -115,11 +115,37 @@
         const value = String(state || EMPTY_STATE);
         return ["CUSTOMER_FACTORY", "FACTORY_FACTORY", "CUSTOMER_CUSTOMER"].includes(value) ? value : "";
     }
+
+    function formatMeasureNumber(value) {
+        if (value == null || value === "") return null;
+        const number = typeof value === "number" ? value : Number(String(value).trim());
+        if (!Number.isFinite(number)) return null;
+        const text = number.toFixed(2).replace(/\.?0+$/, "");
+        return text === "-0" ? "0" : text;
+    }
+
+    function formatMeasureText(value) {
+        if (value == null || value === "") return null;
+        if (typeof value === "number") return formatMeasureNumber(value);
+        const text = String(value).trim();
+        if (!text) return null;
+        let sawNumber = false;
+        const formatted = text.replace(/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (match) => {
+            const next = formatMeasureNumber(match);
+            if (next == null) return match;
+            sawNumber = true;
+            return next;
+        });
+        return sawNumber ? formatted : text;
+    }
+
     function rowLabel(item) {
         const number = item.piece_number || item.piece_no || item.sequence || item.piece_label || item.index || "—";
-        const width = item.width || item.width_cm || item.w;
-        const length = item.length || item.length_cm || item.h;
-        const measure = item.measurement || item.size || (width && length ? translate("{0} × {1} cm", [width, length]) : "—");
+        const width = formatMeasureNumber(item.width ?? item.width_cm ?? item.w);
+        const length = formatMeasureNumber(item.length ?? item.length_cm ?? item.h);
+        const measure = formatMeasureText(item.measurement)
+            || formatMeasureText(item.size)
+            || (width != null && length != null ? translate("{0} × {1} cm", [width, length]) : "—");
         return { number, measure };
     }
     function rowHtml(item, editable) {
@@ -266,5 +292,13 @@
         return true;
     }
 
-    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({ render, hasPending, hasFactorySelection, savePending });
+    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({
+        render,
+        hasPending,
+        hasFactorySelection,
+        savePending,
+        formatMeasureNumber,
+        formatMeasureText,
+        rowLabel,
+    });
 })();

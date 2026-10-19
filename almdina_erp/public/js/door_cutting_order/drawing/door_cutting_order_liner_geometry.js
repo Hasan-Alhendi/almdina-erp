@@ -156,6 +156,10 @@
         return paths;
     }
 
+    function edgeLengthMm(piece, side) {
+        return polylineLength((edgePaths(piece) || {})[side] || []);
+    }
+
     function onSegment(point, start, end, tolerance) {
         const dx = end[0] - start[0];
         const dy = end[1] - start[1];
@@ -304,6 +308,10 @@
         const near = offsetPolyline(prepared.clipped, Number(offsetCm) * 10, sign);
         const far = offsetPolyline(prepared.clipped, (Number(offsetCm) + Number(widthCm)) * 10, sign);
         return near.concat(far.slice().reverse());
+    }
+
+    function regionReferenceMm(piece, side, startCm, lengthCm) {
+        return preparedReference(piece, side, startCm, lengthCm).clipped;
     }
 
     function stripPolygonMm(piece, side, offsetCm, widthCm) {
@@ -934,14 +942,17 @@
     }
 
     window.AlmdinaLinerGeometry = Object.freeze({
+        toleranceMm: TOLERANCE_MM,
         availableSides,
         sideLabel,
         pieceFromRow,
         piecePolygonMm,
         edgePaths,
+        edgeLengthMm,
         validationCode,
         stripPolygonMm,
         regionPolygonMm,
+        regionReferenceMm,
         cutterCenterOffsetsMm,
         centerlineMm,
         toolpathMm,

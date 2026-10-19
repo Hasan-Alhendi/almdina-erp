@@ -1,4 +1,4 @@
-"""Phase 5: Door Cutting Order list filter and price-approval badge contracts."""
+"""Phase 5: Door Cutting Order price-approval filtering after list badge removal."""
 
 from __future__ import annotations
 
@@ -55,8 +55,9 @@ class TestFinalPriceApprovalPhase5(unittest.TestCase):
         self.assertNotIn("Door Cutting Price Approval", source)
 
     def test_list_price_filter_survives_intentional_badge_removal(self) -> None:
-        # Follow current Develop: the list keeps filtering, while the obsolete
-        # approval badges are absent and the operational pill stays separate.
+        # The list price-approval badges were deliberately removed in c7b69a5174.
+        # Only filtering remains in the list; the operational state pill is separate.
+        # The runtime no-badge behavior is also covered by order_list_cards.test.js.
         source = _read(LIST_JS)
         self.assertIn('priceApprovalFilterConfig({ localize: false })', source)
         self.assertIn('"price_approval_status"', source)

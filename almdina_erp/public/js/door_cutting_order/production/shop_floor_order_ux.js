@@ -108,14 +108,17 @@
 		);
 	}
 
-	function assignedToCurrentUser(stage) {
+	function canOperateCurrentStage(stage) {
+		if (stage && stage.actor_can_operate_current_stage !== undefined) {
+			return Boolean(stage.actor_can_operate_current_stage);
+		}
 		const assignedTo = stage && stage.active_stage_assigned_to;
 		return Boolean(assignedTo && assignedTo === frappe.session.user);
 	}
 
 	function canShowStartAction(frm, stage) {
 		return Boolean(
-			assignedToCurrentUser(stage)
+			canOperateCurrentStage(stage)
 			&& stage.can_start_stage
 			&& stage.active_stage_status === "Pending"
 			&& can(frm, "start_assigned_stage")
@@ -127,7 +130,7 @@
 		// allowed when the worker has handoff without start; do not re-encode
 		// In Progress/Paused here or that case stays hidden.
 		return Boolean(
-			assignedToCurrentUser(stage)
+			canOperateCurrentStage(stage)
 			&& stage.can_handoff_stage
 			&& can(frm, "handoff_assigned_stage")
 		);
@@ -1049,7 +1052,7 @@
 				);
 			}
 
-			if (!assignedToCurrentUser(stage)) return;
+			if (!canOperateCurrentStage(stage)) return;
 			if (canShowStartAction(frm, stage)) {
 				// The worker's current stage action is intentionally top-level: it is
 				// the primary next step, not a category that needs another tap.
