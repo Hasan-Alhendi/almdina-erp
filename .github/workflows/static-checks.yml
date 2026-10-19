@@ -206,7 +206,8 @@ jobs:
           python -m unittest -v \
             almdina_erp.tests.test_customer_bot_contracts \
             almdina_erp.tests.test_customer_bot_phone_access \
-            almdina_erp.tests.test_customer_bot_order_followup
+            almdina_erp.tests.test_customer_bot_order_followup \
+            almdina_erp.tests.test_customer_bot_conversation
 
       - name: Enforce the no-stock product boundary
         run: |

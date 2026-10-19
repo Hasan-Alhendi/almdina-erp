@@ -4,8 +4,10 @@ The reply port is injected here. Connection secrets, provider payloads, and
 session setup stay outside this package.
 """
 
+from .conversation_ports import UnavailableCustomerBotServices
 from .dispatch_text_reply import dispatch_text_reply
 from .errors import BotReplyPortError
+from .handle_conversation import handle_customer_conversation
 from .phone_access_commands import (
     PhoneAccessRetired,
     approve_phone_access_request,
@@ -25,7 +27,9 @@ __all__ = [
     "BotTextReplyPort",
     "PhoneAccessRetired",
     "approve_phone_access_request",
+    "UnavailableCustomerBotServices",
     "dispatch_text_reply",
+    "handle_customer_conversation",
     "list_current_customer_orders",
     "reject_phone_access_request",
     "request_additional_phone_access",

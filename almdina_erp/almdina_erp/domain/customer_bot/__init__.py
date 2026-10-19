@@ -5,6 +5,7 @@ number the gateway adapter has already verified, and that match is not tied
 to a provider name or session id.
 """
 
+from .conversation import BotMessageKey, BotService, ConversationPhase
 from .gateway_capabilities import BotGatewayCapabilities
 from .inbound_message import InboundCustomerMessage, InboundMessageKind, build_inbound_customer_message
 from .order_followup import (
@@ -22,6 +23,9 @@ from .text_reply import (
 
 __all__ = [
     "BotGatewayCapabilities",
+    "BotMessageKey",
+    "BotService",
+    "ConversationPhase",
     "InboundCustomerMessage",
     "InboundMessageKind",
     "PublicOrderStatus",
