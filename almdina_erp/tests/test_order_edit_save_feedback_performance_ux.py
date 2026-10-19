@@ -49,7 +49,7 @@ class TestOrderEditSaveFeedbackPerformanceUx(unittest.TestCase):
 
     def test_native_save_uses_single_success_notification(self) -> None:
         source = REVISION_UX.read_text(encoding="utf-8")
-        after_save = source.split("after_save(frm) {", 1)[1].split("refresh(frm) {", 1)[0]
+        after_save = source.split("after_save(frm, doctype, savedName) {", 1)[1].split("refresh(frm) {", 1)[0]
 
         self.assertIn("lockEditSession(frm, { silent: true });", after_save)
         self.assertNotIn(
