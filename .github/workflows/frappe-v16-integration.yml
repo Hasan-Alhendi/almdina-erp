@@ -561,10 +561,34 @@ jobs:
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true
           git -C apps/almdina_erp rev-parse HEAD | tee "$RUNNER_TEMP/permission-baseline-sha.log"
+          # This is a controlled negative-baseline check, not the PR's
+          # acceptance suite. A known test failure on Develop is evidence;
+          # an unrelated exception must still fail this job.
+          set +e
           bench --site test.localhost run-tests \
             --module almdina_erp.tests.test_permission_type_integration \
             --test test_permission_type_sync_repairs_existing_custom_field_metadata \
             2>&1 | tee "$RUNNER_TEMP/pinned-permission-baseline.log"
+          baseline_status=${PIPESTATUS[0]}
+          set -e
+          if (( baseline_status == 0 )); then
+            echo "The pinned Develop baseline now passes; no inherited failure to isolate."
+          else
+            python - "$RUNNER_TEMP/pinned-permission-baseline.log" <<'PY'
+          import re
+          import sys
+
+          output = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
+          failures = re.findall(r"(?m)^\s*FAIL\s+(test_\S+)", output)
+          expected_name = "test_permission_type_sync_repairs_existing_custom_field_metadata"
+          expected_error = "AssertionError: 'eval:false' == 'eval:false'"
+          if failures != [expected_name] or expected_error not in output:
+              raise SystemExit("Pinned Develop baseline failed for an unexpected reason")
+          print("Confirmed exact inherited Permission Type failure on pinned Develop")
+          PY
+            echo "::warning title=Known pinned Develop failure::The expected Permission Type metadata defect was reproduced on Develop; the PR acceptance suite remains independent."
+          fi
 
       - name: Upload pinned Develop baseline evidence
         if: always() && matrix.suite == 'full_pinned_base_permission'
