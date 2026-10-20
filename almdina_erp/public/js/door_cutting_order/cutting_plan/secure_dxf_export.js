@@ -1096,9 +1096,11 @@
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
         if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
-            // Custom/uploaded tab: original design file before approval, or when
-            // the approved upload already embeds manufacturing-ready cut paths.
-            // After approval with Absent saw centers, regenerate instead.
+            // After delivery the Uploaded tab retrieves the original archive.
+            // During production the existing CNC-ready rule remains unchanged.
+            if (String((options && options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered") {
+                return true;
+            }
             return preferOriginalUpload(options);
         }
         if (normalized === "approved") {
