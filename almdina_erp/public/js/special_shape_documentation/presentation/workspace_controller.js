@@ -65,7 +65,7 @@
             syncZoom();
         }
         function syncZoom() { if (shell && renderer) shell.setZoom(renderer.zoomPercentage()); }
-        function commit(next) { history.commit(next); render(); }
+        function commit(next) { if (!context || !context.permissions.can_edit) return; history.commit(next); render(); }
         function chooseTool(next) { if (cropSession || (!context.permissions.can_edit && next !== "select")) return; tool = next; draft = null; dragging = false; render(); }
         async function save() {
             if (saving || !context.permissions.can_edit) return; const document = history.get();
@@ -226,8 +226,8 @@
             if (tool === "pen") { finishPen(); return; }
             const element = makeElement(tool, draft.start, draft.end); draft = null; if (element && distance(element.start || { xMm: element.xMm, yMm: element.yMm }, element.end || { xMm: element.xMm + element.widthMm, yMm: element.yMm + element.heightMm }) > 3) commit(D.addElement(history.get(), element)); else render();
         }
-        function undo() { if (cropSession) return; history.undo(); selectedId = null; render(); }
-        function redo() { if (cropSession) return; history.redo(); selectedId = null; render(); }
+        function undo() { if (cropSession || !context.permissions.can_edit) return; history.undo(); selectedId = null; render(); }
+        function redo() { if (cropSession || !context.permissions.can_edit) return; history.redo(); selectedId = null; render(); }
         function copySelection() {
             const selected = history.get().elements.find(element => element.id === selectedId);
             if (!selected || cropSession) return false;
