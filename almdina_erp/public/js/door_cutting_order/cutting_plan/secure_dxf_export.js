@@ -1096,8 +1096,12 @@
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
         if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
-            // Uploaded tab is an explicit request for the original file, not CNC output.
-            return true;
+            // After delivery the Uploaded tab retrieves the original archive.
+            // During production the existing CNC-ready rule remains unchanged.
+            if (String((options && options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered") {
+                return true;
+            }
+            return preferOriginalUpload(options);
         }
         if (normalized === "approved") {
             if (!(options && options.hasOriginalFile)) return false;

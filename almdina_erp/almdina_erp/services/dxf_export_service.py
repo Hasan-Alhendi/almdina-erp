@@ -587,9 +587,9 @@ def download_uploaded_dxf(
     File-scope checks. ``frappe.local.response`` still carries the raw bytes
     for direct/API download clients.
 
-    The Uploaded tab downloads the original designer file unchanged. The Approved
-    tab still requires a manufacturing-ready original; otherwise its export path
-    regenerates CNC cutting geometry from the approved snapshot.
+    After delivery the Uploaded tab may retrieve the original designer file
+    unchanged for archival comparison. Before delivery, and from the Approved tab,
+    non-manufacturing uploads still regenerate CNC paths from the approved snapshot.
     """
 
     if not str(order_name or "").strip():
@@ -601,7 +601,12 @@ def download_uploaded_dxf(
 
     filename, content, plan = _load_original_uploaded_dxf(order, plan_source)
     source = str(plan_source or "").strip().lower()
-    if source in {"", "approved"} and not prefer_original_uploaded_download(order, plan):
+    archived_original = (
+        str(getattr(order, "status", "") or "").strip() == "Delivered"
+        and source in _ORIGINAL_UPLOAD_SOURCES
+        and source != "approved"
+    )
+    if not archived_original and not prefer_original_uploaded_download(order, plan):
         frappe.throw(
             _(
                 "ملف DXF الأصلي لهذه الخطة المعتمدة لا يحتوي مسارات قص جاهزة للتصنيع. "

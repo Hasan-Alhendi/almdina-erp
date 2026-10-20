@@ -145,6 +145,12 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
             saw_center_status="Absent",
             dxf_file="/private/files/corrected.dxf",
         )
+        # Do not change the pre-delivery CNC safety contract.
+        self.order.status = "At Drawing"
+        with self.assertRaises(_FakeThrow):
+            self._run(plan_source="custom", plan=approved_absent)
+
+        self.order.status = "Delivered"
         result = self._run(plan_source="custom", plan=approved_absent)
         self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
 

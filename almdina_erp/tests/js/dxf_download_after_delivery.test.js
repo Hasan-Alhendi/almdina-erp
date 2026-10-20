@@ -35,7 +35,8 @@ const original = method(exporter, "function shouldDownloadOriginalUpload(planSou
     ORIGINAL_UPLOAD_SOURCES: new Set(["custom", "uploaded"]),
     preferOriginalUpload: (options) => options?.preferOriginalUpload !== false,
 });
-assert.equal(original("Custom", {preferOriginalUpload: false}), true);
+assert.equal(original("Custom", {preferOriginalUpload: false, frm: {doc: {status: "Delivered"}}}), true);
+assert.equal(original("Custom", {preferOriginalUpload: false, frm: {doc: {status: "At Drawing"}}}), false);
 assert.equal(original("Approved", {hasOriginalFile: true, preferOriginalUpload: false}), false);
 assert.equal(original("Approved", {hasOriginalFile: true, preferOriginalUpload: true}), true);
 
