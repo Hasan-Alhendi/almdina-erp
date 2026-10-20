@@ -77,6 +77,22 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("if (!readOnly) prepareRow(liveRow)", corner)
         self.assertIn("else window.AlmdinaSpecialShapeEditor.view(currentFrm, row)", operator)
 
+
+    def test_delivered_documentation_denial_keeps_its_arabic_translation(self) -> None:
+        """Both read-only projection and write guard must deny delivered orders."""
+        service = SERVICE.read_text(encoding="utf-8")
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        message = "Special door documentation cannot be edited after the order is delivered."
+        self.assertIn(
+            'return {"can_edit": False, "reason": _("' + message + '"), "stage": None}',
+            service,
+        )
+        self.assertIn(
+            'frappe.throw(_("' + message + '"), frappe.PermissionError)',
+            service,
+        )
+        self.assertTrue(_catalog_has(catalog, message, "لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب."))
+
     def test_back_closes_opener_tab_then_falls_back_to_order_route(self) -> None:
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
         self.assertIn("window.opener", controller)
