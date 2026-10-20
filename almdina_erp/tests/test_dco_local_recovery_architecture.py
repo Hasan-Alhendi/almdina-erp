@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import runpy
 import unittest
 from pathlib import Path
@@ -197,6 +198,82 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "edge_cost_usd",
         ):
             self.assertNotIn(f'"{forbidden}"', projection)
+
+    def test_all_editable_dco_fields_have_explicit_recovery_ownership(self) -> None:
+        """Fail on new live inputs until their recovery ownership is decided."""
+        order = json.loads(
+            (
+                ROOT / "almdina_erp" / "doctype"
+                / "door_cutting_order" / "door_cutting_order.json"
+            ).read_text(encoding="utf-8")
+        )
+        detail = json.loads(
+            (
+                ROOT / "almdina_erp" / "doctype"
+                / "door_cutting_order_detail" / "door_cutting_order_detail.json"
+            ).read_text(encoding="utf-8")
+        )
+        projection = (
+            RECOVERY / "application" / "door_cutting_order_recovery_projection.js"
+        ).read_text(encoding="utf-8")
+
+        def allowlisted_fields(name: str) -> set[str]:
+            match = re.search(
+                rf"const {name} = Object\.freeze\(\[([\s\S]*?)\]\);",
+                projection,
+            )
+            self.assertIsNotNone(match, f"missing {name} allowlist")
+            names = re.findall(r'"([^"]+)"', match.group(1))
+            self.assertEqual(len(names), len(set(names)), f"duplicate field in {name}")
+            return set(names)
+
+        layout_types = {
+            "Section Break", "Column Break", "Tab Break",
+            "HTML", "Table", "Button", "Heading", "Fold",
+        }
+
+        def candidate_inputs(schema: dict) -> set[str]:
+            return {
+                field["fieldname"]
+                for field in schema["fields"]
+                if field["fieldtype"] not in layout_types
+                and not field.get("read_only")
+            }
+
+        # These fields belong to Frappe naming, inventory wiring, or Cost;
+        # none are recoverable DCO input requirements.
+        non_dco_input_owners = {
+            "naming_series",
+            "board_item",
+            "board_rate_usd",
+            "cutting_cost_per_board_usd",
+        }
+        headers = allowlisted_fields("HEADER_FIELDS")
+        pieces = allowlisted_fields("PIECE_FIELDS")
+        self.assertEqual(
+            headers,
+            candidate_inputs(order) - non_dco_input_owners,
+            "A header field has no explicit DCO recovery ownership decision",
+        )
+        self.assertEqual(
+            pieces,
+            candidate_inputs(detail),
+            "A piece input is missing from RecoveryProjection or is stale",
+        )
+        self.assertEqual(
+            non_dco_input_owners,
+            candidate_inputs(order) - headers,
+            "Review ownership before excluding a new header input",
+        )
+        for schema, captured in ((order, headers), (detail, pieces)):
+            fields = {field["fieldname"]: field for field in schema["fields"]}
+            for fieldname in captured:
+                self.assertIn(fieldname, fields)
+                self.assertFalse(fields[fieldname].get("read_only"))
+                self.assertEqual(
+                    int(fields[fieldname].get("permlevel") or 0), 0,
+                    f"Protected field {fieldname} must not enter DCO recovery",
+                )
 
     def test_local_assets_are_separate_and_draft_delete_cascades(self) -> None:
         draft_repository = (

@@ -761,7 +761,7 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
                 window.AlmdinaDcoRecovery.LocalCheckpoint.ensureState(frm);
             }"""
         )
-        captured = page.evaluate(
+        page.evaluate(
             """async () => {
                 const frm = window.__recoveryForm;
                 const handlers = window.__formHandlers["Door Cutting Order Detail"];
@@ -776,12 +776,14 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
                     frm.doc.pieces[0][field] = value;
                     handlers[field](frm);
                     if (index === cases.length - 1) {
+                        window.__pagehideCheckpoint = {
+                            field, label,
+                            revision: window.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(frm).recovery_revision,
+                        };
                         window.dispatchEvent(new Event("pagehide"));
-                        await new Promise((resolve) => setTimeout(resolve, 0));
+                        break;
                     }
-                    const flushed = index === cases.length - 1
-                        ? { ok: true }
-                        : await window.AlmdinaDcoRecovery.LocalCheckpoint.flush(frm);
+                    const flushed = await window.AlmdinaDcoRecovery.LocalCheckpoint.flush(frm);
                     const current = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
                         site: location.host,
                         user: "browser-operator",
@@ -794,8 +796,36 @@ def test_chromium_presentation_checkpoints_direct_dco_mutations_and_reports_stat
                         value: current.value.payload.dco.pieces[0][field],
                     });
                 }
+                window.__checkpointResults = results;
+            }"""
+        )
+        # pagehide starts a best-effort flush; a browser task tick does not prove
+        # that SHA-256 hashing and the IndexedDB transaction have committed.
+        # Observe the actual checkpoint owner's acknowledgement without issuing
+        # another explicit flush that could conceal a broken pagehide handler.
+        page.wait_for_function(
+            """() => {
+                const snapshot = window.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(window.__recoveryForm);
+                return snapshot.saved_revision === window.__pagehideCheckpoint.revision
+                    && snapshot.state === "LOCAL_SAVED";
+            }"""
+        )
+        captured = page.evaluate(
+            """async () => {
+                const frm = window.__recoveryForm;
+                const snapshot = window.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(frm);
+                const current = await window.AlmdinaDcoRecovery.LocalCheckpoint.repository().read({
+                    site: location.host, user: "browser-operator", draft_id: snapshot.draft_id,
+                });
+                if (!current.ok) throw new Error("pagehide checkpoint read failed");
+                const pending = window.__pagehideCheckpoint;
+                window.__checkpointResults.push({
+                    label: pending.label,
+                    revision: current.value.recovery_revision,
+                    value: current.value.payload.dco.pieces[0][pending.field],
+                });
                 return {
-                    results,
+                    results: window.__checkpointResults,
                     snapshot: window.AlmdinaDcoRecovery.LocalCheckpoint.snapshot(frm),
                     statusText: document.querySelector(".dco-recovery-status")?.textContent || "",
                     statusState: document.querySelector(".dco-recovery-status")?.dataset.recoveryState || "",

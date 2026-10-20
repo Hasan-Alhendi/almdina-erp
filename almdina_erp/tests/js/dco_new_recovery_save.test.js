@@ -339,8 +339,16 @@ function form(name) {
         dirty() {},
         save() {
             nativeSaveCalls += 1;
-            if (nativeSaveDeferred) return nativeSaveDeferred.promise;
-            return nativeFailure ? Promise.reject(nativeFailure) : Promise.resolve();
+            const origin = this.doc;
+            const result = nativeSaveDeferred
+                ? nativeSaveDeferred.promise
+                : nativeFailure ? Promise.reject(nativeFailure) : Promise.resolve();
+            // In this mock, a resolved native Save represents an acknowledged insert.
+            // Never mark a replacement document as saved by the old operation.
+            return Promise.resolve(result).then(value => {
+                if (this.doc === origin) origin.__islocal = 0;
+                return value;
+            });
         },
     };
 }
@@ -732,7 +740,10 @@ function runCleanups(frm) {
     reconciliationDeferred.resolve({ status: "NOT_FOUND" });
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(Recovery.LocalCheckpoint.snapshot(lockedContinueForm).draft_id, lockedContinueId);
+    assert.equal(Recovery.LocalCheckpoint.snapshot(lockedContinueForm), null,
+        "NOT_FOUND leaves the in-flight insertion marker untouched");
+    assert.equal(lockedContinueButton.disabled, false,
+        "the worker may explicitly recheck a pending INSERT without a forced page refresh");
     reconciliationDeferred = null;
 
     discoveredRecords = [];
@@ -792,23 +803,11 @@ function runCleanups(frm) {
     const retryForm = form("new-door-cutting-order-retry");
     reconciliationResult = { status: "NOT_FOUND" };
     fakeWindow.cur_frm = retryForm;
-    await Recovery.LocalCheckpoint.continueDraft(retryForm, pendingRecord);
-    assert.equal(records.get(pendingId).official_save_state, "ACTIVE");
-    assert.equal(retryForm.doc.customer, "CUST-RECOVERED");
-    assert.equal(retryForm.doc.pieces.length, 1);
-    assert.equal(
-        Recovery.LocalCheckpoint.snapshot(retryForm).draft_id,
-        pendingId,
-        "server-proven absence resumes with the same creation identity"
-    );
-
-    await handlers["Door Cutting Order"].before_save(retryForm);
-    retryForm.doc.name = "DCO-2026-00422";
-    retryForm.doc.__islocal = 0;
-    retryForm.doc.modified = "2026-08-29 11:05:00.000000";
-    await handlers["Door Cutting Order"].after_save(retryForm);
-    assert.equal(records.has(pendingId), false, "acknowledged success cleans up after binding");
+    const retryResult = await Recovery.LocalCheckpoint.continueDraft(retryForm, pendingRecord);
+    assert.equal(retryResult.pending, true, "NOT_FOUND does not clear a pending first INSERT");
+    assert.equal(records.get(pendingId).official_save_state, "PENDING_RECONCILIATION");
     assert.equal(Recovery.LocalCheckpoint.snapshot(retryForm), null);
+    assert.equal(retryForm.doc.pieces.length, 0, "pending draft cannot hydrate or silently save");
 
     const failOpenId = "23232323-2323-4232-8232-232323232323";
     const failOpenRecord = draft(failOpenId);
@@ -818,6 +817,7 @@ function runCleanups(frm) {
     failOpenForm.save = async function saveAfterRecoveryHook() {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
+        this.doc.__islocal = 0; // mock native INSERT ACK
     };
     fakeWindow.cur_frm = failOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(failOpenForm, failOpenRecord);
@@ -838,6 +838,7 @@ function runCleanups(frm) {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
         if (nativeFailure) throw nativeFailure;
+        this.doc.__islocal = 0; // mock native INSERT ACK
     };
     fakeWindow.cur_frm = validationFailOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(
@@ -873,6 +874,7 @@ function runCleanups(frm) {
     checkpointFailOpenForm.save = async function saveAfterRecoveryHook() {
         await handlers["Door Cutting Order"].before_save(this);
         nativeSaveCalls += 1;
+        this.doc.__islocal = 0; // mock native INSERT ACK
     };
     fakeWindow.cur_frm = checkpointFailOpenForm;
     await Recovery.LocalCheckpoint.continueDraft(
@@ -1120,7 +1122,8 @@ function runCleanups(frm) {
     await handlers["Door Cutting Order"].after_save(reusedSuccessForm);
     nativeSaveDeferred.resolve();
     await oldSuccessfulSave;
-    assert.equal(records.has(reusedSuccessId), false, "old success cleans only its originating draft");
+    assert.equal(records.has(reusedSuccessId), true,
+        "an old Save that settles after form reuse cannot delete an unverified previous draft");
     assert.equal(records.get(replacementSuccessId).official_save_state, "PENDING_RECONCILIATION");
     assert.equal(records.get(replacementSuccessId).official_save_attempted_at, replacementSuccessAttempt);
     assert.equal(
@@ -1306,6 +1309,24 @@ function runCleanups(frm) {
         "2026-08-29T10:59:00.000Z"
     );
 
+    // A lost successful HTTP response can yield a temporary NOT_FOUND while the
+    // original insert is still in flight. It must never trigger another insert.
+    const uncertaintyId = "87654321-1111-4111-8111-876543218765";
+    const uncertaintyForm = form("new-door-cutting-order-in-flight");
+    fakeWindow.cur_frm = uncertaintyForm;
+    await Recovery.LocalCheckpoint.continueDraft(uncertaintyForm, draft(uncertaintyId));
+    await handlers["Door Cutting Order"].before_save(uncertaintyForm);
+    assert.equal(records.get(uncertaintyId).official_save_state, "PENDING_RECONCILIATION");
+    reconciliationResult = { status: "NOT_FOUND" };
+    const attemptsBefore = saveAttemptSequence;
+    const savesBefore = nativeSaveCalls;
+    fakeFrappe.validated = true;
+    await handlers["Door Cutting Order"].before_save(uncertaintyForm);
+    assert.equal(fakeFrappe.validated, false, "NOT_FOUND must block retry");
+    assert.equal(saveAttemptSequence, attemptsBefore, "unknown in-flight insert does not create another attempt");
+    assert.equal(nativeSaveCalls, savesBefore, "unknown in-flight insert does not call native Save again");
+    assert.equal(records.get(uncertaintyId).official_save_state, "PENDING_RECONCILIATION");
+
     const raceId = "77777777-7777-4777-8777-777777777777";
     const raceRecord = draft(raceId);
     const raceForm = form("new-door-cutting-order-race");
@@ -1325,6 +1346,24 @@ function runCleanups(frm) {
         "PENDING_RECONCILIATION",
         "a unique-key race must reconcile rather than assume no insert"
     );
+
+    // Frappe may settle frm.save() without a committed INSERT.
+    // A Promise result alone cannot authorize deletion of the recovery copy.
+    const unacknowledgedId = "92929292-9292-4292-8292-929292929292";
+    const unacknowledgedForm = form("new-door-cutting-order-no-ack");
+    unacknowledgedForm.save = async function saveWithoutNativeAcknowledgement() {
+        nativeSaveCalls += 1;
+    };
+    fakeWindow.cur_frm = unacknowledgedForm;
+    await Recovery.LocalCheckpoint.continueDraft(unacknowledgedForm, draft(unacknowledgedId));
+    // Reproduce the actual failed first-INSERT boundary: the pending marker
+    // exists before the observed native Save settles without a server ACK.
+    await handlers["Door Cutting Order"].before_save(unacknowledgedForm);
+    await unacknowledgedForm.save();
+    assert.equal(records.has(unacknowledgedId), true,
+        "a resolved save without server acknowledgement must preserve the draft");
+    assert.equal(records.get(unacknowledgedId).official_save_state, "PENDING_RECONCILIATION");
+    assert.equal(Recovery.LocalCheckpoint.snapshot(unacknowledgedForm).state, "PENDING_RECONCILIATION");
 
     console.log("DCO NEW first-save and reconciliation simulation passed");
 })().catch((error) => {

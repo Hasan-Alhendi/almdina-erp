@@ -169,6 +169,17 @@ recovery neither calls it nor creates a cadence around it. The presentation adap
 only observes its acknowledged `after_save` result and records the advanced expected
 token.
 
+Frappe may settle `frm.save()` before its serial `after_save` handlers finish.
+The existing Order Revision owner binds internal-checkpoint intent to its
+DocumentContext visit, Edit Session generation, and the source DCO/version in
+the native Save callback's `response.docs`. A clean form alone is not proof of
+that request's acknowledgement. The existing handler consumes the preserve-edit
+flag and retains its acknowledged version for idempotent late hooks; a later
+ordinary Save still closes editing. Stale completion/cleanup cannot consume a
+replacement visit's intent. NEW name promotion keeps its existing permission
+projection cleanup. EDIT discovery dismissal and retained-draft notices are also
+scoped to their originating document visit, rather than the reusable Form object.
+
 For a first insert, ALMADINA-129 flushes the latest checkpoint and marks the local
 record pending before the existing explicit Frappe Save proceeds. A hidden unique
 technical creation token on the DCO is the atomic binding; acknowledged or
@@ -237,7 +248,9 @@ checkpointing its stable `asset_id` reference.
 
 The following remain explicitly deferred to later stories:
 
-- EDIT restore/conflict UX and external edit resolution;
+- external edit resolution beyond the implemented EDIT restore/conflict review;
+  EDIT restore, preview, rollback and version/permission guards are implemented,
+  with final pinned-runtime certification still required;
 - activation of local assets in Special Shape recovery;
 - invoice, canonical Cutting Plan, lost calculation, and remote recovery behavior;
 - BroadcastChannel/soft-lease multi-tab hints.
@@ -257,11 +270,21 @@ the acknowledged IndexedDB projection after reload, compares server data before
 and after, and records any `savedocs` request so a local checkpoint cannot be
 mistaken for Official Save.
 
-The measurement benchmark uses 200- and 500-piece DCOs and compares the three
-ALMADINA-128 recovery scripts from the selected PR base with the PR versions in
-isolated browser contexts. For each size/version it records 90 keyboard-driven
-measurement samples, P50/P95 input-to-next-paint-frame time, and P50/P95
-checkpoint acknowledgement time inside Chromium. No latency acceptance threshold
+The interactive measurement benchmark uses a real 100-piece DCO and compares
+three ALMADINA-128 recovery scripts from the selected PR base with the PR versions
+in isolated browser contexts. Each variant records 40 keyboard input-to-second-
+animation-frame samples and 40 input-to-checkpoint-acknowledgement samples.
+Acknowledgement includes debounce, projection, hashing, storage and polling.
+A native IndexedDB observer preserves the real transaction and records creation-
+to-complete latency for the draft-store write matching the exact draft identity
+and acknowledged recovery revision; this excludes projection, hashing and database open.
+After interaction collection, 40 repeated warm calls to the canonical projection
+and serialization functions time the live 100-piece form separately. These direct
+calls do not represent the complete session capture lifecycle or add work inside
+ACK samples. Every metric reports P50/P95; transaction timings require an actual
+completed transaction for every acknowledged edit. The separate 200/500-piece
+Chromium capacity/stress fixtures remain storage evidence rather than real Desk
+interactive measurements. No latency acceptance threshold
 is defined here, so the results are comparative evidence and do not independently
 certify an absolute performance target. The separate Chromium storage test applies a per-origin quota
 through CDP in a temporary persistent profile, records native IndexedDB quota

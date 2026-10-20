@@ -42,6 +42,8 @@ function environment(file) {
         setTimeout() { return 1; },
     };
     const frappe = {
+        almdina: {},
+        provide() {},
         ui: {
             form: {
                 on(name, callbacks) {
@@ -176,4 +178,20 @@ test("stage operation context allows Administrator without changing assignee ide
     assert.equal(frm.__almdina_actor_is_current_assignee, false);
     assert.equal(owner.isCurrentStageAssignee(frm), false);
     assert.equal(owner.canMutateCurrentStage(frm), true);
+});
+
+test("production revert targets accept the native Frappe thenable and release their request", async () => {
+    const { window, calls } = environment("production/shop_floor_order_ux.js");
+    window.AlmdinaPermissions = { canDocument: (_frm, capability) => capability === "revert_department" };
+    const frm = form("DCO-REVERT", "DYNAMIC-STAGE");
+    frm.doc.production_path = "DYNAMIC-ROUTE";
+    window.cur_frm = frm;
+    assert.doesNotThrow(() => window.AlmdinaShopFloorOrderUX.reconcileProductionActions(frm));
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].options.method, /get_revert_targets$/);
+    const pending = frm.__almdinaRevertTargetsPromise;
+    calls[0].resolve({ message: [{ stage_type: "Earlier dynamic stage" }] });
+    await pending;
+    assert.equal(frm.__almdinaRevertTargets.length, 1);
+    assert.equal(frm.__almdinaRevertTargetsPromise, null);
 });

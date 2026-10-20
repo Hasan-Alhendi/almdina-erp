@@ -3,6 +3,14 @@ from __future__ import annotations
 import unittest
 
 import frappe
+from frappe.core.doctype.permission_type.permission_type import CUSTOM_FIELD_TARGET
+
+from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
+    CustomDocPermCapabilityReader,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.projected_permission_matrix_repository import (
+    ProjectedPermissionMatrixRepository,
+)
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
@@ -172,43 +180,74 @@ class TestPermissionTypeIntegration(unittest.TestCase):
                 self._assert_arbitrary_role_grant(permission_type, suffix)
 
     def test_permission_type_sync_repairs_existing_custom_field_metadata(self) -> None:
-        custom_field = frappe.db.get_value(
-            "Custom Field",
-            {
-                "dt": "Custom DocPerm",
-                "fieldname": Capability.UPLOAD_DXF,
-            },
-            ["name", "depends_on"],
-            as_dict=True,
-        )
-        self.assertIsNotNone(custom_field)
-        original_depends_on = custom_field.depends_on
+        original_fields = {}
+        role_name = f"Permission Metadata {frappe.generate_hash(length=8)}"
+        frappe.get_doc(
+            {"doctype": "Role", "role_name": role_name, "desk_access": 1}
+        ).insert(ignore_permissions=True)
         try:
-            frappe.db.set_value(
-                "Custom Field",
-                custom_field.name,
-                "depends_on",
-                "eval:false",
-                update_modified=False,
+            ProjectedPermissionMatrixRepository().save_role_state(
+                role_name,
+                {Capability.UPLOAD_DXF: True, Capability.VIEW_COSTS: False},
             )
-            sync_permission_types()
-            repaired = frappe.db.get_value(
-                "Custom Field",
-                custom_field.name,
-                "depends_on",
-            )
-            self.assertNotEqual(repaired, "eval:false")
-            self.assertIn("Cutting Plan", repaired or "")
-            self.assertNotIn("Door Cutting Order", repaired or "")
+            reader = CustomDocPermCapabilityReader()
+            original_grants = reader.role_capabilities(role_name)
+            self.assertTrue(original_grants[Capability.UPLOAD_DXF])
+            self.assertFalse(original_grants[Capability.VIEW_COSTS])
+
+            for target in CUSTOM_FIELD_TARGET:
+                custom_field = frappe.db.get_value(
+                    "Custom Field",
+                    {"dt": target, "fieldname": Capability.UPLOAD_DXF},
+                    ["name", "depends_on"],
+                    as_dict=True,
+                )
+                self.assertIsNotNone(custom_field, target)
+                original_fields[target] = custom_field
+                frappe.db.set_value(
+                    "Custom Field",
+                    custom_field.name,
+                    "depends_on",
+                    "eval:false",
+                    update_modified=False,
+                )
+
+            repaired_fields = None
+            for attempt in range(2):
+                sync_permission_types()
+                self.assertEqual(reader.role_capabilities(role_name), original_grants)
+                current_fields = {}
+                for target, custom_field in original_fields.items():
+                    field = "share_doctype" if target == "DocShare" else "parent"
+                    values = frappe.db.get_value(
+                        "Custom Field",
+                        custom_field.name,
+                        ["depends_on", "modified"],
+                        as_dict=True,
+                    )
+                    self.assertEqual(
+                        values.depends_on,
+                        f"eval:doc.{field} == 'Cutting Plan'",
+                        (target, attempt),
+                    )
+                    current_fields[target] = dict(values)
+                if repaired_fields is not None:
+                    self.assertEqual(current_fields, repaired_fields)
+                repaired_fields = current_fields
         finally:
-            frappe.db.set_value(
-                "Custom Field",
-                custom_field.name,
-                "depends_on",
-                original_depends_on,
-                update_modified=False,
-            )
-            frappe.clear_cache(doctype="Custom DocPerm")
+            for target, custom_field in original_fields.items():
+                frappe.db.set_value(
+                    "Custom Field",
+                    custom_field.name,
+                    "depends_on",
+                    custom_field.depends_on,
+                    update_modified=False,
+                )
+                frappe.clear_cache(doctype=target)
+            frappe.db.delete("Custom DocPerm", {"role": role_name})
+            frappe.db.delete("DocPerm", {"role": role_name})
+            frappe.delete_doc("Role", role_name, force=True, ignore_permissions=True)
+            frappe.clear_cache()
 
     def test_permission_type_sync_is_idempotent(self) -> None:
         before = frappe.db.count("Permission Type")

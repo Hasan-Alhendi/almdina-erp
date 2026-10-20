@@ -27,10 +27,13 @@ jobs:
         image: redis:7-alpine
         ports: ['11000:6379']
     env:
+      EXPECTED_APP_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       P0_ADMIN_PASSWORD: p0-disposable-only
       FRAPPE_DESK_URL: http://test.localhost:8000
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_APP_SHA }}
       - name: Set isolated evidence paths
         run: |
           echo "P0_FIXTURE_PATH=$RUNNER_TEMP/p0-fixture.json" >> "$GITHUB_ENV"
@@ -56,6 +59,8 @@ jobs:
           bench get-app erpnext --branch v16.17.0 2>&1 | tee "$RUNNER_TEMP/erpnext-install.log"
           test "$(git -C apps/erpnext rev-parse HEAD)" = 7b494dc9e8e47d288de5427bae25ce8a52c37d96
           git clone "$GITHUB_WORKSPACE" apps/almdina_erp
+          test "$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" = "$EXPECTED_APP_SHA"
+          test "$(git -C apps/almdina_erp rev-parse HEAD)" = "$EXPECTED_APP_SHA"
           ./env/bin/pip install -e 'apps/almdina_erp[test]'
           python - <<'PY'
           from pathlib import Path

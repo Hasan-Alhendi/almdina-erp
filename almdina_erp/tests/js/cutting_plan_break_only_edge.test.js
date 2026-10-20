@@ -81,7 +81,11 @@ const context = vm.createContext({
     Promise,
     Boolean,
     Error,
-    __: (value) => value,
+    __(message, replacements = []) {
+        return String(message).replace(/\{(\d+)\}/g, (placeholder, index) => (
+            replacements[index] === undefined ? placeholder : String(replacements[index])
+        ));
+    },
 });
 
 [
@@ -230,8 +234,19 @@ async function main() {
         currentTab = tab;
         const piece = tab === "Custom" ? withSide : fullPath;
         const html = await printed(piece);
-        assert.match(html, new RegExp(`PLAN-${piece.id}`));
+        // Plan IDs/revisions are freshness guards, intentionally omitted from
+        // the print header. Verify the selected source through its geometry.
+        assert.doesNotMatch(html, new RegExp(`PLAN-${piece.id}`));
+        if (tab === "Custom") {
+            assert.ok(breakOnlyPoints(html), "Custom prints its selected break-only geometry");
+            assert.match(html, /dco-edge-line-svg "/);
+            assert.doesNotMatch(html, /dco-edge-break-svg"/);
+        } else {
+            assert.match(html, /dco-edge-break-svg"/);
+            assert.equal(breakOnlyPoints(html), "", "Approved prints its selected full-path geometry");
+        }
         assert.match(html, /DCO-BREAK-ONLY/);
+        assert.match(html, /<title>Cutting plan - DCO-BREAK-ONLY<\/title>/);
         assert.equal(await renderer.print(frm, planFor(alone)), false,
             `${tab} cannot print geometry from the other source`);
     }

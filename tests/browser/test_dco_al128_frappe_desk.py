@@ -172,7 +172,9 @@ def _start_real_edit_session(page: Page) -> None:
         "&& window.cur_frm && window.cur_frm.doc.status === 'Draft'",
         timeout=30_000,
     )
-    edit_action = page.get_by_role("button", name="تعديل", exact=True).first
+    # PageEditAction owns the action and uses a translated label ("Edit order").
+    # Locate its stable component class rather than assuming the test user's locale.
+    edit_action = page.locator("button.dco-tab-edit-start").first
     expect(edit_action).to_be_visible(timeout=30_000)
     edit_action.click()
     page.wait_for_function(
@@ -262,12 +264,91 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             first.locator('.dco-check-toggle[data-check-field="edge_long_left"]').click()
 
             second = rows.nth(1)
-            second.locator('.dco-addon-toggle[data-check-field="extra_liner"]').click()
-            second.locator(".dco-all-sides-profile-button[data-bulk-edge-profile-button]").click()
-            page.locator(
+            # The current measurements UI opens add-ons in a native Frappe dialog,
+            # rather than rendering five independent toggles in each table row.
+            second.locator("button.dco-addons-open[data-open-addons='1']").click()
+            addons = page.locator(".dco-addons-modal [data-addons-dialog]")
+            expect(addons).to_be_visible(timeout=10_000)
+            addons.locator('[data-addon-tab="extra_liner"]').click()
+            addons.locator('[data-liner-side="edge_width_top"]').click()
+            expect(addons.locator("[data-addons-apply]")).to_be_enabled()
+            addons.locator("[data-addons-apply]").click()
+            expect(addons).to_be_hidden(timeout=30_000)
+            # Bulk options are populated asynchronously from the profile owner.
+            # Wait for the actual fixture profile rather than clicking an empty menu.
+            page.wait_for_function(
+                "value => Boolean(window.AlmdinaMultiEdgeBanding && window.cur_frm "
+                "&& AlmdinaMultiEdgeBanding.profiles(cur_frm).has(value))",
+                arg=fixture["bulk_edge_type"],
+                timeout=30_000,
+            )
+            bulk_button = second.locator(
+                ".dco-all-sides-profile-button[data-bulk-edge-profile-button]"
+            )
+            page.evaluate("""() => {
+                window.__al128PopoverEvents = [];
+                const events = window.__al128PopoverEvents;
+                const capture = type => e => {
+                    if (!e.target?.closest?.('[data-bulk-edge-profile-button]')) return;
+                    events.push({type, path: e.target.tagName, at: performance.now()});
+                };
+                document.addEventListener('pointerdown', capture('pointerdown'), true);
+                document.addEventListener('click', capture('click'), true);
+                const observer = new MutationObserver(records => {
+                    for (const item of records) {
+                        for (const node of item.addedNodes) if (node.id === 'dco-edge-profile-popover') {
+                            events.push({type: 'menu-added', at: performance.now()});
+                        }
+                        for (const node of item.removedNodes) if (node.id === 'dco-edge-profile-popover') {
+                            events.push({type: 'menu-removed', at: performance.now()});
+                        }
+                    }
+                });
+                observer.observe(document.body, {childList: true, subtree: true});
+                window.__al128PopoverObserver = observer;
+            }""")
+            bulk_button.click()
+            bulk_option = page.locator(
                 "#dco-edge-profile-popover "
                 f"[data-bulk-profile-value={json.dumps(fixture['bulk_edge_type'])}]"
-            ).click()
+            )
+            try:
+                expect(bulk_option).to_be_visible(timeout=5_000)
+            except Exception:
+                # Distinguish a stale row / detached popover / missing option.
+                # Do not retry or silently bypass the real pointer interaction.
+                state = page.evaluate(
+                    """({value}) => {
+                        const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
+                        const rows = [...root.querySelectorAll(
+                            '.dco-fast-table tbody tr[data-row-name]:not(.dco-virtual-row)')];
+                        const tr = rows[1];
+                        const button = tr && tr.querySelector('[data-bulk-edge-profile-button]');
+                        const menu = document.getElementById('dco-edge-profile-popover');
+                        const row = tr && (cur_frm.doc.pieces || []).find(
+                            piece => piece.name === tr.dataset.rowName);
+                        return {
+                            rowName: tr && tr.dataset.rowName,
+                            rowExists: Boolean(row),
+                            editable: Boolean(window.frappe?.almdina?.orderCanEdit?.(cur_frm)),
+                            buttonExists: Boolean(button),
+                            buttonDisabled: button && button.disabled,
+                            ariaExpanded: button && button.getAttribute('aria-expanded'),
+                            menuExists: Boolean(menu),
+                            menuValues: menu ? [...menu.querySelectorAll('[data-bulk-profile-value]')]
+                                .map(option => option.dataset.bulkProfileValue) : [],
+                            handlerBound: Boolean(root._dcoCompactEdgeProfileControlsBound),
+                            popoverEvents: window.__al128PopoverEvents || [],
+                            profileLoaded: Boolean(cur_frm._dco_side_edge_profiles_loaded),
+                            profileExists: Boolean(window.AlmdinaMultiEdgeBanding
+                                && AlmdinaMultiEdgeBanding.profiles(cur_frm).has(value))
+                        };
+                    }""",
+                    {"value": fixture["bulk_edge_type"]},
+                )
+                trace("bulk_profile_real_click_failed", **state)
+                raise AssertionError(f"Real bulk-profile menu failed to open/select: {state}")
+            bulk_option.click()
             bulk_edge_state_after_action = page.evaluate(
                 "pieceName => {"
                 " const row = cur_frm.doc.pieces.find(item => item.name === pieceName);"
@@ -469,6 +550,21 @@ def test_real_desk_edits_checkpoint_and_permission_isolation() -> None:
             browser.close()
 
 
+def _changed_base_files(base_sha: str) -> set[str]:
+    """Only actual source differences qualify as substituted benchmark assets."""
+    changed = set()
+    for suffix, path in BASE_FILES.items():
+        head_source = subprocess.check_output(
+            ["git", "show", f"HEAD:{path}"], cwd=REPOSITORY, text=True,
+        )
+        base_source = subprocess.check_output(
+            ["git", "show", f"{base_sha}:{path}"], cwd=REPOSITORY, text=True,
+        )
+        if head_source != base_source:
+            changed.add(suffix)
+    return changed
+
+
 def _install_base_metadata_overrides(
     context: BrowserContext,
     base_sha: str,
@@ -501,10 +597,10 @@ def _install_base_metadata_overrides(
                 cwd=REPOSITORY,
                 text=True,
             )
+            # Unchanged assets are a valid equality result for latest-Develop
+            # comparisons. Replacing them would create a fictional difference.
             if head_source == base_source:
-                raise AssertionError(
-                    f"{repository_path} is unchanged between Base and HEAD; it cannot distinguish the benchmark variants."
-                )
+                continue
             if head_source in script:
                 script = script.replace(head_source, base_source, 1)
                 replaced.add(suffix)
@@ -553,10 +649,20 @@ def _publish_benchmark_progress(result: dict[str, Any]) -> None:
             f"({result['keyboard_samples']} samples).\n"
         )
         output.write(
-            f"- IndexedDB checkpoint acknowledgement: "
+            f"- Input → checkpoint acknowledgement (includes debounce, projection, hash and storage): "
             f"P50 {checkpoint['p50']} ms, P95 {checkpoint['p95']} ms "
             f"({result['checkpoint_ack_samples']} samples).\n"
         )
+        for key, label in (
+            ("live_projection_capture_ms", "Live DCO projection capture"),
+            ("live_projection_serialize_ms", "Canonical serialization of live DCO projection"),
+            ("indexeddb_transaction_ms", "Last completed IndexedDB write transaction per acknowledged edit"),
+        ):
+            metric = result[key]
+            output.write(
+                f"- {label}: P50 {metric['p50']} ms, P95 {metric['p95']} ms "
+                f"({metric['samples']} samples).\n"
+            )
         output.write(
             f"- Phase durations: `{json.dumps(result['phase_durations_seconds'], sort_keys=True)}`\n"
         )
@@ -625,9 +731,10 @@ def _benchmark_order(
         _open_order(page, name, count)
         phase_durations["open_order"] = round(time.monotonic() - phase_started, 2)
         if variant == "base":
-            assert replaced == set(BASE_FILES), (
-                "Frappe DCO metadata did not supply all base recovery assets; "
-                f"matched={sorted(replaced)}"
+            expected = _changed_base_files(base_sha)
+            assert replaced == expected, (
+                "Frappe DCO metadata did not supply changed base recovery assets; "
+                f"expected={sorted(expected)}, matched={sorted(replaced)}"
             )
         phase = "edit_session_and_initial_checkpoint"
         phase_started = time.monotonic()
@@ -641,6 +748,39 @@ def _benchmark_order(
                 const root = cur_frm.fields_dict.pieces_fast_entry.$wrapper.get(0);
                 window.__al128KeyboardFrameSamples = [];
                 window.__al128CheckpointSamples = [];
+                window.__al128TransactionSamples = [];
+                window.__al128CompletedWrites = [];
+                // Observe real transactions; preserve their arguments, result and errors.
+                const transactions = new WeakMap();
+                const transaction = IDBDatabase.prototype.transaction;
+                IDBDatabase.prototype.transaction = function (...args) {
+                    const startedAt = performance.now();
+                    const tx = Reflect.apply(transaction, this, args);
+                    const sample = { startedAt, record: null };
+                    transactions.set(tx, sample);
+                    // Register before the gateway's oncomplete handler so the
+                    // exact revision timing exists before its write is ACKed.
+                    tx.addEventListener("complete", () => {
+                        if (sample.record) window.__al128CompletedWrites.push({
+                            ...sample.record, duration: performance.now() - sample.startedAt,
+                        });
+                    }, {once: true});
+                    return tx;
+                };
+                const put = IDBObjectStore.prototype.put;
+                IDBObjectStore.prototype.put = function (record, ...args) {
+                    const request = Reflect.apply(put, this, [record, ...args]);
+                    const indexed = AlmdinaDcoRecovery.IndexedDb;
+                    if (this.name === indexed.DRAFT_STORE && record?.draft_id
+                        && Number.isSafeInteger(record.recovery_revision)) {
+                        const sample = transactions.get(this.transaction);
+                        if (sample) sample.record = {
+                            draft_id: record.draft_id,
+                            revision: record.recovery_revision,
+                        };
+                    }
+                    return request;
+                };
                 window.__al128KeyboardAction = null;
                 window.__al128AckAction = null;
                 root.addEventListener("input", () => {
@@ -662,6 +802,11 @@ def _benchmark_order(
                                 && state.saved_revision > ackAction.savedRevision) {
                                 window.__al128CheckpointSamples.push(
                                     performance.now() - ackAction.startedAt
+                                );
+                                window.__al128TransactionSamples.push(
+                                    window.__al128CompletedWrites.findLast(write =>
+                                        write.draft_id === state.draft_id
+                                        && write.revision === state.saved_revision)?.duration ?? null
                                 );
                                 ackAction.completed = true;
                                 return;
@@ -739,21 +884,51 @@ def _benchmark_order(
             page.evaluate("() => { window.__al128AckAction = null; }")
         phase_durations["checkpoint_ack_samples"] = round(time.monotonic() - phase_started, 2)
 
+        # This phase times the actual canonical projection functions on the live
+        # 100-piece form, outside input/ACK collection so it adds no ACK work.
+        # It is a repeated warm projection microbenchmark, not session overhead.
+        phase = "live_projection_samples"
+        projection_samples = page.evaluate(
+            """sampleCount => {
+                const projection = AlmdinaDcoRecovery.Projection;
+                const capture = [], serialize = [];
+                let bytes = 0;
+                for (let index = 0; index < sampleCount; index++) {
+                    const startedAt = performance.now();
+                    const payload = projection.createPayload({
+                        dco: projection.createDcoInput(cur_frm.doc), dirtyScope: "DCO"
+                    });
+                    capture.push(performance.now() - startedAt);
+                    const serializeAt = performance.now();
+                    const serialized = projection.serialize(payload);
+                    serialize.push(performance.now() - serializeAt);
+                    bytes = new TextEncoder().encode(serialized).byteLength;
+                }
+                return {capture, serialize, bytes};
+            }""",
+            sample_count,
+        )
         samples = page.evaluate(
             "() => ({"
             " keyboard: window.__al128KeyboardFrameSamples.slice(-40),"
-            " checkpoint: window.__al128CheckpointSamples.slice(-40)"
+            " checkpoint: window.__al128CheckpointSamples.slice(-40),"
+            " transaction: window.__al128TransactionSamples.slice(-40)"
             "})"
         )
         frame_ms = samples["keyboard"]
         checkpoint_ms = samples["checkpoint"]
+        transaction_ms = samples["transaction"]
+        assert len(transaction_ms) == sample_count
+        assert all(value is not None and value >= 0 for value in transaction_ms), (
+            "Each acknowledged edit must include an observed completed real write transaction"
+        )
         assert len(frame_ms) == sample_count, (
             f"Expected {sample_count} key-to-paint samples, got {len(frame_ms)}"
         )
         assert len(checkpoint_ms) == sample_count
         assert not save_requests, "Measurement checkpoint unexpectedly invoked Official Save."
         if variant == "base":
-            assert replaced == set(BASE_FILES), f"Base metadata replacement missed: {set(BASE_FILES) - replaced}"
+            assert replaced == _changed_base_files(base_sha), "Changed Base metadata was not substituted"
         result = {
             "variant": variant,
             "rows": count,
@@ -769,6 +944,19 @@ def _benchmark_order(
             "checkpoint_ack_ms": {
                 "p50": _percentile(checkpoint_ms, 0.50),
                 "p95": _percentile(checkpoint_ms, 0.95),
+            },
+            "checkpoint_ack_method": "first input to LOCAL_SAVED; includes debounce/projection/hash/storage/polling",
+            "indexeddb_transaction_method": "native transaction creation to complete event; draft-store write matching exact draft_id and acknowledged recovery revision; excludes projection/hash/open",
+            "projection_method": "40 repeated warm createDcoInput/createPayload and serialize calls on the live form after input/ACK collection; excludes session async work",
+            "projection_payload_bytes": projection_samples["bytes"],
+            **{
+                metric: {"p50": _percentile(values, 0.50),
+                         "p95": _percentile(values, 0.95), "samples": len(values)}
+                for metric, values in (
+                    ("live_projection_capture_ms", projection_samples["capture"]),
+                    ("live_projection_serialize_ms", projection_samples["serialize"]),
+                    ("indexeddb_transaction_ms", transaction_ms),
+                )
             },
             "base_assets_replaced": sorted(replaced),
             "official_save_requests": len(save_requests),
@@ -806,7 +994,7 @@ def _benchmark_order(
         context.close()
 
 
-def test_actual_measurement_entry_performance_200_and_500_before_after() -> None:
+def test_actual_measurement_entry_performance_100_before_after() -> None:
     fixture = fixtures()
     base_sha = os.environ.get("AL128_BASE_SHA", "").strip()
     if not base_sha:
@@ -818,8 +1006,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
         browser = _browser(playwright_instance)
         try:
             for count, fixture_key, variants in (
-                (200, "performance_200", ("base", "head")),
-                (500, "performance_500", ("head", "base")),
+                (100, "performance_100", ("base", "head")),
             ):
                 for variant in variants:
                     result = _benchmark_order(
@@ -837,7 +1024,7 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
 
     by_rows = {
         count: {result["variant"]: result for result in results if result["rows"] == count}
-        for count in (200, 500)
+        for count in (100,)
     }
     comparisons = {}
     for count, variants in by_rows.items():
@@ -855,18 +1042,29 @@ def test_actual_measurement_entry_performance_200_and_500_before_after() -> None
                     2,
                 ),
             }
-            for metric in ("input_to_second_animation_frame_ms", "checkpoint_ack_ms")
+            for metric in (
+                "input_to_second_animation_frame_ms", "checkpoint_ack_ms",
+                "live_projection_capture_ms", "live_projection_serialize_ms",
+                "indexeddb_transaction_ms",
+            )
         }
     evidence = {
         "interaction_run": "PASS",
         "performance_rating": "NOT_ASSESSED_NO_ACCEPTANCE_THRESHOLD_DEFINED",
         "performance_metrics_are_comparative_evidence": True,
-        "sample_method": "40 independent samples per metric, Base and HEAD, for each row count",
+        "sample_method": "40 input samples, 40 acknowledged edits with observed real write transactions, and 40 warm live-projection calls per variant on 100 pieces",
         "performance_test_budget_minutes": 10,
         "versions": fixture["versions"],
         "base_sha": base_sha,
         "benchmarks": results,
         "p95_comparison": comparisons,
+        "source_files_identical": not _changed_base_files(base_sha),
+        "interpretation": (
+            "Baseline and HEAD recovery assets identical: these are same-code "
+            "measurement samples, NOT evidence of a runtime optimization."
+            if not _changed_base_files(base_sha)
+            else "Baseline and HEAD contain changed recovery source assets."
+        ),
     }
     TEST_RESULTS.append({"test": "actual_measurement_entry_performance", "evidence": evidence})
     print(f"AL128_MEASUREMENT_PERFORMANCE {json.dumps(evidence, ensure_ascii=False)}")

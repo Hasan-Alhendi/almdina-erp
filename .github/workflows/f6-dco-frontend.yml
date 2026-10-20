@@ -197,6 +197,8 @@ jobs:
           node almdina_erp/tests/js/dco_local_checkpoint.test.js
           node almdina_erp/tests/js/dco_new_recovery.test.js
           node almdina_erp/tests/js/dco_new_recovery_save.test.js
+          node almdina_erp/tests/js/dco_edit_recovery.test.js
+          node almdina_erp/tests/js/dco_edit_recovery_ui.test.js
 
       - name: Simulate measurement lifecycle and presentation readiness
         run: |

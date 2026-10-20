@@ -81,7 +81,7 @@ class TestOrderEditSaveIntentUx(unittest.TestCase):
         self.assertIn("flushPendingMeasurements(frm);", checkpoint)
         self.assertIn("markEditSessionSticky(frm);", checkpoint)
         self.assertIn("frm.__almdina_preserve_edit_session_after_save = true;", checkpoint)
-        self.assertIn("await frm.save();", checkpoint)
+        self.assertIn("await frm.save(undefined, (response) => {", checkpoint)
 
     def test_save_intent_guard_loads_after_revision_owner_before_page_actions(self) -> None:
         manifest = FRONTEND_ASSETS.read_text(encoding="utf-8")

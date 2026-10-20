@@ -119,7 +119,29 @@ def _ensure_permission_type_schema(permission_type_name: str) -> None:
 
     document = frappe.get_doc("Permission Type", permission_type_name)
     for target in CUSTOM_FIELD_TARGET:
-        document.create_custom_field(target)
+        # Frappe creates missing fields but does not repair a previously
+        # created Custom Field's depends_on. Restore its native Permission Type
+        # visibility contract without changing any role or capability grant.
+        field_name = frappe.db.exists(
+            "Custom Field", {"dt": target, "fieldname": document.perm_type}
+        )
+        if not field_name:
+            document.create_custom_field(target)
+            field_name = frappe.db.exists(
+                "Custom Field", {"dt": target, "fieldname": document.perm_type}
+            )
+        if not field_name:
+            continue
+        parent_field = "share_doctype" if target == "DocShare" else "parent"
+        depends_on = f"eval:doc.{parent_field} == '{document.doc_type}'"
+        if frappe.db.get_value("Custom Field", field_name, "depends_on") != depends_on:
+            frappe.db.set_value(
+                "Custom Field",
+                field_name,
+                "depends_on",
+                depends_on,
+                update_modified=False,
+            )
 
 
 def _clear_relocated_cutting_plan_projections() -> None:

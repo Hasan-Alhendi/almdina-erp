@@ -20,9 +20,9 @@ def _login(page, fixture):
     page.locator("#login_email").fill(fixture["user"])
     page.locator("#login_password").fill(fixture["password"])
     page.locator(".btn-login").click()
-    page.wait_for_function("user => !!frappe?.set_route && frappe.session?.user === user",
+    page.wait_for_function("user => !!window.frappe?.set_route && window.frappe.session?.user === user",
                            arg=fixture["user"], timeout=60000)
-    page.wait_for_function("!!frappe.boot?.user?.can_read && !!frappe.router?.routes && !!frappe.app",
+    page.wait_for_function("!!window.frappe?.boot?.user?.can_read && !!window.frappe?.router?.routes && !!window.frappe?.app",
                            timeout=45000)
 
 
@@ -496,7 +496,8 @@ def test_saved_server_plan_print_runtime():
                         visiblePlanRoot:!!cur_frm.fields_dict.cutting_plan_html.$wrapper
                             .get(0)?.querySelector('.dco-cutting-plan'),
                         selectedTab:AlmdinaPlanTabsUX.activeTab(cur_frm),
-                        row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name
+                        row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name,
+                        revision:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.revision
                     })""")
                     if not action_source["visiblePlanRoot"]:
                         try:
@@ -517,6 +518,9 @@ def test_saved_server_plan_print_runtime():
                                 planSurface:cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
                                     ?.innerText.slice(-500)})""")
                     assert action_source["decorated"] and action_source["visiblePlanRoot"], action_source
+                    assert action_source["selectedTab"] == "System", action_source
+                    assert action_source["row"] == saved_plan[label]["name"], action_source
+                    assert action_source["revision"] == saved_plan[label]["revision"], action_source
                     before_click = page.evaluate('__p0PrintWrites.length')
                     button.click()
                     page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",
@@ -528,7 +532,14 @@ def test_saved_server_plan_print_runtime():
                             in operator_html)
                     assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
                             not in operator_html)
-                    assert order["board"] in operator_html and saved_plan[label]["name"] in operator_html
+                    assert order["board"] in operator_html and other["board"] not in operator_html
+                    # Plan IDs/revisions remain verified source metadata; the
+                    # approved print contract intentionally omits their labels.
+                    assert saved_plan[label]["name"] not in operator_html
+                    piece = saved_plan[label]["first_piece"]
+                    geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
+                    assert geometry in operator_html, (label, geometry)
+                    assert operator_html.count('class="dco-sheet-card"') == saved_plan[label]["sheet_count"]
                     evidence.setdefault("operator_clicks", {})[label] = {
                         "ready_event": page.evaluate('window.__p0ReadyEvent'),
                         "source": action_source,
@@ -561,13 +572,15 @@ def test_saved_server_plan_print_runtime():
                 evidence.setdefault("attempts", {})[f"{label}-{visit}"] = {
                     key: value for key, value in result.items() if key != "html"}
                 assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
+                assert result["revision"] == saved_plan[label]["revision"], result
                 html = result.pop("html")
                 assert (f'<div><b>Order number</b><span>{order["name"]}</span></div>'
                         in html), result
                 assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
                         not in html), result
                 assert order["board"] in html and other["board"] not in html, result
-                assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
+                assert saved_plan[label]["name"] not in html
+                assert html.count('class="dco-sheet-card"') == saved_plan[label]["sheet_count"]
                 assert 'class="dco-unified-print-header"' in html
                 assert f"<title>Cutting plan - {order['name']}</title>" in html
                 assert evidence["factory_identity"]["print_factory_name"] in html
@@ -622,11 +635,11 @@ def test_saved_server_plan_print_runtime():
             assert controlled["result"] is True and controlled["after"] == controlled["before"] + 2
             controlled_html = controlled.pop("html")
             assert b["name"] in controlled_html and a["name"] not in controlled_html
-            assert "CONTROLLED-PLAN-B" in controlled_html
+            assert "CONTROLLED-PLAN-B" not in controlled_html
             assert 'data-resource-kind="OFFCUT"' in controlled_html
             assert "CONTROLLED-OFFCUT-B" in controlled_html
-            assert 'dco-offcut-business-context' in controlled_html
-            assert 'P0 FACTORY ASSIGNED' in controlled_html
+            assert 'class="dco-offcut-business-context"' not in controlled_html
+            assert 'P0 FACTORY ASSIGNED' not in controlled_html
             assert 'data-addon-kind="double"' in controlled_html
             (evidence_dir / "controlled-multisheet-offcut-final.html").write_text(
                 controlled_html, encoding="utf-8")
@@ -807,6 +820,7 @@ def _print_saved_plan_variant(source, prefix):
                 permission:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan')})""", source)
             assert evidence["source"]["selected"] == source, evidence["source"]
             assert evidence["source"]["row"] == selected["plan_name"], evidence["source"]
+            assert evidence["source"]["revision"] == selected["revision"], evidence["source"]
             assert evidence["source"]["permission"]
             button = page.locator('.dco-plan-context-actions-host .dco-print-cutting-plan:visible')
             button.wait_for(state="visible", timeout=15000)
@@ -815,8 +829,7 @@ def _print_saved_plan_variant(source, prefix):
             page.wait_for_function("() => __p0VariantWrites.length >= 2", timeout=15000)
             html = page.evaluate("__p0VariantWrites.at(-1)")
             assert selected["order_name"] in html
-            assert selected["plan_name"] in html
-            assert str(selected["revision"]) in html
+            assert selected["plan_name"] not in html
             assert selected["board"] in html
             assert html.count('class="dco-sheet-card"') == selected["sheets"]
             other_labels = ("B",) if prefix == "custom" else (("A",) if prefix == "approved" else ("A", "B"))
@@ -835,8 +848,7 @@ def _print_saved_plan_variant(source, prefix):
                     r'<div class="dco-offcut-business-context"[^>]*>(.*?)</div>',
                     html, re.S,
                 )
-                assert context and "من المعمل" in context.group(1)
-                assert "في المعمل" in context.group(1)
+                assert context is None, "OFFCUT business routing is intentionally omitted from print"
             filename = f"{prefix}-plan-operator-final.html"
             (evidence_dir / filename).write_text(html, encoding="utf-8")
             evidence["final_html"] = filename

@@ -438,6 +438,16 @@
         window.addEventListener("scroll", event => {
             if (!activePopover) return;
             if (event.target && activePopover.element.contains(event.target)) return;
+            // Scroll events from the click-to-open or focus transition can
+            // arrive after mounting although the anchor has not moved.
+            // Only dismiss when the real anchored position changed.
+            const anchor = activePopover.anchor;
+            const original = activePopover.anchorRect;
+            if (anchor && anchor.isConnected && original) {
+                const now = anchor.getBoundingClientRect();
+                if (Math.abs(now.left - original.left) < 1
+                    && Math.abs(now.top - original.top) < 1) return;
+            }
             closePopover();
         }, { passive: true, capture: true });
     }
@@ -527,7 +537,12 @@
 
     function mountPopover(popover, context) {
         document.body.appendChild(popover);
-        activePopover = { element: popover, ...context };
+        const anchorRect = context.anchor.getBoundingClientRect();
+        activePopover = {
+            element: popover,
+            ...context,
+            anchorRect: { left: anchorRect.left, top: anchorRect.top },
+        };
         bindPopoverDismiss();
         context.anchor.setAttribute("aria-expanded", "true");
         positionPopover(popover, context.anchor);

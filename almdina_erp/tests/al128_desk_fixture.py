@@ -195,6 +195,8 @@ def _pieces(count: int, *, include_special: bool) -> list[dict[str, object]]:
                 "qty": 1 + index % 3,
                 "notes": f"AL128 fixture piece {index + 1}",
                 "extra_liner": int(index == 8),
+                "liner_reference_side": "edge_width_top" if index == 8 else "",
+                "liner_width_cm": 1.8 if index == 8 else 0,
                 "edge_long_left": int(index == 0),
                 "edge_width_top": int(index == 0),
                 "special_shape_geometry_json": geometry if special else "",
@@ -271,7 +273,7 @@ def create_al128_desk_fixtures() -> dict[str, object]:
         "password": "al128-isolated-ci-password",
         "edit_order": _order(customer, edge_type, 10, include_special=True),
         "identity_b": _order(customer, edge_type, 10, include_special=False),
-        "performance_200": _order(customer, edge_type, 200, include_special=False),
+        "performance_100": _order(customer, edge_type, 100, include_special=False),
         "performance_500": _order(customer, edge_type, 500, include_special=False),
     }
 

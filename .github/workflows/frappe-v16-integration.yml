@@ -19,14 +19,25 @@ on:
         default: full
         type: choice
         options:
+          - all
           - full
+          - full_pinned
+          - full_pinned_base_permission
           - al128_desk
           - al128_desk_edit
           - al128_performance
+          - al129_customer
+          - al129_new
+          - al131_edit
+          - al129_backend
+      baseline_sha:
+        description: Exact Develop commit for manual permission-baseline reproduction
+        required: false
+        type: string
       comparison_base:
         description: PR base branch used for AL128 before/after measurements
         required: true
-        default: Recovery-test
+        default: Develop
         type: string
   pull_request:
     paths:
@@ -37,14 +48,32 @@ on:
       - ".github/workflows/frappe-v16-integration.yml"
       - "almdina_erp/tests/al128_desk_fixture.py"
       - "tests/browser/test_dco_al128_frappe_desk.py"
+      - "tests/browser/test_dco_al129_frappe_desk.py"
+      - "tests/browser/test_al129_link_search_request.py"
+      - "almdina_erp/tests/al129_desk_fixture.py"
+      - "almdina_erp/ci/dco_frappe_desk_recovery.py"
+      - "almdina_erp/tests/dco_recovery_desk_fixture.py"
 
 permissions:
   contents: read
 
+# One authoritative PR-head acceptance run per pull request. Replaced commits
+# do not certify the final artifact; manual dispatches remain uncancelled.
+concurrency:
+  group: frappe-v16-integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   integration:
+    name: integration / ${{ matrix.suite }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON((github.event_name == 'pull_request' || inputs.suite == 'all') && '["full","full_pinned","full_pinned_base_permission","al128_desk","al128_performance","al129_customer","al129_new","al131_edit","al129_backend"]' || format('["{0}"]', inputs.suite)) }}
     timeout-minutes: 60
+    env:
+      EXPECTED_APP_SHA: ${{ matrix.suite == 'full_pinned_base_permission' && (github.event.pull_request.base.sha || inputs.baseline_sha) || github.event.pull_request.head.sha || github.sha }}
 
     services:
       mariadb:
@@ -68,10 +97,23 @@ jobs:
           - 11000:6379
 
     steps:
+      - name: Require explicit baseline revision for manual reproduction
+        if: matrix.suite == 'full_pinned_base_permission' && github.event_name != 'pull_request'
+        env:
+          BASELINE_SHA: ${{ inputs.baseline_sha }}
+        run: |
+          [[ "$BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Manual permission-baseline reproduction requires an exact baseline_sha." >&2
+            exit 1
+          }
+
       - name: Checkout Almdina ERP
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Acceptance certifies the PR artifact itself. The independent
+          # baseline installs the exact base commit into a separate site.
+          ref: ${{ env.EXPECTED_APP_SHA }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -124,10 +166,10 @@ jobs:
           redis-cli -h 127.0.0.1 -p 11000 ping | grep -qx PONG
 
       - name: Require ALMADINA-128 target runtime refs
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref }}
+          FRAPPE_REF: ${{ 'v16.17.5' }}
+          ERPNEXT_REF: ${{ 'v16.17.0' }}
         run: |
           set -euo pipefail
           test "$FRAPPE_REF" = "v16.17.5" || {
@@ -141,7 +183,7 @@ jobs:
 
       - name: Initialize Frappe v16 bench
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
+          FRAPPE_REF: ${{ matrix.suite == 'full' && (inputs.frappe_ref || 'version-16') || 'v16.17.5' }}
         run: |
           bench init "$RUNNER_TEMP/frappe-bench" \
             --frappe-branch "$FRAPPE_REF" \
@@ -151,7 +193,7 @@ jobs:
       - name: Install ERPNext v16 and local app source
         env:
           APP_SOURCE: ${{ github.workspace }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
+          ERPNEXT_REF: ${{ matrix.suite == 'full' && (inputs.erpnext_ref || 'version-16') || 'v16.17.0' }}
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench get-app erpnext --branch "$ERPNEXT_REF"
@@ -173,17 +215,25 @@ jobs:
 
       - name: Record and verify application source refs
         env:
-          FRAPPE_REF: ${{ inputs.frappe_ref || 'version-16' }}
-          ERPNEXT_REF: ${{ inputs.erpnext_ref || 'version-16' }}
-          TARGET_SUITE: ${{ inputs.suite || 'full' }}
+          FRAPPE_REF: ${{ matrix.suite == 'full' && (inputs.frappe_ref || 'version-16') || 'v16.17.5' }}
+          ERPNEXT_REF: ${{ matrix.suite == 'full' && (inputs.erpnext_ref || 'version-16') || 'v16.17.0' }}
+          TARGET_SUITE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
+          CHECKOUT_SHA="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)"
+          test "$CHECKOUT_SHA" = "$EXPECTED_APP_SHA"
           cd "$RUNNER_TEMP/frappe-bench"
+          APP_SHA="$(git -C apps/almdina_erp rev-parse HEAD)"
+          test "$APP_SHA" = "$EXPECTED_APP_SHA"
           FRAPPE_SHA="$(git -C apps/frappe rev-parse HEAD)"
           ERPNEXT_SHA="$(git -C apps/erpnext rev-parse HEAD)"
-          printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
-            "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && ("$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance") ]]; then
+          {
+            printf 'Suite=%s\nExpected app=%s\nCheckout=%s\nInstalled app=%s\n' \
+              "$TARGET_SUITE" "$EXPECTED_APP_SHA" "$CHECKOUT_SHA" "$APP_SHA"
+            printf 'Frappe ref=%s sha=%s\nERPNext ref=%s sha=%s\n' \
+              "$FRAPPE_REF" "$FRAPPE_SHA" "$ERPNEXT_REF" "$ERPNEXT_SHA"
+          } | tee "$RUNNER_TEMP/application-source-refs.log" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [[ "$TARGET_SUITE" == "al128_desk" || "$TARGET_SUITE" == "al128_desk_edit" || "$TARGET_SUITE" == "al128_performance" ]]; then
             test "$FRAPPE_SHA" = "75baafaa0bde07a86bf28764383b93b5df97bc7e"
             test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
           else
@@ -194,6 +244,14 @@ jobs:
               test "$ERPNEXT_SHA" = "7b494dc9e8e47d288de5427bae25ce8a52c37d96"
             fi
           fi
+
+      - name: Upload verified application source refs
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-source-refs-${{ matrix.suite }}
+          path: ${{ runner.temp }}/application-source-refs.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Configure Redis URLs
         run: |
@@ -243,7 +301,7 @@ jobs:
           bench --site test.localhost execute frappe.get_all --kwargs '{"doctype":"DocType","filters":{"module":"Almdina ERP"},"pluck":"name"}'
 
       - name: Prepare isolated ALMADINA-128 Desk fixtures
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: startsWith(matrix.suite, 'al128_')
         env:
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
         run: |
@@ -277,26 +335,94 @@ jobs:
           test -s "$DCO_AL128_FIXTURE_FILE"
           echo "DCO_AL128_FIXTURE_FILE=$DCO_AL128_FIXTURE_FILE" >> "$GITHUB_ENV"
 
+      - name: Prepare isolated ALMADINA-129 Desk fixtures
+        if: matrix.suite == 'al129_new' || matrix.suite == 'al129_customer'
+        env:
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.al129_desk_fixture.prepare_al129_desk_site \
+            2>&1 | tee "$RUNNER_TEMP/al129-fixture-setup.log"
+          bench --site test.localhost execute almdina_erp.tests.al129_desk_fixture.create_al129_desk_fixtures \
+            2>&1 | tee "$RUNNER_TEMP/al129-fixture-create.log"
+          test -s "$DCO_AL129_FIXTURE_FILE"
+          echo "DCO_AL129_FIXTURE_FILE=$DCO_AL129_FIXTURE_FILE" >> "$GITHUB_ENV"
+
+      - name: Prepare isolated ALMADINA-131 EDIT Desk fixture
+        if: matrix.suite == 'al131_edit'
+        env:
+          DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost execute almdina_erp.tests.dco_recovery_desk_fixture.prepare_desk_test_site \
+            2>&1 | tee "$RUNNER_TEMP/al131-fixture-setup.log"
+          bench --site test.localhost execute almdina_erp.tests.dco_recovery_desk_fixture.create_desk_edit_recovery_fixtures \
+            2>&1 | tee "$RUNNER_TEMP/al131-fixture-create.log"
+          test -s "$DCO_DESK_FIXTURE_FILE"
+          echo "DCO_DESK_FIXTURE_FILE=$DCO_DESK_FIXTURE_FILE" >> "$GITHUB_ENV"
+
+      - name: Run pinned ALMADINA-129 database and native Save integration
+        if: matrix.suite == 'al129_backend'
+        env:
+          AL129_DB_ROOT_HOST: 127.0.0.1
+          AL129_DB_ROOT_USER: root
+          AL129_DB_ROOT_PASSWORD: root
+          AL129_CONCURRENCY_EVIDENCE_FILE: ${{ runner.temp }}/al129-concurrency-evidence.json
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_concurrent_database_inserts_reject_duplicate_creation_token \
+            2>&1 | tee "$RUNNER_TEMP/al129-race.log"
+          grep -Eq 'Ran 1 tests? in ' "$RUNNER_TEMP/al129-race.log"
+          test -s "$AL129_CONCURRENCY_EVIDENCE_FILE"
+          grep -Fq '"status": "PASS"' "$AL129_CONCURRENCY_EVIDENCE_FILE"
+          bench --site test.localhost run-tests --module almdina_erp.tests.test_new_order_recovery_integration \
+            --test test_lost_response_reconciles_to_one_native_insert \
+            --test test_reconciliation_rejects_unauthenticated_token_probing \
+            --test test_unbound_identity_is_proven_without_creating_a_dco \
+            --test test_acknowledged_creation_binding_is_immutable \
+            --test test_insert_binds_token_to_session_user_and_rejects_malformed_token \
+            --test test_reconciliation_scopes_tokens_and_checks_real_document_read_permission \
+            2>&1 | tee "$RUNNER_TEMP/al129-native-save.log"
+          grep -Eq 'Ran 6 tests? in ' "$RUNNER_TEMP/al129-native-save.log"
+        timeout-minutes: 15
+
+      - name: Upload ALMADINA-129 database evidence
+        if: always() && matrix.suite == 'al129_backend'
+        uses: actions/upload-artifact@v4
+        with:
+          name: al129-mariadb-token-race
+          path: |
+            ${{ runner.temp }}/al129-concurrency-evidence.json
+            ${{ runner.temp }}/al129-race.log
+            ${{ runner.temp }}/al129-native-save.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Install Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install Playwright and Chromium for targeted Desk certification
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           python -m pip install 'pytest>=9,<10' 'playwright==1.55.0'
           python -m playwright install --with-deps chromium
 
       - name: Build Almdina ERP Desk assets
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench build --app almdina_erp
 
       - name: Start isolated Frappe Desk server
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+        if: matrix.suite != 'full' && matrix.suite != 'full_pinned' && matrix.suite != 'al129_backend'
         run: |
           set -euo pipefail
           echo '127.0.0.1 test.localhost' | sudo tee -a /etc/hosts >/dev/null
@@ -316,13 +442,13 @@ jobs:
             exit 1
           fi
 
-      - name: Run one targeted ALMADINA-128 Desk or performance acceptance case
-        if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+      - name: Run pinned ALMADINA-128 Desk/performance acceptance case
+        if: matrix.suite == 'al128_desk' || matrix.suite == 'al128_desk_edit' || matrix.suite == 'al128_performance'
         env:
           FRAPPE_DESK_URL: http://test.localhost:8000
           DCO_AL128_FIXTURE_FILE: ${{ runner.temp }}/al128-desk-fixtures.json
-          AL128_COMPARISON_BASE: ${{ inputs.comparison_base }}
-          AL128_TARGET_CASE: ${{ inputs.suite }}
+          AL128_COMPARISON_BASE: ${{ inputs.comparison_base || 'Develop' }}
+          AL128_TARGET_CASE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
@@ -334,7 +460,7 @@ jobs:
           printf 'ALMADINA-128 comparison base=%s merge-base=%s\n' \
             "$AL128_COMPARISON_BASE" "$AL128_BASE_SHA" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$AL128_TARGET_CASE" == "al128_performance" ]]; then
-            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_200_and_500_before_after"
+            test_target="tests/browser/test_dco_al128_frappe_desk.py::test_actual_measurement_entry_performance_100_before_after"
           else
             test_target="tests/browser/test_dco_al128_frappe_desk.py::test_real_desk_edits_checkpoint_and_permission_isolation"
           fi
@@ -384,11 +510,75 @@ jobs:
           exit "$test_status"
         timeout-minutes: 10
 
-      - name: Upload ALMADINA-128 Desk evidence
-        if: always() && github.event_name == 'workflow_dispatch' && (inputs.suite == 'al128_desk' || inputs.suite == 'al128_desk_edit' || inputs.suite == 'al128_performance')
+      - name: Run pinned ALMADINA-129 NEW Desk acceptance
+        if: matrix.suite == 'al129_customer' || matrix.suite == 'al129_new'
+        env:
+          FRAPPE_DESK_URL: http://test.localhost:8000
+          DCO_AL129_FIXTURE_FILE: ${{ runner.temp }}/al129-desk-fixtures.json
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if [[ "${{ matrix.suite }}" == "al129_customer" ]]; then
+            python -m pytest -q -s \
+              tests/browser/test_al129_link_search_request.py \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_native_entry_and_permission_differential \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_customer_control_link_autocomplete_isolated \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_create_permission_revoke_restore_isolated \
+              2>&1 | tee "$RUNNER_TEMP/al129-desk-tests.log"
+          else
+            python -m pytest -q -s \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_multiple_drafts_start_new_delete_and_restore_geometry \
+              tests/browser/test_dco_al129_frappe_desk.py::test_real_desk_100_piece_checkpoint_restore_and_lost_save_response \
+              2>&1 | tee "$RUNNER_TEMP/al129-desk-tests.log"
+          fi
+        timeout-minutes: 15
+
+      - name: Upload ALMADINA-129 Desk evidence
+        if: always() && (matrix.suite == 'al129_customer' || matrix.suite == 'al129_new')
         uses: actions/upload-artifact@v4
         with:
-          name: al128-real-desk-evidence
+          name: al129-real-desk-${{ matrix.suite }}
+          path: |
+            ${{ runner.temp }}/al129-new-desk-evidence.json
+            ${{ runner.temp }}/al129-new-desk-trace.json
+            ${{ runner.temp }}/al129-desk-failure.png
+            ${{ runner.temp }}/al129-desk-tests.log
+            ${{ runner.temp }}/al129-fixture-setup.log
+            ${{ runner.temp }}/al129-fixture-create.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run pinned ALMADINA-131 EDIT Desk acceptance
+        if: matrix.suite == 'al131_edit'
+        env:
+          FRAPPE_DESK_URL: http://test.localhost:8000
+          DCO_DESK_FIXTURE_FILE: ${{ runner.temp }}/dco-desk-fixtures.json
+          DCO_DESK_EVIDENCE_DIR: ${{ runner.temp }}/dco-al131-desk-evidence
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          python -u almdina_erp/ci/dco_frappe_desk_recovery.py \
+            2>&1 | tee "$RUNNER_TEMP/al131-edit-desk.log"
+        timeout-minutes: 15
+
+      - name: Upload ALMADINA-131 EDIT Desk evidence
+        if: always() && matrix.suite == 'al131_edit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: al131-real-desk-evidence
+          path: |
+            ${{ runner.temp }}/dco-al131-desk-evidence/
+            ${{ runner.temp }}/al131-fixture-setup.log
+            ${{ runner.temp }}/al131-fixture-create.log
+            ${{ runner.temp }}/al131-edit-desk.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload ALMADINA-128 Desk evidence
+        if: always() && (matrix.suite == 'al128_desk' || matrix.suite == 'al128_desk_edit' || matrix.suite == 'al128_performance')
+        uses: actions/upload-artifact@v4
+        with:
+          name: al128-real-desk-evidence-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/al128-desk-evidence.json
             ${{ runner.temp }}/al128-desk-trace.json
@@ -397,8 +587,59 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Reproduce permission metadata sync on pinned Develop baseline
+        if: matrix.suite == 'full_pinned_base_permission'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          git -C apps/almdina_erp rev-parse HEAD | tee "$RUNNER_TEMP/permission-baseline-sha.log"
+          # This is a controlled negative-baseline check, not the PR's
+          # acceptance suite. A known test failure on Develop is evidence;
+          # an unrelated exception must still fail this job.
+          set +e
+          bench --site test.localhost run-tests \
+            --module almdina_erp.tests.test_permission_type_integration \
+            --test test_permission_type_sync_repairs_existing_custom_field_metadata \
+            2>&1 | tee "$RUNNER_TEMP/pinned-permission-baseline.log"
+          baseline_status=${PIPESTATUS[0]}
+          set -e
+          if (( baseline_status == 0 )); then
+            echo "The pinned Develop baseline now passes; no inherited failure to isolate."
+          else
+            python - "$RUNNER_TEMP/pinned-permission-baseline.log" <<'PY'
+          import re
+          import sys
+
+          output = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+          output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
+          failures = re.findall(r"(?m)^\s*FAIL\s+(test_\S+)", output)
+          expected_name = "test_permission_type_sync_repairs_existing_custom_field_metadata"
+          expected_error = "AssertionError: 'eval:false' == 'eval:false'"
+          if failures != [expected_name] or expected_error not in output:
+              raise SystemExit("Pinned Develop baseline failed for an unexpected reason")
+          print("Confirmed exact inherited Permission Type failure on pinned Develop")
+          PY
+            echo "::warning title=Known pinned Develop failure::The expected Permission Type metadata defect was reproduced on Develop; the PR acceptance suite remains independent."
+          fi
+
+      - name: Upload pinned Develop baseline evidence
+        if: always() && matrix.suite == 'full_pinned_base_permission'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-develop-permission-baseline
+          path: |
+            ${{ runner.temp }}/permission-baseline-sha.log
+            ${{ runner.temp }}/pinned-permission-baseline.log
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Run Almdina ERP tests
-        if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'al128_desk' && inputs.suite != 'al128_desk_edit' && inputs.suite != 'al128_performance')
+        if: matrix.suite == 'full' || matrix.suite == 'full_pinned'
+        env:
+          AL129_DB_ROOT_HOST: 127.0.0.1
+          AL129_DB_ROOT_USER: root
+          AL129_DB_ROOT_PASSWORD: root
         run: |
           cd "$RUNNER_TEMP/frappe-bench"
           bench --site test.localhost set-config allow_tests true

@@ -50,6 +50,40 @@
         "edge_color",
     ];
 
+    const NEW_CREATE_FIELD_PROJECTION = "__almdina_new_create_field_projection";
+    // Request acknowledgement metadata only; DocumentContext and the Edit
+    // Session coordinator remain the document/session owners.
+    const checkpointSaveIntents = new WeakMap();
+    const nativeSaveVisits = new WeakMap();
+
+    function captureSaveVisit(frm) {
+        const context = window.AlmdinaDocumentContext;
+        const token = context && typeof context.capture === "function" ? context.capture(frm) : null;
+        const name = String(frm.doc.name || "");
+        const generation = Number(frm._almdinaDocumentContextGeneration || 0);
+        const coordinator = window.AlmdinaDcoEditSessionCoordinator;
+        const sessionGeneration = coordinator && coordinator.snapshot(frm).sessionGeneration;
+        return {
+            name,
+            modified: String(frm.doc.modified || ""),
+            isCurrent() {
+                if (String(frm.doc && frm.doc.name || "") !== name) return false;
+                if (coordinator && coordinator.snapshot(frm).sessionGeneration !== sessionGeneration) return false;
+                if (context && token && typeof context.isCurrent === "function") {
+                    return context.isCurrent(frm, token);
+                }
+                return window.cur_frm === frm
+                    && Number(frm._almdinaDocumentContextGeneration || 0) === generation;
+            },
+        };
+    }
+
+    function clearCheckpointSaveIntent(frm, intent) {
+        if (checkpointSaveIntents.get(frm) !== intent) return;
+        checkpointSaveIntents.delete(frm);
+        frm.__almdina_preserve_edit_session_after_save = false;
+    }
+
     function can(frm, capability) {
         const permissions = window.AlmdinaPermissions;
         return Boolean(
@@ -78,6 +112,89 @@
         } catch (error) {
             return false;
         }
+    }
+
+    function nativeMayCreate(frm) {
+        if (!frm || typeof frm.has_perm !== "function") return false;
+        try {
+            return Boolean(frm.has_perm("create"));
+        } catch (error) {
+            return false;
+        }
+    }
+
+    function clearNewCreateFieldProjection(frm) {
+        const projection = frm && frm[NEW_CREATE_FIELD_PROJECTION];
+        if (!projection) return false;
+        if (frm.perm === projection.projectedPermissions) {
+            frm.perm = projection.originalPermissions;
+        }
+        delete frm[NEW_CREATE_FIELD_PROJECTION];
+        refreshPermissionLevels(frm, projection.permissionLevels);
+        return true;
+    }
+
+    function refreshPermissionLevels(frm, permissionLevels) {
+        if (!frm || !frm.fields_dict || !Array.isArray(permissionLevels)) return;
+        Object.values(frm.fields_dict).forEach(field => {
+            const level = Number(field && field.df && field.df.permlevel || 0);
+            if (
+                permissionLevels.includes(level)
+                && typeof field.refresh === "function"
+            ) field.refresh();
+        });
+    }
+
+    // Frappe's form controls use frm.perm.write to render editable inputs, even
+    // when the user has create but no write permission. Project create-enabled
+    // levels on this NEW form only; never mutate Frappe's shared permission cache.
+    function applyNewCreateFieldProjection(frm) {
+        if (
+            !frm
+            || !frm.doc
+            || !frm.is_new()
+            || !permissionsResolved()
+            || !can(frm, "create_order")
+            || !nativeMayCreate(frm)
+        ) {
+            clearNewCreateFieldProjection(frm);
+            return false;
+        }
+
+        const version = window.AlmdinaPermissions.version();
+        const current = frm[NEW_CREATE_FIELD_PROJECTION];
+        if (
+            current
+            && current.doc === frm.doc
+            && current.name === frm.doc.name
+            && current.version === version
+            && frm.perm === current.projectedPermissions
+        ) return true;
+        clearNewCreateFieldProjection(frm);
+
+        const originalPermissions = Array.isArray(frm.perm) ? frm.perm : null;
+        if (!originalPermissions) return false;
+
+        const permissionLevels = [];
+        const projectedPermissions = originalPermissions.map((level, index) => {
+            if (!level || !level.create || level.write) return level;
+            permissionLevels.push(index);
+            return { ...level, write: true };
+        });
+        if (!permissionLevels.length) return false;
+
+        const projection = {
+            doc: frm.doc,
+            name: frm.doc.name,
+            version,
+            originalPermissions,
+            projectedPermissions,
+            permissionLevels,
+        };
+        frm.perm = projectedPermissions;
+        frm[NEW_CREATE_FIELD_PROJECTION] = projection;
+        refreshPermissionLevels(frm, permissionLevels);
+        return true;
     }
 
     function canShowEditAction(frm) {
@@ -498,6 +615,11 @@
     function applyEditableFields(frm) {
         const editable = orderCanEdit(frm);
         frm.toggle_enable(ORDER_INPUT_FIELDS, editable);
+        if (frm && frm.is_new() && editable) {
+            applyNewCreateFieldProjection(frm);
+        } else {
+            clearNewCreateFieldProjection(frm);
+        }
         syncPrimaryAction(frm);
     }
 
@@ -505,6 +627,11 @@
         if (!frm || !frm.page) return;
 
         if (frm.is_new()) {
+            if (!orderCanEdit(frm) || !nativeMayCreate(frm)) {
+                frm.save_disabled = true;
+                if (typeof frm.disable_save === "function") frm.disable_save();
+                return;
+            }
             if (
                 frm.__almdinaPrimaryActionMode !== "new"
                 || primaryActionLabel(frm) !== saveLabel()
@@ -781,6 +908,7 @@
 
     async function persistOrderEditCheckpoint(frm) {
         if (!frm || frm.is_new() || !orderCanEdit(frm)) return false;
+        const visit = captureSaveVisit(frm);
         flushPendingMeasurements(frm);
         if (!documentIsDirty(frm)) return true;
         if (typeof frm.save !== "function") return false;
@@ -790,16 +918,35 @@
         // button still locks the session; only this explicit internal checkpoint
         // preserves it across the save/reload cycle.
         await flushPendingCostPriceEdits(frm);
+        if (!visit.isCurrent() || !orderCanEdit(frm)) return false;
         flushPendingMeasurements(frm);
         if (!documentIsDirty(frm)) return true;
         markEditSessionSticky(frm);
+        const intent = { visit, acknowledgedModified: null };
+        checkpointSaveIntents.set(frm, intent);
         frm.__almdina_preserve_edit_session_after_save = true;
-        try {
-            await frm.save();
-        } finally {
-            frm.__almdina_preserve_edit_session_after_save = false;
+        const context = window.AlmdinaDocumentContext;
+        if (context && typeof context.registerCleanup === "function") {
+            context.registerCleanup(frm, "dco-order-checkpoint-save", () => clearCheckpointSaveIntent(frm, intent));
         }
-        return !documentIsDirty(frm);
+        let acknowledged = false;
+        try {
+            await frm.save(undefined, (response) => {
+                if (checkpointSaveIntents.get(frm) !== intent || !visit.isCurrent() || response && response.exc) return;
+                const saved = response && Array.isArray(response.docs) && response.docs.find(doc => (
+                    doc.doctype === "Door Cutting Order" && doc.name === visit.name
+                ));
+                const modified = String(saved && saved.modified || "");
+                if (modified && modified !== visit.modified) intent.acknowledgedModified = modified;
+            });
+            acknowledged = visit.isCurrent() && Boolean(intent.acknowledgedModified) && !documentIsDirty(frm);
+            return acknowledged;
+        } finally {
+            // Native Save can settle before the serial after_save handlers.
+            // On success, that existing handler consumes the one-shot intent;
+            // clearing it here would make the checkpoint close Edit instead.
+            if (!acknowledged) clearCheckpointSaveIntent(frm, intent);
+        }
     }
 
     function confirmEditSession(frm) {
@@ -892,10 +1039,33 @@
             hydrateEditSession(frm);
             adoptHydratedOrderEditSession(frm);
         },
-        after_save(frm) {
-            const preserveSession = Boolean(frm.__almdina_preserve_edit_session_after_save);
+        before_save(frm) {
+            // NEW's temporary name is promoted by DocumentContext after insert;
+            // its existing permission-projection cleanup must still run.
+            if (frm.is_new()) nativeSaveVisits.delete(frm);
+            else nativeSaveVisits.set(frm, captureSaveVisit(frm));
+        },
+        after_save(frm, doctype, savedName) {
+            const saveVisit = nativeSaveVisits.get(frm);
+            if (savedName && savedName !== frm.doc.name) return;
+            if (saveVisit && (!saveVisit.isCurrent()
+                || String(frm.doc.modified || "") === saveVisit.modified
+                || documentIsDirty(frm))) return;
+            const intent = checkpointSaveIntents.get(frm);
+            const ownsCheckpoint = Boolean(intent && intent.visit.isCurrent());
+            // A late A event must not consume a newer B checkpoint before its
+            // request-bound callback has positively acknowledged that Save.
+            if (ownsCheckpoint && !intent.acknowledgedModified) return;
+            const preserveSession = ownsCheckpoint
+                && intent.acknowledgedModified === String(frm.doc.modified || "");
+            if (intent && !preserveSession) clearCheckpointSaveIntent(frm, intent);
             frm.__almdina_preserve_edit_session_after_save = false;
+            if (clearNewCreateFieldProjection(frm)) {
+                applyEditableFields(frm);
+            }
             if (preserveSession && isEditSessionActive(frm)) {
+                // Retain the acknowledged version after consuming the flag:
+                // duplicate/late native hooks for this version are idempotent.
                 frm.__almdina_lock_after_save = false;
                 markEditSessionSticky(frm);
                 applyEditableFields(frm);

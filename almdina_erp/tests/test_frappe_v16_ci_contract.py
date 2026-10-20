@@ -46,6 +46,21 @@ class FrappeV16CIContractTests(unittest.TestCase):
         self.assertIn('pytest>=9.0,<10', self.pyproject)
         self.assertIn("pip install -e 'apps/almdina_erp[test]'", self.source)
 
+    def test_acceptance_installs_and_records_the_exact_pr_head(self) -> None:
+        self.assertIn("github.event.pull_request.head.sha || github.sha", self.source)
+        self.assertIn("ref: ${{ env.EXPECTED_APP_SHA }}", self.source)
+        self.assertIn('test "$CHECKOUT_SHA" = "$EXPECTED_APP_SHA"', self.source)
+        self.assertIn('APP_SHA="$(git -C apps/almdina_erp rev-parse HEAD)"', self.source)
+        self.assertIn('test "$APP_SHA" = "$EXPECTED_APP_SHA"', self.source)
+        self.assertIn('name: application-source-refs-${{ matrix.suite }}', self.source)
+        self.assertIn('application-source-refs.log" | tee -a "$GITHUB_STEP_SUMMARY"', self.source)
+        self.assertIn('if-no-files-found: error', self.source)
+
+    def test_permission_baseline_uses_an_immutable_explicit_revision(self) -> None:
+        self.assertIn("github.event.pull_request.base.sha || inputs.baseline_sha", self.source)
+        self.assertIn('[[ "$BASELINE_SHA" =~ ^[0-9a-f]{40}$ ]]', self.source)
+        self.assertNotIn("&& 'Develop' || ''", self.source)
+
     def test_workflow_exercises_real_application_installation(self) -> None:
         required_steps = (
             'Initialize Frappe v16 bench',

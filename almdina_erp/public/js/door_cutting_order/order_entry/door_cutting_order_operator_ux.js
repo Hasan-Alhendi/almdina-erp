@@ -752,6 +752,11 @@
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
         if (!tr || !fieldname) return null;
+        // Blurring an untouched placeholder (including its default qty=1) is
+        // not a row creation. Keep note-only and partial measurement entry valid.
+        if (tr.classList.contains("dco-virtual-row") && !virtualRowHasEnteredValue(tr)) {
+            return null;
+        }
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return null;
         let value = input.value;

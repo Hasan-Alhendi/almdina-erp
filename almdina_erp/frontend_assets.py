@@ -175,6 +175,7 @@ doctype_js = {
         # Integration runs only after the existing Edit Session owner is present.
         # It batches local IndexedDB writes through DocumentContext frames and
         # never calls the official Save path.
+        "public/js/door_cutting_order/recovery/application/door_cutting_order_edit_recovery.js",
         "public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js",
         # Explicit Order-save intent must win over any transient plan-checkpoint
         # preserve marker before Frappe evaluates after_save.
