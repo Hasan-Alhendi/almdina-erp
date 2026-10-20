@@ -419,6 +419,30 @@ def _write_sheet(parts):
     return handle.name
 
 
+def _write_geometry_sheet(parts):
+    """Write the editable pre-CUT_PATH geometry emitted by a system draft."""
+    document = ezdxf.new("R2010")
+    modelspace = document.modelspace()
+    for layer_name in ("SHEET_OUTLINE", "GEOMETRY", "text"):
+        if layer_name not in document.layers:
+            document.layers.add(name=layer_name)
+    sheet = ((0, 0), (1220, 0), (1220, 2440), (0, 2440))
+    for start, end in zip(sheet, (*sheet[1:], sheet[0])):
+        modelspace.add_line(start, end, dxfattribs={"layer": "SHEET_OUTLINE"})
+    for part in parts:
+        outline = part["outline"]
+        for start, end in zip(outline, (*outline[1:], outline[0])):
+            modelspace.add_line(start, end, dxfattribs={"layer": "GEOMETRY"})
+        modelspace.add_text(
+            part["label"],
+            dxfattribs={"layer": "text", "insert": outline[0], "height": 12},
+        )
+    handle = tempfile.NamedTemporaryFile(suffix=".dxf", delete=False)
+    handle.close()
+    document.saveas(handle.name)
+    return handle.name
+
+
 def _anchored(points):
     min_x = min(point[0] for point in points)
     min_y = min(point[1] for point in points)
@@ -883,3 +907,90 @@ def test_client_l_export_normalizes_and_reimports(tmp_path):
     assert piece["h"] == 40
     assert float(piece["clipped_corner_width_cm"]) == 20
     assert piece["overlays"][0]["kind"] == "liner"
+
+
+def test_system_corner_geometry_with_repeated_equal_envelopes_reimports():
+    l_piece = LinerPiece(
+        "L-Shaped Corner",
+        20,
+        30,
+        clipped_corner_width_cm=5,
+        clipped_corner_length_cm=6,
+    )
+    clipped_piece = LinerPiece(
+        "Clipped Corner",
+        20,
+        30,
+        clipped_corner_width_cm=5,
+        clipped_corner_length_cm=6,
+    )
+    mixed = [clipped_piece, l_piece, l_piece, clipped_piece, l_piece, l_piece, l_piece]
+    parts = []
+    for index, piece in enumerate(mixed):
+        column = index % 5
+        row = index // 5
+        origin = (column * 210.0, row * 310.0)
+        outline = [
+            _sheet_point(point, origin)
+            for point in piece_polygon_mm(piece)
+        ]
+        parts.append({"outline": outline, "label": str(index + 1)})
+
+    order = _board(
+        [
+            _door(
+                piece_instance_id="corner-l",
+                qty=5,
+                extra_liner=0,
+                piece_type="L-Shaped Corner",
+                width_cm=20,
+                length_cm=30,
+                cut_width_cm=20,
+                cut_length_cm=30,
+                allow_rotation=1,
+                clipped_corner_width_cm=5,
+                clipped_corner_length_cm=6,
+            ),
+            _door(
+                piece_instance_id="corner-clipped",
+                qty=2,
+                extra_liner=0,
+                piece_type="Clipped Corner",
+                width_cm=20,
+                length_cm=30,
+                cut_width_cm=20,
+                cut_length_cm=30,
+                allow_rotation=1,
+                clipped_corner_width_cm=5,
+                clipped_corner_length_cm=6,
+                edge_break_only=1,
+            ),
+        ]
+    )
+
+    snapshot = _import_banded(
+        _normalize(_write_geometry_sheet(parts)),
+        order,
+        kerf_mm=3,
+    )
+
+    pieces = snapshot["sheets"][0]["pieces"]
+    assert len(pieces) == 7
+    assert [piece["source_piece_no"] for piece in pieces] == [
+        2,
+        1,
+        1,
+        2,
+        1,
+        1,
+        1,
+    ]
+    assert sorted(piece["piece_instance_id"] for piece in pieces) == [
+        "corner-clipped:1",
+        "corner-clipped:2",
+        "corner-l:1",
+        "corner-l:2",
+        "corner-l:3",
+        "corner-l:4",
+        "corner-l:5",
+    ]

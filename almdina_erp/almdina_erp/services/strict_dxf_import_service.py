@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
@@ -70,6 +70,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     PERSISTED_CUT_SPECS,
     PERSISTED_CUT_CONTEXT_CODES,
     PIECE_IDENTITY_MISSING,
+    PIECE_IDENTITY_AMBIGUOUS,
     PIECE_MISSING,
     contour_target,
     SKIP_PERSISTED_CUT_CONTEXT_CODES,
@@ -97,6 +98,13 @@ _EDGE_FIELD_BY_SIDE = {
     "width_bottom": "edge_width_bottom",
 }
 _CUT_QUANTUM_CM = Decimal("0.001")
+
+
+@dataclass(frozen=True, slots=True)
+class _ExactCandidateMatch:
+    index: int | None
+    corner_reason: str | None = None
+    candidate_rows: tuple[int, ...] = ()
 
 
 def _format_decimal(value: Decimal) -> str:
@@ -306,7 +314,7 @@ def _find_exact_candidate(
     rotated: bool,
     require_rotation_allowed: bool = True,
     piece: dict[str, Any] | None = None,
-) -> int | None:
+) -> _ExactCandidateMatch:
     matches: list[int] = []
     for index, candidate in enumerate(unmatched):
         spec: OrderPieceCutSpec = candidate["spec"]
@@ -319,9 +327,10 @@ def _find_exact_candidate(
         if dimensions_match_exact(actual_w, actual_h, expected_w, expected_h):
             matches.append(index)
     if len(matches) <= 1 or piece is None:
-        return matches[0] if matches else None
-    identified = _unique_corner_contour_candidate(unmatched, matches, piece)
-    return matches[0] if identified is None else identified
+        return _ExactCandidateMatch(matches[0] if matches else None)
+    if all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches):
+        return _unique_corner_contour_candidate(unmatched, matches, piece)
+    return _ExactCandidateMatch(matches[0])
 
 
 def _corner_band_tokens(spec: OrderPieceCutSpec) -> dict[str, str]:
@@ -363,20 +372,26 @@ def _unique_corner_contour_candidate(
     unmatched: list[dict[str, Any]],
     matches: list[int],
     piece: dict[str, Any],
-) -> int | None:
+) -> _ExactCandidateMatch:
     """Pick the one corner row whose full contour matches when outer size does not.
 
-    Identical contours keep the existing first-match order. A contour that
-    matches none, or more than one row, does not guess a row here.
+    Physical copies of one order row are one geometric candidate. Once that
+    row is proven, its first unmatched copy keeps deterministic copy numbering.
+    A contour that matches none, or more than one distinct row, never falls
+    back to bounding-box order.
     """
 
-    if not all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches):
-        return None
     outer = _outer_ring_mm(piece)
     if outer is None:
-        return None
-    identified: list[int] = []
+        return _ExactCandidateMatch(None, "none")
+
+    first_copy_by_row: dict[int, int] = {}
     for index in matches:
+        spec: OrderPieceCutSpec = unmatched[index]["spec"]
+        first_copy_by_row.setdefault(spec.row_index, index)
+
+    identified_rows: list[int] = []
+    for row_index, index in first_copy_by_row.items():
         spec: OrderPieceCutSpec = unmatched[index]["spec"]
         notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
         match = match_corner_contour(
@@ -389,9 +404,30 @@ def _unique_corner_contour_candidate(
             cut_length_cm=notch_length_cm,
             edge_bands=_corner_band_tokens(spec),
         )
-        if match.reason == "unique":
-            identified.append(index)
-    return identified[0] if len(identified) == 1 else None
+        # An ambiguous transform still proves the order-row geometry. The
+        # later edge-binding step owns whether that transform ambiguity is
+        # acceptable for the row's edge-band contract.
+        if match.reason in {"unique", "ambiguous"}:
+            identified_rows.append(row_index)
+
+    if len(identified_rows) == 1:
+        row_index = identified_rows[0]
+        return _ExactCandidateMatch(
+            first_copy_by_row[row_index],
+            "unique",
+            (row_index,),
+        )
+    if identified_rows:
+        return _ExactCandidateMatch(
+            None,
+            "ambiguous",
+            tuple(sorted(identified_rows)),
+        )
+    return _ExactCandidateMatch(
+        None,
+        "none",
+        tuple(sorted(first_copy_by_row)),
+    )
 
 
 def _topology_special_candidate(
@@ -1179,25 +1215,65 @@ def _apply_strict_dimension_contract(
                 continue
 
             actual_w, actual_h = _actual_dimensions(piece)
-            direct_index = _find_exact_candidate(
+            direct_match = _find_exact_candidate(
                 unmatched,
                 actual_w,
                 actual_h,
                 rotated=False,
                 piece=piece,
             )
-            rotated_index = _find_exact_candidate(
+            rotated_match = _find_exact_candidate(
                 unmatched,
                 actual_w,
                 actual_h,
                 rotated=True,
                 piece=piece,
             )
-            match_index = direct_index if direct_index is not None else rotated_index
-            rotated = direct_index is None and rotated_index is not None
+            ambiguous_rows = tuple(sorted({
+                row_index
+                for result in (direct_match, rotated_match)
+                if result.corner_reason == "ambiguous"
+                for row_index in result.candidate_rows
+            }))
+            if (
+                direct_match.index is not None
+                and rotated_match.index is not None
+                and direct_match.index != rotated_match.index
+                and is_corner_cut(
+                    unmatched[direct_match.index]["spec"].piece_type
+                )
+                and is_corner_cut(
+                    unmatched[rotated_match.index]["spec"].piece_type
+                )
+            ):
+                ambiguous_rows = tuple(sorted({
+                    unmatched[direct_match.index]["spec"].row_index,
+                    unmatched[rotated_match.index]["spec"].row_index,
+                }))
+            if ambiguous_rows:
+                issues.append(
+                    issue(
+                        PIECE_IDENTITY_AMBIGUOUS,
+                        CATEGORY_IDENTITY,
+                        target=(
+                            contour_target(int(piece["id"]))
+                            if str(piece.get("id") or "").isdigit()
+                            else DxfIssueTarget()
+                        ),
+                        params={"candidate_source_piece_nos": list(ambiguous_rows)},
+                    )
+                )
+                continue
+
+            match_index = (
+                direct_match.index
+                if direct_match.index is not None
+                else rotated_match.index
+            )
+            rotated = direct_match.index is None and rotated_match.index is not None
 
             if match_index is None:
-                forbidden_index = _find_exact_candidate(
+                forbidden_match = _find_exact_candidate(
                     unmatched,
                     actual_w,
                     actual_h,
@@ -1205,8 +1281,26 @@ def _apply_strict_dimension_contract(
                     require_rotation_allowed=False,
                     piece=piece,
                 )
-                if forbidden_index is not None:
-                    candidate = unmatched[forbidden_index]
+                if forbidden_match.corner_reason == "ambiguous":
+                    issues.append(
+                        issue(
+                            PIECE_IDENTITY_AMBIGUOUS,
+                            CATEGORY_IDENTITY,
+                            target=(
+                                contour_target(int(piece["id"]))
+                                if str(piece.get("id") or "").isdigit()
+                                else DxfIssueTarget()
+                            ),
+                            params={
+                                "candidate_source_piece_nos": list(
+                                    forbidden_match.candidate_rows
+                                )
+                            },
+                        )
+                    )
+                    continue
+                if forbidden_match.index is not None:
+                    candidate = unmatched[forbidden_match.index]
                     issues.append(
                         _dimension_issue(
                             FORBIDDEN_ROTATION,
@@ -1214,6 +1308,43 @@ def _apply_strict_dimension_contract(
                             candidate=candidate,
                             actual_w=actual_w,
                             actual_h=actual_h,
+                        )
+                    )
+                    continue
+
+                unresolved_rows = tuple(sorted({
+                    row_index
+                    for result in (direct_match, rotated_match, forbidden_match)
+                    if result.corner_reason == "none"
+                    for row_index in result.candidate_rows
+                }))
+                if unresolved_rows:
+                    candidate_specs = [
+                        candidate["spec"]
+                        for candidate in unmatched
+                        if candidate["spec"].row_index in unresolved_rows
+                    ]
+                    piece_types = {
+                        spec.piece_type for spec in candidate_specs
+                    }
+                    issues.append(
+                        issue(
+                            CORNER_EDGE_UNRESOLVED,
+                            CATEGORY_TOPOLOGY,
+                            target=(
+                                contour_target(int(piece["id"]))
+                                if str(piece.get("id") or "").isdigit()
+                                else DxfIssueTarget()
+                            ),
+                            params={
+                                "piece_type": (
+                                    next(iter(piece_types))
+                                    if len(piece_types) == 1
+                                    else "Corner"
+                                ),
+                                "reason": "none",
+                                "candidate_source_piece_nos": list(unresolved_rows),
+                            },
                         )
                     )
                     continue
