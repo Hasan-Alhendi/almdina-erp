@@ -110,6 +110,10 @@ assert.deepEqual(JSON.parse(JSON.stringify(emptySummary.names)), []);
 const emptyButton = api.renderAddonSummary({}, { editable: true });
 assert.match(emptyButton, /data-open-addons="1"/);
 assert.match(emptyButton, /الإضافات/);
+const readOnlySummary = api.renderAddonSummary({ extra_liner: 1 }, { editable: false, virtual: false });
+assert.match(readOnlySummary, /data-open-addons="1"/);
+assert.doesNotMatch(readOnlySummary, /disabled/);
+assert.match(api.renderAddonSummary({}, { editable: false, virtual: true }), /disabled/);
 assert.doesNotMatch(emptyButton, />0<|>\+0</);
 
 const one = api.addonSummary({ extra_liner: 1 });

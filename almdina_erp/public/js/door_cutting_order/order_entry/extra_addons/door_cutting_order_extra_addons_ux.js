@@ -79,7 +79,7 @@
 
     function renderAddonSummary(row, options = {}) {
         const summary = addonSummary(row);
-        const disabled = options.editable === false ? "disabled" : "";
+        const disabled = options.virtual ? "disabled" : "";
         const active = summary.names.length ? "is-active" : "";
         const badge = summary.hidden
             ? `<span class="dco-addons-more" aria-hidden="true">+${summary.hidden}</span>`

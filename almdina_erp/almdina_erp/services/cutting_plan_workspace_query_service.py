@@ -237,6 +237,14 @@ def _latest(rows: list[Any], *, status: str, source_type: str | None = None) -> 
     return None
 
 
+def _system_plan(rows: list[Any]) -> Any | None:
+    # A system revision remains downloadable after Draft becomes Approved/Superseded.
+    return _latest(rows, status=DRAFT, source_type=SYSTEM) or next(
+        (row for row in rows if str(row.get("source_type") or "") == SYSTEM),
+        None,
+    )
+
+
 def _approved(rows: list[Any], order: Any) -> Any | None:
     approved_name = str(getattr(order, "approved_plan", None) or "").strip()
     if not approved_name:
@@ -339,7 +347,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         order_by="revision desc, modified desc",
     )
 
-    system = _latest(rows, status=DRAFT, source_type=SYSTEM) if capabilities["view_system"] else None
+    system = _system_plan(rows) if capabilities["view_system"] else None
     uploaded = (
         select_uploaded_workspace_plan(rows)
         if capabilities["view_uploaded"]

@@ -652,31 +652,42 @@
         ));
     }
 
-    function cutterCenterSegments(shapes, radius, board) {
+    function cutterCenterPaths(shapes, radius, board) {
         const safeRadius = Math.max(0, num(radius));
         const prepared = shapes.map(shape => ({
             outer: openRing(shape.outer),
             holes: (shape.holes || []).map(openRing).filter(hole => hole.length >= 3),
         })).filter(shape => shape.outer.length >= 3);
-        const segments = [];
+        const closedPaths = [];
+        const openSegments = [];
         prepared.forEach(shape => {
             [shape.outer].concat(shape.holes).forEach(ring => {
                 const offset = safeRadius <= COLLINEAR_TOLERANCE_MM
                     ? ring
                     : offsetClosed(ring, safeRadius, wasteSign(ring, prepared, safeRadius));
                 if (offset.length < 3) return;
+                const boardEdges = new Set();
                 ring.forEach((start, index) => {
                     const finishedEnd = ring[(index + 1) % ring.length];
-                    if (finishedEdgeOnBoard(start, finishedEnd, board)) return;
-                    const offsetStart = offset[index];
+                    if (finishedEdgeOnBoard(start, finishedEnd, board)) boardEdges.add(index);
+                });
+                if (!boardEdges.size) {
+                    closedPaths.push({ points: offset, closed: true });
+                    return;
+                }
+                offset.forEach((point, index) => {
+                    if (boardEdges.has(index)) return;
+                    const offsetStart = point;
                     const offsetEnd = offset[(index + 1) % offset.length];
                     if (Math.hypot(offsetEnd[0] - offsetStart[0], offsetEnd[1] - offsetStart[1]) > COLLINEAR_TOLERANCE_MM) {
-                        segments.push([offsetStart, offsetEnd]);
+                        openSegments.push([offsetStart, offsetEnd]);
                     }
                 });
             });
         });
-        return mergeCollinear(segments);
+        return closedPaths.concat(
+            mergeCollinear(openSegments).map(segment => ({ points: segment, closed: false }))
+        );
     }
 
     function mergeCollinear(segments) {
@@ -847,29 +858,94 @@
         let extmaxX = 0;
         let extmaxY = 0;
 
+        function overlayObstacles(sheet, piece) {
+            const liner = window.AlmdinaLinerGeometry;
+            if (liner && typeof liner.sheetObstaclesMm === "function") {
+                return liner.sheetObstaclesMm(sheet, piece);
+            }
+            const samePiece = liner && typeof liner.samePlacedPiece === "function"
+                ? liner.samePlacedPiece
+                : ((left, right) => left === right);
+            return (sheet.pieces || []).filter(other => !samePiece(other, piece)).map(other => {
+                const geometry = liner && typeof liner.obstacleGeometryMm === "function"
+                    ? liner.obstacleGeometryMm(other)
+                    : null;
+                const polygon = geometry && Array.isArray(geometry.outer)
+                    ? geometry.outer
+                    : (liner && typeof liner.obstaclePolygonMm === "function"
+                        ? liner.obstaclePolygonMm(other)
+                        : (liner && typeof liner.placedPolygonMm === "function"
+                            ? liner.placedPolygonMm(other)
+                            : []));
+                const diagnostic = {
+                    pieceId: other && other.id,
+                    label: String((other && other.label) || ""),
+                    positionCm: {
+                        x: num(other && other.x),
+                        y: num(other && other.y),
+                        w: num(other && other.w),
+                        h: num(other && other.h),
+                    },
+                    geometrySource: (geometry && geometry.source) || "fallback_rectangle",
+                };
+                if (polygon.length >= 3) {
+                    return {
+                        polygon,
+                        holes: (geometry && geometry.holes) || [],
+                        diagnostic,
+                    };
+                }
+                return {
+                    minX: num(other.x) * 10,
+                    minY: num(other.y) * 10,
+                    maxX: (num(other.x) + num(other.w)) * 10,
+                    maxY: (num(other.y) + num(other.h)) * 10,
+                    diagnostic,
+                };
+            });
+        }
+
         function emitOverlayEntity(overlay, transform, sheet, piece) {
             const points = topologyDxfPoints(overlay.path, transform);
             if (!overlay.toolpath) return overlayPath(overlay.layer, points, overlay.closed);
             const liner = window.AlmdinaLinerGeometry;
+            // Design and manufacturing both refuse unsafe liner extensions.
+            // CUT_PATH separation/trim stays manufacturing-only via includeSawCenters.
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
+                let conflictDetails = null;
                 const conflict = liner.extensionConflict(
                     overlay.path,
                     cutterMm,
                     usableBoardMm(plan, sheet, trim),
-                    (sheet.pieces || []).filter(other => other !== piece).map(other => {
-                    const polygon = typeof liner.placedPolygonMm === "function"
-                        ? liner.placedPolygonMm(other)
-                        : [];
-                    if (polygon.length >= 3) return { polygon };
-                    return {
-                        minX: num(other.x) * 10,
-                        minY: num(other.y) * 10,
-                        maxX: (num(other.x) + num(other.w)) * 10,
-                        maxY: (num(other.y) + num(other.h)) * 10,
+                    overlayObstacles(sheet, piece),
+                    details => { conflictDetails = details; }
+                );
+                if (conflict) {
+                    const diagnostic = {
+                        host: {
+                            pieceId: piece && piece.id,
+                            label: String((piece && piece.label) || ""),
+                            positionCm: {
+                                x: num(piece && piece.x),
+                                y: num(piece && piece.y),
+                                w: num(piece && piece.w),
+                                h: num(piece && piece.h),
+                            },
+                        },
+                        neighbour: conflictDetails && conflictDetails.obstacle,
+                        linerPathMm: overlay.path.map(point => point.slice()),
+                        minimumDistanceMm: conflictDetails && conflictDetails.minimumDistanceMm,
+                        cutterRadiusMm: conflictDetails && conflictDetails.cutterRadiusMm,
+                        rejectionThresholdMm: conflictDetails && conflictDetails.rejectionThresholdMm,
+                        rejectCondition: conflictDetails && conflictDetails.rejectCondition,
+                        segmentIndex: conflictDetails && conflictDetails.segmentIndex,
                     };
-                }));
-                if (conflict) throw linerExportError(piece, conflict);
+                    console.error("[liner-extension-conflict]", diagnostic);
+                    const error = linerExportError(piece, conflict);
+                    error.diagnostic = diagnostic;
+                    throw error;
+                }
             }
             return lwpolyline(overlay.layer, points);
         }
@@ -957,8 +1033,16 @@
             };
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
             if (includeSawCenters) {
-                cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
-                    entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
+                cutterCenterPaths(shapes, num(cutterMm) / 2, physicalBoard).forEach(path => {
+                    entities += path.closed
+                        ? lwpolyline(SAW_CENTER_LAYER, path.points, true)
+                        : line(
+                            SAW_CENTER_LAYER,
+                            path.points[0][0],
+                            path.points[0][1],
+                            path.points[1][0],
+                            path.points[1][1]
+                        );
                 });
             }
         });
@@ -1031,9 +1115,11 @@
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
         if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
-            // Custom/uploaded tab: original design file before approval, or when
-            // the approved upload already embeds manufacturing-ready cut paths.
-            // After approval with Absent saw centers, regenerate instead.
+            // After delivery the Uploaded tab retrieves the original archive.
+            // During production the existing CNC-ready rule remains unchanged.
+            if (String((options && options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered") {
+                return true;
+            }
             return preferOriginalUpload(options);
         }
         if (normalized === "approved") {

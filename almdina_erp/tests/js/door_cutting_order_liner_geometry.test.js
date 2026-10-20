@@ -475,15 +475,204 @@ assert.equal(Math.round(Math.min(...insetXs) * 10) / 10, 47.5);
 assert.equal(Math.round(Math.max(...insetXs) * 10) / 10, 452.5);
 const openBoard = { minX: 0, minY: 0, maxX: 1220, maxY: 2440 };
 assert.equal(geometry.extensionConflict(boardEdge.geometry.path, 5, openBoard, []), "");
-const betweenDoors = geometry.syntheticOverlay(placedLiner({ x: 20, width_cm: 40 }));
+const betweenDoorsPiece = placedLiner({ id: 1, label: "1.1", x: 20, width_cm: 40 });
+const betweenDoors = geometry.syntheticOverlay(betweenDoorsPiece);
 const leftNeighbor = geometry.placedPolygonMm(placedLiner({ x: 0, width_cm: 19.5, length_cm: 50 }));
 const rightNeighbor = geometry.placedPolygonMm(placedLiner({ x: 60.5, width_cm: 30, length_cm: 50 }));
 assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, [
     { polygon: leftNeighbor },
     { polygon: rightNeighbor },
 ]), "");
+const rotatedNeighbour = placedLiner({
+    id: 2,
+    label: "2.1",
+    x: 0,
+    w: 19.5,
+    h: 50,
+    width_cm: 50,
+    length_cm: 19.5,
+    rotated: true,
+    extra_liner: 0,
+});
+const rotatedObstacles = geometry.sheetObstaclesMm(
+    { pieces: [betweenDoorsPiece, rotatedNeighbour] },
+    Object.assign({}, betweenDoorsPiece)
+);
+assert.equal(rotatedObstacles.length, 1);
+assert.equal(rotatedObstacles[0].diagnostic.geometrySource, "placement_box");
+assert.deepEqual(copy(rotatedObstacles[0].polygon), [[0, 0], [195, 0], [195, 500], [0, 500]]);
+assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, rotatedObstacles), "");
+
+const offcutNeighbour = placedLiner({
+    id: 3,
+    label: "OFFCUT-3",
+    x: 60.5,
+    w: 30,
+    h: 50,
+    width_cm: 30,
+    length_cm: 50,
+    resource_kind: "OFFCUT",
+    extra_liner: 0,
+});
+const offcutObstacles = geometry.sheetObstaclesMm(
+    { pieces: [betweenDoorsPiece, offcutNeighbour] },
+    Object.assign({}, betweenDoorsPiece)
+);
+assert.equal(offcutObstacles[0].diagnostic.label, "OFFCUT-3");
+assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, offcutObstacles), "");
+
+for (const pieceType of ["Clipped Corner", "L-Shaped Corner"]) {
+    const shapedNeighbour = placedLiner({
+        id: `shape-${pieceType}`,
+        label: pieceType,
+        piece_type: pieceType,
+        x: 60.5,
+        w: 30,
+        h: 50,
+        width_cm: 30,
+        length_cm: 50,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 10,
+        clipped_corner_length_cm: 10,
+        extra_liner: 0,
+    });
+    const shapedObstacles = geometry.sheetObstaclesMm(
+        { pieces: [betweenDoorsPiece, shapedNeighbour] },
+        Object.assign({}, betweenDoorsPiece)
+    );
+    assert.equal(shapedObstacles[0].diagnostic.geometrySource, "placed_parametric_polygon");
+    assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, shapedObstacles), "");
+}
 const crowded = geometry.placedPolygonMm(placedLiner({ x: 40.1, width_cm: 30, length_cm: 50 }));
 assert.equal(geometry.extensionConflict(betweenDoors.geometry.path, 5, openBoard, [{ polygon: crowded }]), "liner_extension_hits_piece");
+// Door 5 regression: Regular obstacle rings follow placed w/h, not an oversized
+// width_cm that forgot the matching rotation flag (false positive into kerf).
+const doorFive = geometry.syntheticOverlay(placedLiner({
+    id: 5,
+    label: "5",
+    x: 40.5,
+    y: 0,
+    w: 30,
+    h: 50,
+    width_cm: 30,
+    length_cm: 50,
+    liner_reference_side: "edge_long_left",
+}));
+assert.equal(doorFive.error, undefined);
+const mismatchedNeighbor = {
+    id: 4,
+    label: "4",
+    piece_type: "Regular",
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 50,
+    width_cm: 50,
+    length_cm: 40,
+    rotated: 0,
+};
+assert.deepEqual(copy(geometry.obstaclePolygonMm(mismatchedNeighbor)), [
+    [0, 0], [400, 0], [400, 500], [0, 500],
+]);
+assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
+    { polygon: geometry.obstaclePolygonMm(mismatchedNeighbor) },
+]), "");
+assert.equal(geometry.extensionConflict(doorFive.geometry.path, 5, openBoard, [
+    { polygon: geometry.placedPolygonMm(mismatchedNeighbor) },
+]), "liner_extension_hits_piece");
+const crowdedDetails = geometry.extensionConflictDetails(doorFive.geometry.path, 5, openBoard, [
+    {
+        polygon: geometry.placedPolygonMm(mismatchedNeighbor),
+        diagnostic: { label: "4", geometrySource: "placed_parametric_polygon" },
+    },
+]);
+assert.equal(crowdedDetails.code, "liner_extension_hits_piece");
+assert.equal(crowdedDetails.obstacle.label, "4");
+assert.equal(crowdedDetails.cutterRadiusMm, 2.5);
+assert.ok(Number.isFinite(crowdedDetails.minimumDistanceMm));
+assert.ok([
+    "endpoint_in_material",
+    "segment_crosses_material_boundary",
+    "clearance_below_cutter_radius",
+].includes(crowdedDetails.rejectCondition));
+const doorFivePiece = placedLiner({
+    id: 5, label: "5", x: 40.5, y: 0, w: 30, h: 50, width_cm: 30, length_cm: 50,
+});
+const selfCopy = Object.assign({}, doorFivePiece);
+assert.equal(doorFivePiece === selfCopy, false);
+assert.equal(geometry.samePlacedPiece(doorFivePiece, selfCopy), true);
+assert.equal(geometry.samePlacedPiece(doorFivePiece, mismatchedNeighbor), false);
+assert.equal(geometry.pieceQuarterTurns({ rotation_quarter_turns: 3, rotated: 0 }), 3);
+assert.equal(geometry.pieceQuarterTurns({ rotated: 1 }), 1);
+
+// Real persisted regression CP-2026-00092 / DCO 26-00112.
+const nestedGlassSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
+const nestedPieces = nestedGlassSnapshot.sheets[0].pieces;
+const nestedGlass = nestedPieces.find(piece => piece.label === "1.1");
+const nestedDoorFive = nestedPieces.find(piece => piece.label === "5.1");
+const nestedObstacles = geometry.sheetObstaclesMm(
+    nestedGlassSnapshot.sheets[0],
+    Object.assign({}, nestedDoorFive)
+);
+assert.equal(nestedObstacles.length, nestedPieces.length - 1);
+assert.equal(nestedObstacles.some(obstacle => obstacle.diagnostic.pieceId === nestedDoorFive.id), false);
+assert.equal(nestedObstacles.find(obstacle => obstacle.diagnostic.label === "1.1").holes.length, 1);
+const nestedToolpath = geometry.syntheticOverlay(Object.assign({}, nestedDoorFive, {
+    kerf_mm: 3,
+    board: { minX: -5, minY: -5, maxX: 1215, maxY: 2435 },
+}));
+assert.equal(nestedToolpath.error, undefined);
+assert.deepEqual(copy(nestedToolpath.geometry.path), [
+    [80.5, 492.5], [80.5, 1075.5], [663.5, 1075.5], [663.5, 1078.5],
+    [77.5, 1078.5], [77.5, 492.5], [74.5, 492.5], [74.5, 1081.5],
+    [663.5, 1081.5], [663.5, 1084.5], [71.5, 1084.5], [71.5, 492.5],
+    [68.5, 492.5], [68.5, 1087.5], [663.5, 1087.5], [663.5, 1090.5],
+    [65.5, 1090.5], [65.5, 492.5],
+]);
+const glassObstacle = geometry.obstacleGeometryMm(nestedGlass);
+assert.equal(glassObstacle.source, "placement_with_glass_hole");
+assert.deepEqual(copy(glassObstacle.holes[0].map(point => point.map(value => Math.round(value * 1000) / 1000))), [
+    [59, 491], [939, 491], [939, 2371], [59, 2371],
+]);
+const falseSolidDiagnostic = geometry.extensionConflictDetails(
+    nestedToolpath.geometry.path,
+    3,
+    openBoard,
+    [{ polygon: glassObstacle.outer, diagnostic: { label: "1.1" } }]
+);
+assert.equal(falseSolidDiagnostic.obstacle.label, "1.1");
+assert.equal(falseSolidDiagnostic.rejectCondition, "endpoint_in_material");
+assert.equal(falseSolidDiagnostic.segmentIndex, 0);
+assert.ok(Math.abs(falseSolidDiagnostic.minimumDistanceMm - 60.5) < 1e-6);
+assert.equal(falseSolidDiagnostic.cutterRadiusMm, 1.5);
+assert.equal(geometry.extensionConflict(
+    nestedToolpath.geometry.path,
+    3,
+    openBoard,
+    nestedObstacles
+), "");
+const persistedUsableSheetObstacle = geometry.obstacleGeometryMm({
+    piece_type: "Regular",
+    x: 90,
+    y: 80,
+    w: 20,
+    h: 10,
+    rotated: true,
+    geometry: {
+        outer: [[100, 200], [300, 200], [300, 300], [100, 300]],
+        holes: [[[140, 220], [260, 220], [260, 280], [140, 280]]],
+    },
+});
+assert.equal(persistedUsableSheetObstacle.source, "persisted_geometry");
+assert.deepEqual(copy(persistedUsableSheetObstacle.outer), [
+    [100, 200], [300, 200], [300, 300], [100, 300],
+]);
+assert.deepEqual(copy(persistedUsableSheetObstacle.holes), [[
+    [140, 220], [260, 220], [260, 280], [140, 280],
+]]);
 const partial = geometry.syntheticOverlay(placedLiner({
     liner_start_cm: 5,
     liner_length_cm: 20,

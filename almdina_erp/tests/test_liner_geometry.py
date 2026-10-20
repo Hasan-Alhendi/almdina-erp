@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     has_self_intersection,
     point_in_polygon,
+    polygon_segments,
+    segment_distance,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
@@ -23,8 +28,11 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_activation_error,
     cutter_center_offsets_mm,
+    extension_conflict,
+    extension_conflict_details,
     liner_centerline_mm,
     liner_toolpath_mm,
+    obstacle_geometry_mm,
     sawn_liner_ends,
     liner_strip_polygon_mm,
     piece_polygon_mm,
@@ -655,6 +663,125 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     )
     assert break_start is False
     assert break_end is True
+
+
+def test_obstacle_polygon_uses_placement_box_for_regular_doors():
+    from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+        extension_conflict,
+        obstacle_polygon_mm,
+        placed_polygon_mm,
+    )
+
+    mismatched = {
+        "piece_type": "Regular",
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 50,
+        "width_cm": 50,
+        "length_cm": 40,
+        "rotated": 0,
+    }
+    assert obstacle_polygon_mm(mismatched) == [
+        (0.0, 0.0),
+        (400.0, 0.0),
+        (400.0, 500.0),
+        (0.0, 500.0),
+    ]
+    assert placed_polygon_mm(mismatched)[1][0] == pytest.approx(500.0)
+    path = [(407.5, 0.0), (407.5, 500.0)]
+    assert extension_conflict(path, 5.0, None, [{"polygon": obstacle_polygon_mm(mismatched)}]) == ""
+    assert (
+        extension_conflict(path, 5.0, None, [{"polygon": placed_polygon_mm(mismatched)}])
+        == "liner_extension_hits_piece"
+    )
+
+
+def test_real_snapshot_nested_glass_hole_is_not_solid_liner_obstacle():
+    fixture_path = Path(__file__).parent / "fixtures" / "liner_extension_nested_glass_snapshot.json"
+    snapshot = json.loads(fixture_path.read_text(encoding="utf-8"))
+    pieces = snapshot["sheets"][0]["pieces"]
+    glass = next(piece for piece in pieces if piece["label"] == "1.1")
+    door_five = next(piece for piece in pieces if piece["label"] == "5.1")
+    liner = LinerPiece(
+        door_five["piece_type"],
+        door_five["original_w"],
+        door_five["original_h"],
+        door_five["clipped_corner_position"],
+        door_five["clipped_corner_width_cm"],
+        door_five["clipped_corner_length_cm"],
+    )
+    origin = (door_five["x"] * 10.0, door_five["y"] * 10.0)
+    trim_x = snapshot["applied_trim_width_cm"] * 10.0
+    trim_y = snapshot["applied_trim_length_cm"] * 10.0
+    board = (
+        -trim_x,
+        -trim_y,
+        snapshot["full_board_width_cm"] * 10.0 - trim_x,
+        snapshot["full_board_length_cm"] * 10.0 - trim_y,
+    )
+    start_sawn, end_sawn = sawn_liner_ends(
+        liner,
+        door_five["liner_reference_side"],
+        origin_mm=origin,
+        mirrored=False,
+        quarter_turns=0,
+        board=board,
+    )
+    local_path = liner_toolpath_mm(
+        liner,
+        door_five["liner_reference_side"],
+        door_five["liner_offset_cm"],
+        door_five["liner_width_cm"],
+        snapshot["kerf_cm"] * 10.0,
+        door_five["liner_start_cm"],
+        door_five["liner_length_cm"],
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    path = [(x + origin[0], y + origin[1]) for x, y in local_path]
+    expected_path = [
+        (80.5, 492.5), (80.5, 1075.5), (663.5, 1075.5), (663.5, 1078.5),
+        (77.5, 1078.5), (77.5, 492.5), (74.5, 492.5), (74.5, 1081.5),
+        (663.5, 1081.5), (663.5, 1084.5), (71.5, 1084.5), (71.5, 492.5),
+        (68.5, 492.5), (68.5, 1087.5), (663.5, 1087.5), (663.5, 1090.5),
+        (65.5, 1090.5), (65.5, 492.5),
+    ]
+    assert len(path) == len(expected_path)
+    for actual, expected in zip(path, expected_path):
+        assert actual == pytest.approx(expected)
+
+    obstacle = obstacle_geometry_mm(glass)
+    assert obstacle["source"] == "placement_with_glass_hole"
+    expected_hole = [(59.0, 491.0), (939.0, 491.0), (939.0, 2371.0), (59.0, 2371.0)]
+    for actual, expected in zip(obstacle["holes"][0], expected_hole):
+        assert actual == pytest.approx(expected)
+    legacy = extension_conflict_details(
+        path,
+        3.0,
+        board,
+        [{"polygon": obstacle["outer"], "diagnostic": {"label": "1.1"}}],
+    )
+    assert legacy is not None
+    assert legacy["obstacle"] == {"label": "1.1"}
+    assert legacy["reject_condition"] == "endpoint_in_material"
+    assert legacy["segment_index"] == 0
+    assert legacy["minimum_distance_mm"] == pytest.approx(60.5)
+    assert legacy["cutter_radius_mm"] == pytest.approx(1.5)
+
+    hole_clearance = min(
+        segment_distance(segment, edge)
+        for segment in zip(path, path[1:])
+        for edge in polygon_segments(obstacle["holes"][0])
+    )
+    assert hole_clearance == pytest.approx(1.5)
+    obstacles = []
+    for piece in pieces:
+        if piece["label"] == "5.1":
+            continue
+        material = obstacle_geometry_mm(piece)
+        obstacles.append({"outer": material["outer"], "holes": material["holes"]})
+    assert extension_conflict(path, 3.0, board, obstacles) == ""
 
 
 def test_previously_exported_board_edge_liner_still_matches():

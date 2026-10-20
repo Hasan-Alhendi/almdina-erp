@@ -7,13 +7,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from frappe import _
 
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     _corner_polygon_mm,
+    classify_corner_contour_type,
     match_corner_contour,
+    measure_corner_remainings_cm,
 )
 from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
     present_issue,
+    present_issues,
     render_error_cards_html,
 )
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import OrderPieceCutSpec
@@ -171,6 +175,47 @@ def test_wrong_cavity_is_not_a_rotation_or_a_mirror():
     assert match.reason == "none"
     assert match.quarter_turns is None
     assert match.mirrored is False
+
+
+@pytest.mark.parametrize("piece_type", ["L-Shaped Corner", "Clipped Corner"])
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_corner_remaining_measurement_returns_to_order_frame(piece_type, turns, mirrored):
+    ring = _mm_ring(piece_type, "Top Right", 900, 800, 600, 400)
+    if mirrored:
+        ring = _reflect_x(ring, width=900)
+    transformed = ring
+    width_mm, height_mm = 900, 800
+    for _ in range(turns):
+        transformed, width_mm, height_mm = _rotate_clockwise(
+            transformed,
+            width_mm,
+            height_mm,
+        )
+
+    measured = measure_corner_remainings_cm(
+        _disturb(transformed),
+        piece_type=piece_type,
+        rotated=bool(turns % 2),
+    )
+
+    assert measured == pytest.approx((30, 40))
+
+
+@pytest.mark.parametrize(
+    ("ring_type", "expected_type"),
+    [
+        ("L-Shaped Corner", "L-Shaped Corner"),
+        ("Clipped Corner", "Clipped Corner"),
+    ],
+)
+def test_corner_topology_classification_ignores_extra_collinear_vertices(
+    ring_type,
+    expected_type,
+):
+    ring = _disturb(_mm_ring(ring_type, "Top Right", 684, 684, 284, 284))
+
+    assert classify_corner_contour_type(ring) == expected_type
 
 
 def test_mirrored_or_rectangular_contour_is_not_a_guessed_rotation():
@@ -539,6 +584,500 @@ def test_same_outer_size_does_not_bind_the_other_cavity():
     assert piece["corner_rotation_quarter_turns"] == 0
 
 
+def _multi_corner_order(specs):
+    rows = [
+        SimpleNamespace(
+            piece_instance_id=f"piece:corner-row-{row_index}",
+            extra_full_door_double=0,
+            qty=1,
+        )
+        for row_index in range(1, max(spec.row_index for spec in specs) + 1)
+    ]
+    for spec in specs:
+        rows[spec.row_index - 1].qty = spec.qty
+    return SimpleNamespace(pieces=rows)
+
+
+def _multi_corner_snapshot(rings):
+    pieces = []
+    for contour_no, ring in enumerate(rings, start=1):
+        width_mm = max(point[0] for point in ring) - min(point[0] for point in ring)
+        height_mm = max(point[1] for point in ring) - min(point[1] for point in ring)
+        pieces.append(
+            {
+                "id": contour_no,
+                "label": f"legacy-{contour_no}",
+                "w": width_mm / 10.0,
+                "h": height_mm / 10.0,
+                "piece_type": "Regular",
+                "geometry": {
+                    "schema_version": 1,
+                    "unit": "mm",
+                    "coordinate_space": "usable_sheet",
+                    "outer": ring,
+                    "holes": [],
+                },
+            }
+        )
+    return {"sheets": [{"pieces": pieces}]}
+
+
+def test_repeated_l_and_clipped_rows_with_the_same_outer_size_keep_their_identity():
+    l_spec = _spec(row_index=1, qty=5)
+    clipped_spec = _spec(
+        row_index=2,
+        qty=2,
+        piece_type="Clipped Corner",
+        edge_break_only=1,
+    )
+    l_ring = _disturb(_POLYGONS[("L-Shaped Corner", "Top Right")])
+    clipped_ring = _disturb(_POLYGONS[("Clipped Corner", "Top Right")])
+    snapshot = _multi_corner_snapshot(
+        [clipped_ring, l_ring, l_ring, clipped_ring, l_ring, l_ring, l_ring]
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [l_spec, clipped_spec],
+        order=_multi_corner_order([l_spec, clipped_spec]),
+    )
+
+    pieces = snapshot["sheets"][0]["pieces"]
+    assert errors == []
+    assert [(piece["source_piece_no"], piece["copy_no"]) for piece in pieces] == [
+        (2, 1),
+        (1, 1),
+        (1, 2),
+        (2, 2),
+        (1, 3),
+        (1, 4),
+        (1, 5),
+    ]
+    assert [piece["piece_type"] for piece in pieces] == [
+        "Clipped Corner",
+        "L-Shaped Corner",
+        "L-Shaped Corner",
+        "Clipped Corner",
+        "L-Shaped Corner",
+        "L-Shaped Corner",
+        "L-Shaped Corner",
+    ]
+    assert len({piece["piece_instance_id"] for piece in pieces}) == 7
+
+
+def test_real_order_corner_groups_keep_row_and_copy_identity_when_mixed():
+    specs = [
+        _spec(
+            row_index=3,
+            qty=5,
+            finished_width_cm=Decimal("68.4"),
+            finished_length_cm=Decimal("68.4"),
+            cut_width_cm=Decimal("68.4"),
+            cut_length_cm=Decimal("68.4"),
+            side_profiles=(),
+            edge_break=0,
+            clipped_corner_width_cm=Decimal("13.68"),
+            clipped_corner_length_cm=Decimal("13.68"),
+        ),
+        _spec(
+            row_index=8,
+            qty=5,
+            finished_width_cm=Decimal("66.8"),
+            finished_length_cm=Decimal("68.4"),
+            cut_width_cm=Decimal("66.8"),
+            cut_length_cm=Decimal("68.4"),
+            side_profiles=(),
+            edge_break_thickness_mm=Decimal("1"),
+            clipped_corner_width_cm=Decimal("26.8"),
+            clipped_corner_length_cm=Decimal("28.4"),
+        ),
+        _spec(
+            row_index=10,
+            qty=2,
+            piece_type="Clipped Corner",
+            edge_break_only=1,
+            finished_width_cm=Decimal("68.4"),
+            finished_length_cm=Decimal("68.4"),
+            cut_width_cm=Decimal("68.4"),
+            cut_length_cm=Decimal("68.4"),
+            side_profiles=(),
+            edge_break=0,
+            clipped_corner_width_cm=Decimal("18.4"),
+            clipped_corner_length_cm=Decimal("18.4"),
+        ),
+        _spec(
+            row_index=14,
+            qty=2,
+            piece_type="Clipped Corner",
+            edge_break_only=1,
+            finished_width_cm=Decimal("66.8"),
+            finished_length_cm=Decimal("68.4"),
+            cut_width_cm=Decimal("66.8"),
+            cut_length_cm=Decimal("68.4"),
+            side_profiles=(),
+            edge_break=0,
+            clipped_corner_width_cm=Decimal("16.8"),
+            clipped_corner_length_cm=Decimal("18.4"),
+        ),
+    ]
+    rings = {
+        3: _mm_ring("L-Shaped Corner", "Top Right", 684, 684, 136.8, 136.8),
+        8: _mm_ring("L-Shaped Corner", "Top Right", 668, 684, 269, 285),
+        10: _mm_ring("Clipped Corner", "Top Right", 684, 684, 184, 184),
+        14: _mm_ring("Clipped Corner", "Top Right", 668, 684, 168, 184),
+    }
+    mixed_rows = [10, 3, 8, 14, 3, 8, 10, 8, 3, 14, 3, 8, 3, 8]
+    snapshot = _multi_corner_snapshot([_disturb(rings[row]) for row in mixed_rows])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        specs,
+        order=_multi_corner_order(specs),
+    )
+
+    pieces = snapshot["sheets"][0]["pieces"]
+    assert errors == []
+    assert [piece["source_piece_no"] for piece in pieces] == mixed_rows
+    for row_index, quantity in ((3, 5), (8, 5), (10, 2), (14, 2)):
+        copies = [
+            piece["copy_no"]
+            for piece in pieces
+            if piece["source_piece_no"] == row_index
+        ]
+        assert copies == list(range(1, quantity + 1))
+
+
+def test_identical_corner_rows_are_rejected_as_genuinely_ambiguous():
+    first = _spec(row_index=1)
+    second = _spec(row_index=2)
+    snapshot = _multi_corner_snapshot(
+        [_disturb(_POLYGONS[("L-Shaped Corner", "Top Right")])]
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [first, second],
+        order=_multi_corner_order([first, second]),
+    )
+
+    assert [error.code for error in errors] == [
+        "PIECE_IDENTITY_AMBIGUOUS",
+        "PIECE_MISSING",
+    ]
+    assert errors[0].params["candidate_source_piece_nos"] == [1, 2]
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert piece["piece_type"] == "Regular"
+    assert "source_piece_no" not in piece
+
+
+def test_repeated_corner_candidates_do_not_fall_back_when_no_shape_matches():
+    l_spec = _spec(row_index=1, qty=2)
+    clipped_spec = _spec(
+        row_index=2,
+        qty=2,
+        piece_type="Clipped Corner",
+        edge_break_only=1,
+    )
+    snapshot = _multi_corner_snapshot(
+        [[[0.0, 0.0], [400.0, 0.0], [400.0, 800.0], [0.0, 800.0]]]
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [l_spec, clipped_spec],
+        order=_multi_corner_order([l_spec, clipped_spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CORNER_EDGE_UNRESOLVED",
+        "PIECE_MISSING",
+    ]
+    assert errors[0].params["reason"] == "none"
+    assert errors[0].params["candidate_source_piece_nos"] == [1, 2]
+    assert errors[0].target.source_piece_no is None
+    ambiguous_card = present_issue(errors[0])
+    assert "1" in ambiguous_card.target and "2" in ambiguous_card.target
+    assert "مسار القص رقم 1" in ambiguous_card.target
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert piece["piece_type"] == "Regular"
+    assert "source_piece_no" not in piece
+
+
+def test_repeated_l_copies_with_wrong_remainings_are_present_not_missing():
+    spec = _spec(
+        row_index=3,
+        qty=5,
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    wrong = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 500, 500))
+    snapshot = _multi_corner_snapshot([wrong] * 5)
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == ["L_CORNER_NOTCH_MISMATCH"] * 5
+    assert [error.target.source_piece_no for error in errors] == [3] * 5
+    assert [error.target.copy_no for error in errors] == [1, 2, 3, 4, 5]
+    assert all(error.params["expected_finished_remaining_cm"] == {
+        "width": "50.000",
+        "length": "50.000",
+    } for error in errors)
+    assert all(error.params["actual_raw_remaining_cm"] == {
+        "width": "40.000",
+        "length": "40.000",
+    } for error in errors)
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(3, 1, 5)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_l_geometry_excludes_same_bbox_clipped_candidate_before_dimension_diagnosis():
+    l_spec = _spec(
+        row_index=3,
+        qty=5,
+        finished_width_cm=Decimal("68.4"),
+        finished_length_cm=Decimal("68.4"),
+        cut_width_cm=Decimal("68.4"),
+        cut_length_cm=Decimal("68.4"),
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        clipped_corner_width_cm=Decimal("18.4"),
+        clipped_corner_length_cm=Decimal("18.4"),
+    )
+    clipped_spec = _spec(
+        row_index=10,
+        qty=5,
+        piece_type="Clipped Corner",
+        edge_break=0,
+        edge_break_only=1,
+        side_profiles=(),
+        finished_width_cm=Decimal("68.4"),
+        finished_length_cm=Decimal("68.4"),
+        cut_width_cm=Decimal("68.4"),
+        cut_length_cm=Decimal("68.4"),
+        clipped_corner_width_cm=Decimal("18.4"),
+        clipped_corner_length_cm=Decimal("18.4"),
+    )
+    wrong_l = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 684, 684, 284, 284))
+    right_clipped = _disturb(
+        _mm_ring("Clipped Corner", "Top Right", 684, 684, 184, 184)
+    )
+    snapshot = _multi_corner_snapshot([wrong_l] * 5 + [right_clipped] * 5)
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [l_spec, clipped_spec],
+        order=_multi_corner_order([l_spec, clipped_spec]),
+    )
+
+    assert [error.code for error in errors] == ["L_CORNER_NOTCH_MISMATCH"] * 5
+    assert {error.target.source_piece_no for error in errors} == {3}
+    assert {error.target.copy_no for error in errors} == {1, 2, 3, 4, 5}
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(3, 1, 5)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_one_wrong_l_copy_is_identified_without_marking_valid_siblings_missing():
+    spec = _spec(
+        row_index=3,
+        qty=5,
+        finished_width_cm=Decimal("68.4"),
+        finished_length_cm=Decimal("68.4"),
+        cut_width_cm=Decimal("68.4"),
+        cut_length_cm=Decimal("68.4"),
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        clipped_corner_width_cm=Decimal("18.4"),
+        clipped_corner_length_cm=Decimal("18.4"),
+    )
+    wrong = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 684, 684, 284, 284))
+    correct = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 684, 684, 184, 184))
+    snapshot = _multi_corner_snapshot([wrong, correct, correct, correct, correct])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == ["L_CORNER_NOTCH_MISMATCH"]
+    assert errors[0].target.source_piece_no == 3
+    assert errors[0].target.copy_no == 1
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+
+
+def test_clipped_geometry_excludes_same_bbox_l_candidate_before_dimension_diagnosis():
+    l_spec = _spec(
+        row_index=3,
+        qty=5,
+        finished_width_cm=Decimal("68.4"),
+        finished_length_cm=Decimal("68.4"),
+        cut_width_cm=Decimal("68.4"),
+        cut_length_cm=Decimal("68.4"),
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        clipped_corner_width_cm=Decimal("18.4"),
+        clipped_corner_length_cm=Decimal("18.4"),
+    )
+    clipped_spec = _spec(
+        row_index=10,
+        qty=5,
+        piece_type="Clipped Corner",
+        edge_break=0,
+        edge_break_only=1,
+        side_profiles=(),
+        finished_width_cm=Decimal("68.4"),
+        finished_length_cm=Decimal("68.4"),
+        cut_width_cm=Decimal("68.4"),
+        cut_length_cm=Decimal("68.4"),
+        clipped_corner_width_cm=Decimal("18.4"),
+        clipped_corner_length_cm=Decimal("18.4"),
+    )
+    right_l = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 684, 684, 184, 184))
+    wrong_clipped = _disturb(
+        _mm_ring("Clipped Corner", "Top Right", 684, 684, 284, 284)
+    )
+    snapshot = _multi_corner_snapshot([right_l] * 5 + [wrong_clipped] * 5)
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [l_spec, clipped_spec],
+        order=_multi_corner_order([l_spec, clipped_spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CLIPPED_CORNER_DIMENSIONS_MISMATCH"
+    ] * 5
+    assert {error.target.source_piece_no for error in errors} == {10}
+    assert {error.target.copy_no for error in errors} == {1, 2, 3, 4, 5}
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(10, 1, 5)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_repeated_clipped_copies_report_inner_dimensions_without_missing():
+    spec = _spec(
+        qty=2,
+        piece_type="Clipped Corner",
+        edge_break=0,
+        edge_break_only=1,
+        side_profiles=(),
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    wrong = _disturb(_mm_ring("Clipped Corner", "Top Right", 900, 900, 500, 500))
+    snapshot = _multi_corner_snapshot([wrong, wrong])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CLIPPED_CORNER_DIMENSIONS_MISMATCH",
+        "CLIPPED_CORNER_DIMENSIONS_MISMATCH",
+    ]
+    assert [error.target.copy_no for error in errors] == [1, 2]
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(1, 1, 2)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_repeated_l_copies_with_unknown_inner_band_are_present_not_missing():
+    spec = _spec(
+        qty=2,
+        edge_break=1,
+        edge_break_thickness_mm=None,
+    )
+    recognizable_l = _disturb(
+        _mm_ring("L-Shaped Corner", "Top Right", 400, 800, 80, 161)
+    )
+    snapshot = _multi_corner_snapshot([recognizable_l, recognizable_l])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CORNER_EDGE_UNRESOLVED",
+        "CORNER_EDGE_UNRESOLVED",
+    ]
+    assert [error.target.source_piece_no for error in errors] == [1, 1]
+    assert [error.target.copy_no for error in errors] == [1, 2]
+    assert all(error.params["reason"] == "break_thickness_unknown" for error in errors)
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+
+
+def test_different_corner_measurements_on_one_row_are_not_grouped_together():
+    spec = _spec(
+        qty=2,
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    remaining_40 = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 500, 500))
+    remaining_45 = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 450, 450))
+    snapshot = _multi_corner_snapshot([remaining_40, remaining_45])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    cards = present_issues(errors)
+    assert len(cards) == 2
+    assert {card.highlight for card in cards} == {
+        _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+            "\u206650 × 50\u2069 سم",
+            "\u206640 × 40\u2069 سم",
+        ),
+        _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+            "\u206650 × 50\u2069 سم",
+            "\u206645 × 45\u2069 سم",
+        ),
+    }
+
+
 _SQUARE_L = [
     [0.0, 0.0],
     [400.0, 0.0],
@@ -685,14 +1224,17 @@ def test_l_inner_band_rejects_a_cavity_that_ignores_its_thickness():
     assert axis[0]["actual_raw_cm"] == "32.000"
     card = present_issue(errors[0])
     html = render_error_cards_html(errors)
-    assert card.target == "الدرفة 1 — زاوية L."
-    assert "بعد احتساب سماكات القشاطات" in card.problem
+    copy_target = _("Door {0} — copy {1}.").format(1, 1)
+    assert card.target == _("{0} — L corner.").format(copy_target[:-1])
+    assert card.problem == _("The L-corner dimensions in the DXF do not match the order.")
     assert "32 سم" in card.details[1]
     assert "1 مم" in card.details[2]
     assert "31.9 سم" in card.details[3]
     assert "32 سم" in card.details[4]
     assert "1 مم" in card.details[5]
     assert "زيادة" in card.details[5]
+    assert "32" in card.highlight
+    assert "31.9" in card.highlight
     assert "تفاصيل الاختلاف" in html
     assert "ما المشكلة؟" in html
 

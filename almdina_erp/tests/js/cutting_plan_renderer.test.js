@@ -21,11 +21,19 @@ const pieceGeometrySource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js"),
     "utf8"
 );
+const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
 
 const fakeWindow = {};
+const rendererDiagnostics = [];
+const testConsole = Object.assign({}, console, {
+    error: (...args) => rendererDiagnostics.push(args),
+});
 const context = vm.createContext({
     window: fakeWindow,
-    console,
+    console: testConsole,
     JSON,
     Number,
     String,
@@ -499,6 +507,76 @@ vm.runInContext(
     context,
     { filename: "door_cutting_order_machining_overlay.js" }
 );
+
+// Real persisted regression CP-2026-00092 / DCO 26-00112. Preview and DXF
+// consume this same usable-sheet snapshot. Door 5.1 is inside the opening of
+// rotated Glass door 1.1; the opening is void, not obstacle material.
+const previewHost = nestedGlassRegressionSnapshot.sheets[0].pieces.find(piece => piece.label === "5.1");
+const previewObstacles = fakeWindow.AlmdinaLinerGeometry.sheetObstaclesMm(
+    nestedGlassRegressionSnapshot.sheets[0],
+    Object.assign({}, previewHost)
+);
+assert.equal(previewObstacles.length, nestedGlassRegressionSnapshot.sheets[0].pieces.length - 1);
+assert.equal(previewObstacles.some(obstacle => obstacle.diagnostic.pieceId === previewHost.id), false);
+const previewGlassObstacle = previewObstacles.find(obstacle => obstacle.diagnostic.label === "1.1");
+assert.equal(previewGlassObstacle.diagnostic.geometrySource, "placement_with_glass_hole");
+assert.equal(previewGlassObstacle.holes.length, 1);
+
+const previewFrm = {
+    doc: {
+        name: "26-00112",
+        // Deliberately different: the frozen plan Kerf (3 mm) is authoritative.
+        kerf_mm: 9,
+        pieces: [
+            {}, {}, {}, {},
+            {
+                // Deliberately different: a live order edit must not rewrite
+                // the already-frozen plan path consumed by Preview and DXF.
+                extra_liner: 1,
+                liner_reference_side: "edge_width_bottom",
+                liner_offset_cm: 1,
+                liner_width_cm: 1.8,
+                piece_type: "Regular",
+                width_cm: 10,
+                length_cm: 10,
+            },
+        ],
+    },
+};
+for (const approvalStatus of ["Draft", "Approved"]) {
+    const previewPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+    previewPlan.approval_status = approvalStatus;
+    previewPlan.saw_center_status = approvalStatus === "Approved" ? "Generated" : "Absent";
+    const previewHtml = renderer.build(previewFrm, previewPlan);
+    assert.match(previewHtml, /data-overlay-kind="liner"/);
+    assert.doesNotMatch(previewHtml, /data-liner-toolpath-error="liner_extension_hits_piece"/);
+    assert.doesNotMatch(previewHtml, /CUT_PATH/);
+}
+
+const trueCollisionPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+const trueCollisionGlass = trueCollisionPlan.sheets[0].pieces.find(piece => piece.label === "1.1");
+trueCollisionGlass.glass_hole_local_mm = [
+    [100, 59], [939, 59], [939, 1939], [100, 1939],
+];
+rendererDiagnostics.length = 0;
+const trueCollisionHtml = renderer.build(previewFrm, trueCollisionPlan);
+assert.match(trueCollisionHtml, /data-liner-toolpath-error="liner_extension_hits_piece"/);
+const trueCollisionDiagnostic = rendererDiagnostics
+    .map(args => args[1])
+    .find(item => item && item.host && item.host.label === "5.1"
+        && item.neighbour && item.neighbour.label === "1.1");
+assert.ok(trueCollisionDiagnostic);
+assert.equal(trueCollisionDiagnostic.neighbour.geometrySource, "placement_with_glass_hole");
+assert.equal(trueCollisionDiagnostic.cutterRadiusMm, 1.5);
+assert.equal(JSON.stringify(trueCollisionDiagnostic.linerPathMm[0]), JSON.stringify([80.5, 492.5]));
+assert.ok(Number.isFinite(trueCollisionDiagnostic.minimumDistanceMm));
+assert.ok([
+    "endpoint_in_material",
+    "segment_crosses_material_boundary",
+    "clearance_below_cutter_radius",
+].includes(trueCollisionDiagnostic.rejectCondition));
+assert.ok(Array.isArray(trueCollisionDiagnostic.linerPathMm));
+
 const symbolPlan = {
     usable_board_width_cm: 122,
     usable_board_length_cm: 244,

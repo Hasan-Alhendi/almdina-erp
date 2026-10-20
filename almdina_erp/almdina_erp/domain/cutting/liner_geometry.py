@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     has_self_intersection,
     point_in_polygon,
+    polygon_segments,
+    segment_distance,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
@@ -1483,6 +1485,227 @@ def localize_path(path: Sequence[Point], outline: Sequence[Point]) -> list[Point
     return [(point[0] - min_x, point[1] - min_y) for point in path]
 
 
+def piece_quarter_turns(piece: Mapping[str, Any] | None) -> int:
+    """Resolve clockwise quarter turns for a placed plan/DXF piece."""
+
+    if not piece:
+        return 0
+    if isinstance(piece.get("rotation_quarter_turns"), int):
+        return int(piece["rotation_quarter_turns"]) % 4
+    if isinstance(piece.get("corner_rotation_quarter_turns"), int):
+        return int(piece["corner_rotation_quarter_turns"]) % 4
+    return 1 if piece.get("rotated") else 0
+
+
+def placement_ring_mm(piece: Mapping[str, Any]) -> list[Point]:
+    x = float(piece.get("x") or 0) * CM_TO_MM
+    y = float(piece.get("y") or 0) * CM_TO_MM
+    width = float(piece.get("w") or 0) * CM_TO_MM
+    height = float(piece.get("h") or 0) * CM_TO_MM
+    if not (width > 0 and height > 0):
+        return []
+    return [
+        (x, y),
+        (x + width, y),
+        (x + width, y + height),
+        (x, y + height),
+    ]
+
+
+def placed_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
+    liner = LinerPiece(
+        str(piece.get("piece_type") or "Regular"),
+        float(
+            piece.get("cut_width_cm")
+            or piece.get("width_cm")
+            or piece.get("original_w")
+            or piece.get("w")
+            or 0
+        ),
+        float(
+            piece.get("cut_length_cm")
+            or piece.get("length_cm")
+            or piece.get("original_h")
+            or piece.get("h")
+            or 0
+        ),
+        str(piece.get("clipped_corner_position") or "Top Right"),
+        float(piece.get("clipped_corner_width_cm") or 0),
+        float(piece.get("clipped_corner_length_cm") or 0),
+    )
+    local = piece_polygon_mm(liner)
+    turns = piece_quarter_turns(piece)
+    mirrored = bool(piece.get("corner_mirrored"))
+    origin_x = float(piece.get("x") or 0) * CM_TO_MM
+    origin_y = float(piece.get("y") or 0) * CM_TO_MM
+    width = _mm(liner.width_cm)
+    height = _mm(liner.length_cm)
+    placed: list[Point] = []
+    for point in local:
+        moved = transform_point(
+            point,
+            mirrored=mirrored,
+            quarter_turns=turns,
+            width=width,
+            height=height,
+        )
+        placed.append((moved[0] + origin_x, moved[1] + origin_y))
+    return placed
+
+
+def obstacle_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
+    """Compatibility outer ring for liner extension clearance."""
+
+    return list(obstacle_geometry_mm(piece)["outer"])
+
+
+def obstacle_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any]:
+    """Placed material outline including openings, in usable-sheet coordinates."""
+
+    geometry = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
+    outer = geometry.get("outer") if geometry else None
+    if isinstance(outer, Sequence) and len(outer) >= 3:
+        holes = geometry.get("holes") if isinstance(geometry.get("holes"), Sequence) else ()
+        return {
+            "outer": [(float(point[0]), float(point[1])) for point in outer],
+            "holes": [
+                [(float(point[0]), float(point[1])) for point in hole]
+                for hole in holes
+                if isinstance(hole, Sequence) and len(hole) >= 3
+            ],
+            "source": "persisted_geometry",
+        }
+    kind = str(piece.get("piece_type") or "Regular")
+    if kind not in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        ring = placement_ring_mm(piece)
+        if len(ring) >= 3:
+            holes: list[list[Point]] = []
+            glass_hole = piece.get("glass_hole_local_mm")
+            if kind == GLASS_TYPE and isinstance(glass_hole, Sequence) and len(glass_hole) >= 3:
+                origin_x = float(piece.get("x") or 0) * CM_TO_MM
+                origin_y = float(piece.get("y") or 0) * CM_TO_MM
+                holes.append(
+                    [
+                        (origin_x + float(point[0]), origin_y + float(point[1]))
+                        for point in glass_hole
+                    ]
+                )
+            return {
+                "outer": ring,
+                "holes": holes,
+                "source": "placement_with_glass_hole" if holes else "placement_box",
+            }
+    return {
+        "outer": placed_polygon_mm(piece),
+        "holes": [],
+        "source": "placed_parametric_polygon",
+    }
+
+
+def _segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool:
+    def side(p: Point, q: Point, r: Point) -> float:
+        return ((q[0] - p[0]) * (r[1] - p[1])) - ((q[1] - p[1]) * (r[0] - p[0]))
+
+    return side(a, b, c) * side(a, b, d) < -1e-8 and side(c, d, a) * side(c, d, b) < -1e-8
+
+
+def _point_in_material(point: Point, outer: Sequence[Point], holes: Sequence[Sequence[Point]]) -> bool:
+    if not point_in_polygon(point, outer):
+        return False
+    return not any(point_in_polygon(point, hole) for hole in holes)
+
+
+def _obstacle_material(obstacle: Mapping[str, Any] | Sequence[Point]) -> tuple[list[Point], list[list[Point]]]:
+    if isinstance(obstacle, Mapping) and "outer" in obstacle:
+        outer = [(float(p[0]), float(p[1])) for p in obstacle.get("outer") or ()]
+    elif isinstance(obstacle, Mapping) and "polygon" in obstacle:
+        outer = [(float(p[0]), float(p[1])) for p in obstacle["polygon"]]
+    elif isinstance(obstacle, Mapping):
+        outer = [
+            (float(obstacle.get("minX") or 0), float(obstacle.get("minY") or 0)),
+            (float(obstacle.get("maxX") or 0), float(obstacle.get("minY") or 0)),
+            (float(obstacle.get("maxX") or 0), float(obstacle.get("maxY") or 0)),
+            (float(obstacle.get("minX") or 0), float(obstacle.get("maxY") or 0)),
+        ]
+    else:
+        outer = [(float(p[0]), float(p[1])) for p in obstacle]
+    holes = []
+    if isinstance(obstacle, Mapping):
+        holes = [
+            [(float(p[0]), float(p[1])) for p in hole]
+            for hole in obstacle.get("holes") or ()
+            if isinstance(hole, Sequence) and len(hole) >= 3
+        ]
+    return outer, holes
+
+
+def extension_conflict_details(
+    path: Sequence[Point],
+    diameter_mm: float,
+    board: Sequence[float] | Mapping[str, float] | None,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+) -> dict[str, Any] | None:
+    """Describe the first material collision made by a liner cutter body.
+
+    ``board`` is accepted for API parity with the JS port; clearance is decided
+    against obstacle rings only (off-board extensions remain allowed).
+    """
+
+    del board  # reserved for callers that still pass usable-sheet bounds
+    radius = float(diameter_mm) / 2.0
+
+    for index in range(len(path) - 1):
+        start = (float(path[index][0]), float(path[index][1]))
+        end = (float(path[index + 1][0]), float(path[index + 1][1]))
+        for obstacle_index, obstacle in enumerate(obstacles or ()):
+            outer, holes = _obstacle_material(obstacle)
+            if len(outer) < 3:
+                continue
+            boundaries = [outer, *holes]
+            minimum_distance = min(
+                segment_distance((start, end), edge)
+                for ring in boundaries
+                for edge in polygon_segments(ring)
+            )
+            reject_condition = ""
+            if _point_in_material(start, outer, holes) or _point_in_material(end, outer, holes):
+                reject_condition = "endpoint_in_material"
+            elif any(
+                _segments_cross(start, end, edge[0], edge[1])
+                for ring in boundaries
+                for edge in polygon_segments(ring)
+            ):
+                reject_condition = "segment_crosses_material_boundary"
+            elif minimum_distance < radius - GEOMETRY_TOLERANCE_MM:
+                reject_condition = "clearance_below_cutter_radius"
+            if reject_condition:
+                return {
+                    "code": "liner_extension_hits_piece",
+                    "segment_index": index,
+                    "obstacle_index": obstacle_index,
+                    "start": start,
+                    "end": end,
+                    "minimum_distance_mm": minimum_distance,
+                    "cutter_radius_mm": radius,
+                    "rejection_threshold_mm": radius - GEOMETRY_TOLERANCE_MM,
+                    "reject_condition": reject_condition,
+                    "obstacle": obstacle.get("diagnostic") if isinstance(obstacle, Mapping) else None,
+                }
+    return None
+
+
+def extension_conflict(
+    path: Sequence[Point],
+    diameter_mm: float,
+    board: Sequence[float] | Mapping[str, float] | None,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+) -> str:
+    """Return ``liner_extension_hits_piece`` when the cutter body invades material."""
+
+    details = extension_conflict_details(path, diameter_mm, board, obstacles)
+    return str(details["code"]) if details else ""
+
+
 def canonical_path(
     path: Sequence[Point],
     *,
@@ -1529,10 +1752,17 @@ __all__ = [
     "inverse_transform_point",
     "liner_parameters_active",
     "cutter_center_offsets_mm",
+    "extension_conflict",
+    "extension_conflict_details",
     "liner_toolpath_mm",
     "liner_strip_polygon_mm",
     "localize_path",
+    "obstacle_polygon_mm",
+    "obstacle_geometry_mm",
     "piece_polygon_mm",
+    "piece_quarter_turns",
+    "placed_polygon_mm",
+    "placement_ring_mm",
     "reference_polyline_mm",
     "sawn_liner_ends",
     "transform_point",

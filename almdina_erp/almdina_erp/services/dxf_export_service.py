@@ -343,7 +343,10 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
     if not normalized:
         return _canonical_saved_plan(order)
     if normalized == "system":
-        return latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
+        return (
+            latest_plan(order.name, source_type=SYSTEM, status=DRAFT)
+            or latest_plan(order.name, source_type=SYSTEM)
+        )
     if normalized in {"custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
         return (
             latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
@@ -584,9 +587,9 @@ def download_uploaded_dxf(
     File-scope checks. ``frappe.local.response`` still carries the raw bytes
     for direct/API download clients.
 
-    Fail closed when this plan is the current production approval but its
-    attached file still lacks manufacturing saw centers — the client must
-    regenerate from the plan snapshot instead of shipping a design-only DXF.
+    After delivery the Uploaded tab may retrieve the original designer file
+    unchanged for archival comparison. Before delivery, and from the Approved tab,
+    non-manufacturing uploads still regenerate CNC paths from the approved snapshot.
     """
 
     if not str(order_name or "").strip():
@@ -597,7 +600,13 @@ def download_uploaded_dxf(
         frappe.throw(_(_MISSING_UPLOADED_DXF_MESSAGE), frappe.ValidationError)
 
     filename, content, plan = _load_original_uploaded_dxf(order, plan_source)
-    if not prefer_original_uploaded_download(order, plan):
+    source = str(plan_source or "").strip().lower()
+    archived_original = (
+        str(getattr(order, "status", "") or "").strip() == "Delivered"
+        and source in _ORIGINAL_UPLOAD_SOURCES
+        and source != "approved"
+    )
+    if not archived_original and not prefer_original_uploaded_download(order, plan):
         frappe.throw(
             _(
                 "ملف DXF الأصلي لهذه الخطة المعتمدة لا يحتوي مسارات قص جاهزة للتصنيع. "

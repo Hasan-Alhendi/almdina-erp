@@ -638,6 +638,25 @@ async function interactionChecks() {
     assert.match(css, /grid-area:\s*remove/);
     assert.match(css, /direction:\s*ltr/);
 
+    // A production/delivered viewer must never mutate persisted model values,
+    // even if a hidden Apply action is invoked programmatically.
+    const beforeViewerWrites = writes.length;
+    const readOnlyOrder = { doc: { pieces: [row] }, dirty() { throw new Error("view made order dirty"); } };
+    fakeWindow.AlmdinaDoorCuttingFastEntry.isEditable = () => false;
+    assert.equal(dialog.open(readOnlyOrder, row), true);
+    const viewer = latest();
+    assert.equal(viewer.root.querySelector("[data-addons-apply]").hidden, true);
+    assert.equal(viewer.root.querySelector("[data-addons-remove]").hidden, true);
+    viewer.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(viewer.root.querySelector("fieldset").disabled, true);
+    viewer.root.querySelector("[data-addon-enable]").dispatch("click");
+    viewer.root.querySelector("[data-addons-apply]").dispatch("click");
+    assert.equal(row.extra_liner, undefined);
+    assert.equal(writes.length, beforeViewerWrites);
+
+    fakeWindow.AlmdinaDoorCuttingFastEntry.isEditable = () => true;
+    assert.equal(dialog.open({ doc: { pieces: [row] }, dirty() {} }, row), true);
+    ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-sides] .is-active"), null);
     assert.equal(ui.root.querySelector('[data-addons-preview] [data-machining-kind="liner"]'), null);

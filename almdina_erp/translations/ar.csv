@@ -1317,6 +1317,7 @@ The documentation workspace is available for special doors only.,مساحة ال
 The selected door does not belong to this order.,الدرفة المحددة لا تنتمي إلى هذا الطلب.
 You do not have permission to edit special door documentation.,ليس لديك صلاحية تعديل توثيق الدرف الخاصة.
 You are not allowed to edit special door documentation.,لا تملك صلاحية تعديل توثيق الدرف الخاصة.
+Special door documentation cannot be edited after the order is delivered.,لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب.
 Documentation can be edited when the order state allows it.,يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك.
 The documentation workspace accepts only the current contract.,مساحة التوثيق تقبل العقد الحالي فقط.
 The documentation width does not match the door width.,عرض التوثيق لا يطابق عرض الدرفة.
@@ -2893,4 +2894,16 @@ Could not cancel the final price approval,تعذر إلغاء اعتماد ال�
 Could not cancel the final price approval.,تعذر إلغاء اعتماد السعر النهائي.
 Do you want to cancel the final price approval for this order? Order details and prices will stay the same.,هل تريد إلغاء اعتماد السعر النهائي لهذا الطلب؟ ستبقى تفاصيل الطلب والأسعار كما هي.
 Save or cancel unsaved changes before cancelling the final price approval.,احفظ التغييرات غير المحفوظة أو ألغها قبل إلغاء اعتماد السعر النهائي.
+Possible doors: {0}. Additional contour information: {1},الدرف المحتملة: {0}. معلومة إضافية عن المحيط: {1}
+The L-corner dimensions in the DXF do not match the order.,قياسات زاوية L في DXF لا تطابق الطلب.
+"Correct the L-corner dimensions in the DXF file, then upload it again.",صحح أبعاد زاوية L في ملف DXF ثم أعد رفعه.
+{0} — L corner.,{0} — زاوية L.
+The clipped-corner dimensions in the DXF do not match the order.,قياسات زاوية الكسر في DXF لا تطابق الطلب.
+"Correct the clipped-corner dimensions in the DXF file, then upload it again.",صحح أبعاد زاوية الكسر في ملف DXF ثم أعد رفعه.
+{0} — clipped corner.,{0} — زاوية كسر.
+Order finished dimensions: {0}. Required raw dimensions after edge banding: {1}. DXF dimensions: {2}.,القياسات النهائية في الطلب: {0}. قياسات القص الخام المطلوبة بعد القشاط: {1}. القياسات في DXF: {2}.
+Order dimensions: {0}. DXF dimensions: {1}.,القياسات في الطلب: {0}. القياسات في DXF: {1}.
+Door {0} — copies {1} through {2}.,الدرفة {0} — النسخ {1} إلى {2}.
+Door {0} — copies {1}.,الدرفة {0} — النسخ {1}.
+Door {0} — copy {1}.,الدرفة {0} — النسخة {1}.
 {0} / {1},{0} / {1}

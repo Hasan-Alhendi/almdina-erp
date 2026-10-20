@@ -163,6 +163,101 @@ def measure_l_remainings_cm(
     return (span_x - horizontal[0]) / 10.0, (span_y - vertical[0]) / 10.0
 
 
+def measure_corner_remainings_cm(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    piece_type: str,
+    rotated: bool,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+) -> tuple[float, float] | None:
+    """Measure corner remaining sides in the order frame when shape is proven.
+
+    This is diagnostic evidence only. It recognizes an L by its single reflex
+    vertex and a clipped corner by its single diagonal joining adjacent bounding
+    sides. It does not relax contour matching or geometry tolerance.
+    """
+
+    if piece_type == L_SHAPED_CORNER_TYPE:
+        return measure_l_remainings_cm(
+            outer_mm,
+            rotated=rotated,
+            tolerance_mm=tolerance_mm,
+        )
+    if piece_type != CLIPPED_CORNER_TYPE:
+        return None
+
+    points = _prepare_ring(outer_mm, tolerance_mm)
+    points = _localize(_collapse_collinear(points, tolerance_mm))
+    if len(points) != 5:
+        return None
+
+    axis_edges = 0
+    diagonal: tuple[Point, Point] | None = None
+    for start, end in _edges(points):
+        horizontal = abs(start[1] - end[1]) <= tolerance_mm
+        vertical = abs(start[0] - end[0]) <= tolerance_mm
+        if horizontal != vertical:
+            axis_edges += 1
+            continue
+        if horizontal or vertical or diagonal is not None:
+            return None
+        diagonal = (start, end)
+    if axis_edges != 4 or diagonal is None:
+        return None
+
+    span_x = max(point[0] for point in points) - min(point[0] for point in points)
+    span_y = max(point[1] for point in points) - min(point[1] for point in points)
+    start, end = diagonal
+    cut_x = abs(end[0] - start[0])
+    cut_y = abs(end[1] - start[1])
+    if cut_x <= tolerance_mm or cut_y <= tolerance_mm:
+        return None
+
+    def boundary_axis(point: Point) -> str | None:
+        on_x = abs(point[0]) <= tolerance_mm or abs(point[0] - span_x) <= tolerance_mm
+        on_y = abs(point[1]) <= tolerance_mm or abs(point[1] - span_y) <= tolerance_mm
+        if on_x == on_y:
+            return None
+        return "x" if on_x else "y"
+
+    if {boundary_axis(start), boundary_axis(end)} != {"x", "y"}:
+        return None
+
+    measured = ((span_x - cut_x) / 10.0, (span_y - cut_y) / 10.0)
+    return (measured[1], measured[0]) if rotated else measured
+
+
+def classify_corner_contour_type(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+) -> str | None:
+    """Classify a proven L or clipped-corner topology without order sizes.
+
+    The measurements are deliberately geometry-only: they use the same
+    tolerance and collinear-vertex normalization as the strict matcher, but
+    do not compare against requested notch dimensions. This lets diagnostics
+    discard an incompatible corner type when several rows share one bbox.
+    """
+
+    l_remaining = measure_l_remainings_cm(
+        outer_mm,
+        rotated=False,
+        tolerance_mm=tolerance_mm,
+    )
+    clipped_remaining = measure_corner_remainings_cm(
+        outer_mm,
+        piece_type=CLIPPED_CORNER_TYPE,
+        rotated=False,
+        tolerance_mm=tolerance_mm,
+    )
+    if l_remaining is not None and clipped_remaining is None:
+        return L_SHAPED_CORNER_TYPE
+    if clipped_remaining is not None and l_remaining is None:
+        return CLIPPED_CORNER_TYPE
+    return None
+
+
 def _turn_cross(start: Point, corner: Point, end: Point) -> float:
     return (corner[0] - start[0]) * (end[1] - corner[1]) - (corner[1] - start[1]) * (
         end[0] - corner[0]
