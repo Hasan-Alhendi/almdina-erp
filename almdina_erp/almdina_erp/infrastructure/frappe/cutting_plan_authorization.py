@@ -7,6 +7,7 @@ from frappe import _
 
 from almdina_erp.almdina_erp.domain.security.authorization import (
     CUTTING_PLAN_DOCTYPE,
+    Capability,
     capability_definition,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -15,6 +16,16 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
 
 
 _DEFAULT_PERMISSION_MESSAGE = "لا تملك الصلاحية المطلوبة على خطة القص لهذا الطلب."
+
+# Delivery closes plan mutations, not plan visibility or DXF downloads.
+_DELIVERED_PLAN_MUTATIONS = frozenset({
+    Capability.APPROVE_DXF,
+    Capability.UPLOAD_DXF,
+    Capability.REPLACE_DXF,
+    Capability.RECALCULATE_PLAN,
+    Capability.EDIT_OPTIMIZER_SETTINGS,
+    Capability.SET_OFFCUT_EXECUTION_OWNER,
+})
 
 
 def cutting_plan_capability_allowed(
@@ -40,6 +51,12 @@ def cutting_plan_capability_allowed(
         raise ValueError(
             f"Capability {capability} does not belong to {CUTTING_PLAN_DOCTYPE}."
         )
+
+    if (
+        str(getattr(order, "status", "") or "").strip() == "Delivered"
+        and capability in _DELIVERED_PLAN_MUTATIONS
+    ):
+        return False
 
     resolved_user = str(user or frappe.session.user or "")
     if resolved_user == "Administrator":

@@ -151,6 +151,8 @@
 
     function hasOperationalAccess(frm) {
         const routed = Boolean(String((frm.doc && frm.doc.production_path) || "").trim());
+        // A delivered order is immutable even if stale stage context still exists.
+        if (String((frm.doc && frm.doc.status) || "").trim() === "Delivered") return false;
         return !routed || canMutateCurrentStage(frm);
     }
 
@@ -200,7 +202,6 @@
             && rowHasPlan(row)
             && caps.export_dxf
             && can(frm, "export_dxf")
-            && hasOperationalAccess(frm)
         );
     }
 

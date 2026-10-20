@@ -135,7 +135,8 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertIn("order_name", download)
         self.assertIn("plan_source", download)
 
-    def test_current_approved_absent_upload_rejects_original_bytes(self) -> None:
+    def test_delivered_uploaded_tab_keeps_original_bytes_even_without_saw_paths(self) -> None:
+        self.order.status = "Delivered"
         self.order.approved_plan = "PLAN-1"
         approved_absent = SimpleNamespace(
             name="PLAN-1",
@@ -144,9 +145,13 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
             saw_center_status="Absent",
             dxf_file="/private/files/corrected.dxf",
         )
-        with self.assertRaises(_FakeThrow) as exc_info:
-            self._run(plan_source="custom", plan=approved_absent)
+        result = self._run(plan_source="custom", plan=approved_absent)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
 
+        # The Approved tab remains manufacturing-only: it must not ship a
+        # designer file without cut paths as if it were CNC-ready.
+        with self.assertRaises(_FakeThrow) as exc_info:
+            self._run(plan_source="approved", plan=approved_absent)
         self.assertIn("مسارات قص جاهزة للتصنيع", str(exc_info.exception))
 
     def test_current_approved_present_upload_keeps_original_bytes(self) -> None:
