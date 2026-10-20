@@ -24,6 +24,7 @@ PENDING_REQUESTS: dict[str, dict[str, str | float]] = {}
 TRACE_PATH: Path | None = None
 ACTIVE_STEP: str | None = None
 CERTIFIED_SCENARIOS: dict[str, dict] = {}
+INPUT_BOUNDARIES: dict[str, dict] = {}
 
 
 def record_scenario(name: str, **evidence) -> None:
@@ -956,6 +957,70 @@ def continue_edit_checkpoint(page: Page, name: str, notes: str) -> None:
     """, arg={"name": name, "notes": notes})
 
 
+def assert_edit_input_boundary(
+    page: Page, boundary: str, expected: dict, *, durable: dict | None = None,
+) -> None:
+    """Compare every input by row identity and retain useful RED evidence."""
+    observed = evaluate(page, f"inspect EDIT inputs at {boundary}", """args => {
+        const source = args.durable ? args.durable.payload.dco.pieces : cur_frm.doc.pieces;
+        const normalized = (row, field) => {
+            const value = row?.[field];
+            return ['Check', 'Float', 'Int'].includes(args.expected.types[field])
+                ? Number(value || 0) : String(value || '');
+        };
+        return args.expected.inputs.map(input => {
+            const matches = source.filter(row => args.durable
+                ? String(row.piece_key) === input.recoveryKey
+                : input.isLocal
+                    ? String(row.notes || '') === input.anchorNotes
+                    : String(row.name) === input.rowName);
+            const row = matches.length === 1 ? matches[0] : null;
+            return {
+                rowName: row?.name || null, recoveryKey: input.recoveryKey || null,
+                originalName: input.rowName, matches: matches.length,
+                fields: Object.fromEntries(args.expected.hiddenFields.map(field => [field, {
+                    expected: input.values[field], actual: normalized(row, field),
+                    matches: Boolean(row) && normalized(row, field) === input.values[field],
+                }])),
+            };
+        });
+    }""", {"expected": expected, "durable": durable})
+    mismatches = [
+        {"row": row["recoveryKey"] or row["originalName"], "field": field, **values}
+        for row in observed for field, values in row["fields"].items()
+        if not values["matches"]
+    ]
+    evidence = {
+        "result": "FAIL" if mismatches else "PASS", "rows": observed,
+        "hidden_input_count": len(expected["hiddenFields"]),
+        "hidden_fields": expected["hiddenFields"], "mismatches": mismatches,
+    }
+    if boundary == "first_restore_before_checkpoint":
+        # A failed restore must not become the new source of truth. Do not
+        # markDirty/flush here, even on failure, before reading the original.
+        retained = checkpoint_record(page, expected["orderName"])
+        evidence["original_checkpoint_preserved"] = (
+            retained["payload_hash"] == expected["originalHash"]
+            and retained["recovery_revision"] == expected["originalRevision"]
+        )
+        evidence["original_revision"] = expected["originalRevision"]
+        evidence["retained_revision"] = retained["recovery_revision"]
+        if not evidence["original_checkpoint_preserved"]:
+            evidence["result"] = "FAIL"
+    INPUT_BOUNDARIES[boundary] = evidence
+    destination = Path(os.environ.get("DCO_DESK_EVIDENCE_DIR", "/tmp/dco-desk-evidence"))
+    destination.mkdir(parents=True, exist_ok=True)
+    (destination / "edit-input-boundaries.json").write_text(
+        json.dumps(INPUT_BOUNDARIES, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
+    _trace_event("edit_input_boundary", boundary=boundary, result=evidence["result"],
+                 mismatches=len(mismatches), hidden_inputs=len(expected["hiddenFields"]))
+    assert not mismatches, f"EDIT {boundary}: {json.dumps(evidence, ensure_ascii=False)}"
+    assert evidence.get("original_checkpoint_preserved", True), (
+        f"EDIT {boundary} replaced its original checkpoint before verification: {evidence}"
+    )
+
+
 def save_other_tab(context, name: str, notes: str) -> dict:
     """An independent browser session commits an actual native Desk Save."""
     browser = context.browser
@@ -1280,26 +1345,65 @@ def certify_edit_restart_rows_and_offline(playwright_instance) -> None:
                 frm.doc.pieces.unshift(last);
                 frm.doc.pieces.forEach((row, index) => { row.idx = index + 1; row.piece_no = index + 1; });
                 const row = frm.doc.pieces[1];
-                await frappe.model.set_value(row.doctype, row.name, {
-                    edge_long_left: 1, edge_long_left_type_override: edgeType,
+                const hidden = frappe.get_meta(row.doctype).fields.filter(field =>
+                    AlmdinaDcoRecovery.Projection.PIECE_FIELDS.includes(field.fieldname)
+                    && field.hidden && !field.read_only
+                    && !['special_shape_drawing_json', 'special_shape_geometry_json'].includes(field.fieldname));
+                if (hidden.length !== 32) throw new Error('Expected all 32 hidden recovery inputs');
+                const types = Object.fromEntries(hidden.map(field => [field.fieldname, field.fieldtype]));
+                const normalize = (field, value) => ['Check', 'Float', 'Int'].includes(types[field])
+                    ? Number(value || 0) : String(value || '');
+                const requested = {
+                    edge_long_left: 1, edge_long_right: 1, edge_width_top: 1, edge_width_bottom: 1,
+                    edge_long_left_type_override: edgeType, edge_long_right_type_override: edgeType,
+                    edge_width_top_type_override: edgeType, edge_width_bottom_type_override: edgeType,
                     extra_full_door_double: 1, extra_liner: 1,
                     liner_reference_side: 'edge_long_left', liner_offset_cm: 0,
                     liner_width_cm: 1.8, liner_start_cm: 0, liner_length_cm: 100,
+                    extra_back_groove: 1, back_groove_reference_side: 'edge_long_right',
+                    back_groove_offset_cm: 5, back_groove_width_cm: 0.7,
+                    back_groove_start_cm: 10, back_groove_length_cm: 80,
+                    extra_recessed_handle_cutout: 1, recessed_handle_reference_side: 'edge_width_top',
+                    recessed_handle_offset_cm: 5, recessed_handle_width_cm: 2.3,
+                    recessed_handle_start_cm: 10, recessed_handle_length_cm: 14,
                     notes: 'Edges and extras survive EDIT hydration',
-                });
+                };
+                // Expected input is assembled before the mutation. A controller
+                // that rejects/resets a requested value cannot bless itself.
+                const inputs = frm.doc.pieces.map(item => ({
+                    rowName: String(item.name), isLocal: Boolean(item.__islocal),
+                    anchorNotes: item === row ? requested.notes : String(item.notes || ''),
+                    values: Object.fromEntries(hidden.map(field => [field.fieldname,
+                        normalize(field.fieldname, item === row && field.fieldname in requested
+                            ? requested[field.fieldname] : item[field.fieldname])])),
+                }));
+                await frappe.model.set_value(row.doctype, row.name, requested);
                 frm.refresh_field('pieces');
                 frm.dirty();
                 return {
+                    hiddenFields: hidden.map(field => field.fieldname), types, inputs,
                     removedName: removed.name,
                     retainedNames: frm.doc.pieces.filter(item => item !== added).map(item => item.name),
                     rowNotes: frm.doc.pieces.map(item => item.notes),
                     widths: frm.doc.pieces.map(item => Number(item.width_cm)),
                 };
             }""", FIXTURES["edge_type"])
+            expected["orderName"] = name
+            assert_edit_input_boundary(page, "live_after_mutation", expected)
             ack = flush_edit_checkpoint(page)
             durable = checkpoint_record(page, name)
             assert durable["payload"]["dco"]["order_notes"] == notes
             assert len(durable["payload"]["dco"]["pieces"]) == 3
+            for item in expected["inputs"]:
+                matches = [piece for piece in durable["payload"]["dco"]["pieces"] if (
+                    piece.get("notes") == item["anchorNotes"] if item["isLocal"]
+                    else piece["piece_key"] == item["rowName"]
+                )]
+                assert len(matches) == 1, (item["rowName"], "Durable row identity is not unique")
+                item["recoveryKey"] = matches[0]["piece_key"]
+            expected["originalHash"] = durable["payload_hash"]
+            expected["originalRevision"] = durable["recovery_revision"]
+            assert_edit_input_boundary(page, "acknowledged_durable_payload", expected, durable=durable)
             context.set_offline(False)
             assert server_document(page, name)["modified"] == original["modified"]
             record_scenario("offline_edit_checkpoint", acknowledged_revision=ack["saved_revision"], server_unchanged=True)
@@ -1309,6 +1413,10 @@ def certify_edit_restart_rows_and_offline(playwright_instance) -> None:
             attach_browser_diagnostics(page)
             open_dco(page, name)
             continue_edit_checkpoint(page, name, notes)
+            assert_edit_input_boundary(page, "first_restore_before_checkpoint", expected)
+            retained = checkpoint_record(page, name)
+            assert retained["payload_hash"] == expected["originalHash"]
+            assert retained["recovery_revision"] == expected["originalRevision"]
             flush_edit_checkpoint(page)
             record_scenario("edit_tab_close_reopen", same_profile=True, explicit_continue=True)
         finally:
@@ -1323,6 +1431,7 @@ def certify_edit_restart_rows_and_offline(playwright_instance) -> None:
         try:
             open_dco(page, name)
             continue_edit_checkpoint(page, name, notes)
+            assert_edit_input_boundary(page, "full_browser_restart_before_checkpoint", expected)
             result = evaluate(page, "verify actual child-row hydration after browser restart", """() => ({
                 names: cur_frm.doc.pieces.map(row => row.name),
                 notes: cur_frm.doc.pieces.map(row => row.notes),

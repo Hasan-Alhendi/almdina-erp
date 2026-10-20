@@ -4,6 +4,16 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const crypto = require("node:crypto");
+
+const childMetadata = JSON.parse(fs.readFileSync(path.resolve(__dirname,
+    "../../almdina_erp/doctype/door_cutting_order_detail/door_cutting_order_detail.json"), "utf8"));
+const headerMetadata = JSON.parse(fs.readFileSync(path.resolve(__dirname,
+    "../../almdina_erp/doctype/door_cutting_order/door_cutting_order.json"), "utf8"));
+const childFields = new Map(childMetadata.fields.map(df => [df.fieldname, structuredClone(df)]));
+const headerFields = new Map(headerMetadata.fields.map(df => [df.fieldname, structuredClone(df)]));
+let fieldOverrides = new Map();
+let mutateDerivedModel = null;
 
 const handlers = {};
 const windowListeners = new Map();
@@ -92,7 +102,8 @@ const fakeWindow = {
     structuredClone,
     cur_frm: null,
     AlmdinaDoorCuttingFastEntry: {
-        async render() {
+        async render(frm) {
+            if (mutateDerivedModel) mutateDerivedModel(frm);
             if (pauseDerivedRebuild) {
                 pauseDerivedRebuild.started();
                 await pauseDerivedRebuild.wait;
@@ -222,16 +233,14 @@ const fakeFrappe = {
     },
     meta: {
         get_docfield(doctype, fieldname) {
-            return {
-                doctype,
-                fieldname,
-                read_only: false,
-                ...(fieldname === "notes" ? { get_status() { return "Write"; } } : {}),
-            };
+            const fields = doctype === "Door Cutting Order Detail" ? childFields : headerFields;
+            const df = fields.get(fieldname);
+            if (!df) return null;
+            return fieldOverrides.has(fieldname) ? { ...df, ...fieldOverrides.get(fieldname) } : df;
         },
     },
     perm: {
-        get_field_display_status(df) { return df.fieldname === "edge_break" ? "Read" : "Write"; },
+        get_perm() { return fakeWindow.cur_frm.perm; },
     },
     async call(options) {
         serverDocumentReads += 1;
@@ -271,6 +280,7 @@ const context = vm.createContext({
     Promise,
     Blob,
     structuredClone,
+    cint(value) { return Number.parseInt(value || 0, 10) || 0; },
     locals: {},
     __(message) {
         // This harness asserts an Arabic notice; exercise its actual catalog entry.
@@ -280,6 +290,7 @@ const context = vm.createContext({
         return entry ? entry.slice(prefix.length) : message;
     },
 });
+Object.defineProperty(context, "cur_frm", { get: () => fakeWindow.cur_frm });
 
 function run(relative) {
     vm.runInContext(fs.readFileSync(path.resolve(__dirname, relative), "utf8"), context, {
@@ -287,6 +298,7 @@ function run(relative) {
     });
 }
 
+run("fixtures/frappe_v16_17_5_field_display_status.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js");
@@ -347,11 +359,17 @@ function form() {
             ],
         },
         coordinatorEditing: false,
+        perm: [{ read: 1, write: 1, create: 1 }, { read: 1, write: 0 }],
         dirtyState: false,
         is_new() { return false; },
         is_dirty() { return this.dirtyState; },
         get_field(fieldname) {
-            return { get_status() { return fieldname === "order_notes" ? "Read" : "Write"; } };
+            return { get_status() {
+                const df = fakeFrappe.meta.get_docfield("Door Cutting Order", fieldname);
+                // Model a native control's own DocField instance; do not let
+                // this test adapter mutate the shared metadata being audited.
+                return fakeFrappe.perm.get_field_display_status(df && { ...df }, frm.doc, frm.perm);
+            } };
         },
         add_child(fieldname) {
             return fakeFrappe.model.add_child(this.doc, "Door Cutting Order Detail", fieldname);
@@ -386,6 +404,7 @@ function form() {
         pieces: {
             grid: {
                 df: { fieldname: "pieces", options: "Door Cutting Order Detail" },
+                perm: frm.perm,
                 is_editable() { return false; },
                 refresh() {},
             },
@@ -404,7 +423,170 @@ async function settle() {
     for (let i = 0; i < 50; i += 1) await Promise.resolve();
 }
 
+function recoveryRecordFor(frm, rowValues = {}, headers = {}) {
+    const source = structuredClone(frm.doc);
+    Object.assign(source, headers);
+    Object.assign(source.pieces[0], rowValues);
+    const projection = fakeWindow.AlmdinaDcoRecovery.Projection;
+    const payload = projection.createPayload({
+        dco: projection.createDcoInput(source), dirtyScope: "DCO",
+    });
+    return makeRecord({
+        target_name: frm.doc.name, payload,
+        payload_hash: crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex"),
+    });
+}
+
+function changedValue(df) {
+    if (df.fieldtype === "Check") return 1;
+    if (df.fieldtype === "Float" || df.fieldtype === "Int") return 2.5;
+    if (df.fieldtype === "Select") return String(df.options).split("\n").filter(Boolean)[0];
+    if (df.fieldtype === "Long Text") return JSON.stringify({ kind: "polygon", points: [[0, 0], [4, 0], [4, 5]] });
+    return "Fixture custom input";
+}
+
+async function offerRecord(frm, record) {
+    fakeWindow.cur_frm = frm;
+    selectedRecord = record;
+    latestServerDocument = null;
+    permission = true;
+    fakeFrappe.lastMessage = null;
+    await handlers["Door Cutting Order"].onload(frm);
+    const dialog = dialogs.at(-1);
+    assert.equal(dialog.shown, true);
+    dialog.wrapper.fire("continue");
+    await settle();
+    return dialog;
+}
+
+async function assertAtomicRejection(frm, record, message) {
+    const original = JSON.stringify(frm.doc);
+    const originalRows = [...frm.doc.pieces];
+    const originalList = frm.doc.pieces;
+    const originalHash = record.payload_hash;
+    const originalRevision = record.recovery_revision;
+    const originalPayload = JSON.stringify(record.payload);
+    const beforeWrites = writes.length;
+    const beforeDeletes = deletes;
+    await offerRecord(frm, record);
+    const queued = checkpointFrames.get(frm);
+    if (queued) { queued(); await settle(); }
+    assert.equal(JSON.stringify(frm.doc), original, message);
+    assert.equal(frm.doc.pieces, originalList, "failed hydration retains its original child table object");
+    originalRows.forEach((row, index) => assert.equal(frm.doc.pieces[index], row));
+    assert.equal(frm.dirtyState, false, "a rejected restore never reports partially restored input as dirty success");
+    assert.equal(writes.length, beforeWrites, "rejected/rolled-back projection cannot replace its acknowledged source checkpoint");
+    assert.equal(deletes, beforeDeletes, "a rejected restore retains the local draft");
+    assert.equal(record.payload_hash, originalHash);
+    assert.equal(record.recovery_revision, originalRevision);
+    assert.equal(JSON.stringify(record.payload), originalPayload);
+    assert.ok(fakeFrappe.lastMessage, "required input denial/mismatch must produce an explicit restore failure");
+}
+
+async function runNativeMetadataRegressions() {
+    const projection = fakeWindow.AlmdinaDcoRecovery.Projection;
+    const hidden = childMetadata.fields.filter(df => df.hidden && projection.PIECE_FIELDS.includes(df.fieldname));
+    assert.equal(hidden.length, 32, "this count audits the current child metadata rather than a handmade field sample");
+    const failures = [];
+    async function check(name, callback) {
+        fieldOverrides = new Map();
+        mutateDerivedModel = null;
+        try {
+            await callback();
+            console.log(`PASS native metadata ${name}`);
+        } catch (error) {
+            failures.push({ name, error });
+            console.error(`FAIL native metadata ${name}: ${error.message}`);
+        } finally {
+            fieldOverrides = new Map();
+            mutateDerivedModel = null;
+        }
+    }
+    for (const df of hidden) {
+        await check(`authorized hidden ${df.fieldname} roundtrip`, async () => {
+            const frm = form();
+            const value = changedValue(df);
+            const record = recoveryRecordFor(frm, { [df.fieldname]: value });
+            const metadataBefore = JSON.stringify([...childFields]);
+            const headerMetadataBefore = JSON.stringify([...headerFields]);
+            const beforeWrites = writes.length;
+            await offerRecord(frm, record);
+            assert.equal(frm.doc.pieces[0][df.fieldname], value,
+                "custom-owned source input cannot be silently skipped because its native storage field is hidden");
+            assert.equal(JSON.stringify([...childFields]), metadataBefore, "restore must not mutate shared child metadata");
+            assert.equal(JSON.stringify([...headerFields]), headerMetadataBefore, "restore must not mutate shared header metadata");
+            const queued = checkpointFrames.get(frm);
+            assert.equal(typeof queued, "function");
+            queued();
+            await settle();
+            assert.ok(writes.length > beforeWrites, "the complete restored projection remains checkpointable");
+            const captured = writes.at(-1).payload.dco.pieces.find(row => row.piece_key === "EDIT-ROW-1");
+            assert.equal(captured[df.fieldname], value, "the next acknowledged checkpoint retains the restored source value");
+        });
+        await check(`denied hidden ${df.fieldname} is atomic`, async () => {
+            const frm = form();
+            fieldOverrides.set(df.fieldname, { permlevel: 1 });
+            const record = recoveryRecordFor(frm, { width_cm: 44, [df.fieldname]: changedValue(df) }, { customer: "LOCAL-CUSTOMER" });
+            await assertAtomicRejection(frm, record,
+                "permission denial for a required changed input cannot leave other headers/rows partially restored");
+        });
+    }
+    for (const denial of ["read_only", "disabled", "is_virtual", "set_only_once", "hidden_due_to_dependency"]) {
+        await check(`${denial} remains authoritative`, async () => {
+            const frm = form();
+            fieldOverrides.set("extra_liner", { [denial]: 1 });
+            await assertAtomicRejection(frm, recoveryRecordFor(frm, { width_cm: 44, extra_liner: 1 }),
+                "custom input visibility must not bypass actual current write restrictions");
+        });
+    }
+    await check("unchanged readonly baseline remains eligible", async () => {
+        const frm = form();
+        frm.doc.pieces[0].extra_liner = 1;
+        fieldOverrides.set("extra_liner", { read_only: 1 });
+        await offerRecord(frm, recoveryRecordFor(frm, { extra_liner: 1, width_cm: 44 }));
+        assert.equal(frm.doc.pieces[0].extra_liner, 1);
+        assert.equal(frm.doc.pieces[0].width_cm, 44,
+            "an unchanged current readonly value does not prevent restoration of authorized changes");
+        assert.equal(frm.dirtyState, true);
+    });
+    await check("denied new row is rejected before child insertion", async () => {
+        const frm = form();
+        fieldOverrides.set("extra_liner", { permlevel: 1 });
+        const record = recoveryRecordFor(frm, { width_cm: 44 });
+        record.payload.dco.pieces.push({
+            piece_key: "b2345678-1234-4123-8123-123456789abc",
+            piece_type: "Regular", width_cm: 50, length_cm: 90, qty: 1, extra_liner: 1,
+        });
+        record.payload_hash = crypto.createHash("sha256").update(JSON.stringify(record.payload)).digest("hex");
+        const beforeEvents = scriptEvents.length;
+        await assertAtomicRejection(frm, record, "a prospective denied child input cannot cause partial row creation");
+        assert.equal(scriptEvents.slice(beforeEvents).filter(event => event.event === "pieces_add").length, 0,
+            "new child field permission is checked before native insertion hooks");
+    });
+    await check("derived UI source mismatch rolls back before checkpoint", async () => {
+        const frm = form();
+        mutateDerivedModel = target => { target.doc.pieces[0].width_cm = 777; };
+        await assertAtomicRejection(frm, recoveryRecordFor(frm, { width_cm: 44 }, { customer: "LOCAL-CUSTOMER" }),
+            "derived UI cannot silently change recovered source input and publish that lossy model as success");
+    });
+    await check("financial and calculated values stay excluded", async () => {
+        const frm = form();
+        frm.doc.pieces[0].extra_liner_unit_price_usd = 9;
+        frm.doc.pieces[0].cut_width_cm = 8;
+        const record = recoveryRecordFor(frm, { width_cm: 44, extra_liner_unit_price_usd: 999, cut_width_cm: 999 });
+        assert.equal(Object.hasOwn(record.payload.dco.pieces[0], "extra_liner_unit_price_usd"), false);
+        assert.equal(Object.hasOwn(record.payload.dco.pieces[0], "cut_width_cm"), false);
+        await offerRecord(frm, record);
+        assert.equal(frm.doc.pieces[0].width_cm, 44);
+        assert.equal(frm.doc.pieces[0].extra_liner_unit_price_usd, 9);
+        assert.equal(frm.doc.pieces[0].cut_width_cm, 8);
+    });
+    if (failures.length) throw new AggregateError(failures.map(item => item.error),
+        `${failures.length} native-metadata recovery regressions failed: ${failures.map(item => item.name).join("; ")}`);
+}
+
 (async () => {
+    await runNativeMetadataRegressions();
     selectedRecord = makeRecord();
     const frm = form();
     fakeWindow.cur_frm = frm;
@@ -419,13 +601,13 @@ async function settle() {
     await settle();
     assert.equal(coordinatorStarts, 1);
     assert.equal(frm.doc.customer, "LOCAL-CUSTOMER", JSON.stringify(fakeFrappe.lastMessage));
-    assert.equal(frm.doc.order_notes, "SERVER-NOTE", "locked header fields stay at the current form value");
+    assert.equal(frm.doc.order_notes, "restored notes", "authorized header inputs are restored in full");
     assert.equal(frm.doc.pieces.map((row) => row.name).join(","), "EDIT-ROW-1,EDIT-ROW-2");
     assert.equal(frm.doc.pieces.map((row) => row.width_cm).join(","), "44,82");
     assert.equal(frm.doc.pieces[0].idx, 1, "restore preserves Frappe row identity and order metadata");
     assert.equal(frm.doc.pieces[0].owner, "server-1", "locked fields are not hydrated");
-    assert.equal(frm.doc.pieces[0].edge_break, 0, "Frappe's current field permission status preserves locked allowlisted values");
-    assert.equal(frm.doc.pieces[0].notes, "server notes", "unknown dynamic field status without a live control fails closed");
+    assert.equal(frm.doc.pieces[0].edge_break, 1, "authorized custom edge input survives native hidden storage metadata");
+    assert.equal(frm.doc.pieces[0].notes, "local notes", "authorized notes remain part of the complete restore");
     assert.equal(frm.doc.status, "Draft", "workflow fields are not hydrated");
     assert.equal(frm.dirtyState, true, "recovered values remain unsaved in the current form");
     assert.equal(officialSaves, 0, "restore never invokes the official Save action");
