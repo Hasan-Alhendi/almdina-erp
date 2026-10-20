@@ -7,6 +7,7 @@ from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
+    classify_corner_contour_type,
     match_corner_contour,
     measure_corner_remainings_cm,
     measure_l_remainings_cm,
@@ -386,6 +387,20 @@ def _unique_corner_contour_candidate(
     outer = _outer_ring_mm(piece)
     if outer is None:
         return _ExactCandidateMatch(None, "none")
+
+    actual_corner_type = classify_corner_contour_type(outer)
+    if actual_corner_type is not None:
+        compatible_matches = [
+            index
+            for index in matches
+            if unmatched[index]["spec"].piece_type == actual_corner_type
+        ]
+        # Keep the historical unresolved path when no candidate has the
+        # proven topology. When a compatible row exists, however, do not let
+        # an equal-bbox L and clipped row remain ambiguous merely because the
+        # requested notch dimensions are wrong.
+        if compatible_matches:
+            matches = compatible_matches
 
     first_copy_by_row: dict[int, int] = {}
     for index in matches:

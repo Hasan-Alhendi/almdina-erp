@@ -227,6 +227,37 @@ def measure_corner_remainings_cm(
     return (measured[1], measured[0]) if rotated else measured
 
 
+def classify_corner_contour_type(
+    outer_mm: Sequence[Sequence[float]],
+    *,
+    tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
+) -> str | None:
+    """Classify a proven L or clipped-corner topology without order sizes.
+
+    The measurements are deliberately geometry-only: they use the same
+    tolerance and collinear-vertex normalization as the strict matcher, but
+    do not compare against requested notch dimensions. This lets diagnostics
+    discard an incompatible corner type when several rows share one bbox.
+    """
+
+    l_remaining = measure_l_remainings_cm(
+        outer_mm,
+        rotated=False,
+        tolerance_mm=tolerance_mm,
+    )
+    clipped_remaining = measure_corner_remainings_cm(
+        outer_mm,
+        piece_type=CLIPPED_CORNER_TYPE,
+        rotated=False,
+        tolerance_mm=tolerance_mm,
+    )
+    if l_remaining is not None and clipped_remaining is None:
+        return L_SHAPED_CORNER_TYPE
+    if clipped_remaining is not None and l_remaining is None:
+        return CLIPPED_CORNER_TYPE
+    return None
+
+
 def _turn_cross(start: Point, corner: Point, end: Point) -> float:
     return (corner[0] - start[0]) * (end[1] - corner[1]) - (corner[1] - start[1]) * (
         end[0] - corner[0]
