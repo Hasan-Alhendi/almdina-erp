@@ -10,6 +10,7 @@ import inspect
 import itertools
 import unittest
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from almdina_erp.almdina_erp.application.customer_bot.conversation_ports import (
@@ -32,6 +33,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
     ServiceResultCode,
     conversation_state_from_payload,
 )
+from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
 from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import (
     InboundMessageKind,
     build_inbound_customer_message,
@@ -103,12 +105,13 @@ class _Routes:
 
 
 class _Services:
-    def __init__(self) -> None:
+    def __init__(self, result: CustomerServiceResult | None = None) -> None:
         self.requests: list[CustomerServiceRequest] = []
+        self.result = result or CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
 
     def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
         self.requests.append(request)
-        return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+        return self.result
 
 
 class _Exploding:
@@ -311,6 +314,31 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertEqual(turn.messages[0].key, BotMessageKey.ORDER_CANCELLED)
         self.assertEqual(services.requests, [])
         self.assertEqual(turn.state.service_id, BotService.FINAL_COST)
+
+    def test_option_two_returns_price_and_document_as_separate_outputs(self) -> None:
+        result = CustomerServiceResult(
+            ServiceResultCode.READY,
+            amount=Decimal("125.00"),
+            currency="USD",
+            documents=(
+                CustomerBotDocument(
+                    document_type="customer_invoice",
+                    filename="فاتورة-DCO-STOP.pdf",
+                    mime_type="application/pdf",
+                    content=b"%PDF-fake",
+                ),
+            ),
+        )
+        services = _Services(result)
+        orders = _Orders((_header("DCO-PRICE"),))
+        opened, _directory, _services = _run("hi", None, orders, services=services)
+        waiting, _directory, _services = _run("2", opened.state, orders, services=services)
+        turn, _directory, _services = _run("DCO-PRICE", waiting.state, orders, services=services)
+        self.assertEqual(turn.messages[0].key, BotMessageKey.FINAL_PRICE)
+        self.assertEqual(dict(turn.messages[0].parameters)["amount"], "125.00")
+        self.assertEqual(dict(turn.messages[0].parameters)["currency"], "USD")
+        self.assertEqual(turn.documents[0].mime_type, "application/pdf")
+        self.assertNotIn("documents", turn.state.to_payload())
 
     def test_missing_and_foreign_orders_have_the_same_messages(self) -> None:
         orders = _Orders((_header("DCO-FOREIGN", customer=OTHER, stored_status="Delivered"),))

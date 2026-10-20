@@ -8,6 +8,10 @@ from .conversation_ports import UnavailableCustomerBotServices
 from .dispatch_text_reply import dispatch_text_reply
 from .errors import BotReplyPortError
 from .handle_conversation import handle_customer_conversation
+from .final_price_service import (
+    CustomerBotFinalPriceService,
+    CustomerBotFinalPriceSnapshot,
+)
 from .phone_access_commands import (
     PhoneAccessRetired,
     approve_phone_access_request,
@@ -30,6 +34,8 @@ __all__ = [
     "UnavailableCustomerBotServices",
     "dispatch_text_reply",
     "handle_customer_conversation",
+    "CustomerBotFinalPriceService",
+    "CustomerBotFinalPriceSnapshot",
     "list_current_customer_orders",
     "reject_phone_access_request",
     "request_additional_phone_access",

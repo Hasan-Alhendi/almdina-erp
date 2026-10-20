@@ -14,10 +14,12 @@ from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
     ConversationPhase,
     ConversationState,
     ConversationTurn,
+    ServiceResultCode,
     conversation_isolation_key,
     menu_command,
     service_for_menu_digit,
 )
+from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
 from almdina_erp.almdina_erp.domain.customer_bot.identity import IdentityCode
 from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import (
     InboundCustomerMessage,
@@ -261,6 +263,7 @@ def _select_typed_order(
     if selection.outcome == OrderSelectionOutcome.IDENTITY_UNAVAILABLE:
         return ConversationTurn(None, (_message(BotMessageKey.UNREGISTERED_PHONE),))
     selected_name = previous_order_name
+    documents = ()
     if selection.outcome == OrderSelectionOutcome.NOT_FOUND:
         body = (_message(BotMessageKey.ORDER_NOT_FOUND),)
     elif selection.outcome == OrderSelectionOutcome.CANCELLED:
@@ -271,7 +274,8 @@ def _select_typed_order(
         body = (_message(BotMessageKey.ORDER_NOT_CURRENT, (("order_name", selection.order_name or ""),)),)
     else:
         selected_name = selection.order_name
-        body = (_service_message(service_id, selection, services, phone),)
+        service_message, documents = _service_output(service_id, selection, services, phone)
+        body = (service_message,)
     return ConversationTurn(
         _fresh(
             message,
@@ -282,15 +286,16 @@ def _select_typed_order(
             selected_name,
         ),
         body + (_message(BotMessageKey.ASK_ORDER_NUMBER, (("service_id", service_id),)),),
+        documents,
     )
 
 
-def _service_message(
+def _service_output(
     service_id: str,
     selection: OrderSelection,
     services: CustomerBotServicePort,
     phone: str,
-) -> BotMessage:
+) -> tuple[BotMessage, tuple[CustomerBotDocument, ...]]:
     order_name = selection.order_name or ""
     if service_id == BotService.ORDER_STATUS:
         return _message(
@@ -299,14 +304,40 @@ def _service_message(
                 ("order_name", order_name),
                 ("public_status", selection.public_status or PublicOrderStatus.UNSUPPORTED),
             ),
-        )
-    services.execute(
+        ), ()
+    result = services.execute(
         CustomerServiceRequest(phone=phone, service_id=service_id, order_name=order_name)
     )
+    if service_id == BotService.FINAL_COST:
+        if result.code == ServiceResultCode.READY:
+            return (
+                _message(
+                    BotMessageKey.FINAL_PRICE,
+                    (
+                        ("order_name", order_name),
+                        ("amount", _amount_text(result.amount)),
+                        ("currency", str(result.currency or "")),
+                    ),
+                ),
+                result.documents,
+            )
+        if result.code == ServiceResultCode.PRICE_UNAVAILABLE:
+            return _message(BotMessageKey.FINAL_PRICE_UNAVAILABLE), ()
+        if result.code == ServiceResultCode.INVOICE_FAILED:
+            return _message(BotMessageKey.INVOICE_FAILED), ()
+        if result.code == ServiceResultCode.PRICE_DATA_CHANGED:
+            return _message(BotMessageKey.PRICE_DATA_CHANGED), ()
     return _message(
         BotMessageKey.SERVICE_UNAVAILABLE,
         (("service_id", service_id), ("order_name", order_name)),
-    )
+    ), ()
+
+
+def _amount_text(value: object) -> str:
+    try:
+        return f"{value:.2f}"
+    except (TypeError, ValueError):
+        return ""
 
 
 def _main_menu(

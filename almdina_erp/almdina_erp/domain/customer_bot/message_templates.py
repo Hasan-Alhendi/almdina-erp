@@ -37,6 +37,10 @@ _MESSAGE_FIELDS: tuple[tuple[str, str, frozenset[str], int], ...] = (
     (BotMessageKey.ORDER_NOT_CURRENT, "orders", frozenset({"order_name"}), MAX_MESSAGE_LENGTH),
     (BotMessageKey.ORDER_CANCELLED, "orders", frozenset({"order_name"}), MAX_MESSAGE_LENGTH),
     (BotMessageKey.ORDER_STATUS, "statuses", frozenset({"order_name", "public_status"}), MAX_MESSAGE_LENGTH),
+    (BotMessageKey.FINAL_PRICE, "statuses", frozenset({"order_name", "amount", "currency"}), MAX_MESSAGE_LENGTH),
+    (BotMessageKey.FINAL_PRICE_UNAVAILABLE, "guidance", frozenset(), MAX_MESSAGE_LENGTH),
+    (BotMessageKey.INVOICE_FAILED, "guidance", frozenset(), MAX_MESSAGE_LENGTH),
+    (BotMessageKey.PRICE_DATA_CHANGED, "guidance", frozenset(), MAX_MESSAGE_LENGTH),
     (BotMessageKey.UNREGISTERED_PHONE, "guidance", frozenset(), MAX_MESSAGE_LENGTH),
     (BotMessageKey.INVALID_ORDER_NUMBER, "guidance", frozenset({"return_digit"}), MAX_MESSAGE_LENGTH),
     (BotMessageKey.SERVICE_UNAVAILABLE, "guidance", frozenset({"service_id", "order_name"}), MAX_MESSAGE_LENGTH),
@@ -48,7 +52,15 @@ MENU_ENTRIES: tuple[tuple[str, str], ...] = (
     ("4", BotService.MEASUREMENTS),
 )
 GROUP_ORDER = ("welcome_menu", "orders", "statuses", "guidance")
-VARIABLE_NAMES = ("order_name", "order_date", "public_status", "service_id", "return_digit")
+VARIABLE_NAMES = (
+    "order_name",
+    "order_date",
+    "public_status",
+    "service_id",
+    "return_digit",
+    "amount",
+    "currency",
+)
 
 
 @dataclass(frozen=True, slots=True)

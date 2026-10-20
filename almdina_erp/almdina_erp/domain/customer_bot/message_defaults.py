@@ -22,6 +22,10 @@ def default_texts() -> dict[str, str]:
         BotMessageKey.ORDER_NOT_CURRENT: "هذه النسخة ليست الطلب الحالي.",
         BotMessageKey.ORDER_CANCELLED: "هذا الطلب تم إلغاؤه سابقاً.",
         BotMessageKey.ORDER_STATUS: "{order_name}: {public_status}",
+        BotMessageKey.FINAL_PRICE: "السعر النهائي المعتمد للطلب {order_name}: {amount} {currency}.",
+        BotMessageKey.FINAL_PRICE_UNAVAILABLE: "لم يتم اعتماد السعر النهائي لهذا الطلب بعد، يرجى التواصل مع الموظف",
+        BotMessageKey.INVOICE_FAILED: "تعذّر تجهيز فاتورة هذا الطلب حالياً، يرجى المحاولة لاحقاً أو التواصل مع الموظف.",
+        BotMessageKey.PRICE_DATA_CHANGED: "تغيّرت بيانات السعر أثناء التجهيز، يرجى المحاولة مرة أخرى.",
         BotMessageKey.UNREGISTERED_PHONE: "عذراً رقمك غير مسجل بالنظام، قم بالتواصل مع الموظف من فضلك",
         BotMessageKey.INVALID_ORDER_NUMBER: "أدخل رقم الطلب الكامل كما هو، أو أرسل {return_digit} للقائمة الرئيسية.",
         BotMessageKey.SERVICE_UNAVAILABLE: "هذه الخدمة غير متاحة حالياً.",
@@ -46,6 +50,8 @@ def variable_examples() -> dict[str, str]:
         "public_status": texts[status_label_key(PublicOrderStatus.AWAITING_START)],
         "service_id": texts[service_title_key(BotService.ORDER_STATUS)],
         "return_digit": "0",
+        "amount": "125.00",
+        "currency": "USD",
     }
 
 

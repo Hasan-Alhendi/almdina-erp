@@ -8,6 +8,7 @@ to a provider name or session id.
 from .conversation import BotMessageKey, BotService, ConversationPhase
 from .gateway_capabilities import BotGatewayCapabilities
 from .inbound_message import InboundCustomerMessage, InboundMessageKind, build_inbound_customer_message
+from .documents import CustomerBotDocument
 from .order_followup import (
     PublicOrderStatus,
     classify_public_order_status,
@@ -28,6 +29,7 @@ __all__ = [
     "ConversationPhase",
     "InboundCustomerMessage",
     "InboundMessageKind",
+    "CustomerBotDocument",
     "PublicOrderStatus",
     "classify_public_order_status",
     "SendDisposition",

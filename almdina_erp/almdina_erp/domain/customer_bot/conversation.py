@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from .checks import required_bool, required_token
+from .documents import CustomerBotDocument
 
 
 class BotService:
@@ -39,10 +40,18 @@ class BotMessageKey:
     ORDER_NOT_CURRENT = "order_not_current"
     INVALID_ORDER_NUMBER = "invalid_order_number"
     SERVICE_UNAVAILABLE = "service_unavailable"
+    FINAL_PRICE = "final_price"
+    FINAL_PRICE_UNAVAILABLE = "final_price_unavailable"
+    INVOICE_FAILED = "invoice_failed"
+    PRICE_DATA_CHANGED = "price_data_changed"
 
 
 class ServiceResultCode:
     UNAVAILABLE = "service_unavailable"
+    READY = "ready"
+    PRICE_UNAVAILABLE = "price_unavailable"
+    INVOICE_FAILED = "invoice_failed"
+    PRICE_DATA_CHANGED = "price_data_changed"
 
 
 _SERVICE_BY_DIGIT = {
@@ -76,7 +85,15 @@ _LATER_SERVICES = frozenset(
     }
 )
 _PARAMETER_NAMES = frozenset(
-    {"service_id", "order_name", "order_date", "public_status", "return_digit"}
+    {
+        "service_id",
+        "order_name",
+        "order_date",
+        "public_status",
+        "return_digit",
+        "amount",
+        "currency",
+    }
 )
 _STATE_FIELDS = frozenset(
     {
@@ -189,6 +206,7 @@ class ConversationState:
 class ConversationTurn:
     state: ConversationState | None
     messages: tuple[BotMessage, ...]
+    documents: tuple[CustomerBotDocument, ...] = ()
 
 
 def conversation_state_from_payload(payload: object) -> ConversationState | None:

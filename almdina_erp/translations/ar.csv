@@ -2928,6 +2928,10 @@ Order not found,الطلب غير موجود
 Not the current revision,ليست النسخة الحالية
 Cancelled order,طلب ملغى
 Order status result,نتيجة حالة الطلب
+Approved final price result,نتيجة السعر النهائي المعتمد
+Final price not approved,السعر النهائي غير معتمد
+Invoice PDF failed,تعذر تجهيز فاتورة PDF
+Price changed during invoice preparation,تغير السعر أثناء تجهيز الفاتورة
 Unregistered number,رقم غير مسجل
 Invalid order number,رقم طلب غير صحيح
 Service unavailable,خدمة غير متاحة
@@ -2945,6 +2949,8 @@ Order date as stored. Empty when the order has no date,تاريخ الطلب ك�
 Status label for the order's public status,نص الحالة العامة للطلب
 Editable title of the selected service,عنوان الخدمة المختارة القابل للتعديل
 Fixed return digit 0,رقم الرجوع الثابت 0
+Approved amount, formatted by the service,المبلغ المعتمد كما تنسقه الخدمة
+Approved currency from the approval record,العملة المعتمدة من سجل الاعتماد
 Unknown number,رقم غير معروف
 Type any message. The sample number is not a customer.,اكتب أي رسالة. الرقم التجريبي ليس عميلاً.
 Customer with no orders,عميل بلا طلبات

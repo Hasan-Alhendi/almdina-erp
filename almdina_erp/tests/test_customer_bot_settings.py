@@ -58,6 +58,7 @@ from almdina_erp.almdina_erp.domain.security.factory_settings import (
     expand_factory_settings_capabilities,
     settings_context,
 )
+from almdina_erp.patches.v1_0.install_customer_bot_settings import _merge_texts
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,6 +144,18 @@ class CustomerBotTemplateTests(unittest.TestCase):
         for digit, service_id in MENU_ENTRIES:
             self.assertEqual(service_for_menu_digit(digit), service_id)
         self.assertNotIn(BotMessageKey.MAIN_MENU, catalog_keys())
+
+    def test_catalog_upgrade_preserves_custom_texts_and_adds_only_new_keys(self) -> None:
+        old = {
+            BotMessageKey.WELCOME: "ترحيب مخصص",
+            BotMessageKey.ORDER_STATUS: "حالة مخصصة {order_name}: {public_status}",
+        }
+        merged = _merge_texts(old, default_texts())
+        self.assertEqual(merged[BotMessageKey.WELCOME], old[BotMessageKey.WELCOME])
+        self.assertEqual(merged[BotMessageKey.ORDER_STATUS], old[BotMessageKey.ORDER_STATUS])
+        self.assertEqual(merged[BotMessageKey.FINAL_PRICE], default_texts()[BotMessageKey.FINAL_PRICE])
+        self.assertEqual(set(merged), set(default_texts()))
+        self.assertEqual(_merge_texts(merged, default_texts()), merged)
 
     def test_catalog_covers_engine_messages_services_and_statuses(self) -> None:
         message_keys = {
