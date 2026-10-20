@@ -13,7 +13,7 @@ function method(source, start, end, scope) {
     const begin = source.indexOf(start);
     const finish = source.indexOf(end, begin);
     assert.ok(begin >= 0 && finish > begin, `missing source method ${start}`);
-    return vm.runInNewContext(`${source.slice(begin, finish)}; ${start.match(/function (\\w+)/)[1]}`, scope);
+    return vm.runInNewContext(`${source.slice(begin, finish)}; ${start.slice("function ".length, start.indexOf("("))}`, scope);
 }
 
 const operational = method(context, "function hasOperationalAccess(frm)", "function canApprove", {
