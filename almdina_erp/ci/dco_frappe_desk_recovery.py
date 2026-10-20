@@ -1347,8 +1347,7 @@ def certify_edit_restart_rows_and_offline(playwright_instance) -> None:
                 const row = frm.doc.pieces[1];
                 const hidden = frappe.get_meta(row.doctype).fields.filter(field =>
                     AlmdinaDcoRecovery.Projection.PIECE_FIELDS.includes(field.fieldname)
-                    && field.hidden && !field.read_only
-                    && !['special_shape_drawing_json', 'special_shape_geometry_json'].includes(field.fieldname));
+                    && field.hidden && !field.read_only);
                 if (hidden.length !== 32) throw new Error('Expected all 32 hidden recovery inputs');
                 const types = Object.fromEntries(hidden.map(field => [field.fieldname, field.fieldtype]));
                 const normalize = (field, value) => ['Check', 'Float', 'Int'].includes(types[field])
