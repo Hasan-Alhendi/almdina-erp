@@ -79,7 +79,7 @@ def _route_active(order: Any) -> bool:
 
 def _edit_state(order: Any) -> dict[str, Any]:
     if str(getattr(order, "status", "") or "").strip() == "Delivered":
-        return {"can_edit": False, "reason": _("Delivered orders are read-only."), "stage": None}
+        return {"can_edit": False, "reason": _("لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب."), "stage": None}
     if not document_has_capability(order, Capability.EDIT_SPECIAL_DRAWING):
         return {"can_edit": False, "reason": _("You do not have permission to edit special door documentation."), "stage": None}
     if _route_active(order):
@@ -95,7 +95,7 @@ def _edit_state(order: Any) -> dict[str, Any]:
 
 def _assert_editable(order: Any) -> None:
     if str(getattr(order, "status", "") or "").strip() == "Delivered":
-        frappe.throw(_("Delivered orders are read-only."), frappe.PermissionError)
+        frappe.throw(_("لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب."), frappe.PermissionError)
     require_document_capability(
         order,
         Capability.EDIT_SPECIAL_DRAWING,
