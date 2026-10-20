@@ -1317,6 +1317,7 @@ The documentation workspace is available for special doors only.,مساحة ال
 The selected door does not belong to this order.,الدرفة المحددة لا تنتمي إلى هذا الطلب.
 You do not have permission to edit special door documentation.,ليس لديك صلاحية تعديل توثيق الدرف الخاصة.
 You are not allowed to edit special door documentation.,لا تملك صلاحية تعديل توثيق الدرف الخاصة.
+Special door documentation cannot be edited after the order is delivered.,لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب.
 Documentation can be edited when the order state allows it.,يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك.
 The documentation workspace accepts only the current contract.,مساحة التوثيق تقبل العقد الحالي فقط.
 The documentation width does not match the door width.,عرض التوثيق لا يطابق عرض الدرفة.
