@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     SAW_CENTER_INVALID,
     SAW_CENTER_MATCH,
     classify_saw_center_segments,
+    cutter_center_paths,
     cutter_center_segments,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import SAW_CENTER_INVALID as SAW_CENTER_ISSUE
@@ -159,7 +160,42 @@ def test_modern_upload_with_matching_saw_centers_keeps_present_status():
     assert snapshot["saw_center_status"] == "Present"
 
 
-def test_modern_upload_with_invalid_saw_centers_is_rejected():
+@pytest.mark.parametrize("entity_type", ["LWPOLYLINE", "POLYLINE"])
+def test_modern_upload_accepts_independent_closed_multi_offset_contours(entity_type):
+    finished = [_rect(10, 10, 200, 500), _rect(215, 10, 200, 500)]
+    shapes = [(ring, ()) for ring in finished]
+    paths = cutter_center_paths(shapes, 2.5, board=(0.0, 0.0, 1220.0, 2440.0))
+    assert len(paths) == 2
+    assert all(path.closed for path in paths)
+
+    document = ezdxf.new("R2010")
+    for name in ("SHEET_OUTLINE", "CUT_PATH", "GEOMETRY", "TEXT"):
+        document.layers.add(name)
+    modelspace = _sheet(document)
+    for index, ring in enumerate(finished, start=1):
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "GEOMETRY"}, close=True)
+        modelspace.add_text(
+            str(index),
+            dxfattribs={"layer": "TEXT", "insert": (110 + (index - 1) * 205, 260), "height": 12},
+        )
+    for path in paths:
+        if entity_type == "LWPOLYLINE":
+            modelspace.add_lwpolyline(path.points, dxfattribs={"layer": "CUT_PATH"}, close=True)
+        else:
+            modelspace.add_polyline2d(path.points, dxfattribs={"layer": "CUT_PATH"}, close=True)
+
+    order = _order([
+        _piece(piece_instance_id="door-1", width_cm=20, length_cm=50, cut_width_cm=20, cut_length_cm=50),
+        _piece(piece_instance_id="door-2", width_cm=20, length_cm=50, cut_width_cm=20, cut_length_cm=50),
+    ])
+    snapshot = _import(_write(document), order, kerf_mm=5, trim_mm=5)
+
+    assert snapshot["saw_center_status"] == "Present"
+    assert len(snapshot["sheets"][0]["pieces"]) == 2
+
+
+@pytest.mark.parametrize("entity_type", ["LINE", "LWPOLYLINE", "POLYLINE"])
+def test_modern_upload_with_invalid_saw_centers_is_rejected(entity_type):
     finished = _rect(10, 10, 500, 500)
     document = ezdxf.new("R2010")
     for name in ("SHEET_OUTLINE", "CUT_PATH", "GEOMETRY", "TEXT"):
@@ -167,9 +203,14 @@ def test_modern_upload_with_invalid_saw_centers_is_rejected():
     modelspace = _sheet(document)
     for start, end in zip(finished, (*finished[1:], finished[0])):
         modelspace.add_line(start, end, dxfattribs={"layer": "GEOMETRY"})
-    # Partial / wrong center: finished edge coordinates, not the radius offset.
-    for start, end in zip(finished, (*finished[1:], finished[0])):
-        modelspace.add_line(start, end, dxfattribs={"layer": "CUT_PATH"})
+    # Wrong center: finished edge coordinates, not the radius offset.
+    if entity_type == "LINE":
+        for start, end in zip(finished, (*finished[1:], finished[0])):
+            modelspace.add_line(start, end, dxfattribs={"layer": "CUT_PATH"})
+    elif entity_type == "LWPOLYLINE":
+        modelspace.add_lwpolyline(finished, dxfattribs={"layer": "CUT_PATH"}, close=True)
+    else:
+        modelspace.add_polyline2d(finished, dxfattribs={"layer": "CUT_PATH"}, close=True)
     modelspace.add_text("1", dxfattribs={"layer": "TEXT", "insert": (250, 250), "height": 12})
     order = _order([
         _piece(piece_instance_id="door-1", width_cm=50, length_cm=50, cut_width_cm=50, cut_length_cm=50),

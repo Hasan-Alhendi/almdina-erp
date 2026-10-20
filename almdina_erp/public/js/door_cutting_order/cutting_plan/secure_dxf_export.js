@@ -652,31 +652,42 @@
         ));
     }
 
-    function cutterCenterSegments(shapes, radius, board) {
+    function cutterCenterPaths(shapes, radius, board) {
         const safeRadius = Math.max(0, num(radius));
         const prepared = shapes.map(shape => ({
             outer: openRing(shape.outer),
             holes: (shape.holes || []).map(openRing).filter(hole => hole.length >= 3),
         })).filter(shape => shape.outer.length >= 3);
-        const segments = [];
+        const closedPaths = [];
+        const openSegments = [];
         prepared.forEach(shape => {
             [shape.outer].concat(shape.holes).forEach(ring => {
                 const offset = safeRadius <= COLLINEAR_TOLERANCE_MM
                     ? ring
                     : offsetClosed(ring, safeRadius, wasteSign(ring, prepared, safeRadius));
                 if (offset.length < 3) return;
+                const boardEdges = new Set();
                 ring.forEach((start, index) => {
                     const finishedEnd = ring[(index + 1) % ring.length];
-                    if (finishedEdgeOnBoard(start, finishedEnd, board)) return;
-                    const offsetStart = offset[index];
+                    if (finishedEdgeOnBoard(start, finishedEnd, board)) boardEdges.add(index);
+                });
+                if (!boardEdges.size) {
+                    closedPaths.push({ points: offset, closed: true });
+                    return;
+                }
+                offset.forEach((point, index) => {
+                    if (boardEdges.has(index)) return;
+                    const offsetStart = point;
                     const offsetEnd = offset[(index + 1) % offset.length];
                     if (Math.hypot(offsetEnd[0] - offsetStart[0], offsetEnd[1] - offsetStart[1]) > COLLINEAR_TOLERANCE_MM) {
-                        segments.push([offsetStart, offsetEnd]);
+                        openSegments.push([offsetStart, offsetEnd]);
                     }
                 });
             });
         });
-        return mergeCollinear(segments);
+        return closedPaths.concat(
+            mergeCollinear(openSegments).map(segment => ({ points: segment, closed: false }))
+        );
     }
 
     function mergeCollinear(segments) {
@@ -1022,8 +1033,16 @@
             };
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
             if (includeSawCenters) {
-                cutterCenterSegments(shapes, num(cutterMm) / 2, physicalBoard).forEach(segment => {
-                    entities += line(SAW_CENTER_LAYER, segment[0][0], segment[0][1], segment[1][0], segment[1][1]);
+                cutterCenterPaths(shapes, num(cutterMm) / 2, physicalBoard).forEach(path => {
+                    entities += path.closed
+                        ? lwpolyline(SAW_CENTER_LAYER, path.points, true)
+                        : line(
+                            SAW_CENTER_LAYER,
+                            path.points[0][0],
+                            path.points[0][1],
+                            path.points[1][0],
+                            path.points[1][1]
+                        );
                 });
             }
         });
