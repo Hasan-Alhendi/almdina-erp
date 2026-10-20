@@ -230,7 +230,17 @@ async function main() {
         currentTab = tab;
         const piece = tab === "Custom" ? withSide : fullPath;
         const html = await printed(piece);
-        assert.match(html, new RegExp(`PLAN-${piece.id}`));
+        // The verified plan row owns print identity, but plan names/revisions are
+        // intentionally omitted from the printed header. Prove the chosen tab
+        // renders its own physical edge geometry instead of an ID label.
+        if (tab === "Custom") {
+            assert.ok(breakOnlyPoints(html), "Custom print must include its break-only diagonal");
+            assert.match(html, /dco-edge-line-svg "/, "Custom print must retain the adjacent side band");
+            assert.doesNotMatch(html, /dco-edge-break-svg"/, "Custom print must not render Approved edge mode");
+        } else {
+            assert.match(html, /dco-edge-break-svg"/, "Approved print must render the full clipped-edge band");
+            assert.equal(breakOnlyPoints(html), "", "Approved print must not render Custom break-only mode");
+        }
         assert.match(html, /DCO-BREAK-ONLY/);
         assert.equal(await renderer.print(frm, planFor(alone)), false,
             `${tab} cannot print geometry from the other source`);
