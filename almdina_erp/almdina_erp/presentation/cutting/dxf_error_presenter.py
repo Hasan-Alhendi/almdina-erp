@@ -29,6 +29,10 @@ _GEOMETRY_ERROR_AR = {
     "zero_area": "مساحة المسار تساوي صفرًا",
     "self_intersection": "المسار يتقاطع مع نفسه",
 }
+_CORNER_DIMENSION_CODES = {
+    codes.L_CORNER_NOTCH_MISMATCH,
+    codes.CLIPPED_CORNER_DIMENSIONS_MISMATCH,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +212,40 @@ def _l_notch_difference_lines(axes: Any) -> tuple[str, ...]:
             )
         )
     return tuple(lines)
+
+
+def _corner_remaining_size(params: Mapping[str, Any], key: str) -> str:
+    values = params.get(key)
+    if not isinstance(values, Mapping):
+        return ""
+    if values.get("width") is None or values.get("length") is None:
+        return ""
+    return _size_cm(values.get("width"), values.get("length"))
+
+
+def _corner_dimension_highlight(params: Mapping[str, Any]) -> str:
+    finished = _corner_remaining_size(params, "expected_finished_remaining_cm")
+    raw = _corner_remaining_size(params, "expected_raw_remaining_cm")
+    actual = _corner_remaining_size(params, "actual_raw_remaining_cm")
+    if not finished or not actual:
+        return ""
+    if raw and raw != finished:
+        return _(
+            "Order finished dimensions: {0}. Required raw dimensions after edge banding: {1}. DXF dimensions: {2}."
+        ).format(finished, raw, actual)
+    return _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+        finished,
+        actual,
+    )
+
+
+def _corner_copy_target(issue: DxfValidationIssue, fallback: str) -> str:
+    if issue.target.source_piece_no is None or issue.target.copy_no is None:
+        return fallback
+    return _("Door {0} — copy {1}.").format(
+        issue.target.source_piece_no,
+        issue.target.copy_no,
+    )
 
 
 def _action_for_context(action: str, context: str) -> str:
@@ -696,6 +734,19 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             action = _("Add a distinct machining reference that establishes the door orientation then re-upload the DXF.")
         return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.CORNER_EDGE_UNRESOLVED:
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
+        )
+        if candidate_rows and issue.target.kind == codes.TARGET_CONTOUR:
+            candidates = "، ".join(str(row) for row in candidate_rows)
+            target_text = _("Possible doors: {0}. Additional contour information: {1}").format(
+                candidates,
+                target_text,
+            )
         reason = str(params.get("reason") or "")
         if reason == "break_thickness_unknown":
             problem = "تعذر التحقق من أبعاد زاوية L لأن سماكة قشاط الزاوية الداخلي غير معروفة."
@@ -711,14 +762,30 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             action = "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة، أو بعد انعكاس واحد مع إحدى هذه الدورانات. المقاس الخارجي وحده لا يكفي."
         return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.L_CORNER_NOTCH_MISMATCH:
-        l_target = target_text[:-1] + " — زاوية L." if target_text.endswith(".") else f"{target_text} — زاوية L."
+        corner_target = _corner_copy_target(issue, target_text)
+        target_base = corner_target[:-1] if corner_target.endswith(".") else corner_target
+        l_target = _("{0} — L corner.").format(target_base)
         return PresentedDxfError(
-            "أبعاد زاوية L في ملف DXF لا تطابق أبعاد القص المطلوبة بعد احتساب سماكات القشاطات.",
+            _("The L-corner dimensions in the DXF do not match the order."),
             l_target,
-            "راجع أبعاد التجويف الداخلي في AutoCAD، وعدّل البعد الموضح ليطابق مقاس القص الخام المطلوب، ثم أعد رفع الملف.",
+            _("Correct the L-corner dimensions in the DXF file, then upload it again."),
             code,
             issue.category,
             _l_notch_difference_lines(params.get("axes")),
+            _corner_dimension_highlight(params),
+        )
+    if code == codes.CLIPPED_CORNER_DIMENSIONS_MISMATCH:
+        corner_target = _corner_copy_target(issue, target_text)
+        target_base = corner_target[:-1] if corner_target.endswith(".") else corner_target
+        clipped_target = _("{0} — clipped corner.").format(target_base)
+        return PresentedDxfError(
+            _("The clipped-corner dimensions in the DXF do not match the order."),
+            clipped_target,
+            _("Correct the clipped-corner dimensions in the DXF file, then upload it again."),
+            code,
+            issue.category,
+            _l_notch_difference_lines(params.get("axes")),
+            _corner_dimension_highlight(params),
         )
 
     if code == codes.FORBIDDEN_ROTATION:
@@ -908,6 +975,19 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError("هوية القطعة لا تطابق هوية الطلب المحفوظة.", target_text, "أعد حساب الخطة أو استورد DXF من الطلب الحالي.", code, issue.category)
 
     if code == codes.PIECE_IDENTITY_AMBIGUOUS:
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
+        )
+        if candidate_rows:
+            candidates = "، ".join(str(row) for row in candidate_rows)
+            target_text = _("Possible doors: {0}. Additional contour information: {1}").format(
+                candidates,
+                target_text,
+            )
         return PresentedDxfError(
             "هوية مسار القص ملتبسة بين أكثر من قطعة.",
             target_text,
@@ -1295,6 +1375,41 @@ def _glass_group_target(group: Sequence[DxfValidationIssue]) -> str:
     return present_issue(first).target
 
 
+def _corner_group_signature(item: DxfValidationIssue) -> tuple[str, ...]:
+    params = item.params or {}
+    return (
+        item.code,
+        item.category,
+        str(item.target.source_piece_no or ""),
+        repr(params.get("expected_finished_remaining_cm") or {}),
+        repr(params.get("expected_raw_remaining_cm") or {}),
+        repr(params.get("actual_raw_remaining_cm") or {}),
+        repr(params.get("axes") or ()),
+    )
+
+
+def _corner_group_target(group: Sequence[DxfValidationIssue]) -> str:
+    first = group[0]
+    piece_no = first.target.source_piece_no
+    copies = sorted({
+        int(item.target.copy_no)
+        for item in group
+        if item.target.copy_no is not None
+    })
+    if piece_no is None or not copies:
+        return present_issue(first).target
+    if len(copies) == 1:
+        return present_issue(first).target
+    if copies == list(range(copies[0], copies[-1] + 1)):
+        return _("Door {0} — copies {1} through {2}.").format(
+            piece_no,
+            copies[0],
+            copies[-1],
+        )
+    listed = "، ".join(str(copy_no) for copy_no in copies)
+    return _("Door {0} — copies {1}.").format(piece_no, listed)
+
+
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
     """Group by cause and corrective action, retaining per-issue evidence."""
     grouped: list[list[DxfValidationIssue]] = []
@@ -1327,6 +1442,14 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
                 codes.TARGET_CONTOUR_PAIR,
             }
         )
+        if item.code in _CORNER_DIMENSION_CODES and item.target.source_piece_no is not None:
+            key = _corner_group_signature(item)
+            if key in index_by_key:
+                grouped[index_by_key[key]].append(item)
+                continue
+            index_by_key[key] = len(grouped)
+            grouped.append([item])
+            continue
         if item.code in _GLASS_CODES and item.target.source_piece_no is not None:
             key = _glass_group_signature(item)
             if key in index_by_key:
@@ -1374,6 +1497,18 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             presented.action,
             presented.code,
             presented.category,
+        )
+    if group[0].code in _CORNER_DIMENSION_CODES:
+        presented = present_issue(group[0])
+        return PresentedDxfError(
+            presented.problem,
+            _corner_group_target(group),
+            presented.action,
+            presented.code,
+            presented.category,
+            presented.details,
+            presented.highlight,
+            presented.detail_table,
         )
     first = present_issue(group[0])
     contour_nos = [item.target.contour_no for item in group if item.target.contour_no is not None]
@@ -1503,7 +1638,7 @@ def render_error_cards_html(
         if item.code not in _GLASS_CODES and (item.details or item.detail_table):
             summary = (
                 "تفاصيل الاختلاف"
-                if item.code == codes.L_CORNER_NOTCH_MISMATCH
+                if item.code in _CORNER_DIMENSION_CODES
                 else "عرض كل المواضع المتأثرة"
             )
             lines = "".join(f"<li>{html.escape(detail)}</li>" for detail in item.details)

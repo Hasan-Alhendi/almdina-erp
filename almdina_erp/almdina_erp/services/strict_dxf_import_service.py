@@ -8,6 +8,7 @@ from typing import Any
 from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     match_corner_contour,
+    measure_corner_remainings_cm,
     measure_l_remainings_cm,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
@@ -61,6 +62,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_TOPOLOGY,
     APPLIED_TRIM_OVERFLOW,
     CORNER_EDGE_UNRESOLVED,
+    CLIPPED_CORNER_DIMENSIONS_MISMATCH,
     REGULAR_EDGE_ORIENTATION_UNRESOLVED,
     L_CORNER_NOTCH_MISMATCH,
     CUT_DIMENSIONS_BIND_FAILED,
@@ -724,11 +726,14 @@ def _l_notch_mismatch_issue(
     spec: OrderPieceCutSpec,
     candidate: dict[str, Any],
     outer: list[list[float]],
+    *,
+    rotated: bool | None = None,
 ) -> DxfValidationIssue | None:
     raw = _l_corner_cut(spec)
     if raw is None or not raw.proven:
         return None
-    measured = measure_l_remainings_cm(outer, rotated=bool(piece.get("rotated")))
+    is_rotated = bool(piece.get("rotated")) if rotated is None else rotated
+    measured = measure_l_remainings_cm(outer, rotated=is_rotated)
     if measured is None:
         return None
     axes: list[dict[str, str]] = []
@@ -761,7 +766,121 @@ def _l_notch_mismatch_issue(
             copy_no=int(candidate.get("copy_no") or 1),
             label=str(candidate.get("label") or ""),
         ),
-        params={"piece_type": spec.piece_type, "axes": axes},
+        params={
+            "piece_type": spec.piece_type,
+            "axes": axes,
+            "expected_finished_remaining_cm": {
+                "width": str(raw.width.finished_remaining_cm),
+                "length": str(raw.length.finished_remaining_cm),
+            },
+            "expected_raw_remaining_cm": {
+                "width": str(raw.width.expected_raw_cm),
+                "length": str(raw.length.expected_raw_cm),
+            },
+            "actual_raw_remaining_cm": {
+                "width": str(normalize_cut_cm(measured[0])),
+                "length": str(normalize_cut_cm(measured[1])),
+            },
+        },
+    )
+
+
+def _clipped_corner_dimensions_mismatch_issue(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    candidate: dict[str, Any],
+    outer: list[list[float]],
+    *,
+    rotated: bool,
+) -> DxfValidationIssue | None:
+    if spec.piece_type != "Clipped Corner":
+        return None
+    measured = measure_corner_remainings_cm(
+        outer,
+        piece_type=spec.piece_type,
+        rotated=rotated,
+    )
+    if measured is None:
+        return None
+    notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    expected_finished = (
+        normalize_cut_cm(spec.finished_width_cm - spec.clipped_corner_width_cm),
+        normalize_cut_cm(spec.finished_length_cm - spec.clipped_corner_length_cm),
+    )
+    expected_raw = (
+        normalize_cut_cm(spec.cut_width_cm - Decimal(str(notch_width_cm))),
+        normalize_cut_cm(spec.cut_length_cm - Decimal(str(notch_length_cm))),
+    )
+    actual_raw = (
+        normalize_cut_cm(measured[0]),
+        normalize_cut_cm(measured[1]),
+    )
+    if actual_raw == expected_raw:
+        return None
+    axes: list[dict[str, str]] = []
+    for index, name in enumerate(("width", "length")):
+        if actual_raw[index] == expected_raw[index]:
+            continue
+        band_mm = (expected_finished[index] - expected_raw[index]) * MM_PER_CM
+        axes.append(
+            {
+                "axis": name,
+                "finished_remaining_cm": str(expected_finished[index]),
+                "band_mm": str(band_mm),
+                "expected_raw_cm": str(expected_raw[index]),
+                "actual_raw_cm": str(actual_raw[index]),
+                "delta_mm": str((actual_raw[index] - expected_raw[index]) * MM_PER_CM),
+            }
+        )
+    return issue(
+        CLIPPED_CORNER_DIMENSIONS_MISMATCH,
+        CATEGORY_DIMENSIONS,
+        target=piece_target(
+            source_piece_no=spec.row_index,
+            copy_no=int(candidate.get("copy_no") or 1),
+            label=str(candidate.get("label") or ""),
+        ),
+        params={
+            "piece_type": spec.piece_type,
+            "axes": axes,
+            "expected_finished_remaining_cm": {
+                "width": str(expected_finished[0]),
+                "length": str(expected_finished[1]),
+            },
+            "expected_raw_remaining_cm": {
+                "width": str(expected_raw[0]),
+                "length": str(expected_raw[1]),
+            },
+            "actual_raw_remaining_cm": {
+                "width": str(actual_raw[0]),
+                "length": str(actual_raw[1]),
+            },
+        },
+    )
+
+
+def _corner_dimensions_mismatch_issue(
+    piece: dict[str, Any],
+    spec: OrderPieceCutSpec,
+    candidate: dict[str, Any],
+    outer: list[list[float]],
+    *,
+    rotated: bool,
+) -> DxfValidationIssue | None:
+    if spec.piece_type == "L-Shaped Corner":
+        return _l_notch_mismatch_issue(
+            piece,
+            spec,
+            candidate,
+            outer,
+            rotated=rotated,
+        )
+    return _clipped_corner_dimensions_mismatch_issue(
+        piece,
+        spec,
+        candidate,
+        outer,
+        rotated=rotated,
     )
 
 
@@ -785,6 +904,87 @@ def _outer_ring_mm(piece: dict[str, Any]) -> list[list[float]] | None:
     if isinstance(outer, (str, bytes)) or not isinstance(outer, list) or len(outer) < 3:
         return None
     return outer
+
+
+def _unique_unresolved_corner_dimension_candidate(
+    unmatched: list[dict[str, Any]],
+    piece: dict[str, Any],
+    results: tuple[tuple[bool, _ExactCandidateMatch], ...],
+) -> tuple[int, DxfValidationIssue] | None:
+    """Diagnose one proven corner row without guessing among equal-size rows."""
+
+    rows = {
+        row_index
+        for _rotated, result in results
+        if result.corner_reason == "none"
+        for row_index in result.candidate_rows
+    }
+    if len(rows) != 1:
+        return None
+    row_index = next(iter(rows))
+    candidate_index = next(
+        (
+            index
+            for index, candidate in enumerate(unmatched)
+            if candidate["spec"].row_index == row_index
+        ),
+        None,
+    )
+    if candidate_index is None:
+        return None
+
+    candidate = unmatched[candidate_index]
+    spec: OrderPieceCutSpec = candidate["spec"]
+    outer = _outer_ring_mm(piece)
+    if outer is None:
+        return None
+    rotations = []
+    for rotated, result in results:
+        if row_index in result.candidate_rows and rotated not in rotations:
+            rotations.append(rotated)
+
+    diagnosed: list[DxfValidationIssue] = []
+    for rotated in rotations:
+        measured = measure_corner_remainings_cm(
+            outer,
+            piece_type=spec.piece_type,
+            rotated=rotated,
+        )
+        if measured is None:
+            continue
+        mismatch = _corner_dimensions_mismatch_issue(
+            piece,
+            spec,
+            candidate,
+            outer,
+            rotated=rotated,
+        )
+        if mismatch is None:
+            reason = (
+                "break_thickness_unknown"
+                if spec.piece_type == "L-Shaped Corner"
+                and spec.edge_break
+                and spec.edge_break_thickness_mm is None
+                else "none"
+            )
+            return (
+                candidate_index,
+                issue(
+                    CORNER_EDGE_UNRESOLVED,
+                    CATEGORY_TOPOLOGY,
+                    target=piece_target(
+                        source_piece_no=spec.row_index,
+                        copy_no=int(candidate.get("copy_no") or 1),
+                        label=str(candidate.get("label") or ""),
+                    ),
+                    params={
+                        "piece_type": spec.piece_type,
+                        "reason": reason,
+                    },
+                ),
+            )
+        diagnosed.append(mismatch)
+    return (candidate_index, diagnosed[0]) if diagnosed else None
 
 
 def _bind_corner_edge_rotation(
@@ -820,7 +1020,13 @@ def _bind_corner_edge_rotation(
     )
     if match is None or match.quarter_turns is None:
         if outer is not None:
-            mismatch = _l_notch_mismatch_issue(piece, spec, candidate, outer)
+            mismatch = _corner_dimensions_mismatch_issue(
+                piece,
+                spec,
+                candidate,
+                outer,
+                rotated=bool(piece.get("rotated")),
+            )
             if mismatch is not None:
                 return mismatch
         reason = match.reason if match is not None else "none"
@@ -1310,6 +1516,21 @@ def _apply_strict_dimension_contract(
                             actual_h=actual_h,
                         )
                     )
+                    continue
+
+                corner_dimension_candidate = _unique_unresolved_corner_dimension_candidate(
+                    unmatched,
+                    piece,
+                    (
+                        (False, direct_match),
+                        (True, rotated_match),
+                        (True, forbidden_match),
+                    ),
+                )
+                if corner_dimension_candidate is not None:
+                    diagnosed_index, diagnosed_issue = corner_dimension_candidate
+                    unmatched.pop(diagnosed_index)
+                    issues.append(diagnosed_issue)
                     continue
 
                 unresolved_rows = tuple(sorted({

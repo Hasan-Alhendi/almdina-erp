@@ -7,13 +7,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from frappe import _
 
 from almdina_erp.almdina_erp.domain.cutting.corner_contour_rotation import (
     _corner_polygon_mm,
     match_corner_contour,
+    measure_corner_remainings_cm,
 )
 from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
     present_issue,
+    present_issues,
     render_error_cards_html,
 )
 from almdina_erp.almdina_erp.services.piece_cut_dimension_service import OrderPieceCutSpec
@@ -171,6 +174,31 @@ def test_wrong_cavity_is_not_a_rotation_or_a_mirror():
     assert match.reason == "none"
     assert match.quarter_turns is None
     assert match.mirrored is False
+
+
+@pytest.mark.parametrize("piece_type", ["L-Shaped Corner", "Clipped Corner"])
+@pytest.mark.parametrize("turns", [0, 1, 2, 3])
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_corner_remaining_measurement_returns_to_order_frame(piece_type, turns, mirrored):
+    ring = _mm_ring(piece_type, "Top Right", 900, 800, 600, 400)
+    if mirrored:
+        ring = _reflect_x(ring, width=900)
+    transformed = ring
+    width_mm, height_mm = 900, 800
+    for _ in range(turns):
+        transformed, width_mm, height_mm = _rotate_clockwise(
+            transformed,
+            width_mm,
+            height_mm,
+        )
+
+    measured = measure_corner_remainings_cm(
+        _disturb(transformed),
+        piece_type=piece_type,
+        rotated=bool(turns % 2),
+    )
+
+    assert measured == pytest.approx((30, 40))
 
 
 def test_mirrored_or_rectangular_contour_is_not_a_guessed_rotation():
@@ -749,9 +777,156 @@ def test_repeated_corner_candidates_do_not_fall_back_when_no_shape_matches():
     ]
     assert errors[0].params["reason"] == "none"
     assert errors[0].params["candidate_source_piece_nos"] == [1, 2]
+    assert errors[0].target.source_piece_no is None
+    ambiguous_card = present_issue(errors[0])
+    assert "1" in ambiguous_card.target and "2" in ambiguous_card.target
+    assert "مسار القص رقم 1" in ambiguous_card.target
     piece = snapshot["sheets"][0]["pieces"][0]
     assert piece["piece_type"] == "Regular"
     assert "source_piece_no" not in piece
+
+
+def test_repeated_l_copies_with_wrong_remainings_are_present_not_missing():
+    spec = _spec(
+        row_index=3,
+        qty=5,
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    wrong = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 500, 500))
+    snapshot = _multi_corner_snapshot([wrong] * 5)
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == ["L_CORNER_NOTCH_MISMATCH"] * 5
+    assert [error.target.source_piece_no for error in errors] == [3] * 5
+    assert [error.target.copy_no for error in errors] == [1, 2, 3, 4, 5]
+    assert all(error.params["expected_finished_remaining_cm"] == {
+        "width": "50.000",
+        "length": "50.000",
+    } for error in errors)
+    assert all(error.params["actual_raw_remaining_cm"] == {
+        "width": "40.000",
+        "length": "40.000",
+    } for error in errors)
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(3, 1, 5)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_repeated_clipped_copies_report_inner_dimensions_without_missing():
+    spec = _spec(
+        qty=2,
+        piece_type="Clipped Corner",
+        edge_break=0,
+        edge_break_only=1,
+        side_profiles=(),
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    wrong = _disturb(_mm_ring("Clipped Corner", "Top Right", 900, 900, 500, 500))
+    snapshot = _multi_corner_snapshot([wrong, wrong])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CLIPPED_CORNER_DIMENSIONS_MISMATCH",
+        "CLIPPED_CORNER_DIMENSIONS_MISMATCH",
+    ]
+    assert [error.target.copy_no for error in errors] == [1, 2]
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+    cards = present_issues(errors)
+    assert len(cards) == 1
+    assert cards[0].target == _("Door {0} — copies {1} through {2}.").format(1, 1, 2)
+    assert "50 × 50" in cards[0].highlight
+    assert "40 × 40" in cards[0].highlight
+
+
+def test_repeated_l_copies_with_unknown_inner_band_are_present_not_missing():
+    spec = _spec(
+        qty=2,
+        edge_break=1,
+        edge_break_thickness_mm=None,
+    )
+    recognizable_l = _disturb(
+        _mm_ring("L-Shaped Corner", "Top Right", 400, 800, 80, 161)
+    )
+    snapshot = _multi_corner_snapshot([recognizable_l, recognizable_l])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    assert [error.code for error in errors] == [
+        "CORNER_EDGE_UNRESOLVED",
+        "CORNER_EDGE_UNRESOLVED",
+    ]
+    assert [error.target.source_piece_no for error in errors] == [1, 1]
+    assert [error.target.copy_no for error in errors] == [1, 2]
+    assert all(error.params["reason"] == "break_thickness_unknown" for error in errors)
+    assert "PIECE_MISSING" not in [error.code for error in errors]
+
+
+def test_different_corner_measurements_on_one_row_are_not_grouped_together():
+    spec = _spec(
+        qty=2,
+        side_profiles=(),
+        edge_break=1,
+        edge_break_thickness_mm=Decimal("0"),
+        finished_width_cm=Decimal("90"),
+        finished_length_cm=Decimal("90"),
+        cut_width_cm=Decimal("90"),
+        cut_length_cm=Decimal("90"),
+        clipped_corner_width_cm=Decimal("40"),
+        clipped_corner_length_cm=Decimal("40"),
+    )
+    remaining_40 = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 500, 500))
+    remaining_45 = _disturb(_mm_ring("L-Shaped Corner", "Top Right", 900, 900, 450, 450))
+    snapshot = _multi_corner_snapshot([remaining_40, remaining_45])
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_multi_corner_order([spec]),
+    )
+
+    cards = present_issues(errors)
+    assert len(cards) == 2
+    assert {card.highlight for card in cards} == {
+        _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+            "\u206650 × 50\u2069 سم",
+            "\u206640 × 40\u2069 سم",
+        ),
+        _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+            "\u206650 × 50\u2069 سم",
+            "\u206645 × 45\u2069 سم",
+        ),
+    }
 
 
 _SQUARE_L = [
@@ -900,14 +1075,17 @@ def test_l_inner_band_rejects_a_cavity_that_ignores_its_thickness():
     assert axis[0]["actual_raw_cm"] == "32.000"
     card = present_issue(errors[0])
     html = render_error_cards_html(errors)
-    assert card.target == "الدرفة 1 — زاوية L."
-    assert "بعد احتساب سماكات القشاطات" in card.problem
+    copy_target = _("Door {0} — copy {1}.").format(1, 1)
+    assert card.target == _("{0} — L corner.").format(copy_target[:-1])
+    assert card.problem == _("The L-corner dimensions in the DXF do not match the order.")
     assert "32 سم" in card.details[1]
     assert "1 مم" in card.details[2]
     assert "31.9 سم" in card.details[3]
     assert "32 سم" in card.details[4]
     assert "1 مم" in card.details[5]
     assert "زيادة" in card.details[5]
+    assert "32" in card.highlight
+    assert "31.9" in card.highlight
     assert "تفاصيل الاختلاف" in html
     assert "ما المشكلة؟" in html
 
