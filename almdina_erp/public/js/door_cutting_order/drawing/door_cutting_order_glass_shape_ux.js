@@ -116,7 +116,7 @@
             ? `${marginCmTextFromMm(state.opening.marginMm)} ${__("cm")}`
             : "";
         return {
-            enabled: Boolean(options.editable) && !options.virtual,
+            enabled: !options.virtual,
             incomplete: !valid,
             icon: "▢",
             label: valid ? summary : __("Set"),
@@ -268,8 +268,9 @@
 
     let activeDialog = null;
 
-    function open(frm, row) {
+    function open(frm, row, options = {}) {
         if (!frm || !isGlass(row)) return;
+        const readOnly = Boolean(options.readOnly);
         const currentRow = () => {
             const editor = window.AlmdinaClippedCornerEditor;
             if (editor && typeof editor.resolveChildRow === "function") {
@@ -284,8 +285,12 @@
         const dialog = new frappe.ui.Dialog({
             title: __("Glass Door"),
             fields: [{ fieldname: "glass_editor", fieldtype: "HTML" }],
-            primary_action_label: __("Apply Shape"),
+            primary_action_label: readOnly ? __("Close") : __("Apply Shape"),
             primary_action() {
+                if (readOnly) {
+                    dialog.hide();
+                    return Promise.resolve();
+                }
                 const root = dialog.$wrapper.find(".dco-glass-editor").get(0);
                 const input = root && root.querySelector("[data-glass-margin]");
                 const latestRow = currentRow();
@@ -343,9 +348,17 @@
         const root = field.$wrapper.find(".dco-glass-editor").get(0);
         renderEditor(root, currentRow() || row, draft, { setInput: true });
         const input = root.querySelector("[data-glass-margin]");
+        if (readOnly) {
+            input.disabled = true;
+            return;
+        }
         input.addEventListener("input", () => {
             renderEditor(root, currentRow() || row, input.value);
         });
+    }
+
+    function view(frm, row) {
+        return open(frm, row, { readOnly: true });
     }
 
     window.AlmdinaGlassShape = Object.freeze({
@@ -364,5 +377,6 @@
         renderEditor,
         syncShapeButton,
         open,
+        view,
     });
 })();

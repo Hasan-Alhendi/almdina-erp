@@ -60,6 +60,23 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("__manufacturingGeometrySeparated: true", facade)
         self.assertNotIn("frappe.ui.Dialog", facade)
 
+    def test_inspection_link_forces_read_only_even_when_stage_grants_edit(self) -> None:
+        facade = FACADE.read_text(encoding="utf-8")
+        page = PAGE.read_text(encoding="utf-8")
+        controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
+        corner = (PUBLIC / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_clipped_corner_ux.js").read_text(encoding="utf-8")
+        operator = (PUBLIC / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_operator_ux.js").read_text(encoding="utf-8")
+        self.assertIn('if (readOnly) parts.push("view")', facade)
+        self.assertIn('readOnly: value[3] === "view"', page)
+        self.assertIn("context = route.readOnly", controller)
+        self.assertIn("can_edit: false", controller)
+        self.assertIn("Shell.mount(main, context)", controller)
+        self.assertIn('== "Delivered"', service)
+        self.assertIn('frappe.PermissionError', service)
+        self.assertIn("if (!readOnly) prepareRow(liveRow)", corner)
+        self.assertIn("else window.AlmdinaSpecialShapeEditor.view(currentFrm, row)", operator)
+
     def test_back_closes_opener_tab_then_falls_back_to_order_route(self) -> None:
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
         self.assertIn("window.opener", controller)

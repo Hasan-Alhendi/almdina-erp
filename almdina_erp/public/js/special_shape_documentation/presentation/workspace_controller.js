@@ -320,9 +320,13 @@
         async function open(route) {
             const token = ++generation; suspended = false; cleanup(); showMessage(translateCopy("Loading door documentation…"));
             try {
-                const loaded = await Api.load(route.orderName, route.pieceName); if (token !== generation || suspended) return; context = loaded;
-                const document = D.fromStored(loaded.piece.special_shape_drawing_json, loaded.piece); history = H.create(document); main.innerHTML = ""; shell = Shell.mount(main, loaded); renderer = Canvas.create(shell.canvas); bindEvents(); chooseTool("select");
-                if (!loaded.permissions.can_edit && loaded.permissions.edit_reason) frappe.show_alert({ message: loaded.permissions.edit_reason, indicator: "orange" }, 5);
+                const loaded = await Api.load(route.orderName, route.pieceName); if (token !== generation || suspended) return;
+                // A view-only order link cannot unlock editing through stage permissions.
+                context = route.readOnly
+                    ? { ...loaded, permissions: { ...loaded.permissions, can_edit: false } }
+                    : loaded;
+                const document = D.fromStored(context.piece.special_shape_drawing_json, context.piece); history = H.create(document); main.innerHTML = ""; shell = Shell.mount(main, context); renderer = Canvas.create(shell.canvas); bindEvents(); chooseTool("select");
+                if (!context.permissions.can_edit && context.permissions.edit_reason) frappe.show_alert({ message: context.permissions.edit_reason, indicator: "orange" }, 5);
             } catch (error) { console.error("Documentation workspace load failed", error); if (token === generation) showMessage(translateCopy("Could not load the door. Open the documentation from the order and check the permissions."), true); }
         }
         function suspend() { suspended = true; generation += 1; cleanup(); }
