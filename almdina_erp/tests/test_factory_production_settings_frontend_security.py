@@ -16,6 +16,7 @@ MODULES = tuple(MODULE_ROOT / name for name in (
     "interactions.js",
     "dialogs.js",
     "whatsapp_panel.js",
+    "customer_bot_panel.js",
     "controller.js",
 ))
 
@@ -48,8 +49,13 @@ class FactoryProductionSettingsFrontendSecurityTest(unittest.TestCase):
 
         self.assertIn("current.permissions.sections", view_model)
         self.assertIn("current.permissions.can_manage_whatsapp_session", view_model)
+        self.assertIn("showCustomerBotPanel: canManageCustomerBotSettings(current)", view_model)
         self.assertIn("viewModel.sectionEditable(state.current, section)", controller)
         self.assertIn("viewModel.canManageWhatsAppSession(state.current)", controller)
+        self.assertIn(
+            "viewModel.canManageCustomerBotSettings(state.current) && customerBot",
+            controller,
+        )
         self.assertNotIn("frappe.call(", controller)
 
 

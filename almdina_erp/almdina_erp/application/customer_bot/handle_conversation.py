@@ -208,7 +208,6 @@ def _open_service(
             ),
             (
                 _message(BotMessageKey.NO_CURRENT_ORDERS, (("service_id", service_id),)),
-                _message(BotMessageKey.ASK_ORDER_NUMBER, (("service_id", service_id),)),
             ),
         )
     if listed.outcome == CurrentOrderListOutcome.ONE:

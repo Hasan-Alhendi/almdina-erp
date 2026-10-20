@@ -76,6 +76,7 @@
         let initialLoadPending = true;
         let whatsapp = null;
         let backups = null;
+        let customerBot = null;
 
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(translate("Change log"), openAudit, null, "history");
@@ -95,6 +96,7 @@
             dispose() {
                 if (whatsapp && typeof whatsapp.dispose === "function") whatsapp.dispose();
                 if (backups && typeof backups.dispose === "function") backups.dispose();
+                if (customerBot && typeof customerBot.dispose === "function") customerBot.dispose();
                 dialogs.dispose();
                 store.dispose();
                 if (wrapper.__almdinaProductionSettingsController === instance) {
@@ -108,6 +110,7 @@
             onDeactivate: () => {
                 if (whatsapp && typeof whatsapp.deactivate === "function") whatsapp.deactivate();
                 if (backups && typeof backups.deactivate === "function") backups.deactivate();
+                if (customerBot && typeof customerBot.deactivate === "function") customerBot.deactivate();
                 dialogs.deactivate();
                 store.deactivate();
             },
@@ -141,6 +144,13 @@
                 isActive: () => Boolean(activation && activation.isActive()),
             });
         }
+        const customerBotModule = window.AlmdinaFactoryProductionSettingsCustomerBot;
+        if (customerBotModule && typeof customerBotModule.attach === "function") {
+            customerBot = customerBotModule.attach({
+                api, renderer, frontend, lifecycle: store.lifecycle, translate, $body,
+                isActive: () => Boolean(activation && activation.isActive()),
+            });
+        }
         store.lifecycle.track(() => activation.dispose(), "production-settings-page-activation");
         if (activation.isActive()) load();
         return instance;
@@ -165,22 +175,11 @@
 
         function render() {
             renderer.render(viewModel.page(state.current));
-            // Full-page render always replaces the live session card with the
-            // loading placeholder, so the OpenWA snapshot must be re-fetched.
-            if (
-                viewModel.canManageWhatsAppSession(state.current)
-                && whatsapp
-                && typeof whatsapp.refresh === "function"
-            ) {
-                whatsapp.refresh();
-            }
-            if (
-                viewModel.page(state.current).showBackupPanel
-                && backups
-                && typeof backups.refresh === "function"
-            ) {
-                backups.refresh();
-            }
+            // Full-page render replaces panel placeholders, so each visible
+            // panel loads its own snapshot again.
+            if (viewModel.canManageWhatsAppSession(state.current) && whatsapp) whatsapp.refresh();
+            if (viewModel.page(state.current).showBackupPanel && backups) backups.refresh();
+            if (viewModel.canManageCustomerBotSettings(state.current) && customerBot) customerBot.refresh();
         }
 
         function load() {

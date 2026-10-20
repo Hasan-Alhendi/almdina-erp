@@ -291,7 +291,10 @@ class CustomerBotConversationTests(unittest.TestCase):
         orders = _Orders((_header("DCO-DONE", stored_status="Delivered", order_date="2026-09-01"),))
         opened, _directory, _services = _run("hi", None, orders)
         waiting, _directory, _services = _run("1", opened.state, orders)
-        self.assertEqual(waiting.messages[0].key, BotMessageKey.NO_CURRENT_ORDERS)
+        self.assertEqual(
+            [message.key for message in waiting.messages],
+            [BotMessageKey.NO_CURRENT_ORDERS],
+        )
         self.assertEqual(orders.exact_names, [])
         selected, _directory, services = _run("  DCO-DONE  ", waiting.state, orders)
         self.assertEqual(selected.messages[0].key, BotMessageKey.ORDER_STATUS)

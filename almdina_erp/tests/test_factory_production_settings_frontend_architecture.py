@@ -16,6 +16,7 @@ RENDERER = MODULE_ROOT / "renderer.js"
 INTERACTIONS = MODULE_ROOT / "interactions.js"
 DIALOGS = MODULE_ROOT / "dialogs.js"
 CONTROLLER = MODULE_ROOT / "controller.js"
+CUSTOMER_BOT = MODULE_ROOT / "customer_bot_panel.js"
 CSS = ROOT / "public" / "css" / "factory_production_settings.css"
 
 
@@ -30,6 +31,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         cls.interactions = INTERACTIONS.read_text(encoding="utf-8")
         cls.dialogs = DIALOGS.read_text(encoding="utf-8")
         cls.controller = CONTROLLER.read_text(encoding="utf-8")
+        cls.customer_bot = CUSTOMER_BOT.read_text(encoding="utf-8")
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_thin_composition_root(self) -> None:
@@ -47,6 +49,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "dialogs.js",
             "whatsapp_panel.js",
             "backup_panel.js",
+            "customer_bot_panel.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_production_settings/{asset}", self.page)
@@ -69,6 +72,11 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "create_backup_now",
             "test_ssh_connection",
             "request_restore",
+            "get_customer_bot_settings",
+            "save_customer_bot_draft",
+            "publish_customer_bot_texts",
+            "set_customer_bot_enabled",
+            "preview_customer_bot",
         ):
             self.assertIn(endpoint, self.api)
             for other in (
@@ -79,6 +87,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
                 self.interactions,
                 self.dialogs,
                 self.controller,
+                self.customer_bot,
             ):
                 self.assertNotIn(endpoint, other)
         self.assertIn("foundation().rpc", self.api)

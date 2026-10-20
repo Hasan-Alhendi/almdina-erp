@@ -28,6 +28,10 @@
             return Boolean(current && current.permissions && current.permissions.can_manage_whatsapp_session);
         }
 
+        function canManageCustomerBotSettings(current) {
+            return Boolean(current && current.permissions && current.permissions.can_manage_customer_bot_settings);
+        }
+
         function canManageBackups(current) {
             return Boolean(current && current.permissions && current.permissions.can_manage_backups);
         }
@@ -162,6 +166,7 @@
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
                 canManageWhatsAppSession: canManageWhatsAppSession(current),
+                showCustomerBotPanel: canManageCustomerBotSettings(current),
                 showBackupPanel: canManageBackups(current) || canRestoreBackups(current),
             };
         }
@@ -170,6 +175,7 @@
             values,
             sectionEditable,
             canManageWhatsAppSession,
+            canManageCustomerBotSettings,
             canManageBackups,
             canRestoreBackups,
             yesNo,

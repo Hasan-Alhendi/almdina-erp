@@ -26,6 +26,7 @@ const files = [
     "public/js/factory_production_settings/renderer.js",
     "public/js/factory_production_settings/view_model.js",
     "public/js/factory_production_settings/whatsapp_panel.js",
+    "public/js/factory_production_settings/customer_bot_panel.js",
     "almdina_erp/page/factory_master_data/factory_master_data.js",
     "almdina_erp/page/factory_plan_archive/factory_plan_archive.js",
 ];

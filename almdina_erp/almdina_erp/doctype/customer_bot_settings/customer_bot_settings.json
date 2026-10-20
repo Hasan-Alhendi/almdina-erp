@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "enabled",
+    "revision",
+    "draft_texts",
+    "published_texts",
+    "published_on",
+    "published_by"
+  ],
+  "fields": [
+    {"default": "0", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "read_only": 1},
+    {"default": "1", "fieldname": "revision", "fieldtype": "Int", "label": "Revision", "non_negative": 1, "read_only": 1, "reqd": 1},
+    {"fieldname": "draft_texts", "fieldtype": "Long Text", "label": "Draft Texts", "read_only": 1},
+    {"fieldname": "published_texts", "fieldtype": "Long Text", "label": "Published Texts", "read_only": 1},
+    {"fieldname": "published_on", "fieldtype": "Datetime", "label": "Published On", "read_only": 1},
+    {"fieldname": "published_by", "fieldtype": "Data", "label": "Published By", "read_only": 1}
+  ],
+  "issingle": 1,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Customer Bot Settings",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}

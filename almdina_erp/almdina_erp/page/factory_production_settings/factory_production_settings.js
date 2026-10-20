@@ -43,6 +43,7 @@ frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_production_settings/dialogs.js",
         "/assets/almdina_erp/js/factory_production_settings/whatsapp_panel.js",
         "/assets/almdina_erp/js/factory_production_settings/backup_panel.js",
+        "/assets/almdina_erp/js/factory_production_settings/customer_bot_panel.js",
         "/assets/almdina_erp/js/factory_production_settings/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css?v=2";

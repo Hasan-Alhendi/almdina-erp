@@ -71,6 +71,43 @@
         return request(`${BACKUPS}.test_ssh_connection`, {}, options).then(data => data || {});
     }
 
+    const CUSTOMER_BOT = "almdina_erp.almdina_erp.services.customer_bot_settings_service";
+
+    function getCustomerBotSettings(options = {}) {
+        return request(`${CUSTOMER_BOT}.get_customer_bot_settings`, {}, options).then(data => data || {});
+    }
+
+    function saveCustomerBotDraft(expectedRevision, texts, options = {}) {
+        return request(`${CUSTOMER_BOT}.save_customer_bot_draft`, {
+            expected_revision: expectedRevision,
+            texts: JSON.stringify(texts || {}),
+        }, options).then(data => data || {});
+    }
+
+    function publishCustomerBotTexts(expectedRevision, texts, options = {}) {
+        return request(`${CUSTOMER_BOT}.publish_customer_bot_texts`, {
+            expected_revision: expectedRevision,
+            texts: JSON.stringify(texts || {}),
+        }, options).then(data => data || {});
+    }
+
+    function setCustomerBotEnabled(expectedRevision, enabled, options = {}) {
+        return request(`${CUSTOMER_BOT}.set_customer_bot_enabled`, {
+            expected_revision: expectedRevision,
+            enabled: enabled ? 1 : 0,
+        }, options).then(data => data || {});
+    }
+
+    function previewCustomerBot(payload, options = {}) {
+        return request(`${CUSTOMER_BOT}.preview_customer_bot`, {
+            source: payload.source,
+            scenario: payload.scenario,
+            text: payload.text,
+            state: payload.state ? JSON.stringify(payload.state) : "",
+            texts: JSON.stringify(payload.texts || {}),
+        }, options).then(data => data || {});
+    }
+
     function requestRestore(operationId, confirmation, options = {}) {
         return request(`${BACKUPS}.request_restore`, {
             operation_id: operationId,
@@ -90,5 +127,10 @@
         createBackupNow,
         testSshConnection,
         requestRestore,
+        getCustomerBotSettings,
+        saveCustomerBotDraft,
+        publishCustomerBotTexts,
+        setCustomerBotEnabled,
+        previewCustomerBot,
     });
 })();

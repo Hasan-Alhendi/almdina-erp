@@ -85,6 +85,7 @@ class Capability:
     MANAGE_WHATSAPP_SESSION = "manage_whatsapp_session"
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
     MANAGE_CUSTOMER_BOT_ACCESS = "manage_customer_bot_access"
+    MANAGE_CUSTOMER_BOT_SETTINGS = "manage_customer_bot_settings"
     MANAGE_BACKUPS = "manage_backups"
     RESTORE_BACKUPS = "restore_backups"
 
@@ -125,6 +126,7 @@ _CUSTOMER_DOCTYPE = "Customer"
 _EDGE_DOCTYPE = "Edge Banding Type"
 CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE = "Customer Bot Phone Access"
 CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE = "Customer Bot Phone Request"
+CUSTOMER_BOT_SETTINGS_DOCTYPE = "Customer Bot Settings"
 
 _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.VIEW_ORDERS, "read", _ORDER_DOCTYPE, "order", False),
@@ -229,6 +231,12 @@ _CAPABILITY_DEFINITIONS = (
         Capability.MANAGE_CUSTOMER_BOT_ACCESS,
         CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE,
         "customer_bot",
+    ),
+    CapabilityDefinition(
+        Capability.MANAGE_CUSTOMER_BOT_SETTINGS,
+        Capability.MANAGE_CUSTOMER_BOT_SETTINGS,
+        CUSTOMER_BOT_SETTINGS_DOCTYPE,
+        "factory_settings",
     ),
     CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
@@ -359,6 +367,7 @@ __all__ = [
     "CUSTOM_PERMISSION_DEFINITIONS",
     "CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE",
     "CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE",
+    "CUSTOMER_BOT_SETTINGS_DOCTYPE",
     "CUTTING_PLAN_DOCTYPE",
     "DRAWING_CAPABILITIES",
     "FACTORY_SETTINGS_CAPABILITIES",

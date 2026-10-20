@@ -833,6 +833,99 @@
     }
 }
 
+.aps-bot-header,
+.aps-bot-actions,
+.aps-bot-choice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+}
+
+.aps-bot-header {
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.aps-bot-notice,
+.aps-bot-alert {
+    margin: 12px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--alm-border-subtle, var(--alm-border, #eaecf0));
+    border-radius: var(--aps-radius-sm);
+    background: var(--alm-status-info-bg, transparent);
+    color: var(--alm-text-secondary);
+}
+
+.aps-bot-alert {
+    white-space: pre-wrap;
+    background: var(--alm-status-danger-bg, transparent);
+}
+
+.aps-bot-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.aps-bot-field textarea,
+.aps-bot-field input,
+.aps-bot-field select {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+    color: var(--alm-text-strong);
+    background: transparent;
+    border: 1px solid var(--alm-border, var(--alm-border-subtle, #dfe3e8));
+    border-radius: var(--aps-radius-sm);
+}
+
+.aps-bot-field textarea {
+    min-height: 4.5rem;
+    resize: vertical;
+}
+
+.aps-bot-field textarea[aria-invalid="true"] {
+    border-color: var(--alm-danger, #b42318);
+}
+
+.aps-bot-variables {
+    margin: 0;
+    padding-inline-start: 1.1rem;
+    color: var(--alm-text-subtle);
+}
+
+.aps-bot-ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+.aps-bot-transcript {
+    min-height: 8rem;
+    max-height: 18rem;
+    overflow: auto;
+    padding: 8px 10px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+    border: 1px solid var(--alm-border-subtle, var(--alm-border, #eaecf0));
+    border-radius: var(--aps-radius-sm);
+}
+
+.aps-bot-flag {
+    color: var(--alm-warning, #b45309);
+}
+
+@media (max-width: 720px) {
+    .aps-bot-header,
+    .aps-bot-actions,
+    .aps-bot-choice {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .aps-section,
     .aps-legacy summary {

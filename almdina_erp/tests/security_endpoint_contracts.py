@@ -93,6 +93,17 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.production_service", F, ("pause_stage", "resume_stage")),
     ("almdina_erp.almdina_erp.services.production_settings_service", C, ("get_factory_settings_audit", "get_print_identity", "get_production_settings", "update_production_settings")),
     (
+        "almdina_erp.almdina_erp.services.customer_bot_settings_service",
+        C,
+        (
+            "get_customer_bot_settings",
+            "save_customer_bot_draft",
+            "publish_customer_bot_texts",
+            "set_customer_bot_enabled",
+            "preview_customer_bot",
+        ),
+    ),
+    (
         "almdina_erp.almdina_erp.services.whatsapp_service",
         C,
         (

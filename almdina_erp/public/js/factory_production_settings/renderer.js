@@ -179,6 +179,11 @@
                             <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
                         </article>
                         ` : ""}
+                        ${model.showCustomerBotPanel ? `
+                        <article class="aps-section aps-bot" data-bot-root>
+                            <div class="aps-bot-loading">${t("Loading customer bot settings...")}</div>
+                        </article>
+                        ` : ""}
                         ${model.showBackupPanel ? `
                         <article class="aps-section aps-backup" data-backup-root>
                             <div class="aps-backup-loading">${t("Loading backup history...")}</div>
@@ -407,6 +412,108 @@
             `;
         }
 
+        function renderCustomerBot(model) {
+            const $root = $body.find("[data-bot-root]");
+            if (!$root.length || !model) return;
+            $root.html(customerBotHtml(model));
+        }
+
+        function customerBotHtml(model) {
+            const groups = Array.isArray(model.groups) ? model.groups : [];
+            const scenarios = Array.isArray(model.scenarios) ? model.scenarios : [];
+            return `
+                <header class="aps-bot-header">
+                    <div>
+                        <span class="alm-section-header__kicker">${t("Customer bot")}</span>
+                        <strong class="alm-section-header__title">${t("Customer bot")}</strong>
+                    </div>
+                    ${uiBadge({
+                        label: model.statusLabel || "",
+                        tone: model.enabled ? "warning" : "neutral",
+                    })}
+                </header>
+                <p class="aps-bot-notice" role="note">${esc(model.notice || "")}</p>
+                <p class="aps-bot-help">${esc(model.toggleHelp || "")}</p>
+                <div class="aps-bot-actions">
+                    ${uiButton({
+                        label: model.toggleLabel || "",
+                        variant: "secondary",
+                        attrs: { "data-bot-toggle": "1" },
+                    })}
+                </div>
+                <p class="aps-bot-meta">${esc(model.meta || "")}</p>
+                <p class="aps-bot-flag" data-bot-unsaved hidden>${t("Customer bot unsaved changes")}</p>
+                <p class="aps-bot-flag" data-bot-unpublished ${model.unpublished ? "" : "hidden"}>${t("Unpublished changes")}</p>
+                <div data-bot-alert role="alert"></div>
+                ${groups.map(group => `
+                    <section class="aps-bot-group">
+                        <h3>${esc(group.label || "")}</h3>
+                        ${(group.fields || []).map(field => `
+                            <label class="aps-bot-field">
+                                <span>${esc(field.label || "")}</span>
+                                <textarea data-bot-field="${esc(field.key || "")}" rows="3">${esc(field.value || "")}</textarea>
+                                ${(field.variables || []).length ? `
+                                    <ul class="aps-bot-variables">
+                                        ${(field.variables || []).map(variable => `
+                                            <li>
+                                                <code class="aps-bot-ltr">{${esc(variable.name || "")}}</code>
+                                                <span>${esc(variable.meaning || "")}</span>
+                                                <span class="aps-bot-ltr">${t("Example")}: ${esc(variable.example || "")}</span>
+                                            </li>
+                                        `).join("")}
+                                    </ul>
+                                ` : ""}
+                            </label>
+                        `).join("")}
+                    </section>
+                `).join("")}
+                <div class="aps-bot-actions">
+                    ${uiButton({
+                        label: t("Save draft"),
+                        variant: "secondary",
+                        attrs: { "data-bot-save": "1" },
+                    })}
+                    ${uiButton({
+                        label: t("Publish draft"),
+                        variant: "primary",
+                        attrs: { "data-bot-publish": "1" },
+                    })}
+                </div>
+                <section class="aps-bot-preview">
+                    <h3>${t("Preview")}</h3>
+                    <p>${t("Preview uses sample data and does not send a message.")}</p>
+                    <div class="aps-bot-choice">
+                        <label><input type="radio" name="aps-bot-source" value="draft" ${model.previewSource === "published" ? "" : "checked"}> ${t("Preview the draft")}</label>
+                        <label><input type="radio" name="aps-bot-source" value="published" ${model.previewSource === "published" ? "checked" : ""}> ${t("Preview the published copy")}</label>
+                    </div>
+                    <label class="aps-bot-field">
+                        <span>${t("Sample situation")}</span>
+                        <select data-bot-scenario>
+                            ${scenarios.map(item => `<option value="${esc(item.id || "")}">${esc(item.label || "")}</option>`).join("")}
+                        </select>
+                    </label>
+                    <p data-bot-hint>${esc((scenarios[0] && scenarios[0].hint) || "")}</p>
+                    <div class="aps-bot-transcript" data-bot-transcript></div>
+                    <label class="aps-bot-field">
+                        <span>${t("Customer message")}</span>
+                        <input type="text" data-bot-preview-input dir="auto" maxlength="500">
+                    </label>
+                    <div class="aps-bot-actions">
+                        ${uiButton({
+                            label: t("Send in preview"),
+                            variant: "primary",
+                            attrs: { "data-bot-preview-send": "1" },
+                        })}
+                        ${uiButton({
+                            label: t("Restart preview"),
+                            variant: "secondary",
+                            attrs: { "data-bot-restart": "1" },
+                        })}
+                    </div>
+                </section>
+            `;
+        }
+
         function renderWhatsApp(snapshot) {
             const $root = $body.find("[data-whatsapp-root]");
             if (!$root.length) return;
@@ -418,6 +525,7 @@
             renderError,
             render,
             renderWhatsApp,
+            renderCustomerBot,
             whatsappHtml,
             auditHtml,
             auditLoadingHtml,

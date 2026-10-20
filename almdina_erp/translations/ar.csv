@@ -2901,3 +2901,92 @@ Could not cancel the final price approval.,تعذر إلغاء اعتماد ال
 Do you want to cancel the final price approval for this order? Order details and prices will stay the same.,هل تريد إلغاء اعتماد السعر النهائي لهذا الطلب؟ ستبقى تفاصيل الطلب والأسعار كما هي.
 Save or cancel unsaved changes before cancelling the final price approval.,احفظ التغييرات غير المحفوظة أو ألغها قبل إلغاء اعتماد السعر النهائي.
 {0} / {1},{0} / {1}
+Customer bot,بوت العملاء
+Loading customer bot settings...,جارٍ تحميل إعدادات بوت العملاء...
+Customer bot unsaved changes,تغييرات غير محفوظة في بوت العملاء
+Unpublished changes,تغييرات غير منشورة
+Save draft,حفظ المسودة
+Publish draft,نشر المسودة
+Preview uses sample data and does not send a message.,المعاينة تستخدم بيانات تجريبية ولا ترسل رسالة.
+Preview the draft,معاينة المسودة
+Preview the published copy,معاينة النسخة المنشورة
+Sample situation,حالة تجريبية
+Example,مثال
+Customer message,رسالة العميل
+Send in preview,إرسال في المعاينة
+Restart preview,إعادة بدء المعاينة
+Welcome,ترحيب
+Order status title,عنوان حالة الطلب
+Final cost title,عنوان التكلفة النهائية
+Cutting plan title,عنوان خطة القص
+Measurements title,عنوان القياسات
+Invalid menu choice,اختيار قائمة غير صحيح
+No current orders,لا توجد طلبات حالية
+Ask for the full order number,طلب الرقم الكامل للطلب
+Current order line,سطر الطلب الحالي
+Order not found,الطلب غير موجود
+Not the current revision,ليست النسخة الحالية
+Cancelled order,طلب ملغى
+Order status result,نتيجة حالة الطلب
+Unregistered number,رقم غير مسجل
+Invalid order number,رقم طلب غير صحيح
+Service unavailable,خدمة غير متاحة
+Status: waiting to start,الحالة: بانتظار البدء
+Status: in progress,الحالة: قيد العمل
+Status: ready for pickup,الحالة: جاهز للاستلام
+Status: delivered,الحالة: تم التسليم
+Status: cancelled,الحالة: ملغى
+Status: unsupported,الحالة: غير مدعومة
+Welcome and menu,الترحيب والقائمة
+Statuses,الحالات
+Errors and guidance,الأخطاء والإرشادات
+"Stored order number, unchanged",رقم الطلب كما هو مخزّن دون تغيير
+Order date as stored. Empty when the order has no date,تاريخ الطلب كما هو مخزّن. فارغ إذا لم يكن للطلب تاريخ
+Status label for the order's public status,نص الحالة العامة للطلب
+Editable title of the selected service,عنوان الخدمة المختارة القابل للتعديل
+Fixed return digit 0,رقم الرجوع الثابت 0
+Unknown number,رقم غير معروف
+Type any message. The sample number is not a customer.,اكتب أي رسالة. الرقم التجريبي ليس عميلاً.
+Customer with no orders,عميل بلا طلبات
+Type a greeting then 1. There is no current order.,اكتب تحية ثم 1. لا يوجد طلب حالي.
+One current order,طلب حالي واحد
+Type a greeting then 1. The sample order is PREVIEW-DCO-00001.,اكتب تحية ثم 1. الطلب التجريبي هو PREVIEW-DCO-00001.
+Several current orders,عدة طلبات حالية
+Type a greeting then 1 then PREVIEW-DCO-00001 or PREVIEW-DCO-00002.,اكتب تحية ثم 1 ثم PREVIEW-DCO-00001 أو PREVIEW-DCO-00002.
+Earlier delivered order,طلب مسلّم سابق
+Type a greeting then 1 then PREVIEW-DCO-DELIVERED.,اكتب تحية ثم 1 ثم PREVIEW-DCO-DELIVERED.
+Type a greeting then 1 then PREVIEW-DCO-CANCELLED.,اكتب تحية ثم 1 ثم PREVIEW-DCO-CANCELLED.
+A required text is missing.,نص مطلوب غير موجود.
+A text is not part of the customer bot.,النص ليس من نصوص بوت العملاء.
+A text must be plain text.,يجب أن يكون النص نصًا عاديًا.
+A text is required.,النص مطلوب.
+A text is longer than the allowed limit.,النص أطول من الحد المسموح.
+A text has an unsupported placeholder.,النص يحتوي عنصرًا نائبًا غير مدعوم.
+A text uses a variable that is not allowed.,النص يستخدم متغيرًا غير مسموح.
+A text contains a character that is not allowed.,النص يحتوي حرفًا غير مسموح.
+The customer bot texts are not valid.,نصوص بوت العملاء غير صالحة.
+Marked on for a later connection,معلَّم للتشغيل بعد اكتمال الربط
+Stopped,متوقف
+Turn the bot off,إيقاف البوت
+Mark the bot on,تعليم البوت للتشغيل لاحقًا
+This does not connect WhatsApp or send a message.,هذا لا يربط واتساب ولا يرسل رسالة.
+The bot connection to WhatsApp is not active yet. These settings prepare its behavior when the link is complete.,اتصال البوت بواتساب لم يُفعّل بعد. هذه الإعدادات تجهّز سلوكه عند اكتمال الربط.
+Revision {0},المراجعة {0}
+Last change {0},آخر تغيير {0}
+Published {0},نُشر {0}
+Not published yet,لم يُنشر بعد
+Could not load customer bot settings.,تعذر تحميل إعدادات بوت العملاء.
+Another change was saved first. Reload the section and review it before saving again.,حُفظ تغيير آخر أولًا. أعد تحميل القسم وراجعه قبل الحفظ مرة أخرى.
+Could not save the customer bot settings. The text is still in the form.,تعذر حفظ إعدادات بوت العملاء. النص ما زال في النموذج.
+Type a customer message first.,اكتب رسالة العميل أولًا.
+The preview could not render these texts.,تعذرت معاينة هذه النصوص.
+Sample customer,عميل تجريبي
+Bot reply,رد البوت
+Draft saved.,تم حفظ المسودة.
+Texts published. The bot stays in its current on or off state.,تم نشر النصوص. يبقى البوت على حالته الحالية من تشغيل أو إيقاف.
+The bot is now marked on for a later connection.,تم تعليم البوت للتشغيل بعد اكتمال الربط.
+The bot is stopped.,البوت متوقف.
+Manage customer bot settings,إدارة إعدادات بوت العملاء
+"Edit the customer bot texts, preview them with sample data, publish them, and turn the bot on or off. Does not connect WhatsApp, send messages, or open customers and orders.",تحرير نصوص بوت العملاء ومعاينتها ببيانات تجريبية ونشرها وتشغيله أو إيقافه. لا يربط واتساب ولا يرسل رسائل ولا يفتح العملاء أو الطلبات.
+Customer bot settings are service-managed.,إعدادات بوت العملاء تُدار من الخدمة فقط.
+You do not have permission for this action.,لا تملك صلاحية هذا الإجراء.

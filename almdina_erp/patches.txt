@@ -33,3 +33,4 @@ almdina_erp.patches.v1_0.migrate_extra_piece_type_to_regular
 almdina_erp.patches.v1_0.install_final_price_approval_phase1
 almdina_erp.patches.v1_0.install_customer_bot_access
 almdina_erp.patches.v1_0.retire_customer_bot_additional_phone_access
+almdina_erp.patches.v1_0.install_customer_bot_settings

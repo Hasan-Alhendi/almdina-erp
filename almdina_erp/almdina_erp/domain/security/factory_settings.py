@@ -109,7 +109,11 @@ SECTION_CAPABILITIES = MappingProxyType(
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
 _VIEW_IMPLIED_BY = frozenset(SECTION_CAPABILITIES.values()) | frozenset(
-    {Capability.MANAGE_WHATSAPP_SESSION, Capability.RESTORE_BACKUPS}
+    {
+        Capability.MANAGE_WHATSAPP_SESSION,
+        Capability.RESTORE_BACKUPS,
+        Capability.MANAGE_CUSTOMER_BOT_SETTINGS,
+    }
 )
 
 
@@ -136,6 +140,7 @@ def settings_context(capabilities: Iterable[str] | None) -> dict[str, object]:
     return {
         "can_view": Capability.VIEW_FACTORY_SETTINGS in granted,
         "can_manage_whatsapp_session": Capability.MANAGE_WHATSAPP_SESSION in granted,
+        "can_manage_customer_bot_settings": Capability.MANAGE_CUSTOMER_BOT_SETTINGS in granted,
         "can_manage_backups": Capability.MANAGE_BACKUPS in granted,
         "can_restore_backups": Capability.RESTORE_BACKUPS in granted,
         "sections": {

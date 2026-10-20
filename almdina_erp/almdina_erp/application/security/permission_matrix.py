@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.domain.security.authorization import (
     CAPABILITY_CATALOG,
     CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE,
     CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE,
+    CUSTOMER_BOT_SETTINGS_DOCTYPE,
     CUTTING_PLAN_DOCTYPE,
     FACTORY_SETTINGS_CAPABILITIES,
     WORKFORCE_CAPABILITIES,
@@ -147,6 +148,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "Manage customer bot access (retired)",
         "Retired. Additional phone linking is no longer part of the customer bot. Holding this grant does not open the historical records or authorize a decision.",
         "critical",
+    ),
+    Capability.MANAGE_CUSTOMER_BOT_SETTINGS: _presentation(
+        "Manage customer bot settings",
+        "Edit the customer bot texts, preview them with sample data, publish them, and turn the bot on or off. Does not connect WhatsApp, send messages, or open customers and orders.",
+        "sensitive",
     ),
     Capability.MANAGE_BACKUPS: _presentation("Manage backups", "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.", "critical"),
     Capability.RESTORE_BACKUPS: _presentation("Restore backups", "Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.", "critical"),
@@ -323,7 +329,11 @@ def standard_permission_projection(
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {"read": can_read, "select": can_read, "create": normalized[Capability.CREATE_EDGE_BANDING_TYPES], "write": normalized[Capability.EDIT_EDGE_BANDING_TYPES], "delete": normalized[Capability.DELETE_EDGE_BANDING_TYPES]}
-    if doctype in {CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE, CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE}:
+    if doctype in {
+        CUSTOMER_BOT_PHONE_ACCESS_DOCTYPE,
+        CUSTOMER_BOT_PHONE_REQUEST_DOCTYPE,
+        CUSTOMER_BOT_SETTINGS_DOCTYPE,
+    }:
         return {"read": False, "select": False, "create": False, "write": False, "delete": False}
     enabled = any(
         normalized[capability]
