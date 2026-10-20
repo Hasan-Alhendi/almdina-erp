@@ -279,7 +279,7 @@
             </div>
             <footer class="dco-addons-footer">
                 <div class="dco-addons-footer-main">
-                    <button type="button" class="btn btn-default btn-sm" data-addons-cancel>${esc(translate("Cancel"))}</button>
+                    <button type="button" class="btn btn-default btn-sm" data-addons-cancel>${esc(translate(editable ? "Cancel" : "Close"))}</button>
                     <button type="button" class="btn btn-sm alm-btn-primary" data-addons-apply ${editable ? "" : "hidden"}>${esc(translate("Apply"))}</button>
                 </div>
                 <button type="button" class="btn btn-default btn-sm dco-addons-remove" data-addons-remove ${editable ? "" : "hidden"}>${esc(translate("Remove {0}", [removeName]))}</button>
@@ -683,6 +683,7 @@
             }
         });
         root.addEventListener("input", (event) => {
+            if (!editable) return;
             const target = event && event.target;
             const changedField = ["offset", "width", "start", "length"].find(field => (
                 target && target.matches && target.matches(`[data-liner-${field}]`)
