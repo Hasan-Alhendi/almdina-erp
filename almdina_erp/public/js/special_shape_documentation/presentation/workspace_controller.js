@@ -65,7 +65,7 @@
             syncZoom();
         }
         function syncZoom() { if (shell && renderer) shell.setZoom(renderer.zoomPercentage()); }
-        function commit(next) { history.commit(next); render(); }
+        function commit(next) { if (!context || !context.permissions.can_edit) return; history.commit(next); render(); }
         function chooseTool(next) { if (cropSession || (!context.permissions.can_edit && next !== "select")) return; tool = next; draft = null; dragging = false; render(); }
         async function save() {
             if (saving || !context.permissions.can_edit) return; const document = history.get();
@@ -226,8 +226,8 @@
             if (tool === "pen") { finishPen(); return; }
             const element = makeElement(tool, draft.start, draft.end); draft = null; if (element && distance(element.start || { xMm: element.xMm, yMm: element.yMm }, element.end || { xMm: element.xMm + element.widthMm, yMm: element.yMm + element.heightMm }) > 3) commit(D.addElement(history.get(), element)); else render();
         }
-        function undo() { if (cropSession) return; history.undo(); selectedId = null; render(); }
-        function redo() { if (cropSession) return; history.redo(); selectedId = null; render(); }
+        function undo() { if (cropSession || !context.permissions.can_edit) return; history.undo(); selectedId = null; render(); }
+        function redo() { if (cropSession || !context.permissions.can_edit) return; history.redo(); selectedId = null; render(); }
         function copySelection() {
             const selected = history.get().elements.find(element => element.id === selectedId);
             if (!selected || cropSession) return false;
@@ -320,9 +320,13 @@
         async function open(route) {
             const token = ++generation; suspended = false; cleanup(); showMessage(translateCopy("Loading door documentation…"));
             try {
-                const loaded = await Api.load(route.orderName, route.pieceName); if (token !== generation || suspended) return; context = loaded;
-                const document = D.fromStored(loaded.piece.special_shape_drawing_json, loaded.piece); history = H.create(document); main.innerHTML = ""; shell = Shell.mount(main, loaded); renderer = Canvas.create(shell.canvas); bindEvents(); chooseTool("select");
-                if (!loaded.permissions.can_edit && loaded.permissions.edit_reason) frappe.show_alert({ message: loaded.permissions.edit_reason, indicator: "orange" }, 5);
+                const loaded = await Api.load(route.orderName, route.pieceName); if (token !== generation || suspended) return;
+                // A view-only order link cannot unlock editing through stage permissions.
+                context = route.readOnly
+                    ? { ...loaded, permissions: { ...loaded.permissions, can_edit: false } }
+                    : loaded;
+                const document = D.fromStored(context.piece.special_shape_drawing_json, context.piece); history = H.create(document); main.innerHTML = ""; shell = Shell.mount(main, context); renderer = Canvas.create(shell.canvas); bindEvents(); chooseTool("select");
+                if (!context.permissions.can_edit && context.permissions.edit_reason) frappe.show_alert({ message: context.permissions.edit_reason, indicator: "orange" }, 5);
             } catch (error) { console.error("Documentation workspace load failed", error); if (token === generation) showMessage(translateCopy("Could not load the door. Open the documentation from the order and check the permissions."), true); }
         }
         function suspend() { suspended = true; generation += 1; cleanup(); }

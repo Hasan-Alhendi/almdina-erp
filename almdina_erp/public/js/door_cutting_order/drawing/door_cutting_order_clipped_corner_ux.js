@@ -1144,8 +1144,9 @@
             return;
         }
         installStyles();
-        prepareRow(liveRow);
         const readOnly = Boolean(options.readOnly);
+        // A viewer must not normalize or mutate saved row values.
+        if (!readOnly) prepareRow(liveRow);
 
         // Prevent stacked corner dialogs from duplicate click handlers.
         if (activeDialog) {

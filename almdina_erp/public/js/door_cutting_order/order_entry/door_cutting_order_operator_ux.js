@@ -338,7 +338,7 @@
                 <span class="dco-check-mark">${data && data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         if (isBreakCorner) {
-            return `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${editable && !virtual ? "" : "disabled"} title="${__("Open the corner shape to choose banding sides")}">
+            return `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${virtual ? "disabled" : ""} title="${__("Open the corner shape to choose banding sides")}">
                             <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (__("No banding")))}</span>
                             <small>${__("Choose banding on shape")}</small>
                         </button>`;
@@ -448,7 +448,7 @@
                 : (__("Open image, measurements and notes documentation")));
         const shapeEnabled = glassState
             ? glassState.enabled
-            : ((isSpecial || isClipped) && editable && !virtual);
+            : ((isSpecial || isClipped) && !virtual);
         const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
             <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${__("Regular")}</option>
             <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${__("Special")}</option>
@@ -478,7 +478,7 @@
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
                 ${extraAddons && typeof extraAddons.renderAddonSummary === "function"
-                    ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable })}</td>`
+                    ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable, virtual })}</td>`
                     : ""}
                 <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
                 <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${__("Delete row")}">×</button>` : ""}</td>
@@ -960,24 +960,29 @@
     }
 
     function openPieceAddons(frm, tr) {
-        if (!frm || !tr || !isEditable(frm)) return;
-        const widthInput = tr.querySelector("input[data-field='width_cm']");
-        const lengthInput = tr.querySelector("input[data-field='length_cm']");
-        if (tr.classList.contains("dco-virtual-row")) {
-            if (!(num(widthInput && widthInput.value) > 0 && num(lengthInput && lengthInput.value) > 0)) {
-                frappe.msgprint({
-                    title: __("Enter dimensions first"),
-                    message: __("Enter the piece width and length before editing add-ons."),
-                    indicator: "orange",
-                });
-                focusWidth(tr);
-                return;
+        if (!frm || !tr) return;
+        const editable = isEditable(frm);
+        // Inspect saved data without flushing disabled controls or creating rows.
+        if (!editable && tr.classList.contains("dco-virtual-row")) return;
+        if (editable) {
+            const widthInput = tr.querySelector("input[data-field='width_cm']");
+            const lengthInput = tr.querySelector("input[data-field='length_cm']");
+            if (tr.classList.contains("dco-virtual-row")) {
+                if (!(num(widthInput && widthInput.value) > 0 && num(lengthInput && lengthInput.value) > 0)) {
+                    frappe.msgprint({
+                        title: __("Enter dimensions first"),
+                        message: __("Enter the piece width and length before editing add-ons."),
+                        indicator: "orange",
+                    });
+                    focusWidth(tr);
+                    return;
+                }
             }
+            ["width_cm", "length_cm", "qty", "piece_type", "notes"].forEach((fieldname) => {
+                const input = tr.querySelector(`[data-field='${fieldname}']`);
+                if (input) syncInputToModel(frm, input, false);
+            });
         }
-        ["width_cm", "length_cm", "qty", "piece_type", "notes"].forEach((fieldname) => {
-            const input = tr.querySelector(`[data-field='${fieldname}']`);
-            if (input) syncInputToModel(frm, input, false);
-        });
         const row = rowByName(frm, tr.dataset.rowName || "");
         const dialog = window.AlmdinaDoorAddonsDialog;
         if (row && dialog && typeof dialog.open === "function") dialog.open(frm, row);
@@ -1125,12 +1130,16 @@
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
                 if (!row || !requirePieceDimensions(row, tr)) return;
                 if (tr && tr.dataset.rowName !== row.name) tr.dataset.rowName = row.name;
+                const editable = isEditable(currentFrm);
                 if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
-                    window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                    if (editable) window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                    else window.AlmdinaClippedCornerEditor.view(currentFrm, row);
                 } else if (window.AlmdinaGlassShape && window.AlmdinaGlassShape.isGlass(row)) {
-                    window.AlmdinaGlassShape.open(currentFrm, row);
+                    if (editable) window.AlmdinaGlassShape.open(currentFrm, row);
+                    else window.AlmdinaGlassShape.view(currentFrm, row);
                 } else if (window.AlmdinaSpecialShapeEditor) {
-                    window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
+                    if (editable) window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
+                    else window.AlmdinaSpecialShapeEditor.view(currentFrm, row);
                 }
             }
         });
