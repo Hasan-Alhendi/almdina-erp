@@ -2950,6 +2950,21 @@ Status: delivered,الحالة: تم التسليم
 Status: cancelled,الحالة: ملغى
 Status: unsupported,الحالة: غير مدعومة
 Welcome and menu,الترحيب والقائمة
+Operation,التشغيل
+Message texts,نصوص الرسائل
+Order selection and guidance,اختيار الطلب والإرشادات
+Order statuses,حالات الطلب
+Price and invoice,السعر والفاتورة
+General errors,الأخطاء العامة
+Customer bot sections,أقسام بوت العملاء
+Search by title or message key,ابحث بالعنوان أو مفتاح الرسالة
+No matching message,لا توجد رسالة مطابقة
+Save draft stores all editor texts. Publish stores those same texts as the draft and the published copy.,حفظ المسودة يخزّن كل نصوص المحرر. النشر يخزّن هذه النصوص نفسها كمسودة وكنسخة منشورة.
+"This preview uses the texts currently in the editors, including edits that are not saved yet.",هذه المعاينة تستخدم النصوص الموجودة الآن في المحرر، بما فيها التعديلات غير المحفوظة.
+This preview uses the published copy stored on the server and ignores unsaved edits.,هذه المعاينة تستخدم النسخة المنشورة المخزّنة في الخادم وتتجاهل التعديلات غير المحفوظة.
+Turning the bot off does not require saving the message texts.,إيقاف البوت لا يتطلب حفظ نصوص الرسائل.
+Last published {0},آخر نشر {0}
+Preview the texts in the editors,معاينة نصوص المحرر
 Statuses,الحالات
 Errors and guidance,الأخطاء والإرشادات
 "Stored order number, unchanged",رقم الطلب كما هو مخزّن دون تغيير
@@ -2957,7 +2972,7 @@ Order date as stored. Empty when the order has no date,تاريخ الطلب ك�
 Status label for the order's public status,نص الحالة العامة للطلب
 Editable title of the selected service,عنوان الخدمة المختارة القابل للتعديل
 Fixed return digit 0,رقم الرجوع الثابت 0
-Approved amount, formatted by the service,المبلغ المعتمد كما تنسقه الخدمة
+"Approved amount, formatted by the service",المبلغ المعتمد كما تنسقه الخدمة
 Approved currency from the approval record,العملة المعتمدة من سجل الاعتماد
 Unknown number,رقم غير معروف
 Type any message. The sample number is not a customer.,اكتب أي رسالة. الرقم التجريبي ليس عميلاً.

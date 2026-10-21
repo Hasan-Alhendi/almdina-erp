@@ -418,96 +418,150 @@
             $root.html(customerBotHtml(model));
         }
 
+        function customerBotTab(tab) {
+            return uiButton({
+                label: tab.label || "",
+                variant: tab.selected ? "primary" : "secondary",
+                attrs: {
+                    "data-bot-tab": tab.id || "",
+                    role: "tab",
+                    id: `aps-bot-tab-${tab.id || ""}`,
+                    "aria-controls": `aps-bot-panel-${tab.id || ""}`,
+                    "aria-selected": tab.selected ? "true" : "false",
+                    tabindex: tab.selected ? "0" : "-1",
+                },
+            });
+        }
+
+        function customerBotField(field) {
+            const variables = Array.isArray(field.variables) ? field.variables : [];
+            return `
+                <div class="aps-bot-field" data-bot-field-wrap="${esc(field.key || "")}" data-bot-group="${esc(field.groupId || "")}" data-bot-label="${esc(field.label || "")}" ${field.hidden ? "hidden" : ""}>
+                    <label class="aps-bot-field-label" for="aps-bot-text-${esc(field.key || "")}">
+                        <span>${esc(field.label || "")}</span>
+                        <span class="aps-bot-key aps-ltr-value" dir="ltr">${esc(field.key || "")}</span>
+                    </label>
+                    <textarea id="aps-bot-text-${esc(field.key || "")}" data-bot-field="${esc(field.key || "")}" dir="auto" rows="2"${field.maxLength ? ` maxlength="${esc(field.maxLength)}"` : ""} aria-invalid="${field.invalid ? "true" : "false"}">${esc(field.value || "")}</textarea>
+                    ${field.maxLength ? `<span class="aps-bot-count" data-bot-count="${esc(field.key || "")}">${esc(field.countLabel || "")}</span>` : ""}
+                    <p class="aps-bot-field-error" data-bot-error="${esc(field.key || "")}" ${field.invalid ? "" : "hidden"}>${esc(field.error || "")}</p>
+                    ${variables.length ? `
+                        <ul class="aps-bot-variables">
+                            ${variables.map(variable => `
+                                <li>
+                                    <code class="aps-ltr-value" dir="ltr">{${esc(variable.name || "")}}</code>
+                                    <span>${esc(variable.meaning || "")}</span>
+                                    ${variable.example ? `<span class="aps-ltr-value" dir="ltr">${t("Example")}: ${esc(variable.example)}</span>` : ""}
+                                </li>
+                            `).join("")}
+                        </ul>
+                    ` : ""}
+                </div>
+            `;
+        }
+
         function customerBotHtml(model) {
             const groups = Array.isArray(model.groups) ? model.groups : [];
             const scenarios = Array.isArray(model.scenarios) ? model.scenarios : [];
+            const tabs = Array.isArray(model.tabs) ? model.tabs : [];
+            const fields = Array.isArray(model.fields) ? model.fields : [];
+            const active = model.activeTab || "operation";
             return `
-                <header class="aps-bot-header">
-                    <div>
-                        <span class="alm-section-header__kicker">${t("Customer bot")}</span>
-                        <strong class="alm-section-header__title">${t("Customer bot")}</strong>
+                <header class="aps-bot-bar">
+                    <strong class="alm-section-header__title">${t("Customer bot")}</strong>
+                    <div class="aps-bot-statusline">
+                        ${uiBadge({
+                            label: model.statusLabel || "",
+                            tone: model.enabled ? "warning" : "neutral",
+                        })}
+                        ${uiButton({
+                            label: model.toggleLabel || "",
+                            variant: "secondary",
+                            attrs: { "data-bot-toggle": "1" },
+                        })}
                     </div>
-                    ${uiBadge({
-                        label: model.statusLabel || "",
-                        tone: model.enabled ? "warning" : "neutral",
-                    })}
                 </header>
                 <p class="aps-bot-notice" role="note">${esc(model.notice || "")}</p>
-                <p class="aps-bot-help">${esc(model.toggleHelp || "")}</p>
-                <div class="aps-bot-actions">
-                    ${uiButton({
-                        label: model.toggleLabel || "",
-                        variant: "secondary",
-                        attrs: { "data-bot-toggle": "1" },
-                    })}
+                <div class="aps-bot-statusline">
+                    <p class="aps-bot-flag" data-bot-unsaved ${model.unsaved ? "" : "hidden"}>${t("Customer bot unsaved changes")}</p>
+                    <p class="aps-bot-flag" data-bot-unpublished ${model.unpublished ? "" : "hidden"}>${t("Unpublished changes")}</p>
+                    <p class="aps-bot-meta">${model.publishedAt ? `<time class="aps-ltr-value" dir="ltr" datetime="${esc(model.publishedAt)}">${esc(model.publishedLabel || "")}</time>` : esc(model.publishedLabel || "")}</p>
+                    <p class="aps-bot-meta aps-ltr-value" dir="ltr">${esc(model.revisionLabel || "")}</p>
                 </div>
-                <p class="aps-bot-meta">${esc(model.meta || "")}</p>
-                <p class="aps-bot-flag" data-bot-unsaved hidden>${t("Customer bot unsaved changes")}</p>
-                <p class="aps-bot-flag" data-bot-unpublished ${model.unpublished ? "" : "hidden"}>${t("Unpublished changes")}</p>
                 <div data-bot-alert role="alert"></div>
-                ${groups.map(group => `
-                    <section class="aps-bot-group">
-                        <h3>${esc(group.label || "")}</h3>
-                        ${(group.fields || []).map(field => `
-                            <label class="aps-bot-field">
-                                <span>${esc(field.label || "")}</span>
-                                <textarea data-bot-field="${esc(field.key || "")}" rows="3">${esc(field.value || "")}</textarea>
-                                ${(field.variables || []).length ? `
-                                    <ul class="aps-bot-variables">
-                                        ${(field.variables || []).map(variable => `
-                                            <li>
-                                                <code class="aps-bot-ltr">{${esc(variable.name || "")}}</code>
-                                                <span>${esc(variable.meaning || "")}</span>
-                                                <span class="aps-bot-ltr">${t("Example")}: ${esc(variable.example || "")}</span>
-                                            </li>
-                                        `).join("")}
-                                    </ul>
-                                ` : ""}
-                            </label>
-                        `).join("")}
-                    </section>
-                `).join("")}
-                <div class="aps-bot-actions">
-                    ${uiButton({
-                        label: t("Save draft"),
-                        variant: "secondary",
-                        attrs: { "data-bot-save": "1" },
-                    })}
-                    ${uiButton({
-                        label: t("Publish draft"),
-                        variant: "primary",
-                        attrs: { "data-bot-publish": "1" },
-                    })}
+                <div class="aps-bot-tabs" role="tablist" aria-label="${esc(model.tabsLabel || "")}">
+                    ${tabs.map(customerBotTab).join("")}
                 </div>
-                <section class="aps-bot-preview">
-                    <h3>${t("Preview")}</h3>
+                <section class="aps-bot-panel" id="aps-bot-panel-operation" role="tabpanel" aria-labelledby="aps-bot-tab-operation" data-bot-panel="operation" ${active === "operation" ? "" : "hidden"}>
+                    <p>${esc(model.operationNote || "")}</p>
+                </section>
+                <section class="aps-bot-panel" id="aps-bot-panel-texts" role="tabpanel" aria-labelledby="aps-bot-tab-texts" data-bot-panel="texts" ${active === "texts" ? "" : "hidden"}>
+                    <label class="aps-bot-field">
+                        <span>${t("Search")}</span>
+                        <input type="search" data-bot-search value="${esc(model.query || "")}" dir="auto" placeholder="${esc(model.searchPlaceholder || "")}">
+                    </label>
+                    <p data-bot-search-empty ${model.searchEmpty ? "" : "hidden"}>${t("No matching message")}</p>
+                    <div class="aps-bot-editor">
+                        <div class="aps-bot-groups" role="group" aria-label="${esc(model.groupsLabel || "")}">
+                            ${groups.map(group => uiButton({
+                                label: group.label || "",
+                                variant: group.selected ? "primary" : "secondary",
+                                className: "aps-bot-group-button",
+                                attrs: {
+                                    "data-bot-group-button": group.id || "",
+                                    "data-bot-group-match": group.hasMatch ? "1" : "0",
+                                    "aria-pressed": group.selected ? "true" : "false",
+                                },
+                            })).join("")}
+                        </div>
+                        <div>
+                            ${fields.map(customerBotField).join("")}
+                            <p class="aps-bot-help">${esc(model.saveHelp || "")}</p>
+                            <div class="aps-bot-actions">
+                                ${uiButton({
+                                    label: t("Save draft"),
+                                    variant: "secondary",
+                                    attrs: { "data-bot-save": "1" },
+                                })}
+                                ${uiButton({
+                                    label: t("Publish draft"),
+                                    variant: "primary",
+                                    attrs: { "data-bot-publish": "1" },
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <section class="aps-bot-panel" id="aps-bot-panel-preview" role="tabpanel" aria-labelledby="aps-bot-tab-preview" data-bot-panel="preview" ${active === "preview" ? "" : "hidden"}>
                     <p>${t("Preview uses sample data and does not send a message.")}</p>
+                    <p class="aps-bot-preview-note" data-bot-preview-note>${esc(model.previewNote || "")}</p>
                     <div class="aps-bot-choice">
-                        <label><input type="radio" name="aps-bot-source" value="draft" ${model.previewSource === "published" ? "" : "checked"}> ${t("Preview the draft")}</label>
+                        <label><input type="radio" name="aps-bot-source" value="draft" ${model.previewSource === "published" ? "" : "checked"}> ${t("Preview the texts in the editors")}</label>
                         <label><input type="radio" name="aps-bot-source" value="published" ${model.previewSource === "published" ? "checked" : ""}> ${t("Preview the published copy")}</label>
                     </div>
                     <label class="aps-bot-field">
                         <span>${t("Sample situation")}</span>
                         <select data-bot-scenario>
-                            ${scenarios.map(item => `<option value="${esc(item.id || "")}">${esc(item.label || "")}</option>`).join("")}
+                            ${scenarios.map(item => `<option value="${esc(item.id || "")}" ${item.selected ? "selected" : ""}>${esc(item.label || "")}</option>`).join("")}
                         </select>
                     </label>
-                    <p data-bot-hint>${esc((scenarios[0] && scenarios[0].hint) || "")}</p>
-                    <div class="aps-bot-transcript" data-bot-transcript></div>
-                    <label class="aps-bot-field">
-                        <span>${t("Customer message")}</span>
-                        <input type="text" data-bot-preview-input dir="auto" maxlength="500">
-                    </label>
+                    <p data-bot-hint>${esc(model.scenarioHint || "")}</p>
                     <div class="aps-bot-actions">
-                        ${uiButton({
-                            label: t("Send in preview"),
-                            variant: "primary",
-                            attrs: { "data-bot-preview-send": "1" },
-                        })}
                         ${uiButton({
                             label: t("Restart preview"),
                             variant: "secondary",
                             attrs: { "data-bot-restart": "1" },
+                        })}
+                    </div>
+                    <div class="aps-bot-transcript" data-bot-transcript role="log" aria-relevant="additions"></div>
+                    <div class="aps-bot-compose">
+                        <label class="aps-bot-field">
+                            <span>${t("Customer message")}</span>
+                            <input type="text" data-bot-preview-input dir="auto" maxlength="500">
+                        </label>
+                        ${uiButton({
+                            label: t("Send in preview"),
+                            variant: "primary",
+                            attrs: { "data-bot-preview-send": "1" },
                         })}
                     </div>
                 </section>

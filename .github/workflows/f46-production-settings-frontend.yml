@@ -53,10 +53,12 @@ jobs:
           node --check almdina_erp/public/js/factory_production_settings/interactions.js
           node --check almdina_erp/public/js/factory_production_settings/dialogs.js
           node --check almdina_erp/public/js/factory_production_settings/whatsapp_panel.js
+          node --check almdina_erp/public/js/factory_production_settings/customer_bot_panel.js
           node --check almdina_erp/public/js/factory_production_settings/controller.js
           node --check almdina_erp/public/js/door_cutting_order/order_entry/door_cutting_order_whatsapp_delivery_ux.js
 
       - name: Run Production Settings view-model simulation
         run: |
           node almdina_erp/tests/js/factory_production_settings_view_model.test.js
+          node almdina_erp/tests/js/customer_bot_settings_panel.test.js
           node almdina_erp/tests/js/whatsapp_delivery.test.js
