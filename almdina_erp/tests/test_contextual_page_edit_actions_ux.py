@@ -74,6 +74,16 @@ def test_financial_presenter_keeps_its_existing_owner_chain() -> None:
     assert cost.index(permissions) < cost.index(financial) < cost.index(cost_session)
 
 
+def test_cost_page_uses_the_single_workspace_save_command() -> None:
+    api = source(PUBLIC / "costing" / "door_cutting_order_cost_workspace_api.js")
+    permissions = source(PUBLIC / "costing" / "door_cutting_order_cost_permissions_ux.js")
+
+    assert "costApi.saveWorkspace(" in permissions
+    assert "saveWorkspace(orderName, {" in api
+    assert "save_cost_workspace" in api
+    assert "api.saveSettings(orderName, payload)" not in permissions
+
+
 def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     coordinator = source(COORDINATOR)
 
@@ -209,7 +219,8 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert "const captured = captureCostSettings(frm, state.draft || {});" in cost
     assert "store.replaceDraft(payload);" in cost
     assert 'const orderName = String(frm.doc.name || "");' in cost
-    assert "api.saveSettings(orderName, payload)" in cost
+    assert "api.saveWorkspace(" in cost
+    assert "cost_settings: pending.dirty ? payload : null" in cost
     assert "documentStillCurrent(frm, token)" in cost
     assert "owner.commit(frm, saved);" in cost
     assert "frm.reload_doc()" not in cost

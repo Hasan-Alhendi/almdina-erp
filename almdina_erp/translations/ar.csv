@@ -2926,3 +2926,7 @@ Door {0} — copies {1} through {2}.,الدرفة {0} — النسخ {1} إلى 
 Door {0} — copies {1}.,الدرفة {0} — النسخ {1}.
 Door {0} — copy {1}.,الدرفة {0} — النسخة {1}.
 {0} / {1},{0} / {1}
+The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
+Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
+Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.

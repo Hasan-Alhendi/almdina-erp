@@ -22,6 +22,8 @@ function deferred() {
 function baseSnapshot(rate = 10, cutting = 2) {
     return {
         order_name: "DCO-COST-LIFECYCLE-A",
+        order_modified: "2026-10-21 10:00:00.000000",
+        can_edit_cost_settings: true,
         order: {
             board_rate_usd: rate,
             cutting_cost_per_board_usd: cutting,
@@ -124,10 +126,14 @@ function makeEnvironment(options = {}) {
                 apiLoadCalls += 1;
                 return options.loadImpl ? options.loadImpl() : Promise.resolve(baseSnapshot());
             },
-            async saveSettings(orderName, payload) {
+            async saveWorkspace(orderName, changes, expectedModified) {
                 saveCalls += 1;
                 assert.equal(orderName, "DCO-COST-LIFECYCLE-A");
-                return baseSnapshot(payload.board_rate_usd, payload.cutting_cost_per_board_usd);
+                assert.equal(expectedModified, "2026-10-21 10:00:00.000000");
+                return baseSnapshot(
+                    changes.cost_settings.board_rate_usd,
+                    changes.cost_settings.cutting_cost_per_board_usd
+                );
             },
         },
     };

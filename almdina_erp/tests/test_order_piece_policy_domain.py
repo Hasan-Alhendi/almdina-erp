@@ -252,8 +252,8 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
             "Document the special door shape before approving its price.",
             approval_source,
         )
-        self.assertIn('if (piece.piece_type or "Regular") != "Special":', approval_source)
-        self.assertIn("has_special_price_approval_permission", approval_source)
+        self.assertIn("save_special_price", approval_source)
+        self.assertNotIn("has_special_price_approval_permission", approval_source)
 
     def test_protected_price_change_detects_approval_fields(self) -> None:
         old = SpecialPrice(

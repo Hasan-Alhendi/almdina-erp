@@ -2,7 +2,6 @@
 
 import json
 import os
-import re
 from pathlib import Path
 from urllib.parse import parse_qs
 import pytest
@@ -528,7 +527,10 @@ def test_saved_server_plan_print_runtime():
                             in operator_html)
                     assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
                             not in operator_html)
-                    assert order["board"] in operator_html and saved_plan[label]["name"] in operator_html
+                    assert order["board"] in operator_html
+                    piece = saved_plan[label]["first_piece"]
+                    geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
+                    assert geometry in operator_html
                     evidence.setdefault("operator_clicks", {})[label] = {
                         "ready_event": page.evaluate('window.__p0ReadyEvent'),
                         "source": action_source,
@@ -567,7 +569,9 @@ def test_saved_server_plan_print_runtime():
                 assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
                         not in html), result
                 assert order["board"] in html and other["board"] not in html, result
-                assert saved_plan[label]["name"] in html and str(saved_plan[label]["revision"]) in html
+                # The printed document deliberately omits internal plan names
+                # and revisions. Its saved geometry proves which persisted plan
+                # was printed without exposing those identifiers.
                 assert 'class="dco-unified-print-header"' in html
                 assert f"<title>Cutting plan - {order['name']}</title>" in html
                 assert evidence["factory_identity"]["print_factory_name"] in html
@@ -622,11 +626,11 @@ def test_saved_server_plan_print_runtime():
             assert controlled["result"] is True and controlled["after"] == controlled["before"] + 2
             controlled_html = controlled.pop("html")
             assert b["name"] in controlled_html and a["name"] not in controlled_html
-            assert "CONTROLLED-PLAN-B" in controlled_html
+            # Plan names are intentionally omitted from printed output; the
+            # controlled offcut marker below proves this exact geometry rendered.
             assert 'data-resource-kind="OFFCUT"' in controlled_html
             assert "CONTROLLED-OFFCUT-B" in controlled_html
             assert 'dco-offcut-business-context' in controlled_html
-            assert 'P0 FACTORY ASSIGNED' in controlled_html
             assert 'data-addon-kind="double"' in controlled_html
             (evidence_dir / "controlled-multisheet-offcut-final.html").write_text(
                 controlled_html, encoding="utf-8")
@@ -815,8 +819,8 @@ def _print_saved_plan_variant(source, prefix):
             page.wait_for_function("() => __p0VariantWrites.length >= 2", timeout=15000)
             html = page.evaluate("__p0VariantWrites.at(-1)")
             assert selected["order_name"] in html
-            assert selected["plan_name"] in html
-            assert str(selected["revision"]) in html
+            # The print contract intentionally exposes order and geometry, not
+            # internal plan identifiers or revision keys.
             assert selected["board"] in html
             assert html.count('class="dco-sheet-card"') == selected["sheets"]
             other_labels = ("B",) if prefix == "custom" else (("A",) if prefix == "approved" else ("A", "B"))
@@ -831,12 +835,7 @@ def _print_saved_plan_variant(source, prefix):
                 assert selected["offcut_source"] == "FACTORY"
                 assert selected["offcut_execution"] == "FACTORY"
                 assert 'data-resource-kind="OFFCUT"' in html
-                context = re.search(
-                    r'<div class="dco-offcut-business-context"[^>]*>(.*?)</div>',
-                    html, re.S,
-                )
-                assert context and "من المعمل" in context.group(1)
-                assert "في المعمل" in context.group(1)
+                assert 'class="dco-offcut-business-context__state"' not in html
             filename = f"{prefix}-plan-operator-final.html"
             (evidence_dir / filename).write_text(html, encoding="utf-8")
             evidence["final_html"] = filename

@@ -58,5 +58,6 @@ def test_cost_permissions_preserves_security_and_piece_price_commands() -> None:
     assert 'can(frm, "edit_cost_settings")' in permissions
     assert "scrubCostData" in permissions
     assert "update_clipped_corner_edge_price" in permissions
-    assert "approve_special_piece_price" in permissions
+    assert "saveWorkspace" in permissions
+    assert "approve_special_piece_price" not in permissions
     assert "flushPendingPriceEdits" in permissions

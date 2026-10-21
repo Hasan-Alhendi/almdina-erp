@@ -121,13 +121,17 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "update_clipped_corner_edge_price" in permissions
     assert "Clipped-corner edge processing cost" in permissions
     assert "orderIsEditable(frm)" in permissions
-    assert "frappe.almdina.orderCanEdit" in permissions
+    assert "frappe.almdina.orderCanEdit" not in permissions
     assert "almdina_edit_session_changed(frm)" in permissions
     # Pricing remains a financial-document gate below, but it must not block
     # persisting a Special/CutCorner measurement row itself.
     assert "أدخل أسعار قشاط" not in permissions
-    assert "before_save(frm)" not in permissions
-    assert "frappe.validated = false" not in permissions
+    assert "before_save(frm)" in permissions
+    before_save = permissions.split("before_save(frm)", 1)[1].split(
+        "onload_post_render(frm)", 1
+    )[0]
+    assert "pendingSpecialPrices(frm).length" in before_save
+    assert "Save special door prices from the Cost edit session." in before_save
     assert "pendingCustomEdgePriceLabels" in source
     assert "An incomplete invoice cannot be printed" in source
     assert "assert_order_editable(order)" in (
