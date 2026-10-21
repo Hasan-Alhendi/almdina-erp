@@ -355,18 +355,25 @@
         const corner = window.AlmdinaClippedCornerGeometry;
         if (corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source)
             && typeof corner.edgeBandSvgMarkup === "function") {
-            const hasNormalBand = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"]
-                .some(side => flagsForSource(source, side) && selected.includes(side));
-            const insets = hasNormalBand ? [8, 11] : [4.5, 7.5];
-            const markup = insets.map(inset => corner.edgeBandSvgMarkup({ ...source, ...flags }, scene.frame.width, scene.frame.height, {
-                offsetX: scene.frame.x,
-                offsetY: scene.frame.y,
-                inheritStroke: false,
-                color: "#5a2d82",
-                strokeWidth: 1.4,
-                insetPx: inset,
-                endTrimPx: 6,
-            })).filter(Boolean).join("");
+            const fields = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"];
+            const markup = fields.filter(side => flags[side]).map(side => {
+                const normalBand = flagsForSource(source, side);
+                const insets = normalBand ? [8, 11] : [4.5, 7.5];
+                const sidePiece = { ...source };
+                fields.forEach(name => {
+                    sidePiece[name] = name === side ? 1 : 0;
+                });
+                const lines = insets.map(inset => corner.edgeBandSvgMarkup(sidePiece, scene.frame.width, scene.frame.height, {
+                    offsetX: scene.frame.x,
+                    offsetY: scene.frame.y,
+                    inheritStroke: false,
+                    color: "#5a2d82",
+                    strokeWidth: 1.4,
+                    insetPx: inset,
+                    endTrimPx: 6,
+                })).filter(Boolean).join("");
+                return lines ? `<g data-double-edge-side="${side}">${lines}</g>` : "";
+            }).join("");
             return markup ? `<g data-double-edge-lines="1">${markup}</g>` : "";
         }
         return selected.map((side) => {
