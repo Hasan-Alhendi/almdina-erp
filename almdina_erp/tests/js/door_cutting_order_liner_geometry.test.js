@@ -896,6 +896,45 @@ assert.equal(preserved.startCm, 4);
 assert.equal(preserved.offsetCm, 2);
 assert.equal(preserved.side, "edge_width_top");
 assert.equal(failedCenter.draft, preserved);
+const alongEdge = {
+    piece: centeredDoor,
+    row: { piece_type: "Regular" },
+    kind: "recessed_handle_cutout",
+    side: "edge_width_top",
+    startCm: 0,
+    offsetCm: 5,
+    widthCm: 3.8,
+    lengthCm: 32.9,
+    fullLength: false,
+    enabled: true,
+};
+const centeredAlong = editor.centerHandleDraft(alongEdge);
+assert.equal(centeredAlong.ok, true);
+assert.equal(centeredAlong.draft.startCm, 13.55);
+assert.equal(centeredAlong.draft.offsetCm, 5);
+assert.equal(centeredAlong.draft.side, "edge_width_top");
+assert.equal(alongEdge.startCm, 0);
+assert.equal(alongEdge.offsetCm, 5);
+assert.equal(editor.handleIsCentered(centeredAlong.draft), true);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { offsetCm: 1.2 })), true);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { startCm: 10 })), false);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { lengthCm: 19.9 })), false);
+const blankSide = editor.centerHandleDraft(Object.assign({}, alongEdge, { side: "" }));
+assert.equal(blankSide.draft.side, "edge_width_top");
+assert.equal(blankSide.draft.startCm, 13.55);
+assert.equal(blankSide.draft.offsetCm, 5);
+for (const [side, startCm] of [
+    ["edge_width_bottom", 13.55],
+    ["edge_long_right", 23.55],
+    ["edge_long_left", 23.55],
+]) {
+    const placed = editor.centerHandleDraft(Object.assign({}, alongEdge, { side }));
+    assert.equal(placed.ok, true, side);
+    assert.equal(placed.draft.side, side, side);
+    assert.equal(placed.draft.startCm, startCm, side);
+    assert.equal(placed.draft.offsetCm, 5, side);
+    assert.equal(editor.handleIsCentered(placed.draft), true, side);
+}
 const sized = editor.applyStandardHandleSize(preserved, { widthMm: 38, lengthMm: 199 });
 assert.equal(sized.widthCm, 3.8);
 assert.equal(sized.lengthCm, 19.9);

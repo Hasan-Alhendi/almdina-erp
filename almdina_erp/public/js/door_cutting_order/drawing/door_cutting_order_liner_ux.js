@@ -512,7 +512,6 @@
         const next = Object.assign({}, draft, {
             side: result.side,
             startCm: result.startCm,
-            offsetCm: result.offsetCm,
             fullLength: false,
             legacyCheckboxOnly: false,
             edgeCm: edgeCm(draft.piece, result.side),
@@ -540,8 +539,7 @@
         if (!api || typeof api.centerRecessedHandle !== "function") return false;
         const placed = api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm);
         if (!placed.ok || String(draft.side || "") !== placed.side) return false;
-        return Math.abs(num(draft.startCm) - placed.startCm) <= 0.0001
-            && Math.abs(num(draft.offsetCm) - placed.offsetCm) <= 0.0001;
+        return Math.abs(num(draft.startCm) - placed.startCm) <= 0.0001;
     }
 
     function syncHandleChoices(root, draft) {
