@@ -292,6 +292,13 @@
         tr.classList.remove("dco-virtual-row");
         const no = tr.querySelector(".dco-row-number");
         if (no) no.textContent = row.idx;
+        // The row was rendered as virtual (its Add-ons button is disabled).
+        // Reconcile its owned controls at the materialization boundary without
+        // replacing the table or disrupting the fast-entry keyboard lifecycle.
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.syncRowPresentation === "function") {
+            extraAddons.syncRowPresentation(frm, tr, row, { editable: isEditable(frm) });
+        }
         ensureSingleVirtualRow(frm);
         return row;
     }
