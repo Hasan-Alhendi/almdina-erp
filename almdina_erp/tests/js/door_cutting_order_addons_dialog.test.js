@@ -1147,7 +1147,19 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
     assert.equal(ui.root.querySelectorAll("[data-handle-size]").length, 7);
-    assert.equal(ui.root.querySelector("[data-handle-center]").hidden, false);
+    const centerButton = ui.root.querySelector("[data-handle-center]");
+    const sizeGrid = ui.root.querySelector("[data-handle-sizes]");
+    assert.equal(centerButton.hidden, false);
+    assert.equal(centerButton.classList.contains("dco-handle-size"), true);
+    assert.equal(centerButton.classList.contains("btn"), false);
+    assert.equal(centerButton.classList.contains("btn-default"), false);
+    assert.equal(centerButton.classList.contains("is-active"), false);
+    const centerRow = ui.root.querySelector(".dco-handle-center-row");
+    assert.equal(sizeGrid.children[0].getAttribute("data-handle-size"), "38x329");
+    assert.equal(sizeGrid.contains(centerButton), false);
+    assert.equal(centerRow.children.length, 1);
+    assert.equal(centerRow.children[0], centerButton);
+    assert.equal(sizeGrid.parent.children[sizeGrid.parent.children.indexOf(sizeGrid) + 1], centerRow);
     assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').textContent.includes("38 × 329"), true);
     const beforeCenterWrites = writes.length;
     ui.root.querySelector('[data-handle-size="38x329"]').dispatch("click");
@@ -1160,14 +1172,22 @@ async function interactionChecks() {
     assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
     assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
     assert.equal(ui.root.querySelector("[data-liner-offset]").value, "38.1");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
     assert.equal(centered.recessed_handle_start_cm, undefined);
     ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-length]").value, "19.9");
     assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
     assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
     ui.root.querySelector("[data-handle-center]").dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-start]").value, "20.05");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
     ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
     ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
     ui.root.querySelector("[data-handle-center]").dispatch("click");
     assert.equal(ui.root.querySelector('[data-liner-side="edge_long_right"]').classList.contains("is-active"), true);
@@ -1196,6 +1216,20 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
     assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    const reopenedStart = ui.root.querySelector("[data-liner-start]");
+    reopenedStart.value = "1";
+    reopenedStart.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    reopenedStart.value = "18.475";
+    reopenedStart.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    const reopenedOffset = ui.root.querySelector("[data-liner-offset]");
+    reopenedOffset.value = "10";
+    reopenedOffset.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
 
     const narrow = blankRow({
         name: "handle-narrow",
@@ -1211,6 +1245,8 @@ async function interactionChecks() {
     ui.root.querySelector("[data-handle-center]").dispatch("click");
     assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
     assert.equal(ui.root.querySelector("[data-liner-offset]").value, "2");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
     assert.match(ui.root.querySelector("[data-liner-help]").textContent, /door width/);
     assert.match(messages[messages.length - 1].message, /door width/);
     assert.ok(messages.length > beforeNarrow);
@@ -1230,6 +1266,7 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
     assert.equal(ui.root.querySelector("[data-handle-center]").hidden, true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
     ui.root.querySelector('[data-handle-size="38x136"]').dispatch("click");
     const startBefore = ui.root.querySelector("[data-liner-start]").value;
     const offsetBefore = ui.root.querySelector("[data-liner-offset]").value;

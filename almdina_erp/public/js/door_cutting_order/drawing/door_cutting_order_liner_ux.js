@@ -534,6 +534,16 @@
         if (length) length.value = formatInput(draft.lengthCm, 3);
     }
 
+    function handleIsCentered(draft) {
+        if (!handleCenteringAllowed(draft) || !draft || !draft.piece) return false;
+        const api = geometry();
+        if (!api || typeof api.centerRecessedHandle !== "function") return false;
+        const placed = api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm);
+        if (!placed.ok || String(draft.side || "") !== placed.side) return false;
+        return Math.abs(num(draft.startCm) - placed.startCm) <= 0.0001
+            && Math.abs(num(draft.offsetCm) - placed.offsetCm) <= 0.0001;
+    }
+
     function syncHandleChoices(root, draft) {
         if (!root || !draft || draft.kind !== "recessed_handle_cutout") return;
         const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
@@ -543,7 +553,14 @@
             button.setAttribute("aria-pressed", selected ? "true" : "false");
         });
         const center = root.querySelector("[data-handle-center]");
-        if (center) center.hidden = !handleCenteringAllowed(draft);
+        if (!center) return;
+        const centered = handleIsCentered(draft);
+        const allowed = handleCenteringAllowed(draft);
+        center.hidden = !allowed;
+        center.classList.toggle("is-active", centered);
+        center.setAttribute("aria-pressed", centered ? "true" : "false");
+        const centerRow = center.parentElement;
+        if (centerRow && centerRow.classList.contains("dco-handle-center-row")) centerRow.hidden = !allowed;
     }
 
     function handleChoicesHtml(draft) {
@@ -554,9 +571,10 @@
             return `<button type="button" class="dco-handle-size ${selected ? "is-active" : ""}" data-handle-size="${size.id}" aria-pressed="${selected ? "true" : "false"}" dir="ltr">${esc(handleSizeLabel(size))}</button>`;
         }).join("");
         const centerHidden = handleCenteringAllowed(draft) ? "" : " hidden";
+        const centered = handleIsCentered(draft);
         return `<div class="dco-corner-section-label">${esc(__("Standard sizes"))}</div>
                 <div class="dco-handle-size-grid" data-handle-sizes>${chips}</div>
-                <button type="button" class="btn btn-default btn-sm dco-handle-center" data-handle-center="1"${centerHidden}>${esc(__("Center Handle"))}</button>`;
+                <div class="dco-handle-center-row"${centerHidden}><button type="button" class="dco-handle-size dco-handle-center ${centered ? "is-active" : ""}" data-handle-center="1" aria-pressed="${centered ? "true" : "false"}"${centerHidden}>${esc(__("Center Handle"))}</button></div>`;
     }
 
     function controlsHtml(draft) {
@@ -991,6 +1009,7 @@
         centerHandleMessage,
         handleCenteringAllowed,
         syncHandleChoices,
+        handleIsCentered,
         writeMachiningInputs,
     });
 })();
