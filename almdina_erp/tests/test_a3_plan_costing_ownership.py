@@ -397,8 +397,10 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                     "special_shape_price_approved_on": "2026-10-21 10:00:00",
                 }
             ],
-            "customer_quote_total_usd": 50,
-            "customer_quote_status": "Approved",
+            "order": {
+                "customer_quote_total_usd": 50,
+                "customer_quote_status": "Approved",
+            },
             "order_modified": "v2",
         }
         with patch.object(cost_service, "save_cost_workspace", return_value=snapshot) as save:

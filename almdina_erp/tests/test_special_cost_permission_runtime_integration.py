@@ -85,10 +85,7 @@ class TestSpecialCostPermissionRuntimeIntegration(FrappeTestCase):
         try:
             return execute_cmd(method)
         finally:
-            if previous_request is None:
-                frappe.local.__dict__.pop("request", None)
-            else:
-                frappe.local.request = previous_request
+            frappe.local.request = previous_request
 
     def setUp(self) -> None:
         super().setUp()
