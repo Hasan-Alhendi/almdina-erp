@@ -75,11 +75,15 @@ def _merge_texts(existing: dict[str, str] | None, defaults: dict[str, str]) -> d
 
 def _upsert_single(frappe: object, field: str, value: str) -> None:
     db = frappe.db  # type: ignore[attr-defined]
-    db.sql(
-        "update `tabSingles` set value=%s where doctype=%s and field=%s",
-        (value, "Customer Bot Settings", field),
+    existing = db.sql(
+        "select 1 from `tabSingles` where doctype=%s and field=%s limit 1 for update",
+        ("Customer Bot Settings", field),
     )
-    if int(db._cursor.rowcount) == 1:
+    if existing:
+        db.sql(
+            "update `tabSingles` set value=%s where doctype=%s and field=%s",
+            (value, "Customer Bot Settings", field),
+        )
         return
     db.sql(
         "insert into `tabSingles` (doctype, field, value) values (%s, %s, %s)",

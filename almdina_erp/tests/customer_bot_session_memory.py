@@ -1,0 +1,294 @@
+"""In-memory session double for single-process tests.
+
+Production protection is the MariaDB repository. This lock only keeps the
+double consistent inside one test process.
+"""
+
+from __future__ import annotations
+
+import json
+import secrets
+import threading
+from dataclasses import dataclass
+from datetime import datetime
+
+from almdina_erp.almdina_erp.application.customer_bot.session_store import BeginTurn
+from almdina_erp.almdina_erp.domain.customer_bot.conversation import ConversationState
+from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
+    CONFLICT,
+    CONVERSATION_BUSY,
+    DUPLICATE,
+    IN_PROGRESS,
+    LOST_LEASE,
+    PROCESSED,
+    PROCEED,
+    SUPPRESSED,
+    classify_stored_event,
+    lease_is_active,
+    utc_iso,
+)
+
+
+@dataclass
+class _Conversation:
+    revision: int
+    state_json: str | None
+    customer_id: str | None
+    last_activity_on: str
+    expires_on: str | None
+    lease_token: str | None
+    lease_expires_on: str | None
+
+
+@dataclass
+class _Event:
+    fingerprint: str
+    status: str
+    outcome: str | None
+    lease_token: str | None
+    lease_expires_on: str | None
+    completed_on: str | None
+
+
+class MemoryCustomerBotSessionStore:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.conversations: dict[tuple[str, str, str], _Conversation] = {}
+        self.events: dict[tuple[str, str], _Event] = {}
+
+    def note_terminal(self, *, connection_ref, provider_event_id, fingerprint, outcome, now) -> str:
+        with self._lock:
+            key = (connection_ref, provider_event_id)
+            existing = self.events.get(key)
+            now_iso = utc_iso(now)
+            if existing is None:
+                self.events[key] = _Event(fingerprint, "completed", outcome, None, None, now_iso)
+                return outcome
+            kind = classify_stored_event(
+                status=existing.status,
+                stored_fingerprint=existing.fingerprint,
+                fingerprint=fingerprint,
+                lease_token=existing.lease_token,
+                lease_expires_on=existing.lease_expires_on,
+                now_iso=now_iso,
+            )
+            return IN_PROGRESS if kind == "reclaim" else kind
+
+    def begin_turn(
+        self, *, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint, now, lease_ttl
+    ) -> BeginTurn:
+        with self._lock:
+            now_iso = utc_iso(now)
+            lease_iso = utc_iso(now + lease_ttl)
+            token = secrets.token_hex(16)
+            conv_key = (connection_ref, conversation_id, sender_id)
+            event_key = (connection_ref, provider_event_id)
+            conversation = self.conversations.get(conv_key)
+            event = self.events.get(event_key)
+            event_kind = None
+            if event is not None:
+                event_kind = classify_stored_event(
+                    status=event.status,
+                    stored_fingerprint=event.fingerprint,
+                    fingerprint=fingerprint,
+                    lease_token=event.lease_token,
+                    lease_expires_on=event.lease_expires_on,
+                    now_iso=now_iso,
+                )
+            busy = conversation is not None and lease_is_active(
+                conversation.lease_token, conversation.lease_expires_on, now_iso
+            )
+            if busy:
+                if event_kind in {CONFLICT, DUPLICATE, IN_PROGRESS}:
+                    return BeginTurn(event_kind)
+                if event_kind == "reclaim":
+                    return BeginTurn(IN_PROGRESS)
+                return BeginTurn(CONVERSATION_BUSY)
+            if event_kind in {CONFLICT, DUPLICATE, IN_PROGRESS}:
+                return BeginTurn(event_kind)
+            created = False
+            previous_token = None
+            previous_expires = None
+            revision = 1
+            state = None
+            if conversation is None:
+                conversation = _Conversation(1, None, None, now_iso, None, token, lease_iso)
+                self.conversations[conv_key] = conversation
+                created = True
+            else:
+                previous_token = conversation.lease_token
+                previous_expires = conversation.lease_expires_on
+                revision = conversation.revision
+                state = _state_from(conversation.state_json)
+                conversation.lease_token = token
+                conversation.lease_expires_on = lease_iso
+                conversation.last_activity_on = now_iso
+            if event_kind == "reclaim" and event is not None:
+                event.lease_token = token
+                event.lease_expires_on = lease_iso
+                return BeginTurn(PROCEED, revision, state, token, token)
+            if event_key in self.events:
+                self._unwind(conv_key, token, previous_token, previous_expires, created)
+                raced = self.events[event_key]
+                kind = classify_stored_event(
+                    status=raced.status,
+                    stored_fingerprint=raced.fingerprint,
+                    fingerprint=fingerprint,
+                    lease_token=raced.lease_token,
+                    lease_expires_on=raced.lease_expires_on,
+                    now_iso=now_iso,
+                )
+                return BeginTurn(IN_PROGRESS if kind == "reclaim" else kind)
+            self.events[event_key] = _Event(fingerprint, "processing", None, token, lease_iso, None)
+            return BeginTurn(PROCEED, revision, state, token, token)
+
+    def complete_turn(
+        self, *, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+        conversation_token, event_token, revision, state, now, acceptance_unchanged,
+    ) -> str:
+        with self._lock:
+            conversation, event = self._owned(
+                connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+                conversation_token, event_token, revision,
+            )
+            if conversation is None or event is None:
+                return LOST_LEASE
+            if not acceptance_unchanged():
+                conversation.lease_token = None
+                conversation.lease_expires_on = None
+                event.status = "completed"
+                event.outcome = SUPPRESSED
+                event.lease_token = None
+                event.lease_expires_on = None
+                event.completed_on = utc_iso(now)
+                return SUPPRESSED
+            if not self._finish(
+                connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+                conversation_token, event_token, revision, state, now,
+            ):
+                return LOST_LEASE
+            return PROCESSED
+
+    def abort_turn(
+        self, *, connection_ref, conversation_id, sender_id, provider_event_id,
+        conversation_token, event_token, revision,
+    ) -> bool:
+        with self._lock:
+            conv_key = (connection_ref, conversation_id, sender_id)
+            event_key = (connection_ref, provider_event_id)
+            conversation = self.conversations.get(conv_key)
+            event = self.events.get(event_key)
+            if (
+                conversation is None
+                or event is None
+                or conversation.lease_token != conversation_token
+                or conversation.revision != revision
+                or event.lease_token != event_token
+                or event.status != "processing"
+            ):
+                return False
+            conversation.lease_token = None
+            conversation.lease_expires_on = None
+            del self.events[event_key]
+            return True
+
+    def purge(self, *, now, conversation_retention, event_retention, limit) -> tuple[int, int]:
+        with self._lock:
+            bounded = max(1, min(int(limit), 200))
+            now_iso = utc_iso(now)
+            conversation_cutoff = utc_iso(now - conversation_retention)
+            event_cutoff = utc_iso(now - event_retention)
+            removed_conversations = 0
+            for key, row in list(self.conversations.items()):
+                if removed_conversations >= bounded:
+                    break
+                leased = lease_is_active(row.lease_token, row.lease_expires_on, now_iso)
+                expired = (row.expires_on is not None and row.expires_on < conversation_cutoff) or (
+                    row.state_json is None and row.last_activity_on < conversation_cutoff
+                )
+                if not leased and expired:
+                    del self.conversations[key]
+                    removed_conversations += 1
+            removed_events = 0
+            for key, row in list(self.events.items()):
+                if removed_events >= bounded:
+                    break
+                if row.status == "completed" and row.completed_on and row.completed_on < event_cutoff:
+                    del self.events[key]
+                    removed_events += 1
+            return removed_conversations, removed_events
+
+    def steal_lease(self, connection_ref: str, conversation_id: str, sender_id: str) -> None:
+        with self._lock:
+            row = self.conversations[(connection_ref, conversation_id, sender_id)]
+            row.lease_token = "stolen"
+            row.lease_expires_on = "9999-01-01T00:00:00+00:00"
+
+    def _finish(
+        self, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+        conversation_token, event_token, revision, state, now,
+    ) -> bool:
+        conversation, event = self._owned(
+            connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+            conversation_token, event_token, revision,
+        )
+        if conversation is None or event is None:
+            return False
+        if state is None:
+            conversation.state_json = None
+            conversation.customer_id = None
+            conversation.expires_on = utc_iso(now)
+        else:
+            payload = state.to_payload()
+            conversation.state_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+            conversation.customer_id = state.customer_id
+            conversation.expires_on = utc_iso(state.expires_at)
+        conversation.revision += 1
+        conversation.last_activity_on = utc_iso(now)
+        conversation.lease_token = None
+        conversation.lease_expires_on = None
+        event.status = "completed"
+        event.outcome = "processed"
+        event.lease_token = None
+        event.lease_expires_on = None
+        event.completed_on = utc_iso(now)
+        return True
+
+    def _owned(
+        self, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
+        conversation_token, event_token, revision,
+    ):
+        conversation = self.conversations.get((connection_ref, conversation_id, sender_id))
+        event = self.events.get((connection_ref, provider_event_id))
+        if (
+            conversation is None
+            or event is None
+            or conversation.lease_token != conversation_token
+            or conversation.revision != revision
+            or event.lease_token != event_token
+            or event.fingerprint != fingerprint
+            or event.status != "processing"
+        ):
+            return None, None
+        return conversation, event
+
+    def _unwind(self, conv_key, token, previous_token, previous_expires, created: bool) -> None:
+        row = self.conversations.get(conv_key)
+        if row is None or row.lease_token != token:
+            return
+        if created:
+            del self.conversations[conv_key]
+            return
+        row.lease_token = previous_token
+        row.lease_expires_on = previous_expires
+
+
+def _state_from(payload: str | None) -> ConversationState | None:
+    if not payload:
+        return None
+    from almdina_erp.almdina_erp.domain.customer_bot.conversation import conversation_state_from_payload
+
+    try:
+        return conversation_state_from_payload(json.loads(payload))
+    except json.JSONDecodeError:
+        return None

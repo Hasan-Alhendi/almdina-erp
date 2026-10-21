@@ -59,6 +59,8 @@ permission_query_conditions = {
     "Customer Bot Phone Access": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_access_query",
     "Customer Bot Phone Request": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_request_query",
     "Customer Bot Settings": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_settings_records.customer_bot_settings_query",
+    "Customer Bot Conversation": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_conversation_query",
+    "Customer Bot Inbound Event": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_inbound_event_query",
 }
 
 has_permission = {
@@ -73,6 +75,8 @@ has_permission = {
     "Customer Bot Phone Access": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_access_has_permission",
     "Customer Bot Phone Request": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_permissions.customer_bot_phone_request_has_permission",
     "Customer Bot Settings": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_settings_records.customer_bot_settings_has_permission",
+    "Customer Bot Conversation": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_conversation_has_permission",
+    "Customer Bot Inbound Event": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_inbound_event_has_permission",
 }
 
 boot_session = "almdina_erp.boot.boot_session"

@@ -20,6 +20,7 @@ from almdina_erp.almdina_erp.application.customer_bot.preview_conversation impor
     preview_customer_bot_turn,
 )
 from almdina_erp.almdina_erp.application.customer_bot.read_runtime import (
+    next_acceptance_epoch,
     read_customer_bot_runtime,
 )
 from almdina_erp.almdina_erp.application.customer_bot.settings_commands import (
@@ -112,6 +113,11 @@ class _Store:
         self.snapshot = replace(
             self.snapshot,
             enabled=enabled,
+            acceptance_epoch=next_acceptance_epoch(
+                self.snapshot.enabled,
+                self.snapshot.acceptance_epoch,
+                enabled,
+            ),
             revision=expected_revision + 1,
             modified=modified,
             modified_by=actor,
@@ -344,6 +350,7 @@ class CustomerBotSettingsCommandTests(unittest.TestCase):
         self.assertEqual(saved.draft[BotMessageKey.WELCOME], "أهلاً بك")
         self.assertEqual(saved.published, default_texts())
         self.assertFalse(saved.enabled)
+        self.assertEqual(saved.acceptance_epoch, 0)
         self.assertEqual(store.writes, ["draft"])
 
     def test_publish_replaces_the_published_copy_without_enabling(self) -> None:
@@ -376,7 +383,11 @@ class CustomerBotSettingsCommandTests(unittest.TestCase):
         disabled = _Store(_snapshot(enabled=True, draft=invalid))
         saved = set_customer_bot_enabled(disabled, False, 1, ACTOR, WHEN)
         self.assertFalse(saved.enabled)
+        self.assertEqual(saved.acceptance_epoch, 1)
         self.assertEqual(saved.draft, invalid)
+        enabled = set_customer_bot_enabled(disabled, True, saved.revision, ACTOR, WHEN)
+        self.assertTrue(enabled.enabled)
+        self.assertEqual(enabled.acceptance_epoch, 1)
         blocked = _Store(_snapshot(published={}))
         with self.assertRaises(CustomerBotSettingsInvalid):
             set_customer_bot_enabled(blocked, True, 1, ACTOR, WHEN)
@@ -393,6 +404,7 @@ class CustomerBotSettingsCommandTests(unittest.TestCase):
         self.assertTrue(runtime.enabled)
         self.assertFalse(runtime.accepting_messages)
         self.assertIsNone(runtime.published)
+        self.assertEqual(runtime.acceptance_epoch, 0)
 
 
 class CustomerBotSettingsAccessTests(unittest.TestCase):

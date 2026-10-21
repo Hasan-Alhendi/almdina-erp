@@ -52,10 +52,12 @@ class TestCustomerBotSettingsIntegration(FrappeTestCase):
         super().setUpClass()
         frappe.set_user("Administrator")
         cls._delete_fixtures()
+        cls._committed_singles = _singles()
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
+        frappe.db.rollback()
         cls._delete_fixtures()
         super().tearDownClass()
 
@@ -81,11 +83,8 @@ class TestCustomerBotSettingsIntegration(FrappeTestCase):
 
     def tearDown(self):
         frappe.set_user("Administrator")
-        for field, value in getattr(self, "_settings_before", {}).items():
-            frappe.db.sql(
-                "update `tabSingles` set value=%s where doctype=%s and field=%s",
-                (value, DOCTYPE, field),
-            )
+        frappe.db.rollback()
+        self.assertEqual(_singles(), self._committed_singles)
         super().tearDown()
 
     def test_capability_opens_the_page_without_other_sections(self) -> None:
@@ -293,6 +292,46 @@ class TestCustomerBotSettingsIntegration(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             document.save()
 
+    def test_unchanged_writes_do_not_insert_single_rows(self) -> None:
+        before = _field_counts()
+        repository = FrappeCustomerBotSettingsRepository()
+        original = repository.load()
+        repeated = original
+        for _ in range(2):
+            repeated = repository.set_enabled(
+                original.enabled,
+                repeated.revision,
+                "Administrator",
+                frappe.utils.now(),
+            )
+            self.assertIsNotNone(repeated)
+            self.assertEqual(repeated.enabled, original.enabled)
+            self.assertEqual(repeated.acceptance_epoch, original.acceptance_epoch)
+            self.assertEqual(repeated.draft, original.draft)
+            self.assertEqual(repeated.published, original.published)
+        self.assertEqual(_field_counts(), before)
+
+    def test_disable_then_enable_bumps_the_epoch_without_extra_rows(self) -> None:
+        before = _field_counts()
+        repository = FrappeCustomerBotSettingsRepository()
+        original = repository.load()
+        current = original
+        if not original.enabled:
+            current = repository.set_enabled(True, original.revision, "Administrator", frappe.utils.now())
+            self.assertIsNotNone(current)
+            self.assertEqual(current.acceptance_epoch, original.acceptance_epoch)
+        disabled = repository.set_enabled(False, current.revision, "Administrator", frappe.utils.now())
+        self.assertIsNotNone(disabled)
+        self.assertEqual(disabled.acceptance_epoch, current.acceptance_epoch + 1)
+        enabled = repository.set_enabled(True, disabled.revision, "Administrator", frappe.utils.now())
+        self.assertIsNotNone(enabled)
+        self.assertTrue(enabled.enabled)
+        self.assertEqual(enabled.acceptance_epoch, disabled.acceptance_epoch)
+        self.assertIsNone(repository.published_if_same_acceptance(original.acceptance_epoch))
+        published = repository.published_if_same_acceptance(enabled.acceptance_epoch)
+        self.assertEqual(published, original.published)
+        self.assertEqual(_field_counts(), before)
+
     @classmethod
     def _ensure_role(cls, role: str) -> None:
         if not frappe.db.exists("Role", role):
@@ -344,3 +383,20 @@ class TestCustomerBotSettingsIntegration(FrappeTestCase):
             if frappe.db.exists("Role", role):
                 frappe.delete_doc("Role", role, force=True, ignore_permissions=True)
         frappe.clear_cache()
+
+
+def _singles() -> tuple:
+    return tuple(
+        frappe.db.sql(
+            "select field, value from `tabSingles` where doctype=%s order by field, value",
+            (DOCTYPE,),
+        )
+    )
+
+
+def _field_counts() -> dict[str, int]:
+    rows = frappe.db.sql(
+        "select field, count(*) from `tabSingles` where doctype=%s group by field",
+        (DOCTYPE,),
+    )
+    return {field: int(count) for field, count in rows}

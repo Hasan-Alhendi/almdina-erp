@@ -28,6 +28,7 @@ class CustomerBotSettingsSnapshot:
     published_by: str | None
     modified: str | None
     modified_by: str | None
+    acceptance_epoch: int = 0
 
 
 class CustomerBotSettingsMissing(Exception):
@@ -72,6 +73,13 @@ class CustomerBotSettingsStore(Protocol):
         actor: str,
         modified: str,
     ) -> CustomerBotSettingsSnapshot | None: ...
+
+    def published_if_same_acceptance(self, acceptance_epoch: int) -> dict[str, str] | None:
+        """Return the published copy only when this cycle is still accepting.
+
+        A database adapter locks the switch row. ``None`` means the turn must
+        not be committed.
+        """
 
 
 def save_customer_bot_draft(

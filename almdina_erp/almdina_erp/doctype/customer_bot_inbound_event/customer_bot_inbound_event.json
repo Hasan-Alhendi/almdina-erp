@@ -1,0 +1,36 @@
+{
+  "actions": [],
+  "allow_import": 0,
+  "allow_rename": 0,
+  "autoname": "hash",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "connection_ref",
+    "provider_event_id",
+    "fingerprint",
+    "status",
+    "outcome",
+    "lease_token",
+    "lease_expires_on",
+    "completed_on"
+  ],
+  "fields": [
+    {"fieldname": "connection_ref", "fieldtype": "Data", "label": "Connection Ref", "read_only": 1, "reqd": 1},
+    {"fieldname": "provider_event_id", "fieldtype": "Data", "label": "Provider Event ID", "read_only": 1, "reqd": 1},
+    {"fieldname": "fingerprint", "fieldtype": "Data", "label": "Fingerprint", "length": 64, "read_only": 1, "reqd": 1},
+    {"fieldname": "status", "fieldtype": "Data", "label": "Status", "read_only": 1, "reqd": 1},
+    {"fieldname": "outcome", "fieldtype": "Data", "label": "Outcome", "read_only": 1},
+    {"fieldname": "lease_token", "fieldtype": "Data", "label": "Lease Token", "read_only": 1},
+    {"fieldname": "lease_expires_on", "fieldtype": "Data", "label": "Lease Expires On", "read_only": 1},
+    {"fieldname": "completed_on", "fieldtype": "Data", "label": "Completed On", "read_only": 1}
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "Customer Bot Inbound Event",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

@@ -5,6 +5,7 @@
   "field_order": [
     "enabled",
     "revision",
+    "acceptance_epoch",
     "draft_texts",
     "published_texts",
     "published_on",
@@ -13,6 +14,7 @@
   "fields": [
     {"default": "0", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "read_only": 1},
     {"default": "1", "fieldname": "revision", "fieldtype": "Int", "label": "Revision", "non_negative": 1, "read_only": 1, "reqd": 1},
+    {"default": "0", "fieldname": "acceptance_epoch", "fieldtype": "Int", "label": "Acceptance Epoch", "non_negative": 1, "read_only": 1},
     {"fieldname": "draft_texts", "fieldtype": "Long Text", "label": "Draft Texts", "read_only": 1},
     {"fieldname": "published_texts", "fieldtype": "Long Text", "label": "Published Texts", "read_only": 1},
     {"fieldname": "published_on", "fieldtype": "Datetime", "label": "Published On", "read_only": 1},

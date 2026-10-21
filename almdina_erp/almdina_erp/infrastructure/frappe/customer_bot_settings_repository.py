@@ -14,13 +14,18 @@ import frappe
 
 from almdina_erp.almdina_erp.application.customer_bot.read_runtime import (
     CustomerBotRuntime,
+    next_acceptance_epoch,
     read_customer_bot_runtime,
 )
 from almdina_erp.almdina_erp.application.customer_bot.settings_commands import (
     CustomerBotSettingsMissing,
     CustomerBotSettingsSnapshot,
 )
-from almdina_erp.almdina_erp.domain.customer_bot.message_templates import dump_texts, load_texts
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+    dump_texts,
+    load_texts,
+    validate_texts,
+)
 
 
 DOCTYPE = "Customer Bot Settings"
@@ -45,6 +50,7 @@ class FrappeCustomerBotSettingsRepository:
             published_by=_text(data.get("published_by")),
             modified=_text(data.get("modified")),
             modified_by=_text(data.get("modified_by")),
+            acceptance_epoch=int(data.get("acceptance_epoch") or 0),
         )
 
     def save_draft(
@@ -87,9 +93,48 @@ class FrappeCustomerBotSettingsRepository:
         actor: str,
         modified: str,
     ) -> CustomerBotSettingsSnapshot | None:
-        if not _write({"enabled": 1 if enabled else 0}, expected_revision, actor, modified):
+        if not _claim_revision(expected_revision):
             return None
+        currently_enabled, epoch = _locked_switch()
+        new_epoch = next_acceptance_epoch(currently_enabled, epoch, enabled)
+        assignments: dict[str, str] = {
+            "enabled": "1" if enabled else "0",
+            "modified": modified,
+            "modified_by": actor,
+        }
+        if new_epoch != epoch:
+            assignments["acceptance_epoch"] = str(new_epoch)
+        for field, value in assignments.items():
+            _upsert_single(field, value)
         return self.load()
+
+    def published_if_same_acceptance(self, acceptance_epoch: int) -> dict[str, str] | None:
+        if isinstance(acceptance_epoch, bool) or not isinstance(acceptance_epoch, int):
+            return None
+        rows = frappe.db.sql(
+            """
+            select field, value from `tabSingles`
+            where doctype=%s and field in ('enabled', 'acceptance_epoch', 'published_texts')
+            for update
+            """,
+            (DOCTYPE,),
+            as_dict=True,
+        )
+        grouped: dict[str, str] = {}
+        for row in rows:
+            value = "" if row.value is None else str(row.value)
+            previous = grouped.get(row.field)
+            if previous is not None and previous != value:
+                return None
+            grouped[row.field] = value
+        enabled = grouped.get("enabled", "0") in {"1", "True"}
+        epoch = int(grouped.get("acceptance_epoch") or 0)
+        if not enabled or epoch != acceptance_epoch:
+            return None
+        published = _texts(grouped.get("published_texts"))
+        if validate_texts(published):
+            return None
+        return published
 
 
 def load_customer_bot_runtime() -> CustomerBotRuntime:
@@ -104,15 +149,7 @@ def _write(
     actor: str,
     modified: str,
 ) -> bool:
-    frappe.db.sql(
-        """
-        UPDATE `tabSingles`
-        SET value = CAST(value AS UNSIGNED) + 1
-        WHERE doctype=%s AND field='revision' AND value=%s
-        """,
-        (DOCTYPE, str(expected_revision)),
-    )
-    if int(frappe.db._cursor.rowcount) != 1:
+    if not _claim_revision(expected_revision):
         return False
     payload = dict(assignments)
     payload["modified"] = modified
@@ -122,12 +159,50 @@ def _write(
     return True
 
 
-def _upsert_single(field: str, value: str) -> None:
+def _claim_revision(expected_revision: int) -> bool:
     frappe.db.sql(
-        "update `tabSingles` set value=%s where doctype=%s and field=%s",
-        (value, DOCTYPE, field),
+        """
+        UPDATE `tabSingles`
+        SET value = CAST(value AS UNSIGNED) + 1
+        WHERE doctype=%s AND field='revision' AND value=%s
+        """,
+        (DOCTYPE, str(expected_revision)),
     )
-    if int(frappe.db._cursor.rowcount) == 1:
+    return int(frappe.db._cursor.rowcount) == 1
+
+
+def _locked_switch() -> tuple[bool, int]:
+    rows = frappe.db.sql(
+        """
+        select field, value from `tabSingles`
+        where doctype=%s and field in ('enabled', 'acceptance_epoch')
+        for update
+        """,
+        (DOCTYPE,),
+        as_dict=True,
+    )
+    enabled_values = [str(row.value or "0") for row in rows if row.field == "enabled"]
+    epoch_values = [int(row.value or 0) for row in rows if row.field == "acceptance_epoch"]
+    return any(value in {"1", "True"} for value in enabled_values), max(epoch_values, default=0)
+
+
+def _upsert_single(field: str, value: str) -> None:
+    """Update every stored copy of one single field, and insert only when absent.
+
+    MariaDB reports changed rows, not matched rows. A value that is already
+    stored therefore has a changed-row count of zero, and several identical
+    copies have a count other than one. Neither case means the field is missing.
+    """
+
+    existing = frappe.db.sql(
+        "select 1 from `tabSingles` where doctype=%s and field=%s limit 1 for update",
+        (DOCTYPE, field),
+    )
+    if existing:
+        frappe.db.sql(
+            "update `tabSingles` set value=%s where doctype=%s and field=%s",
+            (value, DOCTYPE, field),
+        )
         return
     frappe.db.sql(
         "insert into `tabSingles` (doctype, field, value) values (%s, %s, %s)",
