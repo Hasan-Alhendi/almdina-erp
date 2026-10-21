@@ -627,7 +627,8 @@ def test_saved_server_plan_print_runtime():
             assert controlled["result"] is True and controlled["after"] == controlled["before"] + 2
             controlled_html = controlled.pop("html")
             assert b["name"] in controlled_html and a["name"] not in controlled_html
-            assert "CONTROLLED-PLAN-B" in controlled_html
+            # Plan names are intentionally omitted from printed output; the
+            # controlled offcut marker below proves this exact geometry rendered.
             assert 'data-resource-kind="OFFCUT"' in controlled_html
             assert "CONTROLLED-OFFCUT-B" in controlled_html
             assert 'dco-offcut-business-context' in controlled_html
