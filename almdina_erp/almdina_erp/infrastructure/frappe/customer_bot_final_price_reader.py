@@ -11,7 +11,9 @@ from almdina_erp.almdina_erp.application.customer_bot.final_price_service import
     CustomerBotFinalPriceSnapshot,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.identity import IdentityCode
-from almdina_erp.almdina_erp.domain.customer_bot.order_followup import owned_revision_is_current
+from almdina_erp.almdina_erp.domain.customer_bot.order_followup import (
+    plan_read_requires_current_revision,
+)
 from almdina_erp.almdina_erp.domain.orders.final_price_basis import (
     fingerprint_final_price_basis,
     price_basis_token,
@@ -53,17 +55,23 @@ class FrappeCustomerBotFinalPriceReader:
         )
         if not header:
             return None
-        if str(header.get("status") or "").strip() == "Cancelled":
+        status = str(header.get("status") or "").strip()
+        if status == "Cancelled":
             return CustomerBotFinalPriceSnapshot(available=False, cancelled=True)
-        if not owned_revision_is_current(str(header.get("revision_state") or "")):
+        if plan_read_requires_current_revision(status, str(header.get("revision_state") or "")):
             return None
 
         try:
             order = frappe.get_doc("Door Cutting Order", name)
             if str(getattr(order, "customer", None) or "") != identity:
                 return None
-            if str(getattr(order, "status", None) or "").strip() == "Cancelled":
+            status = str(getattr(order, "status", None) or "").strip()
+            if status == "Cancelled":
                 return CustomerBotFinalPriceSnapshot(available=False, cancelled=True)
+            if plan_read_requires_current_revision(
+                status, str(getattr(order, "revision_state", None) or "")
+            ):
+                return None
             return _read_approved_invoice(order)
         except Exception:
             # A customer gets one safe result for missing, foreign, incomplete,

@@ -35,3 +35,4 @@ almdina_erp.patches.v1_0.install_customer_bot_access
 almdina_erp.patches.v1_0.retire_customer_bot_additional_phone_access
 almdina_erp.patches.v1_0.install_customer_bot_settings
 almdina_erp.patches.v1_0.extend_customer_bot_settings_catalog
+almdina_erp.patches.v1_0.extend_customer_bot_settings_plan_catalog

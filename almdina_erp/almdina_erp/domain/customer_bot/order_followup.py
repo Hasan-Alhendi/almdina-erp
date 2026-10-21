@@ -191,6 +191,18 @@ def owned_revision_is_current(revision_state: str | None) -> bool:
     return is_current_revision(revision_state)
 
 
+def plan_read_requires_current_revision(stored_status: str | None, revision_state: str | None) -> bool:
+    """Refuse a non-current copy, except a delivered order read on that same document.
+
+    Delivery does not retarget the read to a successor. Approval validity stays
+    a separate check.
+    """
+
+    if str(stored_status or "").strip() == "Delivered":
+        return False
+    return not owned_revision_is_current(revision_state)
+
+
 def revision_state_for_query(revision_state: str | None) -> str:
     return normalize_revision_state(revision_state)
 
@@ -210,5 +222,6 @@ __all__ = [
     "classify_public_order_status",
     "non_current_revision_states",
     "owned_revision_is_current",
+    "plan_read_requires_current_revision",
     "revision_state_for_query",
 ]

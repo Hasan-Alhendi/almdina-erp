@@ -327,6 +327,18 @@ def _service_output(
             return _message(BotMessageKey.INVOICE_FAILED), ()
         if result.code == ServiceResultCode.PRICE_DATA_CHANGED:
             return _message(BotMessageKey.PRICE_DATA_CHANGED), ()
+    if service_id == BotService.APPROVED_CUTTING_PLAN:
+        if result.code == ServiceResultCode.PLAN_READY:
+            return _message(
+                BotMessageKey.APPROVED_PLAN,
+                (("order_name", order_name),),
+            ), result.documents
+        if result.code == ServiceResultCode.PLAN_UNAVAILABLE:
+            return _message(BotMessageKey.APPROVED_PLAN_UNAVAILABLE), ()
+        if result.code == ServiceResultCode.PLAN_PDF_FAILED:
+            return _message(BotMessageKey.PLAN_PDF_FAILED), ()
+        if result.code == ServiceResultCode.PLAN_DATA_CHANGED:
+            return _message(BotMessageKey.PLAN_DATA_CHANGED), ()
     return _message(
         BotMessageKey.SERVICE_UNAVAILABLE,
         (("service_id", service_id), ("order_name", order_name)),

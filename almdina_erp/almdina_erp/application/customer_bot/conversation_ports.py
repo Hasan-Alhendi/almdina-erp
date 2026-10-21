@@ -47,6 +47,12 @@ class CustomerServiceResult:
             if len(self.documents) != 1:
                 raise ValueError("a ready result needs exactly one document")
             return
+        if self.code == ServiceResultCode.PLAN_READY:
+            if self.amount is not None or self.currency is not None:
+                raise ValueError("a plan result cannot carry price data")
+            if len(self.documents) != 1:
+                raise ValueError("a ready plan result needs exactly one document")
+            return
         if self.amount is not None or self.currency is not None or self.documents:
             raise ValueError("a non-ready result cannot carry price or document data")
 
@@ -63,9 +69,24 @@ class UnavailableCustomerBotServices:
         return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
 
 
+class CustomerBotServiceRouter:
+    """Route service requests to the injected internal use cases only."""
+
+    def __init__(self, *services: CustomerBotServicePort) -> None:
+        self._services = tuple(services)
+
+    def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        for service in self._services:
+            result = service.execute(request)
+            if result.code != ServiceResultCode.UNAVAILABLE:
+                return result
+        return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+
+
 __all__ = [
     "CustomerBotServicePort",
     "CustomerServiceRequest",
     "CustomerServiceResult",
+    "CustomerBotServiceRouter",
     "UnavailableCustomerBotServices",
 ]

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import platform
 import secrets
-import shutil
+from pathlib import Path
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -50,7 +51,7 @@ class TestCustomerBotFinalPriceIntegration(FrappeTestCase):
             self.assertEqual(snapshot.invoice_payload["kind"], "customer_invoice")
             self.assertIsNone(FrappeCustomerBotFinalPriceReader().read(phone, "CBOT-NOT-FOUND"))
             self.assertIsNone(FrappeCustomerBotFinalPriceReader().read("098811111111", order_name))
-            if not any(shutil.which(name) for name in ("chromium", "chromium-browser", "google-chrome", "wkhtmltopdf")):
+            if not _local_pdf_renderer_available():
                 self.skipTest("development site has no local PDF renderer")
             try:
                 pdf = FrappeCustomerBotInvoicePdfAdapter().render(
@@ -63,6 +64,13 @@ class TestCustomerBotFinalPriceIntegration(FrappeTestCase):
             self.assertGreater(len(pdf), 100)
         finally:
             frappe.db.set_value("Customer", customer, "mobile_no", previous_phone, update_modified=False)
+
+
+def _local_pdf_renderer_available() -> bool:
+    relative = {"linux": ("chrome-linux", "headless_shell")}.get(platform.system().lower())
+    if relative and Path(frappe.utils.get_bench_path(), "chromium", *relative).is_file():
+        return True
+    return False
 
 
 __all__ = ["TestCustomerBotFinalPriceIntegration"]

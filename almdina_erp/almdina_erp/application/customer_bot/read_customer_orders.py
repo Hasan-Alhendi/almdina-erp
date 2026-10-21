@@ -93,12 +93,6 @@ def select_customer_order_by_name(
             order_date=_date_text(header.order_date),
             public_status=PublicOrderStatus.CANCELLED,
         )
-    if not owned_revision_is_current(header.revision_state):
-        return OrderSelection(
-            OrderSelectionOutcome.NOT_CURRENT,
-            identity.code,
-            order_name=header.name,
-        )
     if status == PublicOrderStatus.DELIVERED:
         return OrderSelection(
             OrderSelectionOutcome.SELECTED,
@@ -106,6 +100,12 @@ def select_customer_order_by_name(
             order_name=header.name,
             order_date=_date_text(header.order_date),
             public_status=PublicOrderStatus.DELIVERED,
+        )
+    if not owned_revision_is_current(header.revision_state):
+        return OrderSelection(
+            OrderSelectionOutcome.NOT_CURRENT,
+            identity.code,
+            order_name=header.name,
         )
     return OrderSelection(
         OrderSelectionOutcome.SELECTED,

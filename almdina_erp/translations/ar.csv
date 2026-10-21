@@ -2932,6 +2932,10 @@ Approved final price result,نتيجة السعر النهائي المعتمد
 Final price not approved,السعر النهائي غير معتمد
 Invoice PDF failed,تعذر تجهيز فاتورة PDF
 Price changed during invoice preparation,تغير السعر أثناء تجهيز الفاتورة
+Approved cutting plan result,نتيجة خطة القص المعتمدة
+Cutting plan not approved,خطة القص غير معتمدة
+Cutting plan PDF failed,تعذر تجهيز ملف خطة القص
+Cutting plan changed during preparation,تغيرت خطة القص أثناء التجهيز
 Unregistered number,رقم غير مسجل
 Invalid order number,رقم طلب غير صحيح
 Service unavailable,خدمة غير متاحة

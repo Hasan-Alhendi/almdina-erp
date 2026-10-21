@@ -44,6 +44,10 @@ class BotMessageKey:
     FINAL_PRICE_UNAVAILABLE = "final_price_unavailable"
     INVOICE_FAILED = "invoice_failed"
     PRICE_DATA_CHANGED = "price_data_changed"
+    APPROVED_PLAN = "approved_plan"
+    APPROVED_PLAN_UNAVAILABLE = "approved_plan_unavailable"
+    PLAN_PDF_FAILED = "plan_pdf_failed"
+    PLAN_DATA_CHANGED = "plan_data_changed"
 
 
 class ServiceResultCode:
@@ -52,6 +56,10 @@ class ServiceResultCode:
     PRICE_UNAVAILABLE = "price_unavailable"
     INVOICE_FAILED = "invoice_failed"
     PRICE_DATA_CHANGED = "price_data_changed"
+    PLAN_READY = "plan_ready"
+    PLAN_UNAVAILABLE = "plan_unavailable"
+    PLAN_PDF_FAILED = "plan_pdf_failed"
+    PLAN_DATA_CHANGED = "plan_data_changed"
 
 
 _SERVICE_BY_DIGIT = {

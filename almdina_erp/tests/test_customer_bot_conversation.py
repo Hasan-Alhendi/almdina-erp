@@ -13,7 +13,12 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+from almdina_erp.almdina_erp.application.customer_bot.approved_plan_service import (
+    CustomerBotApprovedPlanService,
+    CustomerBotApprovedPlanSnapshot,
+)
 from almdina_erp.almdina_erp.application.customer_bot.conversation_ports import (
+    CustomerBotServiceRouter,
     CustomerServiceRequest,
     CustomerServiceResult,
     UnavailableCustomerBotServices,
@@ -339,6 +344,151 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertEqual(dict(turn.messages[0].parameters)["currency"], "USD")
         self.assertEqual(turn.documents[0].mime_type, "application/pdf")
         self.assertNotIn("documents", turn.state.to_payload())
+
+    def test_option_three_returns_approved_plan_document_separately(self) -> None:
+        result = CustomerServiceResult(
+            ServiceResultCode.PLAN_READY,
+            documents=(
+                CustomerBotDocument(
+                    document_type="approved_cutting_plan",
+                    filename="خطة-قص-DCO-2026-00021-rev-1.pdf",
+                    mime_type="application/pdf",
+                    content=b"%PDF-plan",
+                ),
+            ),
+        )
+        services = _Services(result)
+        orders = _Orders((_header("DCO-2026-00021"),))
+        opened, _directory, _services = _run("hi", None, orders)
+        waiting, _directory, _services = _run("3", opened.state, orders, services=services)
+        turn, _directory, _services = _run(
+            "DCO-2026-00021", waiting.state, orders, services=services
+        )
+
+        self.assertEqual(turn.messages[0].key, BotMessageKey.APPROVED_PLAN)
+        self.assertEqual(
+            dict(turn.messages[0].parameters)["order_name"], "DCO-2026-00021"
+        )
+        self.assertEqual(turn.documents[0].document_type, "approved_cutting_plan")
+        self.assertNotIn("documents", turn.state.to_payload())
+
+    def test_delivered_superseded_order_reaches_status_price_and_plan_on_that_document(self) -> None:
+        rows = (
+            _header("DCO-A"),
+            _header("DCO-B"),
+            _header("DCO-NEW"),
+            _header(
+                "DCO-OLD",
+                stored_status="Delivered",
+                revision_state=RevisionState.SUPERSEDED,
+            ),
+            _header("DCO-STALE", revision_state=RevisionState.SUPERSEDED),
+        )
+
+        class _PlanReader:
+            def __init__(self, available: bool) -> None:
+                self.available = available
+                self.orders: list[str] = []
+
+            def read(self, phone: str, order_name: str):
+                self.orders.append(order_name)
+                if self.available and order_name == "DCO-OLD":
+                    return CustomerBotApprovedPlanSnapshot(
+                        available=True,
+                        plan_name="CP-OLD",
+                        revision=1,
+                        source_type="System",
+                        consistency_key="same",
+                    )
+                return None
+
+        class _PlanPdf:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, str]] = []
+
+            def render(self, order_name: str, plan_name: str) -> bytes:
+                self.calls.append((order_name, plan_name))
+                return b"%PDF-old"
+
+        def _awaiting(orders: _Orders, digit: str, services):
+            opened, _directory, _services = _run("hi", None, orders, services=services)
+            return _run(digit, opened.state, orders, services=services)[0]
+
+        reader = _PlanReader(True)
+        pdf = _PlanPdf()
+        plan = CustomerBotServiceRouter(CustomerBotApprovedPlanService(reader, pdf))
+        orders = _Orders(rows)
+        listed = _awaiting(orders, "3", plan)
+        listed_names = [
+            dict(item.parameters)["order_name"]
+            for item in listed.messages
+            if item.key == BotMessageKey.CURRENT_ORDER_LINE
+        ]
+        self.assertEqual(listed_names, ["DCO-NEW", "DCO-B", "DCO-A"])
+        self.assertEqual(reader.orders, [])
+        ready, _directory, _services = _run("DCO-OLD", listed.state, orders, services=plan)
+        self.assertEqual(ready.messages[0].key, BotMessageKey.APPROVED_PLAN)
+        self.assertEqual(dict(ready.messages[0].parameters)["order_name"], "DCO-OLD")
+        self.assertEqual(reader.orders, ["DCO-OLD", "DCO-OLD"])
+        self.assertEqual(pdf.calls, [("DCO-OLD", "CP-OLD")])
+        self.assertEqual(ready.documents[0].content, b"%PDF-old")
+        self.assertNotIn("DCO-NEW", ready.documents[0].filename)
+        blocked, _directory, _services = _run("DCO-STALE", ready.state, orders, services=plan)
+        self.assertEqual(blocked.messages[0].key, BotMessageKey.ORDER_NOT_CURRENT)
+        self.assertEqual(dict(blocked.messages[0].parameters)["order_name"], "DCO-STALE")
+        self.assertEqual(blocked.documents, ())
+        self.assertEqual(reader.orders, ["DCO-OLD", "DCO-OLD"])
+        self.assertEqual(pdf.calls, [("DCO-OLD", "CP-OLD")])
+
+        missing = _PlanReader(False)
+        missing_pdf = _PlanPdf()
+        unavailable = CustomerBotServiceRouter(
+            CustomerBotApprovedPlanService(missing, missing_pdf)
+        )
+        denied_orders = _Orders(rows)
+        denied_list = _awaiting(denied_orders, "3", unavailable)
+        denied, _directory, _services = _run(
+            "DCO-OLD", denied_list.state, denied_orders, services=unavailable
+        )
+        self.assertEqual(denied.messages[0].key, BotMessageKey.APPROVED_PLAN_UNAVAILABLE)
+        self.assertEqual(denied.documents, ())
+        self.assertEqual(missing_pdf.calls, [])
+        self.assertEqual(missing.orders, ["DCO-OLD"])
+
+        status_services = _Services()
+        status_orders = _Orders(rows)
+        status_list = _awaiting(status_orders, "1", status_services)
+        status, _directory, _services = _run(
+            "DCO-OLD", status_list.state, status_orders, services=status_services
+        )
+        self.assertEqual(status.messages[0].key, BotMessageKey.ORDER_STATUS)
+        self.assertEqual(dict(status.messages[0].parameters)["order_name"], "DCO-OLD")
+        self.assertEqual(
+            dict(status.messages[0].parameters)["public_status"],
+            PublicOrderStatus.DELIVERED,
+        )
+        self.assertEqual(status.documents, ())
+        self.assertEqual(status_services.requests, [])
+
+        class _Price:
+            def __init__(self) -> None:
+                self.orders: list[str] = []
+
+            def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+                if request.service_id != BotService.FINAL_COST:
+                    return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+                self.orders.append(request.order_name)
+                return CustomerServiceResult(ServiceResultCode.PRICE_UNAVAILABLE)
+
+        price = _Price()
+        price_orders = _Orders(rows)
+        price_list = _awaiting(price_orders, "2", price)
+        priced, _directory, _services = _run(
+            "DCO-OLD", price_list.state, price_orders, services=price
+        )
+        self.assertEqual(priced.messages[0].key, BotMessageKey.FINAL_PRICE_UNAVAILABLE)
+        self.assertEqual(priced.documents, ())
+        self.assertEqual(price.orders, ["DCO-OLD"])
 
     def test_missing_and_foreign_orders_have_the_same_messages(self) -> None:
         orders = _Orders((_header("DCO-FOREIGN", customer=OTHER, stored_status="Delivered"),))

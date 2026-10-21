@@ -34,6 +34,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.order_followup import (
     OrderStatusFacts,
     PublicOrderStatus,
     classify_public_order_status,
+    plan_read_requires_current_revision,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import (
     ProductionRoute,
@@ -300,6 +301,31 @@ class CustomerBotOrderFollowupTests(unittest.TestCase):
             "DCO-WAIT",
         )
         self.assertEqual(pending.outcome, OrderSelectionOutcome.NOT_CURRENT)
+
+    def test_delivered_non_current_copy_remains_readable_without_a_successor(self) -> None:
+        self.assertFalse(
+            plan_read_requires_current_revision("Delivered", RevisionState.SUPERSEDED)
+        )
+        self.assertFalse(
+            plan_read_requires_current_revision("Delivered", RevisionState.PENDING_ACTIVATION)
+        )
+        self.assertFalse(plan_read_requires_current_revision("Delivered", RevisionState.CURRENT))
+        self.assertTrue(plan_read_requires_current_revision("Draft", RevisionState.SUPERSEDED))
+        self.assertTrue(
+            plan_read_requires_current_revision("Ready for Delivery", RevisionState.PENDING_ACTIVATION)
+        )
+        self.assertFalse(plan_read_requires_current_revision("Draft", RevisionState.CURRENT))
+        selected = self._select(
+            (
+                _header("DCO-OLD", stored_status="Delivered", revision_state=RevisionState.SUPERSEDED),
+                _header("DCO-NEW"),
+            ),
+            "DCO-OLD",
+        )
+        self.assertEqual(selected.outcome, OrderSelectionOutcome.SELECTED)
+        self.assertEqual(selected.order_name, "DCO-OLD")
+        self.assertEqual(selected.public_status, PublicOrderStatus.DELIVERED)
+        self.assertNotIn("DCO-NEW", str(selected))
 
     def test_a_changed_primary_phone_is_resolved_again(self) -> None:
         directory = _Directory()
