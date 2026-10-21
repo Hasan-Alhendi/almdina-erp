@@ -179,8 +179,10 @@ def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometr
     policy = PIECE_POLICY.read_text(encoding="utf-8")
     permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
-    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
-    assert "doctype_has_any_capability" in service
+    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" not in service
+    assert "has_special_price_approval_permission" not in service
+    assert "doctype_has_any_capability" not in service
+    assert "approve_special_piece_price as save_special_price" in service
     assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
     assert '"special_shape_price_approved_by": frappe.session.user if approved else None' in cost_service
     assert '"special_shape_price_approved_on": now_datetime() if approved else None' in cost_service

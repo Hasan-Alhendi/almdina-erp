@@ -9,14 +9,6 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    doctype_has_any_capability,
-)
-
-SPECIAL_PRICE_APPROVAL_CAPABILITIES = frozenset(
-    {Capability.APPROVE_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE}
-)
 EDITABLE_ORDER_STATUSES = {"Draft", "Pending Review", "Rejected"}
 ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}
 MAX_DRAWING_BYTES = 300_000
@@ -379,15 +371,6 @@ def validate_special_shape_geometry(
         "points": points,
         "exact": True,
     }
-
-
-def has_special_price_approval_permission(user: str | None = None) -> bool:
-    """Resolve special-price access exclusively from configured capabilities."""
-
-    return doctype_has_any_capability(
-        SPECIAL_PRICE_APPROVAL_CAPABILITIES,
-        user=user,
-    )
 
 
 def _get_special_piece(order: Any, piece_name: str) -> Any:

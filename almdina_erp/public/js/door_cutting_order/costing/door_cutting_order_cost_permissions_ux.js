@@ -137,11 +137,9 @@
     }
 
     function orderIsEditable(frm) {
-        // Pricing has its own capabilities and its own Cost edit session. Do not
-        // call frappe.almdina.orderCanEdit() here: that helper intentionally also
-        // requires edit_order + the Order edit session and would couple two
-        // independent permission surfaces. Mirror the server-side
-        // assert_order_editable() lifecycle boundary instead.
+        // Cost Settings authority is evaluated on this document by the server
+        // snapshot and the financial save command. Keep its document lifecycle
+        // boundary aligned here without coupling it to the Order edit session.
         if (!frm || !frm.doc || frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
@@ -149,9 +147,9 @@
     }
 
     function editSessionActive(frm) {
-        // Inline prices are part of the Cost tab, so the Cost edit session is the
-        // primary owner. Keep the Order session fallback for legacy callers that
-        // still save price edits through the order-level edit flow.
+        // Special pricing uses the Cost edit session exclusively. The Order
+        // session fallback remains for clipped-corner prices on their existing
+        // configured capability path.
         const costEditUx = window.AlmdinaCostEditSessionUX;
         if (
             costEditUx
