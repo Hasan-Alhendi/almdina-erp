@@ -16,6 +16,10 @@ from .approved_plan_service import (
     CustomerBotApprovedPlanService,
     CustomerBotApprovedPlanSnapshot,
 )
+from .measurements_service import (
+    CustomerBotMeasurementsService,
+    CustomerBotMeasurementsSnapshot,
+)
 from .phone_access_commands import (
     PhoneAccessRetired,
     approve_phone_access_request,
@@ -43,6 +47,8 @@ __all__ = [
     "CustomerBotFinalPriceSnapshot",
     "CustomerBotApprovedPlanService",
     "CustomerBotApprovedPlanSnapshot",
+    "CustomerBotMeasurementsService",
+    "CustomerBotMeasurementsSnapshot",
     "list_current_customer_orders",
     "reject_phone_access_request",
     "request_additional_phone_access",

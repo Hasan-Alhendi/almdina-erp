@@ -17,6 +17,10 @@ from almdina_erp.almdina_erp.application.customer_bot.approved_plan_service impo
     CustomerBotApprovedPlanService,
     CustomerBotApprovedPlanSnapshot,
 )
+from almdina_erp.almdina_erp.application.customer_bot.measurements_service import (
+    CustomerBotMeasurementsService,
+    CustomerBotMeasurementsSnapshot,
+)
 from almdina_erp.almdina_erp.application.customer_bot.conversation_ports import (
     CustomerBotServiceRouter,
     CustomerServiceRequest,
@@ -712,6 +716,191 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertIn("تم التسليم.", report)
         self.assertIn("هذه الخدمة غير متاحة حالياً.", report)
         self.assertNotIn("98765", report)
+
+    def test_option_four_full_number_returns_measurements_and_keeps_other_services(self) -> None:
+        orders = _Orders(
+            (
+                _header("DCO-A"),
+                _header("DCO-B"),
+                _header(
+                    "DCO-OLD",
+                    stored_status="Delivered",
+                    revision_state=RevisionState.SUPERSEDED,
+                ),
+                _header("DCO-STALE", revision_state=RevisionState.SUPERSEDED),
+                _header("DCO-STOP", stored_status="Cancelled"),
+                _header("DCO-FOREIGN", customer=OTHER),
+            )
+        )
+        pdf_orders: list[str] = []
+
+        class _Reader:
+            def read(self, phone: str, order_name: str):
+                self.last = (phone, order_name)
+                if order_name == "DCO-B":
+                    return CustomerBotMeasurementsSnapshot(
+                        available=True, order_name="DCO-B", consistency_key="b"
+                    )
+                if order_name == "DCO-OLD":
+                    return CustomerBotMeasurementsSnapshot(
+                        available=True, order_name="DCO-OLD", consistency_key="old"
+                    )
+                if order_name == "DCO-STOP":
+                    return CustomerBotMeasurementsSnapshot(available=False, cancelled=True)
+                return None
+
+        class _Pdf:
+            def render(self, phone: str, order_name: str) -> bytes:
+                pdf_orders.append(order_name)
+                return b"%PDF-" + order_name.encode()
+
+        class _Earlier:
+            def __init__(self) -> None:
+                self.requests: list[CustomerServiceRequest] = []
+
+            def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+                self.requests.append(request)
+                if request.service_id == BotService.FINAL_COST:
+                    return CustomerServiceResult(
+                        ServiceResultCode.READY,
+                        amount=Decimal("10.00"),
+                        currency="USD",
+                        documents=(
+                            CustomerBotDocument(
+                                document_type="customer_invoice",
+                                filename="فاتورة-DCO-A.pdf",
+                                mime_type="application/pdf",
+                                content=b"%PDF-price",
+                            ),
+                        ),
+                    )
+                if request.service_id == BotService.APPROVED_CUTTING_PLAN:
+                    return CustomerServiceResult(
+                        ServiceResultCode.PLAN_READY,
+                        documents=(
+                            CustomerBotDocument(
+                                document_type="approved_cutting_plan",
+                                filename="خطة-قص-DCO-A-rev-1.pdf",
+                                mime_type="application/pdf",
+                                content=b"%PDF-plan",
+                            ),
+                        ),
+                    )
+                return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+
+        earlier = _Earlier()
+        services = CustomerBotServiceRouter(
+            earlier,
+            CustomerBotMeasurementsService(_Reader(), _Pdf()),
+        )
+        opened, _directory, _services = _run("hi", None, orders, services=services)
+        listed, _directory, _services = _run("4", opened.state, orders, services=services)
+        self.assertEqual(
+            [message.key for message in listed.messages[:2]],
+            [BotMessageKey.CURRENT_ORDER_LINE, BotMessageKey.CURRENT_ORDER_LINE],
+        )
+        shown = {dict(message.parameters)["order_name"] for message in listed.messages[:2]}
+        self.assertEqual(shown, {"DCO-A", "DCO-B"})
+        selected, _directory, _services = _run("DCO-B", listed.state, orders, services=services)
+        self.assertEqual(selected.messages[0].key, BotMessageKey.MEASUREMENTS)
+        self.assertEqual(dict(selected.messages[0].parameters), {"order_name": "DCO-B"})
+        self.assertEqual(selected.documents[0].document_type, "order_measurements")
+        self.assertEqual(selected.documents[0].content, b"%PDF-DCO-B")
+        self.assertNotIn("documents", selected.state.to_payload())
+        self.assertEqual(pdf_orders, ["DCO-B"])
+
+        menu, _directory, _services = _run("0", selected.state, orders, services=services)
+        self.assertEqual(menu.messages[0].key, BotMessageKey.MAIN_MENU)
+        status_list, _directory, _services = _run("1", menu.state, orders, services=services)
+        status, _directory, _services = _run("DCO-A", status_list.state, orders, services=services)
+        self.assertEqual(status.messages[0].key, BotMessageKey.ORDER_STATUS)
+        self.assertEqual(status.documents, ())
+
+        again, _directory, _services = _run("0", status.state, orders, services=services)
+        waiting, _directory, _services = _run("4", again.state, orders, services=services)
+        delivered, _directory, _services = _run("DCO-OLD", waiting.state, orders, services=services)
+        self.assertEqual(dict(delivered.messages[0].parameters)["order_name"], "DCO-OLD")
+        self.assertEqual(delivered.documents[0].content, b"%PDF-DCO-OLD")
+        self.assertNotIn(b"DCO-A", delivered.documents[0].content)
+        stale, _directory, _services = _run("DCO-STALE", delivered.state, orders, services=services)
+        self.assertEqual(stale.messages[0].key, BotMessageKey.ORDER_NOT_CURRENT)
+        self.assertEqual(stale.documents, ())
+        cancelled, _directory, _services = _run("DCO-STOP", stale.state, orders, services=services)
+        self.assertEqual(cancelled.messages[0].key, BotMessageKey.ORDER_CANCELLED)
+        self.assertEqual(cancelled.documents, ())
+        foreign, _directory, _services = _run("DCO-FOREIGN", cancelled.state, orders, services=services)
+        missing, _directory, _services = _run("DCO-MISSING", foreign.state, orders, services=services)
+        self.assertEqual(foreign.messages[0].key, BotMessageKey.ORDER_NOT_FOUND)
+        self.assertEqual(missing.messages[0].key, BotMessageKey.ORDER_NOT_FOUND)
+        self.assertEqual(foreign.documents, ())
+        self.assertEqual(missing.documents, ())
+        self.assertEqual(pdf_orders, ["DCO-B", "DCO-OLD"])
+
+        menu, _directory, _services = _run("0", missing.state, orders, services=services)
+        price_list, _directory, _services = _run("2", menu.state, orders, services=services)
+        price, _directory, _services = _run("DCO-A", price_list.state, orders, services=services)
+        self.assertEqual(price.messages[0].key, BotMessageKey.FINAL_PRICE)
+        self.assertEqual(price.documents[0].document_type, "customer_invoice")
+        menu, _directory, _services = _run("0", price.state, orders, services=services)
+        plan_list, _directory, _services = _run("3", menu.state, orders, services=services)
+        plan, _directory, _services = _run("DCO-A", plan_list.state, orders, services=services)
+        self.assertEqual(plan.messages[0].key, BotMessageKey.APPROVED_PLAN)
+        self.assertEqual(plan.documents[0].document_type, "approved_cutting_plan")
+        self.assertEqual(
+            [
+                request.service_id
+                for request in earlier.requests
+                if request.service_id != BotService.MEASUREMENTS
+            ],
+            [BotService.FINAL_COST, BotService.APPROVED_CUTTING_PLAN],
+        )
+
+    def test_in_progress_and_ready_orders_reach_measurements(self) -> None:
+        class _Reader:
+            def read(self, phone: str, order_name: str):
+                return CustomerBotMeasurementsSnapshot(
+                    available=True, order_name=order_name, consistency_key=order_name
+                )
+
+        class _Pdf:
+            def render(self, phone: str, order_name: str) -> bytes:
+                return b"%PDF-" + order_name.encode()
+
+        service = CustomerBotMeasurementsService(_Reader(), _Pdf())
+        cases = (
+            (
+                PublicOrderStatus.IN_PROGRESS,
+                _header("DCO-RUN", production_path="PATH", current_stage_name="STAGE"),
+                _Stages({"STAGE": ProductionStageFacts("STAGE", "Open", "Cut")}),
+                _Routes(),
+            ),
+            (
+                PublicOrderStatus.READY_FOR_PICKUP,
+                _header("DCO-READY", production_path="PATH", current_stage_name="STAGE"),
+                _Stages({"STAGE": ProductionStageFacts("STAGE", "Completed", "Cut")}),
+                _Routes({("PATH", "Cut"): True}),
+            ),
+        )
+        for expected_status, header, stages, routes in cases:
+            orders = _Orders((header,))
+            opened = handle_customer_conversation(
+                _inbound("hi"), None, _context(), _Directory(), orders, stages, routes, service
+            )
+            status = handle_customer_conversation(
+                _inbound("1"), opened.state, _context(), _Directory(), orders, stages, routes, service
+            )
+            self.assertEqual(
+                dict(status.messages[0].parameters)["public_status"], expected_status
+            )
+            menu = handle_customer_conversation(
+                _inbound("0"), status.state, _context(), _Directory(), orders, stages, routes, service
+            )
+            measured = handle_customer_conversation(
+                _inbound("4"), menu.state, _context(), _Directory(), orders, stages, routes, service
+            )
+            self.assertEqual(measured.messages[0].key, BotMessageKey.MEASUREMENTS)
+            self.assertEqual(measured.documents[0].content, b"%PDF-" + header.name.encode())
+            self.assertNotIn("amount", dict(measured.messages[0].parameters))
 
     def test_invalid_menu_choice_does_not_list_orders(self) -> None:
         orders = _Orders((_header("DCO-1"),))

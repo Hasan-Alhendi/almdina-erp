@@ -339,6 +339,18 @@ def _service_output(
             return _message(BotMessageKey.PLAN_PDF_FAILED), ()
         if result.code == ServiceResultCode.PLAN_DATA_CHANGED:
             return _message(BotMessageKey.PLAN_DATA_CHANGED), ()
+    if service_id == BotService.MEASUREMENTS:
+        if result.code == ServiceResultCode.MEASUREMENTS_READY:
+            return _message(
+                BotMessageKey.MEASUREMENTS,
+                (("order_name", order_name),),
+            ), result.documents
+        if result.code == ServiceResultCode.MEASUREMENTS_UNAVAILABLE:
+            return _message(BotMessageKey.MEASUREMENTS_UNAVAILABLE), ()
+        if result.code == ServiceResultCode.MEASUREMENTS_PDF_FAILED:
+            return _message(BotMessageKey.MEASUREMENTS_PDF_FAILED), ()
+        if result.code == ServiceResultCode.MEASUREMENTS_DATA_CHANGED:
+            return _message(BotMessageKey.MEASUREMENTS_DATA_CHANGED), ()
     return _message(
         BotMessageKey.SERVICE_UNAVAILABLE,
         (("service_id", service_id), ("order_name", order_name)),

@@ -53,6 +53,12 @@ class CustomerServiceResult:
             if len(self.documents) != 1:
                 raise ValueError("a ready plan result needs exactly one document")
             return
+        if self.code == ServiceResultCode.MEASUREMENTS_READY:
+            if self.amount is not None or self.currency is not None:
+                raise ValueError("a measurements result cannot carry price data")
+            if len(self.documents) != 1:
+                raise ValueError("a ready measurements result needs exactly one document")
+            return
         if self.amount is not None or self.currency is not None or self.documents:
             raise ValueError("a non-ready result cannot carry price or document data")
 

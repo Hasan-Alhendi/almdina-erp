@@ -154,6 +154,12 @@ class CustomerBotTemplateTests(unittest.TestCase):
         self.assertEqual(merged[BotMessageKey.WELCOME], old[BotMessageKey.WELCOME])
         self.assertEqual(merged[BotMessageKey.ORDER_STATUS], old[BotMessageKey.ORDER_STATUS])
         self.assertEqual(merged[BotMessageKey.FINAL_PRICE], default_texts()[BotMessageKey.FINAL_PRICE])
+        self.assertEqual(
+            merged[BotMessageKey.MEASUREMENTS],
+            default_texts()[BotMessageKey.MEASUREMENTS],
+        )
+        self.assertIn("{order_name}", merged[BotMessageKey.MEASUREMENTS])
+        self.assertNotIn("{amount}", merged[BotMessageKey.MEASUREMENTS])
         self.assertEqual(set(merged), set(default_texts()))
         self.assertEqual(_merge_texts(merged, default_texts()), merged)
 
@@ -461,6 +467,7 @@ class CustomerBotSettingsAccessTests(unittest.TestCase):
             "almdina_erp/application/customer_bot/settings_commands.py",
             "almdina_erp/application/customer_bot/preview_conversation.py",
             "almdina_erp/application/customer_bot/read_runtime.py",
+            "almdina_erp/application/customer_bot/measurements_service.py",
         )
         for relative in files:
             source = (ROOT / relative).read_text(encoding="utf-8")

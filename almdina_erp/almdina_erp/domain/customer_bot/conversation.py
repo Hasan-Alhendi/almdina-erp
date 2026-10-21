@@ -48,6 +48,10 @@ class BotMessageKey:
     APPROVED_PLAN_UNAVAILABLE = "approved_plan_unavailable"
     PLAN_PDF_FAILED = "plan_pdf_failed"
     PLAN_DATA_CHANGED = "plan_data_changed"
+    MEASUREMENTS = "order_measurements"
+    MEASUREMENTS_UNAVAILABLE = "measurements_unavailable"
+    MEASUREMENTS_PDF_FAILED = "measurements_pdf_failed"
+    MEASUREMENTS_DATA_CHANGED = "measurements_data_changed"
 
 
 class ServiceResultCode:
@@ -60,6 +64,10 @@ class ServiceResultCode:
     PLAN_UNAVAILABLE = "plan_unavailable"
     PLAN_PDF_FAILED = "plan_pdf_failed"
     PLAN_DATA_CHANGED = "plan_data_changed"
+    MEASUREMENTS_READY = "measurements_ready"
+    MEASUREMENTS_UNAVAILABLE = "measurements_unavailable"
+    MEASUREMENTS_PDF_FAILED = "measurements_pdf_failed"
+    MEASUREMENTS_DATA_CHANGED = "measurements_data_changed"
 
 
 _SERVICE_BY_DIGIT = {

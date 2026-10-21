@@ -34,6 +34,9 @@ from almdina_erp.almdina_erp.services.production_settings_service import (
     get_production_settings,
     update_production_settings,
 )
+from almdina_erp.patches.v1_0.extend_customer_bot_settings_measurements_catalog import (
+    execute as extend_measurements_catalog,
+)
 from almdina_erp.patches.v1_0.install_customer_bot_settings import execute as install_settings
 
 
@@ -190,6 +193,73 @@ class TestCustomerBotSettingsIntegration(FrappeTestCase):
         runtime = load_customer_bot_runtime()
         self.assertFalse(runtime.enabled)
         self.assertFalse(runtime.accepting_messages)
+
+    def test_measurements_catalog_patch_keeps_custom_text_and_the_switch(self) -> None:
+        from almdina_erp.almdina_erp.domain.customer_bot.message_defaults import default_texts
+        from almdina_erp.almdina_erp.domain.customer_bot.message_templates import dump_texts
+
+        before = dict(self._settings_before)
+        enabled = before.get("enabled")
+        custom_welcome = "ترحيب مخصص لاختبار القياسات"
+        stored = json.loads(before["draft_texts"])
+        stored.pop("order_measurements", None)
+        stored.pop("measurements_unavailable", None)
+        stored.pop("measurements_pdf_failed", None)
+        stored.pop("measurements_data_changed", None)
+        stored["welcome"] = custom_welcome
+        published = json.loads(before["published_texts"])
+        published.pop("order_measurements", None)
+        published["welcome"] = custom_welcome
+        frappe.db.sql(
+            "update `tabSingles` set value=%s where doctype=%s and field='draft_texts'",
+            (json.dumps(stored, ensure_ascii=False, separators=(",", ":")), DOCTYPE),
+        )
+        frappe.db.sql(
+            "update `tabSingles` set value=%s where doctype=%s and field='published_texts'",
+            (json.dumps(published, ensure_ascii=False, separators=(",", ":")), DOCTYPE),
+        )
+        extend_measurements_catalog()
+        draft = json.loads(
+            frappe.db.get_value(DOCTYPE, DOCTYPE, "draft_texts")
+            or frappe.db.sql(
+                "select value from `tabSingles` where doctype=%s and field='draft_texts'",
+                (DOCTYPE,),
+            )[0][0]
+        )
+        published_after = json.loads(
+            frappe.db.sql(
+                "select value from `tabSingles` where doctype=%s and field='published_texts'",
+                (DOCTYPE,),
+            )[0][0]
+        )
+        self.assertEqual(draft["welcome"], custom_welcome)
+        self.assertEqual(published_after["welcome"], custom_welcome)
+        self.assertEqual(draft["order_measurements"], default_texts()["order_measurements"])
+        self.assertEqual(
+            frappe.db.sql(
+                "select value from `tabSingles` where doctype=%s and field='enabled'",
+                (DOCTYPE,),
+            )[0][0],
+            enabled,
+        )
+        revision = frappe.db.sql(
+            "select value from `tabSingles` where doctype=%s and field='revision'",
+            (DOCTYPE,),
+        )[0][0]
+        extend_measurements_catalog()
+        self.assertEqual(
+            frappe.db.sql(
+                "select value from `tabSingles` where doctype=%s and field='revision'",
+                (DOCTYPE,),
+            )[0][0],
+            revision,
+        )
+        self.assertEqual(dump_texts(draft), dump_texts(json.loads(
+            frappe.db.sql(
+                "select value from `tabSingles` where doctype=%s and field='draft_texts'",
+                (DOCTYPE,),
+            )[0][0]
+        )))
 
     def test_preview_does_not_write_or_require_a_real_customer(self) -> None:
         frappe.set_user("Administrator")

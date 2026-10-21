@@ -2936,6 +2936,10 @@ Approved cutting plan result,نتيجة خطة القص المعتمدة
 Cutting plan not approved,خطة القص غير معتمدة
 Cutting plan PDF failed,تعذر تجهيز ملف خطة القص
 Cutting plan changed during preparation,تغيرت خطة القص أثناء التجهيز
+Order measurements attachment,إرفاق قياسات الطلب
+No measurements available,لا توجد قياسات متاحة
+Measurements document failed,تعذر تجهيز مستند القياسات
+Measurements changed during preparation,تغيرت القياسات أثناء التجهيز
 Unregistered number,رقم غير مسجل
 Invalid order number,رقم طلب غير صحيح
 Service unavailable,خدمة غير متاحة
