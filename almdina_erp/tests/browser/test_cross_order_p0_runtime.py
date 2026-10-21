@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 26073)
-Total output lines: 1647
-
 """Evidence collection on an ephemeral, version-pinned Frappe Desk site."""
 
 import json
@@ -499,7 +496,707 @@ def test_saved_server_plan_print_runtime():
                         visiblePlanRoot:!!cur_frm.fields_dict.cutting_plan_html.$wrapper
                             .get(0)?.querySelector('.dco-cutting-plan'),
                         selectedTab:AlmdinaPlanTabsUX.activeTab(cur_frm),
-             …11073 tokens truncated…                   AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
+                        row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name
+                    })""")
+                    if not action_source["visiblePlanRoot"]:
+                        try:
+                            page.wait_for_function("""() => !!cur_frm?.fields_dict?.cutting_plan_html
+                                ?.$wrapper?.get(0)?.querySelector('.dco-cutting-plan')""",
+                                timeout=10000)
+                            action_source["visiblePlanRoot"] = True
+                        except Exception:
+                            evidence.setdefault("paint_failure", {})[label] = page.evaluate("""() => ({
+                                event:window.__p0ReadyEvent, tab:AlmdinaPlanTabsUX.activeTab(cur_frm),
+                                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                                snapshotStatus:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.status,
+                                freshness:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.freshness,
+                                stateOrder:AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.order_name,
+                                canonicalRow:AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System')?.name,
+                                displayedRow:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System')?.name,
+                                presenterReady:AlmdinaPlanWorkspacePresenterAdapter.ready(cur_frm),
+                                planSurface:cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                                    ?.innerText.slice(-500)})""")
+                    assert action_source["decorated"] and action_source["visiblePlanRoot"], action_source
+                    before_click = page.evaluate('__p0PrintWrites.length')
+                    button.click()
+                    page.wait_for_function("count => window.__p0PrintWrites.length >= count + 2",
+                                           arg=before_click, timeout=15000)
+                    operator_html = page.evaluate('__p0PrintWrites.at(-1)')
+                    # Plan identifiers can contain another order's numeric suffix.
+                    # Check the printed order field, rather than an unrelated plan name.
+                    assert (f'<div><b>Order number</b><span>{order["name"]}</span></div>'
+                            in operator_html)
+                    assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
+                            not in operator_html)
+                    assert order["board"] in operator_html
+                    piece = saved_plan[label]["first_piece"]
+                    geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
+                    assert geometry in operator_html
+                    evidence.setdefault("operator_clicks", {})[label] = {
+                        "ready_event": page.evaluate('window.__p0ReadyEvent'),
+                        "source": action_source,
+                        "final_html": f"saved-plan-{label}-operator-final.html"}
+                    (evidence_dir / f"saved-plan-{label}-operator-final.html").write_text(
+                        operator_html, encoding="utf-8")
+                    # Direct handler on the same ready visit, in a separate
+                    # Playwright evaluation, to compare with the real click.
+                    result = page.evaluate("""async () => {
+                        const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                        const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
+                        return {result,order:cur_frm.doc.name,row:row?.name,
+                            writes:__p0PrintWrites.length,
+                            revision:row?.revision,html:__p0PrintWrites.at(-1)};
+                    }""")
+                else:
+                    # Same JS operation, while retaining the real async load
+                    # and factory identity boundaries inside that operation.
+                    result = page.evaluate("""async () => {
+                    await AlmdinaDcoWorkspaceAssetRegistry.ensure('plan');
+                    await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+                    if (!AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm))
+                        throw new Error('Ready Plan projection unavailable');
+                    const result=await AlmdinaPlanTabsUX.printActivePlan(cur_frm);
+                    const row=AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,'System');
+                    return {result,order:cur_frm.doc.name,row:row?.name,
+                        writes:__p0PrintWrites.length,
+                        revision:row?.revision,html:__p0PrintWrites.at(-1)};
+                    }""")
+                evidence.setdefault("attempts", {})[f"{label}-{visit}"] = {
+                    key: value for key, value in result.items() if key != "html"}
+                assert result["result"] is True and result["row"] == saved_plan[label]["name"], result
+                html = result.pop("html")
+                assert (f'<div><b>Order number</b><span>{order["name"]}</span></div>'
+                        in html), result
+                assert (f'<div><b>Order number</b><span>{other["name"]}</span></div>'
+                        not in html), result
+                assert order["board"] in html and other["board"] not in html, result
+                # The printed document deliberately omits internal plan names
+                # and revisions. Its saved geometry proves which persisted plan
+                # was printed without exposing those identifiers.
+                assert 'class="dco-unified-print-header"' in html
+                assert f"<title>Cutting plan - {order['name']}</title>" in html
+                assert evidence["factory_identity"]["print_factory_name"] in html
+                piece = saved_plan[label]["first_piece"]
+                geometry = f"{int(float(piece['w']) * 10)} × {int(float(piece['h']) * 10)}"
+                assert geometry in html, (label, geometry)
+                (evidence_dir / f"saved-plan-{label}-final.html").write_text(html, encoding="utf-8")
+                evidence[label] = {**result, "geometry": geometry,
+                                   "html_file": f"saved-plan-{label}-final.html"}
+                if label == "A":
+                    a_plan = page.evaluate("""() => JSON.parse(
+                        AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System').snapshot_json)""")
+            # The real saved A geometry cannot be passed to B's print command.
+            writes_before = page.evaluate("__p0PrintWrites.length")
+            rejected = page.evaluate("""async plan =>
+                await AlmdinaCuttingPlanRender.print(cur_frm,plan)""", a_plan)
+            assert rejected is False and page.evaluate("__p0PrintWrites.length") == writes_before
+            evidence["wrong_plan_rejected"] = True
+            # Separate controlled renderer case: retain B ownership but add an
+            # OFFCUT sheet and Extra flag. This does not pretend to be a saved
+            # server plan; the A/B HTML checks above use persisted API rows.
+            controlled = page.evaluate("""async () => {
+                const frm=cur_frm, state=AlmdinaPlanWorkspaceState;
+                const payload=state.snapshot(frm).data;
+                const row=payload.plans.system_draft;
+                const geometry=JSON.parse(row.snapshot_json);
+                const offcut=JSON.parse(JSON.stringify(geometry.sheets[0]));
+                offcut.sheet_no=geometry.sheets.length+1;
+                offcut.resource_kind='OFFCUT';
+                offcut.pieces[0].id='CONTROLLED-OFFCUT-B';
+                offcut.pieces[0].label='CONTROLLED-OFFCUT-B';
+                offcut.pieces[0].piece_instance_id='CONTROLLED-OFFCUT-PIECE-B';
+                offcut.pieces[0].source_piece_no=1;
+                offcut.pieces[0].extra_double=1;
+                geometry.sheets.push(offcut);
+                const assignments=[{piece_instance_id:'CONTROLLED-OFFCUT-PIECE-B',
+                    business_state:'FACTORY_FACTORY',business_state_label:'P0 FACTORY ASSIGNED'}];
+                const testRow={...row,name:'CONTROLLED-PLAN-B',revision:Number(row.revision)+1,
+                    snapshot_json:JSON.stringify(geometry),offcut:{assignments}};
+                const id=AlmdinaDocumentContext.formIdentity(frm),store=state.storeFor(frm);
+                store.reset(id);
+                store.resolveLoad(id,store.beginLoad(id),{
+                    ...payload,plans:{...payload.plans,system_draft:testRow}});
+                const originalExtra=frm.doc.pieces[0].extra_double;
+                frm.doc.pieces[0].extra_double=1;
+                const before=__p0PrintWrites.length;
+                const result=await AlmdinaCuttingPlanRender.print(frm,geometry,{tab:'System',row:testRow});
+                frm.doc.pieces[0].extra_double=originalExtra;
+                return {result,html:__p0PrintWrites.at(-1),before,
+                    after:__p0PrintWrites.length};
+            }""")
+            assert controlled["result"] is True and controlled["after"] == controlled["before"] + 2
+            controlled_html = controlled.pop("html")
+            assert b["name"] in controlled_html and a["name"] not in controlled_html
+            assert "CONTROLLED-PLAN-B" in controlled_html
+            assert 'data-resource-kind="OFFCUT"' in controlled_html
+            assert "CONTROLLED-OFFCUT-B" in controlled_html
+            assert 'dco-offcut-business-context' in controlled_html
+            assert 'P0 FACTORY ASSIGNED' in controlled_html
+            assert 'data-addon-kind="double"' in controlled_html
+            (evidence_dir / "controlled-multisheet-offcut-final.html").write_text(
+                controlled_html, encoding="utf-8")
+            evidence["controlled_multisheet_offcut"] = controlled
+            writes_before = page.evaluate("__p0PrintWrites.length")
+            # Freeze B, then navigate while the production print handler awaits
+            # the asynchronous identity service. No final HTML may be issued.
+            page.evaluate("""async () => {
+                AlmdinaPlanWorkspaceState.reset(cur_frm);
+                await AlmdinaPlanWorkspaceState.load(cur_frm,{force:true});
+                AlmdinaPlanWorkspacePresenterAdapter.project(cur_frm);
+                window.AlmdinaFactoryPrintIdentity={...window.AlmdinaFactoryPrintIdentity,
+                    get:()=>new Promise(resolve=>__p0ResolveIdentity=resolve)};
+                const row=AlmdinaPlanWorkspaceState.planForTab(cur_frm,'System');
+                const plan=JSON.parse(row.snapshot_json);
+                window.__p0Pending=AlmdinaCuttingPlanRender.print(cur_frm,plan,
+                    {tab:'System',row});
+            }""")
+            page.wait_for_function("!!window.__p0ResolveIdentity", timeout=10000)
+            pending_writes = page.evaluate("__p0PrintWrites.length")
+            assert pending_writes == writes_before + 1
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", a["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name", arg=a["name"], timeout=45000)
+            page.evaluate("__p0ResolveIdentity({})")
+            assert page.evaluate("async () => await __p0Pending") is False
+            assert page.evaluate("__p0PrintWrites.length") == pending_writes
+            evidence["mid_await_route_change_cancelled"] = {
+                "preparation_writes": 1, "final_html_writes": 0}
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            evidence["browser_state"] = page.evaluate("""() => ({route:frappe.get_route?.(),
+                current:cur_frm?.doc?.name, canView:AlmdinaPlanWorkspaceState?.canView(cur_frm),
+                planState:AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status,
+                planAssets:AlmdinaDcoWorkspaceAssetRegistry?.isLoaded('plan'),
+                body:document.body.innerText.slice(-700)})""")
+            page.screenshot(path=str(evidence_dir / "saved-plan-failure.png"), full_page=True)
+            raise
+        finally:
+            (evidence_dir / "saved-plan-print-evidence.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
+def test_recovery_saved_form_compatibility():
+    """Observe saved EDIT/Recovery boundaries; NEW Form remains blocked separately."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence = {"new_form": "BLOCKED_RELEASE_GATE", "saved_forms": {}}
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            for label in ("A", "B", "A"):
+                name = fixture["orders"][label]["name"]
+                page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)", name)
+                page.wait_for_function("name => cur_frm?.doc?.name === name", arg=name, timeout=45000)
+                entry = page.evaluate("""() => ({name:cur_frm.doc.name,
+                    token:AlmdinaDocumentContext.capture(cur_frm),
+                    edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                    isNew:!!cur_frm.is_new()})""")
+                evidence["saved_forms"][f"{label}-{len(evidence['saved_forms'])}"] = entry
+                assert not entry["isNew"] and entry["name"] == name
+            first = evidence["saved_forms"]["A-0"]["token"]
+            revisited = evidence["saved_forms"]["A-2"]["token"]
+            assert revisited["generation"] > first["generation"], evidence
+        finally:
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            (evidence_dir / "recovery-saved-compatibility.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
+def test_new_form_clean_preflight():
+    """Open a first NEW Form before creating any recovery checkpoint."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    evidence = {"scope": "fresh browser context, no recovery restore"}
+
+    def record(name, value):
+        evidence[name] = value
+        (evidence_dir / "new-form-preflight.json").write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page(locale="en-US")
+        page.on("pageerror", lambda error: record("page_error", {
+            "message": str(error), "stack": getattr(error, "stack", None),
+        }))
+        try:
+            _login(page, fixture)
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["A"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["A"]["name"], timeout=45000)
+            record("saved_form", page.evaluate("""() => ({name:cur_frm.doc.name,
+                route:frappe.get_route(),formFactory:!!frappe.views?.FormFactory,
+                newDocApi:typeof frappe.new_doc})"""))
+            record("new_local_name", page.evaluate("""() => {
+                const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                window.__p0NewPreflightName=name;
+                return name;
+            }"""))
+            page.evaluate("""() => {
+                frappe.set_route('Form','Door Cutting Order',window.__p0NewPreflightName);
+            }""")
+            record("route_requested", True)
+            page.wait_for_function("""() => cur_frm?.doctype === 'Door Cutting Order'
+                && cur_frm?.doc?.name === window.__p0NewPreflightName && !!cur_frm.is_new()""",
+                timeout=15000)
+            page.wait_for_function("""() => !!AlmdinaDcoRecovery?.LocalCheckpoint
+                ?.snapshot(cur_frm)""", timeout=15000)
+            record("new_form", page.evaluate("""() => ({name:cur_frm.doc.name,
+                route:frappe.get_route(),isNew:!!cur_frm.is_new(),
+                token:AlmdinaDocumentContext.capture(cur_frm),
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                modal:document.querySelector('.modal.show')?.innerText.slice(0,500) || null})"""))
+            assert not evidence["new_form"]["modal"], evidence
+        except Exception as error:
+            record("failure", repr(error))
+            try:
+                record("browser_state", page.evaluate("""() => ({route:frappe.get_route?.(),
+                    name:cur_frm?.doc?.name, isNew:!!cur_frm?.is_new?.(),
+                    localName:window.__p0NewPreflightName,
+                    modal:document.querySelector('.modal.show')?.innerText.slice(0,500) || null,
+                    body:document.body.innerText.slice(-600)})"""))
+                page.screenshot(path=str(evidence_dir / "new-form-preflight-failure.png"),
+                                full_page=True)
+            except Exception as probe_error:
+                record("probe_error", repr(probe_error))
+            raise
+        finally:
+            browser.close()
+
+
+def _print_saved_plan_variant(source, prefix):
+    """Real persisted manufacturing row prints via the visible Desk action."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    selected = json.loads((evidence_dir / f"{prefix}-plan-fixture.json").read_text())
+    evidence = {"fixture": selected}
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            _login(page, fixture)
+            page.evaluate("""() => {
+                window.__p0VariantWrites=[];
+                window.open=()=>({document:{open(){},write(html){__p0VariantWrites.push(html)},
+                    close(){}},close(){}});
+            }""")
+            page.evaluate("name => frappe.set_route('Form','Door Cutting Order',name)",
+                          selected["order_name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=selected["order_name"], timeout=45000)
+            page.get_by_text("Cutting Plan", exact=True).first.click()
+            source_tab = page.locator(f'.dco-plan-tabs [data-plan-tab="{source}"]')
+            source_tab.wait_for(state="visible", timeout=45000)
+            assert source_tab.is_enabled(), f"Operator source tab {source} is disabled"
+            source_tab.click()
+            page.wait_for_function("""args =>
+                AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === args.name
+                && AlmdinaPlanTabsUX.activeTab(cur_frm) === args.source
+                && cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                    ?.querySelector(`[data-plan-tab="${args.source}"][aria-selected="true"]`)
+                && AlmdinaPlanWorkspaceState?.displayedPlanForTab(cur_frm,args.source)?.name
+                && !!cur_frm.fields_dict.cutting_plan_html.$wrapper.get(0)
+                    ?.querySelector('.dco-cutting-plan')""",
+                arg={"name": selected["order_name"], "source": source}, timeout=45000)
+            evidence["source"] = page.evaluate("""source => ({
+                selected:AlmdinaPlanTabsUX.activeTab(cur_frm),
+                row:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,source)?.name,
+                revision:AlmdinaPlanWorkspaceState.displayedPlanForTab(cur_frm,source)?.revision,
+                permission:AlmdinaPermissions.canDocument(cur_frm,'print_cutting_plan')})""", source)
+            assert evidence["source"]["selected"] == source, evidence["source"]
+            assert evidence["source"]["row"] == selected["plan_name"], evidence["source"]
+            assert evidence["source"]["permission"]
+            button = page.locator('.dco-plan-context-actions-host .dco-print-cutting-plan:visible')
+            button.wait_for(state="visible", timeout=15000)
+            assert button.is_enabled()
+            button.click()
+            page.wait_for_function("() => __p0VariantWrites.length >= 2", timeout=15000)
+            html = page.evaluate("__p0VariantWrites.at(-1)")
+            assert selected["order_name"] in html
+            assert selected["plan_name"] in html
+            assert str(selected["revision"]) in html
+            assert selected["board"] in html
+            assert html.count('class="dco-sheet-card"') == selected["sheets"]
+            other_labels = ("B",) if prefix == "custom" else (("A",) if prefix == "approved" else ("A", "B"))
+            for other in other_labels:
+                assert fixture["orders"][other]["name"] not in html
+            assert ("570 × 930" if prefix == "approved" else "420 × 810") in html
+            if prefix == "multi":
+                assert selected["sheets"] >= 2
+                assert 'data-overlay-kind="liner"' in html
+            if prefix == "offcut":
+                assert selected["offcut_kind"] == "OFFCUT"
+                assert selected["offcut_source"] == "FACTORY"
+                assert selected["offcut_execution"] == "FACTORY"
+                assert 'data-resource-kind="OFFCUT"' in html
+                context = re.search(
+                    r'<div class="dco-offcut-business-context"[^>]*>(.*?)</div>',
+                    html, re.S,
+                )
+                assert context and "من المعمل" in context.group(1)
+                assert "في المعمل" in context.group(1)
+            filename = f"{prefix}-plan-operator-final.html"
+            (evidence_dir / filename).write_text(html, encoding="utf-8")
+            evidence["final_html"] = filename
+        except Exception as exc:
+            evidence["failure"] = repr(exc)
+            try:
+                evidence["browser_state"] = page.evaluate("""() => ({
+                    route:frappe.get_route(), current:cur_frm?.doc?.name,
+                    tab:AlmdinaPlanTabsUX?.activeTab(cur_frm),
+                    plan:AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status,
+                    body:document.body.innerText.slice(-650)})""")
+                page.screenshot(path=str(evidence_dir / f"{prefix}-plan-failure.png"), full_page=True)
+            except Exception:
+                pass
+            raise
+        finally:
+            (evidence_dir / f"{prefix}-plan-print-evidence.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            browser.close()
+
+
+def test_saved_custom_plan_operator_print():
+    _print_saved_plan_variant("Custom", "custom")
+
+
+def test_saved_approved_plan_operator_print():
+    _print_saved_plan_variant("Approved", "approved")
+
+
+def test_saved_multiboard_extra_operator_print():
+    _print_saved_plan_variant("System", "multi")
+
+
+def test_saved_offcut_operator_print():
+    _print_saved_plan_variant("Custom", "offcut")
+
+
+def test_recovery_new_saved_intersection():
+    """Observe the real NEW→Saved boundary without mutating Recovery code."""
+    fixture = json.loads(Path(os.environ["P0_FIXTURE_PATH"]).read_text())
+    evidence_dir = Path(os.environ["P0_EVIDENCE_DIR"])
+    evidence = {"scope": "Develop NEW checkpoint, Start New cancel, Continue restore, Native Save, post-save Plan/Cost edits"}
+
+    def mark_step(name):
+        evidence["last_completed_step"] = name
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        (evidence_dir / "recovery-intersection.json").write_text(
+            json.dumps(evidence, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+    with browser_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(locale="en-US")
+            page_errors = []
+            evidence["preview_commit_requests"] = []
+            evidence["preview_commit_responses"] = []
+            page.on("pageerror", lambda error: page_errors.append({
+                "message": str(error), "stack": getattr(error, "stack", None),
+            }))
+            commit_method = "cutting_plan_preview_service.commit_cutting_plan_preview"
+
+            def record_commit_request(request):
+                if commit_method not in request.url:
+                    return
+                args = parse_qs(request.post_data or "")
+                evidence["preview_commit_requests"].append({
+                    "method": commit_method,
+                    "order_name": (args.get("order_name") or [None])[0],
+                    "preview_id": (args.get("preview_id") or [None])[0],
+                })
+
+            def record_commit_response(response):
+                if commit_method not in response.url:
+                    return
+                item = {"method": commit_method, "http_status": response.status,
+                        "received": True}
+                try:
+                    body = response.json()
+                    message = body.get("message") if isinstance(body, dict) else None
+                    item.update({
+                        "response": {key: message.get(key) for key in (
+                            "name", "committed_preview_id", "exact_preview_commit",
+                            "cutting_plan", "plan_revision", "kerf_mm")}
+                            if isinstance(message, dict) else message,
+                        "exc_type": body.get("exc_type"),
+                        "server_messages": str(body.get("_server_messages") or "")[:500],
+                    })
+                except Exception as exc:
+                    item["response_error"] = type(exc).__name__
+                evidence["preview_commit_responses"].append(item)
+
+            page.on("request", record_commit_request)
+            page.on("response", record_commit_response)
+            _login(page, fixture)
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["A"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["A"]["name"], timeout=45000)
+            evidence["saved_a"] = page.evaluate("""() => ({name:cur_frm.doc.name,
+                isNew:!!cur_frm.is_new(),
+                edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null,
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm),
+                cost:AlmdinaCostWorkspaceState.snapshot(cur_frm)})""")
+            mark_step("saved_A_open")
+            # Pinned Frappe new_doc opens Quick Entry when no create route is
+            # registered. Construct the NEW document through its model API and
+            # navigate by the standard Form route to exercise Desk lifecycle.
+            page.evaluate("""() => {
+                window.__p0NewName=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+            }""")
+            evidence["new_name"] = page.evaluate("window.__p0NewName")
+            mark_step("NEW_model_created")
+            page.evaluate("""() => {
+                frappe.set_route('Form','Door Cutting Order',window.__p0NewName);
+            }""")
+            mark_step("NEW_route_requested")
+            page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
+                                   timeout=45000)
+            mark_step("NEW_route_open")
+            page.wait_for_function("() => !!AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm)",
+                                   timeout=15000)
+            mark_step("NEW_checkpoint_ready")
+            evidence["new_before_save"] = page.evaluate("""() => ({
+                identity:AlmdinaDocumentContext.formIdentity(cur_frm),
+                generation:AlmdinaDocumentContext.capture(cur_frm)?.generation,
+                isNew:!!cur_frm.is_new(),
+                recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null,
+                edit:AlmdinaDcoEditSessionCoordinator?.snapshot(cur_frm) || null})""")
+            mark_step("NEW_Form_open")
+            page.evaluate("""args => {
+                window.__p0Input={status:'pending',field:null};
+                (async () => {
+                    const frm=cur_frm;
+                    for (const [field,value] of Object.entries(args.fields)) {
+                        window.__p0Input.field=field;
+                        await frm.set_value(field,value);
+                    }
+                    const piece=frappe.model.add_child(frm.doc,'Door Cutting Order Detail','pieces');
+                    piece.piece_type='Regular'; piece.width_cm=31; piece.length_cm=62; piece.qty=1;
+                    frm.refresh_field('pieces');
+                    AlmdinaDcoRecovery?.LocalCheckpoint?.markDirty(frm);
+                    window.__p0Input={status:'settled',name:frm.doc.name,
+                        board:frm.doc.board_description,
+                        pieces:frm.doc.pieces.map(row=>({name:row.name,width_cm:row.width_cm})),
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null};
+                })().catch(error=>window.__p0Input={status:'rejected',error:String(error)});
+            }""", {"fields": {"customer": fixture["customer"],
+                "board_description": fixture["recovery_board"],
+                "order_cutting_machine": "CNC",
+                "board_width_cm": 122, "board_length_cm": 244,
+                "default_edge_type": fixture["edge_type"], "edge_color": "P0 Recovery edge",
+                "board_rate_usd": 7, "cutting_cost_per_board_usd": 2}})
+            mark_step("NEW_input_started")
+            try:
+                page.wait_for_function("window.__p0Input?.status !== 'pending'", timeout=20000)
+            finally:
+                evidence["input"] = page.evaluate("window.__p0Input")
+                mark_step("NEW_input_wait_finished")
+            assert evidence["input"]["status"] == "settled", evidence["input"]
+            mark_step("NEW_input_complete")
+            page.evaluate("""() => {
+                window.__p0Flush={status:'pending'};
+                Promise.resolve(AlmdinaDcoRecovery.LocalCheckpoint.flush(cur_frm)).then(
+                    value=>window.__p0Flush={status:'settled',ok:!!value?.ok,
+                        error:value?.error?.code || null},
+                    error=>window.__p0Flush={status:'rejected',error:String(error)});
+            }""")
+            page.wait_for_function("window.__p0Flush?.status !== 'pending'", timeout=20000)
+            evidence["checkpoint"] = page.evaluate("window.__p0Flush")
+            mark_step("checkpoint_flush_settled")
+            assert evidence["checkpoint"]["status"] == "settled", evidence["checkpoint"]
+            assert evidence["checkpoint"].get("ok"), evidence["checkpoint"]
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+
+            def open_new_form():
+                page.evaluate("""() => {
+                    const name=frappe.model.make_new_doc_and_get_name('Door Cutting Order');
+                    frappe.set_route('Form','Door Cutting Order',name);
+                }""")
+                page.wait_for_function("() => cur_frm?.doctype === 'Door Cutting Order' && !!cur_frm.is_new()",
+                                       timeout=45000)
+
+            open_new_form()
+            page.locator('[data-recovery-action="new"]:visible').wait_for(timeout=15000)
+            evidence["discovery_before_cancel"] = page.evaluate("""() => ({
+                draftCards:document.querySelectorAll('[data-draft-id]').length,
+                board:cur_frm.doc.board_description || null})""")
+            page.locator('[data-recovery-action="new"]:visible').click()
+            page.wait_for_function("""() => !document.querySelector('.modal.show [data-recovery-action="new"]')""",
+                                   timeout=15000)
+            evidence["cancel_restore"] = page.evaluate("""() => ({
+                board:cur_frm.doc.board_description || null,
+                pieces:(cur_frm.doc.pieces || []).map(row=>row.width_cm),
+                isNew:!!cur_frm.is_new()})""")
+            assert evidence["cancel_restore"]["isNew"]
+            assert not evidence["cancel_restore"]["board"]
+            assert 31 not in evidence["cancel_restore"]["pieces"]
+            mark_step("restore_cancelled_with_start_new")
+            page.evaluate("name => { frappe.set_route('Form','Door Cutting Order',name); }",
+                          fixture["orders"]["B"]["name"])
+            page.wait_for_function("name => cur_frm?.doc?.name === name",
+                                   arg=fixture["orders"]["B"]["name"], timeout=45000)
+            open_new_form()
+            page.locator('[data-recovery-action="continue"]:visible').wait_for(timeout=15000)
+            page.locator('[data-recovery-action="continue"]:visible').first.click()
+            page.wait_for_function("board => cur_frm?.doc?.board_description === board",
+                                   arg=fixture["recovery_board"], timeout=15000)
+            evidence["restore"] = page.evaluate("""() => ({
+                board:cur_frm.doc.board_description,
+                customer:cur_frm.doc.customer,
+                pieceWidths:cur_frm.doc.pieces.map(row=>row.width_cm),
+                token:AlmdinaDocumentContext.capture(cur_frm),
+                recovery:AlmdinaDcoRecovery.LocalCheckpoint.snapshot(cur_frm)})""")
+            assert evidence["restore"]["customer"] == fixture["customer"]
+            assert 31 in evidence["restore"]["pieceWidths"]
+            mark_step("draft_restored")
+            page.evaluate("""() => {
+                const frm=cur_frm;
+                window.__p0NativeSave={status:'pending',startName:frm.doc.name};
+                Promise.resolve().then(()=>frm.save()).then(
+                    ()=>window.__p0NativeSave={status:'settled',ok:!frm.is_new(),
+                        name:frm.doc.name,board:frm.doc.board_description,
+                        token:AlmdinaDocumentContext.capture(frm),
+                        pieceWidths:(frm.doc.pieces || []).map(row=>row.width_cm),
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null},
+                    error=>window.__p0NativeSave={status:'rejected',ok:false,
+                        error:String(error),name:frm.doc.name,
+                        recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(frm) || null});
+            }""")
+            mark_step("native_save_started")
+            try:
+                page.wait_for_function("window.__p0NativeSave?.status !== 'pending'", timeout=20000)
+                evidence["native_save"] = page.evaluate("window.__p0NativeSave")
+            except Exception:
+                evidence["native_save"] = page.evaluate("""() => ({
+                    ...window.__p0NativeSave,ok:false,timeout:true,
+                    modal:document.querySelector('.modal.show')?.innerText.slice(0,700) || null,
+                    recovery:AlmdinaDcoRecovery?.LocalCheckpoint?.snapshot(cur_frm) || null})""")
+            assert not evidence["native_save"].get("timeout"), evidence["native_save"]
+            assert evidence["native_save"]["status"] == "settled" and evidence["native_save"]["ok"], evidence["native_save"]
+            assert evidence["native_save"]["board"] == fixture["recovery_board"]
+            assert not evidence["native_save"]["name"].startswith("new-"), evidence["native_save"]
+            assert 31 in evidence["native_save"]["pieceWidths"]
+            assert evidence["native_save"]["token"]["identity"].endswith(
+                f"::{evidence['native_save']['name']}")
+            assert evidence["native_save"]["token"]["generation"] == evidence["restore"]["token"]["generation"]
+            mark_step("native_save_settled")
+            # Continue within the same Desk visit and generation immediately after
+            # the first Native Save. All edits use the visible operator controls.
+            saved = evidence["native_save"]["name"]
+            page.get_by_text("Cutting Plan", exact=True).first.click()
+            page.wait_for_function("""name => cur_frm?.doc?.name === name
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name""",
+                arg=saved, timeout=45000)
+            evidence["post_save_action_readiness"] = page.evaluate("""() => {
+                const frm=cur_frm;
+                const actions=frm.fields_dict.plan_control_actions;
+                const node=actions?.$wrapper?.get(0);
+                const section=node?.closest('.form-section');
+                const button=node?.querySelector('.dco-recalculate-plan');
+                const permission=window.AlmdinaPermissions;
+                const context=window.AlmdinaDocumentContext;
+                return {name:frm.doc.name,isNew:frm.is_new(),status:frm.doc.status,
+                    docstatus:frm.doc.docstatus,productionStage:frm.doc.current_production_stage,
+                    generation:context?.capture(frm)?.generation,
+                    permissionsVersion:permission?.version?.(),
+                    recalculateAllowed:permission?.canDocument?.(frm,'recalculate_plan'),
+                    editSettingsAllowed:permission?.canDocument?.(frm,'edit_optimizer_settings'),
+                    costSettingsAllowed:permission?.canDocument?.(frm,'edit_cost_settings'),
+                    canMutateStage:context?.canMutateCurrentStage?.(frm),
+                    canTune:context?.canTuneCuttingAlgorithm?.(frm),
+                    actionFieldHidden:actions?.df?.hidden,
+                    actionWrapperConnected:!!node?.isConnected,
+                    actionShell:!!node?.querySelector('.dco-plan-actions-shell'),
+                    recalculateCount:node?.querySelectorAll('.dco-recalculate-plan').length || 0,
+                    bootstrapMarker:node?.getAttribute('data-almdina-plan-bootstrap'),
+                    actionInlineStyle:node?.getAttribute('style'),
+                    actionDisplay:node && getComputedStyle(node).display,
+                    sectionDisplay:section && getComputedStyle(section).display,
+                    buttonDisplay:button && getComputedStyle(button).display,
+                    planToolbar:!!document.querySelector('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]'),
+                    activeTab:frm.get_active_tab?.()?.df?.fieldname,
+                    planStatus:AlmdinaPlanWorkspaceState.snapshot(frm)?.status};
+            }""")
+            mark_step("post_save_action_readiness_captured")
+            first_plan = page.locator('.dco-recalculate-plan:visible').first
+            first_plan.wait_for(state="visible", timeout=15000)
+            assert first_plan.is_enabled(), "First System plan bootstrap is not available"
+            first_plan.click()
+            page.wait_for_function("""name =>
+                AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.order_name === name
+                && !!AlmdinaPlanWorkspaceState?.snapshot(cur_frm)?.data?.plans?.system_draft?.name""",
+                arg=saved, timeout=60000)
+            evidence["plan_bootstrap"] = page.evaluate("""() => ({
+                token:AlmdinaDocumentContext.capture(cur_frm),
+                plan:AlmdinaPlanWorkspaceState.snapshot(cur_frm).data.plans.system_draft.name,
+                kerf:cur_frm.doc.kerf_mm})""")
+            assert evidence["plan_bootstrap"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            mark_step("post_save_system_plan_bootstrapped")
+
+            plan_toolbar = page.locator('.dco-tab-edit-toolbar[data-almdina-tab-edit-kind="plan"]')
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
+            kerf.wait_for(state="visible", timeout=15000)
+            original_kerf = float(kerf.input_value())
+            new_kerf = original_kerf + 1
+            kerf.fill(str(new_kerf))
+            evidence["plan_draft"] = page.evaluate("""() => ({
+                edit:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm),
+                draft:AlmdinaPlanEditSessionUX.snapshot?.(cur_frm) || null,
+                token:AlmdinaDocumentContext.capture(cur_frm)})""")
+            assert evidence["plan_draft"]["token"]["generation"] == evidence["native_save"]["token"]["generation"]
+            plan_toolbar.locator('.dco-tab-edit-cancel').click()
+            page.wait_for_function("""() => AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null""",
+                                   timeout=15000)
+            assert float(page.evaluate('cur_frm.doc.kerf_mm')) == original_kerf
+            assert float(page.evaluate("""() => AlmdinaPlanWorkspaceState.snapshot(cur_frm)
+                .data.plans.system_draft.settings.kerf_mm""")) == original_kerf
+            mark_step("plan_draft_cancelled")
+            plan_toolbar.locator('.dco-tab-edit-start').click()
+            kerf = page.locator('[data-almdina-plan-setting="kerf_mm"]:visible').first
+            kerf.fill(str(new_kerf))
+            recalculate = page.locator('.dco-recalculate-plan:visible').first
+            assert recalculate.is_enabled()
+            # In this Desk viewport the sticky page head can cover the editor's
+            # button when Playwright scrolls to its center. Keyboard activation
+            # exercises the same visible, enabled operator control.
+            recalculate.press("Enter")
+            page.wait_for_function("""() => AlmdinaPlanPreviewSession?.snapshot(cur_frm)?.status === 'ready'
+                && AlmdinaPlanPreviewSession?.isCommittable(cur_frm)""", timeout=60000)
+            evidence["plan_preview"] = page.evaluate("""() => {
+                const preview=AlmdinaPlanPreviewSession.snapshot(cur_frm);
+                const row=AlmdinaPlanWorkspaceState.snapshot(cur_frm)?.data?.plans?.system_draft;
+                return {preview_id:preview.previewId, status:preview.status,
+                    source_plan:row?.name, source_revision:row?.revision,
+                    source_modified:preview.payload?.source_plan_modified,
+                    settings_fingerprint:preview.payload?.settings_fingerprint,
+                    requested_kerf:preview.requestedSettings?.kerf_mm,
+                    session_generation:AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).sessionGeneration,
+                    token:AlmdinaDocumentContext.capture(cur_frm)};
+            }""")
+            assert evidence["plan_preview"]["source_modified"]
+            assert evidence["plan_preview"]["requested_kerf"] == new_kerf
+            save_plan = plan_toolbar.locator('.dco-tab-edit-save')
+            assert save_plan.is_enabled()
+            save_plan.click()
+            try:
+                page.wait_for_function("""value =>
+                    AlmdinaDcoEditSessionCoordinator.snapshot(cur_frm).activeKind === null
                     && Number(cur_frm.doc.kerf_mm) === value""", arg=new_kerf, timeout=60000)
             except Exception:
                 evidence["plan_save_boundary"] = page.evaluate("""() => {
