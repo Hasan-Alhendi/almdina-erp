@@ -383,7 +383,7 @@
             const normalFlags = piece_edge_flags(piece, geometryModel);
             const hasNormalBand = ["left", "right", "top", "bottom", "edgeBreak", "edgeBreakOnly"]
                 .some(side => flags[side] && normalFlags[side]);
-            const insets = hasNormalBand ? [7, 9.5] : [4, 6.5];
+            const insets = hasNormalBand ? [8, 11] : [4.5, 7.5];
             const markup = insets.map(inset => geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
                 inheritStroke: false,
                 color: EXTRA_DOUBLE_MARK_COLOR,
@@ -410,7 +410,7 @@
                 if (!active) return;
                 const normal = piece_edge_flags(piece, geometryModel);
                 const hasNormal = Boolean(normal[axis]);
-                const insets = hasNormal ? [4.5, 7] : [3, 5.5];
+                const insets = hasNormal ? [8, 11] : [4.5, 7.5];
                 insets.forEach((inset, index) => {
                     const line = axis === "left"
                         ? `x1="${inset}" y1="${start}" x2="${inset}" y2="${start + length}"`
@@ -432,7 +432,7 @@
         let html = `<span data-double-edge-lines="1" style="position:absolute;inset:0;z-index:4;pointer-events:none;">`;
         const addHtmlPair = (side, active, cssSide, border, normal) => {
             if (!active) return;
-            const insets = normal ? [4.5, 7] : [3, 5.5];
+            const insets = normal ? [8, 11] : [4.5, 7.5];
             insets.forEach((inset, index) => {
                 html += `<span data-double-edge-side="${side}" data-double-edge-line-index="${index}" style="position:absolute;${cssSide}:${inset}px;${cssSide === "left" || cssSide === "right" ? `top:${start}%;height:${length}%;` : `left:${start}%;width:${length}%;`}border-${border}:${thickness} solid ${color};"></span>`;
             });
@@ -586,16 +586,6 @@
                 extraAddonTextMark(
                     "full_door_double",
                     extraAddonLegendLabel("extra_full_door_double")
-                )
-            ));
-        }
-        if (flags.double) {
-            marks.push(extraAddonMarkPlate(
-                "top-end",
-                "double",
-                extraAddonTextMark(
-                    "double",
-                    extraAddonLegendLabel("extra_double")
                 )
             ));
         }

@@ -357,7 +357,7 @@
             && typeof corner.edgeBandSvgMarkup === "function") {
             const hasNormalBand = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"]
                 .some(side => flagsForSource(source, side) && selected.includes(side));
-            const insets = hasNormalBand ? [7, 9.5] : [4, 6.5];
+            const insets = hasNormalBand ? [8, 11] : [4.5, 7.5];
             const markup = insets.map(inset => corner.edgeBandSvgMarkup({ ...source, ...flags }, scene.frame.width, scene.frame.height, {
                 offsetX: scene.frame.x,
                 offsetY: scene.frame.y,
@@ -371,7 +371,7 @@
         }
         return selected.map((side) => {
             const normalBand = flagsForSource(source, side);
-            const insetPx = normalBand ? [7, 9.5] : [4, 6.5];
+            const insetPx = normalBand ? [8, 11] : [4.5, 7.5];
             const offsetsMm = insetPx.map(offset => (offset / Math.max(Number(scene.frame.scale) || 1, 0.001)) * 10);
             const paths = typeof api.visualEdgeMarkerPaths === "function"
                 ? api.visualEdgeMarkerPaths(scene.piece, side, offsetsMm)

@@ -134,6 +134,7 @@ def test_cutting_plan_prints_explain_and_render_purple_double_side_markers() -> 
         assert "extra_double_reference_sides" in html
         assert '_("Double Edge")' in html
         assert "box-shadow" in html
+        assert "dco-extra-addon-mark" not in html
 
 
 def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:

@@ -287,7 +287,6 @@ assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="double"/
 assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-kind="double"/);
 assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
-assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
 assert.match(extraAddonHtml, /Double Edge/);
@@ -298,6 +297,7 @@ assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
 assert.match(extraAddonHtml, /dco-extra-addon-legend/);
 assert.match(extraAddonHtml, /#5a2d82/);
 assert.match(extraAddonHtml, /data-double-edge-lines="1"/);
+assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-mark[^>]*data-addon-kind="double"/);
 
 const regularOnlyFrm = {
     doc: {
@@ -346,6 +346,21 @@ assert.match(selectedDoubleHtml, /data-double-edge-side="edge_width_top"/);
 assert.doesNotMatch(selectedDoubleHtml, /data-double-edge-side="edge_long_left"/);
 assert.equal((selectedDoubleHtml.match(/data-double-edge-line-index="1"/g) || []).length, 1);
 assert.match(selectedDoubleHtml, /border-top:1\.4px solid #5a2d82/);
+
+const selectedDoubleWithBandPlan = {
+    ...selectedDoublePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...selectedDoublePlan.sheets[0].pieces[0],
+            edge_width_top: 1,
+        }],
+    }],
+};
+const selectedDoubleWithBandHtml = renderer.build(regularOnlyFrm, selectedDoubleWithBandPlan);
+assert.match(selectedDoubleWithBandHtml, /top:3px;left:16\.667%;width:66\.666%;border-top:3px solid #d00000/);
+assert.match(selectedDoubleWithBandHtml, /top:8px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
+assert.match(selectedDoubleWithBandHtml, /top:11px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
 
 const pastFiftyPlan = {
     ...plan,
