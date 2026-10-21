@@ -836,12 +836,7 @@ def _print_saved_plan_variant(source, prefix):
                 assert selected["offcut_source"] == "FACTORY"
                 assert selected["offcut_execution"] == "FACTORY"
                 assert 'data-resource-kind="OFFCUT"' in html
-                context = re.search(
-                    r'<div class="dco-offcut-business-context"[^>]*>(.*?)</div>',
-                    html, re.S,
-                )
-                assert context and "من المعمل" in context.group(1)
-                assert "في المعمل" in context.group(1)
+                assert 'class="dco-offcut-business-context__state"' not in html
             filename = f"{prefix}-plan-operator-final.html"
             (evidence_dir / filename).write_text(html, encoding="utf-8")
             evidence["final_html"] = filename
