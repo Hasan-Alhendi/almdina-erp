@@ -12,6 +12,8 @@ PLAN_PIECE = ROOT / "almdina_erp" / "doctype" / "cutting_plan_piece" / "cutting_
 DOMAIN = ROOT / "almdina_erp" / "domain" / "orders" / "extra_addons.py"
 ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "costing_adapter.py"
 PLAN_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "frappe" / "orders" / "plan_adapter.py"
+PRODUCTION_PRINT = ROOT / "almdina_erp" / "print_format" / "door_cutting_plan_production_a4" / "door_cutting_plan_production_a4.json"
+OFFICIAL_PRINT = ROOT / "almdina_erp" / "print_format" / "door_cutting_plan_official" / "door_cutting_plan_official.json"
 DOCUMENTS = ROOT / "almdina_erp" / "application" / "costing" / "financial_documents.py"
 MUTATION = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_mutation_impact_policy.js"
 OPERATOR = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_operator_ux.js"
@@ -38,11 +40,14 @@ def test_piece_type_contract_includes_glass_without_restoring_extra() -> None:
         encoding="utf-8"
     )
     assert "EXTRA_PIECE_TYPE" not in domain
-    assert 'GLASS_TYPE = "Glass"' in policy
+    assert 'from almdina_erp.almdina_erp.domain.orders.piece_types import GLASS_TYPE' in policy
 
 
 def test_selections_are_requirements_while_price_snapshots_are_protected() -> None:
     detail = _fields(DETAIL)
+    assert detail["extra_double_reference_sides"]["fieldtype"] == "Data"
+    assert detail["extra_double_reference_sides"]["hidden"] == 1
+    assert _fields(PLAN_PIECE)["extra_double_reference_sides"]["read_only"] == 1
     flags = (
         "extra_double",
         "extra_full_door_double",
@@ -103,7 +108,7 @@ def test_pricing_plan_quantity_and_mutation_impacts_stay_in_their_owners() -> No
     plan_fields = mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
     cost_fields = mutation.split("const PIECE_COST_ONLY_FIELDS", 1)[1].split("];", 1)[0]
     assert "extra_full_door_double" in plan_fields
-    assert "extra_double" not in plan_fields
+    assert '"extra_double",' not in plan_fields
     assert "extra_liner" in cost_fields
     assert "extra_liner" not in plan_fields
     assert "liner_reference_side" in plan_fields
@@ -111,6 +116,23 @@ def test_pricing_plan_quantity_and_mutation_impacts_stay_in_their_owners() -> No
     assert "liner_offset_cm" in plan_fields
     assert "liner_width_cm" in plan_fields
     assert "extra_back_groove" in cost_fields
+
+
+def test_double_side_selection_is_a_plan_metadata_change_not_a_price_input() -> None:
+    mutation = MUTATION.read_text(encoding="utf-8")
+    plan_fields = mutation.split("const PIECE_PLAN_COST_FIELDS", 1)[1].split("];", 1)[0]
+    cost_fields = mutation.split("const PIECE_COST_ONLY_FIELDS", 1)[1].split("];", 1)[0]
+    assert "extra_double_reference_sides" in plan_fields
+    assert "extra_double_reference_sides" not in cost_fields
+    assert '"extra_double_reference_sides"' in PLAN_ADAPTER.read_text(encoding="utf-8")
+
+
+def test_cutting_plan_prints_explain_and_render_purple_double_side_markers() -> None:
+    for path in (PRODUCTION_PRINT, OFFICIAL_PRINT):
+        html = json.loads(path.read_text(encoding="utf-8"))["html"]
+        assert "#5a2d82" in html
+        assert "extra_double_reference_sides" in html
+        assert '_("Edge banding double")' in html
 
 
 def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:

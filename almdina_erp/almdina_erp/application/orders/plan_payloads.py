@@ -70,6 +70,8 @@ class PlanMetadataPiece:
     edge_long_left_type: str = ""
     edge_width_top_type: str = ""
     edge_width_bottom_type: str = ""
+    extra_double: int = 0
+    extra_double_reference_sides: str = ""
 
 
 def build_plan_input_payload(
@@ -141,6 +143,8 @@ def build_plan_metadata_payload(
             {
                 "index": piece.index,
                 "piece_type": piece.piece_type,
+                "extra_double": piece.extra_double,
+                "extra_double_reference_sides": piece.extra_double_reference_sides,
                 "edge_long_right": piece.edge_long_right,
                 "edge_long_left": piece.edge_long_left,
                 "edge_width_top": piece.edge_width_top,

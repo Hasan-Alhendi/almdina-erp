@@ -45,6 +45,50 @@
         return [];
     }
 
+    function normalizeSideSelection(value, pieceType, enabled) {
+        if (!enabled) return [];
+        const available = availableSides(pieceType);
+        if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+            return available.slice();
+        }
+        let raw = value;
+        if (typeof value === "string") {
+            try {
+                raw = JSON.parse(value);
+            } catch (error) {
+                return [];
+            }
+        }
+        if (!Array.isArray(raw)) return [];
+        const selected = new Set(raw.map(side => String(side || "").trim()).filter(Boolean));
+        return available.filter(side => selected.has(side));
+    }
+
+    function sideFlagsForSelection(piece, sides, rotated) {
+        const selected = new Set(normalizeSideSelection(
+            sides,
+            piece && (piece.pieceType || piece.piece_type),
+            true,
+        ));
+        const semantic = {
+            [SIDE_TOP]: selected.has(SIDE_TOP),
+            [SIDE_BOTTOM]: selected.has(SIDE_BOTTOM),
+            [SIDE_LEFT]: selected.has(SIDE_LEFT),
+            [SIDE_RIGHT]: selected.has(SIDE_RIGHT),
+            [SIDE_BREAK]: selected.has(SIDE_BREAK),
+            [SIDE_BREAK_ONLY]: selected.has(SIDE_BREAK_ONLY),
+        };
+        if (!rotated) return semantic;
+        return {
+            [SIDE_TOP]: semantic[SIDE_LEFT],
+            [SIDE_BOTTOM]: semantic[SIDE_RIGHT],
+            [SIDE_LEFT]: semantic[SIDE_BOTTOM],
+            [SIDE_RIGHT]: semantic[SIDE_TOP],
+            [SIDE_BREAK]: semantic[SIDE_BREAK],
+            [SIDE_BREAK_ONLY]: semantic[SIDE_BREAK_ONLY],
+        };
+    }
+
     function sideLabel(side, pieceType) {
         if (pieceType === L_SHAPED && side === SIDE_BREAK) return "زاوية L";
         return SIDE_LABELS[side] || side;
@@ -1107,6 +1151,8 @@
     window.AlmdinaLinerGeometry = Object.freeze({
         toleranceMm: TOLERANCE_MM,
         availableSides,
+        normalizeSideSelection,
+        sideFlagsForSelection,
         sideLabel,
         pieceFromRow,
         piecePolygonMm,

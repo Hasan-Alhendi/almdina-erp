@@ -81,6 +81,9 @@
             extra_double: Number(row && row.extra_double) ? 1 : 0,
             extra_full_door_double: Number(row && row.extra_full_door_double) ? 1 : 0,
         };
+        const doubleSides = editor && typeof editor.doubleEdgeSidesFromRow === "function"
+            ? editor.doubleEdgeSidesFromRow(row)
+            : [];
         const known = fields().some(item => item.fieldname === preferredField);
         const initial = {};
         Object.entries(drafts).forEach(([fieldname, draft]) => {
@@ -95,12 +98,15 @@
                 legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
             };
         });
+        initial.extra_double = flags.extra_double;
+        initial.extra_double_reference_sides = doubleSides.slice();
         return {
             frm: frm || null,
             row,
             piece,
             supported,
             flags,
+            doubleSides,
             drafts,
             initial,
             activeField: known ? preferredField : (fields()[0] ? fields()[0].fieldname : ""),
@@ -115,6 +121,13 @@
         if (Boolean(draft.fullLength) !== Boolean(initial.fullLength)
             || Boolean(draft.legacyCheckboxOnly) !== Boolean(initial.legacyCheckboxOnly)) return true;
         return ["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]));
+    }
+
+    function doubleSidesDirty(session) {
+        if (!session) return false;
+        const initial = (session.initial && session.initial.extra_double_reference_sides) || [];
+        return JSON.stringify(session.doubleSides || []) !== JSON.stringify(initial)
+            || Number(session.flags.extra_double || 0) !== Number(session.initial.extra_double || 0);
     }
 
     function selectTab(session, fieldname) {
@@ -160,6 +173,16 @@
     function invalidEnabledDraft(session) {
         const editor = editorApi();
         if (!session || !editor || typeof editor.validationMessage !== "function") return null;
+        if (session.flags.extra_double && !(session.doubleSides || []).length) {
+            return {
+                code: "double_edge_sides_required",
+                fieldname: "extra_double",
+                field: "sides",
+                fields: ["sides"],
+                message: translate("Select at least one side for Double Edge Banding."),
+                label: translate("Double Edge Banding"),
+            };
+        }
         const candidates = fields().filter((entry) => {
             const draft = session.drafts[entry.fieldname];
             return draft && draft.enabled;
@@ -223,7 +246,12 @@
             enabled: false,
         };
         const companions = enabledPreviewDrafts(session).filter(draft => draft !== carrier);
-        return editor.previewSvg(carrier, { multi: true, companions });
+        return editor.previewSvg(carrier, {
+            multi: true,
+            companions,
+            doubleSides: session.doubleSides,
+            doubleInteractive: session.activeField === "extra_double",
+        });
     }
 
     function settingsMarkup(session, editable) {
@@ -233,6 +261,22 @@
             <span class="dco-addons-enable-mark" aria-hidden="true"></span>
             <span>${esc(translate("Add-on enabled"))}</span>
         </button>`;
+        if (fieldname === "extra_double") {
+            const geometry = window.AlmdinaLinerGeometry;
+            const sides = geometry && typeof geometry.availableSides === "function"
+                ? geometry.availableSides(session.piece && session.piece.pieceType)
+                : [];
+            const sideButtons = sides.map(side => {
+                const selected = (session.doubleSides || []).includes(side);
+                return `<button type="button" class="dco-corner-position ${selected ? "is-active" : ""}" data-double-side="${esc(side)}" aria-pressed="${selected ? "true" : "false"}">${esc(geometry.sideLabel(side, session.piece && session.piece.pieceType))}</button>`;
+            }).join("");
+            const body = `${toggle}
+                <div class="dco-corner-help" data-addons-hint ${enabled && session.doubleSides.length ? "hidden" : ""}>${esc(enabled ? translate("Choose one or more sides.") : translate("Turn this add-on on to include it."))}</div>
+                <div class="dco-corner-section-label">${esc(translate("Double banding sides"))}</div>
+                <div class="dco-corner-position-grid" data-double-sides>${sideButtons}</div>
+                <div class="dco-corner-help">${esc(translate("Double Edge Banding is shown as a purple line on each selected side."))}</div>`;
+            return editable ? body : `<fieldset disabled>${body}</fieldset>`;
+        }
         if (FLAG_FIELDS.includes(fieldname)) {
             return `${toggle}
                 <div class="dco-corner-help" data-addons-hint ${enabled ? "hidden" : ""}>${esc(translate("Turn this add-on on to include it."))}</div>
@@ -331,10 +375,16 @@
         });
         const sideGroup = root && root.querySelector("[data-liner-sides]");
         if (sideGroup) sideGroup.removeAttribute("aria-invalid");
+        const doubleSideGroup = root && root.querySelector("[data-double-sides]");
+        if (doubleSideGroup) doubleSideGroup.removeAttribute("aria-invalid");
         if (issue && here) {
             (issue.fields || (issue.field ? [issue.field] : [])).forEach((field) => {
                 if (field === "side") {
                     if (sideGroup) sideGroup.setAttribute("aria-invalid", "true");
+                    return;
+                }
+                if (field === "sides") {
+                    if (doubleSideGroup) doubleSideGroup.setAttribute("aria-invalid", "true");
                     return;
                 }
                 const input = root && root.querySelector(`[data-liner-${field}]`);
@@ -401,6 +451,11 @@
             hint.textContent = translate("Choose a reference side to include this add-on.");
             return;
         }
+        if (session.activeField === "extra_double" && enabled && !(session.doubleSides || []).length) {
+            hint.hidden = false;
+            hint.textContent = translate("Choose one or more sides.");
+            return;
+        }
         hint.hidden = enabled;
         hint.textContent = translate("Turn this add-on on to include it.");
     }
@@ -414,8 +469,17 @@
         remove.disabled = !editable || !isEnabled(session, session.activeField);
     }
 
-    function syncSides(root, draft) {
-        if (!root || !draft) return;
+    function syncSides(root, draft, session) {
+        if (!root) return;
+        if (session && session.activeField === "extra_double") {
+            root.querySelectorAll("[data-double-side]").forEach((button) => {
+                const selected = (session.doubleSides || []).includes(button.getAttribute("data-double-side"));
+                button.classList.toggle("is-active", selected);
+                button.setAttribute("aria-pressed", selected ? "true" : "false");
+            });
+            return;
+        }
+        if (!draft) return;
         root.querySelectorAll("[data-liner-side]").forEach((button) => {
             const selected = button.getAttribute("data-liner-side") === draft.side;
             button.classList.toggle("is-active", selected);
@@ -449,7 +513,7 @@
         syncTabs(root, session);
         syncEnable(root, session, editable);
         syncRemove(root, session, editable);
-        syncSides(root, session.drafts[session.activeField]);
+        syncSides(root, session.drafts[session.activeField], session);
         syncPreview(root, session);
         showIssue(root, session, invalidEnabledDraft(session));
         syncApply(root, session, editable);
@@ -483,11 +547,20 @@
     function collectValues(session) {
         const values = {};
         const touched = [];
+        if (doubleSidesDirty(session)) {
+            values.extra_double = session.flags.extra_double ? 1 : 0;
+            values.extra_double_reference_sides = session.flags.extra_double
+                ? JSON.stringify(session.doubleSides || [])
+                : "";
+            touched.push("extra_double");
+            touched.push("extra_double_reference_sides");
+        }
         const flagsDirty = FLAG_FIELDS.some(fieldname => (
             Number(session.flags[fieldname] || 0) !== Number(session.row && session.row[fieldname] || 0)
         ));
         if (flagsDirty) {
             FLAG_FIELDS.forEach((fieldname) => {
+                if (fieldname === "extra_double" && doubleSidesDirty(session)) return;
                 values[fieldname] = session.flags[fieldname] ? 1 : 0;
                 touched.push(fieldname);
             });
@@ -510,6 +583,8 @@
         Object.entries(session.drafts || {}).forEach(([fieldname, draft]) => {
             session.initial[fieldname] = snapshotDraft(draft);
         });
+        session.initial.extra_double = session.flags.extra_double ? 1 : 0;
+        session.initial.extra_double_reference_sides = (session.doubleSides || []).slice();
     }
 
     function failSave(session, root, issue, indicator) {
@@ -666,6 +741,21 @@
                 syncChrome(root, session, editable);
                 return;
             }
+            const doubleSide = event.target.closest("[data-double-side]");
+            if (doubleSide && root.contains(doubleSide) && editable) {
+                const sideName = doubleSide.getAttribute("data-double-side");
+                const current = new Set(session.doubleSides || []);
+                if (current.has(sideName)) current.delete(sideName);
+                else current.add(sideName);
+                const geometry = window.AlmdinaLinerGeometry;
+                const available = geometry && typeof geometry.availableSides === "function"
+                    ? geometry.availableSides(session.piece && session.piece.pieceType)
+                    : [];
+                session.doubleSides = available.filter(sideNameValue => current.has(sideNameValue));
+                setEnabled(session, "extra_double", true);
+                syncChrome(root, session, editable);
+                return;
+            }
             if (event.target.closest("[data-addons-cancel]")) {
                 dialog.hide();
                 return;
@@ -744,6 +834,7 @@
         selectTab,
         setEnabled,
         machiningDirty,
+        doubleSidesDirty,
         enabledPreviewDrafts,
         previewMarkup,
         sameValues,

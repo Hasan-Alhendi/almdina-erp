@@ -23,6 +23,8 @@
     "clipped_corner_position",
     "clipped_corner_width_cm",
     "clipped_corner_length_cm",
+    "extra_double",
+    "extra_double_reference_sides",
     "extra_liner",
     "liner_reference_side",
     "liner_offset_cm",
@@ -151,6 +153,8 @@
       "read_only": 1
     },
     {"default":"0","fieldname":"extra_liner","fieldtype":"Check","hidden":1,"label":"Liner","read_only":1},
+    {"default":"0","fieldname":"extra_double","fieldtype":"Check","hidden":1,"label":"Double Edge Banding","read_only":1},
+    {"fieldname":"extra_double_reference_sides","fieldtype":"Data","hidden":1,"label":"Double Edge Banding Sides","read_only":1},
     {"fieldname":"liner_reference_side","fieldtype":"Select","hidden":1,"label":"Liner Reference Side","options":"\nedge_width_top\nedge_width_bottom\nedge_long_left\nedge_long_right\nedge_break\nedge_break_only","read_only":1},
     {"default":"0","fieldname":"liner_offset_cm","fieldtype":"Float","hidden":1,"label":"Liner Offset (CM)","non_negative":1,"read_only":1},
     {"default":"0","fieldname":"liner_width_cm","fieldtype":"Float","hidden":1,"label":"Liner Width (CM)","non_negative":1,"read_only":1},

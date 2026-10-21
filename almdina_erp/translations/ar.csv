@@ -843,6 +843,14 @@ Left long edge,قشاط الطول الأيسر
 Long right,طول يمين
 Long left,طول يسار
 Double Edge Banding,دبل قشاط
+Double Edge Banding Sides,أضلاع الدبل
+Row {0}: Double Edge Banding sides are invalid.,الصف {0}: أضلاع الدبل غير صالحة.
+Row {0}: A selected Double Edge Banding side is unavailable for this piece type.,الصف {0}: ضلع الدبل المحدد غير متاح لهذا النوع من الدرفات.
+Double banding sides,أضلاع الدبل
+selected sides,الأضلاع المحددة
+Select at least one side for Double Edge Banding.,اختر ضلعًا واحدًا على الأقل للدبل.
+Choose one or more sides.,اختر ضلعًا واحدًا أو أكثر.
+Double Edge Banding is shown as a purple line on each selected side.,يظهر الدبل بخط بنفسجي على كل ضلع محدد.
 Double Banding,دبل قشاط
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل

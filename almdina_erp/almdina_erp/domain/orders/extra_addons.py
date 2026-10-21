@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ EXTRA_ADDON_FIELD_BY_CODE = {
     "back_groove": "extra_back_groove",
     "recessed_handle_cutout": "extra_recessed_handle_cutout",
 }
+EXTRA_DOUBLE_SIDES_FIELD = "extra_double_reference_sides"
 FULL_DOOR_DOUBLE_CUT_MULTIPLIER = 2
 EXTRA_OVERLAY_LAYER_BY_KIND = {
     "liner": "Liner",
@@ -42,6 +44,80 @@ class ExtraAddonError(ValueError):
         super().__init__(code)
         self.code = code
         self.addon_code = addon_code
+
+
+def available_extra_double_sides(piece_type: str | None) -> tuple[str, ...]:
+    """Return the canonical side identifiers shared with the Liner editor."""
+
+    from ..cutting.liner_geometry import available_liner_sides
+
+    return tuple(available_liner_sides(piece_type or "Regular"))
+
+
+def normalize_extra_double_sides(
+    value: Any,
+    *,
+    piece_type: str | None,
+    enabled: bool,
+) -> tuple[str, ...]:
+    """Validate and normalize stored Double Banding side selections.
+
+    A missing value is the deliberate legacy representation and resolves to all
+    available sides. An explicit empty list is invalid when the add-on is on.
+    """
+
+    if not enabled:
+        return ()
+
+    available = available_extra_double_sides(piece_type)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return available
+
+    raw = value
+    if isinstance(value, str):
+        try:
+            raw = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ExtraAddonError("double_edge_sides_invalid", "double") from error
+    if not isinstance(raw, (list, tuple, set, frozenset)):
+        raise ExtraAddonError("double_edge_sides_invalid", "double")
+
+    selected = tuple(
+        dict.fromkeys(
+            str(item or "").strip()
+            for item in raw
+            if str(item or "").strip()
+        )
+    )
+    if not selected:
+        raise ExtraAddonError("double_edge_sides_required", "double")
+    unavailable = tuple(side for side in selected if side not in available)
+    if unavailable:
+        raise ExtraAddonError("double_edge_side_unavailable", "double")
+    return tuple(side for side in available if side in selected)
+
+
+def serialize_extra_double_sides(sides: Iterable[str]) -> str:
+    """Persist a compact, deterministic JSON array for the child row field."""
+
+    return json.dumps(
+        list(
+            dict.fromkeys(
+                str(side).strip() for side in sides if str(side).strip()
+            )
+        ),
+        separators=(",", ":"),
+    )
+
+
+def extra_double_sides_for_row(row: Any) -> tuple[str, ...]:
+    """Resolve a row's selected sides, including the legacy all-sides fallback."""
+
+    return normalize_extra_double_sides(
+        _row_field(row, EXTRA_DOUBLE_SIDES_FIELD, ""),
+        piece_type=_row_field(row, "piece_type", "Regular"),
+        enabled=_truthy_flag(_row_field(row, "extra_double", 0)),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +408,7 @@ def _money(value: float) -> float:
 __all__ = [
     "EXTRA_ADDON_CODES",
     "EXTRA_ADDON_FIELD_BY_CODE",
+    "EXTRA_DOUBLE_SIDES_FIELD",
     "EXTRA_OVERLAY_KIND_BY_LAYER",
     "EXTRA_OVERLAY_LAYER_BY_KIND",
     "EXTRA_OVERLAY_LAYER_NAMES",
@@ -342,10 +419,14 @@ __all__ = [
     "ExtraAddonPricingSummary",
     "ExtraAddonRates",
     "apply_extra_double_text_flags_to_snapshot",
+    "available_extra_double_sides",
     "calculate_extra_addon_pricing",
+    "extra_double_sides_for_row",
     "extra_double_text_flags",
     "extra_double_text_flags_by_source_no",
     "extra_overlay_kind_for_layer",
     "extra_overlay_layer_for_kind",
     "physical_cut_quantity",
+    "normalize_extra_double_sides",
+    "serialize_extra_double_sides",
 ]

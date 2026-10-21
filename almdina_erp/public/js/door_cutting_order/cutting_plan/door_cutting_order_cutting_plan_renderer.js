@@ -290,6 +290,131 @@
         return html;
     }
 
+    function double_edge_sides(piece) {
+        if (!piece || !Number(piece.extra_double)) return [];
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.normalizeSideSelection === "function") {
+            return liner.normalizeSideSelection(
+                piece.extra_double_reference_sides,
+                piece.piece_type || "Regular",
+                true,
+            );
+        }
+        const available = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right"];
+        if (piece.piece_type === "Clipped Corner") available.push("edge_break", "edge_break_only");
+        if (piece.piece_type === "L-Shaped Corner") available.push("edge_break");
+        if (piece.extra_double_reference_sides) {
+            try {
+                const selected = JSON.parse(piece.extra_double_reference_sides);
+                if (Array.isArray(selected)) return available.filter(side => selected.includes(side));
+            } catch (error) {
+                return [];
+            }
+        }
+        return available;
+    }
+
+    function double_edge_flags(piece, geometryModel) {
+        const sides = double_edge_sides(piece);
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.sideFlagsForSelection === "function") {
+            const rotated = geometryModel && geometryModel.source === "dxf"
+                ? false
+                : Boolean(piece && piece.rotated);
+            const flags = liner.sideFlagsForSelection({
+                pieceType: piece && piece.piece_type,
+            }, sides, rotated);
+            if (geometryModel && geometryModel.source === "dxf"
+                && Number.isInteger(piece.rotation_quarter_turns)) {
+                const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
+                let { left, top, right, bottom } = flags;
+                for (let turn = 0; turn < turns; turn += 1) {
+                    const previous = { left, top, right, bottom };
+                    left = previous.bottom;
+                    top = previous.left;
+                    right = previous.top;
+                    bottom = previous.right;
+                }
+                return { left, right, top, bottom, edgeBreak: flags.edgeBreak, edgeBreakOnly: flags.edgeBreakOnly };
+            }
+            return flags;
+        }
+        return piece_edge_flags({
+            ...piece,
+            edge_long_left: sides.includes("edge_long_left"),
+            edge_long_right: sides.includes("edge_long_right"),
+            edge_width_top: sides.includes("edge_width_top"),
+            edge_width_bottom: sides.includes("edge_width_bottom"),
+            edge_break: sides.includes("edge_break"),
+            edge_break_only: sides.includes("edge_break_only"),
+        }, geometryModel);
+    }
+
+    function render_piece_double_edge_lines(piece, geometryModel = null, clipId = "") {
+        const sides = double_edge_sides(piece);
+        if (!sides.length) return "";
+        const flags = double_edge_flags(piece, geometryModel);
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const isCornerPiece = Boolean(
+            geometry
+            && ((typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+                || (typeof geometry.isClipped === "function" && geometry.isClipped(piece)))
+        );
+        if (isCornerPiece && geometry && typeof geometry.edgeBandSvgMarkup === "function") {
+            let edgePiece = { ...piece, ...flags };
+            if (geometryModel && geometryModel.source === "dxf") {
+                const liner = window.AlmdinaLinerGeometry;
+                const sourceFlags = liner && typeof liner.sideFlagsForSelection === "function"
+                    ? liner.sideFlagsForSelection(
+                        { pieceType: piece && piece.piece_type },
+                        sides,
+                        false,
+                    )
+                    : flags;
+                edgePiece = typeof geometry.pieceForQuarterTurns === "function"
+                    ? geometry.pieceForQuarterTurns(
+                        { ...piece, ...sourceFlags },
+                        piece.corner_rotation_quarter_turns,
+                        piece.corner_mirrored,
+                    )
+                    : null;
+                if (!edgePiece) return "";
+            }
+            const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
+                inheritStroke: false,
+                color: EXTRA_DOUBLE_MARK_COLOR,
+                strokeWidth: 3,
+            });
+            if (!markup) return "";
+            const pathData = geometryModel && geometryModel.geometry && geometryModel.geometry.pathData;
+            const clipDef = pathData
+                ? `<defs><clipPath id="${clipId}-double"><path d="${pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs>`
+                : "";
+            const clipAttr = pathData ? ` clip-path="url(#${clipId}-double)"` : "";
+            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;">${clipDef}<g${clipAttr}>${markup}</g></svg>`;
+        }
+
+        const color = EXTRA_DOUBLE_MARK_COLOR;
+        const thickness = "3px";
+        const start = 16.667;
+        const length = 66.666;
+        if (geometryModel && geometryModel.vector) {
+            const lines = [];
+            if (flags.left) lines.push(`<line data-double-edge-side="edge_long_left" x1="1" y1="${start}" x2="1" y2="${start + length}"/>`);
+            if (flags.right) lines.push(`<line data-double-edge-side="edge_long_right" x1="99" y1="${start}" x2="99" y2="${start + length}"/>`);
+            if (flags.top) lines.push(`<line data-double-edge-side="edge_width_top" x1="${start}" y1="1" x2="${start + length}" y2="1"/>`);
+            if (flags.bottom) lines.push(`<line data-double-edge-side="edge_width_bottom" x1="${start}" y1="99" x2="${start + length}" y2="99"/>`);
+            if (!lines.length) return "";
+            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;"><defs><clipPath id="${clipId}-double"><path d="${geometryModel.geometry.pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs><g clip-path="url(#${clipId}-double)" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke">${lines.join("")}</g></svg>`;
+        }
+        let html = `<span data-double-edge-lines="1" style="position:absolute;inset:0;z-index:4;pointer-events:none;">`;
+        if (flags.left) html += `<span data-double-edge-side="edge_long_left" style="position:absolute;left:3px;top:${start}%;height:${length}%;border-left:${thickness} solid ${color};"></span>`;
+        if (flags.right) html += `<span data-double-edge-side="edge_long_right" style="position:absolute;right:3px;top:${start}%;height:${length}%;border-right:${thickness} solid ${color};"></span>`;
+        if (flags.top) html += `<span data-double-edge-side="edge_width_top" style="position:absolute;top:3px;left:${start}%;width:${length}%;border-top:${thickness} solid ${color};"></span>`;
+        if (flags.bottom) html += `<span data-double-edge-side="edge_width_bottom" style="position:absolute;bottom:3px;left:${start}%;width:${length}%;border-bottom:${thickness} solid ${color};"></span>`;
+        return `${html}</span>`;
+    }
+
     function print_piece_number(value) {
         const label = String(value || "—").trim();
         const primary = label.split(".")[0].trim();
@@ -371,6 +496,7 @@
     }
 
     function extraAddonLegendSwatch(item) {
+        if (item.addonKind === "double") return extraOverlayStrokeSample(EXTRA_DOUBLE_MARK_COLOR);
         if (item.overlayKind === "recessed_handle_cutout") return extraHandleLegendSwatch();
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
@@ -384,6 +510,7 @@
             if (item.addonKind) {
                 return `
             <span class="dco-extra-addon-legend-item">
+                ${item.addonKind === "double" ? extraAddonLegendSwatch(item) : ""}
                 ${extraAddonTextMark(item.addonKind, label)}
             </span>`;
             }
@@ -528,6 +655,18 @@
             copy.clipped_corner_length_cm = notch.cutLengthCm;
         }
         return copy;
+    }
+
+    function pieceWithDoubleSpec(frm, piece) {
+        if (piece && ["extra_double", "extra_double_reference_sides"].some(field => (
+            Object.prototype.hasOwnProperty.call(piece, field)
+        ))) return piece;
+        const row = extraOrderRowForPiece(frm, piece);
+        if (!row) return piece;
+        return Object.assign({}, piece, {
+            extra_double: row.extra_double,
+            extra_double_reference_sides: row.extra_double_reference_sides,
+        });
     }
 
     function planCutterDiameterMm(plan, frm) {
@@ -1058,7 +1197,7 @@
                 if (!geometry || typeof geometry.resolve !== "function") {
                     throw new Error("Canonical cutting-plan piece geometry is unavailable");
                 }
-                const manufacturingPiece = pieceWithLinerSpec(frm, piece);
+                const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));
                 const geometryModel = geometry.resolve(manufacturingPiece);
                 const placement = geometryModel.placement;
                 const left = (num(placement.xCm) / frame.usableW) * 100;
@@ -1083,6 +1222,7 @@
                 const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
                     .replace(/[^a-zA-Z0-9_-]/g, "-");
                 const edgeLines = render_piece_edge_lines(manufacturingPiece, geometryModel, clipId);
+                const doubleEdgeLines = render_piece_double_edge_lines(manufacturingPiece, geometryModel, clipId);
                 const hostAttr = piece.glass_host_piece_id != null && piece.glass_host_piece_id !== ""
                     ? ` data-glass-host="${escape_html(piece.glass_host_piece_id)}"`
                     : "";
@@ -1092,7 +1232,8 @@
                         ${shapeOutline}
                         ${render_piece_overlays(frm, manufacturingPiece, geometryModel, sheet, frame)}
                         ${edgeLines}
-                        ${render_piece_addon_marks(frm, piece)}
+                        ${doubleEdgeLines}
+                        ${render_piece_addon_marks(frm, manufacturingPiece)}
                         ${render_piece_label(piece, geometryModel)}
                     </div>
                 `;

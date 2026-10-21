@@ -452,6 +452,10 @@ def _apply_snapshot(
                     "original_width_cm": flt(piece.get("original_w")),
                     "original_length_cm": flt(piece.get("original_h")),
                     "piece_type": piece.get("piece_type") or "Regular",
+                    "extra_double": 1 if piece.get("extra_double") else 0,
+                    "extra_double_reference_sides": piece.get(
+                        "extra_double_reference_sides"
+                    ) or "",
                     "clipped_corner_position": piece.get("clipped_corner_position") or "",
                     "clipped_corner_width_cm": flt(piece.get("clipped_corner_width_cm")),
                     "clipped_corner_length_cm": flt(piece.get("clipped_corner_length_cm")),

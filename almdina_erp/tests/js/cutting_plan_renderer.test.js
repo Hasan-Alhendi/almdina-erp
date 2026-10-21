@@ -296,6 +296,8 @@ assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
 assert.match(extraAddonHtml, /dco-extra-addon-legend/);
+assert.match(extraAddonHtml, /#5a2d82/);
+assert.match(extraAddonHtml, /data-double-edge-lines="1"/);
 
 const regularOnlyFrm = {
     doc: {
@@ -326,6 +328,22 @@ assert.match(regularOnlyHtml, /data-addon-kind="full_door_double"/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);
+
+const selectedDoublePlan = {
+    ...regularOnlyPlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...plan.sheets[0].pieces[0],
+            piece_type: "Regular",
+            extra_double: 1,
+            extra_double_reference_sides: '["edge_width_top"]',
+        }],
+    }],
+};
+const selectedDoubleHtml = renderer.build(regularOnlyFrm, selectedDoublePlan);
+assert.match(selectedDoubleHtml, /data-double-edge-side="edge_width_top"/);
+assert.doesNotMatch(selectedDoubleHtml, /data-double-edge-side="edge_long_left"/);
 
 const pastFiftyPlan = {
     ...plan,
