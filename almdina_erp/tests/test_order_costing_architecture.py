@@ -129,15 +129,14 @@ class TestOrderCostingArchitecture(unittest.TestCase):
 
     def test_focused_cost_settings_no_longer_trigger_geometry_recalculation(self) -> None:
         source = COST_PERMISSION_PATH.read_text(encoding="utf-8")
-        focused = source.split("def update_order_cost_settings", 1)[1].split(
-            "\n\n@frappe.whitelist()\ndef approve_special_piece_price", 1
+        focused = source.split("def save_cost_workspace", 1)[1].split(
+            "\n\n@frappe.whitelist()\ndef update_order_cost_settings", 1
         )[0]
 
-        self.assertIn("for update", focused)
+        self.assertIn("_locked_order(name)", focused)
         self.assertIn("update_plan_cost_settings", focused)
-        self.assertIn("Capability.EDIT_COST_SETTINGS", focused)
+        self.assertIn("_require_cost_settings_edit(order)", focused)
         self.assertIn("_require_cost_visibility(order)", focused)
-        self.assertLess(focused.index("for update"), focused.index("_authorized_order("))
         self.assertNotIn("force_cutting_plan_recalculation", focused)
         self.assertNotIn("order.save(", focused)
         self.assertNotIn("ignore_permissions", focused)

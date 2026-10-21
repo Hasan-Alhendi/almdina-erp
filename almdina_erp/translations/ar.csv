@@ -842,8 +842,15 @@ Right long edge,قشاط الطول الأيمن
 Left long edge,قشاط الطول الأيسر
 Long right,طول يمين
 Long left,طول يسار
-Double Edge Banding,دبل قشاط
-Double Banding,دبل قشاط
+Double Edge,دبل ضلع
+Double Edge Sides,أضلاع دبل ضلع
+Row {0}: Double Edge sides are invalid.,الصف {0}: أضلاع دبل الضلع غير صالحة.
+Row {0}: A selected Double Edge side is unavailable for this piece type.,الصف {0}: ضلع دبل الضلع المحدد غير متاح لهذا النوع من الدرفات.
+Double Edge sides,أضلاع دبل ضلع
+selected sides,الأضلاع المحددة
+Select at least one side for Double Edge.,اختر ضلعًا واحدًا على الأقل لدبل الضلع.
+Choose one or more sides.,اختر ضلعًا واحدًا أو أكثر.
+Double Edge is shown as two purple lines on each selected side.,يظهر دبل الضلع بخطين بنفسجيين على كل ضلع محدد.
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
@@ -857,6 +864,19 @@ Liner Start Position,بداية اللاينر
 Machining Width,عرض التفريز
 Machining Start,بداية التفريز
 Machining Length,طول التفريز
+Standard sizes,القياسات المعيارية
+Center Handle,توسيط المسكة
+"Cannot center the handle because its length exceeds the door width.",لا يمكن توسيط المسكة لأن طولها أكبر من عرض الدرفة.
+"Cannot center the handle because its length exceeds the door height.",لا يمكن توسيط المسكة لأن طولها أكبر من ارتفاع الدرفة.
+"Cannot center the handle because its width exceeds the door height.",لا يمكن توسيط المسكة لأن عرضها أكبر من ارتفاع الدرفة.
+"Cannot center the handle because its width exceeds the door width.",لا يمكن توسيط المسكة لأن عرضها أكبر من عرض الدرفة.
+"Cannot center the handle because the door width is missing or invalid.",لا يمكن توسيط المسكة لأن عرض الدرفة غير معروف أو غير صالح.
+"Cannot center the handle because the door height is missing or invalid.",لا يمكن توسيط المسكة لأن ارتفاع الدرفة غير معروف أو غير صالح.
+"Cannot center the handle because its length is missing or invalid.",لا يمكن توسيط المسكة لأن طولها غير صالح.
+"Cannot center the handle because its width is missing or invalid.",لا يمكن توسيط المسكة لأن عرضها غير صالح.
+"Cannot center the handle on this door type.",لا يمكن توسيط المسكة لهذا النوع من الدرفات.
+"Cannot center the handle because the reference side is unavailable.",لا يمكن توسيط المسكة لأن الضلع المرجعي غير متاح.
+Cannot center the handle.,لا يمكن توسيط المسكة.
 Remove add-on,إزالة الإضافة
 Check add-on,تحقق من الإضافة
 Could not save the add-on.,تعذر حفظ الإضافة.
@@ -1051,7 +1071,7 @@ Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:
 Special door,خاصة
 Regular door,عادية
-Double edge banding,دبل قشاط
+Double edge,دبل ضلع
 Full door double,دبل كامل الدرفة
 Back groove,فرزة ظهر
 Recessed handle cutout,حفر مسكة غطس
@@ -1621,7 +1641,6 @@ Download uploaded DXF,تنزيل DXF المرفوع
 Drawing / DXF,الرسم / DXF
 Drawing plan engine,محرك خطة الرسم
 Ease of cutting,سهولة التنفيذ
-Edge banding double,دبل قشاط
 "Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
 Enlarge board,تكبير اللوح
 Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.
@@ -2907,3 +2926,7 @@ Door {0} — copies {1} through {2}.,الدرفة {0} — النسخ {1} إلى 
 Door {0} — copies {1}.,الدرفة {0} — النسخ {1}.
 Door {0} — copy {1}.,الدرفة {0} — النسخة {1}.
 {0} / {1},{0} / {1}
+The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
+Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
+Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.

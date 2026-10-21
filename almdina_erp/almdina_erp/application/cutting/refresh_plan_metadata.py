@@ -18,6 +18,8 @@ PLACED_PIECE_METADATA_FIELDS = (
     "area_m2",
     "notes",
     "piece_type",
+    "extra_double",
+    "extra_double_reference_sides",
     "clipped_corner_position",
     "clipped_corner_width_cm",
     "clipped_corner_length_cm",

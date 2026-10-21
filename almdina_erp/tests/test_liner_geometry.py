@@ -30,6 +30,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     cutter_center_offsets_mm,
     extension_conflict,
     extension_conflict_details,
+    center_recessed_handle,
     liner_centerline_mm,
     liner_toolpath_mm,
     obstacle_geometry_mm,
@@ -801,3 +802,45 @@ def test_previously_exported_board_edge_liner_still_matches():
     assert compare_liner_path(
         legacy, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
     ).ok
+
+
+def test_center_recessed_handle_uses_existing_fields_and_door_center():
+    door = LinerPiece("Regular", 60, 80)
+    placed = center_recessed_handle(door, "", 3.8, 32.9)
+    assert placed.ok
+    assert placed.side == "edge_width_top"
+    assert placed.start_cm == pytest.approx(13.55)
+    assert placed.offset_cm == pytest.approx(38.1)
+    line = liner_centerline_mm(door, placed.side, placed.offset_cm, 3.8, placed.start_cm, 32.9)
+    midpoint = ((line[0][0] + line[-1][0]) / 2, (line[0][1] + line[-1][1]) / 2)
+    assert midpoint[0] == pytest.approx(300)
+    assert midpoint[1] == pytest.approx(400)
+
+    vertical = center_recessed_handle(door, "edge_long_right", 3.8, 32.9)
+    assert vertical.ok
+    assert vertical.side == "edge_long_right"
+    assert vertical.start_cm == pytest.approx(23.55)
+    assert vertical.offset_cm == pytest.approx(28.1)
+    vertical_line = liner_centerline_mm(
+        door, vertical.side, vertical.offset_cm, 3.8, vertical.start_cm, 32.9
+    )
+    vertical_mid = (
+        (vertical_line[0][0] + vertical_line[-1][0]) / 2,
+        (vertical_line[0][1] + vertical_line[-1][1]) / 2,
+    )
+    assert vertical_mid == pytest.approx((300, 400))
+
+    fractional = center_recessed_handle(door, "edge_width_bottom", 3.7, 10.3)
+    assert fractional.ok
+    assert fractional.start_cm == pytest.approx(24.85)
+    assert fractional.offset_cm == pytest.approx(38.15)
+
+    too_long = center_recessed_handle(LinerPiece("Regular", 30, 80), "edge_width_top", 3.8, 32.9)
+    assert not too_long.ok
+    assert too_long.code == "length_exceeds_door_width"
+    assert too_long.start_cm == 0
+    assert too_long.offset_cm == 0
+    for piece_type in ("L-Shaped Corner", "Clipped Corner", "Glass", "Special"):
+        rejected = center_recessed_handle(LinerPiece(piece_type, 60, 80), "edge_long_left", 3.8, 32.9)
+        assert rejected.ok is False
+        assert rejected.code == "unsupported_piece_type"

@@ -54,6 +54,22 @@ assert.deepEqual(
     ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break"]
 );
 assert.deepEqual(copy(geometry.availableSides("Special")), []);
+assert.deepEqual(
+    copy(geometry.normalizeSideSelection("", "Regular", true)),
+    copy(geometry.availableSides("Regular")),
+);
+assert.deepEqual(
+    copy(geometry.normalizeSideSelection('["edge_long_right", "edge_width_top"]', "Regular", true)),
+    ["edge_width_top", "edge_long_right"],
+);
+assert.deepEqual(
+    copy(geometry.sideFlagsForSelection({ pieceType: "Regular" }, ["edge_width_top"], true)),
+    { edge_width_top: false, edge_width_bottom: false, edge_long_left: false, edge_long_right: true, edge_break: false, edge_break_only: false },
+);
+const markerPair = geometry.visualEdgeMarkerPaths(regular, "edge_width_top", [4, 6.5]);
+assert.equal(markerPair.length, 2);
+assert.ok(markerPair.every(path => path.length === 2));
+assert.ok(markerPair[1][0][1] > markerPair[0][0][1]);
 
 for (const side of geometry.availableSides("Regular")) {
     const strip = geometry.stripPolygonMm(regular, side, 2, 1.5);
@@ -93,6 +109,10 @@ const breakRegion = geometry.regionPolygonMm(breakPiece, "edge_break_only", 1, 0
 assert.ok(Math.abs(segmentLength(breakRegion[0], breakRegion[1]) - 40) < 0.2);
 assert.ok(Math.abs(breakRegion[1][0] - breakRegion[0][0]) > 1);
 assert.ok(Math.abs(breakRegion[1][1] - breakRegion[0][1]) > 1);
+const breakMarkers = geometry.visualEdgeMarkerPaths(breakPiece, "edge_break_only", [4, 6.5]);
+assert.equal(breakMarkers.length, 2);
+assert.ok(breakMarkers.every(path => path.length === 2));
+assert.notEqual(breakMarkers[0][0][0], breakMarkers[0][1][0]);
 
 const clipped = geometry.pieceFromRow({
     piece_type: "Clipped Corner",
@@ -785,6 +805,177 @@ assert.deepEqual(
     })),
     { cutWidthCm: 54, cutLengthCm: 23 }
 );
+
+function polygonBounds(points) {
+    const xs = points.map(point => point[0]);
+    const ys = points.map(point => point[1]);
+    return {
+        minX: Math.min(...xs),
+        maxX: Math.max(...xs),
+        minY: Math.min(...ys),
+        maxY: Math.max(...ys),
+    };
+}
+
+const centeredDoor = geometry.pieceFromRow({
+    piece_type: "Regular",
+    width_cm: 60,
+    length_cm: 80,
+});
+const centeredTop = geometry.centerRecessedHandle(centeredDoor, "", 3.8, 32.9);
+assert.equal(centeredTop.ok, true);
+assert.equal(centeredTop.side, "edge_width_top");
+assert.equal(centeredTop.startCm, 13.55);
+assert.equal(centeredTop.offsetCm, 38.1);
+const topBounds = polygonBounds(geometry.regionPolygonMm(
+    centeredDoor, centeredTop.side, centeredTop.offsetCm, 3.8, centeredTop.startCm, 32.9
+));
+assert.ok(Math.abs(topBounds.minX - 135.5) < 0.05);
+assert.ok(Math.abs(topBounds.maxX - 464.5) < 0.05);
+assert.ok(Math.abs(topBounds.minY - 381) < 0.05);
+assert.ok(Math.abs(topBounds.maxY - 419) < 0.05);
+
+for (const side of ["edge_width_bottom", "edge_width_top"]) {
+    const placed = geometry.centerRecessedHandle(centeredDoor, side, 3.8, 32.9);
+    assert.equal(placed.ok, true, side);
+    assert.equal(placed.side, side);
+    const bounds = polygonBounds(geometry.regionPolygonMm(
+        centeredDoor, placed.side, placed.offsetCm, 3.8, placed.startCm, 32.9
+    ));
+    assert.ok(Math.abs(((bounds.minX + bounds.maxX) / 2) - 300) < 0.05, side);
+    assert.ok(Math.abs(((bounds.minY + bounds.maxY) / 2) - 400) < 0.05, side);
+}
+for (const side of ["edge_long_left", "edge_long_right"]) {
+    const placed = geometry.centerRecessedHandle(centeredDoor, side, 3.8, 32.9);
+    assert.equal(placed.ok, true, side);
+    assert.equal(placed.startCm, 23.55);
+    assert.equal(placed.offsetCm, 28.1);
+    const bounds = polygonBounds(geometry.regionPolygonMm(
+        centeredDoor, placed.side, placed.offsetCm, 3.8, placed.startCm, 32.9
+    ));
+    assert.ok(Math.abs(bounds.minX - 281) < 0.05, side);
+    assert.ok(Math.abs(bounds.maxX - 319) < 0.05, side);
+    assert.ok(Math.abs(bounds.minY - 235.5) < 0.05, side);
+    assert.ok(Math.abs(bounds.maxY - 564.5) < 0.05, side);
+}
+const fractional = geometry.centerRecessedHandle(centeredDoor, "edge_width_top", 3.7, 23.05);
+assert.equal(fractional.ok, true);
+assert.equal(fractional.startCm, 18.475);
+const narrowDoor = geometry.pieceFromRow({ piece_type: "Regular", width_cm: 30, length_cm: 80 });
+const tooLong = geometry.centerRecessedHandle(narrowDoor, "edge_width_top", 3.8, 32.9);
+assert.equal(tooLong.ok, false);
+assert.equal(tooLong.code, "length_exceeds_door_width");
+assert.equal(geometry.centerRecessedHandle(centeredDoor, "edge_long_left", 3.8, 90).code, "length_exceeds_door_height");
+assert.equal(geometry.centerRecessedHandle(centeredDoor, "edge_width_top", 90, 10).code, "width_exceeds_door_height");
+assert.equal(geometry.centerRecessedHandle(centeredDoor, "edge_long_right", 70, 10).code, "width_exceeds_door_width");
+for (const pieceType of ["L-Shaped Corner", "Clipped Corner", "Glass", "Special"]) {
+    const rejected = geometry.centerRecessedHandle(
+        geometry.pieceFromRow({ piece_type: pieceType, width_cm: 60, length_cm: 80 }),
+        "edge_width_top",
+        3.8,
+        32.9
+    );
+    assert.equal(rejected.ok, false, pieceType);
+    assert.equal(rejected.code, "unsupported_piece_type", pieceType);
+}
+const preserved = {
+    piece: narrowDoor,
+    row: { piece_type: "Regular" },
+    kind: "recessed_handle_cutout",
+    side: "edge_width_top",
+    startCm: 4,
+    offsetCm: 2,
+    widthCm: 3.8,
+    lengthCm: 32.9,
+    fullLength: false,
+    enabled: true,
+};
+const failedCenter = editor.centerHandleDraft(preserved);
+assert.equal(failedCenter.ok, false);
+assert.equal(preserved.startCm, 4);
+assert.equal(preserved.offsetCm, 2);
+assert.equal(preserved.side, "edge_width_top");
+assert.equal(failedCenter.draft, preserved);
+const alongEdge = {
+    piece: centeredDoor,
+    row: { piece_type: "Regular" },
+    kind: "recessed_handle_cutout",
+    side: "edge_width_top",
+    startCm: 0,
+    offsetCm: 5,
+    widthCm: 3.8,
+    lengthCm: 32.9,
+    fullLength: false,
+    enabled: true,
+};
+const centeredAlong = editor.centerHandleDraft(alongEdge);
+assert.equal(centeredAlong.ok, true);
+assert.equal(centeredAlong.draft.startCm, 13.55);
+assert.equal(centeredAlong.draft.offsetCm, 5);
+assert.equal(centeredAlong.draft.side, "edge_width_top");
+assert.equal(alongEdge.startCm, 0);
+assert.equal(alongEdge.offsetCm, 5);
+assert.equal(editor.handleIsCentered(centeredAlong.draft), true);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { offsetCm: 1.2 })), true);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { startCm: 10 })), false);
+assert.equal(editor.handleIsCentered(Object.assign({}, centeredAlong.draft, { lengthCm: 19.9 })), false);
+const blankSide = editor.centerHandleDraft(Object.assign({}, alongEdge, { side: "" }));
+assert.equal(blankSide.draft.side, "edge_width_top");
+assert.equal(blankSide.draft.startCm, 13.55);
+assert.equal(blankSide.draft.offsetCm, 5);
+for (const [side, startCm] of [
+    ["edge_width_bottom", 13.55],
+    ["edge_long_right", 23.55],
+    ["edge_long_left", 23.55],
+]) {
+    const placed = editor.centerHandleDraft(Object.assign({}, alongEdge, { side }));
+    assert.equal(placed.ok, true, side);
+    assert.equal(placed.draft.side, side, side);
+    assert.equal(placed.draft.startCm, startCm, side);
+    assert.equal(placed.draft.offsetCm, 5, side);
+    assert.equal(editor.handleIsCentered(placed.draft), true, side);
+}
+const sized = editor.applyStandardHandleSize(preserved, { widthMm: 38, lengthMm: 199 });
+assert.equal(sized.widthCm, 3.8);
+assert.equal(sized.lengthCm, 19.9);
+assert.equal(sized.startCm, 4);
+assert.equal(sized.offsetCm, 2);
+assert.equal(sized.fullLength, false);
+assert.equal(editor.matchingHandleSize(3.8, 23.05).id, "38x230.5");
+assert.equal(editor.matchingHandleSize(3.8, 23.2), null);
+const longPreview = editor.previewSvg({
+    piece: centeredDoor,
+    row: {},
+    kind: "recessed_handle_cutout",
+    side: "edge_width_top",
+    offsetCm: 38.1,
+    widthCm: 3.8,
+    startCm: 13.55,
+    lengthCm: 32.9,
+    enabled: true,
+});
+const shortPreview = editor.previewSvg({
+    piece: centeredDoor,
+    row: {},
+    kind: "recessed_handle_cutout",
+    side: "edge_width_top",
+    offsetCm: 38.1,
+    widthCm: 3.8,
+    startCm: 23.2,
+    lengthCm: 13.6,
+    enabled: true,
+});
+function stripSpan(markup) {
+    const points = markup.match(/data-liner-strip="1"[^>]*points="([^"]+)"/)[1]
+        .split(" ")
+        .map(point => point.split(",").map(Number));
+    return polygonBounds(points);
+}
+const longSpan = stripSpan(longPreview);
+const shortSpan = stripSpan(shortPreview);
+assert.ok(longSpan.maxX - longSpan.minX > (shortSpan.maxX - shortSpan.minX) * 2);
+assert.ok(Math.abs((longSpan.maxY - longSpan.minY) - (shortSpan.maxY - shortSpan.minY)) < 0.2);
+assert.doesNotMatch(longPreview, /data-machining-kind="recessed_handle_cutout"[^>]*stroke-dasharray/);
 
 async function persistenceChecks() {
 context.frappe.msgprint = () => {};

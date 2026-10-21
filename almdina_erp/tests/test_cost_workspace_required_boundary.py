@@ -98,7 +98,7 @@ def test_cost_workspace_save_keeps_both_values_mandatory() -> None:
     assert 'control.attr("required", "required")' in ux
     assert "const captured = captureCostSettings(frm, state.draft || {});" in ux
     assert "if (pending.dirty && !validateRequiredCostSettings(frm, captured))" in ux
-    assert "api.saveSettings(orderName, payload)" in ux
+    assert "api.saveWorkspace(" in ux
 
 
 def test_cost_workspace_validation_does_not_make_whole_order_required() -> None:
@@ -121,8 +121,8 @@ def test_cost_save_uses_one_visible_payload_for_validation_dirty_check_and_trans
     assert "const payload = normalizeCostSettings(captured);" in ux
     assert "store.replaceDraft(payload);" in ux
     assert "const pending = store.snapshot();" in ux
-    assert "if (pending.dirty)" in ux
-    assert "api.saveSettings(orderName, payload)" in ux
+    assert "if (pending.dirty || specialPrices.length)" in ux
+    assert "api.saveWorkspace(" in ux
     assert "api.saveSettings(frm.doc.name, state.draft || {})" not in ux
 
 
@@ -135,7 +135,7 @@ def test_cost_save_commits_server_snapshot_without_post_save_reload_race() -> No
     assert "dispatch(frm, snapshot);" in state
     assert "commit," in state
 
-    assert "const saved = await api.saveSettings(orderName, payload);" in ux
+    assert "const saved = await api.saveWorkspace(" in ux
     assert "validSavedSnapshot(saved)" in ux
     assert 'typeof owner.commit === "function"' in ux
     assert "owner.commit(frm, saved);" in ux
@@ -174,7 +174,9 @@ def test_cost_settings_edit_is_not_gated_by_order_status() -> None:
     piece_gate = ux.split("function canEditPiecePrices", 1)[1].split(
         "function canEditCostWorkspace", 1
     )[0]
-    assert 'status || "Draft") !== "Draft"' in piece_gate
+    assert "return canEditCostSettings(frm);" in piece_gate
+
+    assert "serverAllowsCostSettingsEdit(frm) === true" in cost_settings_gate
 
     focused = service.split("def update_order_cost_settings", 1)[1].split(
         "def approve_special_piece_price", 1

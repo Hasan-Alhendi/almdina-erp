@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
     ExtraAddonError,
@@ -9,10 +10,13 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     ExtraAddonRates,
     apply_extra_double_text_flags_to_snapshot,
     calculate_extra_addon_pricing,
+    available_extra_double_sides,
     extra_double_text_flags,
+    normalize_extra_double_sides,
     extra_overlay_kind_for_layer,
     extra_overlay_layer_for_kind,
     physical_cut_quantity,
+    serialize_extra_double_sides,
 )
 
 
@@ -185,6 +189,55 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         )
         self.assertEqual(glass.total_usd, regular.total_usd)
         self.assertEqual(glass.pieces[0].selected_codes, regular.pieces[0].selected_codes)
+
+    def test_double_side_selection_uses_liner_sides_and_legacy_defaults(self) -> None:
+        self.assertEqual(
+            normalize_extra_double_sides(
+                "",
+                piece_type="Clipped Corner",
+                enabled=True,
+            ),
+            available_extra_double_sides("Clipped Corner"),
+        )
+        selected = normalize_extra_double_sides(
+            '["edge_long_right", "edge_width_top"]',
+            piece_type="Regular",
+            enabled=True,
+        )
+        self.assertEqual(selected, ("edge_width_top", "edge_long_right"))
+        self.assertEqual(serialize_extra_double_sides(selected), '["edge_width_top","edge_long_right"]')
+
+    def test_double_side_selection_rejects_explicit_empty_or_unavailable_sides(self) -> None:
+        with self.assertRaisesRegex(ExtraAddonError, "double_edge_sides_required"):
+            normalize_extra_double_sides([], piece_type="Regular", enabled=True)
+        with self.assertRaisesRegex(ExtraAddonError, "double_edge_side_unavailable"):
+            normalize_extra_double_sides(
+                ["edge_break_only"], piece_type="L-Shaped Corner", enabled=True
+            )
+
+    def test_double_side_metadata_does_not_change_pricing(self) -> None:
+        base = calculate_extra_addon_pricing(
+            [ExtraAddonPieceInput(piece_type="Regular", qty=2, double=True)],
+            rates=self.rates,
+        )
+        selected = calculate_extra_addon_pricing(
+            [ExtraAddonPieceInput(piece_type="Regular", qty=2, double=True)],
+            rates=self.rates,
+        )
+        self.assertEqual(base.total_usd, selected.total_usd)
+
+    def test_double_side_metadata_is_carried_into_expanded_plan_pieces(self) -> None:
+        pieces = expand_piece_groups([{
+            "piece_instance_id": "piece-1",
+            "width_cm": 40,
+            "length_cm": 60,
+            "qty": 1,
+            "piece_type": "Regular",
+            "extra_double": 1,
+            "extra_double_reference_sides": '["edge_width_top"]',
+        }])
+        self.assertEqual(pieces[0]["extra_double"], 1)
+        self.assertEqual(pieces[0]["extra_double_reference_sides"], '["edge_width_top"]')
 
 
 if __name__ == "__main__":

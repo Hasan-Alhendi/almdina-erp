@@ -13,12 +13,14 @@ const source = fs.readFileSync(
     "utf8"
 );
 
-const grants = new Set(["view_costs", "approve_special_price"]);
+const grants = new Set(["view_costs", "edit_cost_settings"]);
 const pricingCalls = [];
+const workspaceCalls = [];
 const syncCalls = [];
 let pricingMode = "success";
 let successfulCallIndex = 0;
 let documentGeneration = 1;
+let serverAllowsCostSettings = true;
 
 const fakeFrappe = {
     almdina: {
@@ -44,7 +46,7 @@ const fakeFrappe = {
             pieceName: options.args.piece_name,
         });
 
-        if (pricingMode === "partial" && pricingCalls.length === 2) {
+        if (pricingMode === "partial" && pricingCalls.length === 1) {
             throw new Error("simulated second-command failure");
         }
 
@@ -54,6 +56,14 @@ const fakeFrappe = {
                 order_modified: `server-${successfulCallIndex}`,
             },
         };
+    },
+};
+
+const workspaceApi = {
+    async saveWorkspace(orderName, changes, expectedModified) {
+        workspaceCalls.push({ orderName, changes, expectedModified });
+        successfulCallIndex += 1;
+        return { message: { order_modified: `server-${successfulCallIndex}` } };
     },
 };
 
@@ -104,10 +114,19 @@ const fakeWindow = {
         },
     },
     AlmdinaCostEditSessionUX: {
+        canEditCostSettings() {
+            return serverAllowsCostSettings
+                && grants.has("view_costs")
+                && grants.has("edit_cost_settings")
+                && Number(frm.doc.docstatus || 0) === 0
+                && frm.doc.revision_state !== "Superseded"
+                && frm.doc.status !== "Cancelled";
+        },
         isEditing(receivedFrm) {
             return receivedFrm === frm;
         },
     },
+    AlmdinaCostWorkspaceAPI: workspaceApi,
     AlmdinaOrderRevisionUX: {
         captureEditSessionPresence() {
             return false;
@@ -166,8 +185,15 @@ frm.doc.pieces = [unpricedSpecial];
 assert.equal(
     api.canEditInlinePiecePrice(frm, unpricedSpecial),
     true,
-    "Draft + Cost edit session + approve_special_price must open an unpriced Special input without edit_order"
+    "The effective Cost Settings decision plus the active Cost edit session opens Special pricing"
 );
+
+grants.delete("edit_cost_settings");
+grants.add("approve_special_price");
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), false,
+    "Legacy Special capabilities cannot replace edit_cost_settings");
+grants.delete("approve_special_price");
+grants.add("edit_cost_settings");
 
 const locallyPricedSpecial = {
     ...unpricedSpecial,
@@ -180,7 +206,7 @@ frm.doc.pieces = [locallyPricedSpecial];
 assert.equal(
     api.canEditInlinePiecePrice(frm, locallyPricedSpecial),
     true,
-    "A first-price local draft must keep its original approve capability until Save/Cancel"
+    "A first-price local draft remains editable only through the Cost session"
 );
 
 const alreadyApprovedSpecial = {
@@ -192,24 +218,33 @@ const alreadyApprovedSpecial = {
 frm.doc.pieces = [alreadyApprovedSpecial];
 assert.equal(
     api.canEditInlinePiecePrice(frm, alreadyApprovedSpecial),
-    false,
-    "Editing an already-approved Special price must still require edit_special_price"
+    true,
+    "Special price re-editing uses the same Cost decision"
 );
-
-grants.add("edit_special_price");
-assert.equal(api.canEditInlinePiecePrice(frm, alreadyApprovedSpecial), true);
 
 frm.doc.status = "Pending Review";
-assert.equal(
-    api.canEditInlinePiecePrice(frm, unpricedSpecial),
-    false,
-    "Frontend lifecycle must match the server Draft-only pricing boundary"
-);
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), true);
+frm.doc.status = "Rejected";
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), true);
+frm.doc.status = "Delivered";
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), true);
+frm.doc.status = "Cancelled";
+serverAllowsCostSettings = false;
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), false,
+    "Cancelled documents remain blocked by the shared Cost policy");
 frm.doc.status = "Draft";
+serverAllowsCostSettings = true;
 
 frm.doc.revision_state = "Superseded";
 assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), false);
 frm.doc.revision_state = "Current";
+frm.doc.docstatus = 1;
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), false);
+frm.doc.docstatus = 0;
+serverAllowsCostSettings = false;
+assert.equal(api.canEditInlinePiecePrice(frm, unpricedSpecial), false,
+    "A revoked server Cost decision closes Special pricing");
+serverAllowsCostSettings = true;
 
 fakeWindow.AlmdinaCostEditSessionUX.isEditing = () => false;
 assert.equal(
@@ -246,6 +281,7 @@ function clippedPending(name, price) {
     fakeWindow.AlmdinaCostEditSessionUX.isEditing = () => true;
 
     pricingCalls.length = 0;
+    workspaceCalls.length = 0;
     syncCalls.length = 0;
     successfulCallIndex = 0;
     pricingMode = "success";
@@ -258,11 +294,12 @@ function clippedPending(name, price) {
     ];
 
     await api.flushPendingPriceEdits(frm, { refresh: false });
-    assert.deepEqual(
-        pricingCalls.map(call => call.expectedModified),
-        ["client-0", "server-1"],
-        "each pricing command must consume the version returned by the previous successful command"
-    );
+    assert.equal(workspaceCalls.length, 1,
+        "all Special rows are sent in one unified financial save command");
+    assert.equal(workspaceCalls[0].expectedModified, "client-0");
+    assert.deepEqual(workspaceCalls[0].changes.special_prices.map(row => row.piece_name), ["ROW-A"]);
+    assert.deepEqual(pricingCalls.map(call => call.expectedModified), ["server-1"],
+        "the independent clipped-corner command consumes the unified save version");
     assert.deepEqual(syncCalls, ["server-2"],
         "frm.doc.modified must advance once, after all local pricing commands finish");
     assert.equal(frm.doc.modified, "server-2");
@@ -289,7 +326,7 @@ function clippedPending(name, price) {
     assert.equal(frm.doc.modified, "server-2",
         "partial success must not advance the form write token while another local price remains pending");
     assert.equal(frm.__almdina_pricing_command_modified, "server-3",
-        "the successful command version must be retained for a safe retry");
+        "the successful Special command version must be retained for a safe clipped-price retry");
     assert.equal(api.pendingPricePieces(frm).length, 1);
     assert.equal(api.pendingPricePieces(frm)[0].name, "ROW-D");
 

@@ -20,13 +20,12 @@ const ARABIC = {
     "L-shaped corner": "زاوية L",
     Glass: "درفة بلور",
     "Piece type": "نوع الدرفة",
-    "Double Banding": "دبل قشاط",
     "Full Double": "دبل كامل",
     Liner: "لاينر",
     "Back Groove": "فرزة ظهر",
     "Recessed Handle": "مسكة غطس",
     "Recessed Handle Cutout": "حفر مسكة غطس",
-    "Double Edge Banding": "دبل قشاط",
+    "Double Edge": "دبل ضلع",
     "Full Door Double": "دبل كامل الدرفة",
     "Add-ons": "الإضافات",
 };
@@ -75,7 +74,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
     JSON.parse(JSON.stringify(api.FIELDS.map(item => item.button))),
-    ["Double Banding", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
+    ["Double Edge", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
 );
 
 for (const pieceType of api.PIECE_TYPES.map(item => item.value)) {
@@ -132,19 +131,19 @@ const many = api.addonSummary({
     extra_back_groove: 1,
     extra_recessed_handle_cutout: 1,
 });
-assert.deepEqual(JSON.parse(JSON.stringify(many.names)), ["دبل قشاط", "لاينر", "فرزة ظهر", "مسكة غطس"]);
-assert.equal(many.label, "دبل قشاط · لاينر");
+assert.deepEqual(JSON.parse(JSON.stringify(many.names)), ["دبل ضلع", "لاينر", "فرزة ظهر", "مسكة غطس"]);
+assert.equal(many.label, "دبل ضلع · لاينر");
 assert.equal(many.hidden, 2);
-assert.equal(many.tooltip, "دبل قشاط · لاينر · فرزة ظهر · مسكة غطس");
+assert.equal(many.tooltip, "دبل ضلع · لاينر · فرزة ظهر · مسكة غطس");
 const manyButton = api.renderAddonSummary({
     extra_double: 1,
     extra_liner: 1,
     extra_back_groove: 1,
     extra_recessed_handle_cutout: 1,
 }, { editable: true });
-assert.match(manyButton, /دبل قشاط · لاينر/);
+assert.match(manyButton, /دبل ضلع · لاينر/);
 assert.match(manyButton, /\+2/);
-assert.match(manyButton, /title="دبل قشاط · لاينر · فرزة ظهر · مسكة غطس"/);
+assert.match(manyButton, /title="دبل ضلع · لاينر · فرزة ظهر · مسكة غطس"/);
 assert.doesNotMatch(manyButton, /✓|dco-check-mark/);
 
 useArabic = false;

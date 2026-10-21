@@ -1726,6 +1726,102 @@ def canonical_path(
     ]
 
 
+
+@dataclass(frozen=True, slots=True)
+class RecessedHandleCenter:
+    ok: bool
+    code: str = ""
+    side: str = ""
+    start_cm: float = 0.0
+    offset_cm: float = 0.0
+
+
+_HORIZONTAL_HANDLE_SIDES = frozenset({SIDE_TOP, SIDE_BOTTOM})
+_VERTICAL_HANDLE_SIDES = frozenset({SIDE_LEFT, SIDE_RIGHT})
+_HANDLE_CENTER_TOLERANCE_MM = 0.05
+
+
+def _quantize_cm(value: float) -> float:
+    return round(float(value) * 10000.0) / 10000.0
+
+
+def _positive_cm(value: float) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def center_recessed_handle(
+    piece: LinerPiece,
+    side: str | None,
+    width_cm: float,
+    length_cm: float,
+) -> RecessedHandleCenter:
+    """Place a regular-door recessed handle on the door's geometric center.
+
+    The reference side only sets the rectangle's direction and how start/offset
+    are measured. Offset is the distance from that edge to the near side of the
+    rectangle. Start is the distance along the edge. The placement is returned
+    only when the existing centerline passes through the door center, so preview
+    and DXF consume the same fields.
+    """
+
+    if (piece.piece_type or "") != "Regular":
+        return RecessedHandleCenter(False, "unsupported_piece_type")
+    resolved = str(side or "").strip() or SIDE_TOP
+    horizontal = resolved in _HORIZONTAL_HANDLE_SIDES
+    vertical = resolved in _VERTICAL_HANDLE_SIDES
+    if not horizontal and not vertical:
+        return RecessedHandleCenter(False, "side_unavailable")
+    door_width = _positive_cm(piece.width_cm)
+    door_height = _positive_cm(piece.length_cm)
+    handle_width = _positive_cm(width_cm)
+    handle_length = _positive_cm(length_cm)
+    if door_width is None:
+        return RecessedHandleCenter(False, "door_width_invalid")
+    if door_height is None:
+        return RecessedHandleCenter(False, "door_height_invalid")
+    if handle_length is None:
+        return RecessedHandleCenter(False, "handle_length_invalid")
+    if handle_width is None:
+        return RecessedHandleCenter(False, "handle_width_invalid")
+    span = door_width if horizontal else door_height
+    depth = door_height if horizontal else door_width
+    if handle_length > span + 1e-9:
+        code = "length_exceeds_door_width" if horizontal else "length_exceeds_door_height"
+        return RecessedHandleCenter(False, code)
+    if handle_width > depth + 1e-9:
+        code = "width_exceeds_door_height" if horizontal else "width_exceeds_door_width"
+        return RecessedHandleCenter(False, code)
+    start_cm = _quantize_cm((span - handle_length) / 2.0)
+    offset_cm = _quantize_cm((depth - handle_width) / 2.0)
+    if start_cm < 0 or offset_cm < 0:
+        return RecessedHandleCenter(False, "center_rejected")
+    try:
+        line = liner_centerline_mm(
+            piece, resolved, offset_cm, handle_width, start_cm, handle_length
+        )
+    except LinerGeometryError as error:
+        return RecessedHandleCenter(False, error.code or "center_rejected")
+    if len(line) < 2:
+        return RecessedHandleCenter(False, "center_rejected")
+    midpoint = (
+        (line[0][0] + line[-1][0]) / 2.0,
+        (line[0][1] + line[-1][1]) / 2.0,
+    )
+    center = (_mm(door_width) / 2.0, _mm(door_height) / 2.0)
+    if (
+        abs(midpoint[0] - center[0]) > _HANDLE_CENTER_TOLERANCE_MM
+        or abs(midpoint[1] - center[1]) > _HANDLE_CENTER_TOLERANCE_MM
+    ):
+        return RecessedHandleCenter(False, "center_rejected")
+    return RecessedHandleCenter(True, "", resolved, start_cm, offset_cm)
+
+
 __all__ = [
     "CM_TO_MM",
     "GEOMETRY_TOLERANCE_MM",
@@ -1737,6 +1833,7 @@ __all__ = [
     "LinerGeometryError",
     "LinerMeasurement",
     "LinerPiece",
+    "RecessedHandleCenter",
     "OUTER_SIDES",
     "SIDE_BREAK",
     "SIDE_BREAK_ONLY",
@@ -1746,6 +1843,7 @@ __all__ = [
     "SIDE_TOP",
     "available_liner_sides",
     "canonical_path",
+    "center_recessed_handle",
     "compare_liner_path",
     "contour_notch_cm",
     "liner_activation_error",

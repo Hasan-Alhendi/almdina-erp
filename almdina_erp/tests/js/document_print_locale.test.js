@@ -60,7 +60,7 @@ const french = {
     "Customer invoice": "Facture client",
     "Measurements": "Mesures",
     "Exceptional customization": "Personnalisation exceptionnelle",
-    "Double edge banding": "Double chant",
+    "Double Edge": "Double chant",
     "Full door double": "Double porte complète",
     "Recessed handle cutout": "Poignée encastrée",
     "Regular door": "Porte standard",

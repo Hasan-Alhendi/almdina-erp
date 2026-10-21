@@ -20,6 +20,7 @@
     const PIECE_FIELDS = Object.freeze([
         "piece_type",
         "extra_double",
+        "extra_double_reference_sides",
         "extra_full_door_double",
         "extra_liner",
         "liner_reference_side",

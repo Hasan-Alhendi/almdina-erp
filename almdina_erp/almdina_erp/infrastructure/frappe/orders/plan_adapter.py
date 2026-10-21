@@ -81,6 +81,10 @@ class FrappeOrderPlanAdapter:
             "edge_rate_usd": flt(row.edge_rate_usd),
             "edge_cost_usd": flt(row.edge_cost_usd),
             "piece_type": row.piece_type or "Regular",
+            "extra_double": cint(getattr(row, "extra_double", 0)),
+            "extra_double_reference_sides": str(
+                getattr(row, "extra_double_reference_sides", "") or ""
+            ),
             "clipped_corner_position": row.clipped_corner_position or "",
             "clipped_corner_width_cm": flt(row.clipped_corner_width_cm),
             "clipped_corner_length_cm": flt(row.clipped_corner_length_cm),
@@ -172,6 +176,10 @@ class FrappeOrderPlanAdapter:
                     ),
                     allow_rotation=cint(row.allow_rotation),
                     piece_type=str(row.piece_type or "Regular"),
+                    extra_double=cint(getattr(row, "extra_double", 0)),
+                    extra_double_reference_sides=str(
+                        getattr(row, "extra_double_reference_sides", "") or ""
+                    ),
                     clipped_corner_position=str(
                         row.clipped_corner_position or ""
                     ),

@@ -56,6 +56,28 @@
         edge_width_top: "Left to right",
         edge_width_bottom: "Left to right",
     };
+    const HANDLE_STANDARD_SIZES_MM = Object.freeze([
+        Object.freeze({ id: "38x329", widthMm: 38, lengthMm: 329 }),
+        Object.freeze({ id: "38x296", widthMm: 38, lengthMm: 296 }),
+        Object.freeze({ id: "38x230.5", widthMm: 38, lengthMm: 230.5 }),
+        Object.freeze({ id: "38x199", widthMm: 38, lengthMm: 199 }),
+        Object.freeze({ id: "38x167", widthMm: 38, lengthMm: 167 }),
+        Object.freeze({ id: "38x136", widthMm: 38, lengthMm: 136 }),
+        Object.freeze({ id: "37x103", widthMm: 37, lengthMm: 103 }),
+    ]);
+    const CENTER_HANDLE_MESSAGES = {
+        unsupported_piece_type: "Cannot center the handle on this door type.",
+        side_unavailable: "Cannot center the handle because the reference side is unavailable.",
+        door_width_invalid: "Cannot center the handle because the door width is missing or invalid.",
+        door_height_invalid: "Cannot center the handle because the door height is missing or invalid.",
+        handle_length_invalid: "Cannot center the handle because its length is missing or invalid.",
+        handle_width_invalid: "Cannot center the handle because its width is missing or invalid.",
+        length_exceeds_door_width: "Cannot center the handle because its length exceeds the door width.",
+        length_exceeds_door_height: "Cannot center the handle because its length exceeds the door height.",
+        width_exceeds_door_height: "Cannot center the handle because its width exceeds the door height.",
+        width_exceeds_door_width: "Cannot center the handle because its width exceeds the door width.",
+        center_rejected: "Cannot center the handle.",
+    };
 
     function edgeCm(piece, side) {
         return geometry().edgeLengthMm(piece, side) / 10;
@@ -252,18 +274,20 @@
             : machiningTone(draft.kind);
         const width = role === "active" ? 2.2 : (role === "quiet" ? 1.2 : 1.4);
         let center = "";
-        try {
-            const line = api.centerlineMm(
-                piece,
-                draft.side,
-                draft.offsetCm,
-                draft.widthCm,
-                draft.startCm,
-                draft.lengthCm
-            ).map(point => mapPoint(point, frame, piece));
-            center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
-        } catch (error) {
-            center = "";
+        if (draft.kind !== "recessed_handle_cutout") {
+            try {
+                const line = api.centerlineMm(
+                    piece,
+                    draft.side,
+                    draft.offsetCm,
+                    draft.widthCm,
+                    draft.startCm,
+                    draft.lengthCm
+                ).map(point => mapPoint(point, frame, piece));
+                center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
+            } catch (error) {
+                center = "";
+            }
         }
         const polygon = api.regionPolygonMm(
             piece,
@@ -330,9 +354,89 @@
         return { api, piece, frame, outline, bands };
     }
 
+    function doubleEdgeSidesFromRow(row) {
+        const source = row || {};
+        const api = geometry();
+        if (!Number(source.extra_double)) return [];
+        if (api && typeof api.normalizeSideSelection === "function") {
+            return api.normalizeSideSelection(
+                source.extra_double_reference_sides,
+                source.piece_type || "Regular",
+                true,
+            );
+        }
+        return [];
+    }
+
+    function doubleEdgeMarkup(row, scene, sides) {
+        const selected = (sides || []).filter(Boolean);
+        if (!selected.length) return "";
+        const source = row || {};
+        const api = scene.api;
+        const flags = typeof api.sideFlagsForSelection === "function"
+            ? api.sideFlagsForSelection(scene.piece, selected, false)
+            : {};
+        const corner = window.AlmdinaClippedCornerGeometry;
+        if (corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source)
+            && typeof corner.edgeBandSvgMarkup === "function") {
+            const fields = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"];
+            const markup = fields.filter(side => flags[side]).map(side => {
+                const normalBand = flagsForSource(source, side);
+                const insets = normalBand ? [8, 11] : [4.5, 7.5];
+                const sidePiece = { ...source };
+                fields.forEach(name => {
+                    sidePiece[name] = name === side ? 1 : 0;
+                });
+                const lines = insets.map(inset => corner.edgeBandSvgMarkup(sidePiece, scene.frame.width, scene.frame.height, {
+                    offsetX: scene.frame.x,
+                    offsetY: scene.frame.y,
+                    inheritStroke: false,
+                    color: "#5a2d82",
+                    strokeWidth: 1.4,
+                    insetPx: inset,
+                    endTrimPx: 6,
+                })).filter(Boolean).join("");
+                return lines ? `<g data-double-edge-side="${side}">${lines}</g>` : "";
+            }).join("");
+            return markup ? `<g data-double-edge-lines="1">${markup}</g>` : "";
+        }
+        return selected.map((side) => {
+            const normalBand = flagsForSource(source, side);
+            const insetPx = normalBand ? [8, 11] : [4.5, 7.5];
+            const offsetsMm = insetPx.map(offset => (offset / Math.max(Number(scene.frame.scale) || 1, 0.001)) * 10);
+            const paths = typeof api.visualEdgeMarkerPaths === "function"
+                ? api.visualEdgeMarkerPaths(scene.piece, side, offsetsMm)
+                : [];
+            return paths.map((path, index) => `<polyline data-double-edge-line="1" data-double-edge-line-index="${index}" data-double-edge-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="#5a2d82" stroke-width="1.4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`).join("");
+        }).join("");
+    }
+
+    function flagsForSource(source, side) {
+        return Boolean(Number(source && source[side]));
+    }
+
+    function doubleEdgeHitMarkup(scene, sides) {
+        const api = scene.api;
+        const selected = new Set(sides || []);
+        return api.availableSides(scene.piece.pieceType).map((side) => {
+            const path = api.edgePaths(scene.piece)[side];
+            if (!path) return "";
+            const active = selected.has(side);
+            return `<polyline class="dco-double-side ${active ? "is-selected" : ""}" data-double-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="transparent" stroke-width="14" stroke-linecap="round"/>`;
+        }).join("");
+    }
+
     function previewSvg(draft, options) {
         const scene = previewScene(draft);
         const multi = Boolean(options && options.multi);
+        const double = doubleEdgeMarkup(
+            draft.row,
+            scene,
+            options && options.doubleSides,
+        );
+        const doubleHits = options && options.doubleInteractive
+            ? doubleEdgeHitMarkup(scene, options.doubleSides)
+            : "";
         const quiet = multi
             ? (options.companions || []).filter(item => (
                 item && item.enabled && item.kind !== draft.kind
@@ -351,11 +455,124 @@
         return `<svg viewBox="0 0 420 280" dir="ltr" role="img" aria-label="${esc(label)}">
             <polygon points="${pointsAttr(scene.outline)}" fill="#fff7e8" stroke="#8a5700" stroke-width="2"/>
             ${scene.bands}
+            ${double}
+            ${doubleHits}
             ${hits}
             ${quiet}
             ${active}
             <text x="210" y="268" text-anchor="middle" font-size="12" fill="#536577">${rounded(scene.piece.widthCm)} × ${rounded(scene.piece.lengthCm)} ${esc(__("cm"))}</text>
         </svg>`;
+    }
+
+    function handleSizeById(id) {
+        return HANDLE_STANDARD_SIZES_MM.find(size => size.id === id) || null;
+    }
+
+    function matchingHandleSize(widthCm, lengthCm) {
+        const widthMm = num(widthCm) * 10;
+        const lengthMm = num(lengthCm) * 10;
+        return HANDLE_STANDARD_SIZES_MM.find(size => (
+            Math.abs(widthMm - size.widthMm) <= 0.05
+            && Math.abs(lengthMm - size.lengthMm) <= 0.05
+        )) || null;
+    }
+
+    function handleSizeLabel(size) {
+        return `${formatInput(size.widthMm, 2)} × ${formatInput(size.lengthMm, 2)} ${__("mm")}`;
+    }
+
+    function handleCenteringAllowed(draft) {
+        const rowType = draft && draft.row ? draft.row.piece_type : "";
+        const pieceType = draft && draft.piece ? draft.piece.pieceType : "";
+        return String(rowType || pieceType || "").trim() === "Regular";
+    }
+
+    function centerHandleMessage(code) {
+        return __(CENTER_HANDLE_MESSAGES[code] || CENTER_HANDLE_MESSAGES.center_rejected);
+    }
+
+    function applyStandardHandleSize(draft, size) {
+        return Object.assign({}, draft, {
+            widthCm: size.widthMm / 10,
+            lengthCm: size.lengthMm / 10,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+        });
+    }
+
+    function centerHandleDraft(draft) {
+        if (!handleCenteringAllowed(draft)) {
+            return { ok: false, code: "unsupported_piece_type", draft };
+        }
+        const api = geometry();
+        const result = api && typeof api.centerRecessedHandle === "function"
+            ? api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm)
+            : { ok: false, code: "center_rejected" };
+        if (!result.ok) return { ok: false, code: result.code, draft };
+        const next = Object.assign({}, draft, {
+            side: result.side,
+            startCm: result.startCm,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+            edgeCm: edgeCm(draft.piece, result.side),
+        });
+        const issue = validationIssue(next);
+        if (issue) return { ok: false, code: issue.code, message: issue.message, draft };
+        return { ok: true, draft: next };
+    }
+
+    function writeMachiningInputs(root, draft) {
+        if (!root || !draft) return;
+        const offset = root.querySelector("[data-liner-offset]");
+        const width = root.querySelector("[data-liner-width]");
+        const start = root.querySelector("[data-liner-start]");
+        const length = root.querySelector("[data-liner-length]");
+        if (offset) offset.value = formatInput(draft.offsetCm, 3);
+        if (width) width.value = formatInput(num(draft.widthCm) * 10, 2);
+        if (start) start.value = formatInput(draft.startCm, 3);
+        if (length) length.value = formatInput(draft.lengthCm, 3);
+    }
+
+    function handleIsCentered(draft) {
+        if (!handleCenteringAllowed(draft) || !draft || !draft.piece) return false;
+        const api = geometry();
+        if (!api || typeof api.centerRecessedHandle !== "function") return false;
+        const placed = api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm);
+        if (!placed.ok || String(draft.side || "") !== placed.side) return false;
+        return Math.abs(num(draft.startCm) - placed.startCm) <= 0.0001;
+    }
+
+    function syncHandleChoices(root, draft) {
+        if (!root || !draft || draft.kind !== "recessed_handle_cutout") return;
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        root.querySelectorAll("[data-handle-size]").forEach(button => {
+            const selected = Boolean(match) && button.getAttribute("data-handle-size") === match.id;
+            button.classList.toggle("is-active", selected);
+            button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        const center = root.querySelector("[data-handle-center]");
+        if (!center) return;
+        const centered = handleIsCentered(draft);
+        const allowed = handleCenteringAllowed(draft);
+        center.hidden = !allowed;
+        center.classList.toggle("is-active", centered);
+        center.setAttribute("aria-pressed", centered ? "true" : "false");
+        const centerRow = center.parentElement;
+        if (centerRow && centerRow.classList.contains("dco-handle-center-row")) centerRow.hidden = !allowed;
+    }
+
+    function handleChoicesHtml(draft) {
+        if (!draft || draft.kind !== "recessed_handle_cutout") return "";
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        const chips = HANDLE_STANDARD_SIZES_MM.map(size => {
+            const selected = Boolean(match) && match.id === size.id;
+            return `<button type="button" class="dco-handle-size ${selected ? "is-active" : ""}" data-handle-size="${size.id}" aria-pressed="${selected ? "true" : "false"}" dir="ltr">${esc(handleSizeLabel(size))}</button>`;
+        }).join("");
+        const centerHidden = handleCenteringAllowed(draft) ? "" : " hidden";
+        const centered = handleIsCentered(draft);
+        return `<div class="dco-corner-section-label">${esc(__("Standard sizes"))}</div>
+                <div class="dco-handle-size-grid" data-handle-sizes>${chips}</div>
+                <div class="dco-handle-center-row"${centerHidden}><button type="button" class="dco-handle-size dco-handle-center ${centered ? "is-active" : ""}" data-handle-center="1" aria-pressed="${centered ? "true" : "false"}"${centerHidden}>${esc(__("Center Handle"))}</button></div>`;
     }
 
     function controlsHtml(draft) {
@@ -371,6 +588,7 @@
         return `<div data-liner-fields data-machining-kind="${esc(addon.kind)}">
                 <div class="dco-corner-section-label">${esc(__("Reference Side"))}</div>
                 <div class="dco-corner-position-grid" data-liner-sides>${sides}</div>
+                ${handleChoicesHtml(draft)}
                 <div class="dco-corner-section-label">${esc(__("Distance and width"))}</div>
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
@@ -479,6 +697,7 @@
             direction.textContent = `${__("Measurement Direction")}: ${__(DIRECTION[draft.side] || "Along the selected edge")}`;
         }
         if (help) help.textContent = message;
+        syncHandleChoices(root, draft);
         if (dialog && dialog.get_primary_btn) {
             dialog.get_primary_btn().prop("disabled", Boolean(message));
         }
@@ -697,6 +916,39 @@
                 paint(root, draft, dialog);
                 return;
             }
+            const sizeButton = event.target.closest("[data-handle-size]");
+            if (sizeButton && root.contains(sizeButton) && addon.kind === "recessed_handle_cutout") {
+                const size = handleSizeById(sizeButton.getAttribute("data-handle-size"));
+                if (!size) return;
+                draft = applyStandardHandleSize(
+                    readDraft(root, piece, true, row, addon.kind, draft, "length"),
+                    size
+                );
+                writeMachiningInputs(root, draft);
+                paint(root, draft, dialog);
+                return;
+            }
+            const centerButton = event.target.closest("[data-handle-center]");
+            if (centerButton && root.contains(centerButton) && addon.kind === "recessed_handle_cutout") {
+                const current = readDraft(root, piece, draft.enabled, row, addon.kind, draft, "offset");
+                const outcome = centerHandleDraft(current);
+                if (!outcome.ok) {
+                    paint(root, current, dialog);
+                    const message = outcome.message || centerHandleMessage(outcome.code);
+                    const help = root.querySelector("[data-liner-help]");
+                    if (help) help.textContent = message;
+                    frappe.msgprint({
+                        title: __("Center Handle"),
+                        message,
+                        indicator: "orange",
+                    });
+                    return;
+                }
+                draft = Object.assign({}, outcome.draft, { enabled: true });
+                writeMachiningInputs(root, draft);
+                paint(root, draft, dialog);
+                return;
+            }
             if (event.target.closest("[data-liner-cancel]")) {
                 dialog.hide();
                 return;
@@ -735,6 +987,8 @@
         open,
         applyLiner,
         previewSvg,
+        doubleEdgeMarkup,
+        doubleEdgeSidesFromRow,
         validationMessage,
         validationIssue,
         draftFromRow,
@@ -746,5 +1000,14 @@
         selectSide,
         hostPiece,
         paint,
+        handleStandardSizes: HANDLE_STANDARD_SIZES_MM,
+        matchingHandleSize,
+        applyStandardHandleSize,
+        centerHandleDraft,
+        centerHandleMessage,
+        handleCenteringAllowed,
+        syncHandleChoices,
+        handleIsCentered,
+        writeMachiningInputs,
     });
 })();

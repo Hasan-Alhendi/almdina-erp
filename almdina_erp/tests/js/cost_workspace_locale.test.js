@@ -86,6 +86,7 @@ const french = {
     "Operating cost breakdown": "Ventilation du cout",
     "Cost item": "Poste",
     "Saving the cost settings...": "Enregistrement des couts...",
+    "Saving cost and special door prices...": "Enregistrement des couts et des prix des portes spéciales...",
     "Liner": "Doublure",
     "Add-on": "Supplement",
     "Door": "Vantail",
@@ -353,16 +354,19 @@ async function verifyLifecycle() {
         board_rate_usd: 0,
         cutting_cost_per_board_usd: 5,
         offcut_price_usd: 0,
-    });
+    }, "2026-10-21 10:00:00.000000");
     assert.equal(rpcCalls[0].method, api.READ_METHOD);
     assert.equal(JSON.stringify(rpcCalls[0].args), JSON.stringify({ order_name: "DCO-COST-1" }));
-    assert.equal(rpcCalls[1].method, api.SAVE_SETTINGS_METHOD);
-    assert.equal(rpcCalls[1].freeze_message, "Enregistrement des couts...");
+    assert.equal(rpcCalls[1].method, api.SAVE_WORKSPACE_METHOD);
+    assert.equal(rpcCalls[1].freeze_message, "Enregistrement des couts et des prix des portes spéciales...");
     assert.equal(JSON.stringify(rpcCalls[1].args), JSON.stringify({
         order_name: "DCO-COST-1",
-        board_rate_usd: 0,
-        cutting_cost_per_board_usd: 5,
-        offcut_price_usd: 0,
+        cost_settings: {
+            board_rate_usd: 0,
+            cutting_cost_per_board_usd: 5,
+            offcut_price_usd: 0,
+        },
+        expected_modified: "2026-10-21 10:00:00.000000",
     }));
 }
 

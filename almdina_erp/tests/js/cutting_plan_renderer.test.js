@@ -237,7 +237,7 @@ assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width=
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
 assert.match(html, /Door add-on symbols/);
-assert.match(html, /Edge banding double/);
+assert.match(html, /Double Edge/);
 assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
@@ -287,15 +287,17 @@ assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="double"/
 assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-kind="double"/);
 assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
-assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
-assert.match(extraAddonHtml, /Edge banding double/);
+assert.match(extraAddonHtml, /Double Edge/);
 assert.match(extraAddonHtml, /Full door double/);
 assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
 assert.match(extraAddonHtml, /dco-extra-addon-legend/);
+assert.match(extraAddonHtml, /#5a2d82/);
+assert.match(extraAddonHtml, /data-double-edge-lines="1"/);
+assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-mark[^>]*data-addon-kind="double"/);
 
 const regularOnlyFrm = {
     doc: {
@@ -326,6 +328,39 @@ assert.match(regularOnlyHtml, /data-addon-kind="full_door_double"/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);
+
+const selectedDoublePlan = {
+    ...regularOnlyPlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...plan.sheets[0].pieces[0],
+            piece_type: "Regular",
+            extra_double: 1,
+            extra_double_reference_sides: '["edge_width_top"]',
+        }],
+    }],
+};
+const selectedDoubleHtml = renderer.build(regularOnlyFrm, selectedDoublePlan);
+assert.match(selectedDoubleHtml, /data-double-edge-side="edge_width_top"/);
+assert.doesNotMatch(selectedDoubleHtml, /data-double-edge-side="edge_long_left"/);
+assert.equal((selectedDoubleHtml.match(/data-double-edge-line-index="1"/g) || []).length, 1);
+assert.match(selectedDoubleHtml, /border-top:1\.4px solid #5a2d82/);
+
+const selectedDoubleWithBandPlan = {
+    ...selectedDoublePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...selectedDoublePlan.sheets[0].pieces[0],
+            edge_width_top: 1,
+        }],
+    }],
+};
+const selectedDoubleWithBandHtml = renderer.build(regularOnlyFrm, selectedDoubleWithBandPlan);
+assert.match(selectedDoubleWithBandHtml, /top:3px;left:16\.667%;width:66\.666%;border-top:3px solid #d00000/);
+assert.match(selectedDoubleWithBandHtml, /top:8px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
+assert.match(selectedDoubleWithBandHtml, /top:11px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
 
 const pastFiftyPlan = {
     ...plan,
@@ -656,6 +691,39 @@ assert.ok(Math.abs(grooveSpan.dy - 31.25) < 0.3, grooveSymbol[1]);
 assert.ok(grooveSpan.dx < 0.2);
 assert.match(handleSymbol[0], /width="20"/);
 assert.doesNotMatch(handleSymbol[0], /width="100"/);
+function handleRect(markup) {
+    const tag = markup.match(/<rect class="dco-extra-overlay-path dco-extra-overlay-handle"[^>]*>/);
+    assert.ok(tag);
+    const read = (name) => Number(tag[0].match(new RegExp(`${name}="([^"]+)"`))[1]);
+    return { x: read("x"), y: read("y"), w: read("width"), h: read("height") };
+}
+const drawnHandle = handleRect(symbolHtml);
+assert.ok(Math.abs(drawnHandle.w - 20) < 0.05, drawnHandle.w);
+assert.ok(Math.abs(drawnHandle.h - 1.875) < 0.05, drawnHandle.h);
+function placedHandle(lengthCm, widthCm) {
+    const nextPlan = JSON.parse(JSON.stringify(symbolPlan));
+    const nextFrm = {
+        doc: {
+            ...symbolFrm.doc,
+            pieces: [{
+                ...symbolFrm.doc.pieces[0],
+                recessed_handle_length_cm: lengthCm,
+                recessed_handle_width_cm: widthCm,
+            }],
+        },
+    };
+    return handleRect(renderer.build(nextFrm, nextPlan));
+}
+const longHandle = placedHandle(32.9, 3.8);
+const shortHandle = placedHandle(13.6, 3.8);
+const narrowHandle = placedHandle(10.3, 0.4);
+assert.ok(longHandle.w > shortHandle.w * 2, `${longHandle.w} vs ${shortHandle.w}`);
+assert.ok(Math.abs(longHandle.h - shortHandle.h) < 0.05);
+assert.ok(Math.abs(longHandle.w - 32.9) < 0.05, longHandle.w);
+assert.ok(Math.abs(shortHandle.w - 13.6) < 0.05, shortHandle.w);
+assert.ok(Math.abs(longHandle.h - 4.75) < 0.05, longHandle.h);
+assert.ok(Math.abs(narrowHandle.h - 0.5) < 0.05, narrowHandle.h);
+assert.ok(narrowHandle.h < 1.1);
 
 const diagonalPlan = {
     ...symbolPlan,

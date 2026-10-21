@@ -9,14 +9,6 @@ import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
 
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    doctype_has_any_capability,
-)
-
-SPECIAL_PRICE_APPROVAL_CAPABILITIES = frozenset(
-    {Capability.APPROVE_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE}
-)
 EDITABLE_ORDER_STATUSES = {"Draft", "Pending Review", "Rejected"}
 ALLOWED_DRAWING_TOOLS = {"pen", "line", "rectangle", "ellipse", "dimension", "note"}
 MAX_DRAWING_BYTES = 300_000
@@ -381,15 +373,6 @@ def validate_special_shape_geometry(
     }
 
 
-def has_special_price_approval_permission(user: str | None = None) -> bool:
-    """Resolve special-price access exclusively from configured capabilities."""
-
-    return doctype_has_any_capability(
-        SPECIAL_PRICE_APPROVAL_CAPABILITIES,
-        user=user,
-    )
-
-
 def _get_special_piece(order: Any, piece_name: str) -> Any:
     for row in order.pieces or []:
         if row.name == piece_name:
@@ -403,46 +386,18 @@ def approve_special_piece_price(
     piece_name: str,
     unit_price_usd: float,
     note: str | None = None,
+    expected_modified: str | None = None,
 ) -> dict[str, Any]:
-    """Approve an inclusive customer unit price without granting accounting full order edit rights."""
+    """Compatibility RPC delegated to the unified Cost financial command."""
 
-    if not has_special_price_approval_permission():
-        frappe.throw(
-            _("You do not have permission to approve or edit a special door price."),
-            frappe.PermissionError,
-        )
+    from almdina_erp.almdina_erp.services.cost_permission_service import (
+        approve_special_piece_price as save_special_price,
+    )
 
-    order = frappe.get_doc("Door Cutting Order", order_name)
-    order.check_permission("read")
-    if order.status not in EDITABLE_ORDER_STATUSES:
-        frappe.throw(_("Special pricing can only be changed while the order is editable."))
-
-    piece = _get_special_piece(order, piece_name)
-    if (piece.piece_type or "Regular") != "Special":
-        frappe.throw(_("Only a special door can receive a custom inclusive price."))
-
-    price = _finite_number(unit_price_usd, _("Special Unit Price USD"))
-    if price < 0:
-        frappe.throw(_("Special Unit Price USD cannot be negative."))
-    approval_note = str(note or "").strip()
-    if len(approval_note) > 500:
-        frappe.throw(_("Pricing note cannot exceed 500 characters."))
-
-    piece.special_shape_custom_unit_price_usd = price
-    piece.special_shape_price_status = "Approved"
-    piece.special_shape_price_note = approval_note
-    piece.special_shape_price_approved_by = frappe.session.user
-    piece.special_shape_price_approved_on = now_datetime()
-    order.flags.special_price_approval_action = True
-    order.save(ignore_permissions=True)
-
-    return {
-        "order_name": order.name,
-        "piece_name": piece.name,
-        "unit_price_usd": piece.special_shape_final_unit_price_usd,
-        "price_status": piece.special_shape_price_status,
-        "approved_by": piece.special_shape_price_approved_by,
-        "approved_on": piece.special_shape_price_approved_on,
-        "customer_quote_total_usd": order.customer_quote_total_usd,
-        "customer_quote_status": order.customer_quote_status,
-    }
+    return save_special_price(
+        order_name=order_name,
+        piece_name=piece_name,
+        unit_price_usd=unit_price_usd,
+        note=note,
+        expected_modified=expected_modified,
+    )

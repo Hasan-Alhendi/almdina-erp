@@ -62,6 +62,9 @@ const row = {
 const session = dialog.createSession({ doc: {} }, row);
 assert.equal(session.activeField, "extra_double");
 assert.equal(session.flags.extra_double, 1);
+assert.deepEqual(JSON.parse(JSON.stringify(session.doubleSides)), [
+    "edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right",
+]);
 assert.equal(session.drafts.extra_liner.enabled, true);
 assert.equal(session.drafts.extra_liner.side, "edge_width_top");
 assert.equal(session.drafts.extra_back_groove.side, "edge_long_right");
@@ -98,6 +101,19 @@ assert.match(preview, /data-machining-kind="liner"/);
 assert.match(preview, /data-machining-kind="back_groove"/);
 assert.match(preview, /data-machining-kind="recessed_handle_cutout"/);
 assert.match(preview, /data-liner-edge="1"/);
+assert.match(preview, /#5a2d82/);
+
+const selectedDouble = dialog.createSession({ doc: {} }, {
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_width_top", "edge_long_right"]',
+});
+assert.deepEqual(JSON.parse(JSON.stringify(selectedDouble.doubleSides)), ["edge_width_top", "edge_long_right"]);
+assert.match(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_width_top"/);
+assert.match(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_long_right"/);
+assert.doesNotMatch(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_width_bottom"/);
 
 dialog.setEnabled(session, "extra_liner", false);
 assert.equal(dialog.machiningDirty(session, "extra_liner"), true);
@@ -934,6 +950,7 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
     ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-double-side="edge_width_top"]').dispatch("click");
     failNext = true;
     const beforeFail = writes.length;
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
@@ -1086,11 +1103,12 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
     ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-double-side="edge_width_top"]').dispatch("click");
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();
     assert.equal(live.extra_double, 1);
     assert.equal(live.extra_full_door_double, 0);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     assert.equal(order.dirtyCount, 2);
     dialog.open(order, live);
     ui = latest();
@@ -1105,7 +1123,7 @@ async function interactionChecks() {
 
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     dialog.open(order, live);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
@@ -1116,7 +1134,167 @@ async function interactionChecks() {
     assert.equal(addonLabel(table), "Add-ons");
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
+
+    const centered = blankRow({
+        name: "handle-center",
+        piece_type: "Regular",
+        width_cm: 60,
+        length_cm: 80,
+    });
+    const centeredOrder = { doc: { pieces: [centered] }, dirty() {} };
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-handle-size]").length, 7);
+    const centerButton = ui.root.querySelector("[data-handle-center]");
+    const sizeGrid = ui.root.querySelector("[data-handle-sizes]");
+    assert.equal(centerButton.hidden, false);
+    assert.equal(centerButton.classList.contains("dco-handle-size"), true);
+    assert.equal(centerButton.classList.contains("btn"), false);
+    assert.equal(centerButton.classList.contains("btn-default"), false);
+    assert.equal(centerButton.classList.contains("is-active"), false);
+    const centerRow = ui.root.querySelector(".dco-handle-center-row");
+    assert.equal(sizeGrid.children[0].getAttribute("data-handle-size"), "38x329");
+    assert.equal(sizeGrid.contains(centerButton), false);
+    assert.equal(centerRow.children.length, 1);
+    assert.equal(centerRow.children[0], centerButton);
+    assert.equal(sizeGrid.parent.children[sizeGrid.parent.children.indexOf(sizeGrid) + 1], centerRow);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').textContent.includes("38 × 329"), true);
+    const beforeCenterWrites = writes.length;
+    ui.root.querySelector('[data-handle-size="38x329"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "38");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "32.9");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(writes.length, beforeCenterWrites);
+    const edgeOffset = ui.root.querySelector("[data-liner-offset]");
+    edgeOffset.value = "5";
+    edgeOffset.dispatch("input");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    assert.equal(ui.root.querySelector("[data-addons-preview] [data-machining-kind='recessed_handle_cutout']") !== null, true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
+    assert.equal(centered.recessed_handle_start_cm, undefined);
+    ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "19.9");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "20.05");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
+    ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x199"]').classList.contains("is-active"), true);
+    ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_long_right"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "30.05");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    ui.root.querySelector('[data-liner-side="edge_width_bottom"]').dispatch("click");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_bottom"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "20.05");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    ui.root.querySelector('[data-liner-side="edge_long_left"]').dispatch("click");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_long_left"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "30.05");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(writes.length, beforeCenterWrites);
+    assert.equal(centered.extra_recessed_handle_cutout, undefined);
+
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    ui.root.querySelector('[data-handle-size="38x230.5"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "38");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "23.05");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    ui.root.querySelector("[data-liner-offset]").value = "5";
+    ui.root.querySelector("[data-liner-offset]").dispatch("input");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "5");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(centered.recessed_handle_width_cm, 3.8);
+    assert.equal(centered.recessed_handle_length_cm, 23.05);
+    assert.equal(centered.recessed_handle_reference_side, "edge_width_top");
+    assert.equal(centered.recessed_handle_start_cm, 18.475);
+    assert.equal(centered.recessed_handle_offset_cm, 5);
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    const reopenedStart = ui.root.querySelector("[data-liner-start]");
+    reopenedStart.value = "1";
+    reopenedStart.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    reopenedStart.value = "18.475";
+    reopenedStart.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    const reopenedOffset = ui.root.querySelector("[data-liner-offset]");
+    reopenedOffset.value = "10";
+    reopenedOffset.dispatch("input");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "18.475");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+
+    const narrow = blankRow({
+        name: "handle-narrow",
+        piece_type: "Regular",
+        width_cm: 30,
+        length_cm: 80,
+    });
+    dialog.open({ doc: { pieces: [narrow] }, dirty() {} }, narrow);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    ui.root.querySelector('[data-handle-size="38x329"]').dispatch("click");
+    const beforeNarrow = messages.length;
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "2");
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
+    assert.match(ui.root.querySelector("[data-liner-help]").textContent, /door width/);
+    assert.match(messages[messages.length - 1].message, /door width/);
+    assert.ok(messages.length > beforeNarrow);
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(narrow.recessed_handle_start_cm, undefined);
+
+    const shaped = blankRow({
+        name: "handle-shaped",
+        piece_type: "L-Shaped Corner",
+        width_cm: 60,
+        length_cm: 80,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 20,
+        clipped_corner_length_cm: 20,
+    });
+    dialog.open({ doc: { pieces: [shaped] }, dirty() {} }, shaped);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-handle-center]").hidden, true);
+    assert.equal(ui.root.querySelector("[data-handle-center]").classList.contains("is-active"), false);
+    ui.root.querySelector('[data-handle-size="38x136"]').dispatch("click");
+    const startBefore = ui.root.querySelector("[data-liner-start]").value;
+    const offsetBefore = ui.root.querySelector("[data-liner-offset]").value;
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, startBefore);
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, offsetBefore);
+    assert.match(messages[messages.length - 1].message, /door type/);
 
     console.log("Unified add-ons dialog interaction passed");
 }
