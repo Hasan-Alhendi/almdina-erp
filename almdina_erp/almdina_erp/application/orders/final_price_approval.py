@@ -168,6 +168,10 @@ def decide_final_price_approval_actions(
     can_edit = can_edit_cost_settings_for_order(
         has_edit_cost_settings=has_edit_cost_settings,
         price_approval_status=status,
+        has_view_costs=has_view_costs,
+        order_status=order_status,
+        revision_state=revision_state,
+        docstatus=docstatus,
     )
 
     cancel_ok = False

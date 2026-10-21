@@ -95,7 +95,44 @@ def require_cutting_plan_capability(
     )
 
 
+def cost_settings_edit_allowed(order: Any, *, user: str | None = None) -> bool:
+    """Return the one effective document-level Cost Settings edit decision."""
+
+    from almdina_erp.almdina_erp.domain.orders.price_approval import (
+        can_edit_cost_settings_for_order,
+    )
+
+    return can_edit_cost_settings_for_order(
+        has_view_costs=cutting_plan_capability_allowed(
+            order, Capability.VIEW_COSTS, user=user
+        ),
+        has_edit_cost_settings=cutting_plan_capability_allowed(
+            order, Capability.EDIT_COST_SETTINGS, user=user
+        ),
+        price_approval_status=getattr(order, "price_approval_status", None),
+        order_status=getattr(order, "status", None),
+        revision_state=getattr(order, "revision_state", None),
+        docstatus=int(getattr(order, "docstatus", 0) or 0),
+    )
+
+
+def require_cost_settings_edit(
+    order: Any,
+    *,
+    user: str | None = None,
+    message: str | None = None,
+) -> None:
+    if cost_settings_edit_allowed(order, user=user):
+        return
+    frappe.throw(
+        message or _("لا تملك صلاحية تعديل إعدادات التكلفة لهذا الطلب أو أن حالته لا تسمح بذلك."),
+        frappe.PermissionError,
+    )
+
+
 __all__ = [
     "cutting_plan_capability_allowed",
+    "cost_settings_edit_allowed",
     "require_cutting_plan_capability",
+    "require_cost_settings_edit",
 ]

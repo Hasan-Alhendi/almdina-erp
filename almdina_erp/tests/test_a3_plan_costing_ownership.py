@@ -508,44 +508,25 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
             plan_commands._assert_plan_ready_for_approval(order, plan)
 
     def test_cost_settings_update_does_not_require_draft_order_status(self) -> None:
-        order = SimpleNamespace(name="DCO-AT-CNC-001", status="At CNC")
-        saved_plan = SimpleNamespace(name="CP-AT-CNC-001")
-        snapshot = {"order_name": order.name, "cutting_plan": saved_plan.name}
-        fake_db = SimpleNamespace(sql=lambda *args, **kwargs: None)
+        order = SimpleNamespace(name="DCO-AT-CNC-001", status="Arbitrary Stage")
+        snapshot = {"order_name": order.name, "cutting_plan": "CP-AT-CNC-001"}
 
-        with patch.object(cost_service.frappe, "db", fake_db):
-            with patch.object(cost_service, "_", lambda value: value):
-                with patch.object(cost_service, "_authorized_order", return_value=order):
-                    with patch.object(cost_service, "_require_cost_visibility"):
-                        with patch.object(
-                            cost_service,
-                            "_required_cost_input",
-                            side_effect=lambda value, _label: float(value),
-                        ):
-                            with patch(
-                                "almdina_erp.almdina_erp.services.cutting_plan_cost_command_service.update_plan_cost_settings",
-                                return_value={"cutting_plan": saved_plan.name},
-                            ) as save_settings:
-                                with patch.object(
-                                    cost_service.frappe,
-                                    "get_doc",
-                                    return_value=saved_plan,
-                                ):
-                                    with patch.object(
-                                        cost_service,
-                                        "_cost_snapshot",
-                                        return_value=snapshot,
-                                    ):
-                                        result = cost_service.update_order_cost_settings(
-                                            order.name,
-                                            board_rate_usd=8,
-                                            cutting_cost_per_board_usd=2,
-                                        )
+        with patch.object(cost_service, "save_cost_workspace", return_value=snapshot) as command:
+            result = cost_service.update_order_cost_settings(
+                order.name,
+                board_rate_usd=8,
+                cutting_cost_per_board_usd=2,
+                expected_modified="current-revision",
+            )
 
-        save_settings.assert_called_once()
-        self.assertIs(save_settings.call_args.args[0], order)
-        self.assertEqual(save_settings.call_args.kwargs["board_rate_usd"], 8.0)
-        self.assertEqual(save_settings.call_args.kwargs["cutting_cost_per_board_usd"], 2.0)
+        command.assert_called_once_with(
+            order_name=order.name,
+            cost_settings={
+                "board_rate_usd": 8,
+                "cutting_cost_per_board_usd": 2,
+            },
+            expected_modified="current-revision",
+        )
         self.assertEqual(result, snapshot)
 
 

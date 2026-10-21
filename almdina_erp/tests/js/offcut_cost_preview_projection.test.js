@@ -383,7 +383,10 @@ function verifyEditSessionBindsStablePresenterInput() {
                 status: "ready",
                 editing,
                 draft: editing ? { ...draft } : null,
-                data: { order: { ...draft } },
+                data: {
+                    order: { ...draft },
+                    can_edit_cost_settings: true,
+                },
                 dirty: false,
             };
         },

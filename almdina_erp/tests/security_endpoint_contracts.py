@@ -30,7 +30,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.archive_service", C, ("archive_approved_plan_pdf", "get_archive_context")),
     ("almdina_erp.almdina_erp.services.backup_restore_service", C, ("create_backup_now", "get_backup_context", "request_restore", "test_ssh_connection")),
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
-    ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "update_clipped_corner_edge_price", "update_order_cost_settings")),
+    ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "save_cost_workspace", "update_clipped_corner_edge_price", "update_order_cost_settings")),
     (
         "almdina_erp.almdina_erp.services.final_price_approval_service",
         C,

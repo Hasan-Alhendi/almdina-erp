@@ -118,7 +118,7 @@ def test_cost_edit_scope_remains_independent_from_plan_scope():
     # Capture the document identity before any awaited command. A late completion
     # must never pick up frm.doc.name from a different order.
     assert 'const orderName = String(frm.doc.name || "");' in source
-    assert "api.saveSettings(orderName, payload)" in source
+    assert "api.saveWorkspace(" in source
     assert "documentStillCurrent(frm, token)" in source
     assert "owner.commit(frm, saved);" in source
     assert 'field.df[STATUS_KEY] = "Read"' in source
@@ -204,8 +204,8 @@ def test_tab_local_edit_buttons_fail_closed_against_each_session_permission_poli
     assert "permissionsResolved() && canEdit(frm, kind)" in page_source
     assert 'can(frm, "edit_optimizer_settings")' in plan_source
     assert 'can(frm, "view_costs") && can(frm, "edit_cost_settings")' in cost_source
-    assert 'can(frm, "approve_special_price") || can(frm, "edit_special_price")' in cost_source
-    assert "canEditCostSettings(frm) || canEditPiecePrices(frm)" in cost_source
+    assert "canEditCostSettings(frm)" in cost_source
+    assert "serverAllowsCostSettingsEdit(frm) === true" in cost_source
     assert "COST_SETTINGS_EDITABLE_ORDER_STATUSES" not in cost_source
     assert 'typeof api.canEditCostWorkspace === "function"' in page_source
     assert 'can(frm, "edit_order")' in order_source

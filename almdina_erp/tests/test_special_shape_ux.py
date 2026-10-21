@@ -175,27 +175,28 @@ def test_drawing_validation_and_special_measurement_edge_disable_remain_authorit
 
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
+    cost_service = (APP_ROOT / "almdina_erp" / "services" / "cost_permission_service.py").read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")
     permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
     assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
     assert "doctype_has_any_capability" in service
     assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
-    assert "special_shape_price_approved_by = frappe.session.user" in service
-    assert "special_shape_price_approved_on = now_datetime()" in service
-    assert "order.save(ignore_permissions=True)" in service
+    assert '"special_shape_price_approved_by": frappe.session.user if approved else None' in cost_service
+    assert '"special_shape_price_approved_on": now_datetime() if approved else None' in cost_service
+    assert "order.save(ignore_permissions=True)" not in service
 
     assert "function canEditInlinePiecePrice(frm, piece)" in permissions
-    assert '"approve_special_price"' in permissions
+    assert '"edit_cost_settings"' in permissions
     assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
     assert "function flushPendingPriceEdits(frm, options = {})" in permissions
-    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert "costApi.saveWorkspace" in permissions
     assert 'note: piece.special_shape_price_note || ""' in permissions
 
     assert "old_special_geometry != special_geometry" in policy
     assert "decision = evaluate_special_shape(" in policy
     assert "if decision.reset_price:" in policy
-    assert "document_has_capability(" in policy
+    assert "Special prices must be saved from the Cost edit session." in policy
 
 
 def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
@@ -212,7 +213,7 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "boardCount * boardRate" in presenter
     assert "boardCount * cuttingRate" in presenter
     assert "function quoteTotal(frm)" in presenter
-    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert "costApi.saveWorkspace" in permissions
     assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
 
 

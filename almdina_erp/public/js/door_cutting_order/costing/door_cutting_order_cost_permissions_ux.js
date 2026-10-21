@@ -182,9 +182,7 @@
             return piece.__almdina_pending_price_capability;
         }
         if (piece.piece_type === "Special") {
-            return piece.special_shape_price_status === "Approved"
-                ? "edit_special_price"
-                : "approve_special_price";
+            return "edit_cost_settings";
         }
         if (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner") {
             return piece.clipped_corner_edge_price_status === "Priced"
@@ -195,9 +193,20 @@
     }
 
     function canEditInlinePiecePrice(frm, piece) {
-        if (!frm || !piece || !orderIsEditable(frm) || !editSessionActive(frm)) {
+        if (!frm || !piece) {
             return false;
         }
+        if (piece.piece_type === "Special") {
+            const costEditUx = window.AlmdinaCostEditSessionUX;
+            return Boolean(
+                costEditUx
+                && typeof costEditUx.canEditCostSettings === "function"
+                && costEditUx.canEditCostSettings(frm)
+                && typeof costEditUx.isEditing === "function"
+                && costEditUx.isEditing(frm)
+            );
+        }
+        if (!orderIsEditable(frm) || !editSessionActive(frm)) return false;
         const capability = requiredInlinePriceCapability(piece);
         return Boolean(capability && can(frm, capability));
     }
@@ -259,6 +268,10 @@
 
     function rememberPendingCapability(piece, kind) {
         if (!piece || piece.__almdina_pending_price_capability) return;
+        if (kind !== "clipped") {
+            piece.__almdina_pending_price_capability = "edit_cost_settings";
+            return;
+        }
         if (kind === "clipped") {
             piece.__almdina_pending_price_capability =
                 piece.clipped_corner_edge_price_status === "Priced"
@@ -320,6 +333,22 @@
         return (frm.doc.pieces || []).filter((piece) => piece.__almdina_pending_price_edit);
     }
 
+    function pendingSpecialPrices(frm) {
+        return pendingPricePieces(frm)
+            .filter((piece) => piece.__almdina_pending_price_edit === "special")
+            .map((piece) => ({
+                piece_name: piece.name,
+                unit_price_usd: piece.special_shape_custom_unit_price_usd,
+                note: piece.special_shape_price_note || "",
+            }));
+    }
+
+    function clearPendingSpecialPrices(frm) {
+        pendingPricePieces(frm)
+            .filter((piece) => piece.__almdina_pending_price_edit === "special")
+            .forEach(clearPendingPriceMarker);
+    }
+
     function clearPendingPriceMarker(piece) {
         if (!piece) return;
         delete piece.__almdina_pending_price_edit;
@@ -343,7 +372,7 @@
     function rememberPricingCommandModified(frm, response) {
         const payload = response && response.message !== undefined
             ? response.message
-            : null;
+            : response;
         const modified = String(payload && payload.order_modified || "").trim();
         if (!modified) {
             throw new Error("The server did not return the order revision after saving the price.");
@@ -382,41 +411,43 @@
 
         const token = captureDocument(frm);
         const orderName = String(frm && frm.doc && frm.doc.name || "");
-        for (const piece of pending) {
+        const specialPrices = pendingSpecialPrices(frm);
+        if (specialPrices.length) {
+            const costApi = window.AlmdinaCostWorkspaceAPI;
+            if (!costApi || typeof costApi.saveWorkspace !== "function") return false;
+            const expectedModified = pricingExpectedModified(frm);
+            if (!expectedModified) {
+                throw new Error("Could not verify the current order revision. Reload the order and try again.");
+            }
+            const response = await costApi.saveWorkspace(
+                orderName,
+                { special_prices: specialPrices },
+                expectedModified
+            );
+            if (!documentStillCurrent(frm, token)) return false;
+            rememberPricingCommandModified(frm, response);
+            clearPendingSpecialPrices(frm);
+        }
+
+        for (const piece of pending.filter(row => row.__almdina_pending_price_edit === "clipped")) {
             if (!documentStillCurrent(frm, token)) return false;
             const expectedModified = pricingExpectedModified(frm);
             if (!expectedModified) {
                 throw new Error("Could not verify the current order revision. Reload the order and try again.");
             }
 
-            let response;
-            if (piece.__almdina_pending_price_edit === "clipped") {
-                response = await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
-                    args: {
-                        order_name: orderName,
-                        piece_name: piece.name,
-                        edge_price_usd: piece.clipped_corner_edge_price_usd,
-                        note: piece.clipped_corner_edge_price_note || "",
-                        expected_modified: expectedModified,
-                    },
-                    freeze: true,
-                    freeze_message: translate("Saving the edge prices..."),
-                });
-            } else {
-                response = await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
-                    args: {
-                        order_name: orderName,
-                        piece_name: piece.name,
-                        unit_price_usd: piece.special_shape_custom_unit_price_usd,
-                        note: piece.special_shape_price_note || "",
-                        expected_modified: expectedModified,
-                    },
-                    freeze: true,
-                    freeze_message: translate("Saving the special door prices..."),
-                });
-            }
+            const response = await frappe.call({
+                method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
+                args: {
+                    order_name: orderName,
+                    piece_name: piece.name,
+                    edge_price_usd: piece.clipped_corner_edge_price_usd,
+                    note: piece.clipped_corner_edge_price_note || "",
+                    expected_modified: expectedModified,
+                },
+                freeze: true,
+                freeze_message: translate("Saving the edge prices..."),
+            });
             if (!documentStillCurrent(frm, token)) return false;
             rememberPricingCommandModified(frm, response);
             clearPendingPriceMarker(piece);
@@ -490,7 +521,9 @@
                 input.getAttribute("data-price-kind"),
                 input.value
             );
-            markFormDirty(frm);
+            if (input.getAttribute("data-price-kind") === "clipped") {
+                markFormDirty(frm);
+            }
             const cell = input.closest(".dco-special-price-cell");
             if (cell) {
                 const priced = Number(input.value) > 0;
@@ -633,6 +666,11 @@
     }
 
     frappe.ui.form.on("Door Cutting Order", {
+        before_save(frm) {
+            if (!pendingSpecialPrices(frm).length) return;
+            frappe.validated = false;
+            frappe.msgprint(translate("Save special door prices from the Cost edit session."));
+        },
         onload_post_render(frm) {
             scheduleApply(frm);
         },
@@ -667,5 +705,7 @@
         flushPendingPriceEdits,
         discardPendingPriceEdits,
         pendingPricePieces,
+        pendingSpecialPrices,
+        clearPendingSpecialPrices,
     });
 })();

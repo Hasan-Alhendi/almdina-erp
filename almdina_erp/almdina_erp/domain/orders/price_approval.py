@@ -259,11 +259,30 @@ def can_edit_cost_settings_for_order(
     *,
     has_edit_cost_settings: bool,
     price_approval_status: Any,
+    has_view_costs: bool = True,
+    order_status: Any = None,
+    revision_state: Any = None,
+    docstatus: int | None = None,
 ) -> bool:
-    """Cost-settings edits follow capability/lifecycle; Approved alone does not block."""
+    """Return the effective Cost Settings edit decision for one document.
+
+    Production stage labels and final-price approval never grant or deny this
+    authority. Access requires the cost visibility and edit capabilities, a
+    current revision, and a saved, non-cancelled document. Delivered orders
+    remain editable when the canonical capabilities and document scope allow it.
+    """
 
     del price_approval_status
-    return bool(has_edit_cost_settings)
+    resolved_status = str(order_status or "Draft").strip()
+    resolved_revision = str(revision_state or "Current").strip()
+    resolved_docstatus = int(docstatus or 0)
+    return bool(
+        has_view_costs
+        and has_edit_cost_settings
+        and resolved_docstatus == 0
+        and resolved_revision != "Superseded"
+        and resolved_status != "Cancelled"
+    )
 
 
 class FinalPriceApprovalEligibilityError(ValueError):

@@ -106,28 +106,22 @@
 
     function canEditCostSettings(frm) {
         if (!baseDocumentEditable(frm)) return false;
-        if (!(can(frm, "view_costs") && can(frm, "edit_cost_settings"))) return false;
-        // Server decision remains authoritative for lifecycle/capability narrowing.
-        // Approved final price no longer freezes board/cutting/offcut inputs.
-        const server = serverAllowsCostSettingsEdit(frm);
-        if (server === false) return false;
-        return true;
+        if (!hasCostSettingsCapability(frm)) return false;
+        // The snapshot is the same effective document-level decision enforced by
+        // the financial command. Missing/stale authority fails closed until reload.
+        return serverAllowsCostSettingsEdit(frm) === true;
+    }
+
+    function hasCostSettingsCapability(frm) {
+        return Boolean(can(frm, "view_costs") && can(frm, "edit_cost_settings"));
     }
 
     function canEditPiecePrices(frm) {
-        if (!baseDocumentEditable(frm)) return false;
-        // Canonical price commands call assert_order_editable(), which is Draft-only.
-        if (String(frm.doc.status || "Draft") !== "Draft") return false;
-        return Boolean(
-            can(frm, "view_costs")
-            && (can(frm, "approve_special_price") || can(frm, "edit_special_price"))
-        );
+        return canEditCostSettings(frm);
     }
 
     function canEditCostWorkspace(frm) {
-        // One visual edit session hosts independent financial authorities. Owning
-        // price approval must never imply edit_cost_settings, and vice versa.
-        return canEditCostSettings(frm) || canEditPiecePrices(frm);
+        return canEditCostSettings(frm);
     }
 
     function workspaceSnapshot(frm) {
@@ -354,6 +348,19 @@
         return owner.pendingPricePieces(frm) || [];
     }
 
+    function pendingSpecialPrices(frm) {
+        const owner = priceOwner();
+        if (!owner || typeof owner.pendingSpecialPrices !== "function") return [];
+        return owner.pendingSpecialPrices(frm) || [];
+    }
+
+    function clearPendingSpecialPrices(frm) {
+        const owner = priceOwner();
+        if (owner && typeof owner.clearPendingSpecialPrices === "function") {
+            owner.clearPendingSpecialPrices(frm);
+        }
+    }
+
     async function flushPendingPriceEdits(frm, options = {}) {
         const owner = priceOwner();
         if (!owner || typeof owner.flushPendingPriceEdits !== "function") return false;
@@ -377,7 +384,10 @@
     }
 
     async function startEditing(frm, sessionContext = null) {
-        if (!canEditCostWorkspace(frm)) {
+        // A read-only snapshot is needed to obtain the server's document-level
+        // decision. Local capability checks may start that GET, but never grant
+        // the edit session until the returned decision is true.
+        if (!baseDocumentEditable(frm) || !hasCostSettingsCapability(frm)) {
             frappe.msgprint(translate("You do not have permission to edit the cost or special-door prices for this document."));
             return false;
         }
@@ -401,6 +411,10 @@
         }
         if (!documentStillCurrent(frm, token)) return false;
         if (!sessionIsCurrent(frm, sessionContext)) return false;
+        if (!canEditCostWorkspace(frm)) {
+            frappe.msgprint(translate("Your permissions or this document state no longer allow editing this section."));
+            return false;
+        }
 
         const store = storeFor(frm);
         const seed = currentSettings(frm);
@@ -505,7 +519,7 @@
 
         if (canEditCostSettings(frm)) {
             const api = window.AlmdinaCostWorkspaceAPI;
-            if (!api || typeof api.saveSettings !== "function") return false;
+            if (!api || typeof api.saveWorkspace !== "function") return false;
 
             // Capture the visible controls exactly once. Validation, dirty detection,
             // and transport all consume this same payload so the UI can never show
@@ -521,6 +535,7 @@
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
+            const specialPrices = pendingSpecialPrices(frm);
 
             if (pending.dirty && !canEditCostSettings(frm)) {
                 frappe.msgprint({
@@ -535,8 +550,28 @@
                 return false;
             }
 
-            if (pending.dirty) {
-                const saved = await api.saveSettings(orderName, payload);
+            if (pending.dirty || specialPrices.length) {
+                const expectedModified = String(
+                    currentState.data && currentState.data.order_modified
+                    || frm.doc.modified
+                    || ""
+                ).trim();
+                if (!expectedModified) {
+                    frappe.msgprint({
+                        title: translate("Could not save the cost"),
+                        message: translate("Could not verify the current order revision. Reload the order and try again."),
+                        indicator: "red",
+                    });
+                    return false;
+                }
+                const saved = await api.saveWorkspace(
+                    orderName,
+                    {
+                        cost_settings: pending.dirty ? payload : null,
+                        special_prices: specialPrices,
+                    },
+                    expectedModified
+                );
                 if (!documentStillCurrent(frm, token)) return false;
                 if (!sessionIsCurrent(frm, sessionContext)) return false;
                 if (!validSavedSnapshot(saved)) {
@@ -547,6 +582,7 @@
                     });
                     return false;
                 }
+                clearPendingSpecialPrices(frm);
                 if (owner && typeof owner.commit === "function") {
                     owner.commit(frm, saved);
                 } else {
@@ -570,9 +606,9 @@
         projectCurrent(frm);
         applyFieldAccess(frm);
 
-        // Special/clipped prices belong to their capability-protected commands,
-        // but the Cost tab Save action owns this user intent. Flush them here,
-        // after the settings draft closes, and reload one authoritative snapshot.
+        // Clipped-corner pricing keeps its independent command. Special prices
+        // were already part of the unified Cost save above; flush only remaining
+        // clipped edits and reload one authoritative snapshot.
         const hadPendingPrices = pendingPricePieces(frm).length > 0;
         if (hadPendingPrices) {
             const flushed = await flushPendingPriceEdits(frm, { refresh: false });
@@ -591,7 +627,7 @@
         sync(frm);
         signalEditChanged(frm);
         frappe.show_alert({
-            message: translate("The cost edits were saved and the section returned to read-only."),
+            message: translate("The cost and special door price edits were saved and the section returned to read-only."),
             indicator: "green",
         }, 5);
         return true;

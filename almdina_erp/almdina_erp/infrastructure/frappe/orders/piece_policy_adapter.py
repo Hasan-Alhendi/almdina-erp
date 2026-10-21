@@ -37,10 +37,6 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     resolve_clipped_corner,
     validate_glass_opening,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
-from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
-    document_has_capability,
-)
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
     FrappeEdgeProfileRepository,
 )
@@ -181,15 +177,6 @@ class FrappeOrderPiecePolicyAdapter:
                 getattr(row, "special_shape_price_approved_by", None) or ""
             ),
             approved_on=get_datetime(approved_on) if approved_on else None,
-        )
-
-    @staticmethod
-    def _required_price_capability(old_row: Any | None) -> str:
-        return (
-            Capability.EDIT_SPECIAL_PRICE
-            if old_row
-            and str(old_row.special_shape_price_status or "") == "Approved"
-            else Capability.APPROVE_SPECIAL_PRICE
         )
 
     def _validate_clipped_corner(self, row: Any, index: int) -> None:
@@ -450,7 +437,6 @@ class FrappeOrderPiecePolicyAdapter:
         approval_action = bool(
             self.document.flags.get("special_price_approval_action")
         )
-        permission_cache: dict[str, bool] = {}
 
         for index, row in enumerate(self.document.pieces or [], start=1):
             row.piece_type = row.piece_type or "Regular"
@@ -508,20 +494,12 @@ class FrappeOrderPiecePolicyAdapter:
             )
 
             if decision.requires_price_permission:
-                capability = self._required_price_capability(old_row)
-                if capability not in permission_cache:
-                    permission_cache[capability] = document_has_capability(
-                        self.document,
-                        capability,
-                    )
-                if not permission_cache[capability]:
-                    frappe.throw(
-                        _(
-                            "Row {0}: you do not have permission to approve or edit "
-                            "the special door price."
-                        ).format(index),
-                        frappe.PermissionError,
-                    )
+                frappe.throw(
+                    _(
+                        "Row {0}: Special prices must be saved from the Cost edit session."
+                    ).format(index),
+                    frappe.PermissionError,
+                )
 
             if documentation_changed:
                 row.special_shape_drawing_updated_by = frappe.session.user
