@@ -237,7 +237,7 @@ assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width=
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
 assert.match(html, /Door add-on symbols/);
-assert.match(html, /Edge banding double/);
+assert.match(html, /Double Edge/);
 assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
@@ -290,7 +290,7 @@ assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
-assert.match(extraAddonHtml, /Edge banding double/);
+assert.match(extraAddonHtml, /Double Edge/);
 assert.match(extraAddonHtml, /Full door double/);
 assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
@@ -344,6 +344,8 @@ const selectedDoublePlan = {
 const selectedDoubleHtml = renderer.build(regularOnlyFrm, selectedDoublePlan);
 assert.match(selectedDoubleHtml, /data-double-edge-side="edge_width_top"/);
 assert.doesNotMatch(selectedDoubleHtml, /data-double-edge-side="edge_long_left"/);
+assert.equal((selectedDoubleHtml.match(/data-double-edge-line-index="1"/g) || []).length, 1);
+assert.match(selectedDoubleHtml, /border-top:1\.4px solid #5a2d82/);
 
 const pastFiftyPlan = {
     ...plan,

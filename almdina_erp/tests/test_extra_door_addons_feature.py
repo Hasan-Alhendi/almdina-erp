@@ -132,7 +132,8 @@ def test_cutting_plan_prints_explain_and_render_purple_double_side_markers() -> 
         html = json.loads(path.read_text(encoding="utf-8"))["html"]
         assert "#5a2d82" in html
         assert "extra_double_reference_sides" in html
-        assert '_("Edge banding double")' in html
+        assert '_("Double Edge")' in html
+        assert "box-shadow" in html
 
 
 def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:

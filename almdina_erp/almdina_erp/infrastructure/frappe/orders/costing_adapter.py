@@ -300,7 +300,7 @@ class FrappeOrderCostingAdapter:
             )
         except ExtraAddonError as error:
             labels = {
-                "double": _("Double Edge Banding"),
+                "double": _("Double Edge"),
                 "full_door_double": _("Full Door Double"),
                 "liner": _("Liner"),
                 "back_groove": _("Back Groove"),
@@ -308,7 +308,7 @@ class FrappeOrderCostingAdapter:
             }
             messages = {
                 "mutually_exclusive_double_addons": _(
-                    "Double Edge Banding and Full Door Double cannot be selected together."
+                    "Double Edge and Full Door Double cannot be selected together."
                 ),
                 "extra_quantity_invalid": _(
                     "Door quantity must be greater than zero when an add-on is selected."

@@ -122,7 +122,7 @@
             extraAddons: [
                 {
                     selected: Boolean(number(source.extra_double)),
-                    label: "Edge banding double",
+                    label: "Double Edge",
                     rate: number(source.extra_double_unit_price_usd),
                     amount: number(source.extra_double_total_usd),
                 },

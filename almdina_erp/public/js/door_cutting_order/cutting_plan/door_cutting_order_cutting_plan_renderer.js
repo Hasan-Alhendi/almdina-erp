@@ -380,11 +380,17 @@
                     : null;
                 if (!edgePiece) return "";
             }
-            const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
+            const normalFlags = piece_edge_flags(piece, geometryModel);
+            const hasNormalBand = ["left", "right", "top", "bottom", "edgeBreak", "edgeBreakOnly"]
+                .some(side => flags[side] && normalFlags[side]);
+            const insets = hasNormalBand ? [7, 9.5] : [4, 6.5];
+            const markup = insets.map(inset => geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
                 inheritStroke: false,
                 color: EXTRA_DOUBLE_MARK_COLOR,
-                strokeWidth: 3,
-            });
+                strokeWidth: DOUBLE_EDGE_STROKE_WIDTH,
+                insetPx: inset,
+                endTrimPx: DOUBLE_EDGE_END_TRIM,
+            })).filter(Boolean).join("");
             if (!markup) return "";
             const pathData = geometryModel && geometryModel.geometry && geometryModel.geometry.pathData;
             const clipDef = pathData
@@ -395,23 +401,47 @@
         }
 
         const color = EXTRA_DOUBLE_MARK_COLOR;
-        const thickness = "3px";
+        const thickness = `${DOUBLE_EDGE_STROKE_WIDTH}px`;
         const start = 16.667;
         const length = 66.666;
         if (geometryModel && geometryModel.vector) {
             const lines = [];
-            if (flags.left) lines.push(`<line data-double-edge-side="edge_long_left" x1="1" y1="${start}" x2="1" y2="${start + length}"/>`);
-            if (flags.right) lines.push(`<line data-double-edge-side="edge_long_right" x1="99" y1="${start}" x2="99" y2="${start + length}"/>`);
-            if (flags.top) lines.push(`<line data-double-edge-side="edge_width_top" x1="${start}" y1="1" x2="${start + length}" y2="1"/>`);
-            if (flags.bottom) lines.push(`<line data-double-edge-side="edge_width_bottom" x1="${start}" y1="99" x2="${start + length}" y2="99"/>`);
+            const addPair = (side, active, axis) => {
+                if (!active) return;
+                const normal = piece_edge_flags(piece, geometryModel);
+                const hasNormal = Boolean(normal[axis]);
+                const insets = hasNormal ? [4.5, 7] : [3, 5.5];
+                insets.forEach((inset, index) => {
+                    const line = axis === "left"
+                        ? `x1="${inset}" y1="${start}" x2="${inset}" y2="${start + length}"`
+                        : axis === "right"
+                            ? `x1="${100 - inset}" y1="${start}" x2="${100 - inset}" y2="${start + length}"`
+                            : axis === "top"
+                                ? `x1="${start}" y1="${inset}" x2="${start + length}" y2="${inset}"`
+                                : `x1="${start}" y1="${100 - inset}" x2="${start + length}" y2="${100 - inset}"`;
+                    lines.push(`<line data-double-edge-side="${side}" data-double-edge-line-index="${index}" ${line}/>`);
+                });
+            };
+            addPair("edge_long_left", flags.left, "left");
+            addPair("edge_long_right", flags.right, "right");
+            addPair("edge_width_top", flags.top, "top");
+            addPair("edge_width_bottom", flags.bottom, "bottom");
             if (!lines.length) return "";
-            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;"><defs><clipPath id="${clipId}-double"><path d="${geometryModel.geometry.pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs><g clip-path="url(#${clipId}-double)" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke">${lines.join("")}</g></svg>`;
+            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;"><defs><clipPath id="${clipId}-double"><path d="${geometryModel.geometry.pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs><g clip-path="url(#${clipId}-double)" fill="none" stroke="${color}" stroke-width="${DOUBLE_EDGE_STROKE_WIDTH}" vector-effect="non-scaling-stroke">${lines.join("")}</g></svg>`;
         }
         let html = `<span data-double-edge-lines="1" style="position:absolute;inset:0;z-index:4;pointer-events:none;">`;
-        if (flags.left) html += `<span data-double-edge-side="edge_long_left" style="position:absolute;left:3px;top:${start}%;height:${length}%;border-left:${thickness} solid ${color};"></span>`;
-        if (flags.right) html += `<span data-double-edge-side="edge_long_right" style="position:absolute;right:3px;top:${start}%;height:${length}%;border-right:${thickness} solid ${color};"></span>`;
-        if (flags.top) html += `<span data-double-edge-side="edge_width_top" style="position:absolute;top:3px;left:${start}%;width:${length}%;border-top:${thickness} solid ${color};"></span>`;
-        if (flags.bottom) html += `<span data-double-edge-side="edge_width_bottom" style="position:absolute;bottom:3px;left:${start}%;width:${length}%;border-bottom:${thickness} solid ${color};"></span>`;
+        const addHtmlPair = (side, active, cssSide, border, normal) => {
+            if (!active) return;
+            const insets = normal ? [4.5, 7] : [3, 5.5];
+            insets.forEach((inset, index) => {
+                html += `<span data-double-edge-side="${side}" data-double-edge-line-index="${index}" style="position:absolute;${cssSide}:${inset}px;${cssSide === "left" || cssSide === "right" ? `top:${start}%;height:${length}%;` : `left:${start}%;width:${length}%;`}border-${border}:${thickness} solid ${color};"></span>`;
+            });
+        };
+        const normalFlags = piece_edge_flags(piece, geometryModel);
+        addHtmlPair("edge_long_left", flags.left, "left", "left", normalFlags.left);
+        addHtmlPair("edge_long_right", flags.right, "right", "right", normalFlags.right);
+        addHtmlPair("edge_width_top", flags.top, "top", "top", normalFlags.top);
+        addHtmlPair("edge_width_bottom", flags.bottom, "bottom", "bottom", normalFlags.bottom);
         return `${html}</span>`;
     }
 
@@ -427,6 +457,8 @@
         recessed_handle_cutout: "#c45c12",
     });
     const EXTRA_DOUBLE_MARK_COLOR = "#5a2d82";
+    const DOUBLE_EDGE_STROKE_WIDTH = 1.4;
+    const DOUBLE_EDGE_END_TRIM = 6;
     const EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR = "#1a5f4a";
     const EXTRA_ADDON_LEGEND_ITEMS = Object.freeze([
         Object.freeze({ fieldname: "extra_liner", label: "Liner", overlayKind: "liner" }),
@@ -436,7 +468,7 @@
             label: "Recessed handle",
             overlayKind: "recessed_handle_cutout",
         }),
-        Object.freeze({ fieldname: "extra_double", label: "Edge banding double", addonKind: "double" }),
+        Object.freeze({ fieldname: "extra_double", label: "Double Edge", addonKind: "double" }),
         Object.freeze({
             fieldname: "extra_full_door_double",
             label: "Full door double",
@@ -482,6 +514,10 @@
         return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="1" stroke-dasharray="3 2.2" stroke-linecap="round"/></svg>`;
     }
 
+    function extraDoubleLegendSwatch() {
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 3.5 H26 M2 6.5 H26" fill="none" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+    }
+
     function extraHandleLegendSwatch() {
         const color = EXTRA_OVERLAY_STROKE_BY_KIND.recessed_handle_cutout;
         return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><rect x="6" y="2.2" width="16" height="5.6" fill="none" stroke="${color}" stroke-width="0.9"/></svg>`;
@@ -496,7 +532,7 @@
     }
 
     function extraAddonLegendSwatch(item) {
-        if (item.addonKind === "double") return extraOverlayStrokeSample(EXTRA_DOUBLE_MARK_COLOR);
+        if (item.addonKind === "double") return extraDoubleLegendSwatch();
         if (item.overlayKind === "recessed_handle_cutout") return extraHandleLegendSwatch();
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);

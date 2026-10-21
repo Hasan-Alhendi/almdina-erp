@@ -1108,7 +1108,7 @@ async function interactionChecks() {
     await tick();
     assert.equal(live.extra_double, 1);
     assert.equal(live.extra_full_door_double, 0);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     assert.equal(order.dirtyCount, 2);
     dialog.open(order, live);
     ui = latest();
@@ -1123,7 +1123,7 @@ async function interactionChecks() {
 
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     dialog.open(order, live);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
@@ -1134,7 +1134,7 @@ async function interactionChecks() {
     assert.equal(addonLabel(table), "Add-ons");
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
 
     console.log("Unified add-ons dialog interaction passed");
 }

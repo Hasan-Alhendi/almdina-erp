@@ -323,18 +323,18 @@ class FrappeOrderPiecePolicyAdapter:
         except ExtraAddonError as error:
             messages = {
                 "double_edge_sides_invalid": _(
-                    "Row {0}: Double Edge Banding sides are invalid."
+                    "Row {0}: Double Edge sides are invalid."
                 ),
                 "double_edge_sides_required": _(
-                    "Row {0}: Select at least one side for Double Edge Banding."
+                    "Row {0}: Select at least one side for Double Edge."
                 ),
                 "double_edge_side_unavailable": _(
-                    "Row {0}: A selected Double Edge Banding side is unavailable for this piece type."
+                    "Row {0}: A selected Double Edge side is unavailable for this piece type."
                 ),
             }
             message = messages.get(
                 error.code,
-                _("Row {0}: Double Edge Banding sides are invalid."),
+                _("Row {0}: Double Edge sides are invalid."),
             )
             frappe.throw(message.format(index))
             return

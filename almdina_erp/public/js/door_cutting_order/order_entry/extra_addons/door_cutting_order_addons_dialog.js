@@ -179,8 +179,8 @@
                 fieldname: "extra_double",
                 field: "sides",
                 fields: ["sides"],
-                message: translate("Select at least one side for Double Edge Banding."),
-                label: translate("Double Edge Banding"),
+                message: translate("Select at least one side for Double Edge."),
+                label: translate("Double Edge"),
             };
         }
         const candidates = fields().filter((entry) => {
@@ -272,9 +272,9 @@
             }).join("");
             const body = `${toggle}
                 <div class="dco-corner-help" data-addons-hint ${enabled && session.doubleSides.length ? "hidden" : ""}>${esc(enabled ? translate("Choose one or more sides.") : translate("Turn this add-on on to include it."))}</div>
-                <div class="dco-corner-section-label">${esc(translate("Double banding sides"))}</div>
+                <div class="dco-corner-section-label">${esc(translate("Double Edge sides"))}</div>
                 <div class="dco-corner-position-grid" data-double-sides>${sideButtons}</div>
-                <div class="dco-corner-help">${esc(translate("Double Edge Banding is shown as a purple line on each selected side."))}</div>`;
+                <div class="dco-corner-help">${esc(translate("Double Edge is shown as two purple lines on each selected side."))}</div>`;
             return editable ? body : `<fieldset disabled>${body}</fieldset>`;
         }
         if (FLAG_FIELDS.includes(fieldname)) {

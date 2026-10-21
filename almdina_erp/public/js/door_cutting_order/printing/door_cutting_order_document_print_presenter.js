@@ -124,7 +124,7 @@
     function extraAddonLabels(row) {
         if (!row) return [];
         return [
-            ["extra_double", __("Double edge banding")],
+            ["extra_double", __("Double Edge")],
             ["extra_full_door_double", __("Full door double")],
             ["extra_liner", __("Liner")],
             ["extra_back_groove", __("Back groove")],

@@ -204,6 +204,17 @@
         return polylineLength((edgePaths(piece) || {})[side] || []);
     }
 
+    function visualEdgeMarkerPaths(piece, side, offsetsMm) {
+        const reference = (edgePaths(piece) || {})[side];
+        const polygon = piecePolygonMm(piece);
+        if (!reference || reference.length < 2 || !polygon) return [];
+        const sign = inwardSign(reference, polygon);
+        return (offsetsMm || [])
+            .map(offset => Number(offset))
+            .filter(offset => Number.isFinite(offset) && offset >= 0)
+            .map(offset => offsetPolyline(reference, offset, sign));
+    }
+
     function onSegment(point, start, end, tolerance) {
         const dx = end[0] - start[0];
         const dy = end[1] - start[1];
@@ -1157,6 +1168,7 @@
         pieceFromRow,
         piecePolygonMm,
         edgePaths,
+        visualEdgeMarkerPaths,
         edgeLengthMm,
         validationCode,
         stripPolygonMm,

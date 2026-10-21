@@ -842,16 +842,15 @@ Right long edge,قشاط الطول الأيمن
 Left long edge,قشاط الطول الأيسر
 Long right,طول يمين
 Long left,طول يسار
-Double Edge Banding,دبل قشاط
-Double Edge Banding Sides,أضلاع الدبل
-Row {0}: Double Edge Banding sides are invalid.,الصف {0}: أضلاع الدبل غير صالحة.
-Row {0}: A selected Double Edge Banding side is unavailable for this piece type.,الصف {0}: ضلع الدبل المحدد غير متاح لهذا النوع من الدرفات.
-Double banding sides,أضلاع الدبل
+Double Edge,دبل ضلع
+Double Edge Sides,أضلاع دبل ضلع
+Row {0}: Double Edge sides are invalid.,الصف {0}: أضلاع دبل الضلع غير صالحة.
+Row {0}: A selected Double Edge side is unavailable for this piece type.,الصف {0}: ضلع دبل الضلع المحدد غير متاح لهذا النوع من الدرفات.
+Double Edge sides,أضلاع دبل ضلع
 selected sides,الأضلاع المحددة
-Select at least one side for Double Edge Banding.,اختر ضلعًا واحدًا على الأقل للدبل.
+Select at least one side for Double Edge.,اختر ضلعًا واحدًا على الأقل لدبل الضلع.
 Choose one or more sides.,اختر ضلعًا واحدًا أو أكثر.
-Double Edge Banding is shown as a purple line on each selected side.,يظهر الدبل بخط بنفسجي على كل ضلع محدد.
-Double Banding,دبل قشاط
+Double Edge is shown as two purple lines on each selected side.,يظهر دبل الضلع بخطين بنفسجيين على كل ضلع محدد.
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
@@ -1059,7 +1058,7 @@ Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:
 Special door,خاصة
 Regular door,عادية
-Double edge banding,دبل قشاط
+Double edge,دبل ضلع
 Full door double,دبل كامل الدرفة
 Back groove,فرزة ظهر
 Recessed handle cutout,حفر مسكة غطس
@@ -1629,7 +1628,6 @@ Download uploaded DXF,تنزيل DXF المرفوع
 Drawing / DXF,الرسم / DXF
 Drawing plan engine,محرك خطة الرسم
 Ease of cutting,سهولة التنفيذ
-Edge banding double,دبل قشاط
 "Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
 Enlarge board,تكبير اللوح
 Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.

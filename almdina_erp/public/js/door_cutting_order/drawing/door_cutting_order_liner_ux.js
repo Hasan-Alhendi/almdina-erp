@@ -355,22 +355,33 @@
         const corner = window.AlmdinaClippedCornerGeometry;
         if (corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source)
             && typeof corner.edgeBandSvgMarkup === "function") {
-            const markup = corner.edgeBandSvgMarkup({ ...source, ...flags }, scene.frame.width, scene.frame.height, {
+            const hasNormalBand = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"]
+                .some(side => flagsForSource(source, side) && selected.includes(side));
+            const insets = hasNormalBand ? [7, 9.5] : [4, 6.5];
+            const markup = insets.map(inset => corner.edgeBandSvgMarkup({ ...source, ...flags }, scene.frame.width, scene.frame.height, {
                 offsetX: scene.frame.x,
                 offsetY: scene.frame.y,
                 inheritStroke: false,
                 color: "#5a2d82",
-                strokeWidth: 3,
-                insetPx: 4,
+                strokeWidth: 1.4,
+                insetPx: inset,
                 endTrimPx: 6,
-            });
+            })).filter(Boolean).join("");
             return markup ? `<g data-double-edge-lines="1">${markup}</g>` : "";
         }
         return selected.map((side) => {
-            const path = api.edgePaths(scene.piece)[side];
-            if (!path) return "";
-            return `<polyline data-double-edge-line="1" data-double-edge-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="#5a2d82" stroke-width="3" stroke-linecap="round"/>`;
+            const normalBand = flagsForSource(source, side);
+            const insetPx = normalBand ? [7, 9.5] : [4, 6.5];
+            const offsetsMm = insetPx.map(offset => (offset / Math.max(Number(scene.frame.scale) || 1, 0.001)) * 10);
+            const paths = typeof api.visualEdgeMarkerPaths === "function"
+                ? api.visualEdgeMarkerPaths(scene.piece, side, offsetsMm)
+                : [];
+            return paths.map((path, index) => `<polyline data-double-edge-line="1" data-double-edge-line-index="${index}" data-double-edge-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="#5a2d82" stroke-width="1.4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`).join("");
         }).join("");
+    }
+
+    function flagsForSource(source, side) {
+        return Boolean(Number(source && source[side]));
     }
 
     function doubleEdgeHitMarkup(scene, sides) {
@@ -380,7 +391,7 @@
             const path = api.edgePaths(scene.piece)[side];
             if (!path) return "";
             const active = selected.has(side);
-            return `<polyline class="dco-double-side ${active ? "is-selected" : ""}" data-double-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="${active ? "#5a2d82" : "transparent"}" stroke-width="${active ? 5 : 14}" stroke-linecap="round"/>`;
+            return `<polyline class="dco-double-side ${active ? "is-selected" : ""}" data-double-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="transparent" stroke-width="14" stroke-linecap="round"/>`;
         }).join("");
     }
 

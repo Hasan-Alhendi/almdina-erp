@@ -106,7 +106,7 @@ const french = {
     "Board {0}": "Panneau {0}",
     "Unassigned": "Non assigné",
     "Door add-on symbols": "Symboles des ajouts",
-    "Edge banding double": "Double chant",
+    "Double Edge": "Double chant",
     "Save the order before uploading a DXF file.": "Enregistrez la commande avant le DXF.",
     "Approve drawing": "Approuver le dessin",
     "Plan uploaded from DXF": "Plan importé depuis DXF",

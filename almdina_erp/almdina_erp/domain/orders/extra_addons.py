@@ -60,7 +60,7 @@ def normalize_extra_double_sides(
     piece_type: str | None,
     enabled: bool,
 ) -> tuple[str, ...]:
-    """Validate and normalize stored Double Banding side selections.
+    """Validate and normalize stored Double Edge side selections.
 
     A missing value is the deliberate legacy representation and resolves to all
     available sides. An explicit empty list is invalid when the add-on is on.
