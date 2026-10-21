@@ -121,7 +121,7 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "update_clipped_corner_edge_price" in permissions
     assert "Clipped-corner edge processing cost" in permissions
     assert "orderIsEditable(frm)" in permissions
-    assert "frappe.almdina.orderCanEdit" in permissions
+    assert "frappe.almdina.orderCanEdit" not in permissions
     assert "almdina_edit_session_changed(frm)" in permissions
     # Pricing remains a financial-document gate below, but it must not block
     # persisting a Special/CutCorner measurement row itself.
