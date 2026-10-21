@@ -62,6 +62,9 @@ const row = {
 const session = dialog.createSession({ doc: {} }, row);
 assert.equal(session.activeField, "extra_double");
 assert.equal(session.flags.extra_double, 1);
+assert.deepEqual(JSON.parse(JSON.stringify(session.doubleSides)), [
+    "edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right",
+]);
 assert.equal(session.drafts.extra_liner.enabled, true);
 assert.equal(session.drafts.extra_liner.side, "edge_width_top");
 assert.equal(session.drafts.extra_back_groove.side, "edge_long_right");
@@ -98,6 +101,19 @@ assert.match(preview, /data-machining-kind="liner"/);
 assert.match(preview, /data-machining-kind="back_groove"/);
 assert.match(preview, /data-machining-kind="recessed_handle_cutout"/);
 assert.match(preview, /data-liner-edge="1"/);
+assert.match(preview, /#5a2d82/);
+
+const selectedDouble = dialog.createSession({ doc: {} }, {
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_width_top", "edge_long_right"]',
+});
+assert.deepEqual(JSON.parse(JSON.stringify(selectedDouble.doubleSides)), ["edge_width_top", "edge_long_right"]);
+assert.match(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_width_top"/);
+assert.match(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_long_right"/);
+assert.doesNotMatch(dialog.previewMarkup(selectedDouble), /data-double-edge-side="edge_width_bottom"/);
 
 dialog.setEnabled(session, "extra_liner", false);
 assert.equal(dialog.machiningDirty(session, "extra_liner"), true);
@@ -934,6 +950,7 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
     ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-double-side="edge_width_top"]').dispatch("click");
     failNext = true;
     const beforeFail = writes.length;
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
@@ -1086,11 +1103,12 @@ async function interactionChecks() {
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
     ui.root.querySelector("[data-addon-enable]").dispatch("click");
+    ui.root.querySelector('[data-double-side="edge_width_top"]').dispatch("click");
     ui.root.querySelector("[data-addons-apply]").dispatch("click");
     await tick();
     assert.equal(live.extra_double, 1);
     assert.equal(live.extra_full_door_double, 0);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     assert.equal(order.dirtyCount, 2);
     dialog.open(order, live);
     ui = latest();
@@ -1105,7 +1123,7 @@ async function interactionChecks() {
 
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
     dialog.open(order, live);
     ui = latest();
     ui.root.querySelector('[data-addon-tab="extra_double"]').dispatch("click");
@@ -1116,7 +1134,7 @@ async function interactionChecks() {
     assert.equal(addonLabel(table), "Add-ons");
     live.extra_double = 1;
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
-    assert.equal(addonLabel(table), "Double Banding");
+    assert.equal(addonLabel(table), "Double Edge");
 
     console.log("Unified add-ons dialog interaction passed");
 }

@@ -570,7 +570,7 @@
 
     function edgeBandSvgMarkup(piece, viewportWidth = 100, viewportHeight = 100, options = {}) {
         const paths = clippedEdgePaths(piece, viewportWidth, viewportHeight, options);
-        if (!paths.top && !paths.break) return "";
+        if (!paths.top && !paths.bottom && !paths.left && !paths.right && !paths.break && !paths.breakOnly) return "";
         if (Number(options.endTrimPx) > 0) {
             Object.keys(paths).forEach(key => {
                 if (paths[key]) paths[key] = trimPathEnds(paths[key], Number(options.endTrimPx));

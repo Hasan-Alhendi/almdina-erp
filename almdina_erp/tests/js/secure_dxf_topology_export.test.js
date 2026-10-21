@@ -703,7 +703,7 @@ async function run() {
         downloadedDxf,
         /1\r\n\\U\+062F\\U\+0628\\U\+0644 \\U\+0643\\U\+0627\\U\+0645\\U\+0644\r\n/
     );
-    assert.doesNotMatch(downloadedDxf, /Double Edge Banding/);
+    assert.doesNotMatch(downloadedDxf, /Double Edge/);
     assert.doesNotMatch(downloadedDxf, /Full Door Double/);
     assert.doesNotMatch(downloadedDxf, /1\r\nDouble\r\n/);
 

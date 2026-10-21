@@ -842,8 +842,15 @@ Right long edge,قشاط الطول الأيمن
 Left long edge,قشاط الطول الأيسر
 Long right,طول يمين
 Long left,طول يسار
-Double Edge Banding,دبل قشاط
-Double Banding,دبل قشاط
+Double Edge,دبل ضلع
+Double Edge Sides,أضلاع دبل ضلع
+Row {0}: Double Edge sides are invalid.,الصف {0}: أضلاع دبل الضلع غير صالحة.
+Row {0}: A selected Double Edge side is unavailable for this piece type.,الصف {0}: ضلع دبل الضلع المحدد غير متاح لهذا النوع من الدرفات.
+Double Edge sides,أضلاع دبل ضلع
+selected sides,الأضلاع المحددة
+Select at least one side for Double Edge.,اختر ضلعًا واحدًا على الأقل لدبل الضلع.
+Choose one or more sides.,اختر ضلعًا واحدًا أو أكثر.
+Double Edge is shown as two purple lines on each selected side.,يظهر دبل الضلع بخطين بنفسجيين على كل ضلع محدد.
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
@@ -1051,7 +1058,7 @@ Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:
 Special door,خاصة
 Regular door,عادية
-Double edge banding,دبل قشاط
+Double edge,دبل ضلع
 Full door double,دبل كامل الدرفة
 Back groove,فرزة ظهر
 Recessed handle cutout,حفر مسكة غطس
@@ -1621,7 +1628,6 @@ Download uploaded DXF,تنزيل DXF المرفوع
 Drawing / DXF,الرسم / DXF
 Drawing plan engine,محرك خطة الرسم
 Ease of cutting,سهولة التنفيذ
-Edge banding double,دبل قشاط
 "Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
 Enlarge board,تكبير اللوح
 Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.
@@ -1748,7 +1754,6 @@ Your permissions or this document state no longer allow editing this section.,ل
 Could not save the cost,تعذر حفظ التكلفة
 The server did not return the saved cost data. Editing was not closed.,لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل.
 The cost edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة.
-The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
 MDF boards — {0},ألواح MDF — {0}
 MDF boards,ألواح MDF
 Board cutting and preparation,أجور قص وتجهيز الألواح
@@ -1784,7 +1789,6 @@ Priced,مسعّر
 {0} of {1} are unpriced,{0} غير مسعّرة من {1}
 {0} priced,تم تسعير {0}
 Saving the cost settings...,جاري حفظ إعدادات التكلفة...
-Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
 Add-on,إضافة
 Could not load the cost data. Try again.,تعذر تحميل بيانات التكلفة. أعد المحاولة.
 Loading the cost data...,جاري تحميل بيانات التكلفة...
@@ -1826,8 +1830,6 @@ Preparing the internal cost report...,جاري تجهيز تقرير التكل�
 Preparing the customer invoice...,جاري تجهيز فاتورة الزبون...
 Print internal cost report,طباعة تقرير التكلفة الداخلي
 Saving the edge prices...,جاري اعتماد أسعار القشاط...
-Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
-Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
 Saving the special door prices...,جاري اعتماد أسعار الدرف الخاصة...
 Inclusive special door price,السعر الخاص الشامل للدرفة
 L-shaped corner edge processing cost,تكلفة معالجة قشاط زاوية L
@@ -2911,3 +2913,7 @@ Door {0} — copies {1} through {2}.,الدرفة {0} — النسخ {1} إلى 
 Door {0} — copies {1}.,الدرفة {0} — النسخ {1}.
 Door {0} — copy {1}.,الدرفة {0} — النسخة {1}.
 {0} / {1},{0} / {1}
+The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
+Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
+Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.

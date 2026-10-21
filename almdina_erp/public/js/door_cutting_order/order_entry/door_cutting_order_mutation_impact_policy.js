@@ -39,6 +39,7 @@
         "glass_margin_mm",
         "special_shape_geometry_json",
         "extra_full_door_double",
+        "extra_double_reference_sides",
         "liner_reference_side",
         "liner_offset_cm",
         "liner_width_cm",

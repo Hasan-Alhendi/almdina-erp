@@ -42,6 +42,7 @@ _OLD_PIECE_FIELDS = [
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
     "extra_double",
+    "extra_double_reference_sides",
     "extra_double_unit_price_usd",
     "extra_full_door_double",
     "extra_full_door_double_unit_price_usd",

@@ -37,6 +37,12 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     resolve_clipped_corner,
     validate_glass_opening,
 )
+from almdina_erp.almdina_erp.domain.orders.extra_addons import (
+    EXTRA_DOUBLE_SIDES_FIELD,
+    ExtraAddonError,
+    normalize_extra_double_sides,
+    serialize_extra_double_sides,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
     FrappeEdgeProfileRepository,
 )
@@ -292,6 +298,39 @@ class FrappeOrderPiecePolicyAdapter:
                 self._clear_machining(row, addon)
 
     @staticmethod
+    def _validate_double_edge_sides(row: Any, index: int) -> None:
+        enabled = bool(cint(getattr(row, "extra_double", 0)))
+        raw = getattr(row, EXTRA_DOUBLE_SIDES_FIELD, "")
+        try:
+            sides = normalize_extra_double_sides(
+                raw,
+                piece_type=getattr(row, "piece_type", "Regular"),
+                enabled=enabled,
+            )
+        except ExtraAddonError as error:
+            messages = {
+                "double_edge_sides_invalid": _(
+                    "Row {0}: Double Edge sides are invalid."
+                ),
+                "double_edge_sides_required": _(
+                    "Row {0}: Select at least one side for Double Edge."
+                ),
+                "double_edge_side_unavailable": _(
+                    "Row {0}: A selected Double Edge side is unavailable for this piece type."
+                ),
+            }
+            message = messages.get(
+                error.code,
+                _("Row {0}: Double Edge sides are invalid."),
+            )
+            frappe.throw(message.format(index))
+            return
+        if not enabled:
+            setattr(row, EXTRA_DOUBLE_SIDES_FIELD, "")
+        elif str(raw or "").strip():
+            setattr(row, EXTRA_DOUBLE_SIDES_FIELD, serialize_extra_double_sides(sides))
+
+    @staticmethod
     def _addon_title(addon: Any) -> str:
         titles = {
             "liner": _("Liner"),
@@ -446,6 +485,7 @@ class FrappeOrderPiecePolicyAdapter:
                 self._validate_glass_opening(row, index)
             if is_corner_cut(row.piece_type):
                 self._validate_clipped_corner(row, index)
+            self._validate_double_edge_sides(row, index)
             self._apply_edge_break(row)
             self._apply_special_measurement_edges(row)
             self._normalize_machining_fields(row)

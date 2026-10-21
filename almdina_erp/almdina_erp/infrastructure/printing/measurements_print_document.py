@@ -18,7 +18,7 @@ PIECE_TYPE_LABELS = {
     "Glass": "Glass door",
 }
 EXTRA_ADDONS = (
-    ("extra_double", "Double edge banding"),
+    ("extra_double", "Double Edge"),
     ("extra_full_door_double", "Full door double"),
     ("extra_liner", "Liner"),
     ("extra_back_groove", "Back groove"),

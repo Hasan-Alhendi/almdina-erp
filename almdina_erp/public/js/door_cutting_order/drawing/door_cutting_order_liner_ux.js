@@ -330,9 +330,89 @@
         return { api, piece, frame, outline, bands };
     }
 
+    function doubleEdgeSidesFromRow(row) {
+        const source = row || {};
+        const api = geometry();
+        if (!Number(source.extra_double)) return [];
+        if (api && typeof api.normalizeSideSelection === "function") {
+            return api.normalizeSideSelection(
+                source.extra_double_reference_sides,
+                source.piece_type || "Regular",
+                true,
+            );
+        }
+        return [];
+    }
+
+    function doubleEdgeMarkup(row, scene, sides) {
+        const selected = (sides || []).filter(Boolean);
+        if (!selected.length) return "";
+        const source = row || {};
+        const api = scene.api;
+        const flags = typeof api.sideFlagsForSelection === "function"
+            ? api.sideFlagsForSelection(scene.piece, selected, false)
+            : {};
+        const corner = window.AlmdinaClippedCornerGeometry;
+        if (corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source)
+            && typeof corner.edgeBandSvgMarkup === "function") {
+            const fields = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"];
+            const markup = fields.filter(side => flags[side]).map(side => {
+                const normalBand = flagsForSource(source, side);
+                const insets = normalBand ? [8, 11] : [4.5, 7.5];
+                const sidePiece = { ...source };
+                fields.forEach(name => {
+                    sidePiece[name] = name === side ? 1 : 0;
+                });
+                const lines = insets.map(inset => corner.edgeBandSvgMarkup(sidePiece, scene.frame.width, scene.frame.height, {
+                    offsetX: scene.frame.x,
+                    offsetY: scene.frame.y,
+                    inheritStroke: false,
+                    color: "#5a2d82",
+                    strokeWidth: 1.4,
+                    insetPx: inset,
+                    endTrimPx: 6,
+                })).filter(Boolean).join("");
+                return lines ? `<g data-double-edge-side="${side}">${lines}</g>` : "";
+            }).join("");
+            return markup ? `<g data-double-edge-lines="1">${markup}</g>` : "";
+        }
+        return selected.map((side) => {
+            const normalBand = flagsForSource(source, side);
+            const insetPx = normalBand ? [8, 11] : [4.5, 7.5];
+            const offsetsMm = insetPx.map(offset => (offset / Math.max(Number(scene.frame.scale) || 1, 0.001)) * 10);
+            const paths = typeof api.visualEdgeMarkerPaths === "function"
+                ? api.visualEdgeMarkerPaths(scene.piece, side, offsetsMm)
+                : [];
+            return paths.map((path, index) => `<polyline data-double-edge-line="1" data-double-edge-line-index="${index}" data-double-edge-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="#5a2d82" stroke-width="1.4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`).join("");
+        }).join("");
+    }
+
+    function flagsForSource(source, side) {
+        return Boolean(Number(source && source[side]));
+    }
+
+    function doubleEdgeHitMarkup(scene, sides) {
+        const api = scene.api;
+        const selected = new Set(sides || []);
+        return api.availableSides(scene.piece.pieceType).map((side) => {
+            const path = api.edgePaths(scene.piece)[side];
+            if (!path) return "";
+            const active = selected.has(side);
+            return `<polyline class="dco-double-side ${active ? "is-selected" : ""}" data-double-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="transparent" stroke-width="14" stroke-linecap="round"/>`;
+        }).join("");
+    }
+
     function previewSvg(draft, options) {
         const scene = previewScene(draft);
         const multi = Boolean(options && options.multi);
+        const double = doubleEdgeMarkup(
+            draft.row,
+            scene,
+            options && options.doubleSides,
+        );
+        const doubleHits = options && options.doubleInteractive
+            ? doubleEdgeHitMarkup(scene, options.doubleSides)
+            : "";
         const quiet = multi
             ? (options.companions || []).filter(item => (
                 item && item.enabled && item.kind !== draft.kind
@@ -351,6 +431,8 @@
         return `<svg viewBox="0 0 420 280" dir="ltr" role="img" aria-label="${esc(label)}">
             <polygon points="${pointsAttr(scene.outline)}" fill="#fff7e8" stroke="#8a5700" stroke-width="2"/>
             ${scene.bands}
+            ${double}
+            ${doubleHits}
             ${hits}
             ${quiet}
             ${active}
@@ -735,6 +817,8 @@
         open,
         applyLiner,
         previewSvg,
+        doubleEdgeMarkup,
+        doubleEdgeSidesFromRow,
         validationMessage,
         validationIssue,
         draftFromRow,

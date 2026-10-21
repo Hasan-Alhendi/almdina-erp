@@ -54,6 +54,22 @@ assert.deepEqual(
     ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break"]
 );
 assert.deepEqual(copy(geometry.availableSides("Special")), []);
+assert.deepEqual(
+    copy(geometry.normalizeSideSelection("", "Regular", true)),
+    copy(geometry.availableSides("Regular")),
+);
+assert.deepEqual(
+    copy(geometry.normalizeSideSelection('["edge_long_right", "edge_width_top"]', "Regular", true)),
+    ["edge_width_top", "edge_long_right"],
+);
+assert.deepEqual(
+    copy(geometry.sideFlagsForSelection({ pieceType: "Regular" }, ["edge_width_top"], true)),
+    { edge_width_top: false, edge_width_bottom: false, edge_long_left: false, edge_long_right: true, edge_break: false, edge_break_only: false },
+);
+const markerPair = geometry.visualEdgeMarkerPaths(regular, "edge_width_top", [4, 6.5]);
+assert.equal(markerPair.length, 2);
+assert.ok(markerPair.every(path => path.length === 2));
+assert.ok(markerPair[1][0][1] > markerPair[0][0][1]);
 
 for (const side of geometry.availableSides("Regular")) {
     const strip = geometry.stripPolygonMm(regular, side, 2, 1.5);
@@ -93,6 +109,10 @@ const breakRegion = geometry.regionPolygonMm(breakPiece, "edge_break_only", 1, 0
 assert.ok(Math.abs(segmentLength(breakRegion[0], breakRegion[1]) - 40) < 0.2);
 assert.ok(Math.abs(breakRegion[1][0] - breakRegion[0][0]) > 1);
 assert.ok(Math.abs(breakRegion[1][1] - breakRegion[0][1]) > 1);
+const breakMarkers = geometry.visualEdgeMarkerPaths(breakPiece, "edge_break_only", [4, 6.5]);
+assert.equal(breakMarkers.length, 2);
+assert.ok(breakMarkers.every(path => path.length === 2));
+assert.notEqual(breakMarkers[0][0][0], breakMarkers[0][1][0]);
 
 const clipped = geometry.pieceFromRow({
     piece_type: "Clipped Corner",
