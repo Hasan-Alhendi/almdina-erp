@@ -549,6 +549,80 @@
         return offsetPolyline(reference, distance, sign);
     }
 
+    function quantizeCm(value) {
+        return Math.round(value * 10000) / 10000;
+    }
+
+    function positiveCm(value) {
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? number : null;
+    }
+
+    function pointNear(point, target, tolerance) {
+        return Math.abs(point[0] - target[0]) <= tolerance && Math.abs(point[1] - target[1]) <= tolerance;
+    }
+
+    function centerRecessedHandle(piece, side, widthCm, lengthCm) {
+        const source = piece || {};
+        const pieceType = String(source.pieceType || source.piece_type || "").trim();
+        if (pieceType !== "Regular") return { ok: false, code: "unsupported_piece_type" };
+        const resolved = String(side || "").trim() || SIDE_TOP;
+        const horizontal = resolved === SIDE_TOP || resolved === SIDE_BOTTOM;
+        const vertical = resolved === SIDE_LEFT || resolved === SIDE_RIGHT;
+        if (!horizontal && !vertical) return { ok: false, code: "side_unavailable" };
+        const doorWidth = positiveCm(source.widthCm);
+        const doorHeight = positiveCm(source.lengthCm);
+        const handleWidth = positiveCm(widthCm);
+        const handleLength = positiveCm(lengthCm);
+        if (doorWidth === null) return { ok: false, code: "door_width_invalid" };
+        if (doorHeight === null) return { ok: false, code: "door_height_invalid" };
+        if (handleLength === null) return { ok: false, code: "handle_length_invalid" };
+        if (handleWidth === null) return { ok: false, code: "handle_width_invalid" };
+        const span = horizontal ? doorWidth : doorHeight;
+        const depth = horizontal ? doorHeight : doorWidth;
+        if (handleLength > span + 1e-9) {
+            return { ok: false, code: horizontal ? "length_exceeds_door_width" : "length_exceeds_door_height" };
+        }
+        if (handleWidth > depth + 1e-9) {
+            return { ok: false, code: horizontal ? "width_exceeds_door_height" : "width_exceeds_door_width" };
+        }
+        const startCm = quantizeCm((span - handleLength) / 2);
+        const offsetCm = quantizeCm((depth - handleWidth) / 2);
+        if (startCm < 0 || offsetCm < 0) return { ok: false, code: "center_rejected" };
+        const host = {
+            pieceType: "Regular",
+            widthCm: doorWidth,
+            lengthCm: doorHeight,
+            position: source.position || "Top Right",
+            cutWidthCm: 0,
+            cutLengthCm: 0,
+        };
+        let line;
+        let polygon;
+        try {
+            line = centerlineMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+            polygon = regionPolygonMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+        } catch (error) {
+            return { ok: false, code: (error && error.code) || "center_rejected" };
+        }
+        if (!line || line.length < 2 || !polygon || polygon.length < 4) {
+            return { ok: false, code: "center_rejected" };
+        }
+        const doorCenter = [doorWidth * 5, doorHeight * 5];
+        const lineMid = [
+            (line[0][0] + line[line.length - 1][0]) / 2,
+            (line[0][1] + line[line.length - 1][1]) / 2,
+        ];
+        const polygonMid = polygon.reduce(
+            (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
+            [0, 0]
+        ).map(value => value / polygon.length);
+        if (!pointNear(lineMid, doorCenter, 0.05) || !pointNear(polygonMid, doorCenter, 0.05)) {
+            return { ok: false, code: "center_rejected" };
+        }
+        return { ok: true, code: "", side: resolved, startCm, offsetCm };
+    }
+
     function collinearPoint(start, middle, end) {
         const area = Math.abs(
             ((middle[0] - start[0]) * (end[1] - start[1]))
@@ -1176,6 +1250,7 @@
         regionReferenceMm,
         cutterCenterOffsetsMm,
         centerlineMm,
+        centerRecessedHandle,
         toolpathMm,
         generateToolpath,
         buildMachiningOverlay,

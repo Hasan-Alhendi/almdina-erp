@@ -764,22 +764,16 @@
     function overlayHandleRect(local) {
         const xs = local.map(point => point[0]);
         const ys = local.map(point => point[1]);
-        let minX = Math.min(...xs);
-        let maxX = Math.max(...xs);
-        let minY = Math.min(...ys);
-        let maxY = Math.max(...ys);
-        const minSize = 1.1;
-        if (maxX - minX < minSize) {
-            const mid = (minX + maxX) / 2;
-            minX = mid - (minSize / 2);
-            maxX = mid + (minSize / 2);
-        }
-        if (maxY - minY < minSize) {
-            const mid = (minY + maxY) / 2;
-            minY = mid - (minSize / 2);
-            maxY = mid + (minSize / 2);
-        }
-        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        return {
+            x: minX,
+            y: minY,
+            w: Math.max(0, maxX - minX),
+            h: Math.max(0, maxY - minY),
+        };
     }
 
     function pieceWithLinerSpec(frm, piece) {
@@ -1064,14 +1058,15 @@
             const isToolpath = Boolean(geometry && geometry.toolpath);
             if (isToolpath) return "";
             if (kind === "recessed_handle_cutout") {
+                const handleAttrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="rgba(196,92,18,0.16)" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
                 if (axisAlignedPolygon(local)) {
                     const box = overlayHandleRect(local);
-                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${handleAttrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
                 }
                 const outline = local
                     .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
                     .join(" ") + (closed ? " Z" : "");
-                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${handleAttrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
             const machiningKind = kind === "liner" || kind === "back_groove";
             const strokePoints = machiningKind ? overlaySingleLine(local, closed) : local;

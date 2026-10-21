@@ -1136,6 +1136,108 @@ async function interactionChecks() {
     fakeWindow.AlmdinaExtraDoorAddonsUX.syncAddonButtons(table, live, true);
     assert.equal(addonLabel(table), "Double Edge");
 
+    const centered = blankRow({
+        name: "handle-center",
+        piece_type: "Regular",
+        width_cm: 60,
+        length_cm: 80,
+    });
+    const centeredOrder = { doc: { pieces: [centered] }, dirty() {} };
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-handle-size]").length, 7);
+    assert.equal(ui.root.querySelector("[data-handle-center]").hidden, false);
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').textContent.includes("38 × 329"), true);
+    const beforeCenterWrites = writes.length;
+    ui.root.querySelector('[data-handle-size="38x329"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "38");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "32.9");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(writes.length, beforeCenterWrites);
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_width_top"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "38.1");
+    assert.equal(centered.recessed_handle_start_cm, undefined);
+    ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "19.9");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "13.55");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x329"]').classList.contains("is-active"), false);
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "20.05");
+    ui.root.querySelector('[data-liner-side="edge_long_right"]').dispatch("click");
+    ui.root.querySelector('[data-handle-size="38x199"]').dispatch("click");
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector('[data-liner-side="edge_long_right"]').classList.contains("is-active"), true);
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "30.05");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "28.1");
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(writes.length, beforeCenterWrites);
+    assert.equal(centered.extra_recessed_handle_cutout, undefined);
+
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    ui.root.querySelector('[data-handle-size="38x230.5"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "38");
+    assert.equal(ui.root.querySelector("[data-liner-length]").value, "23.05");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(centered.recessed_handle_width_cm, 3.8);
+    assert.equal(centered.recessed_handle_length_cm, 23.05);
+    assert.equal(centered.recessed_handle_reference_side, "edge_width_top");
+    assert.equal(centered.recessed_handle_start_cm, 18.475);
+    assert.equal(centered.recessed_handle_offset_cm, 38.1);
+    dialog.open(centeredOrder, centered);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelector('[data-handle-size="38x230.5"]').classList.contains("is-active"), true);
+
+    const narrow = blankRow({
+        name: "handle-narrow",
+        piece_type: "Regular",
+        width_cm: 30,
+        length_cm: 80,
+    });
+    dialog.open({ doc: { pieces: [narrow] }, dirty() {} }, narrow);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    ui.root.querySelector('[data-handle-size="38x329"]').dispatch("click");
+    const beforeNarrow = messages.length;
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, "0");
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, "2");
+    assert.match(ui.root.querySelector("[data-liner-help]").textContent, /door width/);
+    assert.match(messages[messages.length - 1].message, /door width/);
+    assert.ok(messages.length > beforeNarrow);
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+    assert.equal(narrow.recessed_handle_start_cm, undefined);
+
+    const shaped = blankRow({
+        name: "handle-shaped",
+        piece_type: "L-Shaped Corner",
+        width_cm: 60,
+        length_cm: 80,
+        clipped_corner_position: "Top Right",
+        clipped_corner_width_cm: 20,
+        clipped_corner_length_cm: 20,
+    });
+    dialog.open({ doc: { pieces: [shaped] }, dirty() {} }, shaped);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_recessed_handle_cutout"]').dispatch("click");
+    assert.equal(ui.root.querySelector("[data-handle-center]").hidden, true);
+    ui.root.querySelector('[data-handle-size="38x136"]').dispatch("click");
+    const startBefore = ui.root.querySelector("[data-liner-start]").value;
+    const offsetBefore = ui.root.querySelector("[data-liner-offset]").value;
+    ui.root.querySelector("[data-handle-center]").dispatch("click");
+    assert.equal(ui.root.querySelector("[data-liner-start]").value, startBefore);
+    assert.equal(ui.root.querySelector("[data-liner-offset]").value, offsetBefore);
+    assert.match(messages[messages.length - 1].message, /door type/);
+
     console.log("Unified add-ons dialog interaction passed");
 }
 

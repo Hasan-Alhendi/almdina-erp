@@ -514,6 +514,9 @@
         syncEnable(root, session, editable);
         syncRemove(root, session, editable);
         syncSides(root, session.drafts[session.activeField], session);
+        if (editorApi() && typeof editorApi().syncHandleChoices === "function") {
+            editorApi().syncHandleChoices(root, session.drafts[session.activeField]);
+        }
         syncPreview(root, session);
         showIssue(root, session, invalidEnabledDraft(session));
         syncApply(root, session, editable);
@@ -741,6 +744,54 @@
                 syncChrome(root, session, editable);
                 return;
             }
+            const sizeButton = event.target.closest("[data-handle-size]");
+            if (sizeButton && root.contains(sizeButton) && editable && editor) {
+                const current = captureActive(session, root, "length");
+                const sizeId = sizeButton.getAttribute("data-handle-size");
+                const size = (editor.handleStandardSizes || []).find(item => item.id === sizeId);
+                if (!current || !size || typeof editor.applyStandardHandleSize !== "function") return;
+                const next = editor.applyStandardHandleSize(current, size);
+                next.enabled = true;
+                session.drafts[session.activeField] = next;
+                setEnabled(session, session.activeField, true);
+                editor.writeMachiningInputs(root, next);
+                syncChrome(root, session, editable);
+                return;
+            }
+            const centerButton = event.target.closest("[data-handle-center]");
+            if (centerButton && root.contains(centerButton) && editable && editor) {
+                const current = captureActive(session, root, "offset");
+                if (!current || typeof editor.centerHandleDraft !== "function") return;
+                const outcome = editor.centerHandleDraft(current);
+                if (!outcome.ok) {
+                    syncChrome(root, session, editable);
+                    const message = outcome.message || editor.centerHandleMessage(outcome.code);
+                    const help = root.querySelector("[data-liner-help]");
+                    if (help) {
+                        help.textContent = message;
+                        help.classList.add("is-error");
+                    }
+                    const banner = root.querySelector("[data-addons-error]");
+                    if (banner) {
+                        banner.hidden = false;
+                        banner.textContent = message;
+                    }
+                    if (typeof frappe !== "undefined" && frappe.msgprint) {
+                        frappe.msgprint({
+                            title: translate("Center Handle"),
+                            message,
+                            indicator: "orange",
+                        });
+                    }
+                    return;
+                }
+                const next = Object.assign({}, outcome.draft, { enabled: true });
+                session.drafts[session.activeField] = next;
+                setEnabled(session, session.activeField, true);
+                editor.writeMachiningInputs(root, next);
+                syncChrome(root, session, editable);
+                return;
+            }
             const doubleSide = event.target.closest("[data-double-side]");
             if (doubleSide && root.contains(doubleSide) && editable) {
                 const sideName = doubleSide.getAttribute("data-double-side");
@@ -780,6 +831,7 @@
             )) || "";
             const draft = captureActive(session, root, changedField);
             if (draft && draft.fullLength && changedField === "start") writeSpanInputs(root, draft);
+            if (editor && typeof editor.syncHandleChoices === "function") editor.syncHandleChoices(root, draft);
             syncPreview(root, session);
             showIssue(root, session, invalidEnabledDraft(session));
             syncApply(root, session, editable);

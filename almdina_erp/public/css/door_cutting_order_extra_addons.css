@@ -371,6 +371,48 @@ body[dir="ltr"] .dco-addons-preview-pane {
     box-shadow: none;
 }
 
+.dco-addons-modal .dco-handle-size-grid,
+.dco-corner-editor .dco-handle-size-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--alm-space-2, 8px);
+}
+
+.dco-addons-modal .dco-handle-size,
+.dco-corner-editor .dco-handle-size {
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: 999px;
+    background: var(--alm-card, #fff);
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-bold, 700);
+    line-height: 1;
+    direction: ltr;
+    cursor: pointer;
+}
+
+.dco-addons-modal .dco-handle-size:hover,
+.dco-corner-editor .dco-handle-size:hover {
+    border-color: var(--alm-border-hover, #d0d5dd);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-addons-modal .dco-handle-size.is-active,
+.dco-corner-editor .dco-handle-size.is-active {
+    border-color: var(--alm-primary, #172033);
+    background: var(--alm-primary, #172033);
+    color: var(--alm-on-primary, #fff);
+}
+
+.dco-addons-modal .dco-handle-center,
+.dco-corner-editor .dco-handle-center {
+    align-self: flex-start;
+}
+
 .dco-addons-modal .dco-corner-input-wrap {
     min-width: 0;
 }

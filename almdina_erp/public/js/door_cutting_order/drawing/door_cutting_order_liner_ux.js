@@ -56,6 +56,28 @@
         edge_width_top: "Left to right",
         edge_width_bottom: "Left to right",
     };
+    const HANDLE_STANDARD_SIZES_MM = Object.freeze([
+        Object.freeze({ id: "38x329", widthMm: 38, lengthMm: 329 }),
+        Object.freeze({ id: "38x296", widthMm: 38, lengthMm: 296 }),
+        Object.freeze({ id: "38x230.5", widthMm: 38, lengthMm: 230.5 }),
+        Object.freeze({ id: "38x199", widthMm: 38, lengthMm: 199 }),
+        Object.freeze({ id: "38x167", widthMm: 38, lengthMm: 167 }),
+        Object.freeze({ id: "38x136", widthMm: 38, lengthMm: 136 }),
+        Object.freeze({ id: "37x103", widthMm: 37, lengthMm: 103 }),
+    ]);
+    const CENTER_HANDLE_MESSAGES = {
+        unsupported_piece_type: "Cannot center the handle on this door type.",
+        side_unavailable: "Cannot center the handle because the reference side is unavailable.",
+        door_width_invalid: "Cannot center the handle because the door width is missing or invalid.",
+        door_height_invalid: "Cannot center the handle because the door height is missing or invalid.",
+        handle_length_invalid: "Cannot center the handle because its length is missing or invalid.",
+        handle_width_invalid: "Cannot center the handle because its width is missing or invalid.",
+        length_exceeds_door_width: "Cannot center the handle because its length exceeds the door width.",
+        length_exceeds_door_height: "Cannot center the handle because its length exceeds the door height.",
+        width_exceeds_door_height: "Cannot center the handle because its width exceeds the door height.",
+        width_exceeds_door_width: "Cannot center the handle because its width exceeds the door width.",
+        center_rejected: "Cannot center the handle.",
+    };
 
     function edgeCm(piece, side) {
         return geometry().edgeLengthMm(piece, side) / 10;
@@ -252,18 +274,20 @@
             : machiningTone(draft.kind);
         const width = role === "active" ? 2.2 : (role === "quiet" ? 1.2 : 1.4);
         let center = "";
-        try {
-            const line = api.centerlineMm(
-                piece,
-                draft.side,
-                draft.offsetCm,
-                draft.widthCm,
-                draft.startCm,
-                draft.lengthCm
-            ).map(point => mapPoint(point, frame, piece));
-            center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
-        } catch (error) {
-            center = "";
+        if (draft.kind !== "recessed_handle_cutout") {
+            try {
+                const line = api.centerlineMm(
+                    piece,
+                    draft.side,
+                    draft.offsetCm,
+                    draft.widthCm,
+                    draft.startCm,
+                    draft.lengthCm
+                ).map(point => mapPoint(point, frame, piece));
+                center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
+            } catch (error) {
+                center = "";
+            }
         }
         const polygon = api.regionPolygonMm(
             piece,
@@ -440,6 +464,101 @@
         </svg>`;
     }
 
+    function handleSizeById(id) {
+        return HANDLE_STANDARD_SIZES_MM.find(size => size.id === id) || null;
+    }
+
+    function matchingHandleSize(widthCm, lengthCm) {
+        const widthMm = num(widthCm) * 10;
+        const lengthMm = num(lengthCm) * 10;
+        return HANDLE_STANDARD_SIZES_MM.find(size => (
+            Math.abs(widthMm - size.widthMm) <= 0.05
+            && Math.abs(lengthMm - size.lengthMm) <= 0.05
+        )) || null;
+    }
+
+    function handleSizeLabel(size) {
+        return `${formatInput(size.widthMm, 2)} × ${formatInput(size.lengthMm, 2)} ${__("mm")}`;
+    }
+
+    function handleCenteringAllowed(draft) {
+        const rowType = draft && draft.row ? draft.row.piece_type : "";
+        const pieceType = draft && draft.piece ? draft.piece.pieceType : "";
+        return String(rowType || pieceType || "").trim() === "Regular";
+    }
+
+    function centerHandleMessage(code) {
+        return __(CENTER_HANDLE_MESSAGES[code] || CENTER_HANDLE_MESSAGES.center_rejected);
+    }
+
+    function applyStandardHandleSize(draft, size) {
+        return Object.assign({}, draft, {
+            widthCm: size.widthMm / 10,
+            lengthCm: size.lengthMm / 10,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+        });
+    }
+
+    function centerHandleDraft(draft) {
+        if (!handleCenteringAllowed(draft)) {
+            return { ok: false, code: "unsupported_piece_type", draft };
+        }
+        const api = geometry();
+        const result = api && typeof api.centerRecessedHandle === "function"
+            ? api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm)
+            : { ok: false, code: "center_rejected" };
+        if (!result.ok) return { ok: false, code: result.code, draft };
+        const next = Object.assign({}, draft, {
+            side: result.side,
+            startCm: result.startCm,
+            offsetCm: result.offsetCm,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+            edgeCm: edgeCm(draft.piece, result.side),
+        });
+        const issue = validationIssue(next);
+        if (issue) return { ok: false, code: issue.code, message: issue.message, draft };
+        return { ok: true, draft: next };
+    }
+
+    function writeMachiningInputs(root, draft) {
+        if (!root || !draft) return;
+        const offset = root.querySelector("[data-liner-offset]");
+        const width = root.querySelector("[data-liner-width]");
+        const start = root.querySelector("[data-liner-start]");
+        const length = root.querySelector("[data-liner-length]");
+        if (offset) offset.value = formatInput(draft.offsetCm, 3);
+        if (width) width.value = formatInput(num(draft.widthCm) * 10, 2);
+        if (start) start.value = formatInput(draft.startCm, 3);
+        if (length) length.value = formatInput(draft.lengthCm, 3);
+    }
+
+    function syncHandleChoices(root, draft) {
+        if (!root || !draft || draft.kind !== "recessed_handle_cutout") return;
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        root.querySelectorAll("[data-handle-size]").forEach(button => {
+            const selected = Boolean(match) && button.getAttribute("data-handle-size") === match.id;
+            button.classList.toggle("is-active", selected);
+            button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        const center = root.querySelector("[data-handle-center]");
+        if (center) center.hidden = !handleCenteringAllowed(draft);
+    }
+
+    function handleChoicesHtml(draft) {
+        if (!draft || draft.kind !== "recessed_handle_cutout") return "";
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        const chips = HANDLE_STANDARD_SIZES_MM.map(size => {
+            const selected = Boolean(match) && match.id === size.id;
+            return `<button type="button" class="dco-handle-size ${selected ? "is-active" : ""}" data-handle-size="${size.id}" aria-pressed="${selected ? "true" : "false"}" dir="ltr">${esc(handleSizeLabel(size))}</button>`;
+        }).join("");
+        const centerHidden = handleCenteringAllowed(draft) ? "" : " hidden";
+        return `<div class="dco-corner-section-label">${esc(__("Standard sizes"))}</div>
+                <div class="dco-handle-size-grid" data-handle-sizes>${chips}</div>
+                <button type="button" class="btn btn-default btn-sm dco-handle-center" data-handle-center="1"${centerHidden}>${esc(__("Center Handle"))}</button>`;
+    }
+
     function controlsHtml(draft) {
         const api = geometry();
         const sides = api.availableSides(draft.piece.pieceType).map(side => `
@@ -453,6 +572,7 @@
         return `<div data-liner-fields data-machining-kind="${esc(addon.kind)}">
                 <div class="dco-corner-section-label">${esc(__("Reference Side"))}</div>
                 <div class="dco-corner-position-grid" data-liner-sides>${sides}</div>
+                ${handleChoicesHtml(draft)}
                 <div class="dco-corner-section-label">${esc(__("Distance and width"))}</div>
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
@@ -561,6 +681,7 @@
             direction.textContent = `${__("Measurement Direction")}: ${__(DIRECTION[draft.side] || "Along the selected edge")}`;
         }
         if (help) help.textContent = message;
+        syncHandleChoices(root, draft);
         if (dialog && dialog.get_primary_btn) {
             dialog.get_primary_btn().prop("disabled", Boolean(message));
         }
@@ -779,6 +900,39 @@
                 paint(root, draft, dialog);
                 return;
             }
+            const sizeButton = event.target.closest("[data-handle-size]");
+            if (sizeButton && root.contains(sizeButton) && addon.kind === "recessed_handle_cutout") {
+                const size = handleSizeById(sizeButton.getAttribute("data-handle-size"));
+                if (!size) return;
+                draft = applyStandardHandleSize(
+                    readDraft(root, piece, true, row, addon.kind, draft, "length"),
+                    size
+                );
+                writeMachiningInputs(root, draft);
+                paint(root, draft, dialog);
+                return;
+            }
+            const centerButton = event.target.closest("[data-handle-center]");
+            if (centerButton && root.contains(centerButton) && addon.kind === "recessed_handle_cutout") {
+                const current = readDraft(root, piece, draft.enabled, row, addon.kind, draft, "offset");
+                const outcome = centerHandleDraft(current);
+                if (!outcome.ok) {
+                    paint(root, current, dialog);
+                    const message = outcome.message || centerHandleMessage(outcome.code);
+                    const help = root.querySelector("[data-liner-help]");
+                    if (help) help.textContent = message;
+                    frappe.msgprint({
+                        title: __("Center Handle"),
+                        message,
+                        indicator: "orange",
+                    });
+                    return;
+                }
+                draft = Object.assign({}, outcome.draft, { enabled: true });
+                writeMachiningInputs(root, draft);
+                paint(root, draft, dialog);
+                return;
+            }
             if (event.target.closest("[data-liner-cancel]")) {
                 dialog.hide();
                 return;
@@ -830,5 +984,13 @@
         selectSide,
         hostPiece,
         paint,
+        handleStandardSizes: HANDLE_STANDARD_SIZES_MM,
+        matchingHandleSize,
+        applyStandardHandleSize,
+        centerHandleDraft,
+        centerHandleMessage,
+        handleCenteringAllowed,
+        syncHandleChoices,
+        writeMachiningInputs,
     });
 })();
