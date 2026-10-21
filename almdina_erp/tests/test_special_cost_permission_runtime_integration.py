@@ -7,6 +7,8 @@ import frappe
 from frappe.handler import execute_cmd
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import now_datetime
+from werkzeug.test import EnvironBuilder
+from werkzeug.wrappers import Request
 
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.custom_docperm_capability_reader import (
@@ -73,6 +75,20 @@ class TestSpecialCostPermissionRuntimeIntegration(FrappeTestCase):
         frappe.clear_cache(doctype="Door Cutting Order")
         frappe.clear_cache(doctype="Cutting Plan")
         frappe.local.almdina_matrix_capabilities = {}
+
+    @staticmethod
+    def _execute_rpc(method: str) -> dict:
+        """Dispatch through Frappe's real RPC handler with a real POST request."""
+
+        previous_request = getattr(frappe.local, "request", None)
+        frappe.local.request = Request(EnvironBuilder(method="POST").get_environ())
+        try:
+            return execute_cmd(method)
+        finally:
+            if previous_request is None:
+                frappe.local.__dict__.pop("request", None)
+            else:
+                frappe.local.request = previous_request
 
     def setUp(self) -> None:
         super().setUp()
@@ -219,7 +235,7 @@ class TestSpecialCostPermissionRuntimeIntegration(FrappeTestCase):
             ],
             expected_modified=str(order.modified),
         )
-        return execute_cmd(
+        return self._execute_rpc(
             "almdina_erp.almdina_erp.services.cost_permission_service.save_cost_workspace"
         )
 
@@ -362,7 +378,7 @@ class TestSpecialCostPermissionRuntimeIntegration(FrappeTestCase):
         )
         frappe.db.savepoint("special_cost_atomicity")
         with self.assertRaises(frappe.PermissionError):
-            execute_cmd(
+            self._execute_rpc(
                 "almdina_erp.almdina_erp.services.cost_permission_service.save_cost_workspace"
             )
         frappe.db.rollback(save_point="special_cost_atomicity")
@@ -406,7 +422,7 @@ class TestSpecialCostPermissionRuntimeIntegration(FrappeTestCase):
             expected_modified=str(order.modified),
         )
         with self.assertRaises(frappe.PermissionError):
-            execute_cmd(
+            self._execute_rpc(
                 "almdina_erp.almdina_erp.services.cost_permission_service.save_cost_workspace"
             )
         self.assertEqual(

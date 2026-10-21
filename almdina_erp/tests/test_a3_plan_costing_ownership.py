@@ -72,7 +72,7 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
                 saved.append(saved_plan)
                 return saved_plan
 
-        with patch.object(cost_commands, "require_cutting_plan_capability"):
+        with patch.object(cost_commands, "require_cost_settings_edit"):
             with patch.object(cost_commands, "current_cost_plan", return_value=plan):
                 with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository", FakeRepository):
                     with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
@@ -147,7 +147,7 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
 
         with patch.object(cost_commands, "_", lambda value: value):
             with patch.object(cost_commands.frappe, "db", fake_db):
-                with patch.object(cost_commands, "require_cutting_plan_capability"):
+                with patch.object(cost_commands, "require_cost_settings_edit"):
                     with patch.object(cost_commands, "current_cost_plan", return_value=plan):
                         with patch.object(cost_commands, "FrappeCuttingPlanCommandRepository") as repository_cls:
                             with patch.object(cost_commands, "initialize_draft_plan_cost_snapshot", return_value=False):
@@ -385,57 +385,42 @@ class TestA3PlanCostingOwnership(unittest.TestCase):
         self.assertEqual(special_line["amount_usd"], 50)
 
     def test_special_price_command_refreshes_projection_before_response(self) -> None:
-        piece = SimpleNamespace(
-            name="DCO-DETAIL-SPECIAL-COMMAND",
-            piece_type="Special",
-            special_shape_custom_unit_price_usd=0,
-            special_shape_final_unit_price_usd=0,
-            special_shape_price_status="Estimated",
-            special_shape_price_note="",
-            special_shape_price_approved_by="",
-            special_shape_price_approved_on=None,
+        snapshot = {
+            "pieces": [
+                {
+                    "name": "DCO-DETAIL-SPECIAL-COMMAND",
+                    "special_shape_custom_unit_price_usd": 25,
+                    "special_shape_final_unit_price_usd": 25,
+                    "special_shape_price_status": "Approved",
+                    "special_shape_price_note": "سعر معتمد",
+                    "special_shape_price_approved_by": "accounts@example.com",
+                    "special_shape_price_approved_on": "2026-10-21 10:00:00",
+                }
+            ],
+            "customer_quote_total_usd": 50,
+            "customer_quote_status": "Approved",
+            "order_modified": "v2",
+        }
+        with patch.object(cost_service, "save_cost_workspace", return_value=snapshot) as save:
+            result = cost_service.approve_special_piece_price(
+                "DCO-A3-SPECIAL-COMMAND",
+                "DCO-DETAIL-SPECIAL-COMMAND",
+                25,
+                "سعر معتمد",
+                expected_modified="v1",
+            )
+
+        save.assert_called_once_with(
+            order_name="DCO-A3-SPECIAL-COMMAND",
+            special_prices=[
+                {
+                    "piece_name": "DCO-DETAIL-SPECIAL-COMMAND",
+                    "unit_price_usd": 25,
+                    "note": "سعر معتمد",
+                }
+            ],
+            expected_modified="v1",
         )
-        order = SimpleNamespace(
-            name="DCO-A3-SPECIAL-COMMAND",
-            modified="v1",
-            pieces=[piece],
-            flags=SimpleNamespace(),
-            customer_quote_total_usd=0,
-            customer_quote_status="Estimated",
-        )
-
-        def save(*, ignore_permissions: bool) -> None:
-            self.assertTrue(ignore_permissions)
-            order.modified = "v2"
-
-        order.save = save
-
-        def refresh(saved_order) -> dict[str, object]:
-            self.assertIs(saved_order, order)
-            piece.special_shape_final_unit_price_usd = piece.special_shape_custom_unit_price_usd
-            saved_order.customer_quote_total_usd = 50
-            saved_order.customer_quote_status = "Approved"
-            return {
-                "customer_quote_total_usd": 50,
-                "customer_quote_status": "Approved",
-            }
-
-        with patch.object(cost_service, "_locked_order", return_value=order):
-            with patch.object(cost_service, "_require_cost_visibility"):
-                with patch.object(cost_service, "require_document_capability"):
-                    with patch.object(cost_service, "_require_expected_document_version"):
-                        with patch.object(cost_service, "assert_order_editable"):
-                            with patch.object(cost_service, "refresh_order_commercial_totals", side_effect=refresh) as refresh_mock:
-                                with patch.object(cost_service.frappe, "session", SimpleNamespace(user="accounts@example.com")):
-                                    result = cost_service.approve_special_piece_price(
-                                        order.name,
-                                        piece.name,
-                                        25,
-                                        "سعر معتمد",
-                                        expected_modified="v1",
-                                    )
-
-        refresh_mock.assert_called_once_with(order)
         self.assertEqual(result["unit_price_usd"], 25)
         self.assertEqual(result["customer_quote_total_usd"], 50)
         self.assertEqual(result["customer_quote_status"], "Approved")
