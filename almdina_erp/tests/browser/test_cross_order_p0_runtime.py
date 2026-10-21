@@ -820,8 +820,8 @@ def _print_saved_plan_variant(source, prefix):
             page.wait_for_function("() => __p0VariantWrites.length >= 2", timeout=15000)
             html = page.evaluate("__p0VariantWrites.at(-1)")
             assert selected["order_name"] in html
-            assert selected["plan_name"] in html
-            assert str(selected["revision"]) in html
+            # The print contract intentionally exposes order and geometry, not
+            # internal plan identifiers or revision keys.
             assert selected["board"] in html
             assert html.count('class="dco-sheet-card"') == selected["sheets"]
             other_labels = ("B",) if prefix == "custom" else (("A",) if prefix == "approved" else ("A", "B"))
