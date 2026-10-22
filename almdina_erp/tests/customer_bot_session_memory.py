@@ -10,7 +10,7 @@ import json
 import secrets
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
 from almdina_erp.almdina_erp.application.customer_bot.session_store import BeginTurn
@@ -76,6 +76,7 @@ class _Reply:
     claimed_on: str | None
     provider_message_id: str | None
     reason_code: str | None
+    created_on: datetime | None = None
 
 
 class MemoryCustomerBotSessionStore:
@@ -197,16 +198,36 @@ class MemoryCustomerBotSessionStore:
                 conversation_token, event_token, revision, state, now,
             ):
                 return LOST_LEASE
-            self._store_replies(replies)
+            self._store_replies(replies, now=now)
             return PROCESSED
 
-    def claim_next(self, *, now) -> ClaimedReply | None:
+    def claim_next(
+        self,
+        *,
+        now,
+        eligible_phone: str | None = None,
+        created_not_before: datetime | None = None,
+    ) -> ClaimedReply | None:
         with self._lock:
-            eligible = [
-                row
-                for row in self.replies.values()
-                if row.status == PENDING and not self._blocked(row.intent)
-            ]
+            eligible = []
+            for row in self.replies.values():
+                if row.status != PENDING or self._blocked(row.intent):
+                    continue
+                if eligible_phone and row.intent.normalized_phone != eligible_phone:
+                    continue
+                if created_not_before is not None:
+                    created = row.created_on
+                    if created is None:
+                        continue
+                    stamp = created if created.tzinfo is not None else created.replace(tzinfo=now.tzinfo)
+                    cutoff = (
+                        created_not_before
+                        if created_not_before.tzinfo is not None
+                        else created_not_before.replace(tzinfo=now.tzinfo)
+                    )
+                    if stamp < cutoff:
+                        continue
+                eligible.append(row)
             if not eligible:
                 return None
             eligible.sort(key=lambda row: (row.intent.sequence, row.reply_id))
@@ -241,6 +262,7 @@ class MemoryCustomerBotSessionStore:
                 normalized_phone=intent.normalized_phone,
                 acceptance_epoch=intent.acceptance_epoch,
                 group_document_specs=group_specs,
+                created_on=chosen.created_on,
             )
 
     def record_result(self, *, reply_id, claim_token, result, now) -> bool:
@@ -374,12 +396,28 @@ class MemoryCustomerBotSessionStore:
         event.completed_on = utc_iso(now)
         return True
 
-    def _store_replies(self, replies: tuple[ReplyIntent, ...]) -> None:
+    def _store_replies(
+        self,
+        replies: tuple[ReplyIntent, ...],
+        *,
+        now: datetime | None = None,
+    ) -> None:
+        created = now if now is not None else datetime.now(timezone.utc)
         for intent in replies:
             key = (intent.connection_ref, intent.provider_event_id, intent.sequence)
             if key in self.replies:
                 raise RuntimeError("reply intent already stored for this event")
-            self.replies[key] = _Reply(intent, intent.reply_id(), PENDING, 0, None, None, None, None)
+            self.replies[key] = _Reply(
+                intent,
+                intent.reply_id(),
+                PENDING,
+                0,
+                None,
+                None,
+                None,
+                None,
+                created_on=created,
+            )
 
     def _blocked(self, intent: ReplyIntent) -> bool:
         for row in self.replies.values():

@@ -8,7 +8,7 @@ cancel, or marks an expired claim ``unknown``. It does not call the gateway.
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import frappe
 
@@ -38,8 +38,20 @@ _TERMINAL = {ACCEPTED, REJECTED, UNKNOWN}
 
 
 class FrappeCustomerBotReplyRepository:
-    def claim_next(self, *, now: datetime) -> ClaimedReply | None:
-        return _commit_with_deadlock_retry(lambda: self._claim(now))
+    def claim_next(
+        self,
+        *,
+        now: datetime,
+        eligible_phone: str | None = None,
+        created_not_before: datetime | None = None,
+    ) -> ClaimedReply | None:
+        return _commit_with_deadlock_retry(
+            lambda: self._claim(
+                now,
+                eligible_phone=eligible_phone,
+                created_not_before=created_not_before,
+            )
+        )
 
     def record_result(
         self,
@@ -73,16 +85,32 @@ class FrappeCustomerBotReplyRepository:
         bounded = max(1, min(int(limit), 200))
         return _commit_with_deadlock_retry(lambda: self._recover(now, claim_ttl, bounded))
 
-    def _claim(self, now: datetime) -> ClaimedReply | None:
+    def _claim(
+        self,
+        now: datetime,
+        *,
+        eligible_phone: str | None = None,
+        created_not_before: datetime | None = None,
+    ) -> ClaimedReply | None:
+        clauses = ["status='pending'"]
+        params: list[object] = []
+        if eligible_phone:
+            clauses.append("normalized_phone=%s")
+            params.append(eligible_phone)
+        if created_not_before is not None:
+            clauses.append("creation>=%s")
+            params.append(utc_iso(created_not_before))
+        where_sql = " and ".join(clauses)
         rows = frappe.db.sql(
             f"""select name, reply_id, connection_ref, provider_event_id, conversation_id,
                        destination_id, sequence, body, attempt_count, part_kind, document_spec,
-                       customer_id, normalized_phone, acceptance_epoch
+                       customer_id, normalized_phone, acceptance_epoch, creation
                 from `{_REPLY}`
-                where status='pending'
+                where {where_sql}
                 order by creation asc, sequence asc
                 limit 50
                 for update""",
+            tuple(params),
             as_dict=True,
         )
         for row in rows:
@@ -127,6 +155,7 @@ class FrappeCustomerBotReplyRepository:
                 group_document_specs=self._group_document_specs(
                     row.connection_ref, row.provider_event_id
                 ),
+                created_on=_parse_creation(row.creation),
             )
         return None
 
@@ -273,6 +302,30 @@ class FrappeCustomerBotReplyRepository:
 
 def _modified() -> str:
     return frappe.utils.now()
+
+
+def _parse_creation(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        # Frappe often stores naive UTC timestamps.
+        if "T" not in text and " " in text:
+            text = text.replace(" ", "T", 1)
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 __all__ = ["FrappeCustomerBotReplyRepository"]

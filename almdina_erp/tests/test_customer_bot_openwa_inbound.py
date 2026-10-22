@@ -7,6 +7,10 @@ import unittest
 from datetime import timezone
 
 from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import InboundMessageKind
+from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
+    MAX_KEY_LENGTH,
+    fit_session_key,
+)
 from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_openwa_inbound import (
     OpenWAInboundError,
     map_openwa_message_received,
@@ -179,6 +183,36 @@ class OpenWAInboundAdapterTests(unittest.TestCase):
         )
         self.assertEqual(message.sender_id, "1234567890@lid")
         self.assertIsNone(message.normalized_phone)
+
+    def test_long_idempotency_keys_with_shared_prefix_stay_distinct(self) -> None:
+        shared = (
+            "msg_08e1dfbe-5d6b-4e5b-b540-60a5924dd707_false_"
+            "120363090841257773@g.us_"
+        )
+        first_raw = shared + ("A" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        second_raw = shared + ("B" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        self.assertGreater(len(first_raw), MAX_KEY_LENGTH)
+        self.assertGreater(len(second_raw), MAX_KEY_LENGTH)
+        self.assertTrue(first_raw.startswith(shared) and second_raw.startswith(shared))
+
+        first = map_openwa_message_received(
+            _envelope(idempotencyKey=first_raw),
+            connection_ref=CONNECTION,
+        )
+        second = map_openwa_message_received(
+            _envelope(idempotencyKey=second_raw),
+            connection_ref=CONNECTION,
+        )
+        self.assertLessEqual(len(first.provider_event_id), MAX_KEY_LENGTH)
+        self.assertLessEqual(len(second.provider_event_id), MAX_KEY_LENGTH)
+        self.assertNotEqual(first.provider_event_id, second.provider_event_id)
+        self.assertEqual(first.provider_event_id, fit_session_key(first_raw))
+        self.assertEqual(second.provider_event_id, fit_session_key(second_raw))
+        self.assertEqual(fit_session_key(first_raw), fit_session_key(first_raw))
+
+    def test_short_idempotency_key_is_unchanged(self) -> None:
+        message = map_openwa_message_received(_envelope(idempotencyKey="idem-1"), connection_ref=CONNECTION)
+        self.assertEqual(message.provider_event_id, "idem-1")
 
 
 if __name__ == "__main__":

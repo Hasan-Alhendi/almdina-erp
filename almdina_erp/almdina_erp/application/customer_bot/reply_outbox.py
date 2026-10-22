@@ -34,15 +34,24 @@ class ClaimedReply:
     normalized_phone: str | None = None
     acceptance_epoch: int | None = None
     group_document_specs: tuple[DocumentReplySpec, ...] = ()
+    created_on: datetime | None = None
 
 
 class CustomerBotReplyOutbox(Protocol):
-    def claim_next(self, *, now: datetime) -> ClaimedReply | None:
+    def claim_next(
+        self,
+        *,
+        now: datetime,
+        eligible_phone: str | None = None,
+        created_not_before: datetime | None = None,
+    ) -> ClaimedReply | None:
         """Move one pending reply to processing, or return none.
 
         The claim commits before this returns. A second worker cannot claim
         the same row. A later sequence stays unclaimed until every earlier
-        sequence of that event is ``accepted``.
+        sequence of that event is ``accepted``. When ``eligible_phone`` /
+        ``created_not_before`` are set, older or other-phone pending rows stay
+        ``pending`` and are not selected.
         """
         ...
 

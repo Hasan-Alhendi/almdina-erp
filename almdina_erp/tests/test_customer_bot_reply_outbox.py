@@ -29,6 +29,8 @@ from almdina_erp.almdina_erp.domain.customer_bot.text_reply import SendDispositi
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery import (
     LIVE_REPLY_DELIVERY_ENABLED,
     deliver_customer_bot_replies,
+    enqueue_customer_bot_reply_delivery,
+    run_customer_bot_reply_delivery_job,
     scheduled_customer_bot_reply_tick,
 )
 import almdina_erp.hooks as almdina_hooks
@@ -331,11 +333,16 @@ class ReplyOutboxTests(unittest.TestCase):
             "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery.scheduled_customer_bot_reply_tick",
             cron,
         )
-        source = inspect.getsource(scheduled_customer_bot_reply_tick)
-        self.assertIn("recover_abandoned_reply_claims", source)
-        self.assertIn("deliver_customer_bot_replies", source)
-        self.assertNotIn("OpenWAClient", source)
-        self.assertNotIn("OPENWA_API_KEY", source)
+        tick_source = inspect.getsource(scheduled_customer_bot_reply_tick)
+        self.assertIn("run_customer_bot_reply_delivery_job", tick_source)
+        job_source = inspect.getsource(run_customer_bot_reply_delivery_job)
+        self.assertIn("recover_abandoned_reply_claims", job_source)
+        self.assertIn("deliver_customer_bot_replies", job_source)
+        self.assertNotIn("OpenWAClient", job_source)
+        self.assertNotIn("OPENWA_API_KEY", job_source)
+        enqueue_source = inspect.getsource(enqueue_customer_bot_reply_delivery)
+        self.assertIn("enqueue_after_commit", enqueue_source)
+        self.assertIn("frappe.enqueue", enqueue_source)
         with patch(
             "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery.deliver_customer_bot_replies",
             return_value=0,
@@ -352,3 +359,17 @@ class ReplyOutboxTests(unittest.TestCase):
         recover.assert_called_once()
         deliver.assert_called_once_with()
         self.assertFalse(LIVE_REPLY_DELIVERY_ENABLED)
+
+    def test_notifier_enqueue_failure_leaves_committed_replies_for_scheduler(self) -> None:
+        """Gateway-style notifier must not erase durable intents when enqueue fails."""
+
+        def fail_enqueue(_count: int) -> None:
+            # Simulate enqueue_customer_bot_reply_delivery returning False / logging only.
+            return None
+
+        accepted = self.accept(_message("hello", "e-enq"), on_replies_committed=fail_enqueue)
+        self.assertEqual(accepted.disposition, PROCESSED)
+        self.assertEqual(len(self.sessions.replies), 2)
+        self.assertTrue(
+            all(row.status == PENDING for row in self.sessions.replies.values())
+        )

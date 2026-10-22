@@ -1,17 +1,34 @@
-"""Production entry for reply delivery and scheduled recovery.
+"""Production entry for reply delivery, immediate enqueue, and scheduled recovery.
 
-Live sending stays off. The scheduled tick always recovers abandoned claims
-and always looks at pending rows. While the flag is off it does not construct
-a gateway client, does not read API keys, and does not send.
+Live sending stays off by default. After inbound acceptance commits reply intents,
+``enqueue_customer_bot_reply_delivery`` schedules the same delivery path on a
+background worker (``frappe.enqueue`` + ``enqueue_after_commit``). The minute
+cron tick remains the durable recovery / backlog drain: Frappe's default
+scheduler wake interval is four minutes, so the cron alone is not the primary
+send path.
+
+While transport is not armed the delivery entry does not construct a gateway
+client, does not read API keys, and does not send. Transport also requires a
+ready server-side pilot (E.164 + start cutoff). Flipping
+``LIVE_REPLY_DELIVERY_ENABLED`` alone cannot bypass the phone gate.
 """
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime
 
 from almdina_erp.almdina_erp.application.customer_bot.ports import BotTextReplyPort
+from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
 
 LIVE_REPLY_DELIVERY_ENABLED = False
+
+_DELIVERY_JOB_METHOD = (
+    "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery"
+    ".run_customer_bot_reply_delivery_job"
+)
+_DELIVERY_QUEUE = "default"
+_DELIVERY_TIMEOUT_SEC = 300
 
 
 def deliver_customer_bot_replies(
@@ -20,15 +37,26 @@ def deliver_customer_bot_replies(
     limit: int = 20,
     now: datetime | None = None,
 ) -> int:
-    """Hand pending replies to ``port`` only when live delivery is enabled.
+    """Hand pending replies to ``port`` only when live delivery is armed.
 
-    The durable guarantee is the outbox row plus the scheduled tick, not a
-    queue job. Recovery of abandoned claims does not need a port. When the
-    live flag is off this returns immediately without building OpenWA ports.
+    Used by the immediate RQ job and by the scheduled recovery tick. Claim
+    locking + sequence gates prevent duplicate sends when both run together.
+    When the pilot/transport gate is off this returns immediately without
+    building OpenWA ports.
     """
 
-    if not LIVE_REPLY_DELIVERY_ENABLED:
+    from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
+        intent_pilot_cancel_reason,
+        load_customer_bot_pilot,
+        pilot_transport_may_run,
+    )
+
+    if not pilot_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
         return 0
+    pilot = load_customer_bot_pilot()
+    if not pilot.is_ready or pilot.phone_e164 is None or pilot.started_at is None:
+        return 0
+
     from almdina_erp.almdina_erp.application.customer_bot.deliver_reply_intents import (
         ReplyDeliveryDeps,
         deliver_pending_replies,
@@ -61,23 +89,36 @@ def deliver_customer_bot_replies(
             services=build_customer_bot_services(),
             document_port=bundle.reply,
         )
+
+    def _pilot_recheck(claimed: ClaimedReply) -> str | None:
+        from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
+            REASON_PILOT_INACTIVE,
+        )
+
+        if not pilot_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
+            return REASON_PILOT_INACTIVE
+        current = load_customer_bot_pilot()
+        return intent_pilot_cancel_reason(
+            current,
+            normalized_phone=claimed.normalized_phone,
+            created_on=claimed.created_on,
+        )
+
     steps = deliver_pending_replies(
         FrappeCustomerBotReplyRepository(),
         port,
         limit=limit,
         now=now,
         deps=deps,
+        eligible_phone=pilot.phone_e164,
+        created_not_before=pilot.started_at,
+        after_claim_cancel_reason=_pilot_recheck,
     )
     return len(steps)
 
 
-def scheduled_customer_bot_reply_tick() -> dict[str, int]:
-    """Durable scan: abandon stale claims, then try live delivery if enabled.
-
-    Registered under ``scheduler_events``. When live delivery is off this
-    recovers abandoned ``processing`` rows to ``unknown`` and returns without
-    building an OpenWA client or reading credentials.
-    """
+def run_customer_bot_reply_delivery_job() -> dict[str, int]:
+    """RQ worker entry: recover abandoned claims, then deliver if transport may run."""
 
     from almdina_erp.almdina_erp.application.customer_bot.deliver_reply_intents import (
         recover_abandoned_reply_claims,
@@ -86,14 +127,75 @@ def scheduled_customer_bot_reply_tick() -> dict[str, int]:
         FrappeCustomerBotReplyRepository,
     )
 
-    outbox = FrappeCustomerBotReplyRepository()
-    abandoned = recover_abandoned_reply_claims(outbox)
+    abandoned = recover_abandoned_reply_claims(FrappeCustomerBotReplyRepository())
     sent = deliver_customer_bot_replies()
     return {"abandoned": abandoned, "sent": sent}
+
+
+def enqueue_customer_bot_reply_delivery(
+    *,
+    connection_ref: str,
+    provider_event_id: str,
+) -> bool:
+    """Queue immediate delivery after the surrounding DB transaction commits.
+
+    Must not run inside the webhook request body or inside the accept
+    transaction. Call only after reply intents are durable. Returns ``False``
+    when enqueue fails; pending rows stay for the scheduled tick. Never raises
+    for Redis/queue errors so inbound acceptance stays ``processed``.
+    """
+
+    ref = str(connection_ref or "").strip()
+    event_id = str(provider_event_id or "").strip()
+    if not ref or not event_id:
+        return False
+
+    import frappe
+
+    job_id = _delivery_job_id(ref, event_id)
+    try:
+        frappe.enqueue(
+            _DELIVERY_JOB_METHOD,
+            queue=_DELIVERY_QUEUE,
+            timeout=_DELIVERY_TIMEOUT_SEC,
+            enqueue_after_commit=True,
+            job_id=job_id,
+            deduplicate=True,
+        )
+    except Exception:
+        try:
+            frappe.log_error(
+                title="customer bot reply delivery enqueue failed",
+                message=f"connection_ref={ref!r} provider_event_id_len={len(event_id)}",
+            )
+        except Exception:
+            pass
+        return False
+    return True
+
+
+def scheduled_customer_bot_reply_tick() -> dict[str, int]:
+    """Durable recovery tick: abandon stale claims, then drain pending if armed.
+
+    Not the primary send path after inbound accept (see
+    ``enqueue_customer_bot_reply_delivery``). Keeps backlog moving when enqueue
+    fails or the worker was down. When transport is off this recovers abandoned
+    ``processing`` rows to ``unknown`` without building an OpenWA client.
+    """
+
+    return run_customer_bot_reply_delivery_job()
+
+
+def _delivery_job_id(connection_ref: str, provider_event_id: str) -> str:
+    material = f"{connection_ref}\n{provider_event_id}".encode("utf-8")
+    digest = hashlib.sha256(material).hexdigest()[:24]
+    return f"almdina-cbot-reply-{digest}"
 
 
 __all__ = [
     "LIVE_REPLY_DELIVERY_ENABLED",
     "deliver_customer_bot_replies",
+    "enqueue_customer_bot_reply_delivery",
+    "run_customer_bot_reply_delivery_job",
     "scheduled_customer_bot_reply_tick",
 ]

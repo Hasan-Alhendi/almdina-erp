@@ -150,6 +150,54 @@ Application لا تعيد المحاولة، ولا تحوّل استثناءً 
 
 بدون `allow_guest`. تسجيل الدخول وحده لا يكفي؛ المطلوب `ingest_customer_bot_inbound` (مصادقة token أو جلسة). مرجع الاتصال `openwa_connection_ref` والجلسة المتوقعة `openwa_session_id` وسر HMAC `openwa_webhook_secret` تُقرأ من `Customer Bot Settings` في الخادم فقط. غياب أي منها يمنع الاستقبال بلا قيم افتراضية. التوقيع `X-OpenWA-Signature: sha256=<hex>` يُحسب على بايتات الجسم الأصلية قبل أي كتابة لصفوف البوت، دون إعادة تسلسل JSON. `sessionId` الوارد يجب أن يطابق الجلسة المضبوطة. `idempotencyKey` هو `provider_event_id` ضمن `connection_ref`، و`deliveryId` للتتبع فقط. وقت الرسالة الأصلي هو `data.timestamp` (ثوانٍ يونكس) ويُميَّز عن `timestamp` الخاص بمحاولة webhook وعن وقت إعادة التسليم. سياسة العمر الداخلية الافتراضية: أقصى عمر 30 دقيقة وأقصى انحراف مستقبلي دقيقتان، مأخوذة من نافذة إعادة محاولة البوابة (`retryCount=3` و`retryDelay` الأساسي 5 ث وانتهاء مهلة حتى ~25 ث مع هامش طابور). رسالة أقدم أو ذات طابع زمني غير صالح تُسجَّل `ignored` طرفيًا ولا تُعاد تلقائيًا عند إعادة تشغيل البوت؛ التكرار المسجّل يبقى `duplicate` عبر مفتاح الحدث. النص المباشر فقط يدخل المحرك؛ `fromMe` والمجموعات و`isStatusBroadcast` والمرفقات تُسجَّل `ignored`. الإرسال الحي يبقى متوقفًا. لا تُنشأ webhook حية ولا جلسة مصنع في هذه الطبقة.
 
+## وضع التجربة المحدودة (Pilot)
+
+إعدادات التشغيل في `site_config` فقط (لا من جسم webhook ولا من Domain/Application):
+
+- `customer_bot_pilot_enabled`
+- `customer_bot_pilot_phone_e164` (E.164 موثوق)
+- `customer_bot_pilot_started_at` (حد بداية يمنع نقل النيات الأقدم)
+- `customer_bot_pilot_transport_armed`
+
+تفعيل البوت من واجهة إعدادات المعمل لا يفتح النقل الحي. `LIVE_REPLY_DELIVERY_ENABLED` الافتراضي `False`، وتغييره وحده لا يتجاوز حصر الرقم. النقل يبدأ فقط عندما يكون الطيار جاهزًا (مفعّل + رقم صالح + `started_at`) و(`LIVE_REPLY_DELIVERY_ENABLED` أو `customer_bot_pilot_transport_armed`).
+
+بعد نجاح commit لقبول الحدث ونيات الرد، يُدرَج `frappe.enqueue(..., enqueue_after_commit=True)` لمسار التسليم/الحجز الحالي (بدون إرسال داخل طلب webhook أو داخل المعاملة). فشل الإدراج يبقي النيات `pending` لمهمة الاستعادة الدورية. مهمة الـcron تبقى للتعافي/الطابور؛ استيقاظ مجدول Frappe الافتراضي كل 4 دقائق (`scheduler_tick_interval`) فلا تُعتمد وحدها لمسار الرد السريع. الحجز والترتيب يمنعان تكرار الإرسال عند تزامن المهمة الفورية والدورية؛ لا إعادة تلقائية لـ`accepted`/`unknown`.
+
+أثناء تفعيل الطيار: الرسائل من غير الرقم المحدد تُسجَّل `ignored` قبل المحرك وقبل قراءة الطلبات، بلا رد «رقمك غير مسجل» وبلا نيات إرسال وبلا جلسة محادثة جديدة. المصادقة وHMAC ومطابقة الجلسة تبقى كما هي. قبل النقل يُعاد التحقق من الرقم وحد البداية؛ إيقاف الطيار أو نزع تسليح النقل يمنع بدء طلبات بوابة جديدة. لا إعادة محاولة تلقائية لـ`unknown`. النيات الأقدم من `started_at` تبقى `pending` دون نقل ودون حذف لنتائج `accepted`/`unknown` التاريخية.
+
+أوامر محلية (`bench --site almdina.local execute …`) دون طباعة أسرار:
+
+- `almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot_admin.configure_openwa_inbound_connection`
+- `…enable_pilot` / `…disable_pilot`
+- `…arm_pilot_transport` / `…disarm_pilot_transport`
+- `…show_pilot_status`
+
+لا تُنشئ هذه الأوامر مستخدم تكامل ولا مفاتيح API ولا تسجّل webhook.
+
+### تجهيز webhook (للمراجعة فقط — لا تسجيل حي هنا)
+
+- URL من عملية البوابة إلى ERP:  
+  `http://host.docker.internal:8000/api/method/almdina_erp.almdina_erp.services.customer_bot_inbound_service.receive_openwa_customer_bot_event`  
+  (أو عنوان يصل إلى `almdina.local` من حاوية/عملية OpenWA؛ أضفه إلى `SSRF_ALLOWED_HOSTS` عند الحاجة).
+- الحدث: `message.received` فقط.
+- ترويسة Authorization لمستخدم التكامل (token) عبر `headers` في CreateWebhook — لا تُعاد في استجابات القائمة.
+- `secret` = نفس سر HMAC المخزّن في إعدادات البوت (≥16 حرفًا) → `X-OpenWA-Signature`.
+- `sessionId` = `openwa_session_id` المضبوط على الخادم.
+- `retryCount`: 3 (افتراضي البوابة مقبول).
+- إعادة التسليم تستخدم نفس `idempotencyKey`؛ لا تتطلب إعادة تشغيل المحادثة داخل ERP.
+- للطيار مع محادثات `@lid`: فعّل في بوابة OpenWA `RESOLVE_LID_TO_PHONE=true` (حل عبر `getContactLidAndPhone` / تعيين LID↔هاتف واتساب، لا اختراع رقم من أرقام `@lid`). غياب `senderPhone` الموثوق يُتجاهل تحت بوابة الطيار.
+- مفاتيح `idempotencyKey` الأطول من 140 تُحوَّل داخل ERP إلى `h1:` + SHA-256 كامل المفتاح قبل التخزين (بدون اقتطاع بادئة) حتى لا يحدث HTTP 500 على حقول Data؛ إعادة التسليم تبقى مربوطة بنفس المفتاح الكامل.
+
+مثال تسجيل (أسرار مخفية — لا تنفّذ في هذه الجولة):
+
+```bash
+curl -sS -X POST "$OPENWA/api/sessions/$SESSION_ID/webhooks" \
+  -H "X-API-Key: $OPENWA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"url":"http://host.docker.internal:8000/api/method/…receive_openwa_customer_bot_event","events":["message.received"],"secret":"$HMAC_SECRET","headers":{"Authorization":"token $INGEST_USER:$API_KEY"},"retryCount":3}'
+```
+
+إزالة لاحقة: `DELETE /api/sessions/$SESSION_ID/webhooks/$WEBHOOK_ID`.
+
 ## التعرف إلى العميل
 
 التعرف لا يعتمد على Meta. بعد قبول الحدث الموثوق يُعاد حسم الهوية من الرقم الأساسي فقط.

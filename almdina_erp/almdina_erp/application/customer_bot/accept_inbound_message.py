@@ -55,6 +55,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     event_fingerprint,
     is_operational_message,
     keys_fit,
+    with_fitted_session_keys,
 )
 
 from .conversation_ports import CustomerBotServicePort
@@ -122,7 +123,10 @@ def accept_inbound_customer_message(
 
     if now is None:
         now = datetime.now(timezone.utc)
+    message = with_fitted_session_keys(message)
     if not keys_fit(message):
+        # After fitting, this is only possible if MAX_KEY_LENGTH is misconfigured.
+        # Refuse without a 500 so non-operational noise cannot crash the webhook.
         raise ValueError("inbound identifiers exceed the session key length")
     fingerprint = event_fingerprint(message)
     if not is_operational_message(message):

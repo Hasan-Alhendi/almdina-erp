@@ -22,10 +22,14 @@ from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     DUPLICATE,
     IGNORED,
     PROCESSED,
+    fit_session_key,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_connection import (
     DOCTYPE,
     load_openwa_inbound_connection,
+)
+from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_pilot_config import (
+    CustomerBotPilotConfig,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery import (
     LIVE_REPLY_DELIVERY_ENABLED,
@@ -107,9 +111,22 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         self._configure_connection(CONNECTION, SESSION, SECRET)
         self._ensure_bot_enabled()
         self.assertFalse(LIVE_REPLY_DELIVERY_ENABLED)
+        # Site may have a live single-phone pilot; isolate webhook contract tests from it.
+        self._pilot_patch = patch(
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_pilot",
+            return_value=CustomerBotPilotConfig(
+                enabled=False,
+                phone_e164=None,
+                started_at=None,
+                transport_armed=False,
+            ),
+        )
+        self._pilot_patch.start()
 
     def tearDown(self):
         frappe.set_user("Administrator")
+        if getattr(self, "_pilot_patch", None) is not None:
+            self._pilot_patch.stop()
         self._cleanup_bot_rows()
         self._restore_connection(self._connection_before)
         self._restore_bot_enabled(self._enabled_before)
@@ -186,6 +203,99 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         self.assertEqual(replay["disposition"], DUPLICATE)
         self.assertEqual(_event_count(PREFIX + "dup"), 1)
         self.assertGreaterEqual(_reply_count(PREFIX + "dup"), 1)
+
+    def test_oversized_group_keys_ignore_without_500_and_redeliver_dedupe(self) -> None:
+        """Long OpenWA idempotency keys must not crash MariaDB Data(140) columns."""
+
+        shared = (
+            "msg_08e1dfbe-5d6b-4e5b-b540-60a5924dd707_false_"
+            "120363090841257773@g.us_"
+        )
+        first_raw = shared + ("A" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        second_raw = shared + ("B" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        self.assertNotEqual(first_raw, second_raw)
+        first_fitted = fit_session_key(first_raw)
+        second_fitted = fit_session_key(second_raw)
+        self.assertNotEqual(first_fitted, second_fitted)
+
+        group_data = {
+            "isGroup": True,
+            "from": "120363090841257773@g.us",
+            "chatId": "120363090841257773@g.us",
+            "author": "168448650932425@lid",
+            "senderPhone": None,
+        }
+        first = _signed_body(idempotency_key=first_raw, delivery_id="long-d1", data=group_data)
+        first_response = self._invoke(INGEST_USER, first[0], first[1])
+        self.assertEqual(frappe.local.response.get("http_status_code"), 200)
+        self.assertTrue(first_response.get("ok"))
+        self.assertEqual(first_response["disposition"], IGNORED)
+        self.assertEqual(first_response["provider_event_id"], first_fitted)
+        self.assertEqual(_event_count(first_fitted), 1)
+        self.assertEqual(_reply_count(first_fitted), 0)
+
+        # Same event, new delivery id: terminal ignore remains a duplicate, not a second row.
+        replay = _signed_body(idempotency_key=first_raw, delivery_id="long-d2", data=group_data)
+        replay_response = self._invoke(INGEST_USER, replay[0], replay[1])
+        self.assertEqual(frappe.local.response.get("http_status_code"), 200)
+        self.assertEqual(replay_response["disposition"], DUPLICATE)
+        self.assertEqual(_event_count(first_fitted), 1)
+        self.assertEqual(_reply_count(first_fitted), 0)
+
+        other = _signed_body(idempotency_key=second_raw, delivery_id="long-d3", data=group_data)
+        other_response = self._invoke(INGEST_USER, other[0], other[1])
+        self.assertEqual(frappe.local.response.get("http_status_code"), 200)
+        self.assertEqual(other_response["disposition"], IGNORED)
+        self.assertEqual(_event_count(second_fitted), 1)
+        self.assertEqual(_reply_count(second_fitted), 0)
+
+        own_long = _signed_body(
+            idempotency_key=shared + ("C" * 48) + "_own",
+            data={"fromMe": True},
+        )
+        own_response = self._invoke(INGEST_USER, own_long[0], own_long[1])
+        self.assertEqual(frappe.local.response.get("http_status_code"), 200)
+        self.assertEqual(own_response["disposition"], IGNORED)
+        self.assertEqual(_reply_count(own_response["provider_event_id"]), 0)
+
+    def test_pilot_gate_oversized_keys_still_ignore_without_500(self) -> None:
+        """Pilot ignore path must fit long keys before note_terminal (no DataError 500)."""
+
+        from datetime import datetime, timezone
+
+        self._pilot_patch.stop()
+        with patch(
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_pilot",
+            return_value=CustomerBotPilotConfig(
+                enabled=True,
+                phone_e164="+963931644327",
+                started_at=datetime(2026, 10, 22, 12, 0, tzinfo=timezone.utc),
+                transport_armed=False,
+            ),
+        ):
+            raw = (
+                "msg_pilot_long_false_120363090841257773@g.us_"
+                + ("Z" * 80)
+                + "_author@lid_webhook"
+            )
+            fitted = fit_session_key(raw)
+            body, signature = _signed_body(
+                idempotency_key=raw,
+                data={
+                    "isGroup": True,
+                    "from": "120363090841257773@g.us",
+                    "chatId": "120363090841257773@g.us",
+                    "author": "author@lid",
+                    "senderPhone": None,
+                },
+            )
+            response = self._invoke(INGEST_USER, body, signature)
+            self.assertEqual(frappe.local.response.get("http_status_code"), 200)
+            self.assertEqual(response["disposition"], IGNORED)
+            self.assertEqual(response["provider_event_id"], fitted)
+            self.assertEqual(_event_count(fitted), 1)
+            self.assertEqual(_reply_count(fitted), 0)
+        self._pilot_patch.start()
 
     def test_lid_without_trusted_phone_and_valid_phone(self) -> None:
         lid = _signed_body(

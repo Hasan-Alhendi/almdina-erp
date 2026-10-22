@@ -29,9 +29,48 @@ DEFAULT_LEASE_TTL = timedelta(minutes=2)
 DEFAULT_CONVERSATION_RETENTION = timedelta(days=7)
 DEFAULT_EVENT_RETENTION = timedelta(days=30)
 MAX_KEY_LENGTH = 140
+_COMPACT_KEY_PREFIX = "h1:"
 
 _SENDABLE = frozenset({PROCESSED})
 _RETRY_LATER = frozenset({CONVERSATION_BUSY, IN_PROGRESS, FAILED, LOST_LEASE})
+
+
+def fit_session_key(value: str, *, max_length: int = MAX_KEY_LENGTH) -> str:
+    """Return a key that fits Data/unique-index limits without prefix truncation.
+
+    Values already within ``max_length`` are unchanged so existing short OpenWA
+    idempotency keys keep their original form. Longer values become
+    ``h1:`` + SHA-256 hex of the full UTF-8 string. Two long keys that share a
+    long common prefix therefore stay distinct, and the same full key always
+    maps to the same stored id (redelivery / dedupe).
+    """
+
+    if not isinstance(value, str):
+        raise TypeError("session key must be a string")
+    if len(value) <= max_length:
+        return value
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()
+    compacted = f"{_COMPACT_KEY_PREFIX}{digest}"
+    if len(compacted) > max_length:
+        raise ValueError("compacted session key exceeds max length")
+    return compacted
+
+
+def with_fitted_session_keys(message: InboundCustomerMessage) -> InboundCustomerMessage:
+    """Copy ``message`` with every session-store key fitted to ``MAX_KEY_LENGTH``."""
+
+    return InboundCustomerMessage(
+        connection_ref=fit_session_key(message.connection_ref),
+        provider_event_id=fit_session_key(message.provider_event_id),
+        conversation_id=fit_session_key(message.conversation_id),
+        sender_id=fit_session_key(message.sender_id),
+        occurred_at=message.occurred_at,
+        kind=message.kind,
+        text=message.text,
+        from_own_account=message.from_own_account,
+        is_group=message.is_group,
+        normalized_phone=message.normalized_phone,
+    )
 
 
 def is_operational_message(message: InboundCustomerMessage) -> bool:
@@ -137,8 +176,10 @@ __all__ = [
     "disposition_is_sendable",
     "disposition_retries_later",
     "event_fingerprint",
+    "fit_session_key",
     "is_operational_message",
     "keys_fit",
     "lease_is_active",
     "utc_iso",
+    "with_fitted_session_keys",
 ]

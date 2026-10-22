@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.phone_number import (
     CustomerPhoneError,
     normalize_customer_phone,
 )
+from almdina_erp.almdina_erp.domain.customer_bot.session_admission import fit_session_key
 
 OPENWA_MESSAGE_RECEIVED = "message.received"
 _SIGNATURE_PREFIX = "sha256="
@@ -113,11 +114,12 @@ def map_openwa_message_received(
     )
 
     trusted_phone = trusted_phone_from_openwa_sender_phone(data.get("senderPhone"))
+    # Fit keys to DocType Data/unique limits without prefix truncation (hash when oversize).
     return build_inbound_customer_message(
-        connection_ref=connection_ref,
-        provider_event_id=provider_event_id,
-        conversation_id=conversation_id,
-        sender_id=sender_id,
+        connection_ref=fit_session_key(connection_ref),
+        provider_event_id=fit_session_key(provider_event_id),
+        conversation_id=fit_session_key(conversation_id),
+        sender_id=fit_session_key(sender_id),
         occurred_at=occurred_at,
         kind=kind,
         text=text if kind is InboundMessageKind.TEXT else "",

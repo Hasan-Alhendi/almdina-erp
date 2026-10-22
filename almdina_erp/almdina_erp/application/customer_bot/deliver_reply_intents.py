@@ -9,6 +9,7 @@ unchanged after the network request begins.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -71,6 +72,9 @@ def deliver_one_reply(
     *,
     deps: ReplyDeliveryDeps | None = None,
     now: datetime | None = None,
+    eligible_phone: str | None = None,
+    created_not_before: datetime | None = None,
+    after_claim_cancel_reason: Callable[[ClaimedReply], str | None] | None = None,
 ) -> ReplyDelivery | None:
     """Claim one pending reply, preflight, call the port, then store the result.
 
@@ -79,13 +83,34 @@ def deliver_one_reply(
     ``pending``. A failure while storing the result leaves the row in
     ``processing`` until claim recovery marks it ``unknown``. When preflight
     cancels, the row becomes ``cancelled`` and the gateway is not called.
+    ``after_claim_cancel_reason`` is an infrastructure hook (pilot re-check)
+    that cancels without calling the gateway.
     """
 
     if now is None:
         now = datetime.now(timezone.utc)
-    claimed = outbox.claim_next(now=now)
+    claimed = outbox.claim_next(
+        now=now,
+        eligible_phone=eligible_phone,
+        created_not_before=created_not_before,
+    )
     if claimed is None:
         return None
+    if after_claim_cancel_reason is not None:
+        cancel_reason = after_claim_cancel_reason(claimed)
+        if cancel_reason:
+            try:
+                saved = outbox.record_cancelled(
+                    reply_id=claimed.reply_id,
+                    claim_token=claimed.claim_token,
+                    reason_code=cancel_reason,
+                    now=now,
+                )
+            except Exception:
+                return ReplyDelivery(claimed.reply_id, PROCESSING)
+            if not saved:
+                return ReplyDelivery(claimed.reply_id, PROCESSING)
+            return ReplyDelivery(claimed.reply_id, CANCELLED)
     if deps is not None:
         preflight = verify_reply_before_send(
             claimed,
@@ -142,6 +167,9 @@ def deliver_pending_replies(
     now: datetime | None = None,
     claim_ttl: timedelta = DEFAULT_REPLY_CLAIM_TTL,
     deps: ReplyDeliveryDeps | None = None,
+    eligible_phone: str | None = None,
+    created_not_before: datetime | None = None,
+    after_claim_cancel_reason: Callable[[ClaimedReply], str | None] | None = None,
 ) -> tuple[ReplyDelivery, ...]:
     """Recover abandoned claims, then send pending replies that remain eligible.
 
@@ -156,7 +184,15 @@ def deliver_pending_replies(
     bounded = max(1, min(int(limit), 100))
     delivered: list[ReplyDelivery] = []
     for _ in range(bounded):
-        step = deliver_one_reply(outbox, port, deps=deps, now=now)
+        step = deliver_one_reply(
+            outbox,
+            port,
+            deps=deps,
+            now=now,
+            eligible_phone=eligible_phone,
+            created_not_before=created_not_before,
+            after_claim_cancel_reason=after_claim_cancel_reason,
+        )
         if step is None:
             break
         delivered.append(step)
