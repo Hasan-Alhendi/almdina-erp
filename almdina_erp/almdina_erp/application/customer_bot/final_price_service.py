@@ -73,6 +73,11 @@ class CustomerBotFinalPriceService(CustomerBotServicePort):
                 filename=_invoice_filename(request.order_name),
                 mime_type="application/pdf",
                 content=content,
+                order_name=request.order_name,
+                consistency_key=first.consistency_key,
+                service_id=BotService.FINAL_COST,
+                amount=str(first.amount),
+                currency=str(first.currency or ""),
             )
         except Exception:
             return CustomerServiceResult(ServiceResultCode.INVOICE_FAILED)

@@ -86,6 +86,7 @@ class Capability:
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
     MANAGE_CUSTOMER_BOT_ACCESS = "manage_customer_bot_access"
     MANAGE_CUSTOMER_BOT_SETTINGS = "manage_customer_bot_settings"
+    INGEST_CUSTOMER_BOT_INBOUND = "ingest_customer_bot_inbound"
     MANAGE_BACKUPS = "manage_backups"
     RESTORE_BACKUPS = "restore_backups"
 
@@ -237,6 +238,12 @@ _CAPABILITY_DEFINITIONS = (
         Capability.MANAGE_CUSTOMER_BOT_SETTINGS,
         CUSTOMER_BOT_SETTINGS_DOCTYPE,
         "factory_settings",
+    ),
+    CapabilityDefinition(
+        Capability.INGEST_CUSTOMER_BOT_INBOUND,
+        Capability.INGEST_CUSTOMER_BOT_INBOUND,
+        CUSTOMER_BOT_SETTINGS_DOCTYPE,
+        "customer_bot",
     ),
     CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),

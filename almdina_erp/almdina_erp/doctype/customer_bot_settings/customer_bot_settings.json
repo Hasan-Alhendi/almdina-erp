@@ -9,7 +9,10 @@
     "draft_texts",
     "published_texts",
     "published_on",
-    "published_by"
+    "published_by",
+    "openwa_connection_ref",
+    "openwa_session_id",
+    "openwa_webhook_secret"
   ],
   "fields": [
     {"default": "0", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "read_only": 1},
@@ -18,7 +21,10 @@
     {"fieldname": "draft_texts", "fieldtype": "Long Text", "label": "Draft Texts", "read_only": 1},
     {"fieldname": "published_texts", "fieldtype": "Long Text", "label": "Published Texts", "read_only": 1},
     {"fieldname": "published_on", "fieldtype": "Datetime", "label": "Published On", "read_only": 1},
-    {"fieldname": "published_by", "fieldtype": "Data", "label": "Published By", "read_only": 1}
+    {"fieldname": "published_by", "fieldtype": "Data", "label": "Published By", "read_only": 1},
+    {"description": "Server-side connection identity for inbound OpenWA events. The webhook body cannot choose this value.", "fieldname": "openwa_connection_ref", "fieldtype": "Data", "hidden": 1, "label": "OpenWA Connection Ref", "read_only": 1},
+    {"description": "Expected OpenWA sessionId for the customer-bot inbound connection. Must match the signed webhook envelope.", "fieldname": "openwa_session_id", "fieldtype": "Data", "hidden": 1, "label": "OpenWA Session ID", "read_only": 1},
+    {"description": "HMAC secret for X-OpenWA-Signature verification. Stored encrypted. Absence blocks inbound reception.", "fieldname": "openwa_webhook_secret", "fieldtype": "Password", "hidden": 1, "label": "OpenWA Webhook Secret", "read_only": 1}
   ],
   "issingle": 1,
   "links": [],

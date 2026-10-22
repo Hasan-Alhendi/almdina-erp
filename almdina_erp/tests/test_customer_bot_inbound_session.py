@@ -156,7 +156,19 @@ class _Services:
             ServiceResultCode.READY,
             amount=1,
             currency="USD",
-            documents=(CustomerBotDocument("invoice", "invoice.pdf", "application/pdf", b"%PDF-test"),),
+            documents=(
+                CustomerBotDocument(
+                    "customer_invoice",
+                    "invoice.pdf",
+                    "application/pdf",
+                    b"%PDF-test",
+                    order_name=request.order_name,
+                    consistency_key="price-key-1",
+                    service_id=request.service_id,
+                    amount="1",
+                    currency="USD",
+                ),
+            ),
         )
 
 
@@ -240,7 +252,11 @@ class InboundSessionTests(unittest.TestCase):
         self.accept(_message("hello", "e1"))
         self.accept(_message("2", "e2"))
         self.clock.now += timedelta(minutes=31)
-        again = self.accept(_message("2", "e3"), session_ttl=timedelta(minutes=30))
+        # Provider timestamp stays fresh; only the conversation TTL expires.
+        again = self.accept(
+            _message("2", "e3", occurred_at=self.clock.now),
+            session_ttl=timedelta(minutes=30),
+        )
         self.assertEqual(again.messages[0].key, BotMessageKey.WELCOME)
         self.assertEqual(self.services.calls, 0)
         self.assertEqual(self.orders.list_calls, 1)

@@ -1,8 +1,8 @@
 """Claim and finish customer-bot reply intents.
 
 The inbound commit inserts the rows. This adapter only moves a pending row to
-processing, stores the gateway result for that same claim, or marks an expired
-claim ``unknown``. It does not call the gateway.
+processing, stores the gateway result for that same claim, marks a preflight
+cancel, or marks an expired claim ``unknown``. It does not call the gateway.
 """
 
 from __future__ import annotations
@@ -13,10 +13,15 @@ from datetime import datetime, timedelta
 import frappe
 
 from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
+from almdina_erp.almdina_erp.domain.customer_bot.document_reply_spec import (
+    document_reply_spec_from_payload,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     ABANDONED_CLAIM_REASON,
     ACCEPTED,
+    CANCELLED,
     DEFAULT_REPLY_CLAIM_TTL,
+    PART_TEXT,
     PROCESSING,
     REJECTED,
     UNKNOWN,
@@ -46,6 +51,18 @@ class FrappeCustomerBotReplyRepository:
     ) -> bool:
         return _commit_with_deadlock_retry(lambda: self._record(reply_id, claim_token, result, now))
 
+    def record_cancelled(
+        self,
+        *,
+        reply_id: str,
+        claim_token: str,
+        reason_code: str,
+        now: datetime,
+    ) -> bool:
+        return _commit_with_deadlock_retry(
+            lambda: self._cancel(reply_id, claim_token, reason_code, now)
+        )
+
     def recover_abandoned_claims(
         self,
         *,
@@ -59,7 +76,8 @@ class FrappeCustomerBotReplyRepository:
     def _claim(self, now: datetime) -> ClaimedReply | None:
         rows = frappe.db.sql(
             f"""select name, reply_id, connection_ref, provider_event_id, conversation_id,
-                       destination_id, sequence, body, attempt_count
+                       destination_id, sequence, body, attempt_count, part_kind, document_spec,
+                       customer_id, normalized_phone, acceptance_epoch
                 from `{_REPLY}`
                 where status='pending'
                 order by creation asc, sequence asc
@@ -85,6 +103,12 @@ class FrappeCustomerBotReplyRepository:
             )
             if not owned or owned[0].status != PROCESSING or owned[0].claim_token != token:
                 continue
+            document_spec = None
+            if row.document_spec:
+                document_spec = document_reply_spec_from_payload(row.document_spec)
+            acceptance_epoch = row.acceptance_epoch
+            if acceptance_epoch is not None:
+                acceptance_epoch = int(acceptance_epoch)
             return ClaimedReply(
                 reply_id=row.reply_id,
                 claim_token=token,
@@ -95,8 +119,30 @@ class FrappeCustomerBotReplyRepository:
                 sequence=int(row.sequence),
                 body=row.body,
                 attempt_count=attempt_count,
+                part_kind=row.part_kind or PART_TEXT,
+                document_spec=document_spec,
+                customer_id=row.customer_id or None,
+                normalized_phone=row.normalized_phone or None,
+                acceptance_epoch=acceptance_epoch,
+                group_document_specs=self._group_document_specs(
+                    row.connection_ref, row.provider_event_id
+                ),
             )
         return None
+
+    def _group_document_specs(self, connection_ref: str, provider_event_id: str):
+        rows = frappe.db.sql(
+            f"""select document_spec from `{_REPLY}`
+                where connection_ref=%s and provider_event_id=%s
+                  and document_spec is not null and document_spec<>''
+                order by sequence asc""",
+            (connection_ref, provider_event_id),
+            as_dict=True,
+        )
+        specs = []
+        for row in rows:
+            specs.append(document_reply_spec_from_payload(row.document_spec))
+        return tuple(specs)
 
     def _blocked(self, connection_ref: str, provider_event_id: str, sequence: int) -> bool:
         row = frappe.db.sql(
@@ -148,6 +194,38 @@ class FrappeCustomerBotReplyRepository:
             as_dict=True,
         )
         return bool(stored) and stored[0].status == status
+
+    def _cancel(self, reply_id: str, claim_token: str, reason_code: str, now: datetime) -> bool:
+        rows = frappe.db.sql(
+            f"""select name from `{_REPLY}`
+                where reply_id=%s and claim_token=%s and status=%s
+                for update""",
+            (reply_id, claim_token, PROCESSING),
+            as_dict=True,
+        )
+        if not rows:
+            return False
+        frappe.db.sql(
+            f"""update `{_REPLY}`
+                set status=%s, reason_code=%s, provider_message_id=null,
+                    finished_on=%s, modified=%s
+                where reply_id=%s and claim_token=%s and status=%s""",
+            (
+                CANCELLED,
+                reason_code,
+                utc_iso(now),
+                _modified(),
+                reply_id,
+                claim_token,
+                PROCESSING,
+            ),
+        )
+        stored = frappe.db.sql(
+            f"""select status from `{_REPLY}` where reply_id=%s and claim_token=%s""",
+            (reply_id, claim_token),
+            as_dict=True,
+        )
+        return bool(stored) and stored[0].status == CANCELLED
 
     def _recover(self, now: datetime, claim_ttl: timedelta, limit: int) -> int:
         rows = frappe.db.sql(

@@ -70,6 +70,12 @@ class CustomerBotApprovedPlanService(CustomerBotServicePort):
                 filename=_plan_filename(request.order_name, first.revision),
                 mime_type="application/pdf",
                 content=content,
+                order_name=request.order_name,
+                consistency_key=first.consistency_key,
+                service_id=BotService.APPROVED_CUTTING_PLAN,
+                plan_name=first.plan_name,
+                plan_revision=first.revision,
+                source_type=first.source_type,
             )
         except Exception:
             return CustomerServiceResult(ServiceResultCode.PLAN_PDF_FAILED)

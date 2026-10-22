@@ -68,6 +68,9 @@ class CustomerBotMeasurementsService(CustomerBotServicePort):
                 filename=_measurements_filename(first.order_name or ""),
                 mime_type="application/pdf",
                 content=content,
+                order_name=first.order_name or request.order_name,
+                consistency_key=first.consistency_key,
+                service_id=BotService.MEASUREMENTS,
             )
         except Exception:
             return CustomerServiceResult(ServiceResultCode.MEASUREMENTS_PDF_FAILED)

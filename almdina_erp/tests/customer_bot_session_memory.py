@@ -18,7 +18,9 @@ from almdina_erp.almdina_erp.domain.customer_bot.conversation import Conversatio
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     ABANDONED_CLAIM_REASON,
     ACCEPTED,
+    CANCELLED,
     DEFAULT_REPLY_CLAIM_TTL,
+    PART_DOCUMENT,
     PENDING,
     PROCESSING,
     REJECTED,
@@ -215,6 +217,14 @@ class MemoryCustomerBotSessionStore:
             chosen.claim_token = token
             chosen.claimed_on = utc_iso(now)
             intent = chosen.intent
+            group_specs = tuple(
+                item.intent.document_spec
+                for item in self.replies.values()
+                if item.intent.connection_ref == intent.connection_ref
+                and item.intent.provider_event_id == intent.provider_event_id
+                and item.intent.part_kind == PART_DOCUMENT
+                and item.intent.document_spec is not None
+            )
             return ClaimedReply(
                 reply_id=chosen.reply_id,
                 claim_token=token,
@@ -225,6 +235,12 @@ class MemoryCustomerBotSessionStore:
                 sequence=intent.sequence,
                 body=intent.body,
                 attempt_count=chosen.attempt_count,
+                part_kind=intent.part_kind,
+                document_spec=intent.document_spec,
+                customer_id=intent.customer_id,
+                normalized_phone=intent.normalized_phone,
+                acceptance_epoch=intent.acceptance_epoch,
+                group_document_specs=group_specs,
             )
 
     def record_result(self, *, reply_id, claim_token, result, now) -> bool:
@@ -243,6 +259,17 @@ class MemoryCustomerBotSessionStore:
             row.status = status
             row.reason_code = result.reason_code
             row.provider_message_id = result.provider_message_id if status == ACCEPTED else None
+            return True
+
+    def record_cancelled(self, *, reply_id, claim_token, reason_code, now) -> bool:
+        del now
+        with self._lock:
+            row = next((item for item in self.replies.values() if item.reply_id == reply_id), None)
+            if row is None or row.status != PROCESSING or row.claim_token != claim_token:
+                return False
+            row.status = CANCELLED
+            row.reason_code = reason_code
+            row.provider_message_id = None
             return True
 
     def recover_abandoned_claims(self, *, now, claim_ttl=DEFAULT_REPLY_CLAIM_TTL, limit=50) -> int:

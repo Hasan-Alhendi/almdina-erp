@@ -6,10 +6,10 @@ from ``sender_id``, and does not send a reply.
 
 The acceptance epoch is checked inside the commit transaction. That same
 transaction stores the new session state, marks the event complete, and
-inserts one pending reply intent per rendered text line. A failure rolls all
-three back. If the process dies after that commit, a later call with the same
-event returns ``duplicate`` and does not insert the replies again. Sending
-those rows is a separate worker. This function does not call the gateway.
+inserts one pending reply intent per rendered text line and each durable
+document descriptor. A failure rolls all of them back. If the process dies
+after that commit, a later call with the same event returns ``duplicate`` and
+does not insert the replies again. Sending those rows is a separate worker.
 """
 
 from __future__ import annotations
@@ -21,10 +21,22 @@ from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
     BotMessage,
     ConversationContext,
 )
+from almdina_erp.almdina_erp.domain.customer_bot.document_reply_spec import DocumentReplySpec
 from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
 from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import InboundCustomerMessage
+from almdina_erp.almdina_erp.domain.customer_bot.message_age import (
+    AGE_OK,
+    DEFAULT_MAX_FUTURE_SKEW,
+    DEFAULT_MAX_MESSAGE_AGE,
+    classify_message_age,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.message_templates import render_customer_lines
-from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import ReplyIntent, ordered_reply_intents
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
+    PART_DOCUMENT,
+    PART_TEXT,
+    ReplyIntent,
+    ordered_reply_intents,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     CONFLICT,
     DEFAULT_LEASE_TTL,
@@ -102,6 +114,8 @@ def accept_inbound_customer_message(
     now: datetime | None = None,
     session_ttl: timedelta = DEFAULT_SESSION_TTL,
     lease_ttl: timedelta = DEFAULT_LEASE_TTL,
+    max_message_age: timedelta = DEFAULT_MAX_MESSAGE_AGE,
+    max_future_skew: timedelta = DEFAULT_MAX_FUTURE_SKEW,
     on_replies_committed: Callable[[int], None] | None = None,
 ) -> InboundAcceptance:
     """Run the current engine once, or refuse without calling it."""
@@ -112,6 +126,21 @@ def accept_inbound_customer_message(
         raise ValueError("inbound identifiers exceed the session key length")
     fingerprint = event_fingerprint(message)
     if not is_operational_message(message):
+        return _quiet(sessions.note_terminal(
+            connection_ref=message.connection_ref,
+            provider_event_id=message.provider_event_id,
+            fingerprint=fingerprint,
+            outcome=IGNORED,
+            now=now,
+        ))
+    age = classify_message_age(
+        message.occurred_at,
+        now=now,
+        max_age=max_message_age,
+        max_future_skew=max_future_skew,
+    )
+    if age != AGE_OK:
+        # Terminal ignore: a later bot enablement does not re-run this event.
         return _quiet(sessions.note_terminal(
             connection_ref=message.connection_ref,
             provider_event_id=message.provider_event_id,
@@ -179,19 +208,13 @@ def accept_inbound_customer_message(
         return True
 
     def build_replies() -> tuple[ReplyIntent, ...]:
-        lines = render_customer_lines(published, turn.messages)
-        return ordered_reply_intents(
-            tuple(
-                ReplyIntent(
-                    connection_ref=message.connection_ref,
-                    provider_event_id=message.provider_event_id,
-                    conversation_id=message.conversation_id,
-                    destination_id=message.conversation_id,
-                    sequence=index,
-                    body=line,
-                )
-                for index, line in enumerate(lines)
-            )
+        return _build_reply_intents(
+            message,
+            turn.messages,
+            turn.documents,
+            published,
+            acceptance_epoch=acceptance_epoch,
+            customer_id=turn.state.customer_id if turn.state else None,
         )
 
     try:
@@ -222,14 +245,83 @@ def accept_inbound_customer_message(
         return _quiet(FAILED if released else LOST_LEASE)
     if outcome != PROCESSED:
         return _quiet(outcome)
-    if on_replies_committed is not None and turn.messages:
-        on_replies_committed(len(turn.messages))
+    if on_replies_committed is not None and (turn.messages or turn.documents):
+        on_replies_committed(len(turn.messages) + len(turn.documents))
     return InboundAcceptance(
         PROCESSED,
         messages=turn.messages,
         documents=turn.documents,
         published=dict(published),
     )
+
+
+def _build_reply_intents(
+    message: InboundCustomerMessage,
+    messages: tuple[BotMessage, ...],
+    documents: tuple[CustomerBotDocument, ...],
+    published: dict[str, str],
+    *,
+    acceptance_epoch: int,
+    customer_id: str | None,
+) -> tuple[ReplyIntent, ...]:
+    lines = render_customer_lines(published, messages)
+    phone = message.normalized_phone
+    parts: list[ReplyIntent] = []
+    sequence = 0
+    for line in lines:
+        parts.append(
+            ReplyIntent(
+                connection_ref=message.connection_ref,
+                provider_event_id=message.provider_event_id,
+                conversation_id=message.conversation_id,
+                destination_id=message.conversation_id,
+                sequence=sequence,
+                body=line,
+                part_kind=PART_TEXT,
+                customer_id=customer_id,
+                normalized_phone=phone,
+                acceptance_epoch=acceptance_epoch,
+            )
+        )
+        sequence += 1
+    for document in documents:
+        if not document.has_durable_provenance:
+            raise ValueError("document reply requires durable provenance")
+        if not customer_id or not phone:
+            raise ValueError("document reply requires a verified customer identity")
+        spec = DocumentReplySpec(
+            service_id=document.service_id,
+            document_type=document.document_type,
+            order_name=document.order_name,
+            consistency_key=document.consistency_key,
+            filename=document.filename,
+            mime_type=document.mime_type,
+            customer_id=customer_id,
+            normalized_phone=phone,
+            acceptance_epoch=acceptance_epoch,
+            amount=document.amount,
+            currency=document.currency,
+            plan_name=document.plan_name,
+            plan_revision=document.plan_revision,
+            source_type=document.source_type,
+        )
+        parts.append(
+            ReplyIntent(
+                connection_ref=message.connection_ref,
+                provider_event_id=message.provider_event_id,
+                conversation_id=message.conversation_id,
+                destination_id=message.conversation_id,
+                sequence=sequence,
+                body=document.filename,
+                part_kind=PART_DOCUMENT,
+                document_spec=spec,
+                customer_id=customer_id,
+                normalized_phone=phone,
+                acceptance_epoch=acceptance_epoch,
+            )
+        )
+        sequence += 1
+    return ordered_reply_intents(tuple(parts))
 
 
 def _quiet(disposition: str) -> InboundAcceptance:

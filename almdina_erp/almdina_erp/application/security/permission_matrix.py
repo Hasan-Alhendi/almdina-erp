@@ -45,7 +45,7 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "control_center": {"label": "Control center and quality", "description": "Archive plans, view and record production incidents, and manage replacement pieces.", "icon": "dashboard"},
     "workforce": {"label": "Users and workforce", "description": "View, create, edit, and enable factory accounts, and manage their roles.", "icon": "users"},
     "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
-    "customer_bot": {"label": "Customer bot access (retired)", "description": "Retired. Additional phone linking is closed. This category does not open customer follow-up.", "icon": "comment"},
+    "customer_bot": {"label": "Customer bot", "description": "Inbound webhook ingestion for the customer bot, plus the retired additional-phone grants that no longer open follow-up.", "icon": "comment"},
     "master_data": {"label": "Master data", "description": "Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.", "icon": "database"},
     "administration": {"label": "Permission management", "description": "Edit the permission matrix for all roles.", "icon": "lock"},
 }
@@ -153,6 +153,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "Manage customer bot settings",
         "Edit the customer bot texts, preview them with sample data, publish them, and turn the bot on or off. Does not connect WhatsApp, send messages, or open customers and orders.",
         "sensitive",
+    ),
+    Capability.INGEST_CUSTOMER_BOT_INBOUND: _presentation(
+        "Ingest customer bot inbound events",
+        "Accept authenticated OpenWA webhook deliveries for the configured customer-bot connection. Does not edit bot texts, manage the factory WhatsApp session, or send replies.",
+        "critical",
     ),
     Capability.MANAGE_BACKUPS: _presentation("Manage backups", "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.", "critical"),
     Capability.RESTORE_BACKUPS: _presentation("Restore backups", "Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.", "critical"),

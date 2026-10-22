@@ -588,14 +588,18 @@ def _insert_event(
 
 def _insert_replies(replies: tuple[ReplyIntent, ...], stamp: str) -> None:
     for intent in replies:
+        spec_json = intent.document_spec.dumps() if intent.document_spec is not None else None
         frappe.db.sql(
             f"""insert into `{_REPLY}`
                 (name, creation, modified, modified_by, owner, docstatus,
                  reply_id, connection_ref, provider_event_id, conversation_id,
-                 destination_id, sequence, body, status, attempt_count,
+                 destination_id, sequence, part_kind, body, document_spec,
+                 customer_id, normalized_phone, acceptance_epoch,
+                 status, attempt_count,
                  provider_message_id, reason_code, claim_token, claimed_on, finished_on)
                 values (%s, %s, %s, 'Administrator', 'Administrator', 0,
-                        %s, %s, %s, %s, %s, %s, %s, 'pending', 0,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        'pending', 0,
                         null, null, null, null, null)""",
             (
                 frappe.generate_hash(length=12),
@@ -607,7 +611,12 @@ def _insert_replies(replies: tuple[ReplyIntent, ...], stamp: str) -> None:
                 intent.conversation_id,
                 intent.destination_id,
                 intent.sequence,
+                intent.part_kind,
                 intent.body,
+                spec_json,
+                intent.customer_id,
+                intent.normalized_phone,
+                intent.acceptance_epoch,
             ),
         )
 
