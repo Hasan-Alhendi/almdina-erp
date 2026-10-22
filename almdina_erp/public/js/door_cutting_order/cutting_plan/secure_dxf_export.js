@@ -992,13 +992,19 @@
                     : [{ kind: "liner" }];
                 const regionEmitted = new Set();
                 regionAddons.forEach(addon => {
-                    const spec = regionEngine && typeof regionEngine.specFrom === "function"
-                        ? regionEngine.specFrom(piece, addon.kind)
-                        : null;
-                    const region = linerRegionPoints(piece, placement, spec);
-                    if (!region) return;
-                    entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
-                    regionEmitted.add(addon.kind);
+                    const specs = addon.kind === "liner"
+                        && regionEngine
+                        && typeof regionEngine.linerSpecsFrom === "function"
+                        ? regionEngine.linerSpecsFrom(piece)
+                        : [(regionEngine && typeof regionEngine.specFrom === "function"
+                            ? regionEngine.specFrom(piece, addon.kind)
+                            : null)].filter(Boolean);
+                    specs.forEach(spec => {
+                        const region = linerRegionPoints(piece, placement, spec);
+                        if (!region) return;
+                        entities += lwpolyline(FINISHED_GEOMETRY_LAYER, region, true);
+                        regionEmitted.add(addon.kind);
+                    });
                 });
                 overlays.forEach(overlay => {
                     if (overlay.toolpath || !overlay.closed) return;
@@ -1217,6 +1223,7 @@
                             piece[addon.start] = row[addon.start];
                             piece[addon.length] = row[addon.length];
                         }
+                        if (addon.specs) piece[addon.specs] = row[addon.specs] || "";
                     });
                 }
                 if (!piece.piece_type && row && row.piece_type) piece.piece_type = row.piece_type;

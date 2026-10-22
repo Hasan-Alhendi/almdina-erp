@@ -6,7 +6,7 @@ Liner, back groove, and recessed handle use one cutter-center toolpath.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,7 +15,15 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerMeasurement,
     LinerPiece,
     compare_liner_path,
+    compare_liner_set_paths,
     liner_toolpath_mm,
+    merged_liner_toolpaths_mm,
+)
+from almdina_erp.almdina_erp.domain.orders.liner_specs import (
+    LINER_SPECS_FIELD,
+    DoorLinerError,
+    door_liner_fields,
+    door_liners_from_source,
 )
 
 
@@ -75,7 +83,7 @@ MACHINING_GEOMETRY_FIELDS = tuple(
         addon.start_field,
         addon.length_field,
     )
-)
+) + (LINER_SPECS_FIELD,)
 
 
 def machining_addon(kind: str) -> MachiningAddon:
@@ -114,6 +122,31 @@ def machining_values(source: Any) -> dict[str, dict[str, Any]]:
             "start_cm": _num(_read(source, addon.start_field, 0)),
             "length_cm": _num(_read(source, addon.length_field, 0)),
         }
+    try:
+        liner_set = door_liners_from_source(source)
+    except DoorLinerError:
+        liner_set = None
+    if liner_set is not None and liner_set.liners:
+        values["liner"]["enabled"] = True
+        values["liner"]["width_cm"] = liner_set.width_cm
+        first = liner_set.first
+        if first is not None:
+            values["liner"]["side"] = first.side
+            values["liner"]["offset_cm"] = first.offset_cm
+            values["liner"]["start_cm"] = first.start_cm
+            values["liner"]["length_cm"] = first.length_cm
+        values["liner"]["liners"] = [
+            {
+                "id": spec.liner_id,
+                "side": spec.side,
+                "offset_cm": spec.offset_cm,
+                "start_cm": spec.start_cm,
+                "length_cm": spec.length_cm,
+            }
+            for spec in liner_set.liners
+        ]
+    else:
+        values["liner"]["liners"] = ()
     return values
 
 
@@ -130,6 +163,12 @@ def machining_metadata(source: Any) -> dict[str, Any]:
         payload[addon.width_field] = spec["width_cm"]
         payload[addon.start_field] = spec["start_cm"]
         payload[addon.length_field] = spec["length_cm"]
+    try:
+        payload[LINER_SPECS_FIELD] = door_liner_fields(door_liners_from_source(source)).get(
+            LINER_SPECS_FIELD, ""
+        )
+    except DoorLinerError:
+        payload[LINER_SPECS_FIELD] = str(_read(source, LINER_SPECS_FIELD, "") or "")
     return payload
 
 
@@ -157,6 +196,27 @@ def generate_toolpath(
         cutter_diameter_mm,
         start_cm,
         length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+
+
+def generate_liner_set_toolpaths(
+    *,
+    piece: LinerPiece,
+    specs: Sequence[Any],
+    width_cm: float,
+    cutter_diameter_mm: float,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> list[list[tuple[float, float]]]:
+    """Cutter-center paths for every liner on a door after mill-region union."""
+
+    return merged_liner_toolpaths_mm(
+        piece,
+        specs,
+        width_cm,
+        cutter_diameter_mm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
     )
@@ -199,6 +259,8 @@ __all__ = [
     "MACHINING_GEOMETRY_FIELDS",
     "MachiningAddon",
     "compare_overlay_path",
+    "compare_liner_set_paths",
+    "generate_liner_set_toolpaths",
     "generate_toolpath",
     "machining_addon",
     "machining_metadata",

@@ -455,15 +455,23 @@ class TestExtraDxfOverlayImport(unittest.TestCase):
         self.assertEqual(len(snapshot["sheets"][0]["pieces"]), 1)
         self.assertNotIn("overlays", snapshot["sheets"][0]["pieces"][0])
 
-    def test_duplicate_liner_on_one_piece_is_rejected(self) -> None:
+    def test_multiple_liner_marks_on_one_piece_are_accepted(self) -> None:
         doc = _extra_plan_doc()
         msp = doc.modelspace()
         _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer=LINER)
+        snapshot = self._parse(doc, _order(piece_type="L-Shaped Corner", extra_liner=1))
+        overlays = snapshot["sheets"][0]["pieces"][0]["overlays"]
+        self.assertGreaterEqual(len([item for item in overlays if item["kind"] == "liner"]), 2)
+
+    def test_duplicate_back_groove_on_one_piece_is_rejected(self) -> None:
+        doc = _extra_plan_doc(overlay_layer="Rear Groove")
+        msp = doc.modelspace()
+        _add_rectangle(msp, ((200, 200), (280, 200), (280, 280), (200, 280)), layer="Rear Groove")
         with self.assertRaises(DxfImportError) as exc_info:
-            self._parse(doc, _order(piece_type="L-Shaped Corner", extra_liner=1))
+            self._parse(doc, _order(piece_type="L-Shaped Corner", extra_back_groove=1))
         message = _present_error(exc_info.exception)
         self.assertIn("أكثر من علامة", message)
-        self.assertIn("علامة الإضافة", message)
+        self.assertIn("فرزة الظهر", message)
 
     def test_liner_overlay_without_matching_flag_is_rejected(self) -> None:
         with self.assertRaises(DxfImportError) as exc_info:

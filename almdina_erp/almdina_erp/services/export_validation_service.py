@@ -474,6 +474,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
                 "liner_offset_cm": flt(getattr(piece, "liner_offset_cm", 0)),
                 "liner_width_cm": flt(getattr(piece, "liner_width_cm", 0)),
+                "liner_start_cm": flt(getattr(piece, "liner_start_cm", 0)),
+                "liner_length_cm": flt(getattr(piece, "liner_length_cm", 0)),
+                "liner_specs_json": getattr(piece, "liner_specs_json", "") or "",
                 "special_shape_geometry_json": (
                     getattr(piece, "special_shape_geometry_json", "") or ""
                 ),

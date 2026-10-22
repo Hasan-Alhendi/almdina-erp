@@ -170,7 +170,7 @@ def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
         key=1,
         piece_type="L-Shaped Corner",
         polygon=_rect(0, 0, 400, 600),
-        selected_codes=("liner",),
+        selected_codes=("back_groove",),
         label="2.1",
     )
     with pytest.raises(ExtraOverlayError) as duplicate:
@@ -178,14 +178,14 @@ def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
             [
                 ExtraOverlayCandidate(
                     key=1,
-                    kind="liner",
-                    layer="Liner",
+                    kind="back_groove",
+                    layer="Rear Groove",
                     path=((40, 40), (80, 80)),
                 ),
                 ExtraOverlayCandidate(
                     key=2,
-                    kind="liner",
-                    layer="Liner",
+                    kind="back_groove",
+                    layer="Rear Groove",
                     path=((120, 40), (180, 80)),
                 ),
             ],
@@ -193,7 +193,38 @@ def test_assign_extra_overlays_rejects_duplicate_mark_for_one_selected_addon():
             tolerance=0.25,
         )
     assert duplicate.value.code == "extra_overlay_addon_duplicate"
-    assert duplicate.value.kind == "liner"
+    assert duplicate.value.kind == "back_groove"
+
+
+def test_assign_extra_overlays_allows_multiple_liner_marks_for_one_door():
+    host = ExtraOverlayHost(
+        key=1,
+        piece_type="Regular",
+        polygon=_rect(0, 0, 400, 600),
+        selected_codes=("liner",),
+        label="3.1",
+    )
+    assigned = assign_extra_overlays(
+        [
+            ExtraOverlayCandidate(
+                key=1,
+                kind="liner",
+                layer="Liner",
+                path=((40, 40), (360, 40)),
+            ),
+            ExtraOverlayCandidate(
+                key=2,
+                kind="liner",
+                layer="Liner",
+                path=((40, 40), (40, 560)),
+            ),
+        ],
+        [host],
+        tolerance=0.25,
+        cutter_radius_mm=2.5,
+    )
+    assert len(assigned) == 2
+    assert {item.kind for item in assigned} == {"liner"}
 
 
 def test_piece_with_only_commercial_addons_does_not_require_dxf_marks():

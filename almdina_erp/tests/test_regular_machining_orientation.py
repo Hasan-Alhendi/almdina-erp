@@ -1,6 +1,6 @@
 """Pure tests for machining-driven rectangular DXF orientation."""
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
-    LinerPiece, liner_strip_polygon_mm, transform_point,
+    LinerPiece, liner_strip_polygon_mm, merged_liner_toolpaths_mm, transform_point,
 )
 from almdina_erp.almdina_erp.domain.cutting.regular_machining_orientation import (
     match_regular_machining_orientation,
@@ -67,6 +67,42 @@ def test_one_extra_rotated_differently_rejects_combination():
     )
     assert result.reason == "invalid"
     assert result.quarter_turns is None
+
+
+def test_multiple_liners_match_union_paths_across_rotation():
+    door = LinerPiece("Regular", 40, 60)
+    liners = [
+        {"side": "edge_width_top", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
+        {"side": "edge_long_left", "offset_cm": 2, "start_cm": 0, "length_cm": 0},
+    ]
+    specs = {
+        "liner": {
+            "enabled": True,
+            "side": "edge_width_top",
+            "offset_cm": 2,
+            "width_cm": 1.5,
+            "liners": liners,
+        }
+    }
+    paths = merged_liner_toolpaths_mm(door, liners, 1.5, 5)
+    for turns in (0, 1):
+        rotated = [
+            [
+                transform_point(point, mirrored=False, quarter_turns=turns, width=400, height=600)
+                for point in path
+            ]
+            for path in paths
+        ]
+        matched = match_regular_machining_orientation(
+            piece=door,
+            overlay_paths={"liner": rotated},
+            settings=specs,
+            candidate_turns=(0, 1, 2, 3),
+            edge_bands={},
+            cutter_diameter_mm=5,
+        )
+        assert matched.reason == "unique", (turns, matched)
+        assert matched.quarter_turns == turns
 
 
 def test_no_machining_evidence_does_not_invent_half_turn():

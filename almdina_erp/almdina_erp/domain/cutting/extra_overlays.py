@@ -354,9 +354,11 @@ def extra_overlay_selection_mismatches(
 ) -> tuple[ExtraOverlayError, ...]:
     """Return add-on overlay kinds that do not match the order checkboxes.
 
-    Each host must have exactly one mark for every selected overlay kind
-    (liner, back groove, recessed handle) and none for unselected overlay kinds.
-    Double / full-door-double are commercial addons, not DXF overlay layers.
+    Each host must have at least one Liner mark when liner is selected, and
+    exactly one mark for back groove and recessed handle. Unselected overlay
+    kinds must have none. Intersecting liners may legally produce one or many
+    Liner entities. Double / full-door-double are commercial addons, not DXF
+    overlay layers.
     """
 
     found_by_host: dict[str | int, list[str]] = {}
@@ -382,7 +384,7 @@ def extra_overlay_selection_mismatches(
                         label=host.label,
                     )
                 )
-            elif selected_kind and count > 1:
+            elif selected_kind and count > 1 and kind != "liner":
                 errors.append(
                     ExtraOverlayError(
                         "extra_overlay_addon_duplicate",

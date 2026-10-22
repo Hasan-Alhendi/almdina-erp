@@ -118,6 +118,20 @@ class TestExtraDoorAddonsDomain(unittest.TestCase):
         self.assertEqual(piece.liner_total_usd, 7.5)
         self.assertEqual(piece.total_usd, 25.5)
 
+    def test_liner_fee_is_once_per_door_regardless_of_liner_count(self) -> None:
+        for _count in (1, 2, 5, 10):
+            summary = calculate_extra_addon_pricing(
+                [ExtraAddonPieceInput(piece_type="Regular", qty=1, liner=True)],
+                rates=self.rates,
+            )
+            self.assertEqual(summary.pieces[0].liner_unit_price_usd, 2.5)
+            self.assertEqual(summary.pieces[0].liner_total_usd, 2.5)
+        many_doors = calculate_extra_addon_pricing(
+            [ExtraAddonPieceInput(piece_type="Regular", qty=3, liner=True)],
+            rates=self.rates,
+        )
+        self.assertEqual(many_doors.pieces[0].liner_total_usd, 7.5)
+
     def test_full_double_and_all_machining_fees_remain_commercial_qty(self) -> None:
         summary = calculate_extra_addon_pricing(
             [

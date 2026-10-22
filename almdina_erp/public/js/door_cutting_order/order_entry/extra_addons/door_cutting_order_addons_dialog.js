@@ -73,6 +73,13 @@
                 draft.piece = piece;
                 draft.edgeCm = editor.edgeLengthCm(piece, draft.side);
                 if (draft.fullLength) draft.lengthCm = Math.max(0, draft.edgeCm - draft.startCm);
+                if (draft.kind === "liner" && Array.isArray(draft.liners) && draft.liners[0]) {
+                    draft.liners[0].side = draft.side;
+                    draft.liners[0].edgeCm = draft.edgeCm;
+                    draft.liners[0].startCm = draft.startCm;
+                    draft.liners[0].lengthCm = draft.lengthCm;
+                    draft.liners[0].fullLength = draft.fullLength;
+                }
                 draft.row = row;
                 drafts[item.fieldname] = draft;
             });
@@ -87,16 +94,7 @@
         const known = fields().some(item => item.fieldname === preferredField);
         const initial = {};
         Object.entries(drafts).forEach(([fieldname, draft]) => {
-            initial[fieldname] = {
-                enabled: draft.enabled,
-                side: draft.side,
-                offsetCm: draft.offsetCm,
-                widthCm: draft.widthCm,
-                startCm: draft.startCm,
-                lengthCm: draft.lengthCm,
-                fullLength: Boolean(draft.fullLength),
-                legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
-            };
+            initial[fieldname] = snapshotDraft(draft);
         });
         initial.extra_double = flags.extra_double;
         initial.extra_double_reference_sides = doubleSides.slice();
@@ -120,7 +118,10 @@
         if (Boolean(draft.enabled) !== Boolean(initial.enabled) || draft.side !== initial.side) return true;
         if (Boolean(draft.fullLength) !== Boolean(initial.fullLength)
             || Boolean(draft.legacyCheckboxOnly) !== Boolean(initial.legacyCheckboxOnly)) return true;
-        return ["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]));
+        if (["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]))) {
+            return true;
+        }
+        return JSON.stringify(linerSnapshot(draft)) !== JSON.stringify(linerSnapshot(initial));
     }
 
     function doubleSidesDirty(session) {
@@ -245,7 +246,13 @@
             side: "",
             enabled: false,
         };
-        const companions = enabledPreviewDrafts(session).filter(draft => draft !== carrier);
+        const companions = enabledPreviewDrafts(session).filter(draft => draft !== carrier).flatMap((draft) => {
+            if (draft.kind !== "liner" || typeof editor.linerItems !== "function") return [draft];
+            return editor.linerItems(draft).map(item => Object.assign({}, draft, item, {
+                widthCm: draft.widthCm,
+                liners: null,
+            }));
+        });
         return editor.previewSvg(carrier, {
             multi: true,
             companions,
@@ -287,9 +294,11 @@
         }
         const draft = session.drafts[fieldname];
         const editor = editorApi();
-        const fieldsHtml = draft && editor && typeof editor.controlsHtml === "function"
-            ? editor.controlsHtml(draft)
-            : "";
+        const fieldsHtml = draft && editor && fieldname === "extra_liner" && typeof editor.linerSetHtml === "function"
+            ? editor.linerSetHtml(draft)
+            : (draft && editor && typeof editor.controlsHtml === "function"
+                ? editor.controlsHtml(draft)
+                : "");
         const hint = `<div class="dco-corner-help" data-addons-hint ${enabled ? "hidden" : ""}>${esc(translate("Turn this add-on on to include it."))}</div>`;
         const body = `${toggle}${hint}<div data-addon-fields>${fieldsHtml}</div>`;
         return editable ? body : `<fieldset disabled>${body}</fieldset>`;
@@ -331,22 +340,24 @@
         </div>`;
     }
 
-    function captureActive(session, root, changedField) {
+    function captureActive(session, root, changedField, changedItemId) {
         const fieldname = session.activeField;
         const draft = session.drafts[fieldname];
         const editor = editorApi();
         if (!draft || !root || !editor || typeof editor.readDraft !== "function") return draft;
         const fieldsRoot = root.querySelector("[data-addon-fields]") || root;
         if (!fieldsRoot.querySelector("[data-liner-offset]")) return draft;
-        const next = editor.readDraft(
-            fieldsRoot,
-            session.piece,
-            draft.enabled,
-            session.row,
-            draft.kind,
-            draft,
-            changedField,
-        );
+        const next = fieldname === "extra_liner" && typeof editor.readLinerSet === "function"
+            ? editor.readLinerSet(fieldsRoot, session.piece, draft, changedField, changedItemId)
+            : editor.readDraft(
+                fieldsRoot,
+                session.piece,
+                draft.enabled,
+                session.row,
+                draft.kind,
+                draft,
+                changedField,
+            );
         next.enabled = draft.enabled;
         session.drafts[fieldname] = next;
         return next;
@@ -367,27 +378,31 @@
         const help = root && root.querySelector("[data-liner-help]");
         const here = Boolean(issue && issue.fieldname === session.activeField);
         ["offset", "width", "start", "length"].forEach((field) => {
-            const input = root && root.querySelector(`[data-liner-${field}]`);
-            if (!input) return;
-            input.removeAttribute("aria-invalid");
-            const wrap = input.closest && input.closest(".dco-corner-input-wrap");
-            if (wrap) wrap.classList.remove("is-error");
+            (root ? root.querySelectorAll(`[data-liner-${field}]`) : []).forEach((input) => {
+                input.removeAttribute("aria-invalid");
+                const wrap = input.closest && input.closest(".dco-corner-input-wrap");
+                if (wrap) wrap.classList.remove("is-error");
+            });
         });
         const sideGroup = root && root.querySelector("[data-liner-sides]");
         if (sideGroup) sideGroup.removeAttribute("aria-invalid");
         const doubleSideGroup = root && root.querySelector("[data-double-sides]");
         if (doubleSideGroup) doubleSideGroup.removeAttribute("aria-invalid");
         if (issue && here) {
+            const scope = issue.linerId && root
+                ? root.querySelector(`[data-liner-item="${issue.linerId}"]`) || root
+                : root;
+            const scopedSide = scope && scope.querySelector("[data-liner-sides]");
             (issue.fields || (issue.field ? [issue.field] : [])).forEach((field) => {
                 if (field === "side") {
-                    if (sideGroup) sideGroup.setAttribute("aria-invalid", "true");
+                    if (scopedSide || sideGroup) (scopedSide || sideGroup).setAttribute("aria-invalid", "true");
                     return;
                 }
                 if (field === "sides") {
                     if (doubleSideGroup) doubleSideGroup.setAttribute("aria-invalid", "true");
                     return;
                 }
-                const input = root && root.querySelector(`[data-liner-${field}]`);
+                const input = (scope || root) && (scope || root).querySelector(`[data-liner-${field}]`);
                 if (!input) return;
                 input.setAttribute("aria-invalid", "true");
                 const wrap = input.closest && input.closest(".dco-corner-input-wrap");
@@ -480,6 +495,34 @@
             return;
         }
         if (!draft) return;
+        const editor = editorApi();
+        const items = draft.kind === "liner" && editor && typeof editor.linerItems === "function"
+            ? editor.linerItems(draft)
+            : [draft];
+        root.querySelectorAll("[data-liner-item]").forEach((section, index) => {
+            const item = items[index] || items[0];
+            if (!item) return;
+            section.querySelectorAll("[data-liner-side]").forEach((button) => {
+                const selected = button.getAttribute("data-liner-side") === item.side;
+                button.classList.toggle("is-active", selected);
+                button.setAttribute("aria-pressed", selected ? "true" : "false");
+            });
+            const available = section.querySelector("[data-liner-available]");
+            const direction = section.querySelector("[data-liner-direction]");
+            if (available) {
+                available.textContent = `${translate("Available Length")}: ${Math.round(Number(item.edgeCm) * 10) / 10} ${translate("cm")}`;
+            }
+            if (direction) {
+                const directionKey = {
+                    edge_long_right: "Top to bottom",
+                    edge_long_left: "Top to bottom",
+                    edge_width_top: "Left to right",
+                    edge_width_bottom: "Left to right",
+                }[item.side] || "Along the selected edge";
+                direction.textContent = `${translate("Measurement Direction")}: ${translate(directionKey)}`;
+            }
+        });
+        if (root.querySelector("[data-liner-item]")) return;
         root.querySelectorAll("[data-liner-side]").forEach((button) => {
             const selected = button.getAttribute("data-liner-side") === draft.side;
             button.classList.toggle("is-active", selected);
@@ -534,6 +577,21 @@
         if (fast && typeof fast.render === "function") fast.render(frm);
     }
 
+    function linerSnapshot(draft) {
+        const editor = editorApi();
+        const items = draft && editor && typeof editor.linerItems === "function" && draft.kind === "liner"
+            ? editor.linerItems(draft)
+            : (draft && Array.isArray(draft.liners) ? draft.liners : []);
+        return items.map(item => ({
+            id: item.id,
+            side: item.side,
+            offsetCm: Number(item.offsetCm),
+            startCm: Number(item.startCm),
+            lengthCm: Number(item.lengthCm),
+            fullLength: Boolean(item.fullLength),
+        }));
+    }
+
     function snapshotDraft(draft) {
         return {
             enabled: draft.enabled,
@@ -544,6 +602,7 @@
             lengthCm: draft.lengthCm,
             fullLength: Boolean(draft.fullLength),
             legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
+            liners: linerSnapshot(draft),
         };
     }
 
@@ -733,14 +792,59 @@
                 syncChrome(root, session, editable);
                 return;
             }
+            const addLiner = event.target.closest("[data-add-liner]");
+            if (addLiner && root.contains(addLiner) && editable && editor && typeof editor.addLiner === "function") {
+                captureActive(session, root);
+                const current = session.drafts.extra_liner;
+                if (!current) return;
+                session.drafts.extra_liner = editor.addLiner(current);
+                setEnabled(session, "extra_liner", true);
+                paintStructure(root, session, editable);
+                const items = root.querySelectorAll("[data-liner-item]");
+                const added = items[items.length - 1];
+                const pane = root.querySelector("[data-addons-settings]");
+                if (added && typeof added.scrollIntoView === "function") {
+                    added.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                } else if (pane && added && typeof pane.scrollTo === "function") {
+                    pane.scrollTo({ top: added.offsetTop, behavior: "smooth" });
+                }
+                return;
+            }
+            const removeItem = event.target.closest("[data-liner-remove-item]");
+            if (removeItem && root.contains(removeItem) && editable && editor && typeof editor.removeLiner === "function") {
+                captureActive(session, root);
+                const current = session.drafts.extra_liner;
+                if (!current) return;
+                session.drafts.extra_liner = editor.removeLiner(current, removeItem.getAttribute("data-liner-remove-item"));
+                paintStructure(root, session, editable);
+                return;
+            }
             const side = event.target.closest("[data-liner-side]");
             if (side && root.contains(side) && editable) {
-                const current = captureActive(session, root);
+                const item = side.closest("[data-liner-item]");
+                const itemId = item && item.getAttribute("data-liner-item");
+                const current = captureActive(session, root, "", itemId);
                 if (!current || typeof editor.selectSide !== "function") return;
-                const draft = editor.selectSide(current, session.piece, side.getAttribute("data-liner-side"));
-                session.drafts[session.activeField] = draft;
+                if (itemId && Array.isArray(current.liners)) {
+                    const target = current.liners.find(entry => entry.id === itemId);
+                    if (target) {
+                        editor.selectSide(target, session.piece, side.getAttribute("data-liner-side"));
+                        target.legacyCheckboxOnly = false;
+                        session.drafts[session.activeField] = editor.linerItems
+                            ? Object.assign(current, { liners: current.liners })
+                            : current;
+                        if (current.liners[0] && current.liners[0].id === itemId) {
+                            editor.selectSide(current, session.piece, side.getAttribute("data-liner-side"));
+                        }
+                    }
+                } else {
+                    const draft = editor.selectSide(current, session.piece, side.getAttribute("data-liner-side"));
+                    session.drafts[session.activeField] = draft;
+                }
                 setEnabled(session, session.activeField, true);
-                writeSpanInputs(root, draft);
+                writeSpanInputs(item || root, itemId && current.liners
+                    ? current.liners.find(entry => entry.id === itemId) || current
+                    : current);
                 syncChrome(root, session, editable);
                 return;
             }
@@ -829,8 +933,15 @@
             const changedField = ["offset", "width", "start", "length"].find(field => (
                 target && target.matches && target.matches(`[data-liner-${field}]`)
             )) || "";
-            const draft = captureActive(session, root, changedField);
-            if (draft && draft.fullLength && changedField === "start") writeSpanInputs(root, draft);
+            const item = target && target.closest && target.closest("[data-liner-item]");
+            const itemId = item ? item.getAttribute("data-liner-item") : "";
+            const draft = captureActive(session, root, changedField, itemId);
+            if (draft && changedField === "start") {
+                const host = item && Array.isArray(draft.liners)
+                    ? draft.liners.find(entry => entry.id === itemId)
+                    : draft;
+                if (host && host.fullLength) writeSpanInputs(item || root, host);
+            }
             if (editor && typeof editor.syncHandleChoices === "function") editor.syncHandleChoices(root, draft);
             syncPreview(root, session);
             showIssue(root, session, invalidEnabledDraft(session));

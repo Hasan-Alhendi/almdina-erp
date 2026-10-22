@@ -24,6 +24,7 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+    Set,
     console,
 });
 load("../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js", context);
@@ -40,6 +41,31 @@ const regular = geometry.pieceFromRow({
 function copy(value) {
     return JSON.parse(JSON.stringify(value));
 }
+
+const legacyLiners = geometry.parseDoorLiners({
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_offset_cm: 2,
+    liner_width_cm: 1.5,
+    liner_start_cm: 0,
+    liner_length_cm: 40,
+});
+assert.equal(legacyLiners.liners.length, 1);
+assert.equal(legacyLiners.liners[0].id, "liner_1");
+const jsonLiners = geometry.parseDoorLiners({
+    extra_liner: 1,
+    liner_width_cm: 1.5,
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.8,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 40 },
+            { id: "liner_2", side: "edge_long_left", offset_cm: 3, start_cm: 5, length_cm: 20 },
+        ],
+    }),
+});
+assert.equal(jsonLiners.widthCm, 1.8);
+assert.equal(jsonLiners.liners.length, 2);
+assert.equal(geometry.serializeDoorLiners(jsonLiners).includes("liner_2"), true);
 
 assert.deepEqual(
     copy(geometry.availableSides("Regular")),

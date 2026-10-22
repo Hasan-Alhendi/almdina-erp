@@ -860,6 +860,13 @@ Choose a reference side.,اختر الجهة المرجعية.
 Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
+Add liner,إضافة لاينر
+Liner {0},لاينر {0}
+Remove liner {0},إزالة اللاينر {0}
+Remove liner,إزالة اللاينر
+Remove,إزالة
+Distance and width,المسافة والعرض
+Distance and length,المسافة والطول
 Liner Start Position,بداية اللاينر
 Machining Width,عرض التفريز
 Machining Start,بداية التفريز

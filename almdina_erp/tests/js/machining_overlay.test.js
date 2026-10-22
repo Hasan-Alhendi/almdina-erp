@@ -21,6 +21,7 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+    Set,
     console,
 });
 load("../../public/js/door_cutting_order/drawing/door_cutting_order_liner_geometry.js", context);
@@ -131,5 +132,33 @@ const quietOnly = editor.previewSvg(Object.assign({}, grooveDraft, { enabled: fa
 assert.match(quietOnly, /data-machining-kind="liner"/);
 assert.match(quietOnly, /data-machining-kind="recessed_handle_cutout"/);
 assert.doesNotMatch(quietOnly, /data-machining-role="active"/);
+
+const twoLiners = Object.assign({}, host, {
+    extra_back_groove: 0,
+    extra_recessed_handle_cutout: 0,
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.5,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 0 },
+            { id: "liner_2", side: "edge_width_bottom", offset_cm: 2, start_cm: 0, length_cm: 0 },
+        ],
+    }),
+});
+const twoCompleted = engine.completeToolpaths(twoLiners, [], 6, null);
+assert.equal(twoCompleted.error, undefined);
+assert.equal(twoCompleted.overlays.filter(item => item.kind === "liner").length, 2);
+
+const crossed = Object.assign({}, twoLiners, {
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.5,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 0 },
+            { id: "liner_2", side: "edge_long_left", offset_cm: 2, start_cm: 0, length_cm: 0 },
+        ],
+    }),
+});
+const crossedCompleted = engine.completeToolpaths(crossed, [], 6, null);
+assert.equal(crossedCompleted.error, undefined);
+assert.ok(crossedCompleted.overlays.filter(item => item.kind === "liner").length >= 1);
 
 console.log("Shared machining overlay simulation passed");
