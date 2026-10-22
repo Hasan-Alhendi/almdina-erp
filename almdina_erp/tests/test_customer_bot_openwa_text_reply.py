@@ -58,7 +58,6 @@ class OpenWACustomerBotTextReplyTests(unittest.TestCase):
         cases = (
             (400, "gateway_http_400"),
             (404, "gateway_http_404"),
-            (409, "gateway_http_409"),
             (501, "gateway_http_501"),
         )
         for status, reason in cases:
@@ -70,6 +69,16 @@ class OpenWACustomerBotTextReplyTests(unittest.TestCase):
                 self.assertEqual(result.disposition, SendDisposition.REJECTED)
                 self.assertEqual(result.reason_code, reason)
                 self.assertIsNone(result.provider_message_id)
+
+    def test_ambiguous_408_and_409_are_unknown(self) -> None:
+        for status in (408, 409):
+            with self.subTest(status=status):
+                result = OpenWACustomerBotTextReply(
+                    _Client(error=WhatsAppTransportError("maybe", status_code=status)),
+                    "session-1",
+                ).send_text_reply(_request())
+                self.assertEqual(result.disposition, SendDisposition.UNKNOWN)
+                self.assertEqual(result.reason_code, f"gateway_http_{status}")
 
     def test_http_503_and_other_5xx_are_unknown(self) -> None:
         for status in (500, 503, 502):
