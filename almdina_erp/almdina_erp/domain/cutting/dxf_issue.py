@@ -93,6 +93,12 @@ CLIPPED_CORNER_DIMENSIONS_MISMATCH = "CLIPPED_CORNER_DIMENSIONS_MISMATCH"
 CUT_SIZE_MISMATCH = "CUT_SIZE_MISMATCH"
 PIECE_COUNT_MISMATCH = "PIECE_COUNT_MISMATCH"
 SPECIAL_SIZE_MISMATCH = "SPECIAL_SIZE_MISMATCH"
+REGULAR_OUTLINE_NOT_RECTANGLE = "REGULAR_OUTLINE_NOT_RECTANGLE"
+SPECIAL_OUTLINE_IS_RECTANGLE = "SPECIAL_OUTLINE_IS_RECTANGLE"
+SPECIAL_ADDON_GROUP_EXTRA = "SPECIAL_ADDON_GROUP_EXTRA"
+SPECIAL_ADDON_GROUP_MISSING = "SPECIAL_ADDON_GROUP_MISSING"
+SPECIAL_ADDON_GROUP_SPLIT = "SPECIAL_ADDON_GROUP_SPLIT"
+SPECIAL_OVERLAY_AMBIGUOUS = "SPECIAL_OVERLAY_AMBIGUOUS"
 FORBIDDEN_ROTATION = "FORBIDDEN_ROTATION"
 PIECE_MISSING = "PIECE_MISSING"
 EXTRA_CUT_PATH = "EXTRA_CUT_PATH"
@@ -289,6 +295,12 @@ SKIP_PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
         EXPECTED_PIECE_MISMATCH,
         EXTRA_CUT_PATH,
         PIECE_MISSING,
+        REGULAR_OUTLINE_NOT_RECTANGLE,
+        SPECIAL_OUTLINE_IS_RECTANGLE,
+        SPECIAL_ADDON_GROUP_EXTRA,
+        SPECIAL_ADDON_GROUP_MISSING,
+        SPECIAL_ADDON_GROUP_SPLIT,
+        SPECIAL_OVERLAY_AMBIGUOUS,
     }
 )
 
@@ -320,6 +332,24 @@ def topology_error_to_issue(
     if expected_index is not None:
         params["expected_piece_index"] = expected_index
 
+    if code == "REGULAR_OUTLINE_NOT_RECTANGLE":
+        params["identity_unproven"] = True
+        return issue(
+            REGULAR_OUTLINE_NOT_RECTANGLE,
+            CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "SPECIAL_OUTLINE_IS_RECTANGLE":
+        params["identity_unproven"] = True
+        return issue(
+            SPECIAL_OUTLINE_IS_RECTANGLE,
+            CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
     if code == "FORBIDDEN_ROTATION":
         return issue(
             FORBIDDEN_ROTATION,
@@ -404,6 +434,7 @@ _OVERLAY_CODE_MAP = {
     "extra_overlay_floating": OVERLAY_FLOATING,
     "extra_overlay_addon_missing": OVERLAY_ADDON_MISSING,
     "extra_overlay_addon_duplicate": OVERLAY_ADDON_DUPLICATE,
+    "extra_overlay_special_ambiguous": SPECIAL_OVERLAY_AMBIGUOUS,
 }
 
 

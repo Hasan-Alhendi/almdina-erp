@@ -212,12 +212,36 @@ def _centerline_gap(
     return gap
 
 
+def _special_hosts(hosts: Sequence[ExtraOverlayHost]) -> tuple[ExtraOverlayHost, ...]:
+    return tuple(host for host in hosts if str(host.piece_type or "") == "Special")
+
+
+def _reject_unbound_overlay(
+    overlay: ExtraOverlayCandidate,
+    contained: Sequence[ExtraOverlayHost],
+    involved: Sequence[ExtraOverlayHost],
+) -> None:
+    """Fail closed when a mark is not tied to exactly one door."""
+
+    specials = _special_hosts((*contained, *involved))
+    if len(contained) != 1 and specials:
+        raise ExtraOverlayError(
+            "extra_overlay_special_ambiguous",
+            layer=overlay.layer,
+            kind=overlay.kind,
+        )
+    if len(contained) > 1 or len(involved) > 1:
+        raise ExtraOverlayError("extra_overlay_spans_hosts", layer=overlay.layer)
+    raise ExtraOverlayError("extra_overlay_floating", layer=overlay.layer)
+
+
 def _assign_liner_by_cutter_footprint(
     overlay: ExtraOverlayCandidate,
     hosts: Sequence[ExtraOverlayHost],
     *,
     tolerance: float,
     cutter_radius_mm: float,
+    enforce_selection: bool,
 ) -> AssignedExtraOverlay:
     """Bind one liner path without treating a kerf-zone center as a second door.
 
@@ -242,12 +266,10 @@ def _assign_liner_by_cutter_footprint(
             owners.append(host)
         if gap < intrusion_limit:
             intruded.append(host)
-    if len(owners) > 1 or len(intruded) > 1:
-        raise ExtraOverlayError("extra_overlay_spans_hosts", layer=overlay.layer)
     if len(owners) != 1:
-        raise ExtraOverlayError("extra_overlay_floating", layer=overlay.layer)
+        _reject_unbound_overlay(overlay, owners, intruded)
     host = owners[0]
-    if overlay.kind not in host.selected_codes:
+    if enforce_selection and overlay.kind not in host.selected_codes:
         raise ExtraOverlayError(
             "extra_overlay_addon_not_selected",
             layer=overlay.layer,
@@ -271,6 +293,7 @@ def assign_extra_overlays(
     tolerance: float = EPSILON,
     host_margin: float = 0.0,
     cutter_radius_mm: float = 0.0,
+    enforce_selection: bool = True,
 ) -> tuple[AssignedExtraOverlay, ...]:
     """Bind add-on overlay marks to their selected host without making cut pieces."""
 
@@ -287,6 +310,7 @@ def assign_extra_overlays(
                     hosts,
                     tolerance=tolerance,
                     cutter_radius_mm=radius,
+                    enforce_selection=enforce_selection,
                 )
             )
             continue
@@ -312,39 +336,31 @@ def assign_extra_overlays(
                 host_margin=host_margin,
             )
         )
-        if len(contained) > 1 or len(intersecting) > 1:
+        if len(contained) != 1:
+            _reject_unbound_overlay(overlay, contained, intersecting)
+        host = contained[0]
+        if enforce_selection and overlay.kind not in host.selected_codes:
             raise ExtraOverlayError(
-                "extra_overlay_spans_hosts",
+                "extra_overlay_addon_not_selected",
                 layer=overlay.layer,
+                host_key=host.key,
+                kind=overlay.kind,
+                label=host.label,
             )
-        if len(contained) == 1:
-            host = contained[0]
-            if overlay.kind not in host.selected_codes:
-                raise ExtraOverlayError(
-                    "extra_overlay_addon_not_selected",
-                    layer=overlay.layer,
-                    host_key=host.key,
-                    kind=overlay.kind,
-                    label=host.label,
-                )
-            assigned.append(
-                AssignedExtraOverlay(
-                    host_key=host.key,
-                    kind=overlay.kind,
-                    layer=overlay.layer,
-                    path=path,
-                    closed=overlay.closed,
-                )
+        assigned.append(
+            AssignedExtraOverlay(
+                host_key=host.key,
+                kind=overlay.kind,
+                layer=overlay.layer,
+                path=path,
+                closed=overlay.closed,
             )
-            continue
-        raise ExtraOverlayError(
-            "extra_overlay_floating",
-            layer=overlay.layer,
         )
 
-    mismatches = extra_overlay_selection_mismatches(hosts, assigned)
-    if mismatches:
-        raise mismatches[0]
+    if enforce_selection:
+        mismatches = extra_overlay_selection_mismatches(hosts, assigned)
+        if mismatches:
+            raise mismatches[0]
     return tuple(assigned)
 
 

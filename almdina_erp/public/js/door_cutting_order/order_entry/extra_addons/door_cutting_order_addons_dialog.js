@@ -84,10 +84,18 @@
                 drafts[item.fieldname] = draft;
             });
         }
+        const presenceOnly = String((row && row.piece_type) || "") === "Special";
         const flags = {
             extra_double: Number(row && row.extra_double) ? 1 : 0,
             extra_full_door_double: Number(row && row.extra_full_door_double) ? 1 : 0,
         };
+        if (presenceOnly) {
+            fields().forEach((item) => {
+                if (flags[item.fieldname] === undefined) {
+                    flags[item.fieldname] = Number(row && row[item.fieldname]) ? 1 : 0;
+                }
+            });
+        }
         const doubleSides = editor && typeof editor.doubleEdgeSidesFromRow === "function"
             ? editor.doubleEdgeSidesFromRow(row)
             : [];
@@ -98,10 +106,16 @@
         });
         initial.extra_double = flags.extra_double;
         initial.extra_double_reference_sides = doubleSides.slice();
+        if (presenceOnly) {
+            Object.entries(flags).forEach(([fieldname, value]) => {
+                initial[fieldname] = value ? 1 : 0;
+            });
+        }
         return {
             frm: frm || null,
             row,
             piece,
+            presenceOnly,
             supported,
             flags,
             doubleSides,
@@ -140,6 +154,10 @@
     function setEnabled(session, fieldname, enabled) {
         if (!session || !fieldByName(fieldname)) return session;
         const next = enabled ? 1 : 0;
+        if (session.presenceOnly && !FLAG_FIELDS.includes(fieldname)) {
+            session.flags[fieldname] = next;
+            return session;
+        }
         if (FLAG_FIELDS.includes(fieldname)) {
             const scratch = {};
             FLAG_FIELDS.forEach((name) => { scratch[name] = session.flags[name] ? 1 : 0; });
@@ -166,7 +184,9 @@
     }
 
     function isEnabled(session, fieldname) {
-        if (FLAG_FIELDS.includes(fieldname)) return Boolean(session.flags[fieldname]);
+        if ((session && session.presenceOnly) || FLAG_FIELDS.includes(fieldname)) {
+            return Boolean(session.flags[fieldname]);
+        }
         const draft = session.drafts[fieldname];
         return Boolean(draft && draft.enabled);
     }
@@ -174,6 +194,7 @@
     function invalidEnabledDraft(session) {
         const editor = editorApi();
         if (!session || !editor || typeof editor.validationMessage !== "function") return null;
+        if (session.presenceOnly) return null;
         if (session.flags.extra_double && !(session.doubleSides || []).length) {
             return {
                 code: "double_edge_sides_required",
@@ -204,7 +225,7 @@
     function removalPending(session) {
         if (!session) return false;
         const fieldname = session.activeField;
-        if (FLAG_FIELDS.includes(fieldname)) {
+        if (session.presenceOnly || FLAG_FIELDS.includes(fieldname)) {
             return !session.flags[fieldname] && Boolean(Number(session.row && session.row[fieldname]));
         }
         const initial = session.initial && session.initial[fieldname];
@@ -238,6 +259,19 @@
     function previewMarkup(session) {
         const editor = editorApi();
         if (!editor || typeof editor.previewSvg !== "function" || !session.piece) return "";
+        if (session.presenceOnly) {
+            return editor.previewSvg({
+                piece: session.piece,
+                row: session.row,
+                kind: "",
+                side: "",
+                enabled: false,
+            }, {
+                multi: true,
+                companions: [],
+                doubleSides: [],
+            });
+        }
         const active = session.drafts[session.activeField];
         const carrier = active || {
             piece: session.piece,
@@ -268,6 +302,12 @@
             <span class="dco-addons-enable-mark" aria-hidden="true"></span>
             <span>${esc(translate("Add-on enabled"))}</span>
         </button>`;
+        if (session.presenceOnly) {
+            const body = `${toggle}
+                <div class="dco-corner-help">${esc(translate("Selection is enough for a special door. Complete the add-on paths in the DXF before approval."))}</div>
+                <div class="dco-corner-help">${esc(translate("Add-ons are available for every type; Double and Full Door Double are mutually exclusive."))}</div>`;
+            return editable ? body : `<fieldset disabled>${body}</fieldset>`;
+        }
         if (fieldname === "extra_double") {
             const geometry = window.AlmdinaLinerGeometry;
             const sides = geometry && typeof geometry.availableSides === "function"
@@ -607,6 +647,30 @@
     }
 
     function collectValues(session) {
+        if (session && session.presenceOnly) {
+            const values = {};
+            const touched = [];
+            fields().forEach((item) => {
+                const next = session.flags[item.fieldname] ? 1 : 0;
+                const current = Number(session.row && session.row[item.fieldname] || 0) ? 1 : 0;
+                if (next === current) return;
+                values[item.fieldname] = next;
+                touched.push(item.fieldname);
+            });
+            if (touched.length) {
+                const engine = window.AlmdinaMachiningOverlay;
+                (engine && engine.ADDONS ? engine.ADDONS : []).forEach((spec) => {
+                    values[spec.side] = "";
+                    values[spec.offset] = 0;
+                    values[spec.width] = 0;
+                    values[spec.start] = 0;
+                    values[spec.length] = 0;
+                    if (spec.specs) values[spec.specs] = "";
+                });
+                values.extra_double_reference_sides = "";
+            }
+            return { values, touched };
+        }
         const values = {};
         const touched = [];
         if (doubleSidesDirty(session)) {
@@ -994,6 +1058,8 @@
     window.AlmdinaDoorAddonsDialog = Object.freeze({
         open,
         createSession,
+        settingsMarkup,
+        collectValues,
         selectTab,
         setEnabled,
         machiningDirty,

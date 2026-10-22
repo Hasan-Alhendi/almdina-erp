@@ -626,6 +626,7 @@
                         <span class="dco-help-secondary">${__("Edges and rotation toggle in one click without activating a row.")}</span>
                         <span class="dco-help-secondary">${__("For a special door, edge sides are disabled in the table; banding is handled via the special price.")}</span>
                         <span class="dco-help-secondary">${__("Add-ons are available for every type; Double and Full Door Double are mutually exclusive.")}</span>
+                        <span class="dco-help-secondary">${__("Selection is enough for a special door. Complete the add-on paths in the DXF before approval.")}</span>
                     </div>
                     ${editable ? "" : `<span class="dco-fast-readonly-note">${__("Read only")}</span>`}
                 </div>

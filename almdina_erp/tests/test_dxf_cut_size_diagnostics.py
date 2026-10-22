@@ -30,6 +30,20 @@ def _present_error(error: DxfImportError) -> str:
     return "\n".join(present_issues_as_strings(error.issues))
 
 
+def _irregular(width_mm: float, height_mm: float, *, x_mm: float = 0.0, y_mm: float = 0.0) -> dict:
+    return {
+        "points": [
+            (x_mm, y_mm),
+            (x_mm + width_mm, y_mm),
+            (x_mm + width_mm, y_mm + height_mm),
+            (x_mm + min(30.0, width_mm / 4), y_mm + height_mm),
+            (x_mm, y_mm + height_mm - min(30.0, height_mm / 4)),
+        ],
+        "closed": True,
+        "branched": False,
+    }
+
+
 def _rect(width_mm: float, height_mm: float, *, x_mm: float = 0.0, y_mm: float = 0.0) -> dict:
     return {
         "points": [
@@ -217,11 +231,11 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
     def test_special_two_mm_boundary_is_recognized_by_topology(self) -> None:
         order = self._order((300, 400, 0))
         order.pieces[0].piece_type = "Special"
-        _resolve_cut_topology([_rect(298, 398)], order)
+        _resolve_cut_topology([_irregular(298, 398)], order)
 
         rotated_order = self._order((300, 400, 1))
         rotated_order.pieces[0].piece_type = "Special"
-        _resolve_cut_topology([_rect(398, 298)], rotated_order)
+        _resolve_cut_topology([_irregular(398, 298)], rotated_order)
 
     def test_special_bbox_normalizes_float_noise_at_two_mm_boundary(self) -> None:
         rotated, error = self._strict_dimension_result(
@@ -856,7 +870,7 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
                 [
                     _rect(299, 400),
                     _rect(250, 350, x_mm=500),
-                    _rect(398, 500, x_mm=1000),
+                    _irregular(398, 500, x_mm=1000),
                 ],
                 order,
             )

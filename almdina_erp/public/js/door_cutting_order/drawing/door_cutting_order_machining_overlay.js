@@ -243,7 +243,12 @@
         return api.buildMachiningOverlay(piece, spec, mode);
     }
 
+    function isSpecialPiece(piece) {
+        return String((piece && piece.piece_type) || "") === "Special";
+    }
+
     function visualOverlays(piece) {
+        if (isSpecialPiece(piece)) return [];
         const overlays = [];
         ADDONS.forEach(spec => {
             if (spec.kind === "liner") {
@@ -257,6 +262,7 @@
     }
 
     function syntheticOverlays(piece) {
+        if (isSpecialPiece(piece)) return [];
         const overlays = [];
         ADDONS.forEach(spec => {
             if (spec.kind === "liner") {
@@ -271,6 +277,7 @@
 
     function completeToolpaths(piece, existing, kerfMm, board) {
         const next = Array.isArray(existing) ? existing.slice() : [];
+        if (isSpecialPiece(piece)) return { overlays: next };
         const host = Object.assign({}, piece, {
             kerf_mm: num(kerfMm),
             board: board || null,

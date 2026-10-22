@@ -152,8 +152,46 @@ const special = dialog.createSession({ doc: {} }, {
     extra_double: 1,
 });
 assert.equal(special.supported, false);
+assert.equal(special.presenceOnly, true);
 assert.equal(special.flags.extra_double, 1);
 assert.equal(Object.keys(special.drafts).length, 0);
+dialog.setEnabled(special, "extra_liner", true);
+dialog.setEnabled(special, "extra_back_groove", true);
+dialog.setEnabled(special, "extra_recessed_handle_cutout", true);
+dialog.setEnabled(special, "extra_full_door_double", true);
+assert.equal(special.flags.extra_double, 0);
+assert.equal(special.flags.extra_full_door_double, 1);
+const specialMarkup = dialog.settingsMarkup(special, true);
+assert.match(specialMarkup, /Selection is enough for a special door/);
+assert.doesNotMatch(specialMarkup, /data-double-side/);
+assert.doesNotMatch(specialMarkup, /data-liner-offset/);
+assert.doesNotMatch(specialMarkup, /does not support this add-on/);
+const specialValues = dialog.collectValues(special);
+assert.equal(specialValues.values.extra_liner, 1);
+assert.equal(specialValues.values.extra_back_groove, 1);
+assert.equal(specialValues.values.extra_recessed_handle_cutout, 1);
+assert.equal(specialValues.values.extra_full_door_double, 1);
+assert.equal(specialValues.values.extra_double, 0);
+assert.equal(specialValues.values.liner_reference_side, "");
+assert.equal(specialValues.values.liner_specs_json, "");
+assert.equal(specialValues.values.extra_double_reference_sides, "");
+assert.equal(specialValues.values.back_groove_width_cm, 0);
+assert.doesNotMatch(dialog.previewMarkup(special), /data-machining-kind/);
+const machining = fakeWindow.AlmdinaMachiningOverlay;
+const specialPiece = {
+    piece_type: "Special",
+    width_cm: 40,
+    length_cm: 60,
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_width_cm: 2,
+    liner_offset_cm: 1,
+};
+assert.equal(machining.visualOverlays(specialPiece).length, 0);
+assert.equal(machining.syntheticOverlays(specialPiece).length, 0);
+const kept = machining.completeToolpaths(specialPiece, [{ kind: "liner", path: [[1, 2], [3, 4]] }], 5, null);
+assert.equal(kept.overlays.length, 1);
+assert.equal(machining.completeToolpaths(specialPiece, [], 5, null).overlays.length, 0);
 
 const editor = fakeWindow.AlmdinaLinerEditor;
 function machiningRow(kind, widthCm) {

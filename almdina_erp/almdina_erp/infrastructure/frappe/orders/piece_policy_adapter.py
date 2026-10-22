@@ -466,6 +466,10 @@ class FrappeOrderPiecePolicyAdapter:
         if not cint(getattr(row, addon.enabled_field, 0)):
             self._clear_machining(row, addon)
             return
+        if str(getattr(row, "piece_type", "") or "") == "Special":
+            # Presence is the contract. Location is completed in the DXF.
+            self._clear_machining(row, addon)
+            return
         if not available_liner_sides(row.piece_type or "Regular"):
             self._clear_machining(row, addon)
             return
@@ -516,6 +520,9 @@ class FrappeOrderPiecePolicyAdapter:
             self._apply_door_liners(row, index, old_row)
             return
         if not cint(getattr(row, addon.enabled_field, 0)):
+            self._clear_machining(row, addon)
+            return
+        if str(getattr(row, "piece_type", "") or "") == "Special":
             self._clear_machining(row, addon)
             return
         if not available_liner_sides(row.piece_type or "Regular"):
