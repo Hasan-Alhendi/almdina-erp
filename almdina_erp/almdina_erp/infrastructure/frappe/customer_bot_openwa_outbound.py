@@ -1,9 +1,10 @@
 """Build live customer-bot OpenWA reply ports from server settings only.
 
-Never call this while ``LIVE_REPLY_DELIVERY_ENABLED`` is False. The factory
-reads the bot session id and connection ref from Customer Bot Settings and the
-gateway URL/API key from process OpenWA config. Client message bodies never
-supply those values.
+Call only after the ops transport gate has already allowed delivery. The
+factory reads the bot session id and connection ref from Customer Bot Settings
+and the gateway URL/API key from process OpenWA config. Client message bodies
+never supply those values. This module does not change ``OpenWAClient`` or
+factory measurement / invoice / stage notification paths.
 """
 
 from __future__ import annotations

@@ -23,8 +23,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery i
     run_customer_bot_reply_delivery_job,
     scheduled_customer_bot_reply_tick,
 )
-from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_pilot_config import (
-    CustomerBotPilotConfig,
+from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_ops_config import (
+    OPS_MODE_PRODUCTION,
+    CustomerBotOpsConfig,
 )
 
 NOW_UTC = datetime(2026, 10, 22, 13, 30, tzinfo=timezone.utc)
@@ -181,12 +182,13 @@ class GatewayEnqueueWiringTests(unittest.TestCase):
 
         with patch.object(
             gw,
-            "load_customer_bot_pilot",
-            return_value=CustomerBotPilotConfig(
-                enabled=False,
-                phone_e164=None,
-                started_at=None,
+            "load_customer_bot_ops",
+            return_value=CustomerBotOpsConfig(
+                mode=OPS_MODE_PRODUCTION,
+                pilot_phone_e164=None,
+                started_at=NOW_UTC,
                 transport_armed=False,
+                transport_live=False,
             ),
         ):
             with patch.object(gw, "accept_inbound_customer_message", side_effect=fake_accept):

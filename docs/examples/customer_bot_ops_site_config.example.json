@@ -1,0 +1,11 @@
+{
+  "_comment": "Fake values only. Do not copy production secrets into the repository.",
+  "customer_bot_ops_mode": "off",
+  "customer_bot_ops_started_at": null,
+  "customer_bot_transport_armed": 0,
+  "customer_bot_transport_live": 0,
+  "customer_bot_pilot_enabled": 0,
+  "customer_bot_pilot_phone_e164": "+963900000000",
+  "customer_bot_pilot_started_at": null,
+  "customer_bot_pilot_transport_armed": 0
+}

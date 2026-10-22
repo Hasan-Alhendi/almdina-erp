@@ -18,6 +18,9 @@ from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import (
 from almdina_erp.almdina_erp.domain.customer_bot.phone_number import CustomerPhoneError
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import IGNORED, PROCESSED
 from almdina_erp.almdina_erp.domain.customer_bot.text_reply import SendDisposition, TextSendResult
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops import (
+    ops_transport_may_run,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
     REASON_PILOT_PHONE_MISMATCH,
     REASON_PILOT_TOO_OLD,
@@ -27,6 +30,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery import (
     LIVE_REPLY_DELIVERY_ENABLED,
     deliver_customer_bot_replies,
+)
+from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_ops_config import (
+    OPS_MODE_OFF,
+    OPS_MODE_PILOT,
+    CustomerBotOpsConfig,
 )
 from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_pilot_config import (
     CustomerBotPilotConfig,
@@ -132,24 +140,27 @@ class PilotConfigTests(unittest.TestCase):
 
     def test_live_module_alone_does_not_arm_transport(self) -> None:
         with patch(
-            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot.load_customer_bot_pilot",
-            return_value=CustomerBotPilotConfig(
-                enabled=False,
-                phone_e164=None,
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops.load_customer_bot_ops",
+            return_value=CustomerBotOpsConfig(
+                mode=OPS_MODE_OFF,
+                pilot_phone_e164=None,
                 started_at=None,
                 transport_armed=False,
+                transport_live=False,
             ),
         ):
             self.assertFalse(pilot_transport_may_run(live_module_enabled=True))
+            self.assertFalse(ops_transport_may_run(live_module_enabled=True))
 
     def test_armed_without_ready_pilot_does_not_run(self) -> None:
         with patch(
-            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot.load_customer_bot_pilot",
-            return_value=CustomerBotPilotConfig(
-                enabled=True,
-                phone_e164=None,
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops.load_customer_bot_ops",
+            return_value=CustomerBotOpsConfig(
+                mode=OPS_MODE_PILOT,
+                pilot_phone_e164=None,
                 started_at=None,
                 transport_armed=True,
+                transport_live=False,
             ),
         ):
             self.assertFalse(pilot_transport_may_run(live_module_enabled=False))
@@ -167,13 +178,14 @@ class PilotInboundGateTests(unittest.TestCase):
         from almdina_erp.almdina_erp.infrastructure.frappe import customer_bot_inbound_gateway as gateway
 
         message = _msg(phone=PILOT_PHONE, event="e-pilot", when=FRESH)
-        pilot = CustomerBotPilotConfig(
-            enabled=True,
-            phone_e164=PILOT_PHONE,
+        ops = CustomerBotOpsConfig(
+            mode=OPS_MODE_PILOT,
+            pilot_phone_e164=PILOT_PHONE,
             started_at=FRESH - timedelta(minutes=1),
             transport_armed=False,
+            transport_live=False,
         )
-        with patch.object(gateway, "load_customer_bot_pilot", return_value=pilot):
+        with patch.object(gateway, "load_customer_bot_ops", return_value=ops):
             with patch.object(gateway, "FrappeCustomerBotSessionRepository", return_value=self.sessions):
                 with patch.object(gateway, "FrappeCustomerBotSettingsRepository", return_value=self.settings):
                     with patch.object(gateway, "FrappeCustomerPhoneDirectory", return_value=self.directory):
@@ -189,13 +201,14 @@ class PilotInboundGateTests(unittest.TestCase):
         from almdina_erp.almdina_erp.infrastructure.frappe import customer_bot_inbound_gateway as gateway
 
         message = _msg(phone=OTHER_PHONE, event="e-other", when=FRESH)
-        pilot = CustomerBotPilotConfig(
-            enabled=True,
-            phone_e164=PILOT_PHONE,
+        ops = CustomerBotOpsConfig(
+            mode=OPS_MODE_PILOT,
+            pilot_phone_e164=PILOT_PHONE,
             started_at=FRESH - timedelta(minutes=1),
             transport_armed=False,
+            transport_live=False,
         )
-        with patch.object(gateway, "load_customer_bot_pilot", return_value=pilot):
+        with patch.object(gateway, "load_customer_bot_ops", return_value=ops):
             with patch.object(gateway, "FrappeCustomerBotSessionRepository", return_value=self.sessions):
                 result = gateway.accept_verified_customer_bot_inbound(message)
         self.assertEqual(result.disposition, IGNORED)
@@ -207,13 +220,14 @@ class PilotInboundGateTests(unittest.TestCase):
         from almdina_erp.almdina_erp.infrastructure.frappe import customer_bot_inbound_gateway as gateway
 
         message = _msg(phone=None, event="e-none", when=FRESH)
-        pilot = CustomerBotPilotConfig(
-            enabled=True,
-            phone_e164=PILOT_PHONE,
+        ops = CustomerBotOpsConfig(
+            mode=OPS_MODE_PILOT,
+            pilot_phone_e164=PILOT_PHONE,
             started_at=FRESH - timedelta(minutes=1),
             transport_armed=False,
+            transport_live=False,
         )
-        with patch.object(gateway, "load_customer_bot_pilot", return_value=pilot):
+        with patch.object(gateway, "load_customer_bot_ops", return_value=ops):
             with patch.object(gateway, "FrappeCustomerBotSessionRepository", return_value=self.sessions):
                 result = gateway.accept_verified_customer_bot_inbound(message)
         self.assertEqual(result.disposition, IGNORED)
@@ -310,7 +324,7 @@ class PilotDeliveryFilterTests(unittest.TestCase):
     def test_disable_stops_new_transport_claims(self) -> None:
         self.assertFalse(LIVE_REPLY_DELIVERY_ENABLED)
         with patch(
-            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot.pilot_transport_may_run",
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops.ops_transport_may_run",
             return_value=False,
         ):
             with patch(
@@ -381,6 +395,7 @@ class LegacySendIsolationTests(unittest.TestCase):
         for path in paths:
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("customer_bot_pilot", text)
+            self.assertNotIn("customer_bot_ops", text)
             self.assertNotIn("LIVE_REPLY_DELIVERY_ENABLED", text)
 
 

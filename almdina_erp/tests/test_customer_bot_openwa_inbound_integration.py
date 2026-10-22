@@ -28,8 +28,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_connecti
     DOCTYPE,
     load_openwa_inbound_connection,
 )
-from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_pilot_config import (
-    CustomerBotPilotConfig,
+from almdina_erp.almdina_erp.infrastructure.whatsapp.customer_bot_ops_config import (
+    OPS_MODE_PILOT,
+    OPS_MODE_PRODUCTION,
+    CustomerBotOpsConfig,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery import (
     LIVE_REPLY_DELIVERY_ENABLED,
@@ -111,14 +113,18 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         self._configure_connection(CONNECTION, SESSION, SECRET)
         self._ensure_bot_enabled()
         self.assertFalse(LIVE_REPLY_DELIVERY_ENABLED)
-        # Site may have a live single-phone pilot; isolate webhook contract tests from it.
+        # Site may have a live single-phone pilot; isolate webhook contract tests
+        # with production ops that admits any trusted phone (transport still off).
+        from datetime import datetime, timezone
+
         self._pilot_patch = patch(
-            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_pilot",
-            return_value=CustomerBotPilotConfig(
-                enabled=False,
-                phone_e164=None,
-                started_at=None,
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_ops",
+            return_value=CustomerBotOpsConfig(
+                mode=OPS_MODE_PRODUCTION,
+                pilot_phone_e164=None,
+                started_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
                 transport_armed=False,
+                transport_live=False,
             ),
         )
         self._pilot_patch.start()
@@ -218,12 +224,14 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         second_fitted = fit_session_key(second_raw)
         self.assertNotEqual(first_fitted, second_fitted)
 
+        # Pin provider timestamp so redelivery shares the event fingerprint.
         group_data = {
             "isGroup": True,
             "from": "120363090841257773@g.us",
             "chatId": "120363090841257773@g.us",
             "author": "168448650932425@lid",
             "senderPhone": None,
+            "timestamp": 1_792_678_200,
         }
         first = _signed_body(idempotency_key=first_raw, delivery_id="long-d1", data=group_data)
         first_response = self._invoke(INGEST_USER, first[0], first[1])
@@ -265,12 +273,13 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
 
         self._pilot_patch.stop()
         with patch(
-            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_pilot",
-            return_value=CustomerBotPilotConfig(
-                enabled=True,
-                phone_e164="+963931644327",
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_ops",
+            return_value=CustomerBotOpsConfig(
+                mode=OPS_MODE_PILOT,
+                pilot_phone_e164="+963931644327",
                 started_at=datetime(2026, 10, 22, 12, 0, tzinfo=timezone.utc),
                 transport_armed=False,
+                transport_live=False,
             ),
         ):
             raw = (
@@ -298,6 +307,8 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         self._pilot_patch.start()
 
     def test_lid_without_trusted_phone_and_valid_phone(self) -> None:
+        # contact.number is never trusted; without senderPhone the ops gate
+        # ignores before the engine (no invented identity from @lid / contact).
         lid = _signed_body(
             idempotency_key=PREFIX + "lid",
             data={
@@ -308,7 +319,8 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
             },
         )
         lid_response = self._invoke(INGEST_USER, lid[0], lid[1])
-        self.assertEqual(lid_response["disposition"], PROCESSED)
+        self.assertEqual(lid_response["disposition"], IGNORED)
+        self.assertEqual(_reply_count(PREFIX + "lid"), 0)
 
         phone = _signed_body(
             idempotency_key=PREFIX + "phone",

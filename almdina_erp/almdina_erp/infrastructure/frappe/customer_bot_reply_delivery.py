@@ -9,8 +9,9 @@ send path.
 
 While transport is not armed the delivery entry does not construct a gateway
 client, does not read API keys, and does not send. Transport also requires a
-ready server-side pilot (E.164 + start cutoff). Flipping
-``LIVE_REPLY_DELIVERY_ENABLED`` alone cannot bypass the phone gate.
+ready server-side ops mode (pilot phone + start cutoff, or production start
+cutoff). The module constant ``LIVE_REPLY_DELIVERY_ENABLED`` stays ``False``;
+use site ``customer_bot_transport_live`` or the transport arm flag instead.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from datetime import datetime
 from almdina_erp.almdina_erp.application.customer_bot.ports import BotTextReplyPort
 from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
 
+# Deprecated code kill-switch. Keep False; prefer site_config transport flags.
 LIVE_REPLY_DELIVERY_ENABLED = False
 
 _DELIVERY_JOB_METHOD = (
@@ -41,20 +43,20 @@ def deliver_customer_bot_replies(
 
     Used by the immediate RQ job and by the scheduled recovery tick. Claim
     locking + sequence gates prevent duplicate sends when both run together.
-    When the pilot/transport gate is off this returns immediately without
+    When the ops/transport gate is off this returns immediately without
     building OpenWA ports.
     """
 
-    from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
-        intent_pilot_cancel_reason,
-        load_customer_bot_pilot,
-        pilot_transport_may_run,
+    from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops import (
+        intent_ops_cancel_reason,
+        load_customer_bot_ops,
+        ops_transport_may_run,
     )
 
-    if not pilot_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
+    if not ops_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
         return 0
-    pilot = load_customer_bot_pilot()
-    if not pilot.is_ready or pilot.phone_e164 is None or pilot.started_at is None:
+    ops = load_customer_bot_ops()
+    if not ops.is_ready or ops.started_at is None:
         return 0
 
     from almdina_erp.almdina_erp.application.customer_bot.deliver_reply_intents import (
@@ -90,15 +92,15 @@ def deliver_customer_bot_replies(
             document_port=bundle.reply,
         )
 
-    def _pilot_recheck(claimed: ClaimedReply) -> str | None:
-        from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_pilot import (
-            REASON_PILOT_INACTIVE,
+    def _ops_recheck(claimed: ClaimedReply) -> str | None:
+        from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops import (
+            REASON_OPS_INACTIVE,
         )
 
-        if not pilot_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
-            return REASON_PILOT_INACTIVE
-        current = load_customer_bot_pilot()
-        return intent_pilot_cancel_reason(
+        if not ops_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
+            return REASON_OPS_INACTIVE
+        current = load_customer_bot_ops()
+        return intent_ops_cancel_reason(
             current,
             normalized_phone=claimed.normalized_phone,
             created_on=claimed.created_on,
@@ -110,9 +112,9 @@ def deliver_customer_bot_replies(
         limit=limit,
         now=now,
         deps=deps,
-        eligible_phone=pilot.phone_e164,
-        created_not_before=pilot.started_at,
-        after_claim_cancel_reason=_pilot_recheck,
+        eligible_phone=ops.claim_eligible_phone,
+        created_not_before=ops.started_at,
+        after_claim_cancel_reason=_ops_recheck,
     )
     return len(steps)
 
