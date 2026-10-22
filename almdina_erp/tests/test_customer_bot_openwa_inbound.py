@@ -186,11 +186,11 @@ class OpenWAInboundAdapterTests(unittest.TestCase):
 
     def test_long_idempotency_keys_with_shared_prefix_stay_distinct(self) -> None:
         shared = (
-            "msg_08e1dfbe-5d6b-4e5b-b540-60a5924dd707_false_"
+            "msg_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee_false_"
             "120363090841257773@g.us_"
         )
-        first_raw = shared + ("A" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
-        second_raw = shared + ("B" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        first_raw = shared + ("A" * 48) + "_168448650932425@lid_ffffffff-1111-2222-3333-444444444444"
+        second_raw = shared + ("B" * 48) + "_168448650932425@lid_ffffffff-1111-2222-3333-444444444444"
         self.assertGreater(len(first_raw), MAX_KEY_LENGTH)
         self.assertGreater(len(second_raw), MAX_KEY_LENGTH)
         self.assertTrue(first_raw.startswith(shared) and second_raw.startswith(shared))

@@ -214,11 +214,11 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
         """Long OpenWA idempotency keys must not crash MariaDB Data(140) columns."""
 
         shared = (
-            "msg_08e1dfbe-5d6b-4e5b-b540-60a5924dd707_false_"
+            "msg_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee_false_"
             "120363090841257773@g.us_"
         )
-        first_raw = shared + ("A" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
-        second_raw = shared + ("B" * 48) + "_168448650932425@lid_4f07f745-4f0e-42bc-a9a2-7467472a3504"
+        first_raw = shared + ("A" * 48) + "_168448650932425@lid_ffffffff-1111-2222-3333-444444444444"
+        second_raw = shared + ("B" * 48) + "_168448650932425@lid_ffffffff-1111-2222-3333-444444444444"
         self.assertNotEqual(first_raw, second_raw)
         first_fitted = fit_session_key(first_raw)
         second_fitted = fit_session_key(second_raw)
@@ -276,7 +276,7 @@ class TestCustomerBotOpenWAInboundIntegration(FrappeTestCase):
             "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_inbound_gateway.load_customer_bot_ops",
             return_value=CustomerBotOpsConfig(
                 mode=OPS_MODE_PILOT,
-                pilot_phone_e164="+963931644327",
+                pilot_phone_e164="+963944000001",
                 started_at=datetime(2026, 10, 22, 12, 0, tzinfo=timezone.utc),
                 transport_armed=False,
                 transport_live=False,

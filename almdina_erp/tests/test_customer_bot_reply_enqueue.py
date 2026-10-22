@@ -170,7 +170,7 @@ class GatewayEnqueueWiringTests(unittest.TestCase):
             text="hi",
             from_own_account=False,
             is_group=False,
-            trusted_normalized_phone="+963931644327",
+            trusted_normalized_phone="+963944000001",
         )
 
         def fake_accept(_msg, **kwargs):
