@@ -64,6 +64,55 @@
         return Number(String(value).replace(",", ".")) || 0;
     }
 
+    function dimensionValidation() {
+        return window.AlmdinaOrderDimensionValidation || null;
+    }
+
+    function boardDimensions(frm) {
+        const api = dimensionValidation();
+        if (api && typeof api.boardDimensions === "function") return api.boardDimensions(frm);
+        // The operator is also exercised in isolation by focused frontend tests;
+        // the real DCO manifest always loads the board-dimension owner first.
+        if (!api) return { length: Infinity, width: Infinity, valid: true };
+        const length = num(frm && frm.doc && frm.doc.board_length_cm) > 0
+            ? num(frm.doc.board_length_cm)
+            : null;
+        const width = num(frm && frm.doc && frm.doc.board_width_cm) > 0
+            ? num(frm.doc.board_width_cm)
+            : null;
+        return { length, width, valid: length !== null && width !== null };
+    }
+
+    function pieceDimensionIssues(frm, row, values = {}) {
+        const board = boardDimensions(frm);
+        const widthValue = values.width_cm !== undefined ? values.width_cm : row && row.width_cm;
+        const lengthValue = values.length_cm !== undefined ? values.length_cm : row && row.length_cm;
+        const api = dimensionValidation();
+        const positive = api && typeof api.positiveNumber === "function"
+            ? api.positiveNumber
+            : value => num(value) > 0 ? num(value) : null;
+        const width = positive(widthValue);
+        const length = positive(lengthValue);
+        const issues = {};
+        if (!board.valid) {
+            issues.board = __("Please enter board length and width first.");
+            return issues;
+        }
+        if (width === null) issues.width_cm = __("Piece width must be a positive number.");
+        if (length === null) issues.length_cm = __("Piece length must be a positive number.");
+
+        // The inline editor validates the entered axes independently. Rotation
+        // remains an optimizer concern and must not swap these field messages.
+        if (length !== null && length > board.length) issues.length_cm = __("Exceeds board length");
+        if (width !== null && width > board.width) issues.width_cm = __("Exceeds board width");
+        return issues;
+    }
+
+    function showDimensionIssue(message) {
+        if (!message || typeof frappe?.msgprint !== "function") return;
+        frappe.msgprint({ message, indicator: "orange" });
+    }
+
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
             return frappe.almdina.orderCanEdit(frm);
@@ -146,6 +195,9 @@
                 .dco-fast-input:focus,.dco-fast-select:focus {
                     border-color:var(--alm-primary,#172033); box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 13%, transparent);
                 }
+                .dco-fast-input.is-invalid { border-color:var(--red-500,#d63939); box-shadow:0 0 0 2px color-mix(in srgb, var(--red-500,#d63939) 12%, transparent); }
+                .dco-piece-dimension-error { display:block; max-width:100%; min-height:0; color:var(--red-600,#b42318); font-size:10px; line-height:1.2; text-align:start; white-space:normal; overflow-wrap:anywhere; }
+                .dco-piece-dimension-error:empty { display:none; }
                 .dco-edge-buttons { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
                 .dco-check-toggle {
                     min-height:34px; border:1px solid var(--border-color,#ccd3da); border-radius:8px; background:var(--card-bg,#fff);
@@ -263,6 +315,57 @@
         return (frm.doc.pieces || []).find((row) => (
             row.name === requested || row.name === current
         )) || null;
+    }
+
+    function syncDimensionInputState(input, message) {
+        if (!input) return;
+        if (input.classList && typeof input.classList.toggle === "function") {
+            input.classList.toggle("is-invalid", Boolean(message));
+        } else if (input.classList) {
+            if (message && typeof input.classList.add === "function") input.classList.add("is-invalid");
+            if (!message && typeof input.classList.remove === "function") input.classList.remove("is-invalid");
+        }
+        if (message) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+        input._dcoLastAcceptedValue = message ? input._dcoLastAcceptedValue : input.value;
+    }
+
+    function syncRowDimensionValidation(frm, tr, row, values = {}) {
+        if (!tr || tr.classList.contains("dco-virtual-row")) return;
+        const issues = pieceDimensionIssues(frm, row, values);
+        ["width_cm", "length_cm"].forEach(fieldname => {
+            const input = tr.querySelector(`input[data-field='${fieldname}']`);
+            const error = tr.querySelector(`[data-field-error='${fieldname}']`);
+            const message = issues[fieldname] || "";
+            syncDimensionInputState(input, message);
+            if (error) error.textContent = message;
+        });
+    }
+
+    function refreshDimensionValidation(frm) {
+        const api = dimensionValidation();
+        if (api && typeof api.refreshBoardDimensionValidation === "function") {
+            api.refreshBoardDimensionValidation(frm);
+        }
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
+        if (!root) return true;
+        root.querySelectorAll("tr[data-row-name]:not(.dco-virtual-row)").forEach(tr => {
+            const row = rowByName(frm, tr.dataset.rowName || "");
+            if (row) syncRowDimensionValidation(frm, tr, row);
+        });
+        return boardDimensions(frm).valid;
+    }
+
+    function guardDimensionInput(frm, input, event) {
+        if (!input || !["width_cm", "length_cm"].includes(input.dataset.field)) return false;
+        const board = boardDimensions(frm);
+        if (board.valid) return false;
+        if (event && event.cancelable) event.preventDefault();
+        const api = dimensionValidation();
+        if (api && typeof api.notifyBoardRequired === "function") api.notifyBoardRequired();
+        else showDimensionIssue(__("Please enter board length and width first."));
+        return true;
     }
 
     function reindexPieces(frm) {
@@ -407,6 +510,12 @@
         const name = virtual ? `__virtual__${++virtualSequence}` : row.name;
         const index = virtual ? (frm.doc.pieces || []).length + 1 : (row.idx || row.piece_no || 1);
         const data = row || { qty:1 };
+        const dimensionIssues = virtual ? {} : pieceDimensionIssues(frm, data);
+        const dimensionInput = (fieldname, value) => {
+            const issue = dimensionIssues[fieldname] || "";
+            const invalid = issue ? " aria-invalid=\"true\"" : "";
+            return `<input class="dco-fast-input${issue ? " is-invalid" : ""}" type="number" inputmode="decimal" step="any" min="0" data-field="${fieldname}" value="${virtual ? "" : escapeHtml(value || "")}"${invalid} ${disabled}><div class="dco-piece-dimension-error" data-field-error="${fieldname}">${escapeHtml(issue)}</div>`;
+        };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
@@ -471,8 +580,8 @@
             <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
                 <td class="dco-col-type" data-label="${labels.type}">${pieceTypeControl}</td>
-                <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
-                <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
+                <td class="dco-col-number dco-col-width" data-label="${labels.width}">${dimensionInput("width_cm", data.width_cm)}</td>
+                <td class="dco-col-number dco-col-length" data-label="${labels.length}">${dimensionInput("length_cm", data.length_cm)}</td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
@@ -653,6 +762,7 @@
         if (measurementLifecycle && typeof measurementLifecycle.rendered === "function") {
             measurementLifecycle.rendered(frm);
         }
+        refreshDimensionValidation(frm);
     }
 
     function captureMeasurementView(root) {
@@ -734,6 +844,17 @@
         return String(previous ?? "") === String(next ?? "");
     }
 
+    function liveRowDimensionValues(tr, row) {
+        const value = fieldname => {
+            const control = tr && tr.querySelector(`input[data-field='${fieldname}']`);
+            return control ? control.value : row && row[fieldname];
+        };
+        return {
+            width_cm: value("width_cm"),
+            length_cm: value("length_cm"),
+        };
+    }
+
     function virtualRowHasEnteredValue(tr) {
         if (!tr || !tr.classList.contains("dco-virtual-row")) return false;
         const width = tr.querySelector("input[data-field='width_cm']");
@@ -756,6 +877,10 @@
 
     function syncInputToModel(frm, input, trigger = false) {
         if (!measurementInputOwned(frm, input)) return null;
+        if (guardDimensionInput(frm, input, null)) {
+            input.value = input._dcoLastAcceptedValue || "";
+            return null;
+        }
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
         if (!tr || !fieldname) return null;
@@ -767,6 +892,12 @@
         if (!valuesEqual(fieldname, row[fieldname], value)) {
             row[fieldname] = value;
             frm.dirty();
+        }
+        if (["width_cm", "length_cm"].includes(fieldname)) {
+            input._dcoLastAcceptedValue = input.value;
+            // Validate the live controls, including temporary empty/incomplete
+            // input, without replacing the row or moving the active caret.
+            syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
         }
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);
@@ -819,13 +950,11 @@
         return document.activeElement === input;
     }
 
-    function requirePieceDimensions(row, tr) {
-        if (num(row && row.width_cm) > 0 && num(row && row.length_cm) > 0) return true;
-        frappe.msgprint({
-            title: __("Enter dimensions first"),
-            message: __("Enter the piece width and length before opening the shape."),
-            indicator: "orange",
-        });
+    function requirePieceDimensions(frm, row, tr) {
+        const issues = pieceDimensionIssues(frm, row);
+        if (!Object.keys(issues).length) return true;
+        const message = issues.width_cm || issues.length_cm || issues.board;
+        showDimensionIssue(message || __("Please enter board length and width first."));
         focusWidth(tr);
         return false;
     }
@@ -1008,6 +1137,13 @@
         if (root._dcoFastMeasurementsBound) return;
         root._dcoFastMeasurementsBound = true;
 
+        root.addEventListener("beforeinput", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            guardDimensionInput(currentFrm, input, event);
+        }, true);
+
         root.addEventListener("focusin", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
@@ -1015,14 +1151,17 @@
             const tr = input.closest("tr[data-row-name]");
             const row = rowByName(currentFrm, tr && tr.dataset.rowName);
             if (row) captureCornerResizeSnapshot(tr, row);
+            if (input) input._dcoLastAcceptedValue = input.value;
         });
 
+        // Capture the native input event before table extensions can consume its
+        // bubbling phase. The handler mutates only model values and error nodes.
         root.addEventListener("input", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
             if (!input || !root.contains(input) || !currentFrm) return;
             syncInputToModel(currentFrm, input, false);
-        });
+        }, true);
 
         root.addEventListener("change", event => {
             const currentFrm = root._dcoFastEntryForm;
@@ -1071,6 +1210,13 @@
             if (!input || !root.contains(input) || !currentFrm) return;
             const fieldname = input.dataset.field;
             const tr = input.closest("tr[data-row-name]");
+
+            if (["width_cm", "length_cm"].includes(fieldname)
+                && boardDimensions(currentFrm).valid === false
+                && !["Tab", "Shift", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"].includes(event.key)) {
+                guardDimensionInput(currentFrm, input, event);
+                return;
+            }
 
             // Width -> Tab is intentionally untouched. Because this is a plain HTML
             // editor, the browser moves directly to Length with zero Frappe row activation.
@@ -1135,7 +1281,7 @@
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
-                if (!row || !requirePieceDimensions(row, tr)) return;
+                if (!row || !requirePieceDimensions(currentFrm, row, tr)) return;
                 if (tr && tr.dataset.rowName !== row.name) tr.dataset.rowName = row.name;
                 const editable = isEditable(currentFrm);
                 if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
@@ -1225,6 +1371,28 @@
         });
     }
 
+    function validateDimensionsBeforeSave(frm) {
+        const board = boardDimensions(frm);
+        if (!board.valid) {
+            const message = __("Please enter board length and width first.");
+            showDimensionIssue(message);
+            return Promise.reject(new Error(message));
+        }
+        const invalid = (frm.doc.pieces || []).map((row, index) => ({
+            row,
+            index: index + 1,
+            issues: pieceDimensionIssues(frm, row),
+        })).find(item => Object.keys(item.issues).length);
+        if (!invalid) return Promise.resolve();
+        const message = invalid.issues.width_cm || invalid.issues.length_cm || invalid.issues.board;
+        showDimensionIssue(__("Row {0}: {1}", [invalid.index, message]));
+        const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
+        const tr = root && root.querySelector(`tr[data-row-name='${invalid.row.name}']`);
+        if (tr) focusWidth(tr);
+        return Promise.reject(new Error(message));
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
@@ -1249,7 +1417,7 @@
         before_save(frm) {
             flushMeasurementInputs(frm);
             pruneEmptyTrailingRows(frm);
-            return validateMachiningAddonsBeforeSave(frm);
+            return validateDimensionsBeforeSave(frm).then(() => validateMachiningAddonsBeforeSave(frm));
         },
     });
 
@@ -1265,6 +1433,9 @@
             edgesCellHtml,
             edgeOptions,
             isEditable,
+            pieceDimensionIssues,
+            refreshValidation: refreshDimensionValidation,
+            validateDimensionsBeforeSave,
         }
     );
 })();

@@ -2937,3 +2937,15 @@ The cost and special door price edits were saved and the section returned to rea
 Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
 Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
 Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Board length must be a positive number.,يجب أن يكون طول اللوح رقماً موجباً أكبر من الصفر.
+Board width must be a positive number.,يجب أن يكون عرض اللوح رقماً موجباً أكبر من الصفر.
+Piece width must be a positive number.,يجب أن يكون عرض الدرفة رقماً موجباً أكبر من الصفر.
+Piece length must be a positive number.,يجب أن يكون طول الدرفة رقماً موجباً أكبر من الصفر.
+Please enter board length and width first.,يرجى إدخال طول وعرض اللوح أولاً.
+Piece width cannot exceed board width.,لا يجوز أن يتجاوز عرض الدرفة عرض اللوح.
+Piece length cannot exceed board length.,لا يجوز أن يتجاوز طول الدرفة طول اللوح.
+Piece dimensions exceed the board, even after allowed rotation.,تتجاوز قياسات الدرفة أبعاد اللوح حتى بعد السماح بالدوران.
+Exceeds board length,يتجاوز طول اللوح
+Exceeds board width,يتجاوز عرض اللوح
+Row {0}: {1},السطر {0}: {1}
+Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.,السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
