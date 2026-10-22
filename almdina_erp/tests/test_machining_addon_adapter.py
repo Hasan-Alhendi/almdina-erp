@@ -212,3 +212,25 @@ class TestMachiningAddonAdapter(FrappeTestCase):
                         self.assertIn("maximum 60.2 cm", str(raised.exception))
                     else:
                         adapter.validate_machining_rows()
+
+    def test_multiple_liners_share_width_and_dual_write_first_liner(self) -> None:
+        specs = (
+            '{"width_cm":1.5,"liners":['
+            '{"id":"liner_1","side":"edge_width_top","offset_cm":2,"start_cm":0,"length_cm":10},'
+            '{"id":"liner_2","side":"edge_long_left","offset_cm":3,"start_cm":4,"length_cm":12}'
+            "]}"
+        )
+        adapter, row = self._adapter(
+            extra_liner=1,
+            liner_reference_side="edge_width_top",
+            liner_offset_cm=2,
+            liner_width_cm=1.5,
+            liner_start_cm=0,
+            liner_length_cm=10,
+            liner_specs_json=specs,
+        )
+        adapter.validate_machining_rows()
+        self.assertEqual(row.liner_reference_side, "edge_width_top")
+        self.assertEqual(row.liner_width_cm, 1.5)
+        self.assertIn("liner_2", row.liner_specs_json)
+        self.assertIn('"width_cm":1.5', row.liner_specs_json.replace(" ", ""))

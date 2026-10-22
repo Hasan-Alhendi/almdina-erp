@@ -38,6 +38,7 @@ const context = vm.createContext({
     Number,
     String,
     Math,
+    Set,
     // Frappe identity-language translation still interpolates positional values.
     __: (message, values) => {
         let output = String(message);

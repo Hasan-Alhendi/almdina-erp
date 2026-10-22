@@ -145,6 +145,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
+    compare_liner_set_paths,
     compare_overlay_path,
     machining_values,
 )
@@ -1413,6 +1414,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "liner_width_cm": _num(getattr(row, "liner_width_cm", 0)),
                     "liner_start_cm": _num(getattr(row, "liner_start_cm", 0)),
                     "liner_length_cm": _num(getattr(row, "liner_length_cm", 0)),
+                    "liner_specs_json": getattr(row, "liner_specs_json", "") or "",
                     "machining": machining_values(row),
                 }
             )
@@ -2283,16 +2285,18 @@ def _liner_issue(
 
 
 def _regular_overlay_params(piece: dict[str, Any], kind: str) -> dict[str, Any]:
+    spec = (piece.get("_machining") or {}).get(kind) or {}
     if kind == "liner":
+        liners = tuple(spec.get("liners") or ())
         return {
             "enabled": "liner" in tuple(piece.get("_extra_selected_codes") or ()),
-            "side": str(piece.get("_liner_side") or ""),
-            "offset_cm": _num(piece.get("_liner_offset_cm")),
-            "width_cm": _num(piece.get("_liner_width_cm")),
-            "start_cm": piece.get("_liner_start_cm"),
-            "length_cm": piece.get("_liner_length_cm"),
+            "side": str(piece.get("_liner_side") or spec.get("side") or ""),
+            "offset_cm": _num(piece.get("_liner_offset_cm", spec.get("offset_cm"))),
+            "width_cm": _num(piece.get("_liner_width_cm", spec.get("width_cm"))),
+            "start_cm": piece.get("_liner_start_cm", spec.get("start_cm")),
+            "length_cm": piece.get("_liner_length_cm", spec.get("length_cm")),
+            "liners": liners,
         }
-    spec = (piece.get("_machining") or {}).get(kind) or {}
     return {
         "enabled": kind in tuple(piece.get("_extra_selected_codes") or ()),
         "side": str(spec.get("side") or ""),
@@ -2300,6 +2304,7 @@ def _regular_overlay_params(piece: dict[str, Any], kind: str) -> dict[str, Any]:
         "width_cm": _num(spec.get("width_cm")),
         "start_cm": spec.get("start_cm"),
         "length_cm": spec.get("length_cm"),
+        "liners": (),
     }
 
 
@@ -2328,56 +2333,80 @@ def _regular_liner_issue(
     ):
         return None
     marks = [item for item in items if item.kind == kind]
-    if len(marks) != 1:
+    liner_specs = tuple(params.get("liners") or ())
+    if kind != "liner" and len(marks) != 1:
+        return None
+    if kind == "liner" and not marks:
         return None
     outline = tuple((point[0] * 10.0, point[1] * 10.0) for point in piece.get("_outline_cm") or ())
     if len(outline) < 3:
         return None
-    path_cm = _to_plan_points(list(marks[0].path), sheet=sheet, trim_mm=trim_mm)
-    local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
     width_mm = _num(piece.get("original_w")) * 10.0
     height_mm = _num(piece.get("original_h")) * 10.0
     quarter_turns = 1 if piece.get("rotated") else 0
-    canonical = canonical_path(
-        local,
-        mirrored=False,
-        quarter_turns=quarter_turns,
-        width_mm=width_mm,
-        height_mm=height_mm,
-    )
     liner_piece = LinerPiece(piece_type, _num(piece.get("original_w")), _num(piece.get("original_h")))
     trim = max(0.0, float(trim_mm or 0.0))
-    try:
-        start_sawn, end_sawn = sawn_liner_ends(
-            liner_piece,
-            side,
-            origin_mm=(_num(piece.get("x")) * 10.0, _num(piece.get("y")) * 10.0),
-            mirrored=False,
-            quarter_turns=quarter_turns,
-            board=(
-                -trim,
-                -trim,
-                _num(sheet.get("full_width_mm")) - trim,
-                _num(sheet.get("full_height_mm")) - trim,
-            ),
-            start_cm=params["start_cm"],
-            length_cm=params["length_cm"],
+    canonical_paths = []
+    for mark in marks:
+        path_cm = _to_plan_points(list(mark.path), sheet=sheet, trim_mm=trim_mm)
+        local = localize_path(tuple((point[0] * 10.0, point[1] * 10.0) for point in path_cm), outline)
+        canonical_paths.append(
+            canonical_path(
+                local,
+                mirrored=False,
+                quarter_turns=quarter_turns,
+                width_mm=width_mm,
+                height_mm=height_mm,
+            )
         )
-    except LinerGeometryError:
-        start_sawn, end_sawn = None, None
-    measurement = compare_overlay_path(
-        canonical,
-        liner_piece,
-        kind,
-        side,
-        offset_cm,
-        width_cm,
-        cutter_diameter_mm,
-        params["start_cm"],
-        params["length_cm"],
-        start_sawn=start_sawn,
-        end_sawn=end_sawn,
-    )
+    if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
+        specs = liner_specs or (
+            {
+                "side": side,
+                "offset_cm": offset_cm,
+                "start_cm": params["start_cm"],
+                "length_cm": params["length_cm"],
+            },
+        )
+        measurement = compare_liner_set_paths(
+            canonical_paths,
+            liner_piece,
+            specs,
+            width_cm,
+            cutter_diameter_mm,
+        )
+    else:
+        try:
+            start_sawn, end_sawn = sawn_liner_ends(
+                liner_piece,
+                side,
+                origin_mm=(_num(piece.get("x")) * 10.0, _num(piece.get("y")) * 10.0),
+                mirrored=False,
+                quarter_turns=quarter_turns,
+                board=(
+                    -trim,
+                    -trim,
+                    _num(sheet.get("full_width_mm")) - trim,
+                    _num(sheet.get("full_height_mm")) - trim,
+                ),
+                start_cm=params["start_cm"],
+                length_cm=params["length_cm"],
+            )
+        except LinerGeometryError:
+            start_sawn, end_sawn = None, None
+        measurement = compare_overlay_path(
+            canonical_paths[0],
+            liner_piece,
+            kind,
+            side,
+            offset_cm,
+            width_cm,
+            cutter_diameter_mm,
+            params["start_cm"],
+            params["length_cm"],
+            start_sawn=start_sawn,
+            end_sawn=end_sawn,
+        )
     return _liner_issue(
         measurement,
         source_piece_no=int(piece.get("source_piece_no") or 0),

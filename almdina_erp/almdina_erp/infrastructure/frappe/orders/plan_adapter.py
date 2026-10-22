@@ -113,6 +113,7 @@ class FrappeOrderPlanAdapter:
                 piece[addon.width_field] = width
                 piece[addon.start_field] = flt(getattr(row, addon.start_field, 0))
                 piece[addon.length_field] = flt(getattr(row, addon.length_field, 0))
+        piece["liner_specs_json"] = getattr(row, "liner_specs_json", "") or ""
         return piece
 
     def _plan_input_payload(

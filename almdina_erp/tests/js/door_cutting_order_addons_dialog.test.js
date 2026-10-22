@@ -1296,6 +1296,57 @@ async function interactionChecks() {
     assert.equal(ui.root.querySelector("[data-liner-offset]").value, offsetBefore);
     assert.match(messages[messages.length - 1].message, /door type/);
 
+    const multi = blankRow({ name: "piece-multi" });
+    dialog.open({ doc: { pieces: [multi] }, dirty() {} }, multi);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 1);
+    assert.equal(ui.root.querySelector("[data-add-liner]") !== null, true);
+    ui.root.querySelector("[data-add-liner]").dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 2);
+    assert.match(ui.root.textContent, /Liner 2/);
+    ui.root.querySelector("[data-add-liner]").dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 3);
+    const middle = ui.root.querySelectorAll("[data-liner-item]")[1];
+    const middleId = middle.getAttribute("data-liner-item");
+    ui.root.querySelector(`[data-liner-remove-item="${middleId}"]`).dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 2);
+    assert.match(ui.root.textContent, /Liner 1/);
+    assert.match(ui.root.textContent, /Liner 2/);
+    ui.root.querySelector("[data-liner-width]").value = "12";
+    ui.root.querySelector("[data-liner-width]").dispatch("input");
+    const second = ui.root.querySelectorAll("[data-liner-item]")[1];
+    second.querySelector('[data-liner-side="edge_long_left"]').dispatch("click");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    const multiSaved = writes.at(-1);
+    assert.equal(multiSaved.extra_liner, 1);
+    assert.equal(multiSaved.liner_width_cm, 1.2);
+    assert.match(multiSaved.liner_specs_json, /liner_1/);
+    assert.match(multiSaved.liner_specs_json, /edge_long_left/);
+    assert.doesNotMatch(multiSaved.liner_specs_json, new RegExp(middleId));
+
+    dialog.open({ doc: { pieces: [multi] }, dirty() {} }, multi);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 2);
+    assert.equal(ui.root.querySelector("[data-liner-width]").value, "12");
+    ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+
+    const geometry = fakeWindow.AlmdinaLinerGeometry;
+    const piece = geometry.pieceFromRow({ piece_type: "Regular", width_cm: 40, length_cm: 60 });
+    const separate = geometry.mergedToolpathsMm(piece, [
+        { side: "edge_width_top", offsetCm: 2, startCm: 0, lengthCm: 0 },
+        { side: "edge_width_bottom", offsetCm: 2, startCm: 0, lengthCm: 0 },
+    ], 1.5, 5);
+    const joined = geometry.mergedToolpathsMm(piece, [
+        { side: "edge_width_top", offsetCm: 2, startCm: 0, lengthCm: 0 },
+        { side: "edge_long_left", offsetCm: 2, startCm: 0, lengthCm: 0 },
+    ], 1.5, 5);
+    assert.equal(separate.length, 2);
+    assert.ok(joined.length >= 1);
+
     console.log("Unified add-ons dialog interaction passed");
 }
 

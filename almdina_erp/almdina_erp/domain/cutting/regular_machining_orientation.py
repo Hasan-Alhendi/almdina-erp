@@ -19,10 +19,22 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
+    compare_liner_set_paths,
     compare_overlay_path,
 )
 
 Point = tuple[float, float]
+
+
+def _overlay_path_list(raw: Any) -> tuple[Sequence[Point], ...]:
+    if not raw:
+        return ()
+    first = raw[0]
+    if isinstance(first, (list, tuple)) and first and isinstance(first[0], (list, tuple)):
+        return tuple(item for item in raw if item and len(item) >= 2)
+    if len(raw) >= 2:
+        return (raw,)
+    return ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,46 +96,68 @@ def match_regular_machining_orientation(
     for turns in tuple(dict.fromkeys(int(value) % 4 for value in candidate_turns)):
         failures: list[tuple[str, LinerMeasurement | None]] = []
         for kind, spec in active:
-            path = overlay_paths.get(kind)
-            if not path or len(path) < 2:
+            raw_path = overlay_paths.get(kind)
+            paths = _overlay_path_list(raw_path)
+            if not paths:
                 failures.append((kind, None))
                 continue
-            canonical = canonical_path(
-                path,
-                mirrored=False,
-                quarter_turns=turns,
-                width_mm=width_mm,
-                height_mm=height_mm,
-            )
+            canonical_paths = [
+                canonical_path(
+                    path,
+                    mirrored=False,
+                    quarter_turns=turns,
+                    width_mm=width_mm,
+                    height_mm=height_mm,
+                )
+                for path in paths
+            ]
             side = str(spec["side"])
             start = float(spec.get("start_cm") or 0)
             length = float(spec.get("length_cm") or 0)
-            try:
-                start_sawn, end_sawn = sawn_liner_ends(
+            liner_specs = tuple(spec.get("liners") or ())
+            if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
+                measurement = compare_liner_set_paths(
+                    canonical_paths,
                     piece,
-                    side,
-                    origin_mm=origin_mm,
-                    mirrored=False,
-                    quarter_turns=turns,
-                    board=board_mm,
-                    start_cm=start,
-                    length_cm=length,
+                    liner_specs
+                    or (
+                        {
+                            "side": side,
+                            "offset_cm": float(spec.get("offset_cm") or 0),
+                            "start_cm": start,
+                            "length_cm": length,
+                        },
+                    ),
+                    float(spec.get("width_cm") or 0),
+                    cutter_diameter_mm,
                 )
-            except LinerGeometryError:
-                start_sawn, end_sawn = None, None
-            measurement = compare_overlay_path(
-                canonical,
-                piece,
-                kind,
-                side,
-                float(spec.get("offset_cm") or 0),
-                float(spec.get("width_cm") or 0),
-                cutter_diameter_mm,
-                start,
-                length,
-                start_sawn=start_sawn,
-                end_sawn=end_sawn,
-            )
+            else:
+                try:
+                    start_sawn, end_sawn = sawn_liner_ends(
+                        piece,
+                        side,
+                        origin_mm=origin_mm,
+                        mirrored=False,
+                        quarter_turns=turns,
+                        board=board_mm,
+                        start_cm=start,
+                        length_cm=length,
+                    )
+                except LinerGeometryError:
+                    start_sawn, end_sawn = None, None
+                measurement = compare_overlay_path(
+                    canonical_paths[0],
+                    piece,
+                    kind,
+                    side,
+                    float(spec.get("offset_cm") or 0),
+                    float(spec.get("width_cm") or 0),
+                    cutter_diameter_mm,
+                    start,
+                    length,
+                    start_sawn=start_sawn,
+                    end_sawn=end_sawn,
+                )
             if not measurement.ok:
                 failures.append((kind, measurement))
         if not failures:

@@ -13,9 +13,12 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    bbox,
     has_self_intersection,
     point_in_polygon,
+    point_to_polygon_distance,
     polygon_segments,
+    polygons_overlap,
     segment_distance,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
@@ -290,6 +293,29 @@ def liner_strip_polygon_mm(piece: LinerPiece, side: str, offset_cm: float, width
     width = _mm(width_cm)
     near = _offset_polyline(reference, offset, sign)
     far = _offset_polyline(reference, offset + width, sign)
+    return near + list(reversed(far))
+
+
+def liner_region_polygon_mm(
+    piece: LinerPiece,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    start_cm: float | None = None,
+    length_cm: float | None = None,
+) -> list[Point]:
+    """Mill rectangle/band for the ordered start and length, not the whole edge."""
+
+    error = validation_code(piece, side, offset_cm, width_cm)
+    if error:
+        raise LinerGeometryError(error)
+    polygon = piece_polygon_mm(piece)
+    reference, clipped, _start, _end, _boundary_start, _boundary_end = _prepared_reference(
+        piece, side, start_cm, length_cm
+    )
+    sign = _inward_sign(reference, polygon)
+    near = _offset_polyline(clipped, _mm(offset_cm), sign)
+    far = _offset_polyline(clipped, _mm(offset_cm) + _mm(width_cm), sign)
     return near + list(reversed(far))
 
 
@@ -1822,6 +1848,435 @@ def center_recessed_handle(
     return RecessedHandleCenter(True, "", resolved, start_cm, offset_cm)
 
 
+def mill_regions_connected(
+    first: Sequence[Point],
+    second: Sequence[Point],
+    *,
+    tolerance: float = GEOMETRY_TOLERANCE_MM,
+) -> bool:
+    """True when two mill bands share interior or a boundary that should be unioned."""
+
+    if len(first) < 3 or len(second) < 3:
+        return False
+    if polygons_overlap(first, second, tolerance):
+        return True
+    for point in first:
+        if point_in_polygon(point, second, tolerance):
+            return True
+    for point in second:
+        if point_in_polygon(point, first, tolerance):
+            return True
+    for edge in polygon_segments(first):
+        for other in polygon_segments(second):
+            if segment_distance(edge, other, tolerance) <= tolerance:
+                return True
+    return False
+
+
+def _liner_spec_tuple(spec: Any) -> tuple[str, float, float | None, float | None]:
+    if isinstance(spec, Mapping):
+        return (
+            str(spec.get("side") or ""),
+            float(spec.get("offset_cm", spec.get("offsetCm", 0)) or 0),
+            spec.get("start_cm", spec.get("startCm")),
+            spec.get("length_cm", spec.get("lengthCm")),
+        )
+    return (
+        str(getattr(spec, "side", "") or ""),
+        float(getattr(spec, "offset_cm", 0) or 0),
+        getattr(spec, "start_cm", None),
+        getattr(spec, "length_cm", None),
+    )
+
+
+def _connected_liner_components(regions: Sequence[Sequence[Point]]) -> tuple[tuple[int, ...], ...]:
+    remaining = set(range(len(regions)))
+    components: list[tuple[int, ...]] = []
+    while remaining:
+        seed = min(remaining)
+        group = [seed]
+        remaining.remove(seed)
+        queue = [seed]
+        while queue:
+            current = queue.pop()
+            for other in list(remaining):
+                if mill_regions_connected(regions[current], regions[other]):
+                    remaining.remove(other)
+                    group.append(other)
+                    queue.append(other)
+        components.append(tuple(sorted(group)))
+    return tuple(components)
+
+
+def _point_deep_inside(point: Point, polygon: Sequence[Point], margin_mm: float) -> bool:
+    if not point_in_polygon(point, polygon, GEOMETRY_TOLERANCE_MM):
+        return False
+    return point_to_polygon_distance(point, polygon) > max(margin_mm, GEOMETRY_TOLERANCE_MM)
+
+
+def _region_already_milled(
+    region: Sequence[Point],
+    covered: Sequence[Sequence[Point]],
+    margin_mm: float,
+) -> bool:
+    samples = _sample_region(region, max(margin_mm, 2.0))
+    if not samples or not covered:
+        return False
+    inflate = max(margin_mm, GEOMETRY_TOLERANCE_MM)
+    return all(
+        any(point_in_polygon(sample, previous, inflate) for previous in covered)
+        for sample in samples
+    )
+
+
+def _clip_pass_against_covered(
+    line: Sequence[Point],
+    covered: Sequence[Sequence[Point]],
+    keep_margin_mm: float,
+) -> list[list[Point]]:
+    """Drop cutter-center runs that sit fully inside an already-milled region."""
+
+    if len(line) < 2 or not covered:
+        return [list(line)] if len(line) >= 2 else []
+    length = _polyline_length(line)
+    if length <= GEOMETRY_TOLERANCE_MM:
+        return []
+    step = min(1.0, max(length / 64.0, GEOMETRY_TOLERANCE_MM * 4))
+    samples: list[tuple[Point, bool]] = []
+    cursor = 0.0
+    while cursor <= length + 1e-9:
+        point, _index = _point_along(line, min(cursor, length))
+        inside = any(_point_deep_inside(point, region, keep_margin_mm) for region in covered)
+        samples.append((point, inside))
+        if cursor >= length:
+            break
+        cursor = min(length, cursor + step)
+    runs: list[list[Point]] = []
+    current: list[Point] = []
+    for point, inside in samples:
+        if inside:
+            if len(current) >= 2:
+                runs.append(current)
+            current = []
+            continue
+        if current and math.dist(current[-1], point) <= GEOMETRY_TOLERANCE_MM:
+            continue
+        current.append(point)
+    if len(current) >= 2:
+        runs.append(current)
+    return runs
+
+
+def _chain_cutter_lines(lines: Sequence[Sequence[Point]]) -> list[Point]:
+    path: list[Point] = []
+    for index, line in enumerate(lines):
+        if len(line) < 2:
+            continue
+        sequence = list(line if index % 2 == 0 else reversed(line))
+        if path and math.dist(path[-1], sequence[0]) <= 1e-6:
+            sequence = sequence[1:]
+        path.extend(sequence)
+    return path
+
+
+def _close_component_path(
+    path: list[Point],
+    lines: Sequence[Sequence[Point]],
+    *,
+    saw_start: bool,
+    saw_end: bool,
+    junction_start: bool,
+    junction_end: bool,
+) -> list[Point]:
+    if len(path) < 2 or not lines:
+        return path
+    if not saw_start and not junction_start:
+        path = _prepend_closure(path, [line[0] for line in lines])
+    if not saw_end and not junction_end:
+        path = _append_closure(path, [line[-1] for line in lines], lines[-1])
+    return path
+
+
+def merged_liner_toolpaths_mm(
+    piece: LinerPiece,
+    specs: Sequence[Any],
+    width_cm: float,
+    cutter_diameter_mm: float,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+    flat_contour: bool = False,
+) -> list[list[Point]]:
+    """Zigzag cutter-center paths covering the union of overlapping mill bands.
+
+    Isolated liners keep the historical single-strip toolpath. Overlapping
+    bands are milled without repeating the shared interior.
+    """
+
+    items = tuple(specs or ())
+    if not items:
+        return []
+    radius = float(cutter_diameter_mm) / 2.0
+    regions: list[list[Point]] = []
+    for spec in items:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(spec)
+        regions.append(
+            liner_region_polygon_mm(piece, side, offset_cm, width_cm, start_cm, length_cm)
+        )
+    if len(items) == 1:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(items[0])
+        return [
+            liner_toolpath_mm(
+                piece,
+                side,
+                offset_cm,
+                width_cm,
+                cutter_diameter_mm,
+                start_cm,
+                length_cm,
+                start_sawn=None if not start_sawn else start_sawn[0],
+                end_sawn=None if not end_sawn else end_sawn[0],
+                flat_contour=flat_contour,
+            )
+        ]
+
+    paths: list[list[Point]] = []
+    for component in _connected_liner_components(regions):
+        covered: list[list[Point]] = []
+        for index in component:
+            spec = items[index]
+            side, offset_cm, start_cm, length_cm = _liner_spec_tuple(spec)
+            if covered and _region_already_milled(regions[index], covered, radius):
+                continue
+            if not covered:
+                paths.append(
+                    liner_toolpath_mm(
+                        piece,
+                        side,
+                        offset_cm,
+                        width_cm,
+                        cutter_diameter_mm,
+                        start_cm,
+                        length_cm,
+                        start_sawn=None if not start_sawn else start_sawn[index],
+                        end_sawn=None if not end_sawn else end_sawn[index],
+                        flat_contour=flat_contour,
+                    )
+                )
+                covered.append(regions[index])
+                continue
+            lines, saw_start, saw_end = _cutter_passes(
+                piece,
+                side,
+                offset_cm,
+                width_cm,
+                cutter_diameter_mm,
+                start_cm,
+                length_cm,
+                start_sawn=None if not start_sawn else start_sawn[index],
+                end_sawn=None if not end_sawn else end_sawn[index],
+                flat_contour=flat_contour,
+            )
+            clipped: list[list[Point]] = []
+            for line in lines:
+                clipped.extend(_clip_pass_against_covered(line, covered, radius))
+            if not clipped:
+                covered.append(regions[index])
+                continue
+            path = _chain_cutter_lines(clipped)
+            start_pt = clipped[0][0]
+            end_pt = clipped[-1][-1]
+            junction_start = any(
+                _point_deep_inside(start_pt, region, radius * 0.25) or (
+                    point_in_polygon(start_pt, region, radius)
+                )
+                for region in covered
+            )
+            junction_end = any(
+                _point_deep_inside(end_pt, region, radius * 0.25) or (
+                    point_in_polygon(end_pt, region, radius)
+                )
+                for region in covered
+            )
+            path = _close_component_path(
+                path,
+                clipped,
+                saw_start=saw_start or junction_start,
+                saw_end=saw_end or junction_end,
+                junction_start=junction_start,
+                junction_end=junction_end,
+            )
+            if len(path) >= 2:
+                paths.append(path)
+            covered.append(regions[index])
+    return [path for path in paths if len(path) >= 2]
+
+
+def _path_length(path: Sequence[Point]) -> float:
+    return _polyline_length(path)
+
+
+def _point_to_path_distance(point: Point, path: Sequence[Point]) -> float:
+    if len(path) < 2:
+        return math.inf
+    return min(
+        _segment_distance(point, start, end)[0]
+        for start, end in zip(path, path[1:])
+    )
+
+
+def _paths_match(left: Sequence[Point], right: Sequence[Point], tolerance: float) -> bool:
+    if len(left) < 2 or len(right) < 2:
+        return False
+    if abs(_path_length(left) - _path_length(right)) > max(tolerance * 8, 2.0):
+        sampled_left = list(left[:: max(1, len(left) // 12)] ) + [left[-1]]
+        sampled_right = list(right[:: max(1, len(right) // 12)] ) + [right[-1]]
+    else:
+        sampled_left = left
+        sampled_right = right
+    if any(_point_to_path_distance(point, right) > tolerance for point in sampled_left):
+        return False
+    if any(_point_to_path_distance(point, left) > tolerance for point in sampled_right):
+        return False
+    return True
+
+
+def _sample_region(polygon: Sequence[Point], step_mm: float) -> list[Point]:
+    if len(polygon) < 3:
+        return []
+    min_x, min_y, max_x, max_y = bbox(polygon)
+    step = max(step_mm, GEOMETRY_TOLERANCE_MM * 8)
+    samples: list[Point] = []
+    y = min_y + step / 2.0
+    while y <= max_y + 1e-9:
+        x = min_x + step / 2.0
+        while x <= max_x + 1e-9:
+            point = (x, y)
+            if point_in_polygon(point, polygon, GEOMETRY_TOLERANCE_MM):
+                samples.append(point)
+            x += step
+        y += step
+    if not samples:
+        samples.append(
+            (
+                (min_x + max_x) / 2.0,
+                (min_y + max_y) / 2.0,
+            )
+        )
+    return samples
+
+
+def compare_liner_set_paths(
+    paths: Sequence[Sequence[Point]],
+    piece: LinerPiece,
+    specs: Sequence[Any],
+    width_cm: float,
+    cutter_diameter_mm: float | None = None,
+    *,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> LinerMeasurement:
+    """Judge imported Liner entities against the ordered mill union, not entity count."""
+
+    items = tuple(specs or ())
+    imported = [tuple(path) for path in paths if path and len(path) >= 2]
+    if not items:
+        if imported:
+            return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", "", "", "extra_path")
+        return LinerMeasurement(True)
+    if len(items) == 1 and len(imported) == 1:
+        side, offset_cm, start_cm, length_cm = _liner_spec_tuple(items[0])
+        return compare_liner_path(
+            imported[0],
+            piece,
+            side,
+            offset_cm,
+            width_cm,
+            cutter_diameter_mm,
+            start_cm,
+            length_cm,
+            start_sawn=None if not start_sawn else start_sawn[0],
+            end_sawn=None if not end_sawn else end_sawn[0],
+        )
+    if not imported:
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", "", "", "empty_path")
+    if not _positive_diameter(cutter_diameter_mm):
+        return LinerMeasurement(
+            False,
+            LINER_WIDTH_NOT_MEASURABLE,
+            "width",
+            _fmt_cm(_mm(width_cm)),
+            "",
+            "width_not_measurable",
+        )
+    diameter = float(cutter_diameter_mm or 0)
+    radius = diameter / 2.0
+    try:
+        expected = merged_liner_toolpaths_mm(
+            piece,
+            items,
+            width_cm,
+            diameter,
+            start_sawn=start_sawn,
+            end_sawn=end_sawn,
+        )
+        regions = [
+            liner_region_polygon_mm(piece, *_liner_spec_tuple(spec)[:2], width_cm, *_liner_spec_tuple(spec)[2:])
+            for spec in items
+        ]
+    except LinerGeometryError as error:
+        code = LINER_WIDTH_MISMATCH if error.code == "liner_narrower_than_cutter" else LINER_SHAPE_MISMATCH
+        return LinerMeasurement(False, code, "shape", "", "", error.code)
+
+    unused = list(range(len(imported)))
+    matched = 0
+    for expected_path in expected:
+        found = None
+        for index in unused:
+            if _paths_match(imported[index], expected_path, max(GEOMETRY_TOLERANCE_MM * 4, radius * 0.35)):
+                found = index
+                break
+        if found is None:
+            continue
+        unused.remove(found)
+        matched += 1
+    if matched == len(expected) and not unused:
+        return LinerMeasurement(True)
+
+    cover_tolerance = radius + GEOMETRY_TOLERANCE_MM
+    for region in regions:
+        for sample in _sample_region(region, max(radius, 2.0)):
+            if min(_point_to_path_distance(sample, path) for path in imported) > cover_tolerance:
+                return LinerMeasurement(
+                    False,
+                    LINER_SHAPE_MISMATCH,
+                    "shape",
+                    "",
+                    "",
+                    "missing_region",
+                )
+    inflate = radius + GEOMETRY_TOLERANCE_MM * 4
+    for path in imported:
+        for point in path:
+            in_region = any(
+                point_in_polygon(point, region, inflate) for region in regions
+            )
+            near_region = min(point_to_polygon_distance(point, region) for region in regions) <= inflate
+            if in_region or near_region:
+                continue
+            return LinerMeasurement(
+                False,
+                LINER_SHAPE_MISMATCH,
+                "shape",
+                "",
+                "",
+                "extra_path",
+            )
+    if unused and matched == 0:
+        return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", "", "", "shape_mismatch")
+    return LinerMeasurement(True)
+
+
 __all__ = [
     "CM_TO_MM",
     "GEOMETRY_TOLERANCE_MM",
@@ -1845,6 +2300,7 @@ __all__ = [
     "canonical_path",
     "center_recessed_handle",
     "compare_liner_path",
+    "compare_liner_set_paths",
     "contour_notch_cm",
     "liner_activation_error",
     "inverse_transform_point",
@@ -1853,8 +2309,11 @@ __all__ = [
     "extension_conflict",
     "extension_conflict_details",
     "liner_toolpath_mm",
+    "liner_region_polygon_mm",
     "liner_strip_polygon_mm",
     "localize_path",
+    "merged_liner_toolpaths_mm",
+    "mill_regions_connected",
     "obstacle_polygon_mm",
     "obstacle_geometry_mm",
     "piece_polygon_mm",

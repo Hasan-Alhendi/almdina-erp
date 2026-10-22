@@ -158,7 +158,7 @@
             && num(row && row[addon.offset]) <= 0
             && num(row && row[addon.width]) <= 0
         );
-        return {
+        const draft = {
             piece,
             row,
             kind: addon.kind,
@@ -172,10 +172,127 @@
             edgeCm: edge,
             enabled: Boolean(Number(row && row[addon.enabled])),
         };
+        if (addon.kind === "liner") attachLinerSet(draft, row, options);
+        return draft;
+    }
+
+    function attachLinerSet(draft, row, options) {
+        const api = geometry();
+        const parsed = api && typeof api.parseDoorLiners === "function"
+            ? api.parseDoorLiners(row || {})
+            : null;
+        const fallbackId = (api && typeof api.allocateLinerId === "function")
+            ? "liner_1"
+            : "liner_1";
+        if (!parsed || !parsed.liners || !parsed.liners.length) {
+            draft.linerId = fallbackId;
+            draft.liners = [linerItemFromDraft(draft)];
+            return draft;
+        }
+        if (parsed.enabled) draft.enabled = true;
+        if (Number.isFinite(parsed.widthCm) && parsed.widthCm > 0) draft.widthCm = parsed.widthCm;
+        const assignedIds = [];
+        const allowedSides = api.availableSides(draft.piece.pieceType);
+        const usedJson = Boolean(row && row.liner_specs_json && String(row.liner_specs_json).trim());
+        draft.liners = parsed.liners.map((item, index) => {
+            const rawItemSide = String(item.side || "").trim();
+            const itemSide = allowedSides.includes(rawItemSide)
+                ? rawItemSide
+                : (index === 0 ? draft.side : "");
+            const itemStart = Number.isFinite(Number(item.startCm)) ? Number(item.startCm) : 0;
+            const storedLength = Number(item.lengthCm);
+            const missingLength = item.lengthCm === undefined || item.lengthCm === null || String(item.lengthCm).trim() === "";
+            const itemFull = missingLength || storedLength === 0;
+            const itemEdge = edgeCm(draft.piece, itemSide);
+            let linerId = String(item.id || "").trim();
+            if (!linerId) {
+                linerId = index === 0 ? fallbackId : api.allocateLinerId(assignedIds);
+            }
+            assignedIds.push(linerId);
+            return {
+                id: linerId,
+                side: itemSide,
+                offsetCm: Number.isFinite(Number(item.offsetCm)) ? Number(item.offsetCm) : (index === 0 ? draft.offsetCm : 2),
+                startCm: index === 0 && !usedJson ? draft.startCm : itemStart,
+                lengthCm: index === 0 && !usedJson
+                    ? draft.lengthCm
+                    : (itemFull ? Math.max(0, itemEdge - itemStart) : storedLength),
+                fullLength: index === 0 && !usedJson ? draft.fullLength : itemFull,
+                edgeCm: itemEdge,
+                legacyCheckboxOnly: index === 0 ? draft.legacyCheckboxOnly : false,
+            };
+        });
+        return hydrateLinerDraft(draft);
+    }
+
+    function linerItemFromDraft(draft) {
+        return {
+            id: draft.linerId || "liner_1",
+            side: draft.side,
+            offsetCm: draft.offsetCm,
+            startCm: draft.startCm,
+            lengthCm: draft.lengthCm,
+            fullLength: Boolean(draft.fullLength),
+            edgeCm: draft.edgeCm,
+            legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
+        };
+    }
+
+    function linerItems(draft) {
+        if (draft && Array.isArray(draft.liners) && draft.liners.length) return draft.liners;
+        if (!draft || draft.kind !== "liner") return [];
+        return [linerItemFromDraft(draft)];
+    }
+
+    function hydrateLinerDraft(draft) {
+        if (!draft || draft.kind !== "liner") return draft;
+        const items = linerItems(draft);
+        const first = items[0];
+        if (!first) return draft;
+        draft.linerId = first.id;
+        draft.side = first.side;
+        draft.offsetCm = first.offsetCm;
+        draft.startCm = first.startCm;
+        draft.lengthCm = first.lengthCm;
+        draft.fullLength = first.fullLength;
+        draft.edgeCm = first.edgeCm;
+        if (first.legacyCheckboxOnly !== undefined) draft.legacyCheckboxOnly = first.legacyCheckboxOnly;
+        draft.liners = items;
+        return draft;
+    }
+
+    function itemDraft(draft, item) {
+        return Object.assign({}, draft, item, {
+            kind: "liner",
+            widthCm: draft.widthCm,
+            enabled: draft.enabled,
+            piece: draft.piece,
+            row: draft.row,
+            liners: null,
+        });
     }
 
     function validationIssue(draft) {
         if (!draft) return { code: "missing_draft", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, "liner") };
+        if (draft.kind === "liner" && Array.isArray(draft.liners) && draft.liners.length) {
+            if (draft.legacyCheckboxOnly && draft.liners.length === 1) return null;
+            const items = draft.liners;
+            for (let index = 0; index < items.length; index += 1) {
+                const item = index === 0
+                    ? Object.assign({}, items[0], {
+                        side: draft.side,
+                        offsetCm: draft.offsetCm,
+                        startCm: draft.startCm,
+                        lengthCm: draft.lengthCm,
+                        fullLength: draft.fullLength,
+                        edgeCm: draft.edgeCm,
+                    })
+                    : items[index];
+                const issue = validationIssue(itemDraft(draft, item));
+                if (issue) return Object.assign({}, issue, { linerId: item.id, linerIndex: index });
+            }
+            return null;
+        }
         if (draft.legacyCheckboxOnly) return null;
         if (!draft.side) return { code: "choose_side", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, draft.kind) };
         const availableSides = geometry().availableSides(draft.piece && draft.piece.pieceType);
@@ -437,11 +554,17 @@
         const doubleHits = options && options.doubleInteractive
             ? doubleEdgeHitMarkup(scene, options.doubleSides)
             : "";
-        const quiet = multi
-            ? (options.companions || []).filter(item => (
-                item && item.enabled && item.kind !== draft.kind
-            )).map(item => machiningLayer(item, scene.frame, scene.piece, "quiet")).join("")
-            : "";
+        const extraLiners = draft.kind === "liner" && draft.enabled
+            ? linerItems(draft).slice(1).map(item => itemDraft(draft, item))
+            : [];
+        const quiet = [
+            ...(multi
+                ? (options.companions || []).filter(item => (
+                    item && item.enabled && item.kind !== draft.kind
+                ))
+                : []),
+            ...extraLiners,
+        ].map(item => machiningLayer(item, scene.frame, scene.piece, "quiet")).join("");
         const active = multi
             ? (draft.enabled ? machiningLayer(draft, scene.frame, scene.piece, "active") : "")
             : machiningLayer(draft, scene.frame, scene.piece, "legacy");
@@ -575,30 +698,33 @@
                 <div class="dco-handle-center-row"${centerHidden}><button type="button" class="dco-handle-size dco-handle-center ${centered ? "is-active" : ""}" data-handle-center="1" aria-pressed="${centered ? "true" : "false"}"${centerHidden}>${esc(__("Center Handle"))}</button></div>`;
     }
 
-    function controlsHtml(draft) {
+    function controlsHtml(draft, options) {
         const api = geometry();
         const sides = api.availableSides(draft.piece.pieceType).map(side => `
             <button type="button" class="dco-corner-position ${side === draft.side ? "is-active" : ""}" data-liner-side="${side}" aria-pressed="${side === draft.side ? "true" : "false"}">
                 ${esc(api.sideLabel(side, draft.piece.pieceType))}
             </button>`).join("");
         const addon = addonFor(draft.kind);
+        const omitWidth = Boolean(options && options.omitWidth);
         const widthLabel = addon.kind === "liner" ? __("Liner Width") : __("Machining Width");
         const startLabel = addon.kind === "liner" ? __("Liner Start Position") : __("Machining Start");
         const lengthLabel = addon.kind === "liner" ? __("Liner Length") : __("Machining Length");
+        const widthField = omitWidth ? "" : `<div class="dco-corner-input-wrap">
+                        <label>${esc(widthLabel)}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                    </div>`;
+        const distanceLabel = omitWidth ? __("Distance and length") : __("Distance and width");
         return `<div data-liner-fields data-machining-kind="${esc(addon.kind)}">
                 <div class="dco-corner-section-label">${esc(__("Reference Side"))}</div>
                 <div class="dco-corner-position-grid" data-liner-sides>${sides}</div>
                 ${handleChoicesHtml(draft)}
-                <div class="dco-corner-section-label">${esc(__("Distance and width"))}</div>
+                <div class="dco-corner-section-label">${esc(distanceLabel)}</div>
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
                         <label>${esc(__("Edge Offset"))}</label>
                         <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-offset value="${formatInput(draft.offsetCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
-                    <div class="dco-corner-input-wrap">
-                        <label>${esc(widthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
-                    </div>
+                    ${widthField}
                     <div class="dco-corner-input-wrap">
                         <label>${esc(startLabel)}</label>
                         <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-start value="${formatInput(draft.startCm, 3)}"><span>${esc(__("cm"))}</span></div>
@@ -614,12 +740,117 @@
             </div>`;
     }
 
+    function linerSetHtml(draft) {
+        const items = linerItems(draft);
+        const shared = `<div class="dco-liner-shared">
+                <div class="dco-corner-section-label">${esc(__("Liner Width"))}</div>
+                <div class="dco-corner-input-grid">
+                    <div class="dco-corner-input-wrap">
+                        <label>${esc(__("Liner Width"))}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                    </div>
+                </div>
+            </div>`;
+        const sections = items.map((item, index) => {
+            const removable = items.length > 1;
+            const remove = removable
+                ? `<button type="button" class="btn btn-default btn-sm dco-liner-remove-item" data-liner-remove-item="${esc(item.id)}" aria-label="${esc(__("Remove liner {0}", [index + 1]))}">${esc(__("Remove"))}</button>`
+                : "";
+            return `<section class="dco-liner-item" data-liner-item="${esc(item.id)}">
+                <div class="dco-liner-item-head">
+                    <div class="dco-corner-section-label">${esc(__("Liner {0}", [index + 1]))}</div>
+                    ${remove}
+                </div>
+                ${controlsHtml(itemDraft(draft, item), { omitWidth: true })}
+            </section>`;
+        }).join("");
+        return `<div class="dco-liner-set" data-liner-set>
+            ${shared}
+            ${sections}
+            <button type="button" class="btn btn-default btn-sm dco-liner-add" data-add-liner="1">${esc(__("Add liner"))}</button>
+        </div>`;
+    }
+
+    function addLiner(draft) {
+        const api = geometry();
+        const items = linerItems(draft).map(item => Object.assign({}, item));
+        const id = api && typeof api.allocateLinerId === "function"
+            ? api.allocateLinerId(items.map(item => item.id))
+            : `liner_${items.length + 1}`;
+        const sides = api.availableSides(draft.piece.pieceType);
+        const side = sides[0] || "";
+        const edge = edgeCm(draft.piece, side);
+        items.push({
+            id,
+            side,
+            offsetCm: 2,
+            startCm: 0,
+            lengthCm: Math.max(0, edge),
+            fullLength: true,
+            edgeCm: edge,
+            legacyCheckboxOnly: false,
+        });
+        draft.liners = items;
+        draft.enabled = true;
+        draft.legacyCheckboxOnly = false;
+        return hydrateLinerDraft(draft);
+    }
+
+    function removeLiner(draft, linerId) {
+        const items = linerItems(draft).filter(item => item.id !== linerId);
+        if (!items.length) return draft;
+        draft.liners = items;
+        return hydrateLinerDraft(draft);
+    }
+
+    function readLinerSet(root, piece, previous, changedField, changedItemId) {
+        if (!root || !previous) return previous;
+        if (!root.querySelector("[data-liner-item]")) {
+            return readDraft(root, piece, previous.enabled, previous.row, "liner", previous, changedField);
+        }
+        const widthInput = root.querySelector("[data-liner-width]");
+        const widthCm = inputNumber(widthInput) / 10;
+        const items = [];
+        root.querySelectorAll("[data-liner-item]").forEach(section => {
+            const id = section.getAttribute("data-liner-item");
+            const previousItem = (previous.liners || []).find(item => item.id === id);
+            const host = Object.assign({}, previous, previousItem || {}, { kind: "liner", liners: null });
+            const next = readDraft(
+                section,
+                piece,
+                true,
+                previous.row,
+                "liner",
+                host,
+                changedItemId === id ? changedField : "",
+            );
+            items.push({
+                id,
+                side: next.side,
+                offsetCm: next.offsetCm,
+                startCm: next.startCm,
+                lengthCm: next.lengthCm,
+                fullLength: next.fullLength,
+                edgeCm: next.edgeCm,
+                legacyCheckboxOnly: false,
+            });
+        });
+        const draft = Object.assign({}, previous, {
+            widthCm: Number.isFinite(widthCm) ? widthCm : previous.widthCm,
+            liners: items,
+            enabled: previous.enabled,
+            legacyCheckboxOnly: false,
+        });
+        return hydrateLinerDraft(draft);
+    }
+
     function editorHtml(row, draft) {
         const addon = addonFor(draft.kind);
         const removeLabel = addon.kind === "liner" ? __("Remove liner") : __("Remove add-on");
         const remove = draft.enabled
             ? `<button type="button" class="btn btn-default btn-sm" data-liner-remove>${esc(removeLabel)}</button>`
             : "";
+        const fields = addon.kind === "liner" ? linerSetHtml(draft) : controlsHtml(draft);
         return `<div class="dco-corner-editor" data-liner-editor data-machining-kind="${esc(addon.kind)}">
             <section class="dco-corner-preview-panel">
                 <div class="dco-corner-preview-head">
@@ -628,7 +859,7 @@
                 <div class="dco-corner-preview" data-liner-preview>${previewSvg(draft)}</div>
             </section>
             <section class="dco-corner-controls">
-                ${controlsHtml(draft)}
+                ${fields}
                 <button type="button" class="btn btn-default btn-sm" data-liner-cancel>${esc(__("Cancel"))}</button>
                 ${remove}
             </section>
@@ -641,6 +872,13 @@
         draft.edgeCm = nextEdge;
         if (draft.fullLength) draft.lengthCm = Math.max(0, nextEdge - draft.startCm);
         draft.legacyCheckboxOnly = false;
+        if (draft.kind === "liner" && Array.isArray(draft.liners) && draft.liners[0]) {
+            draft.liners[0].side = draft.side;
+            draft.liners[0].edgeCm = draft.edgeCm;
+            draft.liners[0].lengthCm = draft.lengthCm;
+            draft.liners[0].fullLength = draft.fullLength;
+            draft.liners[0].legacyCheckboxOnly = false;
+        }
         return draft;
     }
 
@@ -746,6 +984,30 @@
         const addon = addonFor(kind || (draft && draft.kind));
         const values = {};
         values[addon.enabled] = enabled ? 1 : 0;
+        if (addon.kind === "liner") {
+            const items = enabled ? linerItems(draft) : [];
+            const first = items[0];
+            values[addon.side] = enabled && first ? first.side : "";
+            values[addon.offset] = enabled && first ? first.offsetCm : 0;
+            values[addon.width] = enabled ? draft.widthCm : 0;
+            values[addon.start] = enabled && first ? first.startCm : 0;
+            values[addon.length] = enabled && first ? (first.fullLength ? 0 : first.lengthCm) : 0;
+            const api = geometry();
+            values.liner_specs_json = enabled && api && typeof api.serializeDoorLiners === "function"
+                ? api.serializeDoorLiners({
+                    enabled: true,
+                    widthCm: draft.widthCm,
+                    liners: items.map(item => ({
+                        id: item.id,
+                        side: item.side,
+                        offsetCm: item.offsetCm,
+                        startCm: item.startCm,
+                        lengthCm: item.fullLength ? 0 : item.lengthCm,
+                    })),
+                })
+                : "";
+            return values;
+        }
         values[addon.side] = enabled ? draft.side : "";
         values[addon.offset] = enabled ? draft.offsetCm : 0;
         values[addon.width] = enabled ? draft.widthCm : 0;
@@ -983,7 +1245,7 @@
         return true;
     }
 
-    window.AlmdinaLinerEditor = Object.freeze({
+        window.AlmdinaLinerEditor = Object.freeze({
         open,
         applyLiner,
         previewSvg,
@@ -996,6 +1258,11 @@
         valuesFor,
         formatInputCm: value => formatInput(value, 3),
         controlsHtml,
+        linerSetHtml,
+        linerItems,
+        addLiner,
+        removeLiner,
+        readLinerSet,
         readDraft,
         selectSide,
         hostPiece,
