@@ -349,6 +349,10 @@ class TestCustomerBotInboundSessionIntegration(FrappeTestCase):
     def _cleanup(self) -> None:
         frappe.db.rollback()
         frappe.db.sql(
+            "delete from `tabCustomer Bot Reply Intent` where connection_ref like %s",
+            (PREFIX + "%",),
+        )
+        frappe.db.sql(
             "delete from `tabCustomer Bot Conversation` where connection_ref like %s",
             (PREFIX + "%",),
         )

@@ -4,17 +4,17 @@ The caller is an internal adapter that already authenticated the provider
 connection. This module does not expose an HTTP route, does not read a phone
 from ``sender_id``, and does not send a reply.
 
-Crash window: ``complete_turn`` commits the new session state and marks the
-event complete in one short transaction, before this function returns the
-messages. The acceptance epoch is checked inside that transaction. If the
-process dies after that commit and before the caller receives the result, a
-later call with the same event returns ``duplicate`` and no messages. The
-outputs are not stored, so they cannot be sent again from this layer. That is
-at-most-once handoff to transport, not exactly-once delivery.
+The acceptance epoch is checked inside the commit transaction. That same
+transaction stores the new session state, marks the event complete, and
+inserts one pending reply intent per rendered text line. A failure rolls all
+three back. If the process dies after that commit, a later call with the same
+event returns ``duplicate`` and does not insert the replies again. Sending
+those rows is a separate worker. This function does not call the gateway.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 
 from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
@@ -23,6 +23,8 @@ from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
 )
 from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
 from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import InboundCustomerMessage
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import render_customer_lines
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import ReplyIntent, ordered_reply_intents
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     CONFLICT,
     DEFAULT_LEASE_TTL,
@@ -100,6 +102,7 @@ def accept_inbound_customer_message(
     now: datetime | None = None,
     session_ttl: timedelta = DEFAULT_SESSION_TTL,
     lease_ttl: timedelta = DEFAULT_LEASE_TTL,
+    on_replies_committed: Callable[[int], None] | None = None,
 ) -> InboundAcceptance:
     """Run the current engine once, or refuse without calling it."""
 
@@ -175,21 +178,52 @@ def accept_inbound_customer_message(
         published.update(current)
         return True
 
-    outcome = sessions.complete_turn(
-        connection_ref=identity[0],
-        conversation_id=identity[1],
-        sender_id=identity[2],
-        provider_event_id=identity[3],
-        fingerprint=fingerprint,
-        conversation_token=begun.conversation_token or "",
-        event_token=begun.event_token or "",
-        revision=begun.revision or 0,
-        state=turn.state,
-        now=now,
-        acceptance_unchanged=acceptance_unchanged,
-    )
+    def build_replies() -> tuple[ReplyIntent, ...]:
+        lines = render_customer_lines(published, turn.messages)
+        return ordered_reply_intents(
+            tuple(
+                ReplyIntent(
+                    connection_ref=message.connection_ref,
+                    provider_event_id=message.provider_event_id,
+                    conversation_id=message.conversation_id,
+                    destination_id=message.conversation_id,
+                    sequence=index,
+                    body=line,
+                )
+                for index, line in enumerate(lines)
+            )
+        )
+
+    try:
+        outcome = sessions.complete_turn(
+            connection_ref=identity[0],
+            conversation_id=identity[1],
+            sender_id=identity[2],
+            provider_event_id=identity[3],
+            fingerprint=fingerprint,
+            conversation_token=begun.conversation_token or "",
+            event_token=begun.event_token or "",
+            revision=begun.revision or 0,
+            state=turn.state,
+            now=now,
+            acceptance_unchanged=acceptance_unchanged,
+            build_replies=build_replies,
+        )
+    except Exception:
+        released = sessions.abort_turn(
+            connection_ref=identity[0],
+            conversation_id=identity[1],
+            sender_id=identity[2],
+            provider_event_id=identity[3],
+            conversation_token=begun.conversation_token or "",
+            event_token=begun.event_token or "",
+            revision=begun.revision or 0,
+        )
+        return _quiet(FAILED if released else LOST_LEASE)
     if outcome != PROCESSED:
         return _quiet(outcome)
+    if on_replies_committed is not None and turn.messages:
+        on_replies_committed(len(turn.messages))
     return InboundAcceptance(
         PROCESSED,
         messages=turn.messages,

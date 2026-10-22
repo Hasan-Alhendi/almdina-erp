@@ -12,8 +12,22 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime
 
+from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
 from almdina_erp.almdina_erp.application.customer_bot.session_store import BeginTurn
 from almdina_erp.almdina_erp.domain.customer_bot.conversation import ConversationState
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
+    ABANDONED_CLAIM_REASON,
+    ACCEPTED,
+    DEFAULT_REPLY_CLAIM_TTL,
+    PENDING,
+    PROCESSING,
+    REJECTED,
+    UNKNOWN,
+    ReplyIntent,
+    blocks_later_reply,
+    claim_is_abandoned,
+    ordered_reply_intents,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     CONFLICT,
     CONVERSATION_BUSY,
@@ -50,11 +64,24 @@ class _Event:
     completed_on: str | None
 
 
+@dataclass
+class _Reply:
+    intent: ReplyIntent
+    reply_id: str
+    status: str
+    attempt_count: int
+    claim_token: str | None
+    claimed_on: str | None
+    provider_message_id: str | None
+    reason_code: str | None
+
+
 class MemoryCustomerBotSessionStore:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self.conversations: dict[tuple[str, str, str], _Conversation] = {}
         self.events: dict[tuple[str, str], _Event] = {}
+        self.replies: dict[tuple[str, str, int], _Reply] = {}
 
     def note_terminal(self, *, connection_ref, provider_event_id, fingerprint, outcome, now) -> str:
         with self._lock:
@@ -144,7 +171,7 @@ class MemoryCustomerBotSessionStore:
 
     def complete_turn(
         self, *, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
-        conversation_token, event_token, revision, state, now, acceptance_unchanged,
+        conversation_token, event_token, revision, state, now, acceptance_unchanged, build_replies,
     ) -> str:
         with self._lock:
             conversation, event = self._owned(
@@ -162,12 +189,78 @@ class MemoryCustomerBotSessionStore:
                 event.lease_expires_on = None
                 event.completed_on = utc_iso(now)
                 return SUPPRESSED
+            replies = ordered_reply_intents(tuple(build_replies()))
             if not self._finish(
                 connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,
                 conversation_token, event_token, revision, state, now,
             ):
                 return LOST_LEASE
+            self._store_replies(replies)
             return PROCESSED
+
+    def claim_next(self, *, now) -> ClaimedReply | None:
+        with self._lock:
+            eligible = [
+                row
+                for row in self.replies.values()
+                if row.status == PENDING and not self._blocked(row.intent)
+            ]
+            if not eligible:
+                return None
+            eligible.sort(key=lambda row: (row.intent.sequence, row.reply_id))
+            chosen = eligible[0]
+            token = secrets.token_hex(16)
+            chosen.status = PROCESSING
+            chosen.attempt_count += 1
+            chosen.claim_token = token
+            chosen.claimed_on = utc_iso(now)
+            intent = chosen.intent
+            return ClaimedReply(
+                reply_id=chosen.reply_id,
+                claim_token=token,
+                connection_ref=intent.connection_ref,
+                provider_event_id=intent.provider_event_id,
+                conversation_id=intent.conversation_id,
+                destination_id=intent.destination_id,
+                sequence=intent.sequence,
+                body=intent.body,
+                attempt_count=chosen.attempt_count,
+            )
+
+    def record_result(self, *, reply_id, claim_token, result, now) -> bool:
+        del now
+        with self._lock:
+            row = next((item for item in self.replies.values() if item.reply_id == reply_id), None)
+            status = result.disposition.value
+            if (
+                row is None
+                or row.status != PROCESSING
+                or row.claim_token != claim_token
+                or result.reply_id != reply_id
+                or status not in {ACCEPTED, REJECTED, UNKNOWN}
+            ):
+                return False
+            row.status = status
+            row.reason_code = result.reason_code
+            row.provider_message_id = result.provider_message_id if status == ACCEPTED else None
+            return True
+
+    def recover_abandoned_claims(self, *, now, claim_ttl=DEFAULT_REPLY_CLAIM_TTL, limit=50) -> int:
+        with self._lock:
+            bounded = max(1, min(int(limit), 200))
+            recovered = 0
+            for row in self.replies.values():
+                if recovered >= bounded:
+                    break
+                if row.status != PROCESSING or not row.claim_token:
+                    continue
+                if not claim_is_abandoned(row.claimed_on, now, claim_ttl):
+                    continue
+                row.status = UNKNOWN
+                row.reason_code = ABANDONED_CLAIM_REASON
+                row.provider_message_id = None
+                recovered += 1
+            return recovered
 
     def abort_turn(
         self, *, connection_ref, conversation_id, sender_id, provider_event_id,
@@ -253,6 +346,25 @@ class MemoryCustomerBotSessionStore:
         event.lease_expires_on = None
         event.completed_on = utc_iso(now)
         return True
+
+    def _store_replies(self, replies: tuple[ReplyIntent, ...]) -> None:
+        for intent in replies:
+            key = (intent.connection_ref, intent.provider_event_id, intent.sequence)
+            if key in self.replies:
+                raise RuntimeError("reply intent already stored for this event")
+            self.replies[key] = _Reply(intent, intent.reply_id(), PENDING, 0, None, None, None, None)
+
+    def _blocked(self, intent: ReplyIntent) -> bool:
+        for row in self.replies.values():
+            earlier = row.intent
+            if (
+                earlier.connection_ref == intent.connection_ref
+                and earlier.provider_event_id == intent.provider_event_id
+                and earlier.sequence < intent.sequence
+                and blocks_later_reply(row.status)
+            ):
+                return True
+        return False
 
     def _owned(
         self, connection_ref, conversation_id, sender_id, provider_event_id, fingerprint,

@@ -61,6 +61,7 @@ permission_query_conditions = {
     "Customer Bot Settings": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_settings_records.customer_bot_settings_query",
     "Customer Bot Conversation": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_conversation_query",
     "Customer Bot Inbound Event": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_inbound_event_query",
+    "Customer Bot Reply Intent": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_reply_intent_query",
 }
 
 has_permission = {
@@ -77,6 +78,7 @@ has_permission = {
     "Customer Bot Settings": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_settings_records.customer_bot_settings_has_permission",
     "Customer Bot Conversation": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_conversation_has_permission",
     "Customer Bot Inbound Event": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_inbound_event_has_permission",
+    "Customer Bot Reply Intent": "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_session_records.customer_bot_reply_intent_has_permission",
 }
 
 boot_session = "almdina_erp.boot.boot_session"
@@ -86,6 +88,7 @@ scheduler_events = {
     "cron": {
         "* * * * *": [
             "almdina_erp.almdina_erp.services.backup_restore_service.scheduled_backup_tick",
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery.scheduled_customer_bot_reply_tick",
         ],
     },
 }

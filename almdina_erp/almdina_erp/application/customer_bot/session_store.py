@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Protocol
 
 from almdina_erp.almdina_erp.domain.customer_bot.conversation import ConversationState
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import ReplyIntent
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,11 +62,14 @@ class CustomerBotSessionStore(Protocol):
         state: ConversationState | None,
         now: datetime,
         acceptance_unchanged: Callable[[], bool],
+        build_replies: Callable[[], tuple[ReplyIntent, ...]],
     ) -> str:
         """Commit the turn, or suppress it, while the lease token still matches.
 
-        ``acceptance_unchanged`` runs inside the commit transaction. A false
-        result completes the event as suppressed and does not store ``state``.
+        ``acceptance_unchanged`` and, when it passes, ``build_replies`` run
+        inside the commit transaction. Reply rows are written with the new
+        conversation state and the completed event. A false acceptance result
+        completes the event as suppressed and stores neither state nor replies.
         """
         ...
 

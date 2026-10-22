@@ -8,6 +8,7 @@ from frappe import _
 
 CONVERSATION_DOCTYPE = "Customer Bot Conversation"
 EVENT_DOCTYPE = "Customer Bot Inbound Event"
+REPLY_DOCTYPE = "Customer Bot Reply Intent"
 
 
 def reject_direct_customer_bot_session_mutation(document: object) -> None:
@@ -35,12 +36,23 @@ def customer_bot_inbound_event_query(user=None) -> str:
     return "1=0"
 
 
+def customer_bot_reply_intent_has_permission(doc=None, user=None, ptype=None) -> bool:
+    return False
+
+
+def customer_bot_reply_intent_query(user=None) -> str:
+    return "1=0"
+
+
 __all__ = [
     "CONVERSATION_DOCTYPE",
     "EVENT_DOCTYPE",
+    "REPLY_DOCTYPE",
     "customer_bot_conversation_has_permission",
     "customer_bot_conversation_query",
     "customer_bot_inbound_event_has_permission",
     "customer_bot_inbound_event_query",
+    "customer_bot_reply_intent_has_permission",
+    "customer_bot_reply_intent_query",
     "reject_direct_customer_bot_session_mutation",
 ]

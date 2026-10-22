@@ -1,9 +1,9 @@
 """MariaDB adapter for customer-bot sessions.
 
 Each public method commits or rolls back before it returns, so a PDF render
-never runs while a row lock is held. Completion of the session and the event
-is one transaction. An old lease token cannot update either row after a newer
-token has been stored.
+never runs while a row lock is held. Completion of the session, the event,
+and the reply intents is one transaction. An old lease token cannot update
+either session row after a newer token has been stored.
 """
 
 from __future__ import annotations
@@ -17,6 +17,10 @@ from almdina_erp.almdina_erp.application.customer_bot.session_store import Begin
 from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
     ConversationState,
     conversation_state_from_payload,
+)
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
+    ReplyIntent,
+    ordered_reply_intents,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     CONFLICT,
@@ -32,10 +36,11 @@ from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     utc_iso,
 )
 
-from .customer_bot_session_records import CONVERSATION_DOCTYPE, EVENT_DOCTYPE
+from .customer_bot_session_records import CONVERSATION_DOCTYPE, EVENT_DOCTYPE, REPLY_DOCTYPE
 
 _CONVERSATION = f"tab{CONVERSATION_DOCTYPE}"
 _EVENT = f"tab{EVENT_DOCTYPE}"
+_REPLY = f"tab{REPLY_DOCTYPE}"
 _MAX_PURGE = 200
 
 
@@ -92,6 +97,7 @@ class FrappeCustomerBotSessionRepository:
         state: ConversationState | None,
         now: datetime,
         acceptance_unchanged,
+        build_replies,
     ) -> str:
         return self._commit_outcome(lambda: self._complete_turn(
             connection_ref,
@@ -105,6 +111,7 @@ class FrappeCustomerBotSessionRepository:
             state,
             now,
             acceptance_unchanged,
+            build_replies,
         ))
 
     def abort_turn(
@@ -140,13 +147,7 @@ class FrappeCustomerBotSessionRepository:
         return self._commit(lambda: self._purge(now, conversation_retention, event_retention, bounded))
 
     def _commit(self, work):
-        try:
-            result = work()
-        except Exception:
-            frappe.db.rollback()
-            raise
-        frappe.db.commit()
-        return result
+        return _commit_with_deadlock_retry(work)
 
     def _commit_owned(self, work) -> bool:
         try:
@@ -302,15 +303,10 @@ class FrappeCustomerBotSessionRepository:
 
     def _commit_outcome(self, work) -> str:
         try:
-            result = work()
+            return _commit_with_deadlock_retry(work)
         except _Unowned:
             frappe.db.rollback()
             return LOST_LEASE
-        except Exception:
-            frappe.db.rollback()
-            raise
-        frappe.db.commit()
-        return result
 
     def _complete_turn(
         self,
@@ -325,6 +321,7 @@ class FrappeCustomerBotSessionRepository:
         state,
         now,
         acceptance_unchanged,
+        build_replies,
     ) -> str:
         _require_conversation(
             connection_ref, conversation_id, sender_id, conversation_token, revision
@@ -343,6 +340,7 @@ class FrappeCustomerBotSessionRepository:
                 now,
             )
             return SUPPRESSED
+        replies = ordered_reply_intents(tuple(build_replies()))
         self._finish_turn(
             connection_ref,
             conversation_id,
@@ -354,6 +352,7 @@ class FrappeCustomerBotSessionRepository:
             revision,
             state,
             now,
+            replies,
         )
         return PROCESSED
 
@@ -369,6 +368,7 @@ class FrappeCustomerBotSessionRepository:
         revision,
         state,
         now,
+        replies: tuple[ReplyIntent, ...],
     ) -> None:
         conversation = _require_conversation(
             connection_ref, conversation_id, sender_id, conversation_token, revision
@@ -391,6 +391,7 @@ class FrappeCustomerBotSessionRepository:
             (utc_iso(now), _modified(), event.name, event_token, fingerprint),
         ) != 1:
             raise _Unowned
+        _insert_replies(replies, _modified())
 
     def _suppress_turn(
         self,
@@ -585,6 +586,32 @@ def _insert_event(
     )
 
 
+def _insert_replies(replies: tuple[ReplyIntent, ...], stamp: str) -> None:
+    for intent in replies:
+        frappe.db.sql(
+            f"""insert into `{_REPLY}`
+                (name, creation, modified, modified_by, owner, docstatus,
+                 reply_id, connection_ref, provider_event_id, conversation_id,
+                 destination_id, sequence, body, status, attempt_count,
+                 provider_message_id, reason_code, claim_token, claimed_on, finished_on)
+                values (%s, %s, %s, 'Administrator', 'Administrator', 0,
+                        %s, %s, %s, %s, %s, %s, %s, 'pending', 0,
+                        null, null, null, null, null)""",
+            (
+                frappe.generate_hash(length=12),
+                stamp,
+                stamp,
+                intent.reply_id(),
+                intent.connection_ref,
+                intent.provider_event_id,
+                intent.conversation_id,
+                intent.destination_id,
+                intent.sequence,
+                intent.body,
+            ),
+        )
+
+
 def _unwind(name, token, previous_token, previous_expires, created: bool) -> None:
     if created:
         frappe.db.sql(
@@ -615,6 +642,30 @@ def _state_from(payload: str | None) -> ConversationState | None:
     except json.JSONDecodeError:
         return None
     return conversation_state_from_payload(parsed)
+
+
+def _commit_with_deadlock_retry(work):
+    """Run one transaction again when InnoDB reports a deadlock.
+
+    Two different conversations can deadlock on the reply unique index.
+    The victim's transaction is already rolled back, so repeating the work
+    keeps the turn instead of dropping it.
+    """
+
+    for attempt in range(3):
+        try:
+            result = work()
+        except frappe.QueryDeadlockError:
+            frappe.db.rollback()
+            if attempt == 2:
+                raise
+            continue
+        except Exception:
+            frappe.db.rollback()
+            raise
+        frappe.db.commit()
+        return result
+    raise frappe.QueryDeadlockError
 
 
 def _affected(query: str, values: tuple) -> int:
