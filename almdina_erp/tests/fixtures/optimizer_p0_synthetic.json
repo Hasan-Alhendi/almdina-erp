@@ -1,0 +1,52 @@
+{
+  "provenance": "SYNTHETIC: independently constructed geometry; no customer dimensions or files",
+  "engine_settings": {"selected_mode": "Auto", "machine_type": "CNC Router", "time_limit_sec": 2, "kerf_cm": 0.2},
+  "cases": {
+    "L_PAIR_NESTING": {
+      "board_cm": [16.2, 12],
+      "rows": [
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Top Right", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Bottom Left", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "Regular", "width_cm": 3, "length_cm": 3, "qty": 1, "allow_rotation": 0}
+      ],
+      "one_board_coordinates_cm": [[0, 0], [4.2, 0], [8, 4.5]]
+    },
+    "L_QUAD_NESTING": {
+      "board_cm": [24.2, 24.2],
+      "rows": [
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Bottom Right", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Bottom Left", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Top Right", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "L-Shaped Corner", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Top Left", "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+        {"piece_type": "Regular", "width_cm": 3, "length_cm": 3, "qty": 3, "allow_rotation": 0}
+      ],
+      "one_board_coordinates_cm": [[0, 0], [12.2, 0], [0, 12.2], [12.2, 12.2], [10.6, 10.6], [7.4, 10.6], [10.6, 7.4]]
+    },
+    "CLIPPED_CORNER_GROUP_NESTING": {
+      "board_cm": [20.2, 20.2],
+      "rows": [
+        {"piece_type": "Clipped Corner", "width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Bottom Right", "clipped_corner_width_cm": 6, "clipped_corner_length_cm": 6},
+        {"piece_type": "Clipped Corner", "width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Bottom Left", "clipped_corner_width_cm": 6, "clipped_corner_length_cm": 6},
+        {"piece_type": "Clipped Corner", "width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Top Right", "clipped_corner_width_cm": 6, "clipped_corner_length_cm": 6},
+        {"piece_type": "Clipped Corner", "width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0, "clipped_corner_position": "Top Left", "clipped_corner_width_cm": 6, "clipped_corner_length_cm": 6},
+        {"piece_type": "Regular", "width_cm": 1, "length_cm": 1, "qty": 3, "allow_rotation": 0}
+      ],
+      "one_board_coordinates_cm": [[0, 0], [10.2, 0], [0, 10.2], [10.2, 10.2], [8.3, 9.3], [9.5, 9.3], [10.7, 9.3]]
+    },
+    "GLASS_OPENING_PRIORITY": {
+      "board_cm": [50, 50],
+      "rows": [
+        {"piece_type": "Glass", "width_cm": 40, "length_cm": 40, "glass_margin_mm": 50, "qty": 1, "allow_rotation": 0},
+        {"piece_type": "Regular", "width_cm": 20, "length_cm": 20, "qty": 1, "allow_rotation": 0}
+      ]
+    },
+    "BOARD_ELIMINATION": {
+      "board_cm": [20.4, 20.4],
+      "rows": [
+        {"piece_type": "Regular", "width_cm": 12, "length_cm": 10, "qty": 2, "allow_rotation": 0},
+        {"piece_type": "Regular", "width_cm": 8, "length_cm": 10, "qty": 2, "allow_rotation": 0},
+        {"piece_type": "Regular", "width_cm": 3, "length_cm": 3, "qty": 1, "allow_rotation": 0}
+      ]
+    }
+  }
+}
