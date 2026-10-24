@@ -81,8 +81,7 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
     source = UX_JS.read_text(encoding="utf-8")
     required_fragments = [
         'class="dco-fast-input" type="number"',
-        'data-field="width_cm"',
-        'data-field="length_cm"',
+        'data-field="${fieldname}"',
         'event.key === "Tab" && !event.shiftKey && fieldname === "width_cm"',
         "the browser moves directly to Length with zero Frappe row activation",
         'event.key === "Enter" && fieldname === "length_cm"',
@@ -287,9 +286,9 @@ def test_fast_editor_binds_measurement_handlers_only_once():
     assert "if (root._dcoFastMeasurementsBound) return" in source
     assert "root._dcoFastMeasurementsBound = true" in source
     assert "const currentFrm = root._dcoFastEntryForm" in source
-    assert "function requirePieceDimensions(row, tr)" in source
-    assert "if (!row || !requirePieceDimensions(row, tr)) return" in source
-    assert "Enter the piece width and length before opening the shape." in source
+    assert "function requirePieceDimensions(frm, row, tr)" in source
+    assert "if (!row || !requirePieceDimensions(currentFrm, row, tr)) return" in source
+    assert "Please enter board length and width first." in source
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in source
     assert "window.AlmdinaClippedCornerEditor.open(currentFrm, row)" in source
     # html() replaces children of the wrapper; rebinding the wrapper on every

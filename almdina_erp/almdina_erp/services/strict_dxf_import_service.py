@@ -26,6 +26,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
     MACHINING_ADDONS_BY_KIND,
+    compare_liner_set_paths,
     compare_overlay_path,
     machining_metadata,
     machining_values,
@@ -243,6 +244,7 @@ def _proxy_order(
             "liner_width_cm": float(getattr(row, "liner_width_cm", 0) or 0),
             "liner_start_cm": float(getattr(row, "liner_start_cm", 0) or 0),
             "liner_length_cm": float(getattr(row, "liner_length_cm", 0) or 0),
+            "liner_specs_json": str(getattr(row, "liner_specs_json", "") or ""),
         }
         # Copy only fields that exist on the saved row. A missing glass margin
         # stays missing so import can tell a dropped field from a blank value.
@@ -1135,7 +1137,9 @@ def _corner_liner_issue(
         for overlay in (piece.get("overlays") or [])
         if isinstance(overlay, dict) and overlay.get("kind") == kind
     ]
-    if len(liners) != 1:
+    if kind != "liner" and len(liners) != 1:
+        return None
+    if kind == "liner" and not liners:
         return None
     geometry = piece.get("geometry") if isinstance(piece.get("geometry"), dict) else {}
     outer = geometry.get("outer") or ()
@@ -1166,14 +1170,6 @@ def _corner_liner_issue(
             )
         turns = int(match.quarter_turns)
         mirrored = bool(match.mirrored)
-    local = localize_path(path, outer)
-    canonical = canonical_path(
-        local,
-        mirrored=mirrored,
-        quarter_turns=turns,
-        width_mm=float(spec.cut_width_cm) * 10.0,
-        height_mm=float(spec.cut_length_cm) * 10.0,
-    )
     liner_piece = LinerPiece(
         spec.piece_type,
         float(spec.cut_width_cm),
@@ -1182,38 +1178,77 @@ def _corner_liner_issue(
         notch_width_cm,
         notch_length_cm,
     )
+    canonical_paths = []
+    for overlay in liners:
+        overlay_path = ((overlay.get("geometry") or {}).get("path") or ())
+        if len(overlay_path) < 2:
+            continue
+        canonical_paths.append(
+            canonical_path(
+                localize_path(overlay_path, outer),
+                mirrored=mirrored,
+                quarter_turns=turns,
+                width_mm=float(spec.cut_width_cm) * 10.0,
+                height_mm=float(spec.cut_length_cm) * 10.0,
+            )
+        )
+    if not canonical_paths:
+        return None
     start_cm = float(getattr(row, addon.start_field, 0) or 0) if row else None
     length_cm = float(getattr(row, addon.length_field, 0) or 0) if row else None
-    try:
-        start_sawn, end_sawn = sawn_liner_ends(
+    machining = machining_values(row) if row is not None else {}
+    liner_specs = tuple((machining.get("liner") or {}).get("liners") or ())
+    if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
+        measurement = compare_liner_set_paths(
+            canonical_paths,
             liner_piece,
-            side,
-            origin_mm=(float(piece.get("x") or 0.0) * 10.0, float(piece.get("y") or 0.0) * 10.0),
-            mirrored=mirrored,
-            quarter_turns=turns,
-            board=_shifted_board_mm(sheet),
-            start_cm=start_cm,
-            length_cm=length_cm,
+            liner_specs
+            or (
+                {
+                    "side": side,
+                    "offset_cm": offset_cm,
+                    "start_cm": start_cm,
+                    "length_cm": length_cm,
+                },
+            ),
+            width_cm,
+            (
+                float(cutter_diameter_mm)
+                if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
+                else None
+            ),
         )
-    except LinerGeometryError:
-        start_sawn, end_sawn = None, None
-    measurement = compare_overlay_path(
-        canonical,
-        liner_piece,
-        kind,
-        side,
-        offset_cm,
-        width_cm,
-        (
-            float(cutter_diameter_mm)
-            if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
-            else None
-        ),
-        start_cm,
-        length_cm,
-        start_sawn=start_sawn,
-        end_sawn=end_sawn,
-    )
+    else:
+        try:
+            start_sawn, end_sawn = sawn_liner_ends(
+                liner_piece,
+                side,
+                origin_mm=(float(piece.get("x") or 0.0) * 10.0, float(piece.get("y") or 0.0) * 10.0),
+                mirrored=mirrored,
+                quarter_turns=turns,
+                board=_shifted_board_mm(sheet),
+                start_cm=start_cm,
+                length_cm=length_cm,
+            )
+        except LinerGeometryError:
+            start_sawn, end_sawn = None, None
+        measurement = compare_overlay_path(
+            canonical_paths[0],
+            liner_piece,
+            kind,
+            side,
+            offset_cm,
+            width_cm,
+            (
+                float(cutter_diameter_mm)
+                if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
+                else None
+            ),
+            start_cm,
+            length_cm,
+            start_sawn=start_sawn,
+            end_sawn=end_sawn,
+        )
     return liner_geometry_issue(
         measurement,
         source_piece_no=spec.row_index,
@@ -1274,13 +1309,18 @@ def _regular_machining_issues(
     outer = geometry.get("outer") or []
     if len(outer) < 3:
         return []
-    paths = {}
+    grouped: dict[str, list] = {}
     for overlay in piece.get("overlays") or []:
         if not isinstance(overlay, dict):
             continue
         path = ((overlay.get("geometry") or {}).get("path") or ())
         if len(path) >= 2:
-            paths[str(overlay.get("kind") or "")] = localize_path(path, outer)
+            kind = str(overlay.get("kind") or "")
+            grouped.setdefault(kind, []).append(localize_path(path, outer))
+    paths = {
+        kind: items[0] if len(items) == 1 else items
+        for kind, items in grouped.items()
+    }
 
     actual_w, actual_h = _actual_dimensions(piece)
     # Strict dimensions already selected direct/swapped geometry. A square

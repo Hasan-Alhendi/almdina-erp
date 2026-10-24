@@ -66,6 +66,11 @@ def normalize_extra_double_sides(
     available sides. An explicit empty list is invalid when the add-on is on.
     """
 
+    if str(piece_type or "") == "Special":
+        # A special door has no straight sides to select. Presence is the
+        # contract; location is completed later in the DXF.
+        return ()
+
     if not enabled:
         return ()
 

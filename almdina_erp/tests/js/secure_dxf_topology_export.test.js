@@ -154,6 +154,7 @@ const context = vm.createContext({
     Math,
     Object,
     Array,
+    Set,
     Error,
     Promise,
     Uint8Array,

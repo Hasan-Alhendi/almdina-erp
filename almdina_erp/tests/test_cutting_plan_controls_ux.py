@@ -145,6 +145,7 @@ def test_legacy_helpers_never_intercept_or_save_cutting_plan_commands():
 
     assert "validateCurrentPlanInputs" in fast_save
     assert "preparePlanInputs" in text_board
+    assert "measurements.validateDimensionsBeforeSave(frm)" in text_board
     assert "door_cutting_order_plan_controls_ux.js" in text_board
 
 

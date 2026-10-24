@@ -1228,9 +1228,231 @@
     }
 
     function summary(row) {
-        if (!row || !Number(row.extra_liner) || !row.liner_reference_side) return "";
+        const parsed = parseDoorLiners(row);
+        if (!parsed.enabled || !parsed.liners.length) return "";
         const piece = pieceFromRow(row);
-        return `${sideLabel(row.liner_reference_side, piece.pieceType)} · ${num(row.liner_offset_cm)} / ${num(row.liner_width_cm)} سم`;
+        if (parsed.liners.length === 1) {
+            const spec = parsed.liners[0];
+            return `${sideLabel(spec.side, piece.pieceType)} · ${num(spec.offsetCm)} / ${num(parsed.widthCm)} سم`;
+        }
+        return `${parsed.liners.length} · ${Math.round(num(parsed.widthCm) * 100) / 10} ${__("mm")}`;
+    }
+
+    function allocateLinerId(existing) {
+        let used = 0;
+        (existing || []).forEach(id => {
+            const match = String(id || "").trim().match(/^liner_(\d+)$/);
+            if (match) used = Math.max(used, Number(match[1]));
+        });
+        return `liner_${used + 1}`;
+    }
+
+    function parseDoorLiners(row) {
+        const enabled = Boolean(num(row && row.extra_liner));
+        const raw = row && row.liner_specs_json;
+        if (raw && String(raw).trim()) {
+            try {
+                const data = JSON.parse(raw);
+                const items = Array.isArray(data && data.liners) ? data.liners : [];
+                const liners = items.map((item, index) => ({
+                    id: String((item && (item.id || item.liner_id)) || (index === 0 ? "liner_1" : allocateLinerId(["liner_1"]))).trim(),
+                    side: String((item && (item.side || item.reference_side)) || "").trim(),
+                    offsetCm: num(item && (item.offset_cm != null ? item.offset_cm : item.offsetCm)),
+                    startCm: num(item && (item.start_cm != null ? item.start_cm : item.startCm)),
+                    lengthCm: num(item && (item.length_cm != null ? item.length_cm : item.lengthCm)),
+                }));
+                if (enabled && liners.length) {
+                    const widthCm = data.width_cm != null ? num(data.width_cm) : num(row && row.liner_width_cm);
+                    return { enabled: true, widthCm, liners };
+                }
+            } catch (error) {
+                /* fall through to scalar fields */
+            }
+        }
+        if (!enabled) return { enabled: false, widthCm: 0, liners: [] };
+        return {
+            enabled: true,
+            widthCm: num(row && row.liner_width_cm),
+            liners: [{
+                id: "liner_1",
+                side: String((row && row.liner_reference_side) || "").trim(),
+                offsetCm: num(row && row.liner_offset_cm),
+                startCm: num(row && row.liner_start_cm),
+                lengthCm: num(row && row.liner_length_cm),
+            }],
+        };
+    }
+
+    function serializeDoorLiners(payload) {
+        if (!payload || !payload.enabled || !(payload.liners || []).length) return "";
+        return JSON.stringify({
+            width_cm: num(payload.widthCm),
+            liners: payload.liners.map(spec => ({
+                id: spec.id,
+                side: spec.side,
+                offset_cm: num(spec.offsetCm),
+                start_cm: num(spec.startCm),
+                length_cm: num(spec.lengthCm),
+            })),
+        });
+    }
+
+    function millRegionsConnected(first, second) {
+        if (!first || first.length < 3 || !second || second.length < 3) return false;
+        if (first.some(point => pointInPolygon(point, second))) return true;
+        if (second.some(point => pointInPolygon(point, first))) return true;
+        for (let i = 0; i < first.length; i += 1) {
+            const a = first[i];
+            const b = first[(i + 1) % first.length];
+            for (let j = 0; j < second.length; j += 1) {
+                const c = second[j];
+                const d = second[(j + 1) % second.length];
+                if (segmentsCross(a, b, c, d)) return true;
+                if (pointSegDist(a, c, d) <= TOLERANCE_MM || pointSegDist(c, a, b) <= TOLERANCE_MM) return true;
+            }
+        }
+        return false;
+    }
+
+    function connectedLinerComponents(regions) {
+        const remaining = new Set(regions.map((_item, index) => index));
+        const components = [];
+        while (remaining.size) {
+            const seed = Math.min(...remaining);
+            const group = [seed];
+            remaining.delete(seed);
+            const queue = [seed];
+            while (queue.length) {
+                const current = queue.pop();
+                Array.from(remaining).forEach(other => {
+                    if (!millRegionsConnected(regions[current], regions[other])) return;
+                    remaining.delete(other);
+                    group.push(other);
+                    queue.push(other);
+                });
+            }
+            components.push(group.sort((a, b) => a - b));
+        }
+        return components;
+    }
+
+    function pointDeepInside(point, polygon, marginMm) {
+        if (!pointInPolygon(point, polygon, TOLERANCE_MM)) return false;
+        return boundaryDistance(point, polygon) > Math.max(marginMm, TOLERANCE_MM);
+    }
+
+    function regionAlreadyMilled(region, covered, marginMm) {
+        if (!region || region.length < 3 || !(covered || []).length) return false;
+        const inflate = Math.max(marginMm, TOLERANCE_MM);
+        const minX = Math.min(...region.map(point => point[0]));
+        const maxX = Math.max(...region.map(point => point[0]));
+        const minY = Math.min(...region.map(point => point[1]));
+        const maxY = Math.max(...region.map(point => point[1]));
+        const step = Math.max(inflate, 2);
+        for (let y = minY + step / 2; y <= maxY + 1e-9; y += step) {
+            for (let x = minX + step / 2; x <= maxX + 1e-9; x += step) {
+                const point = [x, y];
+                if (!pointInPolygon(point, region, TOLERANCE_MM)) continue;
+                if (!covered.some(previous => pointInPolygon(point, previous, inflate))) return false;
+            }
+        }
+        return true;
+    }
+
+    function clipPassAgainstCovered(line, covered, keepMarginMm) {
+        if (!line || line.length < 2 || !(covered || []).length) return line && line.length >= 2 ? [line.map(point => point.slice())] : [];
+        const length = polylineLength(line);
+        if (!(length > TOLERANCE_MM)) return [];
+        const step = Math.min(1, Math.max(length / 64, TOLERANCE_MM * 4));
+        const samples = [];
+        for (let cursor = 0; cursor <= length + 1e-9; cursor = Math.min(length, cursor + step)) {
+            const point = pointAlong(line, Math.min(cursor, length)).point;
+            const inside = covered.some(region => pointDeepInside(point, region, keepMarginMm));
+            samples.push({ point, inside });
+            if (cursor >= length) break;
+        }
+        const runs = [];
+        let current = [];
+        samples.forEach(sample => {
+            if (sample.inside) {
+                if (current.length >= 2) runs.push(current);
+                current = [];
+                return;
+            }
+            if (current.length && dist(current[current.length - 1], sample.point) <= TOLERANCE_MM) return;
+            current.push(sample.point);
+        });
+        if (current.length >= 2) runs.push(current);
+        return runs;
+    }
+
+    function chainCutterLines(lines) {
+        const path = [];
+        (lines || []).forEach((line, index) => {
+            if (!line || line.length < 2) return;
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        return path;
+    }
+
+    function mergedToolpathsMm(piece, specs, widthCm, cutterDiameterMm, endsByIndex) {
+        const items = (specs || []).filter(Boolean);
+        if (!items.length) return [];
+        const read = spec => ({
+            side: spec.side,
+            offsetCm: spec.offsetCm != null ? spec.offsetCm : spec.offset_cm,
+            startCm: spec.startCm != null ? spec.startCm : spec.start_cm,
+            lengthCm: spec.lengthCm != null ? spec.lengthCm : spec.length_cm,
+        });
+        if (items.length === 1) {
+            const spec = read(items[0]);
+            return [toolpathMm(
+                piece,
+                spec.side,
+                spec.offsetCm,
+                widthCm,
+                cutterDiameterMm,
+                spec.startCm,
+                spec.lengthCm,
+                endsByIndex && endsByIndex[0]
+            )];
+        }
+        const regions = items.map(spec => {
+            const item = read(spec);
+            return regionPolygonMm(piece, item.side, item.offsetCm, widthCm, item.startCm, item.lengthCm);
+        });
+        const radius = num(cutterDiameterMm) / 2;
+        const paths = [];
+        connectedLinerComponents(regions).forEach(component => {
+            const covered = [];
+            component.forEach(index => {
+                const spec = read(items[index]);
+                const ends = endsByIndex && endsByIndex[index];
+                if (covered.length && regionAlreadyMilled(regions[index], covered, radius)) {
+                    return;
+                }
+                if (!covered.length) {
+                    paths.push(toolpathMm(
+                        piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                        spec.startCm, spec.lengthCm, ends
+                    ));
+                    covered.push(regions[index]);
+                    return;
+                }
+                const generated = toolpathMm(
+                    piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                    spec.startCm, spec.lengthCm, Object.assign({}, ends || {}, { startSawn: true, endSawn: true })
+                );
+                const clipped = clipPassAgainstCovered(generated, covered, radius);
+                clipped.forEach(run => {
+                    if (run && run.length >= 2) paths.push(run);
+                });
+                covered.push(regions[index]);
+            });
+        });
+        return paths.filter(path => path && path.length >= 2);
     }
 
     window.AlmdinaLinerGeometry = Object.freeze({
@@ -1270,5 +1492,11 @@
         visualCenterline,
         syntheticOverlay,
         summary,
+        parseDoorLiners,
+        serializeDoorLiners,
+        allocateLinerId,
+        mergedToolpathsMm,
+        sawnBoundaryEnds,
+        placeLocalPath,
     });
 })();

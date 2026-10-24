@@ -11,6 +11,7 @@ from frappe.utils import cint, flt
 from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_policy import piece_fits_board
 
 
 _OLD_PIECE_FIELDS = [
@@ -52,6 +53,7 @@ _OLD_PIECE_FIELDS = [
     "liner_width_cm",
     "liner_start_cm",
     "liner_length_cm",
+    "liner_specs_json",
     "extra_liner_unit_price_usd",
     "extra_back_groove",
     "back_groove_reference_side",
@@ -149,6 +151,21 @@ class FrappeOrderDocumentAccess:
     @staticmethod
     def normalized_number(value: Any) -> float:
         return round(flt(value), 6)
+
+    def board_dimensions(self) -> tuple[float, float]:
+        length_cm = self.finite(
+            getattr(self.document, "board_length_cm", None),
+            _("Board Length (CM)"),
+        )
+        width_cm = self.finite(
+            getattr(self.document, "board_width_cm", None),
+            _("Board Width (CM)"),
+        )
+        if length_cm <= 0:
+            frappe.throw(_("Board Length (CM) must be greater than zero."))
+        if width_cm <= 0:
+            frappe.throw(_("Board Width (CM) must be greater than zero."))
+        return length_cm, width_cm
 
     def enforce_immutability(self) -> None:
         if self.document.is_new() or self.document.flags.get("allow_approved_edit"):
@@ -248,6 +265,8 @@ class FrappeOrderDocumentAccess:
         if not self.document.pieces:
             frappe.throw(_("At least one piece row is required."))
 
+        board_length_cm, board_width_cm = self.board_dimensions()
+
         for index, row in enumerate(self.document.pieces or [], start=1):
             width = self.finite(
                 row.width_cm,
@@ -269,6 +288,25 @@ class FrappeOrderDocumentAccess:
                 frappe.throw(
                     _("Row {0}: Length must be greater than zero.").format(index)
                 )
+            if not piece_fits_board(
+                piece_width_cm=width,
+                piece_length_cm=length,
+                board_width_cm=board_width_cm,
+                board_length_cm=board_length_cm,
+                allow_rotation=bool(cint(getattr(row, "allow_rotation", 0))),
+            ):
+                frappe.throw(
+                    _(
+                        "Row {0}: Piece dimensions {1} × {2} cm do not fit "
+                        "the board {3} × {4} cm, even after allowed rotation."
+                    ).format(
+                        index,
+                        width,
+                        length,
+                        board_width_cm,
+                        board_length_cm,
+                    )
+                )
             if qty <= 0 or qty != int(qty):
                 frappe.throw(
                     _("Row {0}: Quantity must be a positive integer.").format(index)
@@ -281,24 +319,7 @@ class FrappeOrderDocumentAccess:
         if not description:
             frappe.throw(_("Board description is required."))
 
-        length_cm = self.finite(
-            default_if_missing(
-                getattr(self.document, "board_length_cm", None),
-                244,
-            ),
-            _("Board Length (CM)"),
-        )
-        width_cm = self.finite(
-            default_if_missing(
-                getattr(self.document, "board_width_cm", None),
-                122,
-            ),
-            _("Board Width (CM)"),
-        )
-        if length_cm <= 0:
-            frappe.throw(_("Board Length (CM) must be greater than zero."))
-        if width_cm <= 0:
-            frappe.throw(_("Board Width (CM) must be greater than zero."))
+        length_cm, width_cm = self.board_dimensions()
 
         self.document.board_description = description
         self.document.board_length_cm = length_cm

@@ -29,6 +29,27 @@ def is_glass(piece_type: str | None) -> bool:
     return (piece_type or "") == GLASS_TYPE
 
 
+def piece_fits_board(
+    *,
+    piece_width_cm: float,
+    piece_length_cm: float,
+    board_width_cm: float,
+    board_length_cm: float,
+    allow_rotation: bool = False,
+) -> bool:
+    """Return whether one piece can fit on one board, including 90° rotation."""
+
+    direct = (
+        piece_width_cm <= board_width_cm
+        and piece_length_cm <= board_length_cm
+    )
+    rotated = bool(allow_rotation) and (
+        piece_width_cm <= board_length_cm
+        and piece_length_cm <= board_width_cm
+    )
+    return direct or rotated
+
+
 def corner_cut_arabic_label(piece_type: str | None) -> str:
     if (piece_type or "") == L_SHAPED_CORNER_TYPE:
         return "درفة زاوية L"

@@ -15,12 +15,41 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     geometry_changed,
     pricing_basis_changed,
     protected_price_changed,
+    piece_fits_board,
     reset_price_values,
     resolve_clipped_corner,
 )
 
 
 class TestOrderPiecePolicyDomain(unittest.TestCase):
+    def test_piece_fit_accepts_equal_dimensions_and_allowed_rotation(self) -> None:
+        self.assertTrue(
+            piece_fits_board(
+                piece_width_cm=210,
+                piece_length_cm=280,
+                board_width_cm=210,
+                board_length_cm=280,
+            )
+        )
+        self.assertTrue(
+            piece_fits_board(
+                piece_width_cm=150,
+                piece_length_cm=90,
+                board_width_cm=100,
+                board_length_cm=160,
+                allow_rotation=True,
+            )
+        )
+        self.assertFalse(
+            piece_fits_board(
+                piece_width_cm=161,
+                piece_length_cm=101,
+                board_width_cm=100,
+                board_length_cm=220,
+                allow_rotation=True,
+            )
+        )
+
     def test_glass_piece_type_import_is_order_independent(self) -> None:
         """Fresh processes must import the order policy and cutting engine in either order."""
         modules = (

@@ -860,6 +860,13 @@ Choose a reference side.,اختر الجهة المرجعية.
 Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
+Add liner,إضافة لاينر
+Liner {0},لاينر {0}
+Remove liner {0},إزالة اللاينر {0}
+Remove liner,إزالة اللاينر
+Remove,إزالة
+Distance and width,المسافة والعرض
+Distance and length,المسافة والطول
 Liner Start Position,بداية اللاينر
 Machining Width,عرض التفريز
 Machining Start,بداية التفريز
@@ -2930,3 +2937,36 @@ The cost and special door price edits were saved and the section returned to rea
 Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
 Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
 Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Board length must be a positive number.,يجب أن يكون طول اللوح رقماً موجباً أكبر من الصفر.
+Board width must be a positive number.,يجب أن يكون عرض اللوح رقماً موجباً أكبر من الصفر.
+Piece width must be a positive number.,يجب أن يكون عرض الدرفة رقماً موجباً أكبر من الصفر.
+Piece length must be a positive number.,يجب أن يكون طول الدرفة رقماً موجباً أكبر من الصفر.
+Please enter board length and width first.,يرجى إدخال طول وعرض اللوح أولاً.
+Piece width cannot exceed board width.,لا يجوز أن يتجاوز عرض الدرفة عرض اللوح.
+Piece length cannot exceed board length.,لا يجوز أن يتجاوز طول الدرفة طول اللوح.
+Piece dimensions exceed the board, even after allowed rotation.,تتجاوز قياسات الدرفة أبعاد اللوح حتى بعد السماح بالدوران.
+Exceeds board length,يتجاوز طول اللوح
+Exceeds board width,يتجاوز عرض اللوح
+Row {0}: {1},السطر {0}: {1}
+Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.,السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
+A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
+A special door could not be matched because the DXF contour is a rectangle.,تعذر مطابقة درفة خاصة لأن المحيط في DXF مستطيل.
+"The special-door group {0} × {1} cm has an extra {2} that the order does not require.",مجموعة الدرفات الخاصة {0} × {1} سم تحتوي على {2} إضافي غير مطلوب.
+"The special-door group {0} × {1} cm is missing a required {2}.",مجموعة الدرفات الخاصة {0} × {1} سم تفتقد {2} المطلوبة.
+That path is on a regular door and is not counted for the special door.,ذلك المسار على درفة عادية ولا يُحتسب للدرفة الخاصة.
+"{0} and {1} are on different special doors, but the order requires them on the same door ({2} × {3} cm).","{0} و{1} موجودان على درفتين مختلفتين، بينما الطلب يتطلبهما على الدرفة نفسها ({2} × {3} سم)."
+"The {0} path could not be tied to exactly one special door.",تعذر ربط مسار {0} بدرفة خاصة واحدة بشكل واضح.
+A special-door group has an extra add-on that the order does not require.,مجموعة الدرفات الخاصة تحتوي على إضافة زائدة غير مطلوبة.
+A special-door group is missing a required add-on.,مجموعة الدرفات الخاصة تفتقد إضافة مطلوبة.
+Add-ons that belong on the same special door are split across different doors.,إضافات مطلوبة على الدرفة الخاصة نفسها موزعة على درفتين مختلفتين.
+Replace the contour with an axis-aligned rectangle that matches the ordered cut size.,استبدل المحيط بمستطيل محاوره مطابقة لمقاس القص المطلوب.
+Use a non-rectangular contour whose outer dimensions match the ordered special door.,استخدم محيطًا غير مستطيل تطابق أبعاده الخارجية الدرفة الخاصة المطلوبة.
+"Remove the extra add-on path, or add that add-on to the order.",أزل مسار الإضافة الزائد، أو أضف الإضافة إلى الطلب.
+Draw the missing add-on on a special door in this size group.,ارسم الإضافة الناقصة على درفة خاصة ضمن هذه المجموعة.
+Put the required add-ons on the same special-door contour.,ضع الإضافات المطلوبة على محيط الدرفة الخاصة نفسه.
+Move the add-on path so it belongs to exactly one special door.,حرّك مسار الإضافة حتى يرتبط بدرفة خاصة واحدة فقط.
+Selection is enough for a special door. Complete the add-on paths in the DXF before approval.,الاختيار يكفي للدرفة الخاصة. أكمل مسارات الإضافات في ملف DXF قبل الاعتماد.
+liner,لاينر
+back groove,فرزة ظهر
+recessed handle,مسكة غطس
+add-on,إضافة

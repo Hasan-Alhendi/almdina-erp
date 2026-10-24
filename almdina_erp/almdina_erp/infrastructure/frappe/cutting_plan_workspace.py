@@ -465,6 +465,7 @@ def _apply_snapshot(
                     "liner_width_cm": flt(piece.get("liner_width_cm")),
                     "liner_start_cm": flt(piece.get("liner_start_cm")),
                     "liner_length_cm": flt(piece.get("liner_length_cm")),
+                    "liner_specs_json": piece.get("liner_specs_json") or "",
                     "extra_back_groove": 1 if piece.get("extra_back_groove") else 0,
                     "back_groove_reference_side": piece.get("back_groove_reference_side") or "",
                     "back_groove_offset_cm": flt(piece.get("back_groove_offset_cm")),

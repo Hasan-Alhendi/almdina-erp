@@ -38,6 +38,7 @@ def _piece_rows(order: Any) -> list[dict[str, Any]]:
             "liner_width_cm": flt(getattr(row, "liner_width_cm", 0)),
             "liner_start_cm": flt(getattr(row, "liner_start_cm", 0)),
             "liner_length_cm": flt(getattr(row, "liner_length_cm", 0)),
+            "liner_specs_json": getattr(row, "liner_specs_json", "") or "",
             "extra_back_groove": cint(getattr(row, "extra_back_groove", 0)),
             "back_groove_reference_side": getattr(row, "back_groove_reference_side", "") or "",
             "back_groove_offset_cm": flt(getattr(row, "back_groove_offset_cm", 0)),

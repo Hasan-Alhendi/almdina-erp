@@ -36,6 +36,10 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     obstacle_geometry_mm,
     sawn_liner_ends,
     liner_strip_polygon_mm,
+    merged_liner_toolpaths_mm,
+    mill_regions_connected,
+    liner_region_polygon_mm,
+    compare_liner_set_paths,
     piece_polygon_mm,
     resolved_liner_span_mm,
     transform_point,
@@ -844,3 +848,81 @@ def test_center_recessed_handle_uses_existing_fields_and_door_center():
         rejected = center_recessed_handle(LinerPiece(piece_type, 60, 80), "edge_long_left", 3.8, 32.9)
         assert rejected.ok is False
         assert rejected.code == "unsupported_piece_type"
+
+
+def _spec(side: str, offset_cm: float = 2, start_cm: float = 0, length_cm: float = 0):
+    return {
+        "side": side,
+        "offset_cm": offset_cm,
+        "start_cm": start_cm,
+        "length_cm": length_cm,
+    }
+
+
+def test_single_liner_merged_path_matches_historical_toolpath():
+    piece = _regular()
+    spec = _spec("edge_width_top")
+    merged = merged_liner_toolpaths_mm(piece, [spec], 1.5, 5)
+    historical = liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5, 0, 0)
+    assert merged == [historical]
+    assert compare_liner_set_paths(merged, piece, [spec], 1.5, 5).ok
+
+
+def test_parallel_liners_stay_separate_and_identical_liners_do_not_repeat():
+    piece = _regular()
+    parallel = [_spec("edge_width_top", 2), _spec("edge_width_top", 8)]
+    paths = merged_liner_toolpaths_mm(piece, parallel, 1.5, 5)
+    assert len(paths) == 2
+    assert compare_liner_set_paths(paths, piece, parallel, 1.5, 5).ok
+
+    identical = [_spec("edge_width_top", 2), _spec("edge_width_top", 2)]
+    same = merged_liner_toolpaths_mm(piece, identical, 1.5, 5)
+    assert len(same) == 1
+    assert same[0] == liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5, 0, 0)
+    assert compare_liner_set_paths(same, piece, identical, 1.5, 5).ok
+
+
+def test_l_t_plus_and_three_liner_unions_cover_connected_mill_regions():
+    piece = _regular()
+    width = 1.5
+    diameter = 5
+    ell = [_spec("edge_width_top", 2), _spec("edge_long_left", 2)]
+    tee = [_spec("edge_width_top", 2), _spec("edge_long_left", 18, 0, 25)]
+    plus = [_spec("edge_width_top", 20), _spec("edge_long_left", 18)]
+    three = [_spec("edge_width_top", 2), _spec("edge_long_left", 2), _spec("edge_width_bottom", 2)]
+    for specs in (ell, tee, plus, three):
+        regions = [
+            liner_region_polygon_mm(piece, spec["side"], spec["offset_cm"], width, spec["start_cm"], spec["length_cm"])
+            for spec in specs
+        ]
+        assert mill_regions_connected(regions[0], regions[1])
+        paths = merged_liner_toolpaths_mm(piece, specs, width, diameter)
+        solo = [
+            liner_toolpath_mm(
+                piece, spec["side"], spec["offset_cm"], width, diameter, spec["start_cm"], spec["length_cm"]
+            )
+            for spec in specs
+        ]
+        assert 1 <= len(paths) <= len(specs)
+        assert mill_regions_connected(regions[0], regions[1])
+        assert compare_liner_set_paths(paths, piece, specs, width, diameter).ok
+        assert compare_liner_set_paths([], piece, specs, width, diameter).ok is False
+
+
+def test_partial_overlap_and_internal_span_do_not_repeat_mill_area():
+    piece = _regular()
+    width = 1.5
+    diameter = 5
+    overlapping = [
+        _spec("edge_width_top", 2, 0, 25),
+        _spec("edge_width_top", 2, 15, 25),
+    ]
+    internal = [_spec("edge_long_left", 4, 8, 20)]
+    overlap_paths = merged_liner_toolpaths_mm(piece, overlapping, width, diameter)
+    assert 1 <= len(overlap_paths) <= 2
+    assert compare_liner_set_paths(overlap_paths, piece, overlapping, width, diameter).ok
+    internal_paths = merged_liner_toolpaths_mm(piece, internal, width, diameter)
+    historical = liner_toolpath_mm(piece, "edge_long_left", 4, width, diameter, 8, 20)
+    assert internal_paths == [historical]
+    extra = overlap_paths + [liner_toolpath_mm(piece, "edge_width_bottom", 2, width, diameter, 0, 0)]
+    assert compare_liner_set_paths(extra, piece, overlapping, width, diameter).ok is False

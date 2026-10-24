@@ -318,6 +318,40 @@ body[dir="ltr"] .dco-addons-preview-pane {
     min-width: 0;
 }
 
+.dco-liner-set {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-3, 12px);
+    min-width: 0;
+}
+
+.dco-liner-shared,
+.dco-liner-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+}
+
+.dco-liner-item {
+    padding: var(--alm-space-2, 8px);
+    border: 1px solid var(--alm-border-subtle, #eaecf0);
+    border-radius: var(--alm-radius-sm, 10px);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-liner-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alm-space-2, 8px);
+}
+
+.dco-liner-add,
+.dco-liner-remove-item {
+    align-self: flex-start;
+}
+
 .dco-addons-modal .dco-corner-section-label {
     margin: 0;
     color: var(--alm-text-subtle, #667085);

@@ -68,9 +68,13 @@ class ExpectedPieceEvidence:
     height: float
     allow_rotation: bool
     # Shape freedom is distinct from manufacturing-envelope freedom. Special
-    # pieces may use arbitrary valid polygons, but their bbox must still match
-    # the persisted cut dimensions below.
+    # pieces may use any valid non-rectangular polygon, but their bbox must
+    # still match the persisted cut dimensions below.
     arbitrary_outline: bool = False
+    # Empty leaves the historical dimension-only match. Regular requires an
+    # axis-aligned rectangle. Special requires a non-rectangle. Glass and
+    # corner types keep their own geometric checks.
+    piece_type: str = ""
     source_piece_no: int | None = None
     copy_no: int | None = None
     # Optional Glass evidence used only to demote a uniquely proven opening
@@ -275,7 +279,28 @@ def validate_material_layout(
                 )
 
 
-def _dimensions_match(
+def outline_compatible_with_piece_type(
+    polygon: Sequence[Point],
+    piece_type: str,
+    *,
+    tolerance: float,
+) -> bool:
+    """Regular is a rectangle. Special is any other valid outer contour.
+
+    Glass and corner pieces are not reclassified here. Their geometric
+    contracts stay in the validators that already own those shapes.
+    """
+
+    kind = str(piece_type or "")
+    if kind not in {"Regular", "Special"}:
+        return True
+    rectangular = is_axis_aligned_rectangle(polygon, tolerance)
+    if kind == "Regular":
+        return rectangular
+    return not rectangular
+
+
+def _size_match(
     contour: ContourCandidate,
     expected: ExpectedPieceEvidence,
     *,
@@ -297,17 +322,39 @@ def _dimensions_match(
     )
 
 
+def _dimensions_match(
+    contour: ContourCandidate,
+    expected: ExpectedPieceEvidence,
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
+) -> bool:
+    if not _size_match(
+        contour,
+        expected,
+        dimension_tolerance=dimension_tolerance,
+    ):
+        return False
+    return outline_compatible_with_piece_type(
+        contour.polygon,
+        expected.piece_type,
+        tolerance=geometry_tolerance,
+    )
+
+
 def _matches_any_expected(
     contour: ContourCandidate,
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
 ) -> bool:
     return any(
         _dimensions_match(
             contour,
             expected_piece,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         for expected_piece in expected
     )
@@ -318,12 +365,14 @@ def _inventory_assignment(
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
     excluded_edge: tuple[int, int] | None = None,
 ) -> tuple[int, ...] | None:
     """Return one expected-piece index per selected contour, if injective.
 
     Every piece, including Special, is bound to its persisted manufacturing
-    envelope. The contour itself may be any valid polygon inside that envelope.
+    envelope. Regular also requires a rectangle, and Special requires any
+    other valid outer contour. Glass and corner pieces keep their own checks.
     """
     if len(selected) > len(expected):
         return None
@@ -337,6 +386,7 @@ def _inventory_assignment(
                 contour,
                 expected_piece,
                 dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             )
         ]
         if not matches:
@@ -554,6 +604,7 @@ def _forbidden_rotation_error(
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
 ) -> DxfTopologyError | None:
     """Diagnose the minimum forbidden rotations across all feasible assignments.
 
@@ -568,6 +619,7 @@ def _forbidden_rotation_error(
             height=piece.height,
             allow_rotation=True,
             arbitrary_outline=piece.arbitrary_outline,
+            piece_type=piece.piece_type,
             source_piece_no=piece.source_piece_no,
             copy_no=piece.copy_no,
         )
@@ -580,6 +632,7 @@ def _forbidden_rotation_error(
             contour,
             relaxed,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
     )
     size = len(expected)
@@ -595,6 +648,7 @@ def _forbidden_rotation_error(
             height=piece.height,
             allow_rotation=False,
             arbitrary_outline=piece.arbitrary_outline,
+            piece_type=piece.piece_type,
             source_piece_no=piece.source_piece_no,
             copy_no=piece.copy_no,
         )
@@ -603,6 +657,7 @@ def _forbidden_rotation_error(
                 contour,
                 direct_piece,
                 dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             ):
                 row_costs.append(0)
                 continue
@@ -624,9 +679,12 @@ def _forbidden_rotation_error(
                 contour,
                 piece,
                 dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             ):
                 row_costs.append(0)
-            elif exact_rotated and not piece.arbitrary_outline:
+            elif exact_rotated and (
+                not piece.arbitrary_outline or piece.piece_type in {"Regular", "Special"}
+            ):
                 row_costs.append(1)
                 measurements[(len(costs), contour_index)] = (
                     actual_width,
@@ -846,7 +904,10 @@ def _proven_glass_opening_pair(
     if not evidence.is_glass:
         return False
     if not _dimensions_match(
-        host, evidence, dimension_tolerance=dimension_tolerance
+        host,
+        evidence,
+        dimension_tolerance=dimension_tolerance,
+        geometry_tolerance=geometry_tolerance,
     ):
         return False
     expected_insets = _expected_glass_insets(evidence)
@@ -990,6 +1051,7 @@ def _demote_proven_glass_openings(
             next_selected,
             expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         is None
     ):
@@ -1152,9 +1214,65 @@ def diagnostic_piece_contours(
             contour,
             expected_pieces,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
     }
     return tuple(contour for contour in ordered if contour.key in selected_keys)
+
+
+def _outline_class_mismatch(
+    contours: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> DxfTopologyError | None:
+    """Report a size match rejected only because Regular/Special outline differs."""
+
+    for contour in contours:
+        dimension_hits = [
+            piece
+            for piece in expected
+            if _size_match(
+                contour,
+                piece,
+                dimension_tolerance=dimension_tolerance,
+            )
+        ]
+        if not dimension_hits:
+            continue
+        if any(
+            outline_compatible_with_piece_type(
+                contour.polygon,
+                piece.piece_type,
+                tolerance=geometry_tolerance,
+            )
+            for piece in dimension_hits
+        ):
+            continue
+        kinds = {str(piece.piece_type or "") for piece in dimension_hits}
+        min_x, min_y, max_x, max_y = bbox(contour.polygon)
+        actual_width = max_x - min_x
+        actual_height = max_y - min_y
+        sample = dimension_hits[0]
+        rectangular = is_axis_aligned_rectangle(contour.polygon, geometry_tolerance)
+        if rectangular and "Special" in kinds and "Regular" not in kinds:
+            return DxfTopologyError(
+                "SPECIAL_OUTLINE_IS_RECTANGLE",
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=sample.width,
+                expected_height=sample.height,
+            )
+        if not rectangular and "Regular" in kinds and "Special" not in kinds:
+            return DxfTopologyError(
+                "REGULAR_OUTLINE_NOT_RECTANGLE",
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=sample.width,
+                expected_height=sample.height,
+            )
+    return None
 
 
 def resolve_contour_ownership(
@@ -1171,8 +1289,8 @@ def resolve_contour_ownership(
     * a contour not contained by another contour must be an actual piece;
     * every actual piece, including Special, must match the persisted cut-width
       and cut-length envelope (or its allowed rotation);
-    * a Special outer may still be concave or otherwise non-rectangular as long
-      as its valid polygon has the required manufacturing bounding box;
+    * a Regular outer must be an axis-aligned rectangle, and a Special outer
+      must not be one; Glass and corner pieces are not reclassified by that rule;
     * a nested contour matching expected piece dimensions remains an actual piece
       candidate (supporting pieces placed inside proven holes);
     * a nested contour without piece evidence can be considered a hole only when
@@ -1204,6 +1322,7 @@ def resolve_contour_ownership(
             contour,
             expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
     )
     selected_keys = {
@@ -1220,9 +1339,18 @@ def resolve_contour_ownership(
         diagnostic = _forbidden_rotation_error(
             ordered_contours, expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         if diagnostic is not None:
             raise diagnostic
+        outline_error = _outline_class_mismatch(
+            ordered_contours,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+        if outline_error is not None:
+            raise outline_error
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
     if len(selected) > len(expected):
         demoted = _demote_proven_glass_openings(
@@ -1237,6 +1365,7 @@ def resolve_contour_ownership(
                 roots,
                 expected,
                 dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             ) is None:
                 raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
             raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
@@ -1245,14 +1374,24 @@ def resolve_contour_ownership(
         selected,
         expected,
         dimension_tolerance=dimension_tolerance,
+        geometry_tolerance=geometry_tolerance,
     )
     if assignment is None:
         diagnostic = _forbidden_rotation_error(
             ordered_contours, expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         if diagnostic is not None:
             raise diagnostic
+        outline_error = _outline_class_mismatch(
+            ordered_contours,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+        if outline_error is not None:
+            raise outline_error
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
 
     topology = _classify_selection(
@@ -1289,6 +1428,7 @@ __all__ = [
     "material_footprints_overlap",
     "polygon_contains_polygon",
     "polygon_strictly_contains_polygon",
+    "outline_compatible_with_piece_type",
     "resolve_contour_ownership",
     "validate_material_layout",
 ]

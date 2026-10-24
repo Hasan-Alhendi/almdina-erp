@@ -546,6 +546,23 @@ def _present_glass_opening(
     return PresentedDxfError(problem, target_text, action, code, issue.category)
 
 
+def _overlay_kind_label(kind: Any) -> str:
+    labels = {
+        "liner": _("liner"),
+        "back_groove": _("back groove"),
+        "recessed_handle_cutout": _("recessed handle"),
+    }
+    return labels.get(str(kind or ""), _("add-on"))
+
+
+def _group_size_cm(params: Mapping[str, Any]) -> tuple[str, str] | None:
+    width = params.get("width_cm")
+    height = params.get("height_cm")
+    if width is None or height is None:
+        return None
+    return format_cm(width), format_cm(height)
+
+
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     params = dict(issue.params or {})
     target_text = present_target(issue.target, params=params)
@@ -895,6 +912,69 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             problem,
             target_text,
             _special_range_action(params),
+            code,
+            issue.category,
+        )
+
+    if code == codes.REGULAR_OUTLINE_NOT_RECTANGLE:
+        return PresentedDxfError(
+            _("A regular door could not be matched because the DXF contour is not a rectangle."),
+            target_text,
+            _("Replace the contour with an axis-aligned rectangle that matches the ordered cut size."),
+            code,
+            issue.category,
+        )
+    if code == codes.SPECIAL_OUTLINE_IS_RECTANGLE:
+        return PresentedDxfError(
+            _("A special door could not be matched because the DXF contour is a rectangle."),
+            target_text,
+            _("Use a non-rectangular contour whose outer dimensions match the ordered special door."),
+            code,
+            issue.category,
+        )
+    if code in {
+        codes.SPECIAL_ADDON_GROUP_EXTRA,
+        codes.SPECIAL_ADDON_GROUP_MISSING,
+        codes.SPECIAL_ADDON_GROUP_SPLIT,
+    }:
+        size = _group_size_cm(params)
+        kind = _overlay_kind_label(params.get("overlay_kind"))
+        kinds = [
+            _overlay_kind_label(item)
+            for item in (params.get("overlay_kinds") or ())
+        ]
+        if code == codes.SPECIAL_ADDON_GROUP_EXTRA:
+            problem = (
+                _("The special-door group {0} × {1} cm has an extra {2} that the order does not require.").format(size[0], size[1], kind)
+                if size
+                else _("A special-door group has an extra add-on that the order does not require.")
+            )
+            action = _("Remove the extra add-on path, or add that add-on to the order.")
+        elif code == codes.SPECIAL_ADDON_GROUP_MISSING:
+            problem = (
+                _("The special-door group {0} × {1} cm is missing a required {2}.").format(size[0], size[1], kind)
+                if size
+                else _("A special-door group is missing a required add-on.")
+            )
+            if params.get("found_on_piece_type") == "Regular":
+                problem = f"{problem} {_('That path is on a regular door and is not counted for the special door.')}"
+            action = _("Draw the missing add-on on a special door in this size group.")
+        elif size and len(kinds) >= 2:
+            problem = _(
+                "{0} and {1} are on different special doors, but the order requires them on the same door ({2} × {3} cm)."
+            ).format(kinds[0], kinds[1], size[0], size[1])
+            action = _("Put the required add-ons on the same special-door contour.")
+        else:
+            problem = _("Add-ons that belong on the same special door are split across different doors.")
+            action = _("Put the required add-ons on the same special-door contour.")
+        return PresentedDxfError(problem, target_text, action, code, issue.category)
+    if code == codes.SPECIAL_OVERLAY_AMBIGUOUS:
+        return PresentedDxfError(
+            _("The {0} path could not be tied to exactly one special door.").format(
+                _overlay_kind_label(params.get("overlay_kind"))
+            ),
+            target_text,
+            _("Move the add-on path so it belongs to exactly one special door."),
             code,
             issue.category,
         )

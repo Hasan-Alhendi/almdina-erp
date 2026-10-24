@@ -45,6 +45,7 @@
         "liner_width_cm",
         "liner_start_cm",
         "liner_length_cm",
+        "liner_specs_json",
         "back_groove_reference_side",
         "back_groove_offset_cm",
         "back_groove_width_cm",
