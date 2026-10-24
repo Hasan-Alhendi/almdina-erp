@@ -163,6 +163,19 @@ class TestPlanFingerprintCompatibility(unittest.TestCase):
             elapsed = perf_counter() - start
             self.assertLess(elapsed, 1.0, f'{count} pieces took {elapsed:.3f}s')
 
+    def test_active_machining_glass_and_corner_golden_schemas_are_immutable(self):
+        fixture, order, plan = golden_case()
+        schemas = {'v3': (3, ()), 'v2_current': (2, ()),
+                   'v2_pre_oct22': (2, ('liner_specs_json',)),
+                   'v2_pre_oct21': (2, ('liner_specs_json', 'extra_double', 'extra_double_reference_sides'))}
+        for scenario in fixture['scenarios']:
+            candidate = copy.deepcopy(order)
+            candidate.pieces[0].__dict__.update(scenario['piece_overrides'])
+            for name, (version, omitted) in schemas.items():
+                with self.subTest(scenario=scenario['name'], contract=name):
+                    self.assertEqual(scenario['sha256'][name], workspace.plan_input_fingerprint(
+                        candidate, plan, version=version, omitted=omitted))
+
 
 class TestPlanFingerprintServiceIntegration(unittest.TestCase):
     def test_compatible_approved_save_never_writes_or_cancels(self):
