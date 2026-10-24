@@ -68,8 +68,14 @@ function createWrapper() {
     };
 }
 
-function loadTabs(uploadedRow) {
+function loadTabs(uploadedRow, language = "en") {
+    const catalog = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+    const translated = message => {
+        const line = catalog.split("\n").find(row => row.startsWith(`${message},`));
+        return language === "ar" && line ? line.slice(message.length + 1).trim() : message;
+    };
     const fakeWindow = {
+        AlmdinaLocale: { translate: translated, direction: () => language === "ar" ? "rtl" : "ltr" },
         AlmdinaPermissions: {
             canDocument() {
                 return true;
@@ -182,3 +188,31 @@ assert.match(staleHtml, /dco-uploaded-plan-mismatch-banner[\s\S]*dco-plan/);
 assert.match(staleHtml, /dco-plan/);
 
 console.log("Uploaded plan mismatch banner contract passed");
+
+for (const freshness of ["REVIEW_REQUIRED", "PERSISTED_STALE"]) {
+    const tabs = loadTabs({
+        ...uploadedGeometry,
+        validation: { needs_recalculation: true, freshness_state: freshness, status: "Valid" },
+    });
+    const html = renderCustom(tabs, createWrapper(), true);
+    assert.match(html, /Plan matching requires review/);
+    assert.doesNotMatch(html, /This order was changed/);
+    assert.match(html, /Review the plan|Review it/);
+    assert.match(html, /dco-plan/);
+}
+const compatibleTabs = loadTabs({
+    ...uploadedGeometry,
+    validation: { needs_recalculation: false, freshness_state: "COMPATIBLE", status: "Valid" },
+});
+assert.doesNotMatch(renderCustom(compatibleTabs, createWrapper(), false), /dco-uploaded-plan-mismatch-banner/);
+
+for (const language of ["en", "ar"]) {
+    const tabs = loadTabs({
+        ...uploadedGeometry,
+        validation: { needs_recalculation: true, freshness_state: "REVIEW_REQUIRED", status: "Valid" },
+    }, language);
+    const html = renderCustom(tabs, createWrapper(), true);
+    assert.match(html, language === "ar" ? /مطابقة الخطة تحتاج إلى مراجعة/ : /Plan matching requires review/);
+    assert.match(html, language === "ar" ? /تعذر تأكيد مطابقة الخطة/ : /could not be confirmed/);
+    assert.match(html, language === "ar" ? /dir="rtl"/ : /dir="ltr"/);
+}

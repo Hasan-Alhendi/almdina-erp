@@ -16,7 +16,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     cancel_approval_transition,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    freshness_expected_fingerprint,
+    plan_fingerprint_compatibility,
 )
 
 
@@ -55,12 +55,15 @@ def _sync_drawing_dxf_status(order: Any) -> None:
     order.drawing_dxf_status = "Uploaded" if has_valid_uploaded_dxf else "None"
 
 
-def _expected_fingerprint(order: Any, plan: Any) -> str:
-    return freshness_expected_fingerprint(
-        order,
-        plan,
-        str(getattr(plan, "input_fingerprint", None) or ""),
+def _expected_fingerprint(order: Any, plan: Any) -> str | None:
+    # Share the decision used by freshness_expected_fingerprint; uncertainty blocks
+    # new use through runtime gates, but must not rewrite an immutable approval.
+    decision = plan_fingerprint_compatibility(
+        order, plan, str(getattr(plan, "input_fingerprint", None) or ""),
     )
+    if decision.state == "REVIEW_REQUIRED":
+        return None
+    return decision.expected_fingerprint
 
 
 def _cancel_stale_approved_plan(order: Any) -> str | None:
@@ -86,10 +89,13 @@ def _cancel_stale_approved_plan(order: Any) -> str | None:
         _sync_drawing_dxf_status(order)
         return None
 
+    expected = _expected_fingerprint(order, plan)
+    if expected is None:
+        return None
     decision = decide_approved_plan_freshness(
         status=str(plan.status or ""),
         stored_fingerprint=str(plan.input_fingerprint or ""),
-        expected_fingerprint=_expected_fingerprint(order, plan),
+        expected_fingerprint=expected,
     )
     if not decision.should_invalidate:
         return None
@@ -143,10 +149,13 @@ def _mark_stale_uploaded_plan(order: Any, skipped: tuple[str, ...]) -> str | Non
 
     plan = frappe.get_doc("Cutting Plan", plan_name)
     already_stale = bool(cint(plan.plan_needs_recalculation))
+    expected = _expected_fingerprint(order, plan)
+    if expected is None:
+        return None
     decision = decide_uploaded_plan_mismatch(
         source_type=str(plan.source_type or ""),
         stored_fingerprint=str(plan.input_fingerprint or ""),
-        expected_fingerprint=_expected_fingerprint(order, plan),
+        expected_fingerprint=expected,
         already_needs_recalculation=already_stale,
     )
     if not decision.should_invalidate:
@@ -182,10 +191,13 @@ def invalidate_stale_draft_plans(order: Any) -> tuple[str, ...]:
     for plan_name in plan_names:
         plan = frappe.get_doc("Cutting Plan", plan_name)
         already_stale = bool(cint(plan.plan_needs_recalculation))
+        expected = _expected_fingerprint(order, plan)
+        if expected is None:
+            continue
         decision = decide_draft_plan_freshness(
             status=str(plan.status or ""),
             stored_fingerprint=str(plan.input_fingerprint or ""),
-            expected_fingerprint=_expected_fingerprint(order, plan),
+            expected_fingerprint=expected,
             already_needs_recalculation=already_stale,
         )
         if not decision.should_invalidate:

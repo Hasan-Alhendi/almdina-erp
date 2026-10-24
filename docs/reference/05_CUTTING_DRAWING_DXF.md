@@ -265,3 +265,40 @@ Stage 14 يثبت أن CNC لا يستطيع التصرف كعامل الرسم 
 - **رفض DXF:** محيط غير مغلق، تداخل مادة حقيقي، مسافة Kerf ناقصة، ضيف يلامس إطار البلور، علاقات استضافة دائرية أو أعمق من الحد، غموض ملكية المحيط، وهندسة غير صالحة.
 - **الحفظ والتصدير:** `snapshot_json` هو مصدر الحقيقة لـ`glass_host_piece_id` و`glass_hole_local_mm` (وجدولي المواضع لا يحملان علاقة الاستضافة). إعادة البناء عند التصدير تدمج الحقول من الـSnapshot. المعاينة/الطباعة تعرض الفتحة بـ`evenodd` وترفع طبقات الضيوف حسب عمق التعشيق.
 - **ما لم يثبته النظام:** ترتيب تنفيذ القص الفعلي على ماكينة CNC، وزمن تشغيل الريشة، وسلامة مسار الأداة خارج عقد الهندسة والطبقات المصدرة. لا يدّعي المستودع أن ترتيب الكيانات في DXF يضمن تسلسل القص على الماكينة.
+
+## 13. Versioned input fingerprints and legacy plan review
+
+New Cutting Plan inputs use fingerprint contract **3**, declared by
+`input_fingerprint_contract` in the immutable snapshot. The explicit geometry key
+set and golden hashes freeze that contract; changing a serializer/registry must
+not silently change an existing version. SHA-256 remains owned by
+`domain/orders/plan_fingerprint.py`.
+
+All freshness consumers use `plan_fingerprint_compatibility` (older string callers
+use `freshness_expected_fingerprint`). Supported historical V2 shapes are pinned
+to Git parents `13c3c89c` (before multi-liner JSON) and `e8453978` (before double-side
+fields), plus the last deployed V2. Omitting liner JSON is allowed only when it
+expresses exactly the scalar liner toolpath already protected by the old hash.
+Pre-double hashes with active double requirements need review; the old hash cannot
+prove their historical selection. Existing exact V1 / board-label-overlay matching
+remains, without adding speculative historical variants.
+
+`MATCH` / `COMPATIBLE` leave the original fingerprint, approval, revision and DXF
+untouched. `MISMATCH` retains normal invalidation. `REVIEW_REQUIRED` blocks new
+manufacturing/approval through existing runtime gates, without cancelling an
+immutable approval merely because its historical formula cannot be proven. Old
+unrecognized schemas are review cases; captured manufacturing requirements can
+independently prove dimension/quantity/type changes. An existing persisted stale
+flag remains authoritative and is never cleared automatically. Cancelled and
+Superseded revisions are never revived.
+
+Read-only audit, scoped by native read access and uploaded-plan capability:
+
+```sh
+bench --site SITE execute almdina_erp.almdina_erp.services.cutting_plan_fingerprint_audit.audit_uploaded_plan_fingerprints
+```
+
+The audit paginates all visible uploaded revisions and returns identifiers,
+revision/status, classification and reason only. It does not repair data or send
+customer/financial fields. Review historical cancellations separately. No schema
+migration, bulk stale-flag reset or automatic production repair is part of this fix.

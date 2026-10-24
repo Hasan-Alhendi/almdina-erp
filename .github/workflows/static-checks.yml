@@ -121,6 +121,9 @@ jobs:
             almdina_erp/tests/test_configurable_production_permissions.py \
             almdina_erp/tests/test_configurable_production_routing_domain.py
 
+      - name: Validate versioned cutting-plan fingerprint compatibility
+        run: python -m unittest -v almdina_erp.tests.test_plan_fingerprint_compatibility
+
       - name: Run shop-floor command application tests
         run: python -m unittest -v almdina_erp.tests.test_shop_floor_command_application
 
@@ -321,3 +324,4 @@ jobs:
           node almdina_erp/tests/js/special_shape_documentation.test.js
           python -m unittest -v almdina_erp.tests.test_special_shape_documentation_workspace_contract
           python -m unittest -v almdina_erp.tests.test_special_shape_documentation_ownership_contract
+

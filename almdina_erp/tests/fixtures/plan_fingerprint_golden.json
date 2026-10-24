@@ -1,0 +1,241 @@
+{
+  "provenance": {
+    "pre_oct22": "13c3c89ca5d5a40a91da7804ff12097bb93d2bd1",
+    "pre_oct21": "e8453978e08044542c67f3e5030179d7cfb7f55b"
+  },
+  "order": {
+    "name": "GOLDEN-ORDER",
+    "revision": 2,
+    "full_board_width_mm": 1220.0,
+    "full_board_length_mm": 2440.0,
+    "board_description": "Test board",
+    "pieces": [
+      {
+        "width_cm": 40.0,
+        "length_cm": 80.0,
+        "cut_width_cm": 40.0,
+        "cut_length_cm": 80.0,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_instance_id": "piece:golden",
+        "piece_type": "Regular",
+        "extra_full_door_double": 0,
+        "extra_double": 0,
+        "extra_double_reference_sides": "",
+        "liner_specs_json": "",
+        "edge_long_right": 0,
+        "edge_long_left": 0,
+        "edge_width_top": 0,
+        "edge_width_bottom": 0,
+        "edge_break": 0,
+        "edge_break_only": 0,
+        "edge_rate_usd": 0,
+        "edge_cost_usd": 0,
+        "clipped_corner_width_cm": 0,
+        "clipped_corner_length_cm": 0,
+        "edge_long_thickness_mm": 0,
+        "edge_width_thickness_mm": 0,
+        "edge_long_rate_usd": 0,
+        "edge_width_rate_usd": 0,
+        "edge_long_cost_usd": 0,
+        "edge_width_cost_usd": 0,
+        "edge_type": "",
+        "clipped_corner_position": "",
+        "special_shape_geometry_json": "",
+        "notes": "",
+        "edge_long_type": "",
+        "edge_width_type": ""
+      }
+    ]
+  },
+  "plan": {
+    "name": "GOLDEN-PLAN",
+    "revision": 2,
+    "status": "Approved",
+    "source_type": "Uploaded DXF",
+    "plan_needs_recalculation": 0,
+    "board_description": "Test board"
+  },
+  "contracts": {
+    "v2_pre_oct22": {
+      "payload": {
+        "version": 2,
+        "order": "GOLDEN-ORDER",
+        "order_revision": 2,
+        "board": {
+          "width_mm": 1220.0,
+          "length_mm": 2440.0
+        },
+        "settings": {
+          "optimization_mode": "auto_pro",
+          "machine_type": "Auto",
+          "time_limit_sec": 10.0,
+          "kerf_mm": 3.0,
+          "trim_margin_mm": 5.0
+        },
+        "pieces": [
+          {
+            "piece_instance_id": "piece:golden",
+            "width_cm": 40.0,
+            "length_cm": 80.0,
+            "qty": 2,
+            "allow_rotation": 1,
+            "edge_long_right": 0,
+            "edge_long_left": 0,
+            "edge_width_top": 0,
+            "edge_width_bottom": 0,
+            "edge_break": 0,
+            "edge_break_only": 0,
+            "piece_type": "Regular",
+            "extra_double": 0,
+            "extra_double_reference_sides": "",
+            "clipped_corner_position": "",
+            "clipped_corner_width_cm": 0.0,
+            "clipped_corner_length_cm": 0.0,
+            "special_shape_geometry_json": "",
+            "final_width_cm": 40.0,
+            "final_length_cm": 80.0,
+            "edge_long_thickness_mm": 0.0,
+            "edge_width_thickness_mm": 0.0
+          }
+        ]
+      },
+      "sha256": "4daa19c5f2237c5f8b0a8d9ceab941b282e136cd67156efbf428923c92ca3834"
+    },
+    "v2_pre_oct21": {
+      "payload": {
+        "version": 2,
+        "order": "GOLDEN-ORDER",
+        "order_revision": 2,
+        "board": {
+          "width_mm": 1220.0,
+          "length_mm": 2440.0
+        },
+        "settings": {
+          "optimization_mode": "auto_pro",
+          "machine_type": "Auto",
+          "time_limit_sec": 10.0,
+          "kerf_mm": 3.0,
+          "trim_margin_mm": 5.0
+        },
+        "pieces": [
+          {
+            "piece_instance_id": "piece:golden",
+            "width_cm": 40.0,
+            "length_cm": 80.0,
+            "qty": 2,
+            "allow_rotation": 1,
+            "edge_long_right": 0,
+            "edge_long_left": 0,
+            "edge_width_top": 0,
+            "edge_width_bottom": 0,
+            "edge_break": 0,
+            "edge_break_only": 0,
+            "piece_type": "Regular",
+            "clipped_corner_position": "",
+            "clipped_corner_width_cm": 0.0,
+            "clipped_corner_length_cm": 0.0,
+            "special_shape_geometry_json": "",
+            "final_width_cm": 40.0,
+            "final_length_cm": 80.0,
+            "edge_long_thickness_mm": 0.0,
+            "edge_width_thickness_mm": 0.0
+          }
+        ]
+      },
+      "sha256": "a9903943df1f481eaedb11eeff6b9d993dc7e7e778efd6cdd1a11fc5a7d5f1df"
+    },
+    "v2_current": {
+      "payload": {
+        "version": 2,
+        "order": "GOLDEN-ORDER",
+        "order_revision": 2,
+        "board": {
+          "width_mm": 1220.0,
+          "length_mm": 2440.0
+        },
+        "settings": {
+          "optimization_mode": "auto_pro",
+          "machine_type": "Auto",
+          "time_limit_sec": 10.0,
+          "kerf_mm": 3.0,
+          "trim_margin_mm": 5.0
+        },
+        "pieces": [
+          {
+            "piece_instance_id": "piece:golden",
+            "width_cm": 40.0,
+            "length_cm": 80.0,
+            "qty": 2,
+            "allow_rotation": 1,
+            "edge_long_right": 0,
+            "edge_long_left": 0,
+            "edge_width_top": 0,
+            "edge_width_bottom": 0,
+            "edge_break": 0,
+            "edge_break_only": 0,
+            "piece_type": "Regular",
+            "extra_double": 0,
+            "extra_double_reference_sides": "",
+            "clipped_corner_position": "",
+            "clipped_corner_width_cm": 0.0,
+            "clipped_corner_length_cm": 0.0,
+            "special_shape_geometry_json": "",
+            "liner_specs_json": "",
+            "final_width_cm": 40.0,
+            "final_length_cm": 80.0,
+            "edge_long_thickness_mm": 0.0,
+            "edge_width_thickness_mm": 0.0
+          }
+        ]
+      },
+      "sha256": "34d8ee409e69b824adf28bca6395338c8396c7f37c19ea8ed5668f043a03b9cd"
+    },
+    "v3": {
+      "payload": {
+        "version": 3,
+        "order": "GOLDEN-ORDER",
+        "order_revision": 2,
+        "board": {
+          "width_mm": 1220.0,
+          "length_mm": 2440.0
+        },
+        "settings": {
+          "optimization_mode": "auto_pro",
+          "machine_type": "Auto",
+          "time_limit_sec": 10.0,
+          "kerf_mm": 3.0,
+          "trim_margin_mm": 5.0
+        },
+        "pieces": [
+          {
+            "piece_instance_id": "piece:golden",
+            "width_cm": 40.0,
+            "length_cm": 80.0,
+            "qty": 2,
+            "allow_rotation": 1,
+            "edge_long_right": 0,
+            "edge_long_left": 0,
+            "edge_width_top": 0,
+            "edge_width_bottom": 0,
+            "edge_break": 0,
+            "edge_break_only": 0,
+            "piece_type": "Regular",
+            "extra_double": 0,
+            "extra_double_reference_sides": "",
+            "clipped_corner_position": "",
+            "clipped_corner_width_cm": 0.0,
+            "clipped_corner_length_cm": 0.0,
+            "special_shape_geometry_json": "",
+            "liner_specs_json": "",
+            "final_width_cm": 40.0,
+            "final_length_cm": 80.0,
+            "edge_long_thickness_mm": 0.0,
+            "edge_width_thickness_mm": 0.0
+          }
+        ]
+      },
+      "sha256": "bb13434c331eba5975476bd17a56337460c9dfb481f8532b031466f69aebe579"
+    }
+  }
+}
