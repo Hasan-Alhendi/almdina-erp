@@ -2944,11 +2944,11 @@ Piece length must be a positive number.,يجب أن يكون طول الدرفة
 Please enter board length and width first.,يرجى إدخال طول وعرض اللوح أولاً.
 Piece width cannot exceed board width.,لا يجوز أن يتجاوز عرض الدرفة عرض اللوح.
 Piece length cannot exceed board length.,لا يجوز أن يتجاوز طول الدرفة طول اللوح.
-Piece dimensions exceed the board, even after allowed rotation.,تتجاوز قياسات الدرفة أبعاد اللوح حتى بعد السماح بالدوران.
+"Piece dimensions exceed the board, even after allowed rotation.",تتجاوز قياسات الدرفة أبعاد اللوح حتى بعد السماح بالدوران.
 Exceeds board length,يتجاوز طول اللوح
 Exceeds board width,يتجاوز عرض اللوح
 Row {0}: {1},السطر {0}: {1}
-Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.,السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
+"Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
 A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
 A special door could not be matched because the DXF contour is a rectangle.,تعذر مطابقة درفة خاصة لأن المحيط في DXF مستطيل.
 "The special-door group {0} × {1} cm has an extra {2} that the order does not require.",مجموعة الدرفات الخاصة {0} × {1} سم تحتوي على {2} إضافي غير مطلوب.
