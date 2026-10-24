@@ -110,8 +110,8 @@ def test_operator_opens_only_new_documentation_runtime():
         "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.",
     )
     assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
-    assert "function requirePieceDimensions(row, tr)" in operator
-    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
+    assert "function requirePieceDimensions(frm, row, tr)" in operator
+    assert "if (!row || !requirePieceDimensions(currentFrm, row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell

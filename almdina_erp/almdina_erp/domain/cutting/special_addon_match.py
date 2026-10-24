@@ -4,7 +4,8 @@ The order sketch is not a geometric identity. Special doors that share a
 manufacturing envelope are distinguished only by the add-on paths actually
 bound to each contour. Double and full-door double have no DXF layer, so they
 do not split a group. A deterministic assignment is enough when every
-constraint is satisfied.
+constraint is satisfied. Regular contours reuse this assignment with candidate
+indexes constrained by the existing machining geometry matcher.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ class SpecialContourRecord:
     height_cm: float
     signature: frozenset[str]
     current_expected_index: int | None = None
+    compatible_expected_indexes: frozenset[int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +104,11 @@ def _edges(
     for contour in contours:
         options: list[int] = []
         for item in expected:
+            if (
+                contour.compatible_expected_indexes is not None
+                and item.index not in contour.compatible_expected_indexes
+            ):
+                continue
             if require_signature and contour.signature != item.signature:
                 continue
             if _dimensions_compatible(
@@ -123,26 +130,26 @@ def _assign(edges: Sequence[Sequence[int]]) -> list[int] | None:
 
     if any(not options for options in edges):
         return None
-    used: set[int] = set()
+    owners: dict[int, int] = {}
     chosen = [-1] * len(edges)
 
-    def visit(contour_index: int) -> bool:
-        if contour_index == len(edges):
-            return True
-        for expected_index in edges[contour_index]:
-            if expected_index in used:
+    def visit(contour_index: int, seen: set[int]) -> bool:
+        # Prefer free slots, preserving stable copy numbering for equivalent
+        # doors. Reassign an earlier door only when the whole group needs it.
+        options = edges[contour_index]
+        for expected_index in sorted(options, key=lambda index: index in owners):
+            if expected_index in seen:
                 continue
-            used.add(expected_index)
-            chosen[contour_index] = expected_index
-            if visit(contour_index + 1):
+            seen.add(expected_index)
+            if expected_index not in owners or visit(owners[expected_index], seen):
+                owners[expected_index] = contour_index
+                chosen[contour_index] = expected_index
                 return True
-            used.remove(expected_index)
         return False
 
-    if not visit(0):
-        return None
-    if len(used) != len(edges):
-        return None
+    for contour_index in range(len(edges)):
+        if not visit(contour_index, set()):
+            return None
     return chosen
 
 

@@ -259,6 +259,13 @@ def _proxy_order(
         ):
             if row is not None and hasattr(row, fieldname):
                 piece_values[fieldname] = getattr(row, fieldname)
+        for addon in MACHINING_ADDONS:
+            for fieldname in (
+                addon.side_field, addon.offset_field, addon.width_field,
+                addon.start_field, addon.length_field,
+            ):
+                if row is not None and hasattr(row, fieldname):
+                    piece_values[fieldname] = getattr(row, fieldname)
         pieces.append(SimpleNamespace(**piece_values))
     return SimpleNamespace(
         pieces=pieces,
@@ -449,12 +456,15 @@ def _unique_corner_contour_candidate(
     )
 
 
-def _topology_special_candidate(
+def _imported_identity_candidate(
     unmatched: list[dict[str, Any]],
     piece: dict[str, Any],
 ) -> int | None:
-    """Resolve a Special piece only from identity proven by the topology importer."""
-    if str(piece.get("piece_type") or "") != "Special":
+    """Preserve importer-owned identity after private keys are stripped.
+
+    These labels come from the order binding, never from DXF TEXT.
+    """
+    if str(piece.get("piece_type") or "") not in {"Special", "Regular"}:
         return None
 
     label = str(piece.get("label") or "").strip()
@@ -472,7 +482,7 @@ def _topology_special_candidate(
         if candidate["label"] == label
         and candidate["copy_no"] == copy_no
         and candidate["spec"].row_index == source_piece_no
-        and candidate["spec"].piece_type == "Special"
+        and candidate["spec"].piece_type == piece["piece_type"]
     ]
     return matches[0] if len(matches) == 1 else None
 
@@ -1420,12 +1430,12 @@ def _apply_strict_dimension_contract(
     for sheet in snapshot.get("sheets") or []:
         for piece in sheet.get("pieces") or []:
             # Prefer the importer-owned index when present. After
-            # ``_public_piece`` strips private keys, Special pieces still carry
-            # label/source/copy identity that ``_topology_special_candidate``
+            # ``_public_piece`` strips private keys, imported pieces still carry
+            # label/source/copy identity that ``_imported_identity_candidate``
             # can prove uniquely against the order.
             topology_index = _topology_candidate(unmatched, piece)
             if topology_index is None:
-                topology_index = _topology_special_candidate(unmatched, piece)
+                topology_index = _imported_identity_candidate(unmatched, piece)
             if topology_index is not None:
                 candidate = unmatched[topology_index]
                 rotated, error = _validate_topology_candidate_dimensions(

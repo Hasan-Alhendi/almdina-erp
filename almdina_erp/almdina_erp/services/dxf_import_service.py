@@ -158,6 +158,9 @@ from almdina_erp.almdina_erp.domain.cutting.special_addon_match import (
     match_special_addon_group,
     overlay_signature,
 )
+from almdina_erp.almdina_erp.domain.cutting.regular_machining_orientation import (
+    match_regular_machining_orientation,
+)
 from almdina_erp.almdina_erp.domain.cutting.extra_overlays import (
     ExtraOverlayCandidate,
     ExtraOverlayError,
@@ -1787,24 +1790,87 @@ def _special_group_issue(result: Any, assigned: Sequence[Any], pieces: list[dict
     return issue(SPECIAL_ADDON_GROUP_SPLIT, CATEGORY_OVERLAY, target=target, params=params)
 
 
-def _reconcile_special_addon_groups(
+def _regular_addon_candidates(
+    piece: dict[str, Any],
+    expected: Sequence[tuple[int, dict[str, Any]]],
+    assigned: Sequence[Any],
+    sheets: Sequence[dict[str, Any]],
+    trim_mm: float,
+    cutter_diameter_mm: float | None,
+) -> frozenset[int]:
+    """Constrain the existing group matcher using the existing machining matcher."""
+    sheet = next(sheet for sheet in sheets if sheet["sheet_no"] == piece["_sheet_no"])
+    outer = tuple((x * 10.0, y * 10.0) for x, y in piece["_outline_cm"])
+    paths: dict[str, list] = {}
+    for mark in assigned:
+        if mark.host_key != piece["id"]:
+            continue
+        path = _to_plan_points(list(mark.path), sheet=sheet, trim_mm=trim_mm)
+        paths.setdefault(mark.kind, []).append(
+            localize_path(tuple((x * 10.0, y * 10.0) for x, y in path), outer)
+        )
+    compatible = set()
+    for index, candidate in expected:
+        width, height = candidate["width_cm"], candidate["length_cm"]
+        direct = _direct_dimensions_match(piece["w"], piece["h"], width, height)
+        swapped = _rotated_dimensions_match(piece["w"], piece["h"], width, height)
+        turns = tuple(
+            turn for turn in range(4)
+            if (direct if turn % 2 == 0 else swapped)
+            and (turn == 0 or candidate["allow_rotation"])
+        )
+        if not turns:
+            continue
+        result = match_regular_machining_orientation(
+            piece=LinerPiece("Regular", width, height),
+            overlay_paths=paths,
+            settings=candidate["machining"],
+            candidate_turns=turns,
+            # This probe establishes row compatibility only. Strict validation
+            # still owns the physical orientation and edge binding.
+            edge_bands={},
+            cutter_diameter_mm=cutter_diameter_mm,
+            origin_mm=(piece["x"] * 10.0, piece["y"] * 10.0),
+            board_mm=(
+                -trim_mm, -trim_mm,
+                sheet["full_width_mm"] - trim_mm,
+                sheet["full_height_mm"] - trim_mm,
+            ),
+        )
+        if result.reason != "invalid":
+            compatible.add(index)
+    return frozenset(compatible)
+
+
+def _reconcile_addon_groups(
     pieces: list[dict[str, Any]],
     order: Any,
     overlays: Sequence[ExtraOverlayCandidate],
     *,
     cutter_diameter_mm: float | None,
+    piece_type: str = "Special",
+    sheets: Sequence[dict[str, Any]] = (),
+    trim_mm: float = 0.0,
 ) -> None:
-    """Reassign interchangeable Special doors by the add-ons bound to each contour."""
+    """Reassign interchangeable doors as a group before enforcing selection."""
 
     expected = _expected_order_pieces(order)
-    special_expected = [
+    group_expected = [
         (index, piece)
         for index, piece in enumerate(expected)
-        if piece.get("piece_type") == "Special"
+        if piece.get("piece_type") == piece_type
     ]
-    special_pieces = [piece for piece in pieces if piece.get("piece_type") == "Special"]
-    if not special_pieces and not special_expected:
+    group_pieces = [piece for piece in pieces if piece.get("piece_type") == piece_type]
+    if not group_pieces and not group_expected:
         return
+    if piece_type == "Regular":
+        if len(group_pieces) < 2 or not any(
+            overlay_signature(piece.get("selected_codes") or ())
+            for _, piece in group_expected
+        ):
+            return
+        # Geometry, not DXF entity order, fixes copy numbering for equivalent doors.
+        group_pieces = sorted(group_pieces, key=lambda p: (p["_sheet_no"], p["x"], p["y"]))
     hosts = tuple(
         ExtraOverlayHost(
             key=int(piece["id"]),
@@ -1838,11 +1904,17 @@ def _reconcile_special_addon_groups(
             signature=overlay_signature(found.get(int(piece["id"]), ())),
             current_expected_index=(
                 int(piece["_expected_piece_index"])
-                if piece.get("_expected_piece_index") is not None
+                if piece_type == "Special" and piece.get("_expected_piece_index") is not None
                 else None
             ),
+            compatible_expected_indexes=(
+                _regular_addon_candidates(
+                    piece, group_expected, assigned, sheets, trim_mm, cutter_diameter_mm,
+                )
+                if piece_type == "Regular" else None
+            ),
         )
-        for piece in special_pieces
+        for piece in group_pieces
     )
     expected_records = tuple(
         SpecialExpectedRecord(
@@ -1854,7 +1926,7 @@ def _reconcile_special_addon_groups(
             source_piece_no=int(piece["source_piece_no"]),
             copy_no=int(piece["copy_no"]),
         )
-        for index, piece in special_expected
+        for index, piece in group_expected
     )
     result = match_special_addon_group(
         contours,
@@ -1862,6 +1934,12 @@ def _reconcile_special_addon_groups(
         tolerance_cm=DIMENSION_TOLERANCE_MM / 10.0,
     )
     if not result.ok:
+        if piece_type == "Regular":
+            raise DxfImportError(issues=[issue(
+                PIECE_IDENTITY_MISSING, CATEGORY_IDENTITY,
+                target=DxfIssueTarget(kind="order"),
+                params={"identity_unproven": True},
+            )])
         raise DxfImportError(issues=[_special_group_issue(result, assigned, pieces)])
     by_id = {int(piece["id"]): piece for piece in pieces}
     for contour_key, expected_index in result.mapping.items():
@@ -3124,11 +3202,20 @@ def parse_production_dxf(
     _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
     labeled = _match_pieces_to_order(pieces, order)
     cutter_diameter_mm = flt(order.kerf_mm)
-    _reconcile_special_addon_groups(
+    _reconcile_addon_groups(
         labeled,
         order,
         overlays,
         cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+    )
+    _reconcile_addon_groups(
+        labeled,
+        order,
+        overlays,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        piece_type="Regular",
+        sheets=sheets,
+        trim_mm=trim_mm,
     )
     _attach_extra_overlays(
         labeled,
