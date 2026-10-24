@@ -9,6 +9,11 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import ezdxf
+import pytest
+
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
     ContourCandidate,
@@ -28,6 +33,12 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
 )
 from almdina_erp.almdina_erp.services import dxf_import_service
 from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
+
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import LinerPiece, liner_toolpath_mm
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
+from almdina_erp.almdina_erp.services import strict_dxf_import_service as strict
+
+legacy = dxf_import_service
 
 SHEET = dxf_import_service.SHEET_OUTLINE_LAYER
 CUT = dxf_import_service.CUT_PATH_LAYER
@@ -403,6 +414,155 @@ class SpecialDoorAddonDxfMatchingTest(unittest.TestCase):
         self.assertEqual(special.total_usd, regular.total_usd)
         self.assertEqual(normalize_extra_double_sides(["edge_long_right"], piece_type="Special", enabled=True), ())
         self.assertEqual(normalize_extra_double_sides([], piece_type="Special", enabled=True), ())
+
+
+def _row(number, **values):
+    data = dict(
+        name=f"row-{number}", piece_instance_id=f"piece:{number}",
+        width_cm=51.9, length_cm=196.4, cut_width_cm=51.9, cut_length_cm=196.4,
+        qty=1, piece_type="Regular", allow_rotation=0,
+        extra_liner=0, extra_back_groove=1, extra_recessed_handle_cutout=0,
+        recessed_handle_reference_side="edge_width_bottom", recessed_handle_offset_cm=20,
+        recessed_handle_width_cm=2, recessed_handle_start_cm=10, recessed_handle_length_cm=20,
+        liner_reference_side="edge_long_left", liner_offset_cm=5, liner_width_cm=1.8,
+        liner_start_cm=10, liner_length_cm=170,
+        back_groove_reference_side="edge_long_right", back_groove_offset_cm=1,
+        back_groove_width_cm=0.7, back_groove_start_cm=10, back_groove_length_cm=170,
+    )
+    data.update(values)
+    return SimpleNamespace(**data)
+
+
+def _fixture(*, reverse=False, text=False, liners=(True, False), same_signature=False, equivalent=False, handle=False):
+    rows = [_row(i, width_cm=8, length_cm=10, cut_width_cm=8, cut_length_cm=10,
+                 extra_back_groove=0) for i in range(1, 11)]
+    rows += [_row(11, extra_liner=1), _row(12, extra_liner=int(same_signature), liner_offset_cm=5 if equivalent else 15,
+                                  extra_recessed_handle_cutout=int(handle))]
+    order = SimpleNamespace(pieces=rows, trim_margin_mm=0, board_width_cm=122,
+                            board_length_cm=244, full_board_width_mm=1220,
+                            full_board_length_mm=2440, kerf_mm=5)
+    doc = ezdxf.new("R2010")
+    msp = doc.modelspace()
+    def rectangle(x, y, w, h, layer):
+        msp.add_lwpolyline([(x,y), (x+w,y), (x+w,y+h), (x,y+h)], close=True,
+                          dxfattribs={"layer": layer})
+    rectangle(0, 0, 1220, 2440, "SHEET_OUTLINE")
+    for i in range(10):
+        rectangle(10 + i*100, 2200, 80, 100, "CUT_PATH")
+    for slot in ((1, 0) if reverse else (0, 1)):
+        x = 10 + slot*600
+        rectangle(x, 100, 519, 1964, "CUT_PATH")
+        # Put row 11 on the contour that size-first binding assigns to row 12.
+        owner = rows[11] if slot else rows[10]
+        for kind, prefix, layer in (("back_groove", "back_groove", "Rear Groove"),
+                                    ("liner", "liner", "Liner"),
+                                    ("recessed_handle_cutout", "recessed_handle", "Handle Recess")):
+            if kind == "liner" and not (liners[slot] or same_signature):
+                continue
+            if kind == "recessed_handle_cutout" and not owner.extra_recessed_handle_cutout:
+                continue
+            path = liner_toolpath_mm(
+                LinerPiece("Regular", 51.9, 196.4),
+                getattr(owner, prefix+"_reference_side"), getattr(owner, prefix+"_offset_cm"),
+                getattr(owner, prefix+"_width_cm"), 5,
+                getattr(owner, prefix+"_start_cm"), getattr(owner, prefix+"_length_cm"),
+            )
+            msp.add_lwpolyline([(x+px, 2064-py) for px,py in path],
+                              dxfattribs={"layer": layer})
+        if text:
+            # Misleading TEXT must not override manufacturing evidence.
+            msp.add_text("12.1" if slot == 0 else "11.1", dxfattribs={
+                "layer": "TEXT", "insert": (x+200, 1000), "height": 20})
+    return doc, order
+
+
+def _parse(tmp_path, doc, order, parser):
+    path = tmp_path / "identity.dxf"
+    doc.saveas(path)
+    with patch.object(legacy.frappe, "get_site_path", return_value=str(path)):
+        if parser == "strict":
+            return strict.parse_production_dxf("/private/files/identity.dxf", order,
+                settings=PlanSettings(optimization_mode="Auto", machine_type="CNC",
+                    optimization_time_limit_sec=5, kerf_mm=5, preferred_trim_mm=0))
+        return legacy.parse_production_dxf("/private/files/identity.dxf", order)
+
+
+@pytest.mark.parametrize("parser", ["legacy", "strict"])
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("text", [False, True])
+def test_reference_11_12_identity_survives_both_import_stages(tmp_path, parser, reverse, text):
+    doc, order = _fixture(reverse=reverse, text=text)
+    snapshot = _parse(tmp_path, doc, order, parser)
+    pieces = {p["source_piece_no"]: p for s in snapshot["sheets"] for p in s["pieces"]}
+    assert {o["kind"] for o in pieces[11]["overlays"]} == {"liner", "back_groove"}
+    assert {o["kind"] for o in pieces[12]["overlays"]} == {"back_groove"}
+    assert pieces[11]["x"] < pieces[12]["x"]
+    if parser == "strict":
+        assert pieces[11]["piece_instance_id"] == "piece:11:1"
+        assert pieces[12]["piece_instance_id"] == "piece:12:1"
+
+
+@pytest.mark.parametrize("parser", ["legacy", "strict"])
+@pytest.mark.parametrize("liners", [(False, False), (True, True)])
+def test_real_missing_or_extra_liner_is_rejected(tmp_path, parser, liners):
+    doc, order = _fixture(liners=liners)
+    with pytest.raises(legacy.DxfImportError) as error:
+        _parse(tmp_path, doc, order, parser)
+    assert error.value.codes == (["PIECE_IDENTITY_MISSING", "PERSISTED_CUT_SPECS"]
+                                 if parser == "strict" else ["PIECE_IDENTITY_MISSING"])
+    assert error.value.issues[0].params["identity_unproven"] is True
+    assert error.value.issues[0].target.source_piece_no is None
+
+
+@pytest.mark.parametrize("parser", ["legacy", "strict"])
+def test_equal_signatures_use_actual_machining_parameters(tmp_path, parser):
+    doc, order = _fixture(same_signature=True)
+    snapshot = _parse(tmp_path, doc, order, parser)
+    pieces = {p["source_piece_no"]: p for s in snapshot["sheets"] for p in s["pieces"]}
+    assert pieces[11]["x"] < pieces[12]["x"]
+
+
+@pytest.mark.parametrize("parser", ["legacy", "strict"])
+def test_handle_recess_also_distinguishes_same_size_doors(tmp_path, parser):
+    doc, order = _fixture(handle=True)
+    snapshot = _parse(tmp_path, doc, order, parser)
+    pieces = {p["source_piece_no"]: p for sheet in snapshot["sheets"] for p in sheet["pieces"]}
+    assert {o["kind"] for o in pieces[11]["overlays"]} == {"liner", "back_groove"}
+    assert {o["kind"] for o in pieces[12]["overlays"]} == {"back_groove", "recessed_handle_cutout"}
+    assert pieces[11]["x"] < pieces[12]["x"]
+
+
+def test_existing_group_matcher_backtracks_instead_of_greedy_assignment():
+    # First contour can take either orientation; second can only take row 1.
+    contours = (SpecialContourRecord(1, 60, 80, frozenset()),
+                SpecialContourRecord(2, 80, 60, frozenset()))
+    expected = (SpecialExpectedRecord(0, 60, 80, True, frozenset()),
+                SpecialExpectedRecord(1, 60, 80, False, frozenset()))
+    result = match_special_addon_group(contours, expected, tolerance_cm=0.2)
+    assert result.ok
+    assert result.mapping == {1: 1, 2: 0}
+
+
+@pytest.mark.parametrize("parser", ["legacy", "strict"])
+def test_manufacturing_equivalent_copies_keep_stable_identity(tmp_path, parser):
+    mappings = []
+    for reverse in (False, True):
+        doc, order = _fixture(reverse=reverse, same_signature=True, equivalent=True)
+        snapshot = _parse(tmp_path, doc, order, parser)
+        mappings.append({p["source_piece_no"]: p["x"]
+                         for sheet in snapshot["sheets"] for p in sheet["pieces"]})
+    assert mappings[0] == mappings[1]
+    assert mappings[0][11] < mappings[0][12]
+
+
+def test_group_matching_rejects_hall_deficit_without_factorial_search():
+    # Every contour has a candidate, but 32 liners cannot consume 31 liner copies.
+    contours = tuple(SpecialContourRecord(i, 60, 80, frozenset({"liner"})) for i in range(32))
+    expected = tuple(SpecialExpectedRecord(i, 60, 80, False,
+                     frozenset({"liner"}) if i < 31 else frozenset()) for i in range(32))
+    result = match_special_addon_group(contours, expected, tolerance_cm=0.2)
+    assert not result.ok
+    assert result.code == "SPECIAL_ADDON_GROUP_EXTRA"
 
 
 if __name__ == "__main__":

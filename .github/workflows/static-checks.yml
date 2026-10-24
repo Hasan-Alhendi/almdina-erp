@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install static test runner
-        run: python -m pip install pytest
+      - name: Install app test dependencies
+        run: python -m pip install '.[test]'
 
       - name: Validate JSON files
         run: |

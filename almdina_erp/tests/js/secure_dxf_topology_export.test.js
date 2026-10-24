@@ -888,6 +888,11 @@ async function run() {
     assert.match(downloadedDxf, /8\r\nLiner\r\n/);
     assert.match(downloadedDxf, /10\r\n402\.5\r\n20\r\n507\.5\r\n/);
     assert.match(downloadedDxf, /10\r\n389\.5\r\n20\r\n2\.5\r\n/);
+    assert.equal(cutPathEntityCount(downloadedDxf), 0);
+    // The normalization fixture represents the approved manufacturing export.
+    // Keep the pre-approval no-saw-centers contract checked above.
+    await fakeFrappe.almdina.export_order_dxf("26-00105", "approved");
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
 
     function cutPathLengths(dxf) {
         const lines = dxf.split("\r\n");

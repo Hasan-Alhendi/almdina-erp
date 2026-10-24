@@ -95,6 +95,17 @@ class TestTranslationCatalogGate(unittest.TestCase):
                 mismatches.append(index)
         self.assertEqual(mismatches, [])
 
+    def test_board_fit_messages_keep_commas_inside_the_translation_key(self) -> None:
+        rows = {row[0]: row for _, row in _catalog_rows()}
+        for message in (
+            "Piece dimensions exceed the board, even after allowed rotation.",
+            "Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",
+        ):
+            with self.subTest(message=message):
+                self.assertIn(message, rows)
+                self.assertEqual(len(rows[message]), 2)
+                self.assertRegex(rows[message][1], r"[\u0600-\u06ff]")
+
     def test_active_code_has_no_fixed_language_set(self) -> None:
         offenders = []
         for path in (ROOT / "almdina_erp").rglob("*.py"):

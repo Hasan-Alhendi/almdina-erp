@@ -319,9 +319,14 @@ def test_exported_linear_dxf_survives_autocad_normalization(tmp_path):
     assert source_regions and all(entity.closed for entity in source_regions)
     assert {entity.dxf.layer for entity in source_entities if entity.dxftype() == "LINE"} >= {
         "SHEET_OUTLINE",
-        "CUT_PATH",
         "GEOMETRY",
     }
+    source_saw_paths = [entity for entity in source_entities if entity.dxf.layer == "CUT_PATH"]
+    assert len(source_saw_paths) == 1
+    assert source_saw_paths[0].dxftype() == "LWPOLYLINE"
+    assert source_saw_paths[0].closed is True
+    source_saw_points = list(source_saw_paths[0].get_points("xy"))
+    assert source_saw_points == [(2.5, 507.5), (507.5, 507.5), (507.5, 2.5), (2.5, 2.5)]
 
     normalized = rebuild_autocad_dxf(raw)
     result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
@@ -342,9 +347,13 @@ def test_exported_linear_dxf_survives_autocad_normalization(tmp_path):
     assert len(result_regions) == len(source_regions)
     assert {entity.dxf.layer for entity in result_entities if entity.dxftype() == "LINE"} >= {
         "SHEET_OUTLINE",
-        "CUT_PATH",
         "GEOMETRY",
     }
+    result_saw_paths = [entity for entity in result_entities if entity.dxf.layer == "CUT_PATH"]
+    assert len(result_saw_paths) == 1
+    assert result_saw_paths[0].dxftype() == "LWPOLYLINE"
+    assert result_saw_paths[0].closed is True
+    assert list(result_saw_paths[0].get_points("xy")) == source_saw_points
     assert any(entity.dxftype() == "TEXT" for entity in result_entities)
     assert result.audit().has_errors is False
 
