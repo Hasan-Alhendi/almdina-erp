@@ -60,6 +60,7 @@ def _expected_fingerprint(order: Any, plan: Any) -> str | None:
     # new use through runtime gates, but must not rewrite an immutable approval.
     decision = plan_fingerprint_compatibility(
         order, plan, str(getattr(plan, "input_fingerprint", None) or ""),
+        previous_order=getattr(order, "get_doc_before_save", lambda: None)(),
     )
     if decision.state == "REVIEW_REQUIRED":
         return None

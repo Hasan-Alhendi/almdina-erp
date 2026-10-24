@@ -277,6 +277,7 @@ def plan_input_fingerprint(
 
 def plan_fingerprint_compatibility(
     order: Any, plan: Any, stored: str = "", *, snapshot_json: str | None = None,
+    previous_order: Any | None = None,
 ) -> FingerprintCompatibility:
     """One read-only decision shared by display, save, approval and runtime gates."""
 
@@ -313,6 +314,10 @@ def plan_fingerprint_compatibility(
             row.get("extra_double") or str(row.get("extra_double_reference_sides") or "").strip()
             for row in pieces
         ):
+            if previous_order is not None and plan_fingerprint_compatibility(
+                previous_order, plan, stored, snapshot_json=raw,
+            ).compatible:
+                return FingerprintCompatibility("MISMATCH", current, contract, "verified_order_inputs_changed")
             return FingerprintCompatibility("REVIEW_REQUIRED", "", contract, "uncaptured_double_requirements")
         return FingerprintCompatibility("MISMATCH", current, contract, "new_machining_requirements")
 
@@ -336,11 +341,15 @@ def plan_fingerprint_compatibility(
         )
         if canonicalize_manufacturing_requirements(captured) != _manufacturing_requirements(order):
             return FingerprintCompatibility("MISMATCH", current, reason="manufacturing_requirements_changed")
+    if previous_order is not None:
+        before = plan_fingerprint_compatibility(previous_order, plan, stored, snapshot_json=raw)
+        if before.compatible:
+            return FingerprintCompatibility("MISMATCH", current, before.contract, "verified_order_inputs_changed")
     return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unverifiable_legacy_contract")
 
 
 def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> str:
-    """String compatibility boundary; uncertain plans cannot pass runtime gates."""
+    """Return a verified expected hash; empty means review and blocks runtime gates."""
 
     return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 

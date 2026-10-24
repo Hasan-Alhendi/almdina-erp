@@ -288,7 +288,9 @@ untouched. `MISMATCH` retains normal invalidation. `REVIEW_REQUIRED` blocks new
 manufacturing/approval through existing runtime gates, without cancelling an
 immutable approval merely because its historical formula cannot be proven. Old
 unrecognized schemas are review cases; captured manufacturing requirements can
-independently prove dimension/quantity/type changes. An existing persisted stale
+independently prove dimension/quantity/type changes. During an order save, a
+server-owned before-save document that still verifies the stored contract also
+proves a real input change; it is never supplied by the client. An existing persisted stale
 flag remains authoritative and is never cleared automatically. Cancelled and
 Superseded revisions are never revived.
 

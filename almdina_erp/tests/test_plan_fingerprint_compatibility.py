@@ -318,3 +318,23 @@ class TestPlanFingerprintServiceIntegration(unittest.TestCase):
                 self.assertEqual(('Cutting Plan', plan.name, 'plan_needs_recalculation', 1), writes.call_args.args)
             else:
                 writes.assert_not_called()
+
+
+    def test_verified_before_save_inputs_prove_a_real_legacy_addon_change(self):
+        from unittest.mock import patch, Mock
+        import frappe
+        from almdina_erp.almdina_erp.services import cutting_plan_invalidation_service as service
+        fixture, order, plan = golden_case()
+        plan.input_fingerprint = fixture['contracts']['v2_pre_oct21']['sha256']
+        order.approved_plan = plan.name
+        previous = copy.deepcopy(order)
+        order.get_doc_before_save = lambda: previous
+        order.pieces[0].extra_double = 1
+        writes = Mock()
+        with patch.object(frappe, 'get_doc', return_value=plan, create=True), \
+             patch.object(frappe.db, 'exists', return_value=True, create=True), \
+             patch.object(frappe.db, 'set_value', writes, create=True), \
+             patch.object(frappe, 'clear_document_cache', create=True):
+            self.assertEqual(plan.name, service.apply_stale_approved_plan_cancellation(order))
+        self.assertIsNone(order.approved_plan)
+        self.assertEqual('Cancelled', writes.call_args_list[0].args[3])
