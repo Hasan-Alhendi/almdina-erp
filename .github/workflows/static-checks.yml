@@ -316,6 +316,7 @@ jobs:
           node almdina_erp/tests/js/cutting_machine_inline_row.test.js
           node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
+          node almdina_erp/tests/js/plan_preview_locale.test.js
           node almdina_erp/tests/js/historical_plan_workspace_selection.test.js
           node almdina_erp/tests/js/historical_plan_export_policy.test.js
           node almdina_erp/tests/js/jqxhr_finally_compatibility.test.js
