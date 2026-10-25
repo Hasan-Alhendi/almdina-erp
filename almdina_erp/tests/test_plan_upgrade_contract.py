@@ -187,6 +187,30 @@ class TestUpgradeContract(unittest.TestCase):
                 order, plan, workspace._legacy_plan_input_fingerprint(order, plan)
             ).state)
 
+    def test_legacy_mode_reader_survives_a_future_optimizer_catalog_change(self):
+        from almdina_erp.almdina_erp.domain.cutting import plan_settings
+        fixture, order, plan = golden_case()
+        with patch.object(plan_settings, 'persisted_mode_value', side_effect=ValueError('retired optimizer')):
+            self.assertEqual('COMPATIBLE', workspace.plan_fingerprint_compatibility(
+                order, plan, fixture['contracts']['v2_pre_oct22']['sha256']).state)
+
+    def test_frozen_historical_settings_match_every_reviewed_mode_and_default(self):
+        from almdina_erp.almdina_erp.domain.cutting.catalog import OPTIMIZATION_MODES, LEGACY_ENGINE_MODES
+        from almdina_erp.almdina_erp.infrastructure.frappe.historical_plan_piece_reader import historical_plan_settings
+        _, _, plan = golden_case()
+        modes = [mode.id for mode in OPTIMIZATION_MODES]
+        modes += [mode.engine_mode for mode in OPTIMIZATION_MODES if mode.engine_mode]
+        modes += list(LEGACY_ENGINE_MODES)
+        for mode in modes:
+            plan.optimization_mode = mode
+            with self.subTest(mode=mode):
+                self.assertEqual(workspace._plan_settings_payload(plan), historical_plan_settings(plan))
+        plan.optimization_mode = None
+        plan.optimization_time_limit_sec = None
+        plan.kerf_mm = None
+        plan.trim_margin_mm = None
+        self.assertEqual(workspace._plan_settings_payload(plan), historical_plan_settings(plan))
+
     def test_historical_row_reader_replays_the_reviewed_adapter_vectors(self):
         from almdina_erp.almdina_erp.infrastructure.frappe.historical_plan_piece_reader import (
             historical_geometry_piece, historical_v1_piece,

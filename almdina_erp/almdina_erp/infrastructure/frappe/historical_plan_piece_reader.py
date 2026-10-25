@@ -5,12 +5,16 @@ this reader changes old plan meaning; add a new contract instead.
 """
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from typing import Any
 
 from frappe.utils import cint, flt
 
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import require_cut_dimension_cm
-from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import freeze_geometry_piece
+from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
+    PlanFingerprintContractError, freeze_geometry_piece,
+)
 from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
 from almdina_erp.almdina_erp.domain.orders.piece_policy import canonical_glass_margin_mm
 
@@ -20,6 +24,48 @@ _ADDONS = (
     ("extra_back_groove", "back_groove"),
     ("extra_recessed_handle_cutout", "recessed_handle"),
 )
+
+# These deployed V1–V3 normalization values are deliberately independent of
+# future optimizer catalogs. New modes need a new hash contract, not a rewrite.
+_MODE_IDS = frozenset('''auto auto_pro deep_search optimal maxrects guillotine shelf skyline
+cp_sat_ortools mip_cbc scip highs gecode chuffed genetic simulated_annealing'''.split())
+_ENGINE_MODES = {
+    'Auto': 'auto', 'Auto Pro': 'auto_pro', 'Deep Search': 'deep_search',
+    'Optimal Search': 'optimal', 'MaxRects Best Short Side': 'maxrects',
+    'Guillotine Short Axis': 'guillotine', 'Shelf Horizontal': 'shelf',
+    'Skyline Bottom Left': 'skyline',
+}
+_LEGACY_MODES = frozenset('''MaxRects Best Area|MaxRects Bottom Left|MaxRects Contact Point|
+MaxRects Width|MaxRects Length|Shelf Vertical|Shelf First Fit|Shelf Next Fit|
+Guillotine Long Axis|Guillotine Best Area Fit|Guillotine Best Short Side Fit|
+Guillotine Best Long Side Fit|Skyline Best Fit'''.replace('\n', '').split('|'))
+
+
+def historical_plan_settings(plan: Any) -> dict[str, Any]:
+    """Frozen V1–V3 defaults, mode aliases, units, and numeric normalization."""
+    def value(name: str) -> Any:
+        return plan.get(name) if isinstance(plan, Mapping) else getattr(plan, name, None)
+
+    mode = str(value('optimization_mode') or '').strip() or 'auto_pro'
+    mode = _ENGINE_MODES.get(mode, mode)
+    machine = str(value('machine_type') or '').strip() or 'Auto'
+    if mode not in _MODE_IDS | _LEGACY_MODES or machine not in {'Auto', 'CNC Router', 'Panel Saw'}:
+        raise PlanFingerprintContractError('unsupported_historical_plan_settings')
+    numeric: dict[str, float] = {}
+    for field, source, default, positive in (
+        ('time_limit_sec', 'optimization_time_limit_sec', 10.0, True),
+        ('kerf_mm', 'kerf_mm', 3.0, False),
+        ('trim_margin_mm', 'trim_margin_mm', 5.0, False),
+    ):
+        raw = value(source)
+        try:
+            number = float(default if raw is None else raw)
+        except (TypeError, ValueError) as exc:
+            raise PlanFingerprintContractError('invalid_historical_plan_settings') from exc
+        if not math.isfinite(number) or number < 0 or (positive and number == 0):
+            raise PlanFingerprintContractError('invalid_historical_plan_settings')
+        numeric[field] = number
+    return {'optimization_mode': mode, 'machine_type': machine, **numeric}
 
 
 def historical_geometry_piece(row: Any) -> dict[str, Any]:

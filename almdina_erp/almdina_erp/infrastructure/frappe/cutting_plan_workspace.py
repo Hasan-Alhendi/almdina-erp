@@ -58,6 +58,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_plan_ada
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.historical_plan_piece_reader import (
     historical_geometry_piece,
+    historical_plan_settings,
     historical_v1_piece,
 )
 
@@ -249,7 +250,7 @@ def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
                 "width_mm": width_mm,
                 "length_mm": length_mm,
             },
-            "settings": _plan_settings_payload(plan),
+            "settings": historical_plan_settings(plan),
             "pieces": [historical_v1_piece(row) for row in (order.pieces or [])],
         }
     )
@@ -281,7 +282,7 @@ def plan_input_fingerprint(
                 "width_mm": width_mm,
                 "length_mm": length_mm,
             },
-            "settings": _plan_settings_payload(plan),
+            "settings": historical_plan_settings(plan) if historical else _plan_settings_payload(plan),
             "pieces": pieces,
         }
     )

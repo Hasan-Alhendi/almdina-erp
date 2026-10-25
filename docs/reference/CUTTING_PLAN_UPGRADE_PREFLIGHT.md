@@ -23,7 +23,7 @@ on a restored copy and arranging a compatible reader.
 
 V1 and the three known V2 shapes (Git parents `13c3c89c`, `e8453978`)
 and V3 keep their original hash semantics. The frozen historical piece reader
-does not call the current optimizer adapter. The V3 golden corpus and its
+and settings reader do not call the current optimizer adapter or catalog. The V3 golden corpus and its
 independent checksum remain unchanged. V4 uses the same reviewed physical
 piece projection, excludes order revision and optimizer search settings, and
 captures the exact V4 payload in the newly created snapshot. Its SHA must
