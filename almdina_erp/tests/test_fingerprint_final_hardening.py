@@ -304,7 +304,7 @@ class TestNativeStageActivationBoundary(unittest.TestCase):
     def test_native_pending_activation_cannot_bypass_central_commands(self):
         import frappe
         for old in ('Pending', 'Cancelled', 'Completed', None):
-            for target in ('In Progress', 'Completed'):
+            for target in ('In Progress', 'Paused', 'Completed'):
                 if old == target:
                     continue
                 with self.subTest(old=old, target=target), self.assertRaises(frappe.ValidationError):
@@ -341,13 +341,16 @@ class TestNativeStageActivationBoundary(unittest.TestCase):
         if not hasattr(frappe, 'get_meta'):
             self.skipTest('Real Frappe Document is exercised by the MariaDB integration job')
         from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_command_context import authorized_stage_activation
-        doc = frappe.get_doc({
-            'doctype': 'Production Stage', 'sequence': 10, 'status': 'In Progress',
-            'started_by': 'Administrator', 'start_time': '2026-01-01 08:00:00',
-        })
-        with self.assertRaises(frappe.ValidationError):
-            doc.validate()
-        with authorized_stage_activation(doc):
-            doc.validate()
-        with self.assertRaises(frappe.ValidationError):
-            doc.validate()
+        for status in ('In Progress', 'Paused', 'Completed'):
+            doc = frappe.get_doc({
+                'doctype': 'Production Stage', 'sequence': 10, 'status': status,
+                'started_by': 'Administrator', 'start_time': '2026-01-01 08:00:00',
+                'finish_time': '2026-01-01 09:00:00',
+            })
+            with self.subTest(status=status):
+                with self.assertRaises(frappe.ValidationError):
+                    doc.validate()
+                with authorized_stage_activation(doc):
+                    doc.validate()
+                with self.assertRaises(frappe.ValidationError):
+                    doc.validate()

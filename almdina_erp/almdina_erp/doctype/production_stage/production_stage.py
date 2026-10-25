@@ -20,7 +20,7 @@ class ProductionStage(Document):
             frappe.throw(_("A Completed stage must have a finish time."))
 
         old = self.get_doc_before_save()
-        starts_new_work = self.status in {"In Progress", "Completed"} and (
+        starts_new_work = self.status in {"In Progress", "Paused", "Completed"} and (
             old is None or old.status not in {"In Progress", "Paused", self.status}
         )
         if starts_new_work and not is_authorized_stage_activation(self):
