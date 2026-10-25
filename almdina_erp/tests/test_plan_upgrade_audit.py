@@ -22,6 +22,10 @@ class TestPlanUpgradeAudit(unittest.TestCase):
             file.attached_to_name = 'SOMEONE-ELSE'
             self.assertEqual('UNSCOPED', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=True))
         self.assertEqual('NOT_CHECKED', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=False))
+        file.attached_to_name = plan.name
+        plan.dxf_file = '/private/files/not-a-dxf.txt'
+        with patch.object(export, '_dxf_file_row', return_value=file):
+            self.assertEqual('MISSING', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=True))
 
     def test_thousands_of_plans_stream_in_pages_without_database_writes(self):
         from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import FingerprintCompatibility

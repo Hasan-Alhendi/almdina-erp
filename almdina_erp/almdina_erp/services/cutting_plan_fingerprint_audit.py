@@ -44,7 +44,8 @@ def _dxf_attachment_status(plan: Any, source: str, *, verify_files: bool) -> str
         _dxf_file_row, _existing_dxf_disk_path,
     )
     row = _dxf_file_row(url)
-    if not row or not url.startswith("/private/files/") or ".." in url:
+    if (not row or not url.startswith("/private/files/") or ".." in url
+            or not url.lower().split("?", 1)[0].endswith(".dxf")):
         return "MISSING"
     if not (cint(row.is_private)
             and str(row.attached_to_doctype or "") == "Cutting Plan"
