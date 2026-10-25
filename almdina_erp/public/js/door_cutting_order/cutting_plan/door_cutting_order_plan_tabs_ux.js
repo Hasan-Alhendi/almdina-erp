@@ -237,6 +237,10 @@
 			&& row.validation && row.validation.needs_recalculation);
 	}
 
+	function uploadedPlanMismatched(frm) {
+		return planRowMismatched(frm, "Custom");
+	}
+
 	function isHistoricalPlanRow(frm, row) {
 		if (!row) return false;
 		if (row.display_context) return row.display_context === "historical";
@@ -298,7 +302,10 @@
 	}
 
 	function planStatusBanner(frm, tab) {
-		return historicalBanner(frm, tab) || (planRowMismatched(frm, tab) ? mismatchBanner(frm, tab) : "");
+		const mismatched = tab === "Custom"
+			? uploadedPlanMismatched(frm)
+			: planRowMismatched(frm, tab);
+		return historicalBanner(frm, tab) || (mismatched ? mismatchBanner(frm, tab) : "");
 	}
 
 	function renderTabContent(frm, tab) {
