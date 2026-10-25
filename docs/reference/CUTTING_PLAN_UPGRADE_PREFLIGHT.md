@@ -30,6 +30,10 @@ captures the exact V4 payload in the newly created snapshot. Its SHA must
 match both that captured payload and the current physical inputs. An unknown
 contract, damaged baseline, or insufficient older evidence requires review;
 none of these outcomes mutates an approved plan during a read.
+An exact System preview commit checks its V4 physical baseline against the
+trusted preview and independently rechecks the preview's V3 generation inputs
+before saving the layout; optimizer settings cannot bypass that concurrency
+check merely because they are excluded from manufacturing validity.
 
 Changing a legacy order's revision alone during a verified save does not
 cancel its approval when the full V4 input projection before and after that

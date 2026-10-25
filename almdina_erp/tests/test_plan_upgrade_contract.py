@@ -36,6 +36,25 @@ class TestUpgradeContract(unittest.TestCase):
         self.assertEqual(stored['saved_layout_sha256'], workspace.fingerprint_payload(
             {'sheets': workspace.sanitize_plan_snapshot(stored)['sheets']}))
 
+    def test_exact_preview_commit_checks_v4_and_original_generation_inputs(self):
+        from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_preview_commit as commit
+        _, order, plan = golden_case()
+        settings = {'packing_mode': 'auto_pro', 'cutting_machine_type': 'Auto',
+                    'kerf_mm': 3.0, 'trim_margin_mm': 5.0,
+                    'optimization_time_limit_sec': 10.0}
+        v3 = workspace.plan_input_fingerprint(order, plan)
+        v4 = workspace.plan_input_fingerprint(order, plan, version=4)
+        snapshot = {'sheets': [{'pieces': []}], 'validation': {'is_valid': True},
+                    'generation_input_fingerprint': v3}
+        with patch.object(commit, 'apply_calculation_outcome') as apply:
+            commit.apply_exact_system_preview(order, plan, settings=settings, snapshot=snapshot,
+                                              expected_input_fingerprint=v4)
+            self.assertEqual(v3, apply.call_args.kwargs['fingerprint'])
+            with self.assertRaises(ValueError):
+                commit.apply_exact_system_preview(order, plan, settings=settings,
+                    snapshot=snapshot | {'generation_input_fingerprint': 'stale'},
+                    expected_input_fingerprint=v4)
+
     def test_revision_and_optimizer_provenance_do_not_invalidate_saved_geometry(self):
         _, order, plan = golden_case()
         baseline = workspace.plan_input_fingerprint(order, plan, version=4)
