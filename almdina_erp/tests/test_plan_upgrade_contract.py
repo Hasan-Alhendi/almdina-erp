@@ -13,7 +13,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_workspace
 class TestUpgradeContract(unittest.TestCase):
     def test_v4_golden_hash_is_pinned_without_editing_the_v3_corpus(self):
         fixture, order, plan = golden_case()
-        self.assertEqual('ed1805f4eca59df738d12a0760f91ea70216c2f4fc8ef238220a434eede786c4',
+        self.assertEqual('95c0824ba755a389ba279892b83e12586eed5ba630844f986a5570dda2701670',
                          workspace.plan_input_fingerprint(order, plan, version=4))
         self.assertEqual(fixture['contracts']['v3']['sha256'], workspace.plan_input_fingerprint(order, plan))
 
@@ -49,6 +49,7 @@ class TestUpgradeContract(unittest.TestCase):
         baseline = workspace.plan_input_fingerprint(order, plan, version=4)
         for target, field, value in [
             ('order', 'full_board_width_mm', 1200),
+            ('order', 'board_description', 'Different board material'),
             ('plan', 'kerf_mm', 8),
             ('plan', 'trim_margin_mm', 9),
             ('plan', 'machine_type', 'Panel Saw'),

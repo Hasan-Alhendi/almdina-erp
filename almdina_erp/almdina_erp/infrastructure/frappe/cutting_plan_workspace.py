@@ -298,7 +298,10 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
     return {
         "version": MANUFACTURING_BASELINE_VERSION,
         "order": str(order.name),
-        "board": {"width_mm": width_mm, "length_mm": length_mm},
+        "board": {
+            "width_mm": width_mm, "length_mm": length_mm,
+            "material_description": str(getattr(order, "board_description", "") or "").strip(),
+        },
         "execution_settings": freeze_v4_execution_settings(
             machine_type=_plan_attr(plan, "machine_type"),
             kerf_mm=_plan_attr(plan, "kerf_mm"),

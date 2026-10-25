@@ -104,8 +104,11 @@ def validate_v4_baseline(value: Any) -> None:
     if type(value['order']) is not str or not value['order']:
         raise PlanFingerprintContractError('invalid_v4_baseline_order')
     board = value['board']
-    if (not isinstance(board, dict) or set(board) != {'width_mm', 'length_mm'}
-            or any(type(v) is not float or not math.isfinite(v) or v <= 0 for v in board.values())):
+    if (not isinstance(board, dict) or set(board) != {'width_mm', 'length_mm', 'material_description'}
+            or any(type(board[k]) is not float or not math.isfinite(board[k]) or board[k] <= 0
+                   for k in ('width_mm', 'length_mm'))
+            or type(board['material_description']) is not str
+            or not board['material_description']):
         raise PlanFingerprintContractError('invalid_v4_baseline_board')
     settings = value['execution_settings']
     if (not isinstance(settings, dict)
