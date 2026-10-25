@@ -64,6 +64,7 @@ class TestStageAssignmentAccessDomain(unittest.TestCase):
 
     def test_start_records_administrator_without_assigning_the_stage_to_them(self) -> None:
         stage = types.SimpleNamespace(
+            flags={},
             assigned_to="",
             assignment_time=None,
             creation=datetime(2026, 1, 1),

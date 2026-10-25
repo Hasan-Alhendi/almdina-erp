@@ -233,23 +233,72 @@
 		const owner = window.AlmdinaPlanWorkspaceState;
 		if (!owner || typeof owner.planForTab !== "function") return false;
 		const row = owner.planForTab(frm, tab);
-		return Boolean(row && row.validation && row.validation.needs_recalculation);
+		return Boolean(row && !isHistoricalPlanRow(frm, row)
+			&& row.validation && row.validation.needs_recalculation);
 	}
 
-	function uploadedPlanMismatched(frm) {
-		return planRowMismatched(frm, "Custom");
+	function isHistoricalPlanRow(frm, row) {
+		if (!row) return false;
+		if (row.display_context) return row.display_context === "historical";
+		const status = String(row.status || "");
+		if (["Cancelled", "Superseded"].includes(status)) return true;
+		if (status === "Approved") {
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const state = owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+			return String(row.name || "") !== String(state?.data?.approved_plan || "");
+		}
+		return false;
 	}
 
-	function mismatchBanner() {
+	function mismatchBanner(frm, tab) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const row = owner && typeof owner.planForTab === "function" ? owner.planForTab(frm, tab) : null;
+        const state = row && row.validation && row.validation.freshness_state;
+        const review = state === "REVIEW_REQUIRED" || state === "PERSISTED_STALE";
+        const title = review ? "Plan matching requires review" : "The plan does not match the order";
+        const summary = state === "PERSISTED_STALE"
+            ? "The plan is marked as out of date. Review it before starting new manufacturing."
+            : review
+                ? "Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing."
+                : "This order was changed and the plan no longer matches";
 		return `
 			<div class="dco-uploaded-plan-mismatch-banner" role="alert" aria-live="assertive">
 				<span class="dco-uploaded-plan-mismatch-banner__icon" aria-hidden="true">⚠</span>
 				<div class="dco-uploaded-plan-mismatch-banner__body">
-					<strong class="dco-uploaded-plan-mismatch-banner__title">${frappe.utils.escape_html(translate("The plan does not match the order"))}</strong>
-					<span class="dco-uploaded-plan-mismatch-banner__summary">${frappe.utils.escape_html(translate("This order was changed and the plan no longer matches"))}</span>
+					<strong class="dco-uploaded-plan-mismatch-banner__title">${frappe.utils.escape_html(translate(title))}</strong>
+					<span class="dco-uploaded-plan-mismatch-banner__summary">${frappe.utils.escape_html(translate(summary))}</span>
 				</div>
 			</div>
 		`;
+	}
+
+	function historicalBanner(frm, tab) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const row = owner && typeof owner.planForTab === "function" ? owner.planForTab(frm, tab) : null;
+		if (!isHistoricalPlanRow(frm, row)) return "";
+		const status = String(row.status || "");
+		const title = status === "Cancelled" ? "Previous plan — cancelled"
+			: status === "Superseded" ? "Previous plan — superseded"
+				: status === "Approved" ? "Approved plan — no longer current"
+					: "Previous plan";
+		const freshness = row.validation && row.validation.freshness_state;
+		const summary = freshness === "MISMATCH"
+			? "Current order inputs differ from this saved historical plan."
+			: freshness === "PERSISTED_STALE"
+				? "This historical plan carries an older saved review flag whose cause is unknown."
+				: freshness === "REVIEW_REQUIRED"
+					? "The historical plan fingerprint could not be confirmed."
+					: "This plan is kept for reference and is not approved for manufacturing.";
+		return `
+			<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+				<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate(title))}</strong>
+				<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(translate(summary))}</span>
+			</div>
+		`;
+	}
+
+	function planStatusBanner(frm, tab) {
+		return historicalBanner(frm, tab) || (planRowMismatched(frm, tab) ? mismatchBanner(frm, tab) : "");
 	}
 
 	function renderTabContent(frm, tab) {
@@ -257,7 +306,7 @@
 			if (!hasCustomPlan(frm)) {
 				return emptyState("There is no uploaded plan");
 			}
-			const banner = uploadedPlanMismatched(frm) ? mismatchBanner() : "";
+			const banner = planStatusBanner(frm, "Custom");
 			return `${banner}${renderPlanHtml(frm, getPlanForTab(frm, "Custom"))}`;
 		}
 
@@ -266,10 +315,11 @@
 				return emptyState("There is no plan approved for production.");
 			}
 			const plan = getPlanForTab(frm, "Approved");
-			return (
-				renderPlanHtml(frm, plan) ||
-				emptyState("There is no data to display in the approved plan.")
-			);
+			const banner = planStatusBanner(frm, "Approved");
+            return banner + (
+                renderPlanHtml(frm, plan) ||
+                emptyState("There is no data to display in the approved plan.")
+            );
 		}
 
 		const displayed = window.AlmdinaPlanTabsUX.displayedPlanForTab(frm, "System");
@@ -279,7 +329,7 @@
 		}
 		const preview = window.AlmdinaPlanPreviewSession;
 		const banner = !(preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm))
-			&& planRowMismatched(frm, "System") ? mismatchBanner() : "";
+			? planStatusBanner(frm, "System") : "";
 		return `${banner}${planHtml}`;
 	}
 

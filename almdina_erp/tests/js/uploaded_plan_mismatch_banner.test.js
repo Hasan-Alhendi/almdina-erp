@@ -68,8 +68,14 @@ function createWrapper() {
     };
 }
 
-function loadTabs(uploadedRow) {
+function loadTabs(uploadedRow, language = "en") {
+    const catalog = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+    const translated = message => {
+        const line = catalog.split("\n").find(row => row.startsWith(`${message},`));
+        return language === "ar" && line ? line.slice(message.length + 1).trim() : message;
+    };
     const fakeWindow = {
+        AlmdinaLocale: { translate: translated, direction: () => language === "ar" ? "rtl" : "ltr" },
         AlmdinaPermissions: {
             canDocument() {
                 return true;
@@ -170,7 +176,8 @@ assert.doesNotMatch(freshHtml, /لا يوجد خطة مرفوعة/);
 
 const staleTabs = loadTabs({
     ...uploadedGeometry,
-    status: "Cancelled",
+    status: "Draft",
+    display_context: "current_draft",
     validation: { needs_recalculation: true, status: "Valid" },
 });
 const staleHtml = renderCustom(staleTabs, createWrapper(), true);
@@ -182,3 +189,64 @@ assert.match(staleHtml, /dco-uploaded-plan-mismatch-banner[\s\S]*dco-plan/);
 assert.match(staleHtml, /dco-plan/);
 
 console.log("Uploaded plan mismatch banner contract passed");
+
+for (const freshness of ["REVIEW_REQUIRED", "PERSISTED_STALE"]) {
+    const tabs = loadTabs({
+        ...uploadedGeometry,
+        status: "Draft",
+        display_context: "current_draft",
+        validation: { needs_recalculation: true, freshness_state: freshness, status: "Valid" },
+    });
+    const html = renderCustom(tabs, createWrapper(), true);
+    assert.match(html, /Plan matching requires review/);
+    assert.doesNotMatch(html, /This order was changed/);
+    assert.match(html, /Review the plan|Review it/);
+    assert.match(html, /dco-plan/);
+}
+const compatibleTabs = loadTabs({
+    ...uploadedGeometry,
+    status: "Draft",
+    display_context: "current_draft",
+    validation: { needs_recalculation: false, freshness_state: "COMPATIBLE", status: "Valid" },
+});
+assert.doesNotMatch(renderCustom(compatibleTabs, createWrapper(), false), /dco-uploaded-plan-mismatch-banner/);
+
+for (const language of ["en", "ar"]) {
+    const tabs = loadTabs({
+        ...uploadedGeometry,
+        status: "Draft",
+        display_context: "current_draft",
+        validation: { needs_recalculation: true, freshness_state: "REVIEW_REQUIRED", status: "Valid" },
+    }, language);
+    const html = renderCustom(tabs, createWrapper(), true);
+    assert.match(html, language === "ar" ? /مطابقة الخطة تحتاج إلى مراجعة/ : /Plan matching requires review/);
+    assert.match(html, language === "ar" ? /تعذر تأكيد مطابقة الخطة/ : /could not be confirmed/);
+    assert.match(html, language === "ar" ? /dir="rtl"/ : /dir="ltr"/);
+}
+
+for (const [status, title] of [
+    ["Cancelled", /Previous plan — cancelled/],
+    ["Superseded", /Previous plan — superseded/],
+]) {
+    const historical = {
+        ...uploadedGeometry,
+        status,
+        display_context: "historical",
+        validation: { needs_recalculation: true, freshness_state: "PERSISTED_STALE", status: "Valid" },
+    };
+    const html = renderCustom(loadTabs(historical), createWrapper(), true);
+    assert.match(html, /dco-plan-historical-banner/);
+    assert.match(html, title);
+    assert.match(html, /older saved review flag whose cause is unknown/);
+    assert.doesNotMatch(html, /role="alert"/);
+    assert.doesNotMatch(html, /This order was changed/);
+}
+
+const historicalArabic = renderCustom(loadTabs({
+    ...uploadedGeometry,
+    status: "Cancelled",
+    display_context: "historical",
+    validation: { needs_recalculation: true, freshness_state: "REVIEW_REQUIRED", status: "Valid" },
+}, "ar"), createWrapper(), true);
+assert.match(historicalArabic, /خطة سابقة — ملغاة/);
+assert.match(historicalArabic, /تعذر تأكيد بصمة الخطة التاريخية/);

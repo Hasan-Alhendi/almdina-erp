@@ -34,6 +34,16 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
+    FINGERPRINT_CONTRACT_KEY,
+    FINGERPRINT_CONTRACT_VERSION,
+    LEGACY_V2_SCHEMAS,
+    FingerprintCompatibility,
+    PlanFingerprintContractError,
+    freeze_geometry_piece,
+    legacy_omission_is_safe,
+)
+from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     matching_freshness_fingerprint,
 )
@@ -200,7 +210,7 @@ def _geometry_piece_rows(order: Any) -> list[dict[str, Any]]:
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
             piece.pop(key, None)
-        rows.append(piece)
+        rows.append(freeze_geometry_piece(piece))
     return rows
 
 
@@ -235,17 +245,24 @@ def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
     )
 
 
-def plan_input_fingerprint(order: Any, plan: Any) -> str:
+def plan_input_fingerprint(
+    order: Any, plan: Any, *, version: int = FINGERPRINT_CONTRACT_VERSION,
+    omitted: tuple[str, ...] = (),
+) -> str:
     """Fingerprint cutting geometry and optimizer settings, not commercial labels.
 
     Customer name, board description, edge color, and edge-profile names/rates
     stay out of this hash so they do not stale or cancel a production plan.
     """
 
+    if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
+        raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
+    pieces = _geometry_piece_rows(order)
+    pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
-            "version": 2,
+            "version": version,
             "order": order.name,
             "order_revision": cint(getattr(order, "revision", 1)) or 1,
             "board": {
@@ -253,28 +270,88 @@ def plan_input_fingerprint(order: Any, plan: Any) -> str:
                 "length_mm": length_mm,
             },
             "settings": _plan_settings_payload(plan),
-            "pieces": _geometry_piece_rows(order),
+            "pieces": pieces,
         }
     )
 
 
-def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> str:
-    """Compare live geometry against stored hashes, including legacy v1 rows."""
+def plan_fingerprint_compatibility(
+    order: Any, plan: Any, stored: str = "", *, snapshot_json: str | None = None,
+    previous_order: Any | None = None,
+) -> FingerprintCompatibility:
+    """One read-only decision shared by display, save, approval and runtime gates."""
 
-    geometry = plan_input_fingerprint(order, plan)
+    current = plan_input_fingerprint(order, plan)
+    raw = snapshot_json if snapshot_json is not None else _plan_attr(plan, "snapshot_json", "")
+    try:
+        snapshot = frappe.parse_json(raw or "{}")
+    except (TypeError, ValueError):
+        return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="invalid_snapshot")
+    if not isinstance(snapshot, dict):
+        return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="invalid_snapshot")
+    declared = snapshot.get(FINGERPRINT_CONTRACT_KEY)
+    if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
+        return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
+    if stored and stored == current:
+        return FingerprintCompatibility("MATCH", stored, "v3", "current_contract")
+    if declared is not None:
+        return FingerprintCompatibility("MISMATCH", current, "v3", "order_requirements_changed")
+    if not stored:
+        return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="missing_fingerprint")
+
+    pieces = _geometry_piece_rows(order)
+    for contract, omitted in LEGACY_V2_SCHEMAS:
+        candidate = plan_input_fingerprint(order, plan, version=2, omitted=omitted)
+        if stored != candidate:
+            continue
+        try:
+            safe = legacy_omission_is_safe(pieces, omitted)
+        except DoorLinerError:
+            return FingerprintCompatibility("REVIEW_REQUIRED", "", contract, "invalid_liner_data")
+        if safe:
+            return FingerprintCompatibility("COMPATIBLE", stored, contract, "historical_contract_proven")
+        if "extra_double" in omitted and any(
+            row.get("extra_double") or str(row.get("extra_double_reference_sides") or "").strip()
+            for row in pieces
+        ):
+            if previous_order is not None and plan_fingerprint_compatibility(
+                previous_order, plan, stored, snapshot_json=raw,
+            ).compatible:
+                return FingerprintCompatibility("MISMATCH", current, contract, "verified_order_inputs_changed")
+            return FingerprintCompatibility("REVIEW_REQUIRED", "", contract, "uncaptured_double_requirements")
+        return FingerprintCompatibility("MISMATCH", current, contract, "new_machining_requirements")
+
+    # Preserve the existing v1 label-overlay compatibility, without broadening it.
     legacy = _legacy_plan_input_fingerprint(order, plan)
     overlaid = _legacy_plan_input_fingerprint(
         _BoardLabelOverlay(
             order,
-            str(
-                _plan_attr(plan, "board_description")
-                or getattr(order, "board_description", "")
-                or ""
-            ).strip(),
-        ),
-        plan,
+            str(_plan_attr(plan, "board_description") or getattr(order, "board_description", "") or "").strip(),
+        ), plan,
     )
-    return matching_freshness_fingerprint(stored, geometry, legacy, overlaid)
+    if matching_freshness_fingerprint(stored, current, legacy, overlaid) == stored:
+        return FingerprintCompatibility("COMPATIBLE", stored, "v1", "historical_contract_proven")
+
+    # Existing captured requirements can prove dimension/quantity/type changes.
+    # Absence of that evidence is uncertainty, never a claim that the user edited.
+    captured = snapshot.get("manufacturing_requirements")
+    if captured is not None:
+        from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
+            canonicalize_manufacturing_requirements,
+        )
+        if canonicalize_manufacturing_requirements(captured) != _manufacturing_requirements(order):
+            return FingerprintCompatibility("MISMATCH", current, reason="manufacturing_requirements_changed")
+    if previous_order is not None:
+        before = plan_fingerprint_compatibility(previous_order, plan, stored, snapshot_json=raw)
+        if before.compatible:
+            return FingerprintCompatibility("MISMATCH", current, before.contract, "verified_order_inputs_changed")
+    return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unverifiable_legacy_contract")
+
+
+def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> str:
+    """Return a verified expected hash; empty means review and blocks runtime gates."""
+
+    return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 
 
 def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
@@ -327,6 +404,7 @@ def _apply_snapshot(
 ) -> None:
     snapshot = with_physical_execution_contract(snapshot)
     snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
+    snapshot[FINGERPRINT_CONTRACT_KEY] = FINGERPRINT_CONTRACT_VERSION
     validation = snapshot.get("validation") or {}
     metrics = snapshot.get("industrial_metrics") or {}
     width_mm, length_mm = _board_dimensions_mm(order)
@@ -542,5 +620,6 @@ __all__ = [
     "backfill_piece_instance_ids",
     "calculate_system_plan",
     "freshness_expected_fingerprint",
+    "plan_fingerprint_compatibility",
     "plan_input_fingerprint",
 ]

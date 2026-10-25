@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
+    is_current_manufacturing_candidate,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
@@ -61,12 +62,9 @@ def latest_plan(order_name: str, **filters: Any) -> Any | None:
 
 
 def current_working_plan(order_name: str) -> Any | None:
-    """Resolve the current editable plan without consulting DCO source projections."""
+    """Resolve the current editable revision, never an approved/history fallback."""
 
-    draft = latest_plan(order_name, status=DRAFT)
-    if draft:
-        return draft
-    return latest_plan(order_name, status=APPROVED) or latest_plan(order_name)
+    return latest_plan(order_name, status=DRAFT)
 
 
 def _numeric_or_default(value: Any, default: float) -> Any:
@@ -241,6 +239,15 @@ def production_plan_facts(order: Any) -> ProductionPlanFacts:
         else None
     )
     candidate = approved or current_working_plan(str(order.name))
+    if candidate and not is_current_manufacturing_candidate(
+        status=getattr(candidate, "status", None),
+        belongs_to_order=(
+            str(getattr(candidate, "door_cutting_order", None) or "") == str(order.name)
+            and str(getattr(candidate, "plan_kind", "Order") or "Order") == "Order"
+        ),
+        is_linked_approval=bool(approved and candidate.name == approved.name),
+    ):
+        candidate = None
     if not candidate:
         return ProductionPlanFacts(
             plan_name=None,
