@@ -37,11 +37,15 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
 from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FINGERPRINT_CONTRACT_KEY,
     FINGERPRINT_CONTRACT_VERSION,
+    MANUFACTURING_BASELINE_VERSION,
+    MANUFACTURING_BASELINE_KEY,
     LEGACY_V2_SCHEMAS,
     FingerprintCompatibility,
     PlanFingerprintContractError,
     freeze_geometry_piece,
+    freeze_v4_execution_settings,
     legacy_omission_is_safe,
+    validate_v4_baseline,
 )
 from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
@@ -51,6 +55,10 @@ from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_p
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
 from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_plan_adapter import (
     FrappeCutDimensionPlanAdapter,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.historical_plan_piece_reader import (
+    historical_geometry_piece,
+    historical_v1_piece,
 )
 
 
@@ -204,8 +212,10 @@ def _plan_settings_payload(plan: Any) -> dict[str, Any]:
     }
 
 
-def _geometry_piece_rows(order: Any) -> list[dict[str, Any]]:
+def _geometry_piece_rows(order: Any, *, historical: bool = False) -> list[dict[str, Any]]:
     rows = []
+    if historical:
+        return [historical_geometry_piece(row) for row in (order.pieces or [])]
     for row in _piece_rows(order):
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
@@ -240,14 +250,14 @@ def _legacy_plan_input_fingerprint(order: Any, plan: Any) -> str:
                 "length_mm": length_mm,
             },
             "settings": _plan_settings_payload(plan),
-            "pieces": list(_piece_rows(order)),
+            "pieces": [historical_v1_piece(row) for row in (order.pieces or [])],
         }
     )
 
 
 def plan_input_fingerprint(
     order: Any, plan: Any, *, version: int = FINGERPRINT_CONTRACT_VERSION,
-    omitted: tuple[str, ...] = (),
+    omitted: tuple[str, ...] = (), historical: bool = False,
 ) -> str:
     """Fingerprint cutting geometry and optimizer settings, not commercial labels.
 
@@ -255,10 +265,12 @@ def plan_input_fingerprint(
     stay out of this hash so they do not stale or cancel a production plan.
     """
 
+    if version == MANUFACTURING_BASELINE_VERSION and not omitted:
+        return fingerprint_payload(manufacturing_baseline_v4(order, plan, historical=historical))
     if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
         raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
-    pieces = _geometry_piece_rows(order)
+    pieces = _geometry_piece_rows(order, historical=historical)
     pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
@@ -275,13 +287,33 @@ def plan_input_fingerprint(
     )
 
 
+def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False) -> dict[str, Any]:
+    """Frozen execution inputs; optimizer provenance and order revision stay out.
+
+    V3 remains immutable. A later change to this representation must introduce
+    another contract and retain this reader for already persisted V4 plans.
+    """
+
+    width_mm, length_mm = _board_dimensions_mm(order)
+    return {
+        "version": MANUFACTURING_BASELINE_VERSION,
+        "order": str(order.name),
+        "board": {"width_mm": width_mm, "length_mm": length_mm},
+        "execution_settings": freeze_v4_execution_settings(
+            machine_type=_plan_attr(plan, "machine_type"),
+            kerf_mm=_plan_attr(plan, "kerf_mm"),
+            trim_margin_mm=_plan_attr(plan, "trim_margin_mm"),
+        ),
+        "pieces": _geometry_piece_rows(order, historical=historical),
+    }
+
+
 def plan_fingerprint_compatibility(
     order: Any, plan: Any, stored: str = "", *, snapshot_json: str | None = None,
     previous_order: Any | None = None,
 ) -> FingerprintCompatibility:
     """One read-only decision shared by display, save, approval and runtime gates."""
 
-    current = plan_input_fingerprint(order, plan)
     raw = snapshot_json if snapshot_json is not None else _plan_attr(plan, "snapshot_json", "")
     try:
         snapshot = frappe.parse_json(raw or "{}")
@@ -290,8 +322,29 @@ def plan_fingerprint_compatibility(
     if not isinstance(snapshot, dict):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="invalid_snapshot")
     declared = snapshot.get(FINGERPRINT_CONTRACT_KEY)
+    if declared == MANUFACTURING_BASELINE_VERSION and type(declared) is int:
+        baseline = snapshot.get(MANUFACTURING_BASELINE_KEY)
+        # The stored digest must bind the exact captured payload. Missing or
+        # damaged evidence never becomes an inferred manufacturing change.
+        if not isinstance(baseline, dict) or not stored or fingerprint_payload(baseline) != stored:
+            return FingerprintCompatibility("REVIEW_REQUIRED", "", "v4", "invalid_manufacturing_baseline")
+        try:
+            validate_v4_baseline(baseline)
+        except PlanFingerprintContractError:
+            return FingerprintCompatibility("REVIEW_REQUIRED", "", "v4", "unsupported_manufacturing_baseline")
+        validation = snapshot.get("validation")
+        if (not isinstance(snapshot.get("sheets"), list) or not snapshot["sheets"]
+                or not isinstance(validation, dict) or validation.get("is_valid") is not True
+                or snapshot.get("saved_layout_sha256") != fingerprint_payload({"sheets": snapshot["sheets"]})):
+            return FingerprintCompatibility("REVIEW_REQUIRED", "", "v4", "invalid_saved_layout")
+        current = plan_input_fingerprint(order, plan, version=MANUFACTURING_BASELINE_VERSION,
+                                         historical=True)
+        if stored == current:
+            return FingerprintCompatibility("MATCH", stored, "v4", "manufacturing_baseline_proven")
+        return FingerprintCompatibility("MISMATCH", current, "v4", "manufacturing_requirements_changed")
     if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
+    current = plan_input_fingerprint(order, plan, historical=True)
     if stored and stored == current:
         return FingerprintCompatibility("MATCH", stored, "v3", "current_contract")
     if declared is not None:
@@ -299,9 +352,9 @@ def plan_fingerprint_compatibility(
     if not stored:
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="missing_fingerprint")
 
-    pieces = _geometry_piece_rows(order)
+    pieces = _geometry_piece_rows(order, historical=True)
     for contract, omitted in LEGACY_V2_SCHEMAS:
-        candidate = plan_input_fingerprint(order, plan, version=2, omitted=omitted)
+        candidate = plan_input_fingerprint(order, plan, version=2, omitted=omitted, historical=True)
         if stored != candidate:
             continue
         try:
@@ -404,7 +457,14 @@ def _apply_snapshot(
 ) -> None:
     snapshot = with_physical_execution_contract(snapshot)
     snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
-    snapshot[FINGERPRINT_CONTRACT_KEY] = FINGERPRINT_CONTRACT_VERSION
+    baseline = manufacturing_baseline_v4(order, plan)
+    generation_fingerprint = fingerprint
+    fingerprint = fingerprint_payload(baseline)
+    snapshot[FINGERPRINT_CONTRACT_KEY] = MANUFACTURING_BASELINE_VERSION
+    snapshot[MANUFACTURING_BASELINE_KEY] = baseline
+    snapshot["generation_input_fingerprint"] = generation_fingerprint
+    snapshot["input_fingerprint"] = fingerprint
+    snapshot["saved_layout_sha256"] = fingerprint_payload({"sheets": snapshot.get("sheets") or []})
     validation = snapshot.get("validation") or {}
     metrics = snapshot.get("industrial_metrics") or {}
     width_mm, length_mm = _board_dimensions_mm(order)

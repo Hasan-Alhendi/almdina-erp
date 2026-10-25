@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import math
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
@@ -19,6 +20,9 @@ from almdina_erp.almdina_erp.domain.orders.liner_specs import (
 
 FINGERPRINT_CONTRACT_VERSION = 3
 FINGERPRINT_CONTRACT_KEY = 'input_fingerprint_contract'
+MANUFACTURING_BASELINE_VERSION = 4
+MANUFACTURING_BASELINE_KEY = 'manufacturing_baseline'
+_V4_MACHINE_TYPES = frozenset({'Auto', 'CNC Router', 'Panel Saw'})
 # Explicitly frozen; never derive this set from a mutable add-on registry.
 GEOMETRY_PIECE_KEYS = frozenset('''
 piece_instance_id width_cm length_cm final_width_cm final_length_cm qty
@@ -70,6 +74,52 @@ LEGACY_V2_SCHEMAS = (
 
 class PlanFingerprintContractError(ManufacturingRequirementsError):
     """The schema or its inputs cannot be verified; never silently drop fields."""
+
+
+def freeze_v4_execution_settings(*, machine_type: Any, kerf_mm: Any,
+                                 trim_margin_mm: Any) -> dict[str, Any]:
+    """Historic physical settings, independent of evolving optimizer catalogs."""
+    machine = str(machine_type or 'Auto').strip()
+    if machine not in _V4_MACHINE_TYPES:
+        raise PlanFingerprintContractError('unknown_v4_machine_type')
+    numeric: dict[str, float] = {}
+    for field, value, default in (('kerf_mm', kerf_mm, 3.0),
+                                  ('trim_margin_mm', trim_margin_mm, 5.0)):
+        try:
+            number = float(default if value is None else value)
+        except (TypeError, ValueError) as exc:
+            raise PlanFingerprintContractError('invalid_v4_execution_setting') from exc
+        if not math.isfinite(number) or number < 0:
+            raise PlanFingerprintContractError('invalid_v4_execution_setting')
+        numeric[field] = number
+    return {'machine_type': machine, **numeric}
+
+
+def validate_v4_baseline(value: Any) -> None:
+    """Reject an altered schema before interpreting it as changed requirements."""
+    if not isinstance(value, dict) or set(value) != {'version', 'order', 'board', 'execution_settings', 'pieces'}:
+        raise PlanFingerprintContractError('invalid_v4_baseline_shape')
+    if type(value['version']) is not int or value['version'] != MANUFACTURING_BASELINE_VERSION:
+        raise PlanFingerprintContractError('invalid_v4_baseline_version')
+    if type(value['order']) is not str or not value['order']:
+        raise PlanFingerprintContractError('invalid_v4_baseline_order')
+    board = value['board']
+    if (not isinstance(board, dict) or set(board) != {'width_mm', 'length_mm'}
+            or any(type(v) is not float or not math.isfinite(v) or v <= 0 for v in board.values())):
+        raise PlanFingerprintContractError('invalid_v4_baseline_board')
+    settings = value['execution_settings']
+    if (not isinstance(settings, dict)
+            or set(settings) != {'machine_type', 'kerf_mm', 'trim_margin_mm'}
+            or any(type(settings[k]) is not float for k in ('kerf_mm', 'trim_margin_mm'))
+            or settings != freeze_v4_execution_settings(**settings)):
+        raise PlanFingerprintContractError('invalid_v4_baseline_settings')
+    pieces = value['pieces']
+    if not isinstance(pieces, list) or not pieces:
+        raise PlanFingerprintContractError('invalid_v4_baseline_pieces')
+    for piece in pieces:
+        if not isinstance(piece, dict):
+            raise PlanFingerprintContractError('invalid_v4_baseline_piece')
+        freeze_geometry_piece(piece)
 
 
 @dataclass(frozen=True)

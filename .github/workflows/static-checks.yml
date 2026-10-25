@@ -159,7 +159,9 @@ jobs:
         run: |
           python -m unittest -v \
             almdina_erp.tests.test_plan_fingerprint_compatibility \
-            almdina_erp.tests.test_fingerprint_final_hardening
+            almdina_erp.tests.test_fingerprint_final_hardening \
+            almdina_erp.tests.test_plan_upgrade_contract \
+            almdina_erp.tests.test_plan_upgrade_audit
 
       - name: Validate cutting-plan lifecycle safety
         run: python -m unittest -v almdina_erp.tests.test_cutting_plan_lifecycle_safety

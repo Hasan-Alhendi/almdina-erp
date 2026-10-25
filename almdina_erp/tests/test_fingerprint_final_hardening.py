@@ -228,7 +228,7 @@ class TestV3RequiredRepresentation(unittest.TestCase):
         with self.assertRaises(PlanFingerprintContractError):
             workspace.plan_input_fingerprint(order, plan, version=3, omitted=('qty',))
         with self.assertRaises(PlanFingerprintContractError):
-            workspace.plan_input_fingerprint(order, plan, version=4)
+            workspace.plan_input_fingerprint(order, plan, version=5)
 
     def test_v3_schema_meaning_cannot_change_under_the_same_version(self):
         from almdina_erp.almdina_erp.domain.cutting import plan_fingerprint_contract as contract

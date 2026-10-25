@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     cancel_approval_transition,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    manufacturing_baseline_v4,
     plan_fingerprint_compatibility,
 )
 
@@ -58,10 +59,21 @@ def _sync_drawing_dxf_status(order: Any) -> None:
 def _expected_fingerprint(order: Any, plan: Any) -> str | None:
     # Share the decision used by freshness_expected_fingerprint; uncertainty blocks
     # new use through runtime gates, but must not rewrite an immutable approval.
+    previous = getattr(order, "get_doc_before_save", lambda: None)()
+    stored = str(getattr(plan, "input_fingerprint", None) or "")
     decision = plan_fingerprint_compatibility(
-        order, plan, str(getattr(plan, "input_fingerprint", None) or ""),
-        previous_order=getattr(order, "get_doc_before_save", lambda: None)(),
+        order, plan, stored, previous_order=previous,
     )
+    if decision.state == "MISMATCH" and previous is not None:
+        before = plan_fingerprint_compatibility(previous, plan, stored)
+        if (before.compatible
+                and manufacturing_baseline_v4(previous, plan, historical=True)
+                == manufacturing_baseline_v4(order, plan, historical=True)):
+            # A historical hash includes order revision/optimizer provenance.
+            # Preserve the immutable approval record when this save changed no
+            # manufacturing input. Its runtime gate remains fail-closed until
+            # durable evidence for the old contract can be established.
+            return None
     if decision.state == "REVIEW_REQUIRED":
         return None
     return decision.expected_fingerprint
