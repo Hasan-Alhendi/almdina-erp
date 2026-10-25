@@ -869,6 +869,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
 
     if code == codes.CUT_SIZE_MISMATCH:
+        outline_layer = "GEOMETRY" if params.get("outline_layer") == "GEOMETRY" else "CUT_PATH"
         actual = _size_cm(
             params.get("actual_width_cm", params.get("actual_w")),
             params.get("actual_height_cm", params.get("actual_h")),
@@ -879,10 +880,10 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
         if params.get("expected_width_cm") is not None or params.get("expected_w") is not None:
             problem = f"مقاس القص غير مطابق. الموجود {actual} والمطلوب {expected}."
-            action = f"اجعل CUT_PATH بمقاس {expected}."
+            action = _("Set {0} to the required cut size {1}.").format(outline_layer, expected)
         else:
             problem = f"مقاس القص غير مطابق. الموجود {actual}."
-            action = "طابق مقاس القص المحفوظ في الطلب على CUT_PATH."
+            action = _("Match the saved order cut size on {0}.").format(outline_layer)
         return PresentedDxfError(problem, target_text, action, code, issue.category)
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
