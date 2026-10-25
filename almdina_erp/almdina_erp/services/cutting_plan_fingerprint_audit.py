@@ -203,10 +203,13 @@ def audit_cutting_plan_summary(*, order_names: tuple[str, ...] = (), page_size: 
                                verify_files: bool = False) -> dict[str, Any]:
     """Bounded-memory Bench summary; no customer fields or database writes."""
     counts: Counter[str] = Counter()
-    orders: set[str] = set()
+    last_order = None
+    order_count = 0
     for entry in iter_cutting_plan_audit(order_names=order_names, page_size=page_size,
                                          verify_files=verify_files):
-        orders.add(entry["order"])
+        if entry["order"] != last_order:
+            order_count += 1
+            last_order = entry["order"]
         counts["plans"] += 1
         counts[f"status:{entry['status']}"] += 1
         counts[f"contract:{entry['contract'] or 'unknown'}"] += 1
@@ -218,7 +221,7 @@ def audit_cutting_plan_summary(*, order_names: tuple[str, ...] = (), page_size: 
             counts[key] += int(entry[key])
     total_orders = (frappe.db.count("Door Cutting Order")
                     if frappe.session.user == "Administrator" and not order_names else None)
-    return {"orders_total": total_orders, "orders_with_plans": len(orders), "counts": dict(counts)}
+    return {"orders_total": total_orders, "orders_with_plans": order_count, "counts": dict(counts)}
 
 
 def compare_upgrade_audits(before: list[dict[str, Any]], after: list[dict[str, Any]]) -> dict[str, Any]:

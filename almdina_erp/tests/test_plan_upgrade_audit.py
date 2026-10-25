@@ -11,6 +11,18 @@ import frappe
 
 
 class TestPlanUpgradeAudit(unittest.TestCase):
+    def test_uploaded_attachment_requires_the_exact_private_plan_link(self):
+        from almdina_erp.almdina_erp.services import dxf_export_service as export
+        plan = SimpleNamespace(name='SYN-PLAN', dxf_file='/private/files/synthetic.dxf')
+        file = SimpleNamespace(is_private=1, attached_to_doctype='Cutting Plan',
+                               attached_to_name=plan.name, attached_to_field='dxf_file')
+        with patch.object(export, '_dxf_file_row', return_value=file), \
+             patch.object(export, '_existing_dxf_disk_path', return_value='/isolated/synthetic.dxf'):
+            self.assertEqual('AVAILABLE', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=True))
+            file.attached_to_name = 'SOMEONE-ELSE'
+            self.assertEqual('UNSCOPED', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=True))
+        self.assertEqual('NOT_CHECKED', audit._dxf_attachment_status(plan, 'Uploaded DXF', verify_files=False))
+
     def test_thousands_of_plans_stream_in_pages_without_database_writes(self):
         from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import FingerprintCompatibility
         _, order, plan = golden_case()

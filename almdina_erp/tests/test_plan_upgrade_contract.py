@@ -122,6 +122,38 @@ class TestUpgradeContract(unittest.TestCase):
             self.assertIsNone(service.apply_stale_approved_plan_cancellation(order))
         self.assertEqual(plan.name, order.approved_plan)
 
+    def test_v4_approval_survives_provenance_but_cancels_real_cut_change(self):
+        import frappe
+        from almdina_erp.almdina_erp.services import cutting_plan_invalidation_service as service
+        _, order, plan = golden_case()
+        plan.input_fingerprint = workspace.plan_input_fingerprint(order, plan, version=4)
+        from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
+        sheets = [{'pieces': []}]
+        plan.snapshot_json = json.dumps({
+            'input_fingerprint_contract': 4,
+            'manufacturing_baseline': workspace.manufacturing_baseline_v4(order, plan),
+            'sheets': sheets, 'validation': {'is_valid': True},
+            'saved_layout_sha256': fingerprint_payload({'sheets': sheets}),
+        })
+        order.approved_plan = plan.name
+        order.revision += 1
+        plan.optimization_time_limit_sec = 25
+        plan.optimization_mode = 'retired_optimizer_mode'
+        with patch.object(frappe, 'get_doc', return_value=plan, create=True), \
+             patch.object(frappe.db, 'exists', return_value=True, create=True), \
+             patch.object(frappe.db, 'set_value', side_effect=AssertionError('provenance cancelled approval'), create=True):
+            self.assertIsNone(service.apply_stale_approved_plan_cancellation(order))
+        order.pieces[0].cut_width_cm = 45
+        writes = []
+        with patch.object(frappe, 'get_doc', return_value=plan, create=True), \
+             patch.object(frappe.db, 'exists', return_value=True, create=True), \
+             patch.object(frappe.db, 'set_value', side_effect=lambda *a, **kw: writes.append(a), create=True), \
+             patch.object(frappe, 'clear_document_cache', create=True), \
+             patch.object(service, '_sync_drawing_dxf_status'):
+            self.assertEqual(plan.name, service.apply_stale_approved_plan_cancellation(order))
+        self.assertIsNone(order.approved_plan)
+        self.assertTrue(any('status' in call for call in writes))
+
     def test_v4_detects_machining_and_double_changes(self):
         _, order, plan = golden_case()
         baseline = workspace.plan_input_fingerprint(order, plan, version=4)
