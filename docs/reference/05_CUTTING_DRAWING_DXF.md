@@ -304,3 +304,28 @@ The audit paginates all visible uploaded revisions and returns identifiers,
 revision/status, classification and reason only. It does not repair data or send
 customer/financial fields. Review historical cancellations separately. No schema
 migration, bulk stale-flag reset or automatic production repair is part of this fix.
+
+### 13.1. Final hardening: persisted stale evidence and V3 representation
+
+Historical invalidation (including `2ebee99d`, September 15) writes the stale flag
+using `db.set_value(..., update_modified=False)` without a cause/provenance record.
+`track_changes=1` on Cutting Plan does not make that direct DB write a Document
+save with a Version entry. Settings/new-draft initialization can also set the flag.
+A contract-only change and a manufacturing edit subsequently reverted can therefore
+have identical persisted inputs, hash, snapshot and flag. Current `COMPATIBLE` is
+not evidence of the flag's original cause. The audit now reports
+`stale_origin_not_recorded` for `PERSISTED_STALE`; no automatic repair eligibility
+is inferred. Approved snapshots/hashes/status and existing cancellations remain
+untouched. There is no repair command or migration without reliable evidence;
+production flags still need independent review. No live-site audit was executed.
+
+V3 now validates required keys, complete conditional machining groups and exact
+primitive representation (including int/float/bool distinctions) before hashing.
+The existing row adapter and fingerprint engine remain the owners; there is no
+second serializer. The reviewed V3 golden corpus is pinned by an independent
+canonical digest at `0114e3be`, and the V3 schema definition has a separate pinned
+digest, so editing expected SHA values or extending the same schema silently fails CI.
+Active machining, Glass and corner vectors detect normalization changes. A new
+contract meaning requires a new version and new vectors while preserving V3's
+reviewed corpus. This is a regression/review guard; intentionally rewriting both
+production contracts and their protecting tests still requires code review.

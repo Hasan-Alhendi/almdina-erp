@@ -2973,3 +2973,5 @@ add-on,إضافة
 Plan matching requires review,مطابقة الخطة تحتاج إلى مراجعة
 Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing.,تعذر تأكيد مطابقة الخطة بعد تحديث النظام. راجع الخطة قبل استخدامها في عملية تصنيع جديدة.
 The plan is marked as out of date. Review it before starting new manufacturing.,الخطة تحمل علامة محفوظة بأنها قديمة. راجعها قبل استخدامها في عملية تصنيع جديدة.
+Review and verify the cutting plan before starting new manufacturing work.,راجع خطة القص وتأكد من مطابقتها قبل بدء عمل تصنيعي جديد.
+Use the Start or Handoff action to activate a production stage.,استخدم إجراء البدء أو التسليم لتفعيل مرحلة الإنتاج.

@@ -76,6 +76,13 @@ jobs:
           bench --site test.localhost migrate 2>&1 | tee "$RUNNER_TEMP/migrate.log"
           bench build --app almdina_erp 2>&1 | tee "$RUNNER_TEMP/build.log"
           bench --site test.localhost execute almdina_erp.tests.cross_order_p0_runtime_fixture.prepare 2>&1 | tee "$RUNNER_TEMP/fixture.log"
+      - name: Verify fingerprint hardening on pinned Frappe and MariaDB
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config allow_tests true
+          trap 'bench --site test.localhost set-config allow_tests false' EXIT
+          bench --site test.localhost run-tests --app almdina_erp --module almdina_erp.tests.test_fingerprint_final_hardening 2>&1 | tee "$RUNNER_TEMP/fingerprint-hardening.log"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -264,3 +271,4 @@ jobs:
             ${{ runner.temp }}/recovery-browser.log
           if-no-files-found: warn
           retention-days: 14
+

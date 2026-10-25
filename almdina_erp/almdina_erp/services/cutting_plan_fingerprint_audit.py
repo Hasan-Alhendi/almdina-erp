@@ -1,4 +1,9 @@
-"""Read-only Bench audit; permission-scoped, with no repair or approval commands."""
+"""Read-only Bench audit; permission-scoped, with no repair or approval commands.
+
+Legacy invalidation uses db.set_value(update_modified=False) without a reason or
+Version entry. A current compatible hash cannot prove the origin of a saved flag
+(e.g. dimensions changed and later reverted). Never infer repair eligibility.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -37,7 +42,7 @@ def audit_uploaded_plan_fingerprints() -> list[dict[str, Any]]:
             if row.status in {"Cancelled", "Superseded"}:
                 state = "HISTORICAL_REVIEW_REQUIRED"
             elif cint(plan.plan_needs_recalculation) and state in {"MATCH", "COMPATIBLE"}:
-                state = "PERSISTED_STALE"
+                state, reason = "PERSISTED_STALE", "stale_origin_not_recorded"
             result.append({
                 "order": row.door_cutting_order, "plan": row.name,
                 "revision": cint(row.revision), "status": row.status,

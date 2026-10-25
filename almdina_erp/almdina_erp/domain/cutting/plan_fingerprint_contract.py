@@ -32,6 +32,34 @@ extra_back_groove back_groove_reference_side back_groove_offset_cm back_groove_w
 extra_recessed_handle_cutout recessed_handle_reference_side recessed_handle_offset_cm recessed_handle_width_cm recessed_handle_start_cm recessed_handle_length_cm
 '''.split())
 
+# Required keys and primitive types are part of V3, including inactive defaults.
+# Do not infer these from the mutable row adapter or add-on registry.
+_REQUIRED_PIECE_KEYS = frozenset("""
+piece_instance_id width_cm length_cm final_width_cm final_length_cm qty
+allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bottom
+edge_break edge_break_only piece_type extra_double extra_double_reference_sides
+clipped_corner_position clipped_corner_width_cm clipped_corner_length_cm
+special_shape_geometry_json liner_specs_json edge_long_thickness_mm edge_width_thickness_mm
+""".split())
+_INTEGER_PIECE_KEYS = frozenset("""
+qty allow_rotation edge_long_right edge_long_left edge_width_top edge_width_bottom
+edge_break edge_break_only extra_double extra_liner extra_back_groove extra_recessed_handle_cutout
+""".split())
+_STRING_PIECE_KEYS = frozenset("""
+piece_instance_id piece_type extra_double_reference_sides clipped_corner_position
+special_shape_geometry_json liner_specs_json liner_reference_side
+back_groove_reference_side recessed_handle_reference_side
+""".split())
+_MACHINING_GROUPS = tuple(
+    frozenset((enabled, *(f"{prefix}_{suffix}" for suffix in (
+        "reference_side", "offset_cm", "width_cm", "start_cm", "length_cm",
+    ))))
+    for enabled, prefix in (
+        ("extra_liner", "liner"), ("extra_back_groove", "back_groove"),
+        ("extra_recessed_handle_cutout", "recessed_handle"),
+    )
+)
+
 # The only historical omissions supported by evidence from Git. No powerset search.
 LEGACY_V2_SCHEMAS = (
     ('v2_oct22', ()),
@@ -59,6 +87,18 @@ class FingerprintCompatibility:
 def freeze_geometry_piece(piece: Mapping[str, Any]) -> dict[str, Any]:
     if set(piece) - GEOMETRY_PIECE_KEYS:
         raise PlanFingerprintContractError('unknown_fingerprint_piece_fields')
+    if _REQUIRED_PIECE_KEYS - set(piece):
+        raise PlanFingerprintContractError('missing_fingerprint_piece_fields')
+    if piece['piece_type'] == 'Glass' and 'glass_margin_mm' not in piece:
+        raise PlanFingerprintContractError('missing_fingerprint_glass_margin')
+    for group in _MACHINING_GROUPS:
+        present = group.intersection(piece)
+        if present and present != group:
+            raise PlanFingerprintContractError('incomplete_fingerprint_machining_fields')
+    for key, value in piece.items():
+        expected = int if key in _INTEGER_PIECE_KEYS else str if key in _STRING_PIECE_KEYS else float
+        if type(value) is not expected:
+            raise PlanFingerprintContractError('noncanonical_fingerprint_piece_type')
     return dict(piece)
 
 
