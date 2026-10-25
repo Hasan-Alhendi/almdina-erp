@@ -25,7 +25,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization im
     cutting_plan_capability_allowed,
     require_cutting_plan_capability,
 )
-from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import plan_fingerprint_compatibility
+from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
+    manufacturing_baseline_v4, plan_fingerprint_compatibility,
+)
 
 
 def _dxf_attachment_status(plan: Any, source: str, *, verify_files: bool) -> str:
@@ -132,6 +135,17 @@ def _audit_group(rows: list[Any], *, include_system: bool,
             state, reason, contract = decision.state, decision.reason, decision.contract
         except (ManufacturingRequirementsError, frappe.ValidationError):
             state, reason, contract = "REVIEW_REQUIRED", "unverifiable_inputs", ""
+        try:
+            physical_inputs_sha = fingerprint_payload(manufacturing_baseline_v4(order, plan, historical=True))
+        except (AttributeError, ManufacturingRequirementsError, frappe.ValidationError):
+            physical_inputs_sha = ""
+        try:
+            saved = frappe.parse_json(str(getattr(plan, "snapshot_json", "") or "{}"))
+            layout_sha = (fingerprint_payload({"sheets": saved["sheets"]})
+                          if isinstance(saved, dict) and isinstance(saved.get("sheets"), list)
+                          and saved["sheets"] else "")
+        except (TypeError, ValueError):
+            layout_sha = ""
 
         current_draft = current_drafts.get(source) == plan_name
         candidate = current_draft or current_approval
@@ -153,6 +167,8 @@ def _audit_group(rows: list[Any], *, include_system: bool,
         if include_system:
             entry.update(
                 audit_schema_version=1,
+                physical_inputs_sha=physical_inputs_sha,
+                saved_layout_sha=layout_sha,
                 source_type=source,
                 current_draft=current_draft,
                 current_approval=current_approval,
@@ -236,14 +252,37 @@ def compare_upgrade_audits(before: list[dict[str, Any]], after: list[dict[str, A
     changed = sorted(name for name in old.keys() & new.keys()
                      if any(old[name].get(key) != new[name].get(key) for key in
                             ("classification", "status", "dxf_attachment_status")))
+    same_inputs = {name for name in old.keys() & new.keys()
+                   if old[name].get("physical_inputs_sha")
+                   and old[name].get("physical_inputs_sha") == new[name].get("physical_inputs_sha")
+                   and old[name].get("saved_layout_sha")
+                   and old[name].get("saved_layout_sha") == new[name].get("saved_layout_sha")}
+    contract_only = sum(name in same_inputs and old[name].get("status") == new[name].get("status")
+                        and old[name].get("classification") != new[name].get("classification")
+                        for name in changed)
+    lifecycle_changes = sum(old[name].get("status") != new[name].get("status") for name in old.keys() & new.keys())
+    file_losses = sum(old[name].get("dxf_attachment_status") == "AVAILABLE"
+                      and new[name].get("dxf_attachment_status") != "AVAILABLE"
+                      for name in old.keys() & new.keys())
+    physical_drift = sum(old[name].get("physical_inputs_sha") != new[name].get("physical_inputs_sha")
+                         for name in old.keys() & new.keys())
+    layout_drift = sum(old[name].get("saved_layout_sha") != new[name].get("saved_layout_sha")
+                       for name in old.keys() & new.keys())
     incomplete = len(old) != len(before) or len(new) != len(after) or any(
                      item.get("audit_schema_version") != 1 or
+                     not item.get("physical_inputs_sha") or
+                     item.get("manufacturing_authorized") and not item.get("saved_layout_sha") or
                      item.get("dxf_attachment_status") in {"NOT_CHECKED", "UNKNOWN"}
                      for item in [*before, *after])
     return {"result": "BLOCKED_BY_REGRESSION" if regressions else
-            "REVIEW_REQUIRED" if incomplete or changed or old.keys() != new.keys() else "PASS",
+            "REVIEW_REQUIRED" if incomplete or changed or physical_drift or layout_drift
+            or old.keys() != new.keys() else "PASS",
             "lost_manufacturing_eligibility": len(regressions),
             "classification_changes": len(changed), "missing_or_new_plans": len(old.keys() ^ new.keys()),
+            "contract_only_classification_changes": contract_only,
+            "unexplained_classification_changes": len(changed) - contract_only,
+            "physical_projection_changes": physical_drift, "saved_layout_changes": layout_drift,
+            "lifecycle_changes": lifecycle_changes, "dxf_file_losses": file_losses,
             "incomplete_evidence": incomplete}
 
 

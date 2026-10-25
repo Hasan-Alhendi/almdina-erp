@@ -86,6 +86,8 @@ class TestPlanUpgradeAudit(unittest.TestCase):
     def test_preflight_needs_complete_evidence_and_catches_file_or_lifecycle_loss(self):
         old = {'plan': 'SYN', 'audit_schema_version': 1, 'classification': 'MATCH',
                'status': 'Approved', 'manufacturing_authorized': True,
+               'physical_inputs_sha': 'synthetic-physical-digest',
+               'saved_layout_sha': 'synthetic-layout-digest',
                'dxf_attachment_status': 'AVAILABLE'}
         self.assertEqual('PASS', audit.compare_upgrade_audits([old], [dict(old)])['result'])
         self.assertEqual('BLOCKED_BY_REGRESSION', audit.compare_upgrade_audits(
@@ -96,6 +98,13 @@ class TestPlanUpgradeAudit(unittest.TestCase):
             [old], [old | {'dxf_attachment_status': 'NOT_CHECKED'}])['result'])
         self.assertEqual('REVIEW_REQUIRED', audit.compare_upgrade_audits(
             [old], [dict(old) | {'audit_schema_version': None}])['result'])
+        changed = old | {'classification': 'REVIEW_REQUIRED'}
+        result = audit.compare_upgrade_audits([old], [changed])
+        self.assertEqual(1, result['contract_only_classification_changes'])
+        altered = old | {'physical_inputs_sha': 'different-inputs'}
+        result = audit.compare_upgrade_audits([old], [altered])
+        self.assertEqual('REVIEW_REQUIRED', result['result'])
+        self.assertEqual(1, result['physical_projection_changes'])
 
 
 if __name__ == '__main__':

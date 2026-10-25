@@ -66,6 +66,13 @@ automatic PASS retroactively. Future upgrades should capture both manifests
 with this schema before any production deployment. Do not run the manifest
 command on the live site as part of this rollout.
 
+The comparison reports physical-input and saved-layout digests, lifecycle
+changes and DXF losses. It calls a classification change with both digests
+unchanged a contract-only change **on the same isolated DB copy**; this is an
+inference about code interpretation, not proof of a plan's original approval.
+Changed or missing digests require review and never yield `PASS` for an
+otherwise authorized plan.
+
 The Bench summary entry point is
 `almdina_erp.almdina_erp.services.cutting_plan_fingerprint_audit.audit_cutting_plan_summary`.
 The streaming inventory accepts `order_names`, `page_size` (1–500) and
