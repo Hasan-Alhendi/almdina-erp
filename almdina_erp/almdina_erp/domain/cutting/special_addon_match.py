@@ -1,4 +1,4 @@
-"""Match interchangeable Special doors by add-on combination.
+"""Match manufacturing identities and add-ons through complete group assignments.
 
 The order sketch is not a geometric identity. Special doors that share a
 manufacturing envelope are distinguished only by the add-on paths actually
@@ -12,6 +12,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Sequence
+
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    dimensions_match_exact,
+    special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
+)
 
 OVERLAY_KINDS = ("liner", "back_groove", "recessed_handle_cutout")
 _OVERLAY_KIND_SET = frozenset(OVERLAY_KINDS)
@@ -36,6 +41,7 @@ class SpecialExpectedRecord:
     signature: frozenset[str]
     source_piece_no: int | None = None
     copy_no: int | None = None
+    piece_type: str = "Special"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,19 +58,6 @@ def overlay_signature(codes: Sequence[str]) -> frozenset[str]:
     return frozenset(code for code in codes if code in _OVERLAY_KIND_SET)
 
 
-def _direct(
-    actual_width: float,
-    actual_height: float,
-    expected_width: float,
-    expected_height: float,
-    tolerance_cm: float,
-) -> bool:
-    return (
-        abs(actual_width - expected_width) <= tolerance_cm
-        and abs(actual_height - expected_height) <= tolerance_cm
-    )
-
-
 def _dimensions_compatible(
     contour: SpecialContourRecord,
     expected: SpecialExpectedRecord,
@@ -72,22 +65,26 @@ def _dimensions_compatible(
     tolerance_cm: float,
     force_rotation: bool,
 ) -> bool:
-    if _direct(
+    # Discovery tolerance is not manufacturing identity. Keep the argument for
+    # existing callers; the persisted manufacturing contract owns precision.
+    matches = (
+        special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction
+        if expected.piece_type == "Special" else dimensions_match_exact
+    )
+    if matches(
         contour.width_cm,
         contour.height_cm,
         expected.width_cm,
         expected.height_cm,
-        tolerance_cm,
     ):
         return True
     if not (force_rotation or expected.allow_rotation):
         return False
-    return _direct(
+    return matches(
         contour.width_cm,
         contour.height_cm,
         expected.height_cm,
         expected.width_cm,
-        tolerance_cm,
     )
 
 
@@ -339,6 +336,31 @@ def match_special_addon_group(
         return SpecialAddonAssignment(True, {})
     if len(contours) != len(expected):
         return _diagnose(contours, expected, tolerance_cm=tolerance_cm)
+
+    # A complete existing bijection is a fast certificate only after every
+    # edge passes the manufacturing contract. Never trust discovery indexes
+    # merely because they are present; one incompatible edge triggers the
+    # same complete group solver below.
+    by_index = {item.index: item for item in expected}
+    current = [contour.current_expected_index for contour in contours]
+    if len(set(current)) == len(contours) and all(
+        index in by_index
+        and contour.signature == by_index[index].signature
+        and (
+            contour.compatible_expected_indexes is None
+            or index in contour.compatible_expected_indexes
+        )
+        and _dimensions_compatible(
+            contour, by_index[index],
+            tolerance_cm=tolerance_cm, force_rotation=False,
+        )
+        for contour, index in zip(contours, current, strict=True)
+    ):
+        return SpecialAddonAssignment(True, {
+            contour.key: index
+            for contour, index in zip(contours, current, strict=True)
+            if index is not None
+        })
 
     assigned = _assign(
         _edges(

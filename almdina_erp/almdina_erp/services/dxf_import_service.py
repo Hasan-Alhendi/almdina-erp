@@ -175,6 +175,7 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
+    normalize_cut_cm,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
@@ -1578,7 +1579,11 @@ def _topology_piece_rotation(
     height_cm: float,
     candidate: dict[str, Any],
 ) -> bool:
-    if _direct_dimensions_match(
+    matches = (
+        special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction
+        if candidate["piece_type"] == "Special" else dimensions_match_exact
+    )
+    if matches(
         width_cm,
         height_cm,
         candidate["width_cm"],
@@ -1587,11 +1592,11 @@ def _topology_piece_rotation(
         return False
     return bool(
         candidate["allow_rotation"]
-        and _rotated_dimensions_match(
+        and matches(
             width_cm,
             height_cm,
-            candidate["width_cm"],
             candidate["length_cm"],
+            candidate["width_cm"],
         )
     )
 
@@ -1812,8 +1817,8 @@ def _regular_addon_candidates(
     compatible = set()
     for index, candidate in expected:
         width, height = candidate["width_cm"], candidate["length_cm"]
-        direct = _direct_dimensions_match(piece["w"], piece["h"], width, height)
-        swapped = _rotated_dimensions_match(piece["w"], piece["h"], width, height)
+        direct = dimensions_match_exact(piece["w"], piece["h"], width, height)
+        swapped = dimensions_match_exact(piece["w"], piece["h"], height, width)
         turns = tuple(
             turn for turn in range(4)
             if (direct if turn % 2 == 0 else swapped)
@@ -1925,6 +1930,7 @@ def _reconcile_addon_groups(
             signature=overlay_signature(piece.get("selected_codes") or ()),
             source_piece_no=int(piece["source_piece_no"]),
             copy_no=int(piece["copy_no"]),
+            piece_type=piece_type,
         )
         for index, piece in group_expected
     )
@@ -1955,108 +1961,98 @@ def _reconcile_addon_groups(
         )
 
 
-def _match_pieces_to_order(pieces: list[dict[str, Any]], order: Any) -> list[dict[str, Any]]:
+def _match_pieces_to_order(
+    pieces: list[dict[str, Any]], order: Any
+) -> list[dict[str, Any]]:
     expected = _expected_order_pieces(order)
-    _apply_glass_identity(pieces, expected)
-    unmatched_indexes = list(range(len(expected)))
-    labeled: list[dict[str, Any]] = []
-    issues: list[DxfValidationIssue] = []
-
-    for piece_index, piece in enumerate(pieces, start=1):
-        width_cm = _num(piece.get("w"))
-        height_cm = _num(piece.get("h"))
-        expected_index = piece.get("_expected_piece_index")
-        if expected_index is not None:
-            try:
-                expected_index = int(expected_index)
-            except (TypeError, ValueError):
-                expected_index = -1
-            if expected_index not in unmatched_indexes:
-                issues.append(
-                    issue(
-                        PIECE_IDENTITY_MISSING,
-                        CATEGORY_IDENTITY,
-                        target=contour_target(piece_index),
-                        params={"identity_unproven": True},
-                    )
-                )
-                continue
-            candidate = expected[expected_index]
-        else:
-            provisional = str(piece.get("piece_type") or "")
-            expected_index, _rotated, forbidden_rotation = _legacy_expected_piece_match(
-                width_cm=width_cm,
-                height_cm=height_cm,
-                expected=expected,
-                unmatched_indexes=unmatched_indexes,
-                rectangular=(
-                    provisional == "Regular"
-                    if provisional in {"Regular", "Special"}
-                    else None
-                ),
+    if any(piece["piece_type"] == "Glass" for piece in expected):
+        _apply_glass_identity(pieces, expected)
+    # Topology indexes are discovery evidence only. Prove a complete bijection
+    # using persisted cut precision before copying any order-row identity.
+    by_size: dict[tuple, set[int]] = {}
+    special_indexes = set()
+    for index, candidate in enumerate(expected):
+        if candidate["piece_type"] == "Special":
+            special_indexes.add(index)
+            continue
+        size = (
+            normalize_cut_cm(candidate["width_cm"]),
+            normalize_cut_cm(candidate["length_cm"]),
+        )
+        by_size.setdefault(size, set()).add(index)
+        # Keep swapped sizes available for forbidden-rotation diagnosis. The
+        # group matcher independently enforces the row's rotation permission.
+        by_size.setdefault(size[::-1], set()).add(index)
+    contours = []
+    candidate_sets: dict[tuple, frozenset[int]] = {}
+    for piece in pieces:
+        size = (normalize_cut_cm(piece["w"]), normalize_cut_cm(piece["h"]))
+        rectangular = (
+            piece["piece_type"] == "Regular"
+            if piece.get("piece_type") in {"Regular", "Special"}
+            else None
+        )
+        key = (size, rectangular)
+        if key not in candidate_sets:
+            candidate_sets[key] = frozenset(
+                index
+                for index in by_size.get(size, set()) | special_indexes
+                if _legacy_outline_allows(expected[index], rectangular)
             )
-
-            if expected_index is None:
-                if forbidden_rotation:
-                    issues.append(
-                        issue(
-                            FORBIDDEN_ROTATION,
-                            CATEGORY_DIMENSIONS,
-                            target=piece_target(
-                                source_piece_no=int(forbidden_rotation["source_piece_no"]),
-                                label=str(forbidden_rotation.get("label") or ""),
-                            ),
-                            params={
-                                "actual_width_cm": width_cm,
-                                "actual_height_cm": height_cm,
-                                "expected_width_cm": forbidden_rotation["width_cm"],
-                                "expected_height_cm": forbidden_rotation["length_cm"],
-                            },
-                        )
-                    )
-                else:
-                    issues.append(
-                        issue(
-                            CUT_SIZE_MISMATCH,
-                            CATEGORY_DIMENSIONS,
-                            target=contour_target(piece_index),
-                            params={
-                                "actual_width_cm": width_cm,
-                                "actual_height_cm": height_cm,
-                                "identity_unproven": True,
-                            },
-                        )
-                    )
-                continue
-
-            candidate = expected[expected_index]
-
-        unmatched_indexes.remove(expected_index)
+        contours.append(
+            SpecialContourRecord(
+                key=int(piece["id"]),
+                width_cm=piece["w"],
+                height_cm=piece["h"],
+                signature=frozenset(),
+                current_expected_index=piece.get("_expected_piece_index"),
+                compatible_expected_indexes=candidate_sets[key],
+            )
+        )
+    assignment = match_special_addon_group(
+        contours,
+        tuple(
+            SpecialExpectedRecord(
+                index=index,
+                width_cm=piece["width_cm"],
+                height_cm=piece["length_cm"],
+                allow_rotation=bool(piece["allow_rotation"]),
+                signature=frozenset(),
+                source_piece_no=piece["source_piece_no"],
+                copy_no=piece["copy_no"],
+                piece_type=piece["piece_type"],
+            )
+            for index, piece in enumerate(expected)
+        ),
+        tolerance_cm=DIMENSION_TOLERANCE_MM / 10.0,
+    )
+    if not assignment.ok:
+        if assignment.code == "FORBIDDEN_ROTATION":
+            raise DxfImportError(issues=[_special_group_issue(assignment, (), pieces)])
+        raise DxfImportError(
+            issues=[
+                _expected_piece_mismatch_issue(
+                    DxfTopologyError("EXPECTED_PIECE_MISMATCH"),
+                    candidates=tuple(
+                        ContourCandidate(int(piece["id"]), tuple(piece["_outline_mm"]))
+                        for piece in pieces
+                    ),
+                    order=order,
+                    kerf_mm=max(0.0, flt(order.kerf_mm)),
+                )
+            ]
+        )
+    labeled: list[dict[str, Any]] = []
+    for piece in pieces:
+        expected_index = assignment.mapping[int(piece["id"])]
         _apply_expected_identity(
             piece,
-            candidate,
-            width_cm,
-            height_cm,
+            expected[expected_index],
+            _num(piece.get("w")),
+            _num(piece.get("h")),
             expected_index,
         )
         labeled.append(piece)
-
-    if unmatched_indexes:
-        preview = "، ".join(
-            f"{expected[index]['label']} ({_format_cm(expected[index]['width_cm'])} × {_format_cm(expected[index]['length_cm'])} سم)"
-            for index in unmatched_indexes[:6]
-        )
-        suffix = " ..." if len(unmatched_indexes) > 6 else ""
-        issues.append(
-            issue(
-                PIECE_MISSING,
-                CATEGORY_IDENTITY,
-                target=file_target(),
-                params={"preview": f"{preview}{suffix}"},
-            )
-        )
-    if issues:
-        raise DxfImportError(issues=issues)
     glass_issues = _glass_opening_issues(labeled)
     if glass_issues:
         raise DxfImportError(issues=glass_issues)
