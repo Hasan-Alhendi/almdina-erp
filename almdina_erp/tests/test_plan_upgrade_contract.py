@@ -38,6 +38,7 @@ class TestUpgradeContract(unittest.TestCase):
 
     def test_exact_preview_commit_checks_v4_and_original_generation_inputs(self):
         from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_preview_commit as commit
+        import frappe
         _, order, plan = golden_case()
         settings = {'packing_mode': 'auto_pro', 'cutting_machine_type': 'Auto',
                     'kerf_mm': 3.0, 'trim_margin_mm': 5.0,
@@ -50,7 +51,7 @@ class TestUpgradeContract(unittest.TestCase):
             commit.apply_exact_system_preview(order, plan, settings=settings, snapshot=snapshot,
                                               expected_input_fingerprint=v4)
             self.assertEqual(v3, apply.call_args.kwargs['fingerprint'])
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(frappe.ValidationError, "تغيّرت بيانات الطلب"):
                 commit.apply_exact_system_preview(order, plan, settings=settings,
                     snapshot=snapshot | {'generation_input_fingerprint': 'stale'},
                     expected_input_fingerprint=v4)
