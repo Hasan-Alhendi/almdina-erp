@@ -1470,7 +1470,12 @@ def _apply_strict_dimension_contract(
                         )
                     )
                 continue
-            if str(piece.get("piece_type") or "") == "Special":
+            if str(piece.get("piece_type") or "") == "Special" or (
+                piece.get("piece_type") == "Regular"
+                and (piece.get("_expected_piece_index") is not None or (
+                    piece.get("source_piece_no") and piece.get("copy_no")
+                ))
+            ):
                 issues.append(
                     issue(
                         PIECE_IDENTITY_MISSING,
@@ -1851,7 +1856,17 @@ def parse_production_dxf(
         cutter_diameter_mm=settings.kerf_mm,
     )
     if exact_issues:
-        raise DxfImportError(issues=exact_issues)
+        # Existing saw-center provenance distinguishes modern GEOMETRY from
+        # legacy contour DXF without adding persisted snapshot/API fields.
+        outline_layer = (
+            "GEOMETRY" if snapshot.get("saw_center_status") in {"Present", "Absent"}
+            else "CUT_PATH"
+        )
+        raise DxfImportError(issues=[
+            replace(item, params={**item.params, "outline_layer": outline_layer})
+            if item.code == CUT_SIZE_MISMATCH else item
+            for item in exact_issues
+        ])
 
     snapshot["dimension_contract"] = {
         "mode": "exact-edge-adjusted",
