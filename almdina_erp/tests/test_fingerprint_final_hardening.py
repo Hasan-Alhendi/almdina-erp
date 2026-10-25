@@ -122,13 +122,22 @@ class TestFingerprintManufacturingSafety(unittest.TestCase):
         rpc._repository = repo
         rpc._ = lambda value: catalog.get(value, value)
         module_name = 'almdina_erp.almdina_erp.services.shop_floor_commands'
-        with patch.dict(sys.modules, {module_name: rpc}):
+        previous = sys.modules.get(module_name)
+        sys.modules[module_name] = rpc
+        try:
             with self.assertRaisesRegex(RuntimeError, 'راجع خطة القص'):
                 production_service.start_stage('STAGE', assigned_to='Administrator')
             repo.capabilities = {Capability.HANDOFF_ASSIGNED_STAGE}
             with patch.object(rpc, '_stage_completion_whatsapp_context', return_value=None):
                 with self.assertRaisesRegex(RuntimeError, 'راجع خطة القص'):
                     production_service.finish_stage('STAGE')
+        finally:
+            # Restore only our seam. Restoring all of sys.modules discards
+            # controllers loaded by Frappe while its metadata cache retains them.
+            if previous is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous
         self.assertFalse(any(c[0] in {'start_stage','complete_stage'} for c in repo.calls))
 
     def test_queries_and_list_use_the_same_dynamic_planning_safety_fact(self):

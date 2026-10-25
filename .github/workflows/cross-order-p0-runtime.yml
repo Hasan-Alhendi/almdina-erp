@@ -248,6 +248,7 @@ jobs:
             ${{ runner.temp }}/migrate.log
             ${{ runner.temp }}/build.log
             ${{ runner.temp }}/fixture.log
+            ${{ runner.temp }}/fingerprint-hardening.log
             ${{ runner.temp }}/serve.log
             ${{ runner.temp }}/browser.log
             ${{ runner.temp }}/preflight.log
