@@ -448,6 +448,14 @@ class CustomerBotSettingsAccessTests(unittest.TestCase):
         )
         api = (ROOT / "public" / "js" / "factory_production_settings" / "api.js").read_text(encoding="utf-8")
         self.assertIn('methods=["POST"]', service)
+        import frappe
+
+        from almdina_erp.almdina_erp.services.customer_bot_settings_service import (
+            get_customer_bot_settings,
+        )
+
+        allowed = frappe.allowed_http_methods_for_whitelisted_func[get_customer_bot_settings]
+        self.assertIn("POST", allowed)
         self.assertNotIn("allow_guest", service)
         self.assertNotIn("webhook", service)
         self.assertNotIn("System Manager", service)

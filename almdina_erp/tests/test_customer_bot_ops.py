@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from almdina_erp.almdina_erp.application.customer_bot.accept_inbound_message import (
@@ -30,10 +32,20 @@ from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
 )
 from almdina_erp.almdina_erp.domain.customer_bot.text_reply import SendDisposition, TextSendResult
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops import (
+    CONF_OPS_MODE,
+    CONF_OPS_STARTED_AT,
+    CONF_PILOT_STARTED_AT,
+    CONF_PILOT_TRANSPORT_ARMED,
+    CONF_TRANSPORT_ARMED,
+    CONF_TRANSPORT_LIVE,
+    CustomerBotOpsTransitionError,
+    disarm_customer_bot_transport,
     intent_ops_cancel_reason,
     load_customer_bot_ops,
     ops_transport_may_run,
+    refresh_ops_start_cutoff,
     resolve_ops_mode,
+    set_customer_bot_ops_mode,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_reply_delivery import (
     LIVE_REPLY_DELIVERY_ENABLED,
@@ -525,6 +537,208 @@ class PatchIdempotencyTests(unittest.TestCase):
         self.assertIn('"off"', source)
         self.assertNotIn('"production"', source)
         self.assertIn("customer_bot_ops_mode", source)
+
+
+class _Conf:
+    def __init__(self, values: dict) -> None:
+        self.values = dict(values)
+
+    def mapping(self) -> dict:
+        return self.values
+
+    def write(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
+def _live_production_conf() -> _Conf:
+    return _Conf(
+        {
+            "customer_bot_ops_mode": "production",
+            "customer_bot_ops_started_at": "2026-10-01T00:00:00Z",
+            "customer_bot_pilot_enabled": 0,
+            "customer_bot_pilot_phone_e164": PHONE_A,
+            "customer_bot_pilot_started_at": "2026-10-01T00:00:00Z",
+            "customer_bot_transport_armed": 1,
+            "customer_bot_pilot_transport_armed": 1,
+            "customer_bot_transport_live": 1,
+        }
+    )
+
+
+class TransportDisarmTests(unittest.TestCase):
+    def _bound(self, conf: _Conf):
+        module = "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops"
+        stack = ExitStack()
+        stack.enter_context(patch(f"{module}._conf_mapping", conf.mapping))
+        stack.enter_context(patch(f"{module}._write_conf", conf.write))
+        stack.enter_context(patch(f"{module}._refresh_conf", lambda: None))
+        stack.enter_context(
+            patch(f"{module}._epoch_sql", return_value=[SimpleNamespace(value="4")])
+        )
+        stack.enter_context(patch(f"{module}._epoch_execute", return_value=1))
+        return stack
+
+    def test_disarm_clears_live_flag_that_started_enabled(self) -> None:
+        conf = _live_production_conf()
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 1)
+        with self._bound(conf):
+            status = disarm_customer_bot_transport()
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+        self.assertEqual(conf.values[CONF_TRANSPORT_ARMED], 0)
+        self.assertEqual(conf.values[CONF_PILOT_TRANSPORT_ARMED], 0)
+        self.assertEqual(conf.values[CONF_OPS_MODE], "production")
+        self.assertFalse(status["transport_live"])
+        self.assertFalse(status["transport_may_run"])
+
+    def test_mode_change_that_keeps_transport_stopped_does_not_inherit_live(self) -> None:
+        conf = _live_production_conf()
+        with self._bound(conf):
+            status = set_customer_bot_ops_mode(
+                "pilot",
+                pilot_phone_e164=PHONE_A,
+                arm_transport=False,
+            )
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+        self.assertEqual(status["mode"], "pilot")
+        self.assertFalse(status["transport_live"])
+        self.assertFalse(status["transport_armed"])
+        self.assertFalse(status["transport_may_run"])
+
+    def test_connection_change_with_disarm_clears_live_flag(self) -> None:
+        conf = _live_production_conf()
+        previous = conf.values[CONF_OPS_STARTED_AT]
+        with self._bound(conf):
+            status = refresh_ops_start_cutoff(disarm=True)
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+        self.assertNotEqual(conf.values[CONF_OPS_STARTED_AT], previous)
+        self.assertFalse(status["transport_may_run"])
+
+
+class AcceptanceEpochFailureTests(unittest.TestCase):
+    def test_database_failure_aborts_mode_change_and_closes_transport(self) -> None:
+        conf = _live_production_conf()
+        module = "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops"
+        with patch(f"{module}._conf_mapping", conf.mapping), patch(
+            f"{module}._write_conf", conf.write
+        ), patch(f"{module}._refresh_conf", lambda: None), patch(
+            f"{module}._epoch_sql", side_effect=RuntimeError("db down")
+        ):
+            with self.assertRaises(CustomerBotOpsTransitionError):
+                set_customer_bot_ops_mode("pilot", pilot_phone_e164=PHONE_A, arm_transport=False)
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+        self.assertEqual(conf.values[CONF_OPS_MODE], "production")
+        self.assertEqual(conf.values[CONF_OPS_STARTED_AT], "2026-10-01T00:00:00Z")
+
+    def test_database_failure_while_turning_off_does_not_report_success(self) -> None:
+        conf = _live_production_conf()
+        module = "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops"
+        with patch(f"{module}._conf_mapping", conf.mapping), patch(
+            f"{module}._write_conf", conf.write
+        ), patch(f"{module}._refresh_conf", lambda: None), patch(
+            f"{module}._epoch_sql", side_effect=RuntimeError("db down")
+        ):
+            with self.assertRaises(CustomerBotOpsTransitionError):
+                set_customer_bot_ops_mode("off")
+        self.assertEqual(conf.values[CONF_OPS_MODE], "off")
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+        self.assertEqual(conf.values[CONF_TRANSPORT_ARMED], 0)
+
+    def test_database_failure_during_connection_change_keeps_the_old_cutoff(self) -> None:
+        conf = _live_production_conf()
+        module = "almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops"
+        with patch(f"{module}._conf_mapping", conf.mapping), patch(
+            f"{module}._write_conf", conf.write
+        ), patch(f"{module}._refresh_conf", lambda: None), patch(
+            f"{module}._epoch_sql", side_effect=RuntimeError("db down")
+        ):
+            with self.assertRaises(CustomerBotOpsTransitionError):
+                refresh_ops_start_cutoff(disarm=True)
+        self.assertEqual(conf.values[CONF_OPS_STARTED_AT], "2026-10-01T00:00:00Z")
+        self.assertEqual(conf.values[CONF_PILOT_STARTED_AT], "2026-10-01T00:00:00Z")
+        self.assertEqual(conf.values[CONF_TRANSPORT_LIVE], 0)
+
+
+class ReadinessReportTests(unittest.TestCase):
+    def test_settings_ready_is_not_proof_of_sending(self) -> None:
+        from almdina_erp.almdina_erp.infrastructure.frappe import customer_bot_readiness as readiness
+
+        ops = _ops(mode=OPS_MODE_PRODUCTION, phone=None, armed=False, live=False)
+        with patch.object(readiness, "load_customer_bot_ops", return_value=ops), patch.object(
+            readiness, "ops_transport_may_run", return_value=False
+        ), patch.object(
+            readiness,
+            "_lab_switch",
+            return_value={"enabled": True, "accepting_messages": True},
+        ), patch.object(
+            readiness,
+            "_connection_snapshot",
+            return_value={
+                "complete": False,
+                "connection_ref": "",
+                "session_id": "",
+                "webhook_secret_configured": False,
+                "openwa_configured": False,
+            },
+        ), patch.object(readiness, "_factory_session_id", return_value=""), patch.object(
+            readiness, "_published_texts_ok", return_value=True
+        ), patch.object(
+            readiness,
+            "_scheduler_snapshot",
+            return_value={"enable_scheduler": True, "delivery_tick_registered": True},
+        ), patch.object(
+            readiness, "_worker_indicators", return_value={"process_count": 1}
+        ), patch.object(
+            readiness,
+            "_pdf_engine_snapshot",
+            return_value={"available": True, "download_attempted": False},
+        ):
+            missing = readiness.check_customer_bot_readiness(probe_network=True)
+        self.assertFalse(missing["sending_proven"])
+        self.assertEqual(missing["ok"], missing["settings_ready"])
+        self.assertFalse(missing["live_connection_ready"])
+        self.assertEqual(missing["network"]["outcome"], "session_not_ready")
+        with patch.object(
+            readiness,
+            "_probe_session_status",
+            return_value={"probed": True, "reachable": False, "error": "URLError"},
+        ):
+            unreachable = readiness._network_report(
+                True,
+                {"session_id": "session", "openwa_configured": True},
+            )
+        self.assertEqual(unreachable["outcome"], "unreachable")
+        self.assertFalse(unreachable["session_ready"])
+        with patch.object(
+            readiness,
+            "_probe_session_status",
+            return_value={"probed": True, "reachable": True, "http_status": 200, "session_ready": False},
+        ):
+            not_ready = readiness._network_report(
+                True,
+                {"session_id": "session", "openwa_configured": True},
+            )
+        self.assertEqual(not_ready["outcome"], "session_not_ready")
+
+    def test_pdf_check_does_not_download_a_browser(self) -> None:
+        from pathlib import Path
+
+        from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_readiness import (
+            _pdf_engine_snapshot,
+        )
+
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "almdina_erp/infrastructure/frappe/customer_bot_readiness.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("find_or_download_chromium", source)
+        self.assertNotIn("download_chromium", source)
+        with patch("frappe.utils.print_utils.download_chromium") as download, patch(
+            "frappe.utils.print_utils.find_or_download_chromium_executable"
+        ) as finder:
+            snapshot = _pdf_engine_snapshot()
+        download.assert_not_called()
+        finder.assert_not_called()
+        self.assertFalse(snapshot["download_attempted"])
 
 
 if __name__ == "__main__":

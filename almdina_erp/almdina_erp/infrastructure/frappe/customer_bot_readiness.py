@@ -47,9 +47,7 @@ def check_customer_bot_readiness(*, probe_network: bool = False) -> dict[str, An
     scheduler = _scheduler_snapshot()
     workers = _worker_indicators()
     pdf = _pdf_engine_snapshot()
-    network: dict[str, Any] = {"probed": False}
-    if probe_network and connection["session_id"] and connection["openwa_configured"]:
-        network = _probe_session_status(connection["session_id"])
+    network = _network_report(probe_network, connection)
 
     checks = {
         "ops_mode_set": ops.mode in {"off", "pilot", "production"},
@@ -82,9 +80,14 @@ def check_customer_bot_readiness(*, probe_network: bool = False) -> dict[str, An
             "bot_session_matches_factory",
         }
     hard_blockers = [name for name in blockers if name not in soft]
-
+    settings_ready = len(hard_blockers) == 0
+    live_connection_ready = network.get("outcome") == "session_ready"
     return {
-        "ok": len(hard_blockers) == 0,
+        # Settings readiness only. It is not proof that a message can be sent.
+        "ok": settings_ready,
+        "settings_ready": settings_ready,
+        "live_connection_ready": live_connection_ready,
+        "sending_proven": False,
         "ops": {
             "mode": ops.mode,
             "is_ready": ops.is_ready,
@@ -120,6 +123,8 @@ def check_customer_bot_readiness(*, probe_network: bool = False) -> dict[str, An
             "Presence of a worker process does not guarantee the delivery job runs.",
             "accepted means the gateway accepted the send request, not customer receipt.",
             "This check creates no events, intents, or WhatsApp messages.",
+            "ok and settings_ready describe configuration only, not a live send.",
+            "live_connection_ready requires probe_network and a ready session.",
             "LIVE_REPLY_DELIVERY_ENABLED stays False; use transport_armed or transport_live.",
         ],
         "site": getattr(frappe.local, "site", None),
@@ -256,13 +261,76 @@ def _worker_indicators() -> dict[str, Any]:
 
 
 def _pdf_engine_snapshot() -> dict[str, Any]:
-    try:
-        from frappe.utils.print_utils import find_or_download_chromium_executable
+    """Report an already-installed Chromium. Never download a browser or package."""
 
-        executable = str(find_or_download_chromium_executable() or "").strip()
-        return {"available": bool(executable), "engine": "chromium" if executable else None}
+    try:
+        import shutil
+        from pathlib import Path
+
+        import frappe
+
+        configured = str(frappe.get_common_site_config().get("chromium_path") or "").strip()
+        found = shutil.which(configured) if configured else ""
+        if not found:
+            for name in ("chromium", "chromium-browser", "google-chrome"):
+                found = shutil.which(name) or ""
+                if found:
+                    break
+        if not found:
+            bench_exec = Path(frappe.utils.get_bench_path()) / "chromium" / "chrome-linux" / "chrome"
+            if bench_exec.is_file():
+                found = str(bench_exec)
+        return {
+            "available": bool(found),
+            "engine": "chromium" if found else None,
+            "download_attempted": False,
+        }
     except Exception as error:
-        return {"available": False, "engine": None, "error": type(error).__name__}
+        return {
+            "available": False,
+            "engine": None,
+            "download_attempted": False,
+            "error": type(error).__name__,
+        }
+
+
+def _network_report(probe_network: bool, connection: dict[str, Any]) -> dict[str, Any]:
+    if not probe_network:
+        return {
+            "requested": False,
+            "probed": False,
+            "reachable": None,
+            "session_ready": None,
+            "outcome": "not_requested",
+        }
+    if not connection.get("session_id"):
+        return {
+            "requested": True,
+            "probed": False,
+            "reachable": False,
+            "session_ready": False,
+            "outcome": "session_not_ready",
+        }
+    if not connection.get("openwa_configured"):
+        return {
+            "requested": True,
+            "probed": False,
+            "reachable": False,
+            "session_ready": False,
+            "outcome": "gateway_not_configured",
+        }
+    report = _probe_session_status(str(connection["session_id"]))
+    report["requested"] = True
+    if report.get("reachable") is not True:
+        report["reachable"] = False
+        report["session_ready"] = False
+        report["outcome"] = "unreachable"
+    elif report.get("session_ready") is True:
+        report["outcome"] = "session_ready"
+    else:
+        report["session_ready"] = False
+        report["outcome"] = "session_not_ready"
+    return report
 
 
 def _probe_session_status(session_id: str) -> dict[str, Any]:

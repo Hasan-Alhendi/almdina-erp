@@ -59,6 +59,10 @@ REASON_PILOT_PHONE_MISMATCH = "pilot_phone_mismatch"
 REASON_PILOT_TOO_OLD = "pilot_before_start"
 
 
+class CustomerBotOpsTransitionError(RuntimeError):
+    """An ops transition did not finish, so it must not be reported as applied."""
+
+
 def resolve_ops_mode(conf: dict[str, Any] | None = None) -> str:
     """Return the effective ops mode. Never defaults to production."""
 
@@ -185,15 +189,7 @@ def set_customer_bot_ops_mode(
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=timezone.utc)
     stamp = started_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    if normalized == OPS_MODE_OFF:
-        _write_conf(CONF_OPS_MODE, OPS_MODE_OFF)
-        _write_conf(CONF_PILOT_ENABLED, 0)
-        _disarm_transport_keys()
-        _bump_acceptance_epoch()
-        _refresh_conf()
-        return ops_status()
-
+    phone = None
     if normalized == OPS_MODE_PILOT:
         phone_raw = pilot_phone_e164
         if phone_raw is None:
@@ -202,24 +198,35 @@ def set_customer_bot_ops_mode(
             phone = parse_pilot_phone(phone_raw)
         except CustomerPhoneError as error:
             raise ValueError(f"invalid_pilot_phone:{error.code}") from error
+
+    # Close transport before any other write. Turning the mode off also
+    # happens before the epoch so a database failure cannot leave acceptance
+    # and transport open. A new pilot or production window is written only
+    # after the epoch advances.
+    if normalized == OPS_MODE_OFF or not arm_transport:
+        _disarm_transport_keys()
+    if normalized == OPS_MODE_OFF:
+        _write_conf(CONF_OPS_MODE, OPS_MODE_OFF)
+        _write_conf(CONF_PILOT_ENABLED, 0)
+    _bump_acceptance_epoch()
+
+    if normalized == OPS_MODE_OFF:
+        _refresh_conf()
+        return ops_status()
+    if normalized == OPS_MODE_PILOT:
         _write_conf(CONF_OPS_MODE, OPS_MODE_PILOT)
         _write_conf(CONF_PILOT_PHONE, phone)
         _write_conf(CONF_PILOT_STARTED_AT, stamp)
         _write_conf(CONF_PILOT_ENABLED, 1)
         _write_conf(CONF_TRANSPORT_ARMED, 1 if arm_transport else 0)
         _write_conf(CONF_PILOT_TRANSPORT_ARMED, 1 if arm_transport else 0)
-        _bump_acceptance_epoch()
-        _refresh_conf()
-        return ops_status()
-
-    # production
-    _write_conf(CONF_OPS_MODE, OPS_MODE_PRODUCTION)
-    _write_conf(CONF_OPS_STARTED_AT, stamp)
-    # Keep legacy pilot_enabled off so resolve never falls back to pilot.
-    _write_conf(CONF_PILOT_ENABLED, 0)
-    _write_conf(CONF_TRANSPORT_ARMED, 1 if arm_transport else 0)
-    _write_conf(CONF_PILOT_TRANSPORT_ARMED, 1 if arm_transport else 0)
-    _bump_acceptance_epoch()
+    else:
+        _write_conf(CONF_OPS_MODE, OPS_MODE_PRODUCTION)
+        _write_conf(CONF_OPS_STARTED_AT, stamp)
+        # Keep legacy pilot_enabled off so resolve never falls back to pilot.
+        _write_conf(CONF_PILOT_ENABLED, 0)
+        _write_conf(CONF_TRANSPORT_ARMED, 1 if arm_transport else 0)
+        _write_conf(CONF_PILOT_TRANSPORT_ARMED, 1 if arm_transport else 0)
     _refresh_conf()
     return ops_status()
 
@@ -249,15 +256,13 @@ def refresh_ops_start_cutoff(*, disarm: bool = True) -> dict[str, Any]:
 
     ops = load_customer_bot_ops()
     stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    if ops.mode == OPS_MODE_PILOT:
-        _write_conf(CONF_PILOT_STARTED_AT, stamp)
-    elif ops.mode == OPS_MODE_PRODUCTION:
-        _write_conf(CONF_OPS_STARTED_AT, stamp)
-    else:
-        _write_conf(CONF_OPS_STARTED_AT, stamp)
     if disarm:
         _disarm_transport_keys()
     _bump_acceptance_epoch()
+    if ops.mode == OPS_MODE_PILOT:
+        _write_conf(CONF_PILOT_STARTED_AT, stamp)
+    else:
+        _write_conf(CONF_OPS_STARTED_AT, stamp)
     _refresh_conf()
     return ops_status()
 
@@ -286,32 +291,39 @@ def ops_status() -> dict[str, Any]:
 
 
 def _disarm_transport_keys() -> None:
+    """Turn off every supported transport switch, including the live site flag."""
+
+    _write_conf(CONF_TRANSPORT_LIVE, 0)
     _write_conf(CONF_TRANSPORT_ARMED, 0)
     _write_conf(CONF_PILOT_TRANSPORT_ARMED, 0)
 
 
 def _bump_acceptance_epoch() -> int:
-    """Advance the settings acceptance epoch so prior cycles cannot keep sending."""
+    """Advance the settings acceptance epoch so prior cycles cannot keep sending.
+
+    A database failure raises. Callers must not report the transition as applied.
+    """
 
     try:
         import frappe
-    except ImportError:
-        return 0
+    except ImportError as error:
+        raise CustomerBotOpsTransitionError("acceptance_epoch_unavailable") from error
     doctype = "Customer Bot Settings"
     try:
-        rows = frappe.db.sql(
+        rows = _epoch_sql(
+            frappe.db,
             """
             select value from `tabSingles`
             where doctype=%s and field='acceptance_epoch'
             for update
             """,
             (doctype,),
-            as_dict=True,
         )
         current = int(rows[0].value or 0) if rows else 0
         new_epoch = current + 1
         if rows:
-            frappe.db.sql(
+            changed = _epoch_execute(
+                frappe.db,
                 """
                 update `tabSingles`
                 set value=%s
@@ -319,8 +331,11 @@ def _bump_acceptance_epoch() -> int:
                 """,
                 (str(new_epoch), doctype),
             )
+            if changed != 1:
+                raise CustomerBotOpsTransitionError("acceptance_epoch_update_failed")
         else:
-            frappe.db.sql(
+            _epoch_execute(
+                frappe.db,
                 """
                 insert into `tabSingles` (doctype, field, value)
                 values (%s, 'acceptance_epoch', %s)
@@ -328,8 +343,19 @@ def _bump_acceptance_epoch() -> int:
                 (doctype, str(new_epoch)),
             )
         return new_epoch
-    except Exception:
-        return 0
+    except CustomerBotOpsTransitionError:
+        raise
+    except Exception as error:
+        raise CustomerBotOpsTransitionError("acceptance_epoch_update_failed") from error
+
+
+def _epoch_sql(database: Any, query: str, params: tuple[object, ...]) -> list[Any]:
+    return list(database.sql(query, params, as_dict=True) or [])
+
+
+def _epoch_execute(database: Any, query: str, params: tuple[object, ...]) -> int:
+    database.sql(query, params)
+    return int(getattr(getattr(database, "_cursor", None), "rowcount", 0) or 0)
 
 
 def _truthy(value: object) -> bool:
@@ -427,6 +453,7 @@ __all__ = [
     "REASON_PILOT_INACTIVE",
     "REASON_PILOT_PHONE_MISMATCH",
     "REASON_PILOT_TOO_OLD",
+    "CustomerBotOpsTransitionError",
     "arm_customer_bot_transport",
     "disarm_customer_bot_transport",
     "intent_ops_cancel_reason",
