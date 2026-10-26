@@ -182,6 +182,9 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         )
         result = self._run(plan_source="custom", plan=approved_present)
         self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+        repeated = self._run(plan_source="approved", plan=approved_present)
+        self.assertEqual(repeated, result)
+        self.assertEqual(Path(self.path).read_bytes(), ORIGINAL_DXF)
 
 
 

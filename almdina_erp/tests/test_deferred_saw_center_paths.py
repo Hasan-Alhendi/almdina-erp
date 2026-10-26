@@ -5,6 +5,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+
+install_if_unavailable()
+
 import ezdxf
 import pytest
 
@@ -239,6 +243,7 @@ def test_legacy_upload_without_geometry_stays_legacy():
 def test_export_include_saw_centers_only_after_approval():
     draft = SimpleNamespace(
         name="CP-DRAFT",
+        door_cutting_order="DCO-EXPORT",
         status="Draft",
         source_type="System",
         saw_center_status="Absent",
@@ -246,12 +251,13 @@ def test_export_include_saw_centers_only_after_approval():
     )
     approved = SimpleNamespace(
         name="CP-APP",
+        door_cutting_order="DCO-EXPORT",
         status="Approved",
         source_type="System",
         saw_center_status="Absent",
         dxf_file="",
     )
-    order = SimpleNamespace(approved_plan="CP-APP")
+    order = SimpleNamespace(name="DCO-EXPORT", approved_plan="CP-APP")
     assert dxf_export_service._include_saw_centers_for_export(draft, "system", order) is False
     assert dxf_export_service._include_saw_centers_for_export(approved, "approved", order) is True
     assert dxf_export_service._include_saw_centers_for_export(approved, None, order) is True
@@ -261,12 +267,13 @@ def test_export_include_saw_centers_only_after_approval():
 def test_custom_tab_regenerates_when_uploaded_plan_is_current_approval_without_paths():
     uploaded = SimpleNamespace(
         name="CP-UP-1",
+        door_cutting_order="DCO-EXPORT",
         status="Approved",
         source_type="Uploaded DXF",
         saw_center_status="Absent",
         dxf_file="/private/files/design.dxf",
     )
-    order = SimpleNamespace(approved_plan="CP-UP-1")
+    order = SimpleNamespace(name="DCO-EXPORT", approved_plan="CP-UP-1")
     assert dxf_export_service.prefer_original_uploaded_download(order, uploaded) is False
     assert dxf_export_service._include_saw_centers_for_export(uploaded, "custom", order) is True
 
@@ -274,6 +281,7 @@ def test_custom_tab_regenerates_when_uploaded_plan_is_current_approval_without_p
 def test_custom_tab_keeps_original_before_approval_and_when_paths_present():
     draft = SimpleNamespace(
         name="CP-UP-2",
+        door_cutting_order="DCO-EXPORT",
         status="Draft",
         source_type="Uploaded DXF",
         saw_center_status="Absent",
@@ -281,13 +289,14 @@ def test_custom_tab_keeps_original_before_approval_and_when_paths_present():
     )
     present = SimpleNamespace(
         name="CP-UP-3",
+        door_cutting_order="DCO-EXPORT",
         status="Approved",
         source_type="Uploaded DXF",
         saw_center_status="Present",
         dxf_file="/private/files/ready.dxf",
     )
-    other_approved = SimpleNamespace(approved_plan="CP-SYSTEM")
-    same_approved = SimpleNamespace(approved_plan="CP-UP-3")
+    other_approved = SimpleNamespace(name="DCO-EXPORT", approved_plan="CP-SYSTEM")
+    same_approved = SimpleNamespace(name="DCO-EXPORT", approved_plan="CP-UP-3")
     assert dxf_export_service.prefer_original_uploaded_download(other_approved, draft) is True
     assert dxf_export_service._include_saw_centers_for_export(draft, "custom", other_approved) is False
     assert dxf_export_service.prefer_original_uploaded_download(same_approved, present) is True
