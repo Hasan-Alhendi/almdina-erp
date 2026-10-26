@@ -272,8 +272,16 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
             # is not a physical boundary: rebuild the same frame used by DXF
             # export, including historical missing and explicit-zero trim.
             stored = persisted_sheets.get(sheet_no) or {}
-            physical_x = x + resolved_sheet_trim_cm(stored, snapshot, axis="x") * 10
-            physical_y = y + resolved_sheet_trim_cm(stored, snapshot, axis="y") * 10
+            trim_source = {
+                "source_type": source.source_type,
+                "full_width_cm": flt(source.full_width_mm) / 10,
+                "full_length_cm": flt(source.full_length_mm) / 10,
+                "usable_width_cm": usable_w / 10,
+                "usable_length_cm": usable_h / 10,
+                **{key: stored[key] for key in ("applied_trim_width_cm", "applied_trim_length_cm") if key in stored},
+            }
+            physical_x = x + resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
+            physical_y = y + resolved_sheet_trim_cm(trim_source, snapshot, axis="y") * 10
             out_of_sheet = (
                 physical_x < -1e-7 or physical_y < -1e-7
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
