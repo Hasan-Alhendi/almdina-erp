@@ -7,10 +7,23 @@ from almdina_erp.almdina_erp.domain.cutting import (
     optimize_plan,
     validate_plan,
 )
+from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    GLASS_HOST_PIECE_ID,
+    material_outline_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
+from almdina_erp.almdina_erp.domain.cutting.placement_orientation import (
+    PlacementOrientation,
+    physical_edge_bands,
+    transform_ring,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
 from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
 from almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting import (
+    _orientations,
+    _placed_corner,
+    apply_shape_aware_nesting,
     non_quarter_rotation_is_admitted,
     void_edge_angle_deg,
 )
@@ -380,3 +393,541 @@ def test_benchmark_record_for_the_l_cluster_and_inactive_safety():
     assert record["geometry_valid"] is True
     assert record["safety_blocking"] is False
     assert record["largest_reusable_remnant_m2"] >= 0
+
+
+_REMNANT = {
+    "min_remnant_width_cm": 30,
+    "min_remnant_length_cm": 30,
+    "min_remnant_area_m2": 0.09,
+}
+
+
+def _corner_row(piece_type, **extra):
+    row = {
+        "piece_type": piece_type,
+        "width_cm": 20,
+        "length_cm": 20,
+        "qty": 4,
+        "clipped_corner_position": "Top Right",
+        "clipped_corner_width_cm": 8,
+        "clipped_corner_length_cm": 8,
+        "allow_rotation": 1,
+        "edge_long_left": 1,
+        "extra_liner": 1,
+        "liner_reference_side": "edge_long_left",
+        "liner_offset_cm": 1,
+        "liner_width_cm": 2,
+        "liner_start_cm": 0,
+        "liner_length_cm": 10,
+        "extra_back_groove": 1,
+        "back_groove_reference_side": "edge_long_left",
+        "back_groove_offset_cm": 1,
+        "back_groove_width_cm": 1.2,
+        "back_groove_start_cm": 0,
+        "back_groove_length_cm": 8,
+        "extra_recessed_handle_cutout": 1,
+        "recessed_handle_reference_side": "edge_width_top",
+        "recessed_handle_offset_cm": 1,
+        "recessed_handle_width_cm": 3,
+        "recessed_handle_start_cm": 1,
+        "recessed_handle_length_cm": 8,
+    }
+    row.update(extra)
+    return row
+
+
+def _sheet_plan(pieces, placed_at, board=100):
+    sheets = []
+    cursor = 0
+    for sheet_no, spots in enumerate(placed_at, start=1):
+        sheet_pieces = []
+        for x_pos, y_pos in spots:
+            source = pieces[cursor]
+            cursor += 1
+            sheet_pieces.append(
+                make_placed_piece(
+                    source,
+                    x_pos,
+                    y_pos,
+                    source["width_cm"],
+                    source["length_cm"],
+                    False,
+                )
+            )
+        sheets.append({"sheet_no": sheet_no, "w": board, "h": board, "pieces": sheet_pieces})
+    return enrich_plan_metrics(
+        {
+            "sheets": sheets,
+            "unplaced": [],
+            "method_key": "MaxRects Best Short Side",
+        },
+        "MaxRects Best Short Side",
+        "CNC Router",
+        **_REMNANT,
+    )
+
+
+def _apply(plan, pieces, board=100, mirroring_allowed=False, machine_type="CNC Router"):
+    return apply_shape_aware_nesting(
+        plan,
+        pieces,
+        board,
+        board,
+        0.3,
+        mirroring_allowed=mirroring_allowed,
+        machine_type=machine_type,
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+
+
+def _same_points(actual, expected, tolerance=0.02):
+    unused = [tuple(point) for point in expected]
+    assert len(actual) == len(unused)
+    for point in actual:
+        index = next(
+            (
+                item
+                for item, candidate in enumerate(unused)
+                if abs(candidate[0] - point[0]) <= tolerance
+                and abs(candidate[1] - point[1]) <= tolerance
+            ),
+            None,
+        )
+        assert index is not None
+        unused.pop(index)
+
+
+def test_one_board_l_cluster_improves_the_separable_remnant():
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    plan = _sheet_plan(
+        pieces,
+        [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2)]],
+    )
+    improved = _apply(plan, pieces)
+    again = _apply(improved, pieces)
+
+    assert len(plan["sheets"]) == 1
+    assert len(improved["sheets"]) == 1
+    assert improved is not plan
+    assert improved["industrial_rank"] < plan["industrial_rank"]
+    assert (
+        improved["industrial_metrics"]["largest_reusable_free_area_m2"]
+        > plan["industrial_metrics"]["largest_reusable_free_area_m2"]
+    )
+    assert again is improved
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+    assert {
+        piece["clipped_corner_position"] for piece in improved["sheets"][0]["pieces"]
+    } == {"Top Right"}
+
+
+def test_one_board_l_cluster_can_hold_the_inner_piece():
+    pieces = expand_piece_groups(
+        [_corner_row("L-Shaped Corner"), {"piece_type": "Regular", "width_cm": 8, "length_cm": 8, "qty": 1}]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2), (70, 70)]],
+    )
+    improved = _apply(plan, pieces)
+    guest = next(piece for piece in improved["sheets"][0]["pieces"] if piece["id"] == 5)
+
+    assert len(improved["sheets"]) == 1
+    assert improved["industrial_rank"] < plan["industrial_rank"]
+    assert 12 < guest["x"] < 30
+    assert 12 < guest["y"] < 30
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_one_board_clipped_cluster_keeps_the_void_angle():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("Clipped Corner"),
+            {"piece_type": "Regular", "width_cm": 8, "length_cm": 3, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2), (75, 70)]],
+    )
+    improved = _apply(plan, pieces, mirroring_allowed=True)
+    angled = [
+        piece
+        for piece in improved["sheets"][0]["pieces"]
+        if piece.get("placement_rotation_deg")
+    ]
+
+    assert len(improved["sheets"]) == 1
+    assert len(angled) == 1
+    assert angled[0]["placement_rotation_deg"] == void_edge_angle_deg(8, 8)
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_same_board_count_without_a_better_remnant_keeps_the_plan():
+    pieces = expand_piece_groups(
+        [
+            {"width_cm": 60, "length_cm": 60, "qty": 1, "allow_rotation": 0},
+            {"width_cm": 60, "length_cm": 60, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]])
+    improved = improve_plan_search(
+        plan,
+        pieces,
+        100,
+        100,
+        0.3,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+        **_REMNANT,
+    )
+
+    assert improved is plan
+    assert len(improved["sheets"]) == 2
+
+
+def test_same_board_count_accepts_a_larger_separable_remnant():
+    pieces = expand_piece_groups(
+        [
+            {"width_cm": 70, "length_cm": 70, "qty": 2, "allow_rotation": 0},
+            {"width_cm": 20, "length_cm": 20, "qty": 2, "allow_rotation": 0},
+        ]
+    )
+    blocks = [piece for piece in pieces if piece["width_cm"] == 70]
+    splitters = [piece for piece in pieces if piece["width_cm"] == 20]
+    ordered = [blocks[0], splitters[0], blocks[1], splitters[1]]
+    plan = _sheet_plan(ordered, [[(0, 0), (70.3, 70.3)], [(0, 0), (70.3, 70.3)]])
+    improved = improve_plan_search(
+        plan,
+        ordered,
+        100,
+        100,
+        0.3,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+        **_REMNANT,
+    )
+
+    assert len(improved["sheets"]) == 2
+    assert improved["industrial_rank"] < plan["industrial_rank"]
+    assert (
+        improved["industrial_metrics"]["largest_reusable_free_area_m2"]
+        > plan["industrial_metrics"]["largest_reusable_free_area_m2"]
+    )
+    assert not validate_plan(improved, ordered, 100, 100, kerf_cm=0.3)
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(ids) == sorted(piece["id"] for piece in ordered)
+
+
+def test_shape_nesting_refuses_an_extra_board():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            {"width_cm": 70, "length_cm": 70, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [[(70.4, 0), (70.4, 20.4), (70.4, 40.8), (70.4, 61.2), (0, 0)]],
+    )
+    improved = _apply(plan, pieces)
+
+    assert len(plan["sheets"]) == 1
+    assert improved is plan
+
+
+def test_invalid_geometry_keeps_the_original_plan(monkeypatch):
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    plan = _sheet_plan(pieces, [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2)]])
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.evaluation.validate_plan",
+        lambda *args, **kwargs: ["overlap"],
+    )
+
+    assert _apply(plan, pieces) is plan
+
+
+def test_orientations_follow_rotation_and_mirroring_permission():
+    locked = expand_piece_groups([_corner_row("L-Shaped Corner", allow_rotation=0, qty=1)])[0]
+    free = expand_piece_groups([_corner_row("L-Shaped Corner", allow_rotation=1, qty=1)])[0]
+
+    assert {(item[0], item[1]) for item in _orientations(locked, False)} == {(False, 0)}
+    assert {(item[0], item[1]) for item in _orientations(free, False)} == {
+        (False, 0),
+        (False, 1),
+        (False, 2),
+        (False, 3),
+    }
+    assert any(item[0] for item in _orientations(free, True))
+    assert not any(item[0] for item in _orientations(free, False))
+
+
+def test_recorded_turns_keep_edge_identity_and_addons():
+    piece = expand_piece_groups(
+        [_corner_row("L-Shaped Corner", width_cm=30, length_cm=16, qty=1)]
+    )[0]
+    bare = make_placed_piece(piece, 0, 0, 30, 16, False)
+    local = material_outline_cm(bare)
+    for turns in (2, 3):
+        placed = _placed_corner(piece, x_cm=1, y_cm=2, mirrored=False, turns=turns)
+        expected = [
+            (1 + point[0], 2 + point[1])
+            for point in transform_ring(
+                local,
+                PlacementOrientation(False, turns),
+                width=30,
+                height=16,
+            )
+        ]
+        assert placed["clipped_corner_position"] == "Top Right"
+        assert placed["edge_long_left"] == 1
+        assert placed["liner_reference_side"] == "edge_long_left"
+        assert placed["back_groove_reference_side"] == "edge_long_left"
+        assert placed["recessed_handle_reference_side"] == "edge_width_top"
+        assert placed["corner_rotation_quarter_turns"] == turns
+        _same_points(material_outline_cm(placed), expected)
+    mirrored = _placed_corner(piece, x_cm=0, y_cm=0, mirrored=True, turns=0)
+    bands = physical_edge_bands(
+        {"left": "band", "top": "", "right": "", "bottom": ""},
+        PlacementOrientation(True, 1),
+    )
+    assert mirrored["edge_long_left"] == 1
+    assert mirrored["mirrored"] is True
+    assert bands[3] == "band"
+    forbidden = {
+        "sheets": [{
+            "sheet_no": 1,
+            "pieces": [_placed_corner(piece, x_cm=0, y_cm=0, mirrored=False, turns=2)],
+        }]
+    }
+    piece["allow_rotation"] = 0
+    assert placement_permission_errors(forbidden, [piece], mirroring_allowed=False)
+
+
+def test_plan_dxf_roundtrip_matches_the_placed_polygons(tmp_path):
+    import ezdxf
+
+    from almdina_erp.almdina_erp.domain.cutting.dxf_topology import (
+        ContourCandidate,
+        ExpectedPieceEvidence,
+        resolve_contour_ownership,
+    )
+    from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import read_dxf_geometry
+
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "Clipped Corner",
+                width_cm=30,
+                length_cm=24,
+                clipped_corner_width_cm=12,
+                clipped_corner_length_cm=6,
+            ),
+            {"piece_type": "Regular", "width_cm": 10, "length_cm": 3, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = optimize_plan(
+        pieces,
+        60.3,
+        48.3,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=True,
+    )
+    placed = [piece for sheet in plan["sheets"] for piece in sheet["pieces"]]
+    outlines = [material_outline_cm(piece) for piece in placed]
+    assert all(outline is not None for outline in outlines)
+    angled = [piece for piece in placed if piece.get("placement_rotation_deg")]
+    assert len(angled) == 1
+    assert angled[0]["placement_rotation_deg"] == void_edge_angle_deg(12, 6)
+
+    document = ezdxf.new("R2010")
+    for name in ("GEOMETRY", "CUT_PATH", "TEXT"):
+        document.layers.add(name)
+    modelspace = document.modelspace()
+    for outline in outlines:
+        ring = [(point[0] * 10, point[1] * 10) for point in outline]
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "GEOMETRY"}, close=True)
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "CUT_PATH"}, close=True)
+    path = tmp_path / "cluster.dxf"
+    document.saveas(path)
+    loaded = read_dxf_geometry(
+        str(path),
+        relevant_layers={"GEOMETRY", "CUT_PATH"},
+    )
+    layers = {segment["layer"] for segment in loaded["segments"]}
+    assert {"GEOMETRY", "CUT_PATH"} <= layers
+    rings = []
+    for entity_id in sorted({segment["entity_id"] for segment in loaded["segments"] if segment["layer"] == "GEOMETRY"}):
+        segments = [
+            segment
+            for segment in loaded["segments"]
+            if segment["entity_id"] == entity_id and segment["layer"] == "GEOMETRY"
+        ]
+        points = [segments[0]["start"]]
+        points.extend(segment["end"] for segment in segments)
+        if points[0] == points[-1]:
+            points = points[:-1]
+        rings.append(points)
+    assert len(rings) == len(outlines)
+    for outline, ring in zip(outlines, rings, strict=True):
+        _same_points([(point[0] * 10, point[1] * 10) for point in outline], ring, tolerance=0.05)
+
+    expected = tuple(
+        ExpectedPieceEvidence(
+            width=piece["width_cm"] * 10,
+            height=piece["length_cm"] * 10,
+            allow_rotation=bool(piece["allow_rotation"]),
+            piece_type=piece["piece_type"],
+            clipped_cut_width_mm=piece["clipped_corner_width_cm"] * 10,
+            clipped_cut_length_mm=piece["clipped_corner_length_cm"] * 10,
+            clipped_corner_position=piece["clipped_corner_position"],
+        )
+        for piece in pieces
+    )
+    admitted = resolve_contour_ownership(
+        tuple(ContourCandidate(index, tuple(ring)) for index, ring in enumerate(rings, start=1)),
+        expected,
+        dimension_tolerance=0.2,
+    )
+    assert len(admitted.parts) == 5
+
+
+def test_glass_nesting_still_accepts_a_fitting_guest():
+    pieces = expand_piece_groups(
+        [
+            {
+                "piece_type": "Glass",
+                "width_cm": 40,
+                "length_cm": 40,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 50,
+            },
+            {"piece_type": "Regular", "width_cm": 20, "length_cm": 20, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = optimize_plan(
+        pieces,
+        50,
+        50,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+    hosts = [
+        piece.get(GLASS_HOST_PIECE_ID)
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+    ]
+
+    assert hosts.count(1) == 1
+    assert len(plan["sheets"]) == 1
+    assert not validate_plan(plan, pieces, 50, 50, kerf_cm=0.3)
+
+
+def test_shape_nesting_does_not_drop_an_existing_glass_nest():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            {
+                "piece_type": "Glass",
+                "width_cm": 40,
+                "length_cm": 40,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 50,
+            },
+            {"piece_type": "Regular", "width_cm": 18, "length_cm": 18, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = optimize_plan(
+        pieces,
+        100,
+        100,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=True,
+    )
+    hosts = [
+        piece.get(GLASS_HOST_PIECE_ID)
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+    ]
+
+    assert hosts.count(5) == 1
+    assert not validate_plan(plan, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_panel_saw_shape_nesting_does_not_rewrite_a_single_board():
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    plan = _sheet_plan(pieces, [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2)]])
+
+    assert _apply(plan, pieces, machine_type="Panel Saw") is plan
+
+
+def test_search_passes_stay_within_a_measured_time_budget():
+    import time
+
+    cases = {
+        "small": ([{"width_cm": 20, "length_cm": 30, "qty": 4, "allow_rotation": 1}], 80, 80, 1),
+        "medium": (
+            [{"width_cm": 25, "length_cm": 18, "qty": 12, "allow_rotation": 1}],
+            120,
+            80,
+            2,
+        ),
+        "large": (
+            [{"width_cm": 22, "length_cm": 14, "qty": 28, "allow_rotation": 1}],
+            244,
+            122,
+            3,
+        ),
+        "corners": ([_corner_row("L-Shaped Corner"), _corner_row("Clipped Corner")], 80, 80, 2),
+        "glass": (
+            [
+                {
+                    "piece_type": "Glass",
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                    "glass_margin_mm": 50,
+                },
+                {"width_cm": 18, "length_cm": 18, "qty": 3, "allow_rotation": 0},
+            ],
+            90,
+            50,
+            2,
+        ),
+    }
+    measured = {}
+    for name, (rows, width, height, limit) in cases.items():
+        pieces = expand_piece_groups(rows)
+        started = time.perf_counter()
+        optimize_plan(
+            pieces,
+            width,
+            height,
+            0.3,
+            selected_mode="Auto",
+            machine_type="CNC Router",
+            time_limit_sec=limit,
+            mirroring_allowed=False,
+        )
+        measured[name] = time.perf_counter() - started
+    print("CUTTING_SEARCH_SECONDS " + " ".join(f"{name}={value:.3f}" for name, value in measured.items()))
+    assert measured["small"] < 8, measured
+    assert measured["medium"] < 12
+    assert measured["large"] < 20
+    assert measured["corners"] < 12
+    assert measured["glass"] < 15

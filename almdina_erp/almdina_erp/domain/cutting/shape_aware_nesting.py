@@ -1,12 +1,14 @@
 """Place complementary L and clipped-corner outlines after the base pack.
 
 MaxRects, Guillotine, Shelf, and Skyline stay the packing engines. This pass
-only rewrites a plan when four matching corners can face a shared void and the
-resulting layout uses fewer boards without an overlap or a kerf fault.
+rewrites a plan when four matching corners can face a shared void and the
+layout is a real improvement: fewer boards, or the same number of boards with
+a better separable remnant. A layout that needs an extra board is refused.
 
-Mirror orientations are tried only when the caller says mirroring is allowed.
-One non-quarter angle is stored, and only for a rectangle sitting in the void
-of four clipped corners. The angle is the direction of that void edge.
+The stored corner position stays the piece's own position. Quarter-turns and
+mirroring are recorded and drawn by the shared transform. They are generated
+only when that piece and the order allow them. One non-quarter angle is
+stored, and only for a rectangle sitting in the void of four clipped corners.
 """
 
 from __future__ import annotations
@@ -88,11 +90,11 @@ def apply_shape_aware_nesting(
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
 ) -> dict[str, Any]:
-    """Return a smaller valid cluster layout, or the plan unchanged."""
+    """Return a better valid cluster layout, or the same plan object."""
 
     if machine_type == "Panel Saw" or time_limit_sec <= 0 or plan.get("unplaced"):
         return plan
-    if len(plan.get("sheets") or []) < 2:
+    if not plan.get("sheets"):
         return plan
     built = _cluster_sheet(
         pieces,
@@ -104,18 +106,20 @@ def apply_shape_aware_nesting(
     if built is None:
         return plan
     sheet, used_ids = built
-    from .evaluation import validate_plan
-    from .optimizer import enrich_plan_metrics
+    from .evaluation import placement_permission_errors, validate_plan
+    from .optimizer import _candidate_is_better, enrich_plan_metrics
+    from .plan_search import _spot_on_sheet
     from .registry import METHOD_CONFIGS, run_single_method
 
     remainder = [piece for piece in pieces if int(piece["id"]) not in used_ids]
+    pending = _fill_free_space(sheet, remainder, kerf_cm, _spot_on_sheet)
     sheets = [sheet]
-    if remainder:
+    if pending:
         method_key = str(plan.get("method_key") or "")
         if method_key not in METHOD_CONFIGS:
             method_key = "MaxRects Best Short Side"
         packed = run_single_method(
-            remainder, board_w_cm, board_h_cm, kerf_cm, method_key
+            pending, board_w_cm, board_h_cm, kerf_cm, method_key
         )
         if packed.get("unplaced"):
             return plan
@@ -123,7 +127,9 @@ def apply_shape_aware_nesting(
         for index, extra_sheet in enumerate(extra, start=2):
             extra_sheet["sheet_no"] = index
         sheets.extend(extra)
-    if len(sheets) >= len(plan.get("sheets") or []):
+    if len(sheets) > len(plan.get("sheets") or []):
+        return plan
+    if _glass_nest_links(plan) != _glass_nest_links({"sheets": sheets}):
         return plan
     candidate = {
         "sheets": sheets,
@@ -135,15 +141,23 @@ def apply_shape_aware_nesting(
         "attempts": plan.get("attempts") or 1,
         "complexity": plan.get("complexity") or 0,
     }
-    candidate = enrich_plan_metrics(
-        candidate,
-        str(candidate.get("method_key") or "MaxRects Best Short Side"),
-        machine_type,
-        min_remnant_width_cm=min_remnant_width_cm,
-        min_remnant_length_cm=min_remnant_length_cm,
-        min_remnant_area_m2=min_remnant_area_m2,
-    )
+    metric_kwargs = {
+        "min_remnant_width_cm": min_remnant_width_cm,
+        "min_remnant_length_cm": min_remnant_length_cm,
+        "min_remnant_area_m2": min_remnant_area_m2,
+    }
+    method = str(candidate.get("method_key") or "MaxRects Best Short Side")
+    candidate = enrich_plan_metrics(candidate, method, machine_type, **metric_kwargs)
+    baseline = enrich_plan_metrics(plan, method, machine_type, **metric_kwargs)
+    if not _candidate_is_better(candidate, baseline):
+        return plan
     if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+        return plan
+    if placement_permission_errors(
+        candidate,
+        pieces,
+        mirroring_allowed=mirroring_allowed,
+    ):
         return plan
     for key in (
         "search_elapsed_sec",
@@ -236,16 +250,16 @@ def _assign_cluster(
             return []
         position, column, row = _SLOTS[slot]
         for index in sorted(unused):
-            for mirrored, turns, facing, cut_x, cut_y in options[index]:
+            for mirrored, turns, facing, _cut_x, _cut_y in options[index]:
                 if facing != position:
+                    continue
+                oriented_w, oriented_h = (height, width) if turns % 2 else (width, height)
+                if abs(oriented_w - width) > 1e-6 or abs(oriented_h - height) > 1e-6:
                     continue
                 placed = _placed_corner(
                     pieces[index],
                     x_cm=column * (width + kerf_cm),
                     y_cm=row * (height + kerf_cm),
-                    cut_x=cut_x,
-                    cut_y=cut_y,
-                    position=facing,
                     mirrored=mirrored,
                     turns=turns,
                 )
@@ -263,21 +277,42 @@ def _orientations(
     piece: Mapping[str, Any],
     mirroring_allowed: bool,
 ) -> list[tuple[bool, int, str, float, float]]:
-    width = num(piece.get("width_cm"))
-    height = num(piece.get("length_cm"))
-    square = abs(width - height) <= 1e-6
+    """Quarter-turns and mirrors the piece is allowed to use.
+
+    The permission is checked before the candidate is recorded. A 90° or 270°
+    turn of a non-square piece is still recorded; the cluster cell rejects it
+    when the oriented box no longer matches. The clipped-void angle is not
+    produced here.
+    """
+
+    from .placement_orientation import (
+        PlacementOrientation,
+        PlacementOrientationError,
+        assert_orientation_allowed,
+    )
+
     position = str(piece.get("clipped_corner_position") or "")
     cut_x = num(piece.get("clipped_corner_width_cm"))
     cut_y = num(piece.get("clipped_corner_length_cm"))
     if position not in _TURN:
         return []
+    allow_rotation = piece.get("allow_rotation")
     found: list[tuple[bool, int, str, float, float]] = []
-    mirrors = (False, True) if mirroring_allowed else (False,)
-    for mirrored in mirrors:
+    for mirrored in (False, True):
+        if mirrored and not mirroring_allowed:
+            continue
         facing = _MIRROR[position] if mirrored else position
         turned_x, turned_y = cut_x, cut_y
         for turns in range(4):
-            if turns % 2 == 0 or square:
+            try:
+                assert_orientation_allowed(
+                    PlacementOrientation(mirrored, turns),
+                    mirroring_allowed=mirroring_allowed,
+                    allow_rotation=allow_rotation,
+                )
+            except PlacementOrientationError:
+                pass
+            else:
                 found.append((mirrored, turns, facing, turned_x, turned_y))
             facing = _TURN[facing]
             turned_x, turned_y = turned_y, turned_x
@@ -289,29 +324,86 @@ def _placed_corner(
     *,
     x_cm: float,
     y_cm: float,
-    cut_x: float,
-    cut_y: float,
-    position: str,
     mirrored: bool,
     turns: int,
 ) -> dict[str, Any]:
+    """Place a corner without rewriting which edge is its notch.
+
+    Odd turns swap the bounding box only when the sides differ. The original
+    position, cuts, edge bands, and machining sides stay on the piece. The
+    outline transform consumes ``corner_rotation_quarter_turns``.
+    """
+
+    source_w = num(piece.get("width_cm"))
+    source_h = num(piece.get("length_cm"))
+    quarter_turns = int(turns) % 4
+    odd = bool(quarter_turns % 2) and abs(source_w - source_h) > 1e-6
     placed = make_placed_piece(
         dict(piece),
         x_cm,
         y_cm,
-        num(piece.get("width_cm")),
-        num(piece.get("length_cm")),
-        False,
+        source_h if odd else source_w,
+        source_w if odd else source_h,
+        odd,
     )
-    placed["clipped_corner_position"] = position
-    placed["clipped_corner_width_cm"] = cut_x
-    placed["clipped_corner_length_cm"] = cut_y
-    placed["placement_mirrored"] = mirrored
-    placed["placement_quarter_turns"] = turns
-    if mirrored:
-        placed["corner_mirrored"] = True
-        placed["mirrored"] = True
+    placed["corner_rotation_quarter_turns"] = quarter_turns
+    placed["placement_quarter_turns"] = quarter_turns
+    placed["corner_mirrored"] = bool(mirrored)
+    placed["mirrored"] = bool(mirrored)
+    placed["placement_mirrored"] = bool(mirrored)
     return placed
+
+
+def _glass_nest_links(plan: Mapping[str, Any]) -> tuple[tuple[int, int], ...]:
+    links = []
+    for sheet in plan.get("sheets") or []:
+        for piece in sheet.get("pieces") or []:
+            host = piece.get("glass_host_piece_id")
+            if host in (None, ""):
+                continue
+            try:
+                links.append((int(piece["id"]), int(host)))
+            except (TypeError, ValueError):
+                return tuple()
+    return tuple(sorted(links))
+
+
+def _fill_free_space(
+    sheet: dict[str, Any],
+    remainder: Sequence[Mapping[str, Any]],
+    kerf_cm: float,
+    spot_on_sheet: Any,
+) -> list[Mapping[str, Any]]:
+    """Put leftover pieces in the cluster board before opening another board."""
+
+    pending = sorted(
+        remainder,
+        key=lambda piece: num(piece.get("width_cm")) * num(piece.get("length_cm")),
+        reverse=True,
+    )
+    placed = list(sheet.get("pieces") or [])
+    leftover: list[Mapping[str, Any]] = []
+    for piece in pending:
+        spot = spot_on_sheet(
+            {"w": sheet.get("w"), "h": sheet.get("h"), "pieces": placed},
+            dict(piece),
+            kerf_cm,
+        )
+        if spot is None:
+            leftover.append(piece)
+            continue
+        placed.append(
+            make_placed_piece(
+                dict(piece),
+                spot["x"],
+                spot["y"],
+                spot["w"],
+                spot["h"],
+                bool(spot["rotated"]),
+            )
+        )
+    sheet["pieces"] = placed
+    return leftover
 
 
 def _inner_guest(

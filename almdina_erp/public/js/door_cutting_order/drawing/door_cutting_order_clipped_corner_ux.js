@@ -290,7 +290,7 @@
             cutWidth = nextCutWidth;
             sideState = permuteSideState(sideState, ROTATED_SIDE);
         }
-        return {
+        const orientedPiece = {
             ...source,
             rotated: false,
             clipped_corner_position: position,
@@ -306,6 +306,29 @@
             edge_long_right_type_override: sideState.overrides.edge_long_right_type_override,
             edge_profiles: sideState.profiles,
         };
+        // The copy is already in the drawn orientation. Leaving the turn or
+        // mirror keys set would apply the same transform a second time.
+        delete orientedPiece.corner_rotation_quarter_turns;
+        delete orientedPiece.placement_quarter_turns;
+        delete orientedPiece.corner_mirrored;
+        delete orientedPiece.placement_mirrored;
+        delete orientedPiece.mirrored;
+        return orientedPiece;
+    }
+
+    function orientedStoredPiece(piece) {
+        const source = piece || {};
+        const hasTurns = Number.isInteger(source.corner_rotation_quarter_turns)
+            || Number.isInteger(source.placement_quarter_turns);
+        const mirrored = Boolean(
+            source.corner_mirrored || source.placement_mirrored || source.mirrored
+        );
+        if (!hasTurns && !mirrored) return source;
+        const recorded = Number.isInteger(source.corner_rotation_quarter_turns)
+            ? source.corner_rotation_quarter_turns
+            : (Number.isInteger(source.placement_quarter_turns) ? source.placement_quarter_turns : 0);
+        const turns = ((recorded % 4) + 4) % 4;
+        return pieceForQuarterTurns(source, turns, mirrored) || source;
     }
 
     function breakAdjacentSides(position) {
@@ -614,7 +637,8 @@
     }
 
     function points(piece, viewportWidth = 100, viewportHeight = 100) {
-        const config = effectiveConfig(piece || {});
+        const drawn = orientedStoredPiece(piece);
+        const config = effectiveConfig(drawn || {});
         const width = Math.max(0, num(viewportWidth));
         const height = Math.max(0, num(viewportHeight));
         if (!width || !height || !config.width || !config.length) {
@@ -623,7 +647,7 @@
 
         const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
         const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
-        const byPosition = cutStyle(piece) === "L"
+        const byPosition = cutStyle(drawn) === "L"
             ? {
                 "Top Right": [[0, 0], [width - cutX, 0], [width - cutX, cutY], [width, cutY], [width, height], [0, height]],
                 "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY], [cutX, cutY]],

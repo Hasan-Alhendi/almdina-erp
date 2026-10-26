@@ -86,6 +86,62 @@ def _void_rotation_matches_piece(
     )
 
 
+def placement_permission_errors(
+    plan: dict[str, Any],
+    requested_pieces: list[dict[str, Any]],
+    *,
+    mirroring_allowed: bool,
+) -> list[str]:
+    """Reject a recorded quarter-turn or mirror the piece is not allowed to use.
+
+    The clipped-void outline is the one non-quarter exception and is not a
+    quarter-turn. Pieces without an explicit turn record stay on the
+    historical ``rotated`` check inside ``validate_plan``.
+    """
+
+    from .placement_orientation import (
+        PlacementOrientation,
+        PlacementOrientationError,
+        assert_orientation_allowed,
+    )
+
+    expected = {int(piece["id"]): piece for piece in requested_pieces}
+    errors: list[str] = []
+    for sheet in plan.get("sheets") or []:
+        for placed in sheet.get("pieces") or []:
+            if placed.get("placement_outline_cm"):
+                continue
+            turns = placed.get("corner_rotation_quarter_turns")
+            if not isinstance(turns, int):
+                recorded = placed.get("placement_quarter_turns")
+                turns = recorded if isinstance(recorded, int) else None
+            if not isinstance(turns, int):
+                continue
+            try:
+                piece_id = int(placed["id"])
+            except (TypeError, ValueError):
+                continue
+            source = expected.get(piece_id)
+            if source is None:
+                continue
+            mirrored = bool(
+                placed.get("mirrored")
+                or placed.get("corner_mirrored")
+                or placed.get("placement_mirrored")
+            )
+            try:
+                assert_orientation_allowed(
+                    PlacementOrientation(mirrored, int(turns) % 4),
+                    mirroring_allowed=mirroring_allowed,
+                    allow_rotation=source.get("allow_rotation"),
+                )
+            except PlacementOrientationError as exc:
+                errors.append(
+                    f"Piece {placed.get('label')} orientation is not allowed ({exc.code})."
+                )
+    return errors
+
+
 def evaluate_plan(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],

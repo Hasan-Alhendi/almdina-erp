@@ -944,6 +944,9 @@ def _rectangle_outline(
 def _corner_outline(
     placed: Mapping[str, Any],
 ) -> tuple[tuple[float, float], ...] | None:
+    oriented = _outline_from_recorded_orientation(placed)
+    if oriented is not None:
+        return oriented
     width = num(placed.get("w"))
     height = num(placed.get("h"))
     if width <= 0 or height <= 0:
@@ -1184,6 +1187,60 @@ def _clipped_polygons(
             (0.0, height - cut_y),
         ),
     }
+
+
+def _outline_from_recorded_orientation(
+    placed: Mapping[str, Any],
+) -> tuple[tuple[float, float], ...] | None:
+    """Draw a corner from its stored position plus the shared transform.
+
+    Historical pieces that only have ``rotated`` stay on the one-swap path.
+    A recorded quarter-turn or mirror is applied once, to the original local
+    polygon, and is not combined with that swap.
+    """
+
+    turns = placed.get("corner_rotation_quarter_turns")
+    if not isinstance(turns, int):
+        recorded = placed.get("placement_quarter_turns")
+        turns = recorded if isinstance(recorded, int) else None
+    mirror_keys = ("mirrored", "corner_mirrored", "placement_mirrored")
+    if not isinstance(turns, int) and not any(key in placed for key in mirror_keys):
+        return None
+    mirrored = False
+    for key in mirror_keys:
+        if key in placed:
+            mirrored = bool(placed.get(key))
+            break
+    width = num(placed.get("original_w")) or num(placed.get("width_cm"))
+    height = num(placed.get("original_h")) or num(placed.get("length_cm"))
+    if width <= 0 or height <= 0:
+        return None
+    position = str(placed.get("clipped_corner_position") or "")
+    cut_x = num(placed.get("clipped_corner_width_cm"))
+    cut_y = num(placed.get("clipped_corner_length_cm"))
+    if cut_x <= 0 or cut_y <= 0 or cut_x >= width or cut_y >= height:
+        return None
+    local = _corner_local(
+        width,
+        height,
+        cut_x,
+        cut_y,
+        position,
+        str(placed.get("piece_type") or ""),
+    )
+    if local is None or validate_polygon(local, _GEOMETRY_TOLERANCE_CM):
+        return None
+    from .placement_orientation import PlacementOrientation, transform_ring
+
+    moved = transform_ring(
+        local,
+        PlacementOrientation(mirrored, int(turns or 0) % 4),
+        width=width,
+        height=height,
+    )
+    x_pos = num(placed.get("x"))
+    y_pos = num(placed.get("y"))
+    return tuple((x_pos + point[0], y_pos + point[1]) for point in moved)
 
 
 def _corner_local(

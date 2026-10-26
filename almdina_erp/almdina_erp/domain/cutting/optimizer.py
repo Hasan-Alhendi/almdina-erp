@@ -1059,6 +1059,7 @@ def optimize_plan(
         kerf_cm,
         machine_type=machine_type,
         time_limit_sec=time_limit_sec,
+        mirroring_allowed=mirroring_allowed,
         **metric_kwargs,
     )
 

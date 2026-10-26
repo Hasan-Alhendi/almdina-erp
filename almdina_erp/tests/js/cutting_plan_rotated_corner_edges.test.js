@@ -155,6 +155,7 @@ function turnedGeometry(pieceType, turns) {
     };
     const oriented = geometry.pieceForQuarterTurns(visual, turns);
     samePointSet(geometry.points(oriented, width, height), points);
+    samePointSet(geometry.points(visual, width, height), points);
     return {
         visual,
         oriented,
@@ -603,6 +604,7 @@ function reflectX(points, width) {
         };
         const oriented = geometry.pieceForQuarterTurns(visual, turns, 1);
         samePointSet(geometry.points(oriented, width, height), points);
+        samePointSet(geometry.points(visual, width, height), points);
         const storedOuter = points.map(([x, y]) => [x + 100, y + 200]);
         const piece = {
             ...visual,
@@ -633,15 +635,19 @@ function reflectX(points, width) {
     });
 });
 
-const systemIgnoringMirror = {
-    ...systemPiece,
+const storedTurns = {
+    ...basePiece("L-Shaped Corner"),
+    w: 80,
+    h: 40,
+    rotated: true,
     corner_mirrored: 1,
     corner_rotation_quarter_turns: 3,
 };
+const drawnTurns = geometry.pieceForQuarterTurns(storedTurns, 3, true);
 assert.deepEqual(
-    polylines(renderer.build(frm, planFor(systemIgnoringMirror))),
-    systemBands,
-    "system plans keep the boolean rotation and ignore imported mirror metadata"
+    polylines(renderer.build(frm, planFor(storedTurns))),
+    polylines(renderer.build(frm, planFor(drawnTurns))),
+    "a system plan draws the stored quarter-turn and mirror once"
 );
 assert.equal(geometry.pieceForQuarterTurns(basePiece("L-Shaped Corner"), 0, "sideways"), null);
 
