@@ -4,7 +4,7 @@
     const STYLE = "/assets/almdina_erp/css/special_shape_documentation.css";
     const ASSET_ROOT = "/assets/almdina_erp/js/special_shape_documentation";
     const PREREQUISITES = Object.freeze([
-        "/assets/almdina_erp/js/almdina_ui.js?v=2",
+        "/assets/almdina_erp/js/almdina_ui.js",
     ]);
     const MODULES = Object.freeze([
         `${ASSET_ROOT}/domain/reference_crop.js`,

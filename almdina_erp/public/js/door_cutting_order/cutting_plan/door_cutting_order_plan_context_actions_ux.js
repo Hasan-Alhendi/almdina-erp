@@ -445,6 +445,7 @@
         }
         const row = rowForTab(frm);
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
+            archiveOnly: isHistoricalRow(frm, row),
             hasOriginalFile: hasOriginalDxfFile(row),
             originalIsManufacturingReady: originalIsManufacturingReady(row),
             preferOriginalUpload: preferOriginalUpload(frm, row),

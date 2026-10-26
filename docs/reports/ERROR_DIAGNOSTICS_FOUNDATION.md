@@ -22,6 +22,7 @@ Base: `Develop` at `c9081524f6d8bc5cf88cb57f0d1df60d08373524`.
 5. Pair targets lost sheet and copy context. They now carry both copy numbers and board context, including two copies of the same door. Export resolution is board-scoped and refuses ambiguous keys.
 6. `msgprint` is a Desk-global singleton. A document cleanup could hide an unrelated later message if that singleton were reused. New diagnostic dialogs use their own native Frappe Dialog, have idempotent close, remove their DOM on hide, and register with the existing document owner.
 7. Frappe loggers default to ERROR. The separate rotating `almdina_errors` channel explicitly records INFO diagnostic events, without changing other channels. Failed logging produces no invented support reference.
+8. The first pinned Desk run exposed a candidate regression: manually versioned lazy script paths make Frappe v16.17.5 `AssetManager.extn()` treat the query as an extension, producing `TypeError: s is not a function`. Lazy declarations retain plain `.js` paths and use the loader's own release-version query. Global HTML includes retain explicit revisions. A regression rejects query-suffixed lazy declarations; the pinned Desk workflow must pass again before release.
 
 ## Public protocol v1
 
@@ -40,7 +41,7 @@ This is a diagnostics schema; it does not change manufacturing fingerprint versi
 - Public response: at most 100 grouped cards, 20 detail lines per card, 100 table rows and 20 cells per row. Additional-card truncation is explicit. Further checks may remain after an early rejection.
 - The preview is a read-only close-up, not a full-board manufacturing preview, editable plan or downloadable file. It has no persistence or extra file endpoint.
 - Late A→B and A→B→A results cannot show feedback, reload a newer document or move focus. Closing a dialog and subsequent document cleanup are safe to repeat.
-- Changed shared assets and the lazy upload asset have explicit cache revisions; lazy-page declarations and their ownership assertions use the matching revisions.
+- Changed shared HTML includes have explicit cache revisions. Lazy scripts use plain paths and Frappe's native release cache token; release build/cache refresh and a Desk reload remain necessary. No global asset-loader patch is installed.
 
 ## Validation evidence
 
@@ -56,6 +57,8 @@ Local evidence includes:
 - An expanded Python selection produced 631 passing tests and 768 passing subtests, with four pre-existing rendering assertions reproduced on the clean base (below). Subsequently added targeted regressions are separately included in the permanent CI step.
 
 `TestErrorResponseIntegration` is added to the real Bench suite to prove native V1 serialization, retained HTTP 417/native fallback, database rollback, a file-backed support reference after rollback, and native private-file ownership without a System Manager bypass. Its result must be assessed from the candidate SHA's Frappe Integration run, not inferred from local stubs.
+
+At candidate `42564f4626f2549e3fe489fdc8719965d69e2ea7`, Frappe Integration passed, including both new real Bench tests; the six-case Chromium gate also passed. Sixteen workflow runs passed, while the pinned Desk run caught the lazy-path regression above. Those results do not certify the subsequent corrected candidate; its own checks are required. Latest Develop changes through `5226e71` are retained, including approved DXF download routing.
 
 Pre-existing Python assertions (not changed or weakened):
 

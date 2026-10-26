@@ -55,7 +55,7 @@ class TestFrontendFoundationContract(unittest.TestCase):
                 source = page_entry.read_text(encoding="utf-8")
 
                 self.assertIn(
-                    'const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";',
+                    'const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";',
                     source,
                 )
                 self.assertIn(

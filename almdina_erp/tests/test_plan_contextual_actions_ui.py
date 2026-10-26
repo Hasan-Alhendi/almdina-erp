@@ -90,9 +90,10 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         self.assertIn("api.cancelApproval(frm.doc.name)", context)
         self.assertIn("tabs.printActivePlan(frm)", context)
         self.assertIn("export_order_dxf(frm.doc.name, activeTab(frm), {", context)
-        # Export uses the active plan row once, with the server-owned
-        # preference for original uploaded bytes vs manufacturing regeneration.
+        # Historical rows explicitly request archives. Current-plan routing
+        # revalidates on the server even when these workspace hints are stale.
         self.assertIn("const row = rowForTab(frm);", context)
+        self.assertIn("archiveOnly: isHistoricalRow(frm, row)", context)
         self.assertIn("hasOriginalFile: hasOriginalDxfFile(row)", context)
         self.assertIn("originalIsManufacturingReady: originalIsManufacturingReady(row)", context)
         self.assertIn("preferOriginalUpload: preferOriginalUpload(frm, row)", context)

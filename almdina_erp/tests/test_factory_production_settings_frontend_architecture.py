@@ -203,7 +203,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn("AlmdinaUi.button", self.renderer)
         self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertNotIn('class="btn btn-primary aps-edit"', self.renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 
     def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:
         for marker in (

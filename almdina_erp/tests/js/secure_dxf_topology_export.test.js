@@ -16,6 +16,7 @@ const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
 
 let nextPlan = null;
 let originalUpload = null;
+let preferOriginalUpload = false;
 let lastCallMethod = "";
 let downloadedDxf = "";
 let downloadedName = "";
@@ -125,6 +126,7 @@ const fakeFrappe = {
         return Promise.resolve({
             message: {
                 plan: nextPlan,
+                prefer_original_upload: preferOriginalUpload,
                 include_saw_centers: explicit === null ? source === "approved" : explicit,
             },
         });
@@ -593,6 +595,7 @@ async function run() {
     assert.equal(downloadedDxf, "");
 
     const originalDxf = "0\nSECTION\n8\nalong\n8\nCUT_PATH\n0\nEOF\n";
+    preferOriginalUpload = true;
     originalUpload = {
         filename: "cutting_plan_DCO-2026-00018_corrected.dxf",
         content_b64: Buffer.from(originalDxf, "utf8").toString("base64"),
@@ -614,6 +617,7 @@ async function run() {
     assert.match(lastCallMethod, /download_uploaded_dxf/);
     assert.equal(downloadedDxf, originalDxf);
 
+    preferOriginalUpload = false;
     downloadedDxf = "";
     lastCallMethod = "";
     nextPlan = {
@@ -1510,6 +1514,7 @@ async function run() {
     assert.ok(cutPathEntityCount(downloadedDxf) > 0);
 
     // Custom tab before approval: keep the original designer file.
+    preferOriginalUpload = true;
     downloadedDxf = "";
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-DRAFT", "custom", {
@@ -1521,6 +1526,7 @@ async function run() {
 
     // Custom tab after the same upload was approved without saw centers:
     // regenerate manufacturing DXF instead of shipping the design file.
+    preferOriginalUpload = false;
     nextPlan.include_saw_centers = true;
     downloadedDxf = "";
     lastCallMethod = "";
@@ -1539,6 +1545,7 @@ async function run() {
     assert.equal(cutPathEntityCount(downloadedDxf), customApprovedSaw);
 
     // Custom tab when a different plan is approved: still the uploaded original.
+    preferOriginalUpload = true;
     delete nextPlan.include_saw_centers;
     downloadedDxf = "";
     lastCallMethod = "";

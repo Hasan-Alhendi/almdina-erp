@@ -30,10 +30,10 @@ frappe.pages["factory-permissions"].on_page_load = function (wrapper) {
     }
 
 
-    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";
+    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
-        "/assets/almdina_erp/js/almdina_ui.js?v=2",
+        "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/factory_permissions/api.js",
         "/assets/almdina_erp/js/factory_permissions/state.js",
         "/assets/almdina_erp/js/factory_permissions/view_model.js",

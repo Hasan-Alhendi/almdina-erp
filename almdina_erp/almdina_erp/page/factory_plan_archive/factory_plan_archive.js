@@ -34,7 +34,7 @@ frappe.pages["factory-plan-archive"].on_page_load = function (wrapper) {
         context: "almdina_erp.almdina_erp.services.archive_service.get_archive_context",
         archive: "almdina_erp.almdina_erp.services.archive_service.archive_approved_plan_pdf",
     });
-    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";
+    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const STYLESHEET = "/assets/almdina_erp/css/factory_plan_archive.css?v=1";
     const page = frappe.ui.make_app_page({
         parent: wrapper,

@@ -131,7 +131,7 @@ class TestFactoryMasterDataArchitecture(unittest.TestCase):
     def test_routing_workflow_stylesheet_bootstrap_is_explicit_and_fail_closed(self) -> None:
         master = MASTER_PAGE.read_text(encoding="utf-8")
 
-        self.assertIn("/assets/almdina_erp/js/frontend_foundation.js?v=2", master)
+        self.assertIn("/assets/almdina_erp/js/frontend_foundation.js", master)
         self.assertIn("STYLE_ASSETS.map", master)
         self.assertIn("core.frontend.ensureStylesheet(asset, {id})", master)
         self.assertIn("almdina-routing-workflow-style", master)
