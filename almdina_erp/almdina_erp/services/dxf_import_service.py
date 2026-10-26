@@ -2953,10 +2953,11 @@ def validate_imported_plan_issues(
     if placed_count != expected_count:
         issues.append(issue(PIECE_COUNT_MISMATCH, CATEGORY_IDENTITY, target=DxfIssueTarget(kind="order"), params={"actual_count": placed_count, "expected_count": expected_count}))
 
-    usable_w = flt(plan.get("usable_board_width_cm"))
-    usable_h = flt(plan.get("usable_board_length_cm"))
     kerf_cm = max(0.0, flt(plan.get("kerf_cm")))
     for sheet in plan.get("sheets") or []:
+        # A fixed imported layout can have different applied trims per board.
+        usable_w = flt(sheet.get("usable_width_cm", plan.get("usable_board_width_cm")))
+        usable_h = flt(sheet.get("usable_length_cm", plan.get("usable_board_length_cm")))
         pieces = sheet.get("pieces") or []
         for piece in pieces:
             x, y = flt(piece.get("x")), flt(piece.get("y"))
@@ -2975,7 +2976,7 @@ def validate_imported_plan_issues(
             )
             if w <= 0 or h <= 0:
                 issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=target, params={"actual_width_cm": w, "actual_height_cm": h}))
-            if x < -0.01 or y < -0.01 or x + w > usable_w + 0.01 or y + h > usable_h + 0.01:
+            if x < -1e-8 or y < -1e-8 or x + w > usable_w + 1e-8 or y + h > usable_h + 1e-8:
                 issues.append(issue(PIECE_OUTSIDE_SHEET, CATEGORY_LAYOUT, target=target, params={"sheet_no": sheet.get("sheet_no")}))
 
         if topology_by_piece_id is not None:
