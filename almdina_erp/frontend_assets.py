@@ -130,6 +130,9 @@ doctype_js = {
         # Radio presentation and client-only required check for the operational
         # cutting machine. Schema stays optional so the server accepts null.
         "public/js/door_cutting_order/order_entry/door_cutting_order_cutting_machine_ux.js",
+        # Radio presentation for the board-type mirroring policy. Stored values
+        # stay stable IDs; the cutting engine does not place mirrored pieces yet.
+        "public/js/door_cutting_order/order_entry/door_cutting_order_piece_mirroring_ux.js",
         # Qty+Enter is a focused keyboard behavior layered on the operator's
         # existing row materialization/model-sync contract; it owns no rendering.
         "public/js/door_cutting_order/order_entry/measurements/door_cutting_order_fast_entry_keyboard_ux.js",

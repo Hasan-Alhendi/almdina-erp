@@ -100,6 +100,7 @@ class OptimizeOrderPlanCommand:
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
     plan_settings: PlanSettings | None = None
+    allow_piece_mirroring: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +244,9 @@ def optimize_order_plan(
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
+        # Recorded for later placement eligibility. The engine call above does
+        # not receive this flag, so sheet geometry is unchanged in this phase.
+        "allow_piece_mirroring": command.allow_piece_mirroring is True,
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
         "trim_policy": trim_policy,

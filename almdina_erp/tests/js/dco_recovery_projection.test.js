@@ -40,6 +40,7 @@ const doc = {
     board_width_cm: 207,
     default_edge_type: "EDGE-1",
     edge_color: "White",
+    allow_piece_mirroring: "not_allowed",
     total_cost_usd: 999,
     pieces: [{
         name: "new-door-cutting-order-detail-1",

@@ -264,6 +264,59 @@
     box-shadow: var(--alm-shadow-card);
 }
 
+.dco-operator-form [data-fieldname="allow_piece_mirroring"] .control-input-wrapper,
+.dco-operator-form [data-fieldname="allow_piece_mirroring"] .control-input,
+.dco-operator-form [data-fieldname="allow_piece_mirroring"] select,
+.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] .control-input-wrapper,
+.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] .control-input,
+.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] select {
+    display: none !important;
+}
+
+.dco-piece-mirroring-host .control-label {
+    white-space: normal;
+}
+
+.dco-piece-mirroring-radios {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.dco-piece-mirroring-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 6px 14px;
+    border: 1px solid var(--border-color, #d5dbe3);
+    border-radius: 999px;
+    background: var(--card-bg, var(--fg-color, #fff));
+    color: var(--text-color, #26313b);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 750;
+    user-select: none;
+}
+
+.dco-piece-mirroring-option.is-selected {
+    border-color: var(--alm-primary, #172033);
+    background: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
+    color: var(--alm-primary, #172033);
+}
+
+.dco-piece-mirroring-option input {
+    margin: 0;
+    accent-color: var(--alm-primary, #172033);
+}
+
+.dco-order-notes-locked .dco-piece-mirroring-option {
+    cursor: not-allowed;
+    background: var(--subtle-fg, #f6f8fa);
+}
+
 @media (max-width: 900px) {
     .dco-operator-form:has(a.nav-link.active[data-fieldname="cost_tab"]) .form-footer .after-save {
         grid-template-columns: minmax(0, 1fr);

@@ -153,6 +153,7 @@ class TestDcoLocalRecoveryArchitecture(unittest.TestCase):
             "board_width_cm",
             "default_edge_type",
             "edge_color",
+            "allow_piece_mirroring",
         }
         piece_contract = {
             "piece_type",
