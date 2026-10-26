@@ -210,10 +210,12 @@ def test_fixed_dxf_applied_trim_is_independent_by_sheet_and_axis():
 
     physical = _fixed_dxf_snapshot((0, 10), (10, 3), (1, 0))
     result = apply_adaptive_trim_to_fixed_dxf_layout(physical, preferred_trim_mm=5)
-    assert [
+    actual = [
         (s["applied_trim_width_cm"], s["applied_trim_length_cm"])
         for s in result["sheets"]
-    ] == pytest.approx([(0, 0.5), (0.5, 0.3), (0.1, 0)])
+    ]
+    for measured, expected in zip(actual, [(0, 0.5), (0.5, 0.3), (0.1, 0)]):
+        assert measured == pytest.approx(expected)
     for original, adjusted in zip(physical["sheets"], result["sheets"]):
         p, q = original["pieces"][0], adjusted["pieces"][0]
         assert q["x"] + adjusted["applied_trim_width_cm"] == pytest.approx(p["x"])
