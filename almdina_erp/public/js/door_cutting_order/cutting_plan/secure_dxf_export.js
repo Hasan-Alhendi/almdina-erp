@@ -772,6 +772,15 @@
     }
 
     function finishedRings(piece, placement) {
+        const voidOutline = piece && piece.placement_outline_cm;
+        if (Array.isArray(voidOutline) && voidOutline.length >= 3) {
+            const { offsetX, offsetY, fullHeight, appliedTrim } = placement;
+            const outer = voidOutline.map(point => [
+                offsetX + appliedTrim.width + num(point[0]) * 10,
+                offsetY + fullHeight - appliedTrim.length - num(point[1]) * 10,
+            ]);
+            return { outer, holes: [] };
+        }
         const topology = persistedTopology(piece);
         if (topology) {
             return {

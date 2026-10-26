@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from typing import Any
 
@@ -8,6 +9,81 @@ from .primitives import num, present_shop_floor_packing
 
 # Returned alone when an optional validation deadline elapses mid-check.
 VALIDATION_DEADLINE_EXCEEDED = "__validation_deadline_exceeded__"
+
+
+def _placement_outline_bounds(
+    placed: dict[str, Any],
+) -> tuple[float, float, float, float] | None:
+    outline = placed.get("placement_outline_cm")
+    if not isinstance(outline, (list, tuple)) or len(outline) < 3:
+        return None
+    xs: list[float] = []
+    ys: list[float] = []
+    for point in outline:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return None
+        xs.append(float(point[0]))
+        ys.append(float(point[1]))
+    min_x = min(xs)
+    min_y = min(ys)
+    return min_x, min_y, max(xs) - min_x, max(ys) - min_y
+
+
+def _angle_matches(left: float, right: float) -> bool:
+    return abs((left - right + 180.0) % 360.0 - 180.0) <= 0.05
+
+
+def _void_rotation_matches_piece(
+    placed: dict[str, Any],
+    source: dict[str, Any],
+    tolerance: float,
+) -> bool:
+    """Accept one stored angle only when it is the proven void-edge angle.
+
+    Quarter-turns stay on the historical ``rotated`` flag. An outline whose
+    angle disagrees with the void edge keeps the ordinary dimension check.
+    """
+
+    outline = placed.get("placement_outline_cm")
+    if not isinstance(outline, (list, tuple)) or len(outline) < 4:
+        return False
+    try:
+        rotation = float(placed.get("placement_rotation_deg"))
+        void_angle = float(placed.get("placement_void_angle_deg"))
+    except (TypeError, ValueError):
+        return False
+    if abs(rotation % 90.0) <= 0.05:
+        return False
+    if not (
+        _angle_matches(rotation, void_angle)
+        or _angle_matches(rotation, void_angle + 180.0)
+    ):
+        return False
+    points = [(float(point[0]), float(point[1])) for point in outline]
+    edge_x = points[1][0] - points[0][0]
+    edge_y = points[1][1] - points[0][1]
+    if math.hypot(edge_x, edge_y) <= 1e-6:
+        return False
+    edge_angle = math.degrees(math.atan2(edge_y, edge_x))
+    if not any(
+        _angle_matches(edge_angle, rotation + turn) for turn in (0.0, 90.0, 180.0, 270.0)
+    ):
+        return False
+    lengths = sorted(
+        math.hypot(points[(index + 1) % len(points)][0] - point[0], points[(index + 1) % len(points)][1] - point[1])
+        for index, point in enumerate(points)
+    )
+    width = num(source.get("width_cm"))
+    height = num(source.get("length_cm"))
+    short = min(width, height)
+    long = max(width, height)
+    slack = max(tolerance, 0.02)
+    return (
+        abs(lengths[0] - short) <= slack
+        and abs(lengths[1] - short) <= slack
+        and abs(lengths[-1] - long) <= slack
+        and abs(lengths[-2] - long) <= slack
+    )
 
 
 def evaluate_plan(
@@ -78,6 +154,10 @@ def validate_plan(
                     placed.get("h"),
                 ),
             )
+            stored_w, stored_h = w, h
+            outline_box = _placement_outline_bounds(placed)
+            if outline_box is not None:
+                x, y, w, h = outline_box
             if (
                 x < -tolerance
                 or y < -tolerance
@@ -109,7 +189,9 @@ def validate_plan(
                         True,
                     )
                 )
-            actual = (w, h, bool(placed.get("rotated")))
+            if _void_rotation_matches_piece(placed, source, tolerance):
+                continue
+            actual = (stored_w, stored_h, bool(placed.get("rotated")))
             if not any(
                 abs(actual[0] - allowed_value[0]) <= tolerance
                 and abs(actual[1] - allowed_value[1]) <= tolerance

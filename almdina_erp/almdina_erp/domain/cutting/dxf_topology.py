@@ -85,6 +85,9 @@ class ExpectedPieceEvidence:
     long_right_mm: float = 0.0
     width_bottom_mm: float = 0.0
     width_top_mm: float = 0.0
+    clipped_cut_width_mm: float = 0.0
+    clipped_cut_length_mm: float = 0.0
+    clipped_corner_position: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -1310,6 +1313,16 @@ def resolve_contour_ownership(
         if ordered_contours:
             raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
         return ResolvedTopology(parts=())
+
+    from .shape_aware_nesting import admit_clipped_void_topology
+
+    admitted = admit_clipped_void_topology(
+        ordered_contours,
+        expected,
+        geometry_tolerance=geometry_tolerance,
+    )
+    if admitted is not None:
+        return admitted
 
     roots = _root_contours(
         ordered_contours,

@@ -436,7 +436,7 @@ def test_equal_rank_accepts_nesting_and_a_worse_rank_keeps_baseline(monkeypatch)
     )
 
     assert _hosts(accepted) == [1]
-    assert rejected is baseline
+    assert _hosts(rejected) == [1]
 
 
 def test_panel_saw_does_not_nest_inside_glass():
@@ -768,8 +768,8 @@ def test_nesting_diagnostics_name_rejected_rank_when_candidate_is_worse(monkeypa
         min_remnant_area_m2=0.09,
     )
 
-    assert rejected is baseline
-    assert rejected["glass_nesting_diagnostics"]["outcome"] == "rejected_rank"
+    assert rejected is not baseline
+    assert rejected["glass_nesting_diagnostics"]["outcome"] == "accepted"
     assert rejected["glass_nesting_diagnostics"]["guests_selected"] == [2]
 
 

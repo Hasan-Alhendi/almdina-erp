@@ -1,9 +1,14 @@
 """Place proven cut outlines inside Glass openings after the base pack.
 
 The base MaxRects, Shelf, Guillotine, Skyline, and CP-SAT searches stay
-unchanged. This pass runs once on the winning plan. It keeps that plan unless
-the nested result is geometrically valid and better on ``industrial_rank``,
-or equal on that rank while it places more pieces inside openings.
+unchanged. This pass runs once on the winning plan. A nest is accepted when
+the guest outlines sit inside the real openings with kerf and without overlap.
+Board count, remnant area, and ``industrial_rank`` do not reject that nest.
+Rank is used only to choose between two nests that are already valid.
+
+Guests are moved into the openings of the current layout first. Repacking the
+other pieces is optional: it can replace the direct nest when it is also valid
+and better, and its failure leaves the direct nest in place.
 
 Clearance uses the plan Kerf once: the usable opening is the finished hole
 inset by that Kerf, and pieces inside it keep the same Kerf between each
@@ -15,6 +20,7 @@ from __future__ import annotations
 
 import json
 import time
+from copy import deepcopy
 from typing import Any, Mapping, Sequence
 
 from .catalog import MACHINE_TYPES as MACHINE_CATALOG
@@ -80,10 +86,11 @@ def nested_plan_is_better(
     candidate: Mapping[str, Any],
     baseline: Mapping[str, Any],
 ) -> bool:
-    """Prefer a better industrial rank, then a plan that uses more openings.
+    """Choose between two already valid nests.
 
-    Equal rank and equal opening use keep the baseline. Nesting never outranks
-    a plan that is better on ``industrial_rank``.
+    A better industrial rank wins, then the nest that places more pieces in
+    openings. This comparison does not decide whether a geometrically valid
+    nest may replace the unpacked baseline.
     """
 
     candidate_rank = tuple(candidate.get("industrial_rank") or ())
@@ -233,6 +240,30 @@ def host_link_errors(
     return errors
 
 
+def _without_guests(
+    plan: Mapping[str, Any],
+    guest_ids: set[int],
+) -> dict[str, Any]:
+    """Copy a layout with the selected guests removed from their old positions."""
+
+    copied = deepcopy(plan)
+    for sheet in copied.get("sheets") or []:
+        sheet["pieces"] = [
+            piece
+            for piece in (sheet.get("pieces") or [])
+            if _piece_id(piece) not in guest_ids
+        ]
+    copied["sheets"] = [
+        sheet for sheet in (copied.get("sheets") or []) if sheet.get("pieces")
+    ]
+    copied["unplaced"] = [
+        piece
+        for piece in (copied.get("unplaced") or [])
+        if _piece_id(piece) not in guest_ids
+    ]
+    return copied
+
+
 def nest_glass_openings(
     baseline: dict[str, Any],
     pieces: list[dict[str, Any]],
@@ -291,10 +322,94 @@ def nest_glass_openings(
     from .registry import METHOD_CONFIGS, run_single_method
 
     selected_id_set = set(selected_ids)
-    remainder = [piece for piece in pieces if int(piece["id"]) not in selected_id_set]
     method_key = str(baseline.get("method_key") or "")
     if method_key not in METHOD_CONFIGS:
         method_key = _REPACK_METHOD
+    context = {
+        "openings_found": len(openings),
+        "guests_selected": selected_ids,
+    }
+
+    def _expired(plan: dict[str, Any] | None) -> dict[str, Any] | None:
+        if time.monotonic() - started <= budget:
+            return None
+        if plan is not None:
+            return _finish(
+                plan,
+                outcome="accepted",
+                candidate_rank=tuple(plan.get("industrial_rank") or ()),
+                candidate_nested_count=nested_piece_count(plan),
+                **context,
+            )
+        return _finish(baseline, outcome="budget", **context)
+
+    def _prepare(placed: dict[str, Any] | None) -> tuple[dict[str, Any] | None, str]:
+        if placed is None:
+            return None, "place_failed"
+        candidate = placed
+        for key in (
+            "optimization_mode",
+            "ordering_strategy",
+            "attempts",
+            "search_elapsed_sec",
+            "search_time_limit_sec",
+            "solver_status",
+            "solver_wall_time_sec",
+            "method_key",
+            "method_label",
+            "complexity",
+        ):
+            if key in baseline:
+                candidate[key] = baseline[key]
+        used_area = sum(num(piece.get("area_m2")) for piece in pieces)
+        board_area = len(candidate.get("sheets") or []) * (
+            board_w_cm * board_h_cm / 10000
+        )
+        candidate["used_area_m2"] = used_area
+        candidate["total_board_area_m2"] = board_area
+        candidate["waste_area_m2"] = max(0.0, board_area - used_area)
+        expired = _expired(None)
+        if expired is not None:
+            return None, "budget"
+        candidate = enrich_plan_metrics(
+            candidate,
+            str(candidate.get("method_key") or method_key),
+            machine_type,
+            min_remnant_width_cm=min_remnant_width_cm,
+            min_remnant_length_cm=min_remnant_length_cm,
+            min_remnant_area_m2=min_remnant_area_m2,
+        )
+        errors = validate_plan(
+            candidate,
+            pieces,
+            board_w_cm,
+            board_h_cm,
+            kerf_cm=kerf_cm,
+            deadline_monotonic=started + budget,
+        )
+        if errors == [VALIDATION_DEADLINE_EXCEEDED]:
+            return None, "budget"
+        if errors:
+            return candidate, "rejected_validation"
+        return candidate, "accepted"
+
+    direct_source = _without_guests(baseline, selected_id_set)
+    try:
+        direct_placed = _place_guests(direct_source, selected, kerf_cm)
+    except GlassOpeningError:
+        direct_placed = None
+    accepted, failure = _prepare(direct_placed)
+    if failure == "budget" and accepted is None:
+        return _finish(baseline, outcome="budget", **context)
+    if accepted is not None and failure != "accepted":
+        accepted = None
+
+    expired = _expired(accepted if failure == "accepted" else None)
+    if expired is not None:
+        return expired
+
+    remainder = [piece for piece in pieces if int(piece["id"]) not in selected_id_set]
+    repack_plan: dict[str, Any] | None = None
     repacked = run_single_method(
         remainder,
         board_w_cm,
@@ -302,114 +417,45 @@ def nest_glass_openings(
         kerf_cm,
         method_key,
     )
-    if time.monotonic() - started > budget:
+    expired = _expired(accepted)
+    if expired is not None:
+        return expired
+    repack_failure = failure if failure != "accepted" else "repack_unplaced"
+    if not repacked.get("unplaced"):
+        try:
+            repack_placed = _place_guests(repacked, selected, kerf_cm)
+        except GlassOpeningError:
+            repack_placed = None
+        repack_plan, repack_failure = _prepare(repack_placed)
+        if repack_failure == "budget":
+            expired = _expired(accepted)
+            if expired is not None:
+                return expired
+            return _finish(baseline, outcome="budget", **context)
+        if repack_failure == "accepted" and (
+            accepted is None or nested_plan_is_better(repack_plan, accepted)
+        ):
+            accepted = repack_plan
+
+    if accepted is None:
         return _finish(
             baseline,
-            outcome="budget",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-        )
-    if repacked.get("unplaced"):
-        return _finish(
-            baseline,
-            outcome="repack_unplaced",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-        )
-    try:
-        placed = _place_guests(repacked, selected, kerf_cm)
-    except GlassOpeningError:
-        return _finish(
-            baseline,
-            outcome="place_failed",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-        )
-    if placed is None:
-        return _finish(
-            baseline,
-            outcome="place_failed",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-        )
-    candidate = placed
-    for key in (
-        "optimization_mode",
-        "ordering_strategy",
-        "attempts",
-        "search_elapsed_sec",
-        "search_time_limit_sec",
-        "solver_status",
-        "solver_wall_time_sec",
-        "method_key",
-        "method_label",
-        "complexity",
-    ):
-        if key in baseline:
-            candidate[key] = baseline[key]
-    used_area = sum(num(piece.get("area_m2")) for piece in pieces)
-    board_area = len(candidate.get("sheets") or []) * (board_w_cm * board_h_cm / 10000)
-    candidate["used_area_m2"] = used_area
-    candidate["total_board_area_m2"] = board_area
-    candidate["waste_area_m2"] = max(0.0, board_area - used_area)
-    if time.monotonic() - started > budget:
-        return _finish(
-            baseline,
-            outcome="budget",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-        )
-    candidate = enrich_plan_metrics(
-        candidate,
-        str(candidate.get("method_key") or method_key),
-        machine_type,
-        min_remnant_width_cm=min_remnant_width_cm,
-        min_remnant_length_cm=min_remnant_length_cm,
-        min_remnant_area_m2=min_remnant_area_m2,
-    )
-    errors = validate_plan(
-        candidate,
-        pieces,
-        board_w_cm,
-        board_h_cm,
-        kerf_cm=kerf_cm,
-        deadline_monotonic=started + budget,
-    )
-    candidate_nested = nested_piece_count(candidate)
-    if errors == [VALIDATION_DEADLINE_EXCEEDED]:
-        return _finish(
-            baseline,
-            outcome="budget",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-            candidate_nested_count=candidate_nested,
-        )
-    if errors:
-        return _finish(
-            baseline,
-            outcome="rejected_validation",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-            candidate_rank=tuple(candidate.get("industrial_rank") or ()),
-            candidate_nested_count=candidate_nested,
-            validation_error_count=len(errors),
-        )
-    if not nested_plan_is_better(candidate, baseline):
-        return _finish(
-            baseline,
-            outcome="rejected_rank",
-            openings_found=len(openings),
-            guests_selected=selected_ids,
-            candidate_rank=tuple(candidate.get("industrial_rank") or ()),
-            candidate_nested_count=candidate_nested,
+            outcome=repack_failure if repack_failure != "accepted" else failure,
+            candidate_rank=tuple((repack_plan or {}).get("industrial_rank") or ())
+            if repack_failure == "rejected_validation"
+            else None,
+            candidate_nested_count=nested_piece_count(repack_plan)
+            if repack_failure == "rejected_validation" and repack_plan is not None
+            else 0,
+            validation_error_count=1 if repack_failure == "rejected_validation" else 0,
+            **context,
         )
     return _finish(
-        candidate,
+        accepted,
         outcome="accepted",
-        openings_found=len(openings),
-        guests_selected=selected_ids,
-        candidate_rank=tuple(candidate.get("industrial_rank") or ()),
-        candidate_nested_count=candidate_nested,
+        candidate_rank=tuple(accepted.get("industrial_rank") or ()),
+        candidate_nested_count=nested_piece_count(accepted),
+        **context,
     )
 
 
@@ -737,6 +783,14 @@ def layout_pair_fault(
 def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], ...] | None:
     """Board-centimetre cut outline. ``None`` means the shape is not proven."""
 
+    stored = piece.get("placement_outline_cm")
+    if isinstance(stored, (list, tuple)) and len(stored) >= 3:
+        points: list[tuple[float, float]] = []
+        for point in stored:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                return None
+            points.append((float(point[0]), float(point[1])))
+        return tuple(points)
     placed = _as_placed_source(piece)
     kind = str(placed.get("piece_type") or "Regular")
     if kind in _CORNER_TYPES:

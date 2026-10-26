@@ -313,11 +313,21 @@ class TestPieceMirroringDoesNotChangeCutting(unittest.TestCase):
         self.assertTrue(allowed.snapshot["allow_piece_mirroring"])
         self.assertTrue(blocked.snapshot["validation"]["is_valid"])
         self.assertTrue(allowed.snapshot["validation"]["is_valid"])
+        def _without_mirroring(call: dict) -> dict:
+            item = dict(call)
+            item.pop("mirroring_allowed", None)
+            return item
+
         for engine in (blocked_engine, allowed_engine):
             self.assertTrue(engine.calls)
             for call in engine.calls:
                 self.assertNotIn("allow_piece_mirroring", call)
-        self.assertEqual(blocked_engine.calls, allowed_engine.calls)
+        self.assertEqual(
+            [_without_mirroring(call) for call in blocked_engine.calls],
+            [_without_mirroring(call) for call in allowed_engine.calls],
+        )
+        self.assertTrue(all(call.get("mirroring_allowed") is False for call in blocked_engine.calls))
+        self.assertTrue(all(call.get("mirroring_allowed") is True for call in allowed_engine.calls))
 
         offenders = [
             str(path.relative_to(CUTTING))

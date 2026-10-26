@@ -43,6 +43,7 @@ class CuttingPlanEngine(Protocol):
         min_remnant_width_cm: float,
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
+        mirroring_allowed: bool = False,
     ) -> dict[str, Any]: ...
 
     def validate(
@@ -244,8 +245,6 @@ def optimize_order_plan(
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
-        # Recorded for later placement eligibility. The engine call above does
-        # not receive this flag, so sheet geometry is unchanged in this phase.
         "allow_piece_mirroring": command.allow_piece_mirroring is True,
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
@@ -333,6 +332,7 @@ def _run_engine(
         min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
+        mirroring_allowed=command.allow_piece_mirroring is True,
     )
 
 

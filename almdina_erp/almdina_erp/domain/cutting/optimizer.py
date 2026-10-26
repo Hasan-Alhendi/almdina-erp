@@ -170,12 +170,25 @@ def _largest_reusable_free_area(
     min_remnant_width_cm: float,
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
+    machine_type: str = "Auto",
 ) -> float:
+    """Largest remnant that can actually be separated from the board.
+
+    An enclosed void is not a remnant. A panel saw can separate only a
+    through-cut strip. Fewer boards remain a higher priority than this area.
+    """
+
     best = 0.0
     for sheet in plan.get("sheets") or []:
+        board_w = num(sheet.get("w"))
+        board_h = num(sheet.get("h"))
         for rect in _free_rectangles_for_sheet(sheet):
             width = num(rect.get("w"))
             height = num(rect.get("h"))
+            if not _remnant_is_separable(
+                rect, board_w, board_h, machine_type=machine_type
+            ):
+                continue
             area = width * height / 10000
             dimension_ok = (
                 width >= min_remnant_width_cm
@@ -187,6 +200,27 @@ def _largest_reusable_free_area(
             if dimension_ok and area >= min_remnant_area_m2:
                 best = max(best, area)
     return best
+
+
+def _remnant_is_separable(
+    rect: dict[str, float],
+    board_w: float,
+    board_h: float,
+    *,
+    machine_type: str,
+) -> bool:
+    width = num(rect.get("w"))
+    height = num(rect.get("h"))
+    if machine_type == "Panel Saw":
+        spans_width = width >= board_w - 1e-6
+        spans_height = height >= board_h - 1e-6
+        return spans_width or spans_height
+    return (
+        num(rect.get("x")) <= 1e-6
+        or num(rect.get("y")) <= 1e-6
+        or num(rect.get("x")) + width >= board_w - 1e-6
+        or num(rect.get("y")) + height >= board_h - 1e-6
+    )
 
 
 def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
@@ -255,6 +289,7 @@ def enrich_plan_metrics(
         min_remnant_width_cm,
         min_remnant_length_cm,
         min_remnant_area_m2,
+        machine_type=machine_type,
     )
     panel_saw_penalty = 0
     if machine_type == "Panel Saw" and not method_key.startswith("Guillotine"):
@@ -445,9 +480,14 @@ def auto_pro(
     methods = _candidate_methods(machine_type)
     best: dict[str, Any] | None = None
     attempts = 0
+    seen_orders: set[tuple[str, tuple[int, ...]]] = set()
     for method in methods:
         for strategy in ORDERING_STRATEGIES:
             ordered = order_pieces(pieces, strategy)
+            signature = (method, tuple(int(piece["id"]) for piece in ordered))
+            if signature in seen_orders:
+                continue
+            seen_orders.add(signature)
             candidate = _run_preordered_method(
                 ordered,
                 pieces,
@@ -524,10 +564,16 @@ def deep_search(
     )
     deadline = started + max(0.5, float(time_limit_sec or 10.0))
 
+    seen_orders: set[tuple[str, tuple[int, ...]]] = set()
     while attempts < max_attempts and time.monotonic() < deadline:
         method = methods[attempts % len(methods)]
         sequence = deepcopy(pieces)
         rng.shuffle(sequence)
+        signature = (method, tuple(int(piece["id"]) for piece in sequence))
+        if signature in seen_orders:
+            attempts += 1
+            continue
+        seen_orders.add(signature)
         if attempts % 3 == 0 and len(sequence) > 4:
             large = order_pieces(sequence, "area_desc")
             split = max(1, len(large) // 4)
@@ -915,6 +961,7 @@ def optimize_plan(
     min_remnant_width_cm: float = 30.0,
     min_remnant_length_cm: float = 30.0,
     min_remnant_area_m2: float = 0.09,
+    mirroring_allowed: bool = False,
 ) -> dict[str, Any]:
     mode = selected_mode or AUTO_FAST
     metric_kwargs = {
@@ -980,9 +1027,32 @@ def optimize_plan(
         baseline["attempts"] = 1
 
     from .glass_opening_nesting import nest_glass_openings
+    from .plan_search import improve_plan_search
+    from .shape_aware_nesting import apply_shape_aware_nesting
 
-    return nest_glass_openings(
+    nested = nest_glass_openings(
         baseline,
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        machine_type=machine_type,
+        time_limit_sec=time_limit_sec,
+        **metric_kwargs,
+    )
+    shaped = apply_shape_aware_nesting(
+        nested,
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        mirroring_allowed=mirroring_allowed,
+        machine_type=machine_type,
+        time_limit_sec=time_limit_sec,
+        **metric_kwargs,
+    )
+    return improve_plan_search(
+        shaped,
         pieces,
         board_w_cm,
         board_h_cm,

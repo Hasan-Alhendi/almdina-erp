@@ -1411,6 +1411,8 @@ Taken automatically from the edge type,مأخوذ تلقائيًا من نوع �
 Select the cutting machine type,يجب اختيار نوع آلة القص
 Mirrorable,قابل للانعكاس
 Piece mirroring permission is invalid.,إذن عكس الدرفات غير صالح.
+This board type does not allow piece mirroring.,نوع اللوح هذا لا يسمح بعكس الدرفات.
+Turn mirroring off in the DXF or allow it on the order and upload the file again.,أوقف الانعكاس في ملف DXF أو اسمح به في الطلب ثم أعد رفع الملف.
 Send the measurements file to the customer?,هل تريد إرسال ملف القياسات للزبون؟
 Send the measurement changes to the customer?,هل تريد إرسال تعديلات القياسات للزبون؟
 A WhatsApp message will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
