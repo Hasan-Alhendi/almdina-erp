@@ -293,3 +293,80 @@ def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
     monkeypatch.setattr(export, "validate_snapshot_material_layout", lambda *args, **kwargs: True)
     codes = [item.code for item in export.validate_cutting_plan_issues(plan)]
     assert ("PIECE_OUTSIDE_SHEET" in codes) is expected_invalid
+
+
+
+def _write_adaptive_boundary_dxf(path, *, sheets_and_pieces, include_saw_centers=False):
+    import ezdxf
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+        cutter_center_segments,
+    )
+
+    doc = ezdxf.new("R2010")
+    msp = doc.modelspace()
+    overhanging_centers = []
+    for offset_x, local_x, local_y in sheets_and_pieces:
+        board = (offset_x, 0, offset_x + 1220, 2440)
+        outer = [
+            (offset_x + local_x, local_y),
+            (offset_x + local_x + 200, local_y),
+            (offset_x + local_x + 200, local_y + 300),
+            (offset_x + local_x, local_y + 300),
+        ]
+        msp.add_lwpolyline(
+            [(offset_x, 0), (offset_x + 1220, 0),
+             (offset_x + 1220, 2440), (offset_x, 2440)],
+            close=True, dxfattribs={"layer": "SHEET_OUTLINE"},
+        )
+        msp.add_lwpolyline(outer, close=True, dxfattribs={"layer": "GEOMETRY"})
+        if include_saw_centers:
+            segments = cutter_center_segments([(outer, ())], 2.5, board=board)
+            overhanging_centers.extend(segments)
+            for a, b in segments:
+                msp.add_line(a, b, dxfattribs={"layer": "CUT_PATH"})
+    doc.saveas(path)
+    return overhanging_centers
+
+
+def _strict_boundary_import(path, *, count):
+    from unittest.mock import patch
+    from almdina_erp.tests.test_dxf_manufacturing_identity import order_for
+    from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
+    from almdina_erp.almdina_erp.services import dxf_import_service as legacy
+    from almdina_erp.almdina_erp.services import strict_dxf_import_service as strict
+
+    order = order_for([(20, 30, count)])
+    with patch.object(legacy.frappe, "get_site_path", return_value=str(path)):
+        return strict.parse_production_dxf(
+            "/private/files/physical-boundary.dxf",
+            order,
+            settings=PlanSettings("Auto", "CNC", 5, 5, 5),
+        )
+
+
+def test_strict_uploaded_dxf_retains_trim_per_sheet_through_real_parser(tmp_path):
+    path = tmp_path / "two-physical-boards.dxf"
+    _write_adaptive_boundary_dxf(
+        path, sheets_and_pieces=[(0, 0, 0), (1400, 10, 10)],
+    )
+    snapshot = _strict_boundary_import(path, count=2)
+    assert snapshot["saw_center_status"] == "Absent"
+    assert [s["applied_trim_width_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
+    assert [s["applied_trim_length_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
+
+
+@pytest.mark.parametrize("with_saw_paths", [False, True])
+def test_uploaded_finished_material_at_edge_allows_safe_external_saw_centers(
+    tmp_path, with_saw_paths,
+):
+    path = tmp_path / "near-boundary.dxf"
+    centers = _write_adaptive_boundary_dxf(
+        path, sheets_and_pieces=[(0, 1, 10)],
+        include_saw_centers=with_saw_paths,
+    )
+    if with_saw_paths:
+        assert min(p[0] for segment in centers for p in segment) == pytest.approx(-1.5)
+    snapshot = _strict_boundary_import(path, count=1)
+    assert snapshot["saw_center_status"] == ("Present" if with_saw_paths else "Absent")
+    assert snapshot["sheets"][0]["applied_trim_width_cm"] == pytest.approx(0.1)
+    assert snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(0)
