@@ -34,6 +34,10 @@ flowchart LR
 - خذ Backup مناسب قبل Migration عالية الأثر.
 - تأكد أن rollback path معروف.
 
+### شرط إصدار خاص بخطط القص وDXF
+
+عند وجود خطط System أو Uploaded DXF قديمة، طبّق [Cutting Plan release safety](CUTTING_PLAN_RELEASE_SAFETY.md) **قبل النشر**: نسخة احتياطية كاملة (DB + public/private files + site config) مجرّبة الاستعادة، إثبات SHA/image المنشور فعلًا، نجاح اختبارات العقود V1–V4 وLifecycle في CI، ثم Preflight على نسخة معزولة من بيانات الموقع. لا تتجاوز فشلًا غير مفسر بإعادة رفع DXF جماعيًا أو تصفير Stale Flags. اختبارات CI وحدها لا تحل محل مقارنة بيانات المعمل؛ ويجب التحقق من إعداد Required Status Checks في GitHub.
+
 ## 4. Frappe migration contract
 
 الأوامر الدقيقة قد تختلف حسب Docker/Bench wrapper للبيئة، لكن التسلسل المنطقي:
