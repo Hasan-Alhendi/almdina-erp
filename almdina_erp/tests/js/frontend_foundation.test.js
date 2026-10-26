@@ -91,7 +91,8 @@ assert.equal(Object.isFrozen(frontend), true);
     await assert.rejects(frontend.rpc("test.failure"), /server failed/);
     await assert.rejects(frontend.rpc(""), /RPC method is required/);
 
-    assert.equal(frontend.errorMessage(new Error("broken"), "fallback"), "broken");
+    // Unexpected JavaScript exceptions are internal diagnostics, never public copy.
+    assert.equal(frontend.errorMessage(new Error("broken"), "fallback"), "fallback");
     assert.equal(frontend.errorMessage({}, "fallback"), "fallback");
 
     const gate = frontend.createLatestRequestGate();

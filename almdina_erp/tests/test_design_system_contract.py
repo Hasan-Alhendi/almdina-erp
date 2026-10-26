@@ -622,14 +622,14 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=3"'
-        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=2"'
+        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=3"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css?v=2"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=12"'
-        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
-        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
+        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js?v=2"'
+        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js?v=2"'
         notes_asset = '"/assets/almdina_erp/css/notes.css?v=1"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))
@@ -778,20 +778,20 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn('class="btn btn-primary apc-save"', self.permissions_renderer)
         self.assertNotIn('type="file"', self.permissions_renderer)
         self.assertNotIn("apc-import-file", self.permissions_renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.permissions_page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.permissions_page)
 
     def test_factory_workforce_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui aw-shell alm-page alm-page--admin"', self.workforce_renderer)
         self.assertIn("AlmdinaUi.button", self.workforce_renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.workforce_renderer)
         self.assertNotIn('class="btn btn-danger aw-toggle"', self.workforce_renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.workforce_page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.workforce_page)
 
     def test_factory_production_settings_uses_design_system(self) -> None:
         self.assertIn('class="almdina-ui aps-shell alm-page alm-page--admin"', self.production_settings_renderer)
         self.assertIn("AlmdinaUi.button", self.production_settings_renderer)
         self.assertNotIn('class="btn btn-primary aps-edit"', self.production_settings_renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.production_settings_page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.production_settings_page)
 
     def test_shop_floor_inbox_uses_design_system(self) -> None:
         self.assertIn("almdina-ui almdina-sf-shell alm-page alm-page--workbench", self.shop_floor_renderer)
@@ -799,7 +799,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("AlmdinaUi.button", self.shop_floor_renderer)
         self.assertNotIn('class="btn btn-primary sf-quick-action"', self.shop_floor_renderer)
         self.assertNotIn('class="btn btn-danger almdina-sf-logout"', self.shop_floor_renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.shop_floor_page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.shop_floor_page)
 
     def test_shop_floor_workbench_adopts_shared_patterns(self) -> None:
         renderer = self.shop_floor_renderer
@@ -851,7 +851,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertIn("AlmdinaUi.button", self.special_shape_shell)
         self.assertNotIn('class="ald-doc-primary"', self.special_shape_shell)
         self.assertNotIn('class="ald-doc-danger"', self.special_shape_shell)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.special_shape_page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.special_shape_page)
 
     def test_factory_master_data_uses_design_system(self) -> None:
         self.assertIn("almdina-ui prw-shell alm-page alm-page--workbench", self.factory_master_data_page)

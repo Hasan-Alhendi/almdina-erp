@@ -113,7 +113,7 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("[...PREREQUISITES, ...MODULES].map", page)
         self.assertNotIn("MODULES.reduce", page)
         self.assertIn("infrastructure/scanner_bridge.js", page)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", page)
         self.assertIn("application/element_clipboard.js", page)
         self.assertIn("application/keyboard_shortcuts.js", page)
         self.assertIn("domain/reference_crop.js", page)

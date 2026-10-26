@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";
 const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
 
 // The test locale is the identity fallback (__(value) => value); assert stable

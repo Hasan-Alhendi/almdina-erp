@@ -34,8 +34,8 @@
         ["/assets/almdina_erp/css/factory_routing_workflow.css", "almdina-routing-workflow-style"],
         ["/assets/almdina_erp/css/factory_stage_library.css", "almdina-stage-library-style"],
     ]);
-    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
-    const DESIGN_SYSTEM = "/assets/almdina_erp/js/almdina_ui.js";
+    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";
+    const DESIGN_SYSTEM = "/assets/almdina_erp/js/almdina_ui.js?v=2";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const METHODS = Object.freeze({
         load: "almdina_erp.almdina_erp.services.master_data_service.get_production_routing_console",

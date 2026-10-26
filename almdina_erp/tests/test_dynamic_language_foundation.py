@@ -128,7 +128,7 @@ class TestDynamicLanguageFoundation(unittest.TestCase):
     def test_locale_asset_loads_before_consumers(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")
         locale_asset = '"/assets/almdina_erp/js/almdina_locale.js"'
-        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
+        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js?v=2"'
         self.assertEqual(source.count(locale_asset), 1)
         self.assertLess(source.index(locale_asset), source.index(foundation_asset))
         self.assertNotIn("arabic_operator_ui.js", source)

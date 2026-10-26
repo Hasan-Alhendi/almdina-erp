@@ -4,6 +4,7 @@
     if (window.AlmdinaFrontend) return;
 
     const pendingAssetGroups = new Map();
+    const normalizedErrors = new WeakSet();
 
     function frappeRuntime() {
         if (window.frappe) return window.frappe;
@@ -11,18 +12,171 @@
         return null;
     }
 
-    function errorMessage(error, fallback = "") {
-        if (error && typeof error === "object") {
-            const candidates = [
-                error.message,
-                error.exc,
-                error._server_messages,
-            ];
-            const value = candidates.find(candidate => typeof candidate === "string" && candidate.trim());
-            if (value) return value.trim();
+    function translate(message) {
+        return typeof __ === "function" ? __(message) : message;
+    }
+
+    function publicText(value, limit = 2000) {
+        if (typeof value !== "string") return "";
+        // Legacy Frappe messages can contain markup. Return plain text; HTML
+        // consumers must still use the design system's escapeHtml boundary.
+        return value.slice(0, limit)
+            .replace(/<br\s*\/?\s*>/gi, "\n")
+            .replace(/<\/?[a-z!][^>]*>/gi, "")
+            .trim();
+    }
+
+    function parseMessages(value) {
+        if (typeof value === "string") {
+            try { value = JSON.parse(value); } catch (_error) { return []; }
         }
-        if (typeof error === "string" && error.trim()) return error.trim();
-        return String(fallback || "");
+        if (!Array.isArray(value)) return [];
+        return value.slice(0, 10).map(item => {
+            if (typeof item === "string") {
+                try { item = JSON.parse(item); } catch (_error) { return publicText(item); }
+            }
+            return publicText(item && item.message);
+        }).filter(Boolean);
+    }
+
+    function numericPreview(value) {
+        if (!value || !Array.isArray(value.paths) || value.paths.length !== 2) return null;
+        const points = [];
+        const paths = [];
+        for (const rings of value.paths) {
+            if (!Array.isArray(rings) || !rings.length) return null;
+            const result = [];
+            for (const ring of rings) {
+                if (!Array.isArray(ring) || ring.length < 3) return null;
+                const copy = [];
+                for (const point of ring) {
+                    if (!Array.isArray(point) || point.length !== 2
+                        || point.some(n => typeof n !== "number" || !Number.isFinite(n) || Math.abs(n) > 1e8)) return null;
+                    points.push(point);
+                    if (points.length > 512) return null;
+                    copy.push([point[0], point[1]]);
+                }
+                result.push(copy);
+            }
+            paths.push(result);
+        }
+        const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
+        return { paths, bounds: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] };
+    }
+
+    function normalizeError(error, options = {}) {
+        if (error && typeof error === "object" && normalizedErrors.has(error)) return error;
+        const response = error && error.responseJSON || error || {};
+        const status = Number(error && error.status) || 0;
+        const envelope = response && response.almdina_error;
+        const supported = envelope && envelope.schema_version === 1
+            && Array.isArray(envelope.issues);
+        const issues = supported ? envelope.issues.slice(0, 100)
+            .filter(item => item && typeof item.code === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(item.code))
+            .map(item => Object.freeze({
+                code: item.code,
+                problem: publicText(item.problem), target: publicText(item.target),
+                action: publicText(item.action), category: publicText(item.category, 80),
+                highlight: publicText(item.highlight),
+                table: Array.isArray(item.table) ? item.table.slice(0, 100).filter(Array.isArray)
+                    .map(row => row.slice(0, 20).map(cell => publicText(cell, 200))) : [],
+                details: Array.isArray(item.details) ? item.details.slice(0, 20).map(line => publicText(line)).filter(Boolean) : [],
+                preview: numericPreview(item.preview),
+            })) : [];
+        const exceptionType = typeof response.exc_type === "string" ? response.exc_type : "";
+        const knownException = !exceptionType || [
+            "ValidationError", "PermissionError", "AuthenticationError", "DoesNotExistError",
+            "TimestampMismatchError", "DuplicateEntryError", "MandatoryError", "LinkValidationError",
+        ].includes(exceptionType);
+        const messages = knownException && status < 500
+            ? parseMessages(response._server_messages || response.messages) : [];
+        const statusMessages = {
+            401: translate("Your session has expired. Sign in again."),
+            403: translate("You do not have permission to perform this action."),
+            404: translate("The requested resource is unavailable."),
+            413: translate("The uploaded file exceeds the server's size limit."),
+            429: translate("Too many requests. Wait a moment before trying again."),
+            502: translate("The server is temporarily unavailable. Check the current status before repeating the operation."),
+            503: translate("The server is temporarily unavailable. Check the current status before repeating the operation."),
+            504: translate("The request timed out. Check the current status before repeating the operation."),
+        };
+        const fallback = statusMessages[status] || publicText(options.fallback)
+            || translate("The operation could not be completed. Please try again or contact support.");
+        // Error.message/stack/exception/exc are diagnostics, not public copy.
+        // Only a protocol message or a legacy server-message list is eligible
+        // for display; even an unstructured string can contain private details.
+        const message = issues[0] && issues[0].problem || messages.join("\n") || fallback;
+        const normalized = Object.freeze({
+            isAlmdinaError: true, status, exceptionType,
+            code: issues[0] && issues[0].code || "OPERATION_FAILED",
+            title: supported ? publicText(envelope.title, 200) : "",
+            message, issues,
+            outcome: supported && ["rejected", "partial", "unknown"].includes(envelope.outcome)
+                ? envelope.outcome : "unknown",
+            requestReference: supported && typeof envelope.request_reference === "string"
+                && /^[a-zA-Z0-9-]{1,80}$/.test(envelope.request_reference)
+                ? envelope.request_reference
+                : typeof options.requestReference === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(options.requestReference)
+                    ? options.requestReference : null,
+            hasMore: Boolean(supported && envelope.has_more),
+            partialValidation: Boolean(supported && envelope.validation_coverage === "partial"),
+        });
+        normalizedErrors.add(normalized);
+        return normalized;
+    }
+
+    function errorMessage(error, fallback = "") {
+        return normalizeError(error, { fallback }).message;
+    }
+
+    async function ownedRpc(method, args = {}, options = {}) {
+        // Explicit opt-in for app-owned surfaces only. Native Frappe calls keep
+        // their existing transport and message ownership. fetch prevents native
+        // HTTP handlers from showing a second/stale dialog before our owner runs.
+        const runtime = frappeRuntime();
+        if (!/^[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)+$/.test(String(method || ""))
+            || !runtime || !runtime.csrf_token || typeof window.fetch !== "function") {
+            throw normalizeError(null, options);
+        }
+        const body = new URLSearchParams();
+        Object.entries(args).forEach(([key, value]) => {
+            if (value !== undefined) body.set(key, value !== null && typeof value === "object" ? JSON.stringify(value) : String(value == null ? "" : value));
+        });
+        let frozen = false;
+        try {
+            if (options.freeze && runtime.dom && typeof runtime.dom.freeze === "function") {
+                runtime.dom.freeze(options.freezeMessage || "");
+                frozen = true;
+            }
+            const response = await window.fetch(`/api/method/${method}`, {
+                method: "POST", credentials: "same-origin", body,
+                headers: {
+                    "X-Frappe-CSRF-Token": runtime.csrf_token,
+                    "X-Requested-With": "XMLHttpRequest",
+                    Accept: "application/json",
+                },
+            });
+            const data = await response.json().catch(() => null);
+            if (response.status === 401 || data && data.session_expired
+                || response.status === 403 && runtime.session && runtime.session.user === "Guest"
+                    && runtime.session.logged_in_user !== "Guest") {
+                if (runtime.app && typeof runtime.app.handle_session_expired === "function") {
+                    runtime.app.handle_session_expired();
+                }
+            }
+            if (!response.ok || !data || data.exc_type || data.exc || data.session_expired) {
+                throw normalizeError({ responseJSON: data || {}, status: response.status }, {
+                    ...options,
+                    requestReference: response.headers && response.headers.get("X-Frappe-Request-Id"),
+                });
+            }
+            if (data.__messages && runtime._messages) Object.assign(runtime._messages, data.__messages);
+            return options.raw === true ? data : data.message;
+        } catch (error) {
+            throw normalizeError(error, options);
+        } finally {
+            if (frozen) runtime.dom.unfreeze();
+        }
     }
 
     function rpc(method, args = {}, options = {}) {
@@ -224,6 +378,8 @@
     window.AlmdinaFrontend = Object.freeze({
         rpc,
         errorMessage,
+        normalizeError,
+        ownedRpc,
         requireAssets,
         createLatestRequestGate,
         createLifecycleScope,

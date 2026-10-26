@@ -223,7 +223,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)
         self.assertNotIn('id="aw-workforce-search"', self.renderer)
         self.assertNotIn('id="aw-enabled-filter"', self.renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.page)
 
     def test_styles_are_external_and_responsive_without_visual_pinning(self) -> None:
         for selector in (

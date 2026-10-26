@@ -70,7 +70,7 @@
                 })
                 .catch(error => {
                     if (!current()) return;
-                    frappe.msgprint({ title: t("Could not create the backup"), message: errorMessage(error, t("Backup scheduling failed.")), indicator: "red" });
+                    frappe.msgprint({ title: t("Could not create the backup"), message: frappe.utils.escape_html(errorMessage(error, t("Backup scheduling failed."))), indicator: "red" });
                 });
         }
 
@@ -82,7 +82,7 @@
                 })
                 .catch(error => {
                     if (!current()) return;
-                    frappe.msgprint({ title: t("SSH test failed"), message: errorMessage(error, t("Could not connect to the remote server.")), indicator: "red" });
+                    frappe.msgprint({ title: t("SSH test failed"), message: frappe.utils.escape_html(errorMessage(error, t("Could not connect to the remote server."))), indicator: "red" });
                 });
         }
 

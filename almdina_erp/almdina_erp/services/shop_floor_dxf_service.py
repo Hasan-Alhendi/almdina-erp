@@ -5,6 +5,7 @@ from typing import Any
 import frappe
 from frappe import _
 from frappe.utils import cint
+from almdina_erp.almdina_erp.infrastructure.frappe.error_response import record_unexpected_errors
 
 from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     DrawingActionDenied,
@@ -185,7 +186,9 @@ def _throw_dxf_validation_errors(
     )
     from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
         render_error_cards_html,
+        public_dxf_issues,
     )
+    from almdina_erp.almdina_erp.infrastructure.frappe.error_response import attach_error_response
 
     resolved = list(issues or [])
     if not resolved:
@@ -200,6 +203,10 @@ def _throw_dxf_validation_errors(
                     )
                 )
     message = render_error_cards_html(resolved, context="upload")
+    attach_error_response(
+        operation="dxf_upload", title=_("The DXF file could not be accepted"),
+        issues=public_dxf_issues(resolved), outcome="rejected",
+    )
     frappe.throw(message, title=_("تعذر قبول ملف DXF"))
 
 
@@ -232,6 +239,7 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 
 @frappe.whitelist()
+@record_unexpected_errors("dxf_upload")
 def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
     # Security order is intentional and regression-tested:
     # private+unattached staging -> authorization -> geometry validation ->

@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const DESIGN_SYSTEM_MODULE = "/assets/almdina_erp/js/almdina_ui.js";
+const DESIGN_SYSTEM_MODULE = "/assets/almdina_erp/js/almdina_ui.js?v=2";
 
 const cases = [
     {

@@ -201,7 +201,7 @@ class FactoryPermissionsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn('class="btn btn-primary apc-save"', self.renderer)
         self.assertNotIn('type="file"', self.renderer)
         self.assertNotIn("apc-import-file", self.renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.page)
 
     def test_feature_styles_are_external_and_preserve_existing_surface_contract(self) -> None:
         for selector in (

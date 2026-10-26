@@ -317,8 +317,8 @@ function createRuntime({coldCore = false, pendingStyle = false} = {}) {
         },
         require(assets) {
             assert.deepEqual(Array.from(assets), [
-                "/assets/almdina_erp/js/frontend_foundation.js",
-                "/assets/almdina_erp/js/almdina_ui.js",
+                "/assets/almdina_erp/js/frontend_foundation.js?v=2",
+                "/assets/almdina_erp/js/almdina_ui.js?v=2",
                 "/assets/almdina_erp/js/page_revisit_refresh.js",
             ]);
             return assetLoad.promise;

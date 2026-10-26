@@ -31,10 +31,10 @@
     }
 
     const PAGE_ROUTE = "shop-floor-inbox";
-    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
+    const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js?v=2";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
-        "/assets/almdina_erp/js/almdina_ui.js",
+        "/assets/almdina_erp/js/almdina_ui.js?v=2",
         "/assets/almdina_erp/js/shop_floor_quick_actions.js",
         "/assets/almdina_erp/js/shop_floor_inbox/api.js",
         "/assets/almdina_erp/js/shop_floor_inbox/state.js",

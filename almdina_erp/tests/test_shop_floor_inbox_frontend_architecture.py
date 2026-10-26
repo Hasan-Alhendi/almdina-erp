@@ -250,7 +250,7 @@ class ShopFloorInboxFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn('class="btn btn-default sf-open-btn"', self.renderer)
         self.assertNotIn('id="almdina-sf-board-search"', self.renderer)
         self.assertNotIn('id="almdina-sf-route-filter"', self.renderer)
-        self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
+        self.assertIn("/assets/almdina_erp/js/almdina_ui.js?v=2", self.page)
 
     def test_structural_phase_keeps_existing_stylesheet_owner(self) -> None:
         self.assertIn(".almdina-sf-shell", self.css)

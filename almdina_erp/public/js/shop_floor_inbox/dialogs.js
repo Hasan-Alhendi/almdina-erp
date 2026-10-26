@@ -177,7 +177,7 @@
             error(message, generation) {
                 if (!isCurrent(generation)) return null;
                 return own(
-                    frappe.msgprint(message || translate("Could not complete the operation.")),
+                    frappe.msgprint(frappe.utils.escape_html(message || translate("Could not complete the operation."))),
                     "error",
                     generation
                 );
