@@ -267,7 +267,8 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
         usable_w, usable_h = flt(source.usable_width_mm), flt(source.usable_length_mm)
         if width <= 0 or height <= 0:
             issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"actual_width_mm": width, "actual_height_mm": height}))
-        if source.source_type == "Full Board" and str(getattr(source, "resource_kind", "FULL_BOARD") or "FULL_BOARD").upper() != "OFFCUT":
+        resource_kind = str(getattr(source, "resource_kind", "FULL_BOARD") or "FULL_BOARD").upper()
+        if source.source_type == "Full Board" and resource_kind != "OFFCUT":
             # Placed coordinates live in the applied-trim frame. Preferred trim
             # is not a physical boundary: rebuild the same frame used by DXF
             # export, including historical missing and explicit-zero trim.
