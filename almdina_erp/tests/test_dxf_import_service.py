@@ -251,11 +251,19 @@ def test_imported_plan_bounds_follow_each_sheet_usable_dimensions():
 
 
 @pytest.mark.parametrize(
-    "x_mm,explicit_trim,expected_invalid",
-    [(-2, None, False), (-2, 0.0, True), (-6, None, True), (0, 0.0, False)],
+    "x_mm,explicit_trim,expected_invalid,missing_sheet_dimensions,plan_zero",
+    [
+        (-2, None, False, False, False),
+        (-2, 0.0, True, False, False),
+        (-6, None, True, False, False),
+        (0, 0.0, False, False, False),
+        # Legacy sheets can omit dimensions; recover them from persisted sources,
+        # not from a plan-wide zero that loses an earlier per-sheet inset.
+        (-2, None, False, True, True),
+    ],
 )
 def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
-    x_mm, explicit_trim, expected_invalid, monkeypatch,
+    x_mm, explicit_trim, expected_invalid, missing_sheet_dimensions, plan_zero, monkeypatch,
 ):
     import json
     from types import SimpleNamespace
@@ -272,8 +280,14 @@ def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
     if explicit_trim is not None:
         sheet["applied_trim_width_cm"] = explicit_trim
         sheet["applied_trim_length_cm"] = explicit_trim
+    if missing_sheet_dimensions:
+        for field in ("full_width_cm", "full_length_cm", "usable_width_cm", "usable_length_cm"):
+            sheet.pop(field)
     snapshot = {"sheets": [sheet], "full_board_width_cm": 122,
                 "full_board_length_cm": 244, "trim_cm": 0.5}
+    if plan_zero:
+        snapshot["applied_trim_width_cm"] = 0
+        snapshot["applied_trim_length_cm"] = 0
     source = SimpleNamespace(
         sheet_no=1, source_type="Full Board", full_width_mm=1220,
         full_length_mm=2440, usable_width_mm=1210, usable_length_mm=2430,
