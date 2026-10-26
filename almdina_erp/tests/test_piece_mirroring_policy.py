@@ -69,73 +69,103 @@ def _order(**overrides):
 
 class TestPieceMirroringPolicy(unittest.TestCase):
     def test_missing_and_blank_values_mean_mirroring_is_not_allowed(self) -> None:
-        for value in (None, "", "   "):
+        for value in (None, "", "   ", 0, False, "0", "false", "not_allowed"):
             with self.subTest(value=value):
-                self.assertEqual(NOT_ALLOWED, normalize_allow_piece_mirroring(value))
+                self.assertEqual(0, normalize_allow_piece_mirroring(value))
                 self.assertFalse(piece_mirroring_allowed(value))
 
-    def test_canonical_choices_round_trip_and_invalid_values_fail(self) -> None:
-        self.assertEqual(NOT_ALLOWED, normalize_allow_piece_mirroring("not_allowed"))
-        self.assertEqual(ALLOWED, normalize_allow_piece_mirroring("  allowed  "))
-        self.assertTrue(piece_mirroring_allowed(ALLOWED))
-        for value in (True, False, 0, 1, "yes", "no", "نعم"):
+    def test_checkbox_toggles_between_zero_and_one(self) -> None:
+        for value in (1, True, "1", "true", "allowed", "  Allowed  "):
+            with self.subTest(value=value):
+                self.assertEqual(1, normalize_allow_piece_mirroring(value))
+                self.assertTrue(piece_mirroring_allowed(value))
+        for value in ("yes", "no", 2, "نعم", "sideways"):
             with self.subTest(value=value):
                 with self.assertRaises(PieceMirroringPolicyError):
                     normalize_allow_piece_mirroring(value)
 
-    def test_save_keeps_the_choice_and_fills_old_orders(self) -> None:
+    def test_save_keeps_the_choice_and_reopens_it(self) -> None:
         legacy = _order()
         del legacy.allow_piece_mirroring
         FrappeOrderBoardInputAdapter(legacy, _BoardAccess()).load_snapshot()
-        self.assertEqual(NOT_ALLOWED, legacy.allow_piece_mirroring)
+        self.assertEqual(0, legacy.allow_piece_mirroring)
 
-        chosen = _order(allow_piece_mirroring=ALLOWED)
-        FrappeOrderBoardInputAdapter(chosen, _BoardAccess()).load_snapshot()
-        self.assertEqual(ALLOWED, chosen.allow_piece_mirroring)
-        FrappeOrderBoardInputAdapter(chosen, _BoardAccess()).load_snapshot()
-        self.assertEqual(ALLOWED, chosen.allow_piece_mirroring)
+        chosen = _order(allow_piece_mirroring=0)
+        adapter = FrappeOrderBoardInputAdapter(chosen, _BoardAccess())
+        adapter.load_snapshot()
+        self.assertEqual(0, chosen.allow_piece_mirroring)
+
+        chosen.allow_piece_mirroring = 1
+        adapter.load_snapshot()
+        self.assertEqual(1, chosen.allow_piece_mirroring)
+        adapter.load_snapshot()
+        self.assertEqual(1, chosen.allow_piece_mirroring)
+
+        chosen.allow_piece_mirroring = True
+        adapter.load_snapshot()
+        self.assertEqual(1, chosen.allow_piece_mirroring)
+
+        chosen.allow_piece_mirroring = "allowed"
+        adapter.load_snapshot()
+        self.assertEqual(1, chosen.allow_piece_mirroring)
+
+        chosen.allow_piece_mirroring = 0
+        adapter.load_snapshot()
+        self.assertEqual(0, chosen.allow_piece_mirroring)
 
         invalid = _order(allow_piece_mirroring="yes")
         with self.assertRaises(ValueError):
             FrappeOrderBoardInputAdapter(invalid, _BoardAccess()).load_snapshot()
 
-    def test_doctype_radio_defaults_to_not_allowed(self) -> None:
+    def test_doctype_is_one_unchecked_checkbox(self) -> None:
         payload = json.loads(
             (ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json").read_text()
         )
         fields = {field["fieldname"]: field for field in payload["fields"]}
         field = fields["allow_piece_mirroring"]
-        self.assertEqual("Select", field["fieldtype"])
-        self.assertEqual("not_allowed", field["default"])
-        self.assertEqual("not_allowed\nallowed", field["options"])
-        self.assertEqual("Does this board type allow piece mirroring?", field["label"])
+        self.assertEqual("Check", field["fieldtype"])
+        self.assertEqual("0", str(field["default"]))
+        self.assertNotIn("options", field)
+        self.assertEqual("Mirrorable", field["label"])
         self.assertNotIn("reqd", field)
         self.assertEqual(
             "allow_piece_mirroring",
             payload["field_order"][payload["field_order"].index("edge_color") + 1],
         )
+        self.assertEqual(
+            1,
+            sum(1 for item in payload["fields"] if item.get("fieldname") == "allow_piece_mirroring"),
+        )
 
-    def test_visible_copy_is_translated_from_english_ids(self) -> None:
+    def test_visible_copy_is_yes_no_pills(self) -> None:
         with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
             catalog = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
-        self.assertEqual(
-            "هل يسمح نوع اللوح بعكس الدرفات؟",
-            catalog["Does this board type allow piece mirroring?"],
-        )
-        self.assertEqual("لا، الانعكاس غير مسموح", catalog["No, mirroring is not allowed"])
-        self.assertEqual("نعم، الانعكاس مسموح", catalog["Yes, mirroring is allowed"])
+        self.assertEqual("قابل للانعكاس", catalog["Mirrorable"])
+        self.assertEqual("نعم", catalog["Yes"])
+        self.assertEqual("لا", catalog["No"])
         self.assertEqual(
             "إذن عكس الدرفات غير صالح.",
             catalog["Piece mirroring permission is invalid."],
         )
+        css = (ROOT / "public" / "css" / "door_cutting_order_form_tab_layout.css").read_text(encoding="utf-8")
+        self.assertIn("dco-piece-mirroring-option", css)
+        self.assertIn("border-radius: 999px", css)
+        self.assertNotIn("allow_piece_mirroring\"] select", css)
         source = (
             ROOT / "public" / "js" / "door_cutting_order" / "order_entry"
             / "door_cutting_order_piece_mirroring_ux.js"
         ).read_text(encoding="utf-8")
         self.assertIn('input.type = "radio"', source)
-        self.assertIn('value: NOT_ALLOWED', source)
-        self.assertIn('set_value(FIELDNAME, next)', source)
-        self.assertNotIn("allow_piece_mirroring_changed", source)
+        self.assertIn('value: "1"', source)
+        self.assertIn('value: "0"', source)
+        self.assertIn('label: "Yes"', source)
+        self.assertIn('label: "No"', source)
+        self.assertIn("set_value(FIELDNAME, next)", source)
+        self.assertNotIn("<select", source)
+        defaults = (
+            ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_defaults.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('allow_piece_mirroring: "Mirrorable"', defaults)
 
 
 class TestPieceMirroringPlanBinding(unittest.TestCase):

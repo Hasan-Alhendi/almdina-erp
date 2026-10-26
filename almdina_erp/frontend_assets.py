@@ -20,7 +20,7 @@ app_include_css = [
     "/assets/almdina_erp/css/role_form.css?v=2",
     "/assets/almdina_erp/css/door_cutting_order_measurement_structure.css",
     "/assets/almdina_erp/css/door_cutting_order_responsive.css",
-    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=5",
+    "/assets/almdina_erp/css/door_cutting_order_form_tab_layout.css?v=7",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_layout.css?v=12",
     "/assets/almdina_erp/css/door_cutting_order_plan_workspace_shell.css?v=14",
     "/assets/almdina_erp/css/door_cutting_order_form_presentation.css?v=1",
@@ -130,8 +130,7 @@ doctype_js = {
         # Radio presentation and client-only required check for the operational
         # cutting machine. Schema stays optional so the server accepts null.
         "public/js/door_cutting_order/order_entry/door_cutting_order_cutting_machine_ux.js",
-        # Radio presentation for the board-type mirroring policy. Stored values
-        # stay stable IDs; the cutting engine does not place mirrored pieces yet.
+        # Yes/No pills for the board mirroring checkbox. The stored value stays 0 or 1.
         "public/js/door_cutting_order/order_entry/door_cutting_order_piece_mirroring_ux.js",
         # Qty+Enter is a focused keyboard behavior layered on the operator's
         # existing row materialization/model-sync contract; it owns no rendering.

@@ -39,7 +39,7 @@
     {"fieldname":"board_width_column","fieldtype":"Column Break"},
     {"fieldname":"default_edge_type","fieldtype":"Link","label":"Default Edge Type","options":"Edge Banding Type","reqd":1},
     {"description":"Enter the edge color manually for this order.","fieldname":"edge_color","fieldtype":"Data","in_list_view":1,"label":"Edge Color","reqd":1},
-    {"default":"not_allowed","fieldname":"allow_piece_mirroring","fieldtype":"Select","label":"Does this board type allow piece mirroring?","options":"not_allowed\nallowed"},
+    {"default":"0","fieldname":"allow_piece_mirroring","fieldtype":"Check","label":"Mirrorable"},
     {"fieldname":"pieces_section","fieldtype":"Section Break","label":"Pieces"},
     {"fieldname":"pieces_fast_entry","fieldtype":"HTML","label":"Fast Measurements Entry"},
     {"fieldname":"pieces","fieldtype":"Table","hidden":1,"label":"Pieces","options":"Door Cutting Order Detail"},

@@ -1409,9 +1409,7 @@ Enter the edge color,أدخل لون القشاط
 Custom for this order,معدل لهذا الطلب
 Taken automatically from the edge type,مأخوذ تلقائيًا من نوع القشاط
 Select the cutting machine type,يجب اختيار نوع آلة القص
-Does this board type allow piece mirroring?,هل يسمح نوع اللوح بعكس الدرفات؟
-"No, mirroring is not allowed","لا، الانعكاس غير مسموح"
-"Yes, mirroring is allowed","نعم، الانعكاس مسموح"
+Mirrorable,قابل للانعكاس
 Piece mirroring permission is invalid.,إذن عكس الدرفات غير صالح.
 Send the measurements file to the customer?,هل تريد إرسال ملف القياسات للزبون؟
 Send the measurement changes to the customer?,هل تريد إرسال تعديلات القياسات للزبون؟

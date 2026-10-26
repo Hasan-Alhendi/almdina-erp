@@ -16,7 +16,7 @@
             board_width_cm: "Board width (cm)",
             default_edge_type: "Default edge banding type",
             edge_color: "Edge Color",
-            allow_piece_mirroring: "Does this board type allow piece mirroring?",
+            allow_piece_mirroring: "Mirrorable",
         };
         Object.entries(labels).forEach(([fieldname, message]) => {
             const field = frm.fields_dict[fieldname];
