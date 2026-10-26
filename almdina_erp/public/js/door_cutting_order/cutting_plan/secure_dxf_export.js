@@ -1106,33 +1106,14 @@
         }
     }
 
-    function preferOriginalUpload(options) {
-        // Server workspace contract is authoritative. Missing flag keeps the
-        // historical "download attached bytes" path for older payloads.
-        if (options && Object.prototype.hasOwnProperty.call(options, "preferOriginalUpload")) {
-            return options.preferOriginalUpload !== false;
-        }
-        if (options && options.originalIsManufacturingReady === false) {
-            return false;
-        }
-        return true;
-    }
-
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
-        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
-            // After delivery the Uploaded tab retrieves the original archive.
-            // During production the existing CNC-ready rule remains unchanged.
-            if (String((options && options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered") {
-                return true;
-            }
-            return preferOriginalUpload(options);
-        }
-        if (normalized === "approved") {
-            if (!(options && options.hasOriginalFile)) return false;
-            return preferOriginalUpload(options);
-        }
-        return false;
+        // Only explicit archive downloads bypass manufacturing validation.
+        // Current plans always use the fresh server response, never workspace flags.
+        return ORIGINAL_UPLOAD_SOURCES.has(normalized) && Boolean(
+            options && (options.archiveOnly === true
+                || String((options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered")
+        );
     }
 
     function decodeBase64Bytes(value) {
@@ -1350,19 +1331,19 @@
             ? manufacturingSourceForm(options.frm, JSON.stringify(sourceDoc))
             : null;
         if (planSource) args.plan_source = planSource;
-        if (shouldDownloadOriginalUpload(planSource, options)) {
-            return fetchOriginalUploadedDxf(args).then(r => {
-                try {
-                    downloadOriginalUpload(r && r.message);
-                } catch (error) {
-                    console.error("Uploaded DXF download failed", error);
-                    frappe.throw(__("Could not download the uploaded DXF file."));
-                }
-            });
-        }
-        return fetchValidatedPlan(args).then(r =>
-            downloadValidatedPlan(r.message, orderName, sourceForm)
-        );
+        const downloadOriginal = () => fetchOriginalUploadedDxf(args).then(r => {
+            try {
+                downloadOriginalUpload(r && r.message);
+            } catch (error) {
+                console.error("Uploaded DXF download failed", error);
+                frappe.throw(__("Could not download the uploaded DXF file."));
+            }
+        });
+        if (shouldDownloadOriginalUpload(planSource, options)) return downloadOriginal();
+        return fetchValidatedPlan(args).then(r => {
+            if (r.message && r.message.prefer_original_upload === true) return downloadOriginal();
+            return downloadValidatedPlan(r.message, orderName, sourceForm);
+        });
     }
 
     frappe.provide("frappe.almdina");

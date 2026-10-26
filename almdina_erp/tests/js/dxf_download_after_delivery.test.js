@@ -42,11 +42,13 @@ assert.equal(exportAllowed({doc: {status: "Delivered"}}, {
 
 const original = method(exporter, "function shouldDownloadOriginalUpload(planSource, options)", "function decodeBase64Bytes", {
     ORIGINAL_UPLOAD_SOURCES: new Set(["custom", "uploaded"]),
-    preferOriginalUpload: (options) => options?.preferOriginalUpload !== false,
 });
 assert.equal(original("Custom", {preferOriginalUpload: false, frm: {doc: {status: "Delivered"}}}), true);
 assert.equal(original("Custom", {preferOriginalUpload: false, frm: {doc: {status: "At Drawing"}}}), false);
 assert.equal(original("Approved", {hasOriginalFile: true, preferOriginalUpload: false}), false);
-assert.equal(original("Approved", {hasOriginalFile: true, preferOriginalUpload: true}), true);
+assert.equal(original("Approved", {hasOriginalFile: true, preferOriginalUpload: true}), false,
+    "current Approved must ask the server before selecting original bytes");
+assert.equal(original("Custom", {archiveOnly: true}), true);
+assert.equal(original("System", {archiveOnly: true}), false);
 
 console.log("Delivered cutting plan DXF download/read-only contract passed");
