@@ -251,19 +251,21 @@ def test_imported_plan_bounds_follow_each_sheet_usable_dimensions():
 
 
 @pytest.mark.parametrize(
-    "x_mm,explicit_trim,expected_invalid,missing_sheet_dimensions,plan_zero",
+    "x_mm,explicit_trim,expected_invalid,missing_sheet_dimensions,plan_zero,offcut",
     [
-        (-2, None, False, False, False),
-        (-2, 0.0, True, False, False),
-        (-6, None, True, False, False),
-        (0, 0.0, False, False, False),
+        (-2, None, False, False, False, False),
+        (-2, 0.0, True, False, False, False),
+        (-6, None, True, False, False, False),
+        (0, 0.0, False, False, False, False),
         # Legacy sheets can omit dimensions; recover them from persisted sources,
         # not from a plan-wide zero that loses an earlier per-sheet inset.
-        (-2, None, False, True, True),
+        (-2, None, False, True, True, False),
+        # OFFCUT retains its established usable-frame boundary gate.
+        (-2, None, True, False, False, True),
     ],
 )
 def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
-    x_mm, explicit_trim, expected_invalid, missing_sheet_dimensions, plan_zero, monkeypatch,
+    x_mm, explicit_trim, expected_invalid, missing_sheet_dimensions, plan_zero, offcut, monkeypatch,
 ):
     import json
     from types import SimpleNamespace
@@ -291,6 +293,7 @@ def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
     source = SimpleNamespace(
         sheet_no=1, source_type="Full Board", full_width_mm=1220,
         full_length_mm=2440, usable_width_mm=1210, usable_length_mm=2430,
+        resource_kind="OFFCUT" if offcut else "FULL_BOARD",
     )
     placed = SimpleNamespace(
         sheet_no=1, piece_label="1-1", source_piece_no=1,
