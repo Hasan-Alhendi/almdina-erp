@@ -287,7 +287,7 @@ def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
         door_cutting_order="fixture", sources=[source], placed_pieces=[placed],
         snapshot_json=json.dumps(snapshot), kerf_mm=5, plan_kind="Custom DXF",
     )
-    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: SimpleNamespace())
+    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: SimpleNamespace(), raising=False)
     monkeypatch.setattr(export.frappe, "parse_json", json.loads, raising=False)
     monkeypatch.setattr(export, "_validate_source_identity", lambda *args: [])
     monkeypatch.setattr(export, "validate_snapshot_material_layout", lambda *args, **kwargs: True)
