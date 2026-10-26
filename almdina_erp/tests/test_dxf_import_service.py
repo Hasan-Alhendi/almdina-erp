@@ -170,3 +170,124 @@ def test_sheet_outline_accepts_same_fractional_dimension_after_normalization():
         expected_height_mm=2440.0,
     )
     assert len(sheets) == 1
+
+
+# Boundary-regression fixtures: no customer drawing or database mutation.
+def _fixed_dxf_snapshot(*positions_mm):
+    sheets = []
+    for i, (x_mm, y_mm) in enumerate(positions_mm, start=1):
+        x, y = x_mm / 10, y_mm / 10
+        sheets.append({
+            "sheet_no": i,
+            "full_width_cm": 122,
+            "full_length_cm": 244,
+            "usable_width_cm": 122,
+            "usable_length_cm": 244,
+            "pieces": [{
+                "id": i, "x": x, "y": y, "w": 20, "h": 30,
+                "geometry": {
+                    "schema_version": 1, "unit": "mm",
+                    "coordinate_space": "usable_sheet",
+                    "outer": [
+                        [x_mm, y_mm], [x_mm + 200, y_mm],
+                        [x_mm + 200, y_mm + 300], [x_mm, y_mm + 300],
+                    ],
+                    "holes": [],
+                },
+            }],
+        })
+    return {
+        "full_board_width_cm": 122, "full_board_length_cm": 244,
+        "usable_board_width_cm": 122, "usable_board_length_cm": 244,
+        "sheets": sheets,
+    }
+
+
+def test_fixed_dxf_applied_trim_is_independent_by_sheet_and_axis():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
+        apply_adaptive_trim_to_fixed_dxf_layout,
+    )
+
+    physical = _fixed_dxf_snapshot((0, 10), (10, 3), (1, 0))
+    result = apply_adaptive_trim_to_fixed_dxf_layout(physical, preferred_trim_mm=5)
+    assert [
+        (s["applied_trim_width_cm"], s["applied_trim_length_cm"])
+        for s in result["sheets"]
+    ] == pytest.approx([(0, 0.5), (0.5, 0.3), (0.1, 0)])
+    for original, adjusted in zip(physical["sheets"], result["sheets"]):
+        p, q = original["pieces"][0], adjusted["pieces"][0]
+        assert q["x"] + adjusted["applied_trim_width_cm"] == pytest.approx(p["x"])
+        assert q["y"] + adjusted["applied_trim_length_cm"] == pytest.approx(p["y"])
+
+
+def test_fixed_dxf_trim_refinement_never_shifts_material_outside_usable_frame():
+    from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
+        apply_adaptive_trim_to_fixed_dxf_layout,
+    )
+
+    # 1.995 mm physically available; 2.0 mm is not geometrically possible.
+    result = apply_adaptive_trim_to_fixed_dxf_layout(
+        _fixed_dxf_snapshot((1.995, 10)), preferred_trim_mm=5,
+    )
+    s = result["sheets"][0]
+    assert s["pieces"][0]["x"] >= -1e-8
+    assert s["applied_trim_width_cm"] <= 0.1995 + 1e-8
+
+
+def test_imported_plan_bounds_follow_each_sheet_usable_dimensions():
+    from types import SimpleNamespace
+    from almdina_erp.almdina_erp.services.dxf_import_service import validate_imported_plan_issues
+
+    snapshot = _fixed_dxf_snapshot((10, 10), (10, 10))
+    snapshot["usable_board_width_cm"] = 122
+    snapshot["sheets"][0]["usable_width_cm"] = 121
+    snapshot["sheets"][0]["pieces"][0].update(x=120.5, w=1)
+    snapshot["sheets"][1]["pieces"][0].update(x=120.5, w=1)
+    order = SimpleNamespace(pieces=[SimpleNamespace(qty=2, extra_full_door_double=0)])
+    issues = validate_imported_plan_issues(snapshot, order)
+    assert [i.code for i in issues].count("PIECE_OUTSIDE_SHEET") == 1
+
+
+@pytest.mark.parametrize(
+    "x_mm,explicit_trim,expected_invalid",
+    [(-2, None, False), (-2, 0.0, True), (-6, None, True), (0, 0.0, False)],
+)
+def test_saved_export_checks_physical_sheet_not_virtual_usable_frame(
+    x_mm, explicit_trim, expected_invalid, monkeypatch,
+):
+    import json
+    from types import SimpleNamespace
+    from almdina_erp.almdina_erp.services import export_validation_service as export
+
+    sheet = {
+        "sheet_no": 1,
+        "full_width_cm": 122,
+        "full_length_cm": 244,
+        "usable_width_cm": 121,
+        "usable_length_cm": 243,
+        "pieces": [],
+    }
+    if explicit_trim is not None:
+        sheet["applied_trim_width_cm"] = explicit_trim
+        sheet["applied_trim_length_cm"] = explicit_trim
+    snapshot = {"sheets": [sheet], "full_board_width_cm": 122,
+                "full_board_length_cm": 244, "trim_cm": 0.5}
+    source = SimpleNamespace(
+        sheet_no=1, source_type="Full Board", full_width_mm=1220,
+        full_length_mm=2440, usable_width_mm=1210, usable_length_mm=2430,
+    )
+    placed = SimpleNamespace(
+        sheet_no=1, piece_label="1-1", source_piece_no=1,
+        copy_no=1, piece_id=1, x_mm=x_mm, y_mm=0,
+        width_mm=200, height_mm=300,
+    )
+    plan = SimpleNamespace(
+        door_cutting_order="fixture", sources=[source], placed_pieces=[placed],
+        snapshot_json=json.dumps(snapshot), kerf_mm=5, plan_kind="Custom DXF",
+    )
+    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: SimpleNamespace())
+    monkeypatch.setattr(export.frappe, "parse_json", json.loads, raising=False)
+    monkeypatch.setattr(export, "_validate_source_identity", lambda *args: [])
+    monkeypatch.setattr(export, "validate_snapshot_material_layout", lambda *args, **kwargs: True)
+    codes = [item.code for item in export.validate_cutting_plan_issues(plan)]
+    assert ("PIECE_OUTSIDE_SHEET" in codes) is expected_invalid
