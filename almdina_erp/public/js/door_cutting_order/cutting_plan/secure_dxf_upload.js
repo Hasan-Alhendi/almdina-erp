@@ -44,7 +44,7 @@
         const frontend = window.AlmdinaFrontend;
         if (!context || typeof context.capture !== "function" || typeof context.isCurrent !== "function"
             || !frontend || typeof frontend.ownedRpc !== "function" || typeof ui.errorDialog !== "function") {
-            frappe.msgprint(translate("The order is still loading. Wait a moment and try again."));
+            frappe.msgprint(translate("The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page."));
             return null;
         }
         const owner = context.capture(frm);
@@ -64,6 +64,7 @@
                 return frontend.ownedRpc(UPLOAD_METHOD, {
                         order_name: orderName,
                         file_url: file.file_url,
+                        file_id: file.name,
                     }, {
                     freeze: true,
                     freezeMessage: translate("Validating the DXF file and applying the plan..."),

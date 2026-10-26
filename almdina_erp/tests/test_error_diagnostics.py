@@ -197,3 +197,62 @@ def test_unexpected_exception_is_logged_safely_and_original_type_is_preserved():
     assert response["almdina_error"]["issues"][0]["code"] == "UNEXPECTED_ERROR"
     assert response["almdina_error"]["outcome"] == "unknown"
     assert "private SQL" not in str(response)
+
+
+def test_private_staging_file_requires_native_read_permission():
+    from almdina_erp.almdina_erp.services import shop_floor_dxf_service as uploads
+
+    staged = SimpleNamespace(name="FILE-OTHER", file_size=100, is_private=1,
+                             attached_to_doctype=None, attached_to_name=None, attached_to_field=None)
+    def deny(permission):
+        assert permission == "read"
+        raise PermissionError("private staging file")
+    document = SimpleNamespace(check_permission=deny)
+    with patch.object(uploads.frappe.db, "get_value", return_value=staged, create=True):
+        with patch.object(uploads.frappe, "get_doc", return_value=document, create=True) as get_doc:
+            with pytest.raises(PermissionError):
+                uploads._validate_dxf_file_metadata("/private/files/other.dxf")
+    get_doc.assert_called_once_with("File", "FILE-OTHER")
+
+
+def test_truncated_group_details_are_never_presented_as_complete():
+    from almdina_erp.almdina_erp.infrastructure.frappe.error_response import attach_error_response
+
+    response = {}
+    with patch.object(importer.frappe, "local", SimpleNamespace(response=response)):
+        with patch.object(importer.frappe, "logger", create=True):
+            attach_error_response(operation="test", title="Test", issues=[{
+                "code": "TEST", "problem": "Invalid", "details": ["location"] * 21,
+            }])
+    assert response["almdina_error"]["has_more"] is True
+    assert len(response["almdina_error"]["issues"][0]["details"]) == 20
+
+
+def test_upload_file_id_binds_the_exact_record_at_a_deduplicated_url():
+    from unittest.mock import Mock
+    from almdina_erp.almdina_erp.services import shop_floor_dxf_service as uploads
+
+    staged = SimpleNamespace(name="FILE-NEW", file_size=100, is_private=1,
+                             attached_to_doctype=None, attached_to_name=None, attached_to_field=None)
+    permission = Mock()
+    with patch.object(uploads.frappe.db, "get_value", return_value=staged, create=True) as query:
+        with patch.object(uploads.frappe, "get_doc", return_value=SimpleNamespace(check_permission=permission), create=True):
+            _, result = uploads._validate_dxf_file_metadata("/private/files/shared.dxf", file_id="FILE-NEW")
+    assert result.name == "FILE-NEW"
+    assert query.call_args.args[1] == {"name": "FILE-NEW", "file_url": "/private/files/shared.dxf"}
+    permission.assert_called_once_with("read")
+
+
+def test_older_clients_prefer_an_owned_staging_row_over_historical_url_aliases():
+    from unittest.mock import Mock
+    from almdina_erp.almdina_erp.services import shop_floor_dxf_service as uploads
+
+    staged = SimpleNamespace(name="FILE-NEW", file_size=100, is_private=1,
+                             attached_to_doctype=None, attached_to_name=None, attached_to_field=None)
+    with patch.object(uploads.frappe.db, "get_value", return_value=staged, create=True) as query:
+        with patch.object(uploads.frappe, "get_doc", return_value=SimpleNamespace(check_permission=Mock()), create=True):
+            uploads._validate_dxf_file_metadata("/private/files/shared.dxf")
+    filters = query.call_args.args[1]
+    assert filters["owner"] == uploads.frappe.session.user
+    assert filters["attached_to_name"] == ["is", "not set"]
+    assert filters["is_private"] == 1

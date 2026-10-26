@@ -14,6 +14,38 @@ from almdina_erp.almdina_erp.infrastructure.frappe.error_response import attach_
 
 
 class TestErrorResponseIntegration(FrappeTestCase):
+    def test_private_staging_uses_native_file_ownership_without_role_bypass(self):
+        from almdina_erp.almdina_erp.services.shop_floor_dxf_service import _validate_dxf_file_metadata
+
+        frappe.set_user("Administrator")
+        users = []
+        for kind in ("owner", "other"):
+            user = frappe.get_doc({
+                "doctype": "User", "email": f"diagnostic-{kind}-{uuid4().hex[:10]}@example.invalid",
+                "first_name": "Diagnostic " + kind, "send_welcome_email": 0,
+                "user_type": "System User", "roles": [{"role": "System Manager"}],
+            }).insert(ignore_permissions=True)
+            users.append(user.name)
+        file = frappe.get_doc({
+            "doctype": "File", "file_name": f"diagnostic-{uuid4().hex}.dxf",
+            "is_private": 1, "content": f"999\n{uuid4().hex}\n0\nEOF\n".encode(),
+        }).insert(ignore_permissions=True)
+        frappe.db.set_value("File", file.name, "owner", users[0])
+        try:
+            frappe.set_user(users[1])
+            with self.assertRaises(frappe.PermissionError):
+                _validate_dxf_file_metadata(file.file_url)
+            frappe.set_user(users[0])
+            url, row = _validate_dxf_file_metadata(file.file_url)
+            self.assertEqual(url, file.file_url)
+            self.assertEqual(row.name, file.name)
+            explicit_url, explicit_row = _validate_dxf_file_metadata(file.file_url, file_id=file.name)
+            self.assertEqual(explicit_url, file.file_url)
+            self.assertEqual(explicit_row.name, file.name)
+        finally:
+            frappe.set_user("Administrator")
+            frappe.delete_doc("File", file.name, ignore_permissions=True)
+
     def test_public_envelope_survives_native_serialization_and_database_rollback(self):
         savepoint = "error_diagnostics_" + uuid4().hex[:12]
         frappe.db.savepoint(savepoint)

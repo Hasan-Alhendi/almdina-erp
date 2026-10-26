@@ -43,10 +43,21 @@ def attach_error_response(
     if not isinstance(response, dict):
         return
     public = []
+    truncated = len(issues) > MAX_PUBLIC_ISSUES
     for item in issues[:MAX_PUBLIC_ISSUES]:
         code = item.get("code")
         if not isinstance(code, str) or not _CODE.fullmatch(code):
             continue
+        truncated = truncated or len(item.get("details") or ()) > 20 or len(item.get("table") or ()) > 100
+        truncated = truncated or any(isinstance(line, str) and len(line) > 2000 for line in item.get("details") or ())
+        truncated = truncated or any(
+            len(row) > 20 or any(isinstance(cell, str) and len(cell) > 200 for cell in row)
+            for row in item.get("table") or () if isinstance(row, (list, tuple))
+        )
+        truncated = truncated or any(
+            isinstance(item.get(key), str) and len(item[key]) > 2000
+            for key in ("problem", "target", "action", "highlight")
+        )
         public.append({
             "code": code,
             **{key: _text(item.get(key)) for key in ("category", "problem", "target", "action", "highlight")},
@@ -85,7 +96,7 @@ def attach_error_response(
         "title": _text(title, 200),
         "outcome": outcome if outcome in {"rejected", "unknown", "partial"} else "unknown",
         "issues": public,
-        "has_more": len(issues) > MAX_PUBLIC_ISSUES,
+        "has_more": truncated,
         "validation_coverage": "partial",
         "request_reference": reference,
     }

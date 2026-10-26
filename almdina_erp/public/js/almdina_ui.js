@@ -454,7 +454,7 @@
         else if (options.outcomeMessages) footer = options.outcomeMessages[problem.outcome] || "";
         const reference = problem.requestReference
             ? `<p>${escapeHtml(t("Support reference"))}: <code dir="ltr">${escapeHtml(problem.requestReference)}</code></p>` : "";
-        const overflow = problem.hasMore ? `<p>${escapeHtml(t("Additional issues were omitted. Correct the listed issues and validate again."))}</p>` : "";
+        const overflow = problem.hasMore ? `<p>${escapeHtml(t("Some diagnostic details were omitted. Correct the listed issues and validate again."))}</p>` : "";
         const coverage = problem.partialValidation ? `<p>${escapeHtml(t("Validation stopped at these issues. Further checks may remain."))}</p>` : "";
         const message = `<div class="almdina-ui"><div class="alm-error-summary" role="alert">${cards || `<p>${escapeHtml(problem.message)}</p>`}${overflow}${coverage}${footer ? `<p>${escapeHtml(footer)}</p>` : ""}${reference}</div></div>`;
         // msgprint reuses a Desk-global singleton. A document-owned cleanup

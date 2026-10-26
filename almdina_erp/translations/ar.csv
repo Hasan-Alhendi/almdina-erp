@@ -3004,7 +3004,7 @@ Next step,الخطوة التالية
 Affected cut paths (read-only detail),عرض موضع التعارض — للقراءة فقط
 The result could not be confirmed. Check the current status before repeating the operation.,تعذر التأكد من نتيجة العملية. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 Support reference,مرجع الدعم
-Additional issues were omitted. Correct the listed issues and validate again.,توجد مشكلات إضافية لم تُعرض. صحّح المشكلات المذكورة ثم أعد التحقق.
+Some diagnostic details were omitted. Correct the listed issues and validate again.,لم تُعرض بعض تفاصيل التشخيص. صحّح المشكلات المذكورة ثم أعد التحقق.
 The current DXF cutting plan was not replaced.,لم تُستبدل خطة DXF الحالية.
 Validation stopped at these issues. Further checks may remain.,توقف التحقق عند هذه المشكلات؛ وقد توجد فحوص لم تكتمل.
 Your session has expired. Sign in again.,انتهت جلستك. سجّل الدخول مجددًا.
@@ -3015,4 +3015,4 @@ Too many requests. Wait a moment before trying again.,عدد المحاولات 
 The server is temporarily unavailable. Check the current status before repeating the operation.,الخادم غير متاح مؤقتًا. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
-The order is still loading. Wait a moment and try again.,ما زال الطلب قيد التحميل. انتظر قليلًا ثم أعد المحاولة.
+"The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.

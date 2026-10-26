@@ -102,7 +102,7 @@ def _get_authorized_order(
     )
 
 
-def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
+def _validate_dxf_file_metadata(file_url: str, *, file_id: str | None = None) -> tuple[str, Any]:
     """Accept only a private, unattached DXF staging file.
 
     The browser uploads the file before any plan mutation. Keeping the staged
@@ -129,19 +129,31 @@ def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
     if not normalized_url.lower().split("?", 1)[0].endswith(".dxf"):
         raise DxfImportError(issues=[issue(FILE_INVALID_EXTENSION, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
 
-    file_row = frappe.db.get_value(
-        "File",
-        {"file_url": normalized_url},
-        [
+    fields = [
             "name",
             "file_size",
             "is_private",
             "attached_to_doctype",
             "attached_to_name",
             "attached_to_field",
-        ],
-        as_dict=True,
-    )
+        ]
+    if file_id:
+        # Different File rows can share a deduplicated URL. Bind the exact
+        # uploader result rather than whichever row the database returns first.
+        file_row = frappe.db.get_value(
+            "File", {"name": str(file_id), "file_url": normalized_url}, fields, as_dict=True,
+        )
+    else:
+        # Compatibility for older clients: prefer the current user's private,
+        # unattached staging row, not a historical attachment at the same URL.
+        file_row = frappe.db.get_value("File", {
+            "file_url": normalized_url, "owner": frappe.session.user, "is_private": 1,
+            "attached_to_doctype": ["is", "not set"],
+            "attached_to_name": ["is", "not set"],
+            "attached_to_field": ["is", "not set"],
+        }, fields, as_dict=True)
+        if file_row is None:
+            file_row = frappe.db.get_value("File", {"file_url": normalized_url}, fields, as_dict=True)
     if not file_row:
         raise DxfImportError(issues=[issue(FILE_MISSING, CATEGORY_FILE, target=DxfIssueTarget(kind="file"))])
     if not cint(file_row.is_private):
@@ -156,6 +168,9 @@ def _validate_dxf_file_metadata(file_url: str) -> tuple[str, Any]:
     file_size = int(file_row.file_size or 0)
     if file_size > MAX_DXF_FILE_SIZE:
         raise DxfImportError(issues=[issue(FILE_TOO_LARGE, CATEGORY_FILE, target=DxfIssueTarget(kind="file"), params={"maximum_mb": 10, "actual_bytes": file_size})])
+    # The read-only failure preview must not become a way to inspect someone
+    # else's private staging upload. Reuse native File ownership/sharing rules.
+    frappe.get_doc("File", file_row.name).check_permission("read")
     return normalized_url, file_row
 
 
@@ -240,13 +255,16 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
 
 @frappe.whitelist()
 @record_unexpected_errors("dxf_upload")
-def upload_production_dxf(order_name: str, file_url: str) -> dict[str, Any]:
+def upload_production_dxf(order_name: str, file_url: str, file_id: str | None = None) -> dict[str, Any]:
     # Security order is intentional and regression-tested:
     # private+unattached staging -> authorization -> geometry validation ->
     # Cutting Plan persistence -> File attachment -> order-owned workflow state.
     from almdina_erp.almdina_erp.services.dxf_import_service import DxfImportError
     try:
-        normalized_url, file_row = _validate_dxf_file_metadata(file_url)
+        normalized_url, file_row = (
+            _validate_dxf_file_metadata(file_url, file_id=file_id)
+            if file_id else _validate_dxf_file_metadata(file_url)
+        )
     except DxfImportError as error:
         _throw_dxf_validation_errors(issues=error.issues)
 

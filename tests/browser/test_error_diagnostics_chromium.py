@@ -76,6 +76,7 @@ def setup_page(browser, origin, language="en", width=1200):
             call() {window.nativeCalls++; throw Error('native handler must not own this request');},
             show_alert() {window.alerts++;},
             msgprint(options) {
+                if (typeof options === 'string') options = {title:'Message', message:options};
                 const root = document.createElement('section');
                 root.setAttribute('role', 'dialog');
                 root.innerHTML = '<h2>' + options.title + '</h2>' + options.message;
@@ -176,5 +177,17 @@ def test_proxy_timeout_reports_uncertainty_without_retrying(browser, origin):
         assert "could not be confirmed" in page.locator("body").inner_text()
         assert "was not replaced" not in page.locator("body").inner_text()
         assert page.evaluate("frozen") == 0
+    finally:
+        page.close()
+
+
+def test_incomplete_or_old_client_context_never_submits_an_upload(browser, origin):
+    page = setup_page(browser, origin)
+    try:
+        page.evaluate("delete window.AlmdinaDocumentContext; window.uploader = null")
+        page.evaluate("frappe.almdina.upload_production_dxf(frm)")
+        assert page.evaluate("window.uploader") is None
+        assert "reload the page" in page.locator("body").inner_text()
+        assert page.evaluate("[nativeCalls, reloads, alerts, frozen]") == [0, 0, 0, 0]
     finally:
         page.close()

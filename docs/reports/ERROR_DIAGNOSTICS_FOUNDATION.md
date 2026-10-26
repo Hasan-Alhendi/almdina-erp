@@ -9,7 +9,7 @@ Base: `Develop` at `c9081524f6d8bc5cf88cb57f0d1df60d08373524`.
 - Out of scope for this slice: migrating every business endpoint, financial/production policy changes, a full rejected-file editor, centralized cross-site support infrastructure, and production deployment.
 - Invariants: same manufacturing acceptance/rejection, tolerances, identity matching, stage authorization, fingerprints, approved snapshots and file persistence. No accepted-plan or data migration.
 - Layers: additive Frappe boundary, presentation projections, existing API/UI owners, and framework-free geometric evidence. No global replacement of Frappe functions.
-- Permission impact: no added endpoint or grant. Numeric previews are emitted only after the existing upload authorization reaches geometric parsing. They contain the affected pair, not private file paths or cost data.
+- Permission impact: no added endpoint or grant. Private staging files now require native File read permission (owner/sharing), including for System Manager; this closes access to another user's unattached staging upload before diagnosis. New clients bind the exact uploader File ID and URL; older clients prefer their own unattached staging row when URLs are deduplicated. Numeric previews are emitted only after the existing upload authorization reaches geometric parsing. They contain the affected pair, not private file paths or cost data.
 - Localization: new display strings use Frappe translation keys and `ar.csv`; existing untouched DXF copy remains compatible.
 - Rollback: previous app image/assets; no stored plan/schema changes. The server still emits native Frappe messages for old clients.
 
@@ -52,10 +52,10 @@ Local evidence includes:
 - Original manufacturing identity/import/export suites, domain/presentation contracts, locale and architecture gates.
 - Error normalization and owned-RPC Node tests: malformed nested messages, unexpected exceptions, incompatible schema, known HTTP statuses, CSRF/same-origin, freeze cleanup and no automatic retries.
 - All JavaScript simulation files were exercised: 135 passed; four pre-existing failures were reproduced separately on the clean base worktree (listed below).
-- Chromium 140 / Playwright 1.55: five browser cases passed, including Arabic at 375 px, English desktop, DOM injection checks, numeric SVG rendering, document deactivation, A→B→A and non-JSON 504 uncertainty without retries. The browser harness uses real shipped scripts/fetch/DOM and a local test server; it is not a full Desk deployment.
+- Chromium 140 / Playwright 1.55: six browser cases passed, including Arabic at 375 px, English desktop, DOM injection checks, numeric SVG rendering, document deactivation, A→B→A and non-JSON 504 uncertainty without retries; an incomplete/old client fails closed with explicit reload guidance. The browser harness uses real shipped scripts/fetch/DOM and a local test server; it is not a full Desk deployment.
 - An expanded Python selection produced 631 passing tests and 768 passing subtests, with four pre-existing rendering assertions reproduced on the clean base (below). Subsequently added targeted regressions are separately included in the permanent CI step.
 
-`TestErrorResponseIntegration` is added to the real Bench suite to prove native V1 serialization, retained HTTP 417/native fallback, database rollback, and a file-backed support reference after rollback. Its result must be assessed from the candidate SHA's Frappe Integration run, not inferred from local stubs.
+`TestErrorResponseIntegration` is added to the real Bench suite to prove native V1 serialization, retained HTTP 417/native fallback, database rollback, a file-backed support reference after rollback, and native private-file ownership without a System Manager bypass. Its result must be assessed from the candidate SHA's Frappe Integration run, not inferred from local stubs.
 
 Pre-existing Python assertions (not changed or weakened):
 
