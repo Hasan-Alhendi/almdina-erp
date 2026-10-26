@@ -4,12 +4,9 @@
     if (window.AlmdinaPieceMirroringUX) return;
 
     const FIELDNAME = "allow_piece_mirroring";
-    const NOT_ALLOWED = "not_allowed";
-    const ALLOWED = "allowed";
-    const QUESTION = "Does this board type allow piece mirroring?";
     const OPTIONS = Object.freeze([
-        Object.freeze({ value: NOT_ALLOWED, label: "No, mirroring is not allowed" }),
-        Object.freeze({ value: ALLOWED, label: "Yes, mirroring is allowed" }),
+        Object.freeze({ value: "1", label: "Yes" }),
+        Object.freeze({ value: "0", label: "No" }),
     ]);
 
     function fieldNode(frm) {
@@ -19,8 +16,12 @@
         return wrapper.nodeType ? wrapper : wrapper[0] || null;
     }
 
-    function storedValue(frm) {
-        return String((frm && frm.doc && frm.doc[FIELDNAME]) || "").trim();
+    function storedChoice(frm) {
+        const value = frm && frm.doc ? frm.doc[FIELDNAME] : 0;
+        if (value === 1 || value === true) return "1";
+        const text = String(value == null ? "" : value).trim().toLowerCase();
+        if (text === "1" || text === "true" || text === "allowed") return "1";
+        return "0";
     }
 
     function isEditable(frm) {
@@ -31,10 +32,6 @@
             return Boolean(api.isEditableDraft(frm));
         }
         return false;
-    }
-
-    function hostOf(wrapper) {
-        return wrapper.querySelector(".form-group") || wrapper;
     }
 
     function watchWrapper(frm, wrapper) {
@@ -53,13 +50,16 @@
         if (!wrapper) return null;
         wrapper.classList.add("dco-piece-mirroring-host");
         watchWrapper(frm, wrapper);
-        const host = hostOf(wrapper);
-        let group = wrapper.querySelector(".dco-piece-mirroring-radios");
-        if (!group) {
-            group = document.createElement("div");
+        let row = wrapper.querySelector(".dco-piece-mirroring-row");
+        if (!row) {
+            row = document.createElement("div");
+            row.className = "dco-piece-mirroring-row";
+            const caption = document.createElement("span");
+            caption.className = "dco-piece-mirroring-caption";
+            const group = document.createElement("div");
             group.className = "dco-piece-mirroring-radios";
             group.setAttribute("role", "radiogroup");
-            group.setAttribute("aria-label", __(QUESTION));
+            group.setAttribute("aria-label", __("Mirrorable"));
             OPTIONS.forEach((option) => {
                 const label = document.createElement("label");
                 label.className = "dco-piece-mirroring-option";
@@ -77,24 +77,33 @@
                 const active = window.cur_frm || frm;
                 const input = event.target;
                 if (!input || input.type !== "radio" || !isEditable(active)) return;
-                const next = String(input.value || "").trim();
-                if (next !== NOT_ALLOWED && next !== ALLOWED) return;
-                if (storedValue(active) === next) return;
+                const next = input.value === "1" ? 1 : 0;
+                if (storedChoice(active) === String(next)) return;
                 active.set_value(FIELDNAME, next);
             });
-            host.appendChild(group);
+            row.appendChild(caption);
+            row.appendChild(group);
+            wrapper.appendChild(row);
         }
-        return group;
+        const caption = row.querySelector(".dco-piece-mirroring-caption");
+        const labelArea = wrapper.querySelector(".label-area");
+        const label = String((labelArea && labelArea.textContent) || "").trim() || __("Mirrorable");
+        if (caption && caption.textContent !== label) caption.textContent = label;
+        const nativeInput = wrapper.querySelector("input[type='checkbox']");
+        if (nativeInput) {
+            nativeInput.tabIndex = -1;
+            nativeInput.setAttribute("aria-hidden", "true");
+        }
+        return row.querySelector(".dco-piece-mirroring-radios");
     }
 
     function syncRadios(frm) {
         const group = ensureRadios(frm);
         if (!group) return;
-        const value = storedValue(frm);
-        const selected = value === ALLOWED ? ALLOWED : (value === NOT_ALLOWED || !value ? NOT_ALLOWED : "");
+        const selected = storedChoice(frm);
         const editable = isEditable(frm);
         group.querySelectorAll("input[type='radio']").forEach((input) => {
-            input.checked = Boolean(selected) && input.value === selected;
+            input.checked = input.value === selected;
             input.disabled = !editable;
             const option = input.closest(".dco-piece-mirroring-option");
             if (option) option.classList.toggle("is-selected", input.checked);
@@ -129,7 +138,5 @@
     window.AlmdinaPieceMirroringUX = Object.freeze({
         apply,
         schedule,
-        NOT_ALLOWED,
-        ALLOWED,
     });
 })();

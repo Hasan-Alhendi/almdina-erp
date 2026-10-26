@@ -264,25 +264,33 @@
     box-shadow: var(--alm-shadow-card);
 }
 
-.dco-operator-form [data-fieldname="allow_piece_mirroring"] .control-input-wrapper,
-.dco-operator-form [data-fieldname="allow_piece_mirroring"] .control-input,
-.dco-operator-form [data-fieldname="allow_piece_mirroring"] select,
-.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] .control-input-wrapper,
-.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] .control-input,
-.dco-order-tab-layout [data-fieldname="allow_piece_mirroring"] select {
+.dco-piece-mirroring-host .checkbox {
     display: none !important;
 }
 
-.dco-piece-mirroring-host .control-label {
-    white-space: normal;
+.dco-piece-mirroring-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    width: max-content;
+    max-width: 100%;
+}
+
+.dco-piece-mirroring-caption {
+    margin: 0;
+    color: var(--text-muted, #687481);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
 }
 
 .dco-piece-mirroring-radios {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    margin-top: 6px;
 }
 
 .dco-piece-mirroring-option {
@@ -290,6 +298,7 @@
     align-items: center;
     gap: 8px;
     min-height: 36px;
+    margin: 0;
     padding: 6px 14px;
     border: 1px solid var(--border-color, #d5dbe3);
     border-radius: 999px;
@@ -303,8 +312,8 @@
 
 .dco-piece-mirroring-option.is-selected {
     border-color: var(--alm-primary, #172033);
-    background: color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);
-    color: var(--alm-primary, #172033);
+    background: rgba(36, 144, 239, 0.08);
+    color: var(--primary, #1b74c4);
 }
 
 .dco-piece-mirroring-option input {
