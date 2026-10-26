@@ -28,7 +28,9 @@ def _piece_fits(piece: dict[str, Any], *, full_w: float, full_h: float, trim: Ap
     y = _number(piece.get("y"))
     w = _number(piece.get("w"))
     h = _number(piece.get("h"))
-    tolerance = 0.001
+    # Keep trim feasibility aligned with persisted-export boundary precision.
+    # The old 0.01 mm allowance could select a trim larger than the material gap.
+    tolerance = 1e-8
     return (
         x >= trim.width_trim_cm - tolerance
         and y >= trim.length_trim_cm - tolerance
@@ -155,19 +157,38 @@ def apply_adaptive_trim_to_fixed_dxf_layout(
     }
 
     for sheet in result.get("sheets") or []:
+        # A tight board cannot discard the preferred trim of a different board.
+        # Resolve each fixed physical layout independently; never repack pieces.
+        single_sheet = {
+            "sheets": [sheet],
+            "full_board_width_cm": full_w,
+            "full_board_length_cm": full_h,
+        }
+        sheet_decision = resolve_adaptive_trim(
+            preferred=preferred,
+            preferred_quality=_quality(single_sheet, preferred),
+            evaluate=lambda candidate: _quality(single_sheet, candidate),
+            has_pieces=bool(sheet.get("pieces")),
+            physical_board_lower_bound=0,
+        )
+        if sheet_decision.applied_quality.unplaced_count:
+            raise DxfAppliedTrimError("dxf_layout_exceeds_physical_board_or_applied_trim")
+        sheet_applied = sheet_decision.applied
+        sheet["applied_trim_width_cm"] = sheet_applied.width_trim_cm
+        sheet["applied_trim_length_cm"] = sheet_applied.length_trim_cm
         sheet_full_w = _number(sheet.get("full_width_cm") or full_w)
         sheet_full_h = _number(sheet.get("full_length_cm") or full_h)
-        sheet_usable_w = applied.usable_width_cm(full_width_cm=sheet_full_w)
-        sheet_usable_h = applied.usable_length_cm(full_length_cm=sheet_full_h)
+        sheet_usable_w = sheet_applied.usable_width_cm(full_width_cm=sheet_full_w)
+        sheet_usable_h = sheet_applied.usable_length_cm(full_length_cm=sheet_full_h)
         sheet["usable_width_cm"] = sheet_usable_w
         sheet["usable_length_cm"] = sheet_usable_h
         sheet["w"] = sheet_usable_w
         sheet["h"] = sheet_usable_h
-        dx_mm = applied.width_trim_cm * 10.0
-        dy_mm = applied.length_trim_cm * 10.0
+        dx_mm = sheet_applied.width_trim_cm * 10.0
+        dy_mm = sheet_applied.length_trim_cm * 10.0
         for piece in sheet.get("pieces") or []:
-            piece["x"] = _number(piece.get("x")) - applied.width_trim_cm
-            piece["y"] = _number(piece.get("y")) - applied.length_trim_cm
+            piece["x"] = _number(piece.get("x")) - sheet_applied.width_trim_cm
+            piece["y"] = _number(piece.get("y")) - sheet_applied.length_trim_cm
             if "geometry" in piece:
                 piece["geometry"] = _shift_geometry(
                     piece["geometry"],
