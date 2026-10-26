@@ -202,12 +202,13 @@ def _production_facts(
     stage: Any | None,
     operational_role: str | None,
     order_status: str | None = None,
+    route: ProductionRoute | None = None,
 ) -> ProductionActionFacts:
     return ProductionActionFacts(
         order_status=order_status if order_status is not None else _value(order, "status"),
         production_path=_value(order, "production_path"),
         current_stage_name=_value(order, "current_production_stage"),
-        has_cutting_plan=bool(_value(order, "cutting_plan_json")),
+        has_cutting_plan=_as_bool(_value(order, "has_cutting_plan", bool(_value(order, "cutting_plan_json")))),
         plan_needs_recalculation=_as_bool(_value(order, "plan_needs_recalculation")),
         stage_name=_value(stage, "name") if stage else None,
         stage_type=_value(stage, "stage_type") if stage else None,
@@ -222,6 +223,10 @@ def _production_facts(
         # remain capability-driven and do not impersonate a worker role.
         is_admin=actor == "Administrator",
         has_factory_work=bool(_value(order, "has_factory_work", True)),
+        stage_is_planning=bool(
+            route and stage and route.contains(str(_value(stage, "stage_type") or ""))
+            and route.stage(str(_value(stage, "stage_type") or "")).is_planning_stage
+        ),
     )
 
 
@@ -337,6 +342,7 @@ def get_order_operational_role_flags(
                 stage=stage,
                 operational_role=operational_role,
                 order_status=_effective_order_status(order, stage, routes),
+                route=routes.get(str(_value(order, "production_path") or "")),
             ),
         )
         actor_holds_current_role = actor_holds_operational_role(
@@ -437,3 +443,4 @@ __all__ = [
     "overview_order_list_delivered_rank",
     "sort_overview_order_list",
 ]
+

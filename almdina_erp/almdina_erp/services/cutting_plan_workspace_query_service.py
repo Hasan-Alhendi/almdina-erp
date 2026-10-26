@@ -18,7 +18,6 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     ManufacturingRequirementsError,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
-    decide_uploaded_plan_mismatch,
     select_uploaded_workspace_plan,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
@@ -40,7 +39,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
     factory_default_plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
-    freshness_expected_fingerprint,
+    plan_fingerprint_compatibility,
 )
 from almdina_erp.almdina_erp.services.cutting_plan_recalculation_job_service import (
     overlay_background_recalculation,
@@ -305,24 +304,34 @@ def _selected_snapshot_json(rows: list[Any | None]) -> dict[str, str]:
     }
 
 
-def _uploaded_plan_row(order: Any, uploaded: Any, snapshot_json: str) -> dict[str, Any]:
-    payload = _plan_row(uploaded, snapshot_json, order=order)
+def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[str, Any]:
+    payload = _plan_row(plan, snapshot_json, order=order)
+    status = str(plan.get("status") or "")
+    linked_approval = (
+        status == APPROVED
+        and str(plan.get("name") or "")
+        == str(getattr(order, "approved_plan", None) or "")
+    )
+    payload["display_context"] = (
+        "current_draft" if status == DRAFT
+        else "current_approved" if linked_approval
+        else "historical"
+    )
     try:
-        expected = freshness_expected_fingerprint(
-            order,
-            uploaded,
-            str(uploaded.get("input_fingerprint") or ""),
+        compatibility = plan_fingerprint_compatibility(
+            order, plan, str(plan.get("input_fingerprint") or ""),
+            snapshot_json=snapshot_json,
         )
     except (ManufacturingRequirementsError, frappe.ValidationError):
+        payload["validation"].update(needs_recalculation=True, freshness_state="REVIEW_REQUIRED")
         return payload
-    decision = decide_uploaded_plan_mismatch(
-        source_type=str(uploaded.get("source_type") or ""),
-        stored_fingerprint=str(uploaded.get("input_fingerprint") or ""),
-        expected_fingerprint=expected,
-        already_needs_recalculation=payload["validation"]["needs_recalculation"],
+    persisted_stale = payload["validation"]["needs_recalculation"]
+    payload["validation"].update(
+        needs_recalculation=persisted_stale or not compatibility.compatible,
+        freshness_state="PERSISTED_STALE" if persisted_stale and compatibility.compatible else compatibility.state,
+        freshness_reason=compatibility.reason,
+        fingerprint_contract=compatibility.contract,
     )
-    if decision.should_invalidate:
-        payload["validation"]["needs_recalculation"] = True
     return payload
 
 
@@ -362,7 +371,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
     )
     snapshot_json = _selected_snapshot_json([system, uploaded, approved])
     uploaded_payload = (
-        _uploaded_plan_row(order, uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
+        _plan_row_with_freshness(order, uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
         if uploaded else None
     )
 
@@ -381,19 +390,17 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         "editable_settings": calculation_settings if capabilities["edit_settings"] else None,
         "plans": {
             "system_draft": (
-                _plan_row(
-                    system,
+                _plan_row_with_freshness(
+                    order, system,
                     snapshot_json.get(str(system.get("name") or ""), ""),
-                    order=order,
                 )
                 if system else None
             ),
             "uploaded_draft": uploaded_payload,
             "approved": (
-                _plan_row(
-                    approved,
+                _plan_row_with_freshness(
+                    order, approved,
                     snapshot_json.get(str(approved.get("name") or ""), ""),
-                    order=order,
                 )
                 if approved else None
             ),

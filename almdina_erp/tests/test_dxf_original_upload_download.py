@@ -103,6 +103,17 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertEqual(self.response["filecontent"], ORIGINAL_DXF)
         self.assertEqual(self.response["filename"], result["filename"])
 
+    def test_cancelled_uploaded_plan_remains_available_as_original_archive(self) -> None:
+        cancelled = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Cancelled",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        result = self._run(plan_source="custom", plan=cancelled)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+        self.assertEqual(self.response["filecontent"], ORIGINAL_DXF)
+
     def test_system_plan_does_not_enter_original_download(self) -> None:
         with self.assertRaises(_FakeThrow) as exc_info:
             self._run(plan_source="system")

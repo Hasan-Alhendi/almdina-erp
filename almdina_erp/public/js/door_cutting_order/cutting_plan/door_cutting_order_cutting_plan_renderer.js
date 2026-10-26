@@ -1496,7 +1496,7 @@
         return theme.headerCss();
     }
 
-    function printOrderMetaHtml(frm, plan, totalSheets, _source) {
+    function printOrderMetaHtml(frm, plan, totalSheets, source) {
         // Plan name / revision stay in the verified print source for freshness
         // checks, but are intentionally omitted from the printed header.
         const items = [
@@ -1507,6 +1507,16 @@
             [translate("Piece count"), requestedPieceCount(frm)],
             [translate("Board size"), printBoardSize(frm, plan)],
         ];
+        if (source && source.displayContext === "historical") {
+            const statusLabel = source.planStatus === "Cancelled"
+                ? translate("Historical plan: Cancelled")
+                : source.planStatus === "Superseded"
+                    ? translate("Historical plan: Superseded")
+                    : source.planStatus === "Approved"
+                        ? translate("Historical plan: Approval is no longer current")
+                        : translate("Historical plan");
+            items.splice(2, 0, [translate("Plan status"), statusLabel]);
+        }
         return `<div class="dco-print-order-meta">${items.map(([label, value]) => `
             <div><b>${escape_html(label)}</b><span>${escape_html(value)}</span></div>
         `).join("")}</div>`;
@@ -1974,8 +1984,16 @@ ${printHeaderCss()}
         });
         const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
         const edgeProfilesJson = JSON.stringify(printableEdgeProfiles(frm));
+        const planStatus = String(row.status || "");
+        const displayContext = String(row.display_context || (
+            planStatus === "Cancelled" || planStatus === "Superseded"
+            || (planStatus === "Approved"
+                && String(row.name || "") !== String(state.data?.approved_plan || ""))
+                ? "historical" : "current"
+        ));
         return { token, tab, orderName: frm.doc.name, planName: row.name,
-            revision: row.revision, geometryJson: JSON.stringify(geometry), assignmentJson,
+            revision: row.revision, planStatus, displayContext,
+            geometryJson: JSON.stringify(geometry), assignmentJson,
             documentJson: JSON.stringify(frozenDoc), edgeProfilesJson, plan,
             frm: { doc: frozenDoc, _dco_side_edge_profiles: new Map(JSON.parse(edgeProfilesJson)
                 .map(([name, thickness_mm]) => [name, { thickness_mm }])) } };
@@ -1993,6 +2011,13 @@ ${printHeaderCss()}
             && state.data?.order_name === source.orderName
             && state.data?.capabilities?.print !== false
             && row?.name === source.planName && row.revision === source.revision
+            && String(row.status || "") === source.planStatus
+            && String(row.display_context || (
+                source.planStatus === "Cancelled" || source.planStatus === "Superseded"
+                || (source.planStatus === "Approved"
+                    && String(row.name || "") !== String(state.data?.approved_plan || ""))
+                    ? "historical" : "current"
+            )) === source.displayContext
             && (!row.board?.description || row.board.description === frm.doc.board_description)
             && JSON.stringify(rowGeometry(row)) === source.geometryJson
             && rowAssignmentJson(row) === source.assignmentJson);

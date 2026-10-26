@@ -236,6 +236,12 @@ def _facts(
     route_starts_with_planning: bool = False,
 ) -> ProductionActionFacts:
     resolved_actor = actor or None
+    stage_is_planning = False
+    if stage and order.production_path and (
+        order.plan_needs_recalculation or not order.has_cutting_plan
+    ):
+        route = _production_route(repository, order.production_path)
+        stage_is_planning = route.contains(stage.stage_type) and route.stage(stage.stage_type).is_planning_stage
     return ProductionActionFacts(
         order_status=order.status,
         production_path=order.production_path,
@@ -253,6 +259,7 @@ def _facts(
         actor_roles=repository.actor_roles(resolved_actor) if resolved_actor else (),
         is_admin=repository.is_admin(resolved_actor) if resolved_actor else False,
         has_factory_work=order.has_factory_work,
+        stage_is_planning=stage_is_planning,
     )
 
 
@@ -730,3 +737,4 @@ __all__ = [
     "revert_department",
     "start_my_stage",
 ]
+

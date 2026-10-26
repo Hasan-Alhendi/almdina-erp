@@ -86,7 +86,8 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
             / "cutting_plan_preview_commit.py"
         ).read_text(encoding="utf-8")
         self.assertIn("plan_input_fingerprint(order, plan)", source)
-        self.assertIn("live_fingerprint != expected_input_fingerprint", source)
+        self.assertIn("live_baseline != expected_input_fingerprint", source)
+        self.assertIn('snapshot.get("generation_input_fingerprint") != live_fingerprint', source)
         self.assertIn("apply_calculation_outcome", source)
         self.assertIn('not validation.get("is_valid")', source)
         self.assertNotIn("_apply_snapshot", source)

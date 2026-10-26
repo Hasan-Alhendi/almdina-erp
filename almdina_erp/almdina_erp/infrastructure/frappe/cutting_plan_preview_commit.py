@@ -8,6 +8,7 @@ from frappe import _
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     OptimizationOutcome,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import MANUFACTURING_BASELINE_VERSION
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_calculation_outcome,
     plan_input_fingerprint,
@@ -44,7 +45,9 @@ def apply_exact_system_preview(
             setattr(plan, plan_field, settings[setting_name])
 
     live_fingerprint = plan_input_fingerprint(order, plan)
-    if not expected_input_fingerprint or live_fingerprint != expected_input_fingerprint:
+    live_baseline = plan_input_fingerprint(order, plan, version=MANUFACTURING_BASELINE_VERSION)
+    if (not expected_input_fingerprint or live_baseline != expected_input_fingerprint
+            or snapshot.get("generation_input_fingerprint") != live_fingerprint):
         frappe.throw(
             _(
                 "تغيّرت بيانات الطلب أو إعدادات الخطة بعد إنشاء المعاينة. "
