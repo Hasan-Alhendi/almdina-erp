@@ -63,11 +63,14 @@ The comparison exits 0 only for `PASS`; all other outcomes exit 2.
 `BLOCKED_BY_REGRESSION` means a previously eligible plan lost eligibility or
 its required DXF became unavailable. `REVIEW_REQUIRED` covers changed
 classifications/lifecycle, missing/new plan rows, incomplete manifests, or
-unchecked DXF files. The current Develop does not yet emit this manifest
-schema, so the first rollout must treat its old audit as an incomplete
-baseline and review the isolated site's cases manually; it cannot claim an
-automatic PASS retroactively. Future upgrades should capture both manifests
-with this schema before any production deployment. Do not run the manifest
+unchecked DXF files. Releases before the manifest schema was introduced cannot retroactively
+produce the same-schema `before.json`; the first such transition therefore
+requires documented manual review of the isolated site's earlier evidence
+instead of claiming an automatic PASS. Both `Develop` and `main` now include
+the new inventory code, but a source branch SHA does not prove a given site
+has deployed it. Capture both same-schema manifests for subsequent upgrades.
+See [Cutting Plan release safety](CUTTING_PLAN_RELEASE_SAFETY.md) for the complete
+backup, restore, CI, actual deployed-artifact and GO/NO-GO procedure. Do not run the manifest
 command on the live site as part of this rollout.
 
 The comparison reports physical-input and saved-layout digests, lifecycle
