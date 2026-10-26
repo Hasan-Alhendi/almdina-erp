@@ -382,6 +382,17 @@ def set_offcut_execution_owner(plan_name: str, assignments: Any) -> dict[str, An
 
     canonical_plan = _canonical_plan_after_mutation(order, plan)
     refresh_order_commercial_totals(order, canonical_plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Offcut classification changes commercial applicability/assignments.
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="offcut_classification_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
     production_reconciliation = _canonical_production_reconciliation(
         order,
         canonical_plan,

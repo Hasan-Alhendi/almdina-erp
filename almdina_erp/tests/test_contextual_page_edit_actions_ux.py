@@ -74,6 +74,16 @@ def test_financial_presenter_keeps_its_existing_owner_chain() -> None:
     assert cost.index(permissions) < cost.index(financial) < cost.index(cost_session)
 
 
+def test_cost_page_uses_the_single_workspace_save_command() -> None:
+    api = source(PUBLIC / "costing" / "door_cutting_order_cost_workspace_api.js")
+    permissions = source(PUBLIC / "costing" / "door_cutting_order_cost_permissions_ux.js")
+
+    assert "costApi.saveWorkspace(" in permissions
+    assert "saveWorkspace(orderName, {" in api
+    assert "save_cost_workspace" in api
+    assert "api.saveSettings(orderName, payload)" not in permissions
+
+
 def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     coordinator = source(COORDINATOR)
 
@@ -83,9 +93,9 @@ def test_each_top_level_tab_has_its_own_local_edit_command_family() -> None:
     assert "function toolbarSlotHost(frm)" in coordinator
     assert "function ensureToolbarSlot(frm)" in coordinator
     assert "slot.replaceChildren(toolbar)" in coordinator
-    assert 'const EDIT_LABEL = "تعديل"' in coordinator
-    assert 'const SAVE_LABEL = "حفظ"' in coordinator
-    assert 'const CANCEL_LABEL = "إلغاء"' in coordinator
+    assert 'const EDIT_LABEL = "Edit order"' in coordinator
+    assert 'const SAVE_LABEL = "Save"' in coordinator
+    assert 'const CANCEL_LABEL = "Cancel"' in coordinator
     assert 'data-almdina-tab-edit-kind' in coordinator
     assert 'dco-tab-edit-start' in coordinator
     assert 'dco-tab-edit-save' in coordinator
@@ -157,9 +167,9 @@ def test_switching_tabs_is_blocked_at_frappe_native_activation_boundary() -> Non
     assert "on_tab_change(frm)" in guard
     assert "registerCleanup(frm, CLEANUP_KEY" in guard
     assert "tab.set_active = originalSetActive;" in guard
-    assert "احفظ أو ألغِ التعديل الحالي قبل الانتقال إلى قسم آخر" in guard
+    assert 'LOCK_TITLE = "Save or cancel the current edit before moving to another section."' in guard
     assert "showOpenEditMessage()" in guard
-    assert 'title: __("التعديل ما زال مفتوحًا")' in guard
+    assert 'title: translate("The edit is still open")' in guard
 
     # The semantic guard itself must not depend on click propagation, timers, or
     # a global Frappe prototype patch.
@@ -209,7 +219,8 @@ def test_cost_page_is_read_only_until_explicit_workspace_edit_session() -> None:
     assert "const captured = captureCostSettings(frm, state.draft || {});" in cost
     assert "store.replaceDraft(payload);" in cost
     assert 'const orderName = String(frm.doc.name || "");' in cost
-    assert "api.saveSettings(orderName, payload)" in cost
+    assert "api.saveWorkspace(" in cost
+    assert "cost_settings: pending.dirty ? payload : null" in cost
     assert "documentStillCurrent(frm, token)" in cost
     assert "owner.commit(frm, saved);" in cost
     assert "frm.reload_doc()" not in cost

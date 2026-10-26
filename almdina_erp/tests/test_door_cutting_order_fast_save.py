@@ -45,6 +45,14 @@ PLAN_COMMAND_SERVICE = (
     ROOT / "almdina_erp" / "services" / "cutting_plan_command_service.py"
 )
 FRONTEND_ASSETS = ROOT / "frontend_assets.py"
+WORKSPACE_REGISTRY = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "core"
+    / "door_cutting_order_workspace_asset_registry.js"
+)
 HOOKS = ROOT / "hooks.py"
 FAST_SAVE_JS = (
     ROOT
@@ -92,6 +100,7 @@ def test_order_save_use_case_never_owns_cutting_plan_recalculation():
     source = _text(SAVE_USE_CASE)
     assert "without touching Cutting Plan state" in source
     assert "gateway.enforce_immutability()" in source
+    assert "gateway.enforce_price_approval_integrity()" in source
     assert "gateway.calculate_cut_dimensions()" in source
     assert "gateway.calculate_piece_costs()" in source
     assert "force_recalculation_requested" not in source
@@ -149,9 +158,21 @@ def test_fast_save_assets_use_feature_owned_manifest_paths_and_ordering():
         "public/js/door_cutting_order/cutting_plan/"
         "door_cutting_order_fast_save_ux.js"
     )
-    assert plan_path in scripts
-    assert fast_path in scripts
-    assert scripts.index(plan_path) < scripts.index(fast_path)
+    registry_path = (
+        "public/js/door_cutting_order/core/"
+        "door_cutting_order_workspace_asset_registry.js"
+    )
+    registry = _text(WORKSPACE_REGISTRY)
+    plan_feature = registry.split("plan: Object.freeze({", 1)[1].split(
+        "readyGlobals:", 1
+    )[0]
+    plan_asset = "/cutting_plan/door_cutting_order_plan_ux.js"
+
+    assert scripts.count(fast_path) == 1
+    assert plan_path not in scripts
+    assert scripts.count(registry_path) == 1
+    assert scripts.index(registry_path) < scripts.index(fast_path)
+    assert plan_feature.count(plan_asset) == 1
     assert PLAN_JS.is_file()
     assert FAST_SAVE_JS.is_file()
 

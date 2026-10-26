@@ -3,45 +3,35 @@
 
     const EDGE_PROFILE_LOOKUP_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.get_order_edge_banding_options";
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
-
     function translateOrderMaterialLabels(frm) {
-        if (!isArabic()) return;
         const labels = {
-            order_details_section: "بيانات الطلب",
-            customer: "العميل",
-            order_date: "تاريخ الطلب",
-            order_notes: "ملاحظات الطلب",
-            order_cutting_machine: "نوع آلة القص",
-            board_section: "المادة والقشاط",
-            board_description: "صنف اللوح",
-            board_length_cm: "طول اللوح (سم)",
-            board_width_cm: "عرض اللوح (سم)",
-            default_edge_type: "نوع القشاط الافتراضي",
-            edge_color: "لون القشاط",
+            order_details_section: "Order details",
+            customer: "Customer",
+            order_date: "Order Date",
+            order_notes: "Order Notes",
+            order_cutting_machine: "Cutting machine type",
+            board_section: "Material and edge banding",
+            board_description: "Board Item",
+            board_length_cm: "Board length (cm)",
+            board_width_cm: "Board width (cm)",
+            default_edge_type: "Default edge banding type",
+            edge_color: "Edge Color",
         };
-        Object.entries(labels).forEach(([fieldname, label]) => {
+        Object.entries(labels).forEach(([fieldname, message]) => {
             const field = frm.fields_dict[fieldname];
+            const label = __(message);
             if (field && field.df && field.df.label !== label) {
                 frm.set_df_property(fieldname, "label", label);
             }
         });
         if (frm.fields_dict.board_description) {
-            const description = "اكتب النوع والسماكة واللون في نص واحد، مثال: MDF أبيض 18 مم.";
+            const description = __("Write the type, thickness, and color in one line, for example: white MDF 18 mm.");
             if (frm.fields_dict.board_description.df.description !== description) {
                 frm.set_df_property("board_description", "description", description);
             }
         }
         if (frm.fields_dict.edge_color) {
-            const description = "أدخل لون القشاط يدويًا لهذا الطلب.";
+            const description = __("Enter the edge color manually for this order.");
             if (frm.fields_dict.edge_color.df.description !== description) {
                 frm.set_df_property("edge_color", "description", description);
             }
@@ -173,22 +163,108 @@
     }
 
     function applyBoardTextDefaults(frm) {
-        let changed = false;
-        if (!Number(frm.doc.board_length_cm)) {
-            frm.doc.board_length_cm = 244;
-            changed = true;
+        // New orders intentionally start blank. Existing documents keep their
+        // persisted values; opening a form must never invent board dimensions.
+        bindBoardDimensionInputs(frm);
+        refreshBoardDimensionValidation(frm);
+    }
+
+    function liveFieldValue(frm, fieldname) {
+        const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+        const input = field && field.$input;
+        if (input && typeof input.val === "function") return input.val();
+        return frm && frm.doc ? frm.doc[fieldname] : undefined;
+    }
+
+    function positiveNumber(value) {
+        if (value === null || value === undefined || String(value).trim() === "") return null;
+        const number = Number(String(value).replace(",", "."));
+        return Number.isFinite(number) && number > 0 ? number : null;
+    }
+
+    function boardDimensions(frm) {
+        const length = positiveNumber(liveFieldValue(frm, "board_length_cm"));
+        const width = positiveNumber(liveFieldValue(frm, "board_width_cm"));
+        return {
+            length,
+            width,
+            valid: length !== null && width !== null,
+        };
+    }
+
+    function boardError(fieldname) {
+        const label = fieldname === "board_length_cm"
+            ? __("Board length must be a positive number.")
+            : __("Board width must be a positive number.");
+        return label;
+    }
+
+    function setBoardFieldError(frm, fieldname, message) {
+        const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+        const wrapper = field && field.$wrapper && field.$wrapper.get
+            ? field.$wrapper.get(0)
+            : null;
+        if (!wrapper) return;
+        let error = wrapper.querySelector(".dco-board-dimension-error");
+        if (message) {
+            if (!error) {
+                error = document.createElement("div");
+                error.className = "dco-board-dimension-error text-danger small mt-1";
+                const inputWrapper = wrapper.querySelector(".control-input-wrapper") || wrapper;
+                inputWrapper.appendChild(error);
+            }
+            error.textContent = message;
+            const input = wrapper.querySelector("input");
+            if (input) input.setAttribute("aria-invalid", "true");
+        } else if (error) {
+            error.remove();
+            const input = wrapper.querySelector("input");
+            if (input) input.removeAttribute("aria-invalid");
         }
-        if (!Number(frm.doc.board_width_cm)) {
-            frm.doc.board_width_cm = 122;
-            changed = true;
-        }
-        frm.doc.full_board_length_mm = Number(frm.doc.board_length_cm) * 10;
-        frm.doc.full_board_width_mm = Number(frm.doc.board_width_cm) * 10;
-        if (changed) {
-            ["board_length_cm", "board_width_cm"].forEach(fieldname => {
-                if (frm.fields_dict[fieldname]) frm.refresh_field(fieldname);
+    }
+
+    function refreshBoardDimensionValidation(frm) {
+        const dimensions = boardDimensions(frm);
+        setBoardFieldError(
+            frm,
+            "board_length_cm",
+            positiveNumber(liveFieldValue(frm, "board_length_cm")) === null
+                ? boardError("board_length_cm")
+                : "",
+        );
+        setBoardFieldError(
+            frm,
+            "board_width_cm",
+            positiveNumber(liveFieldValue(frm, "board_width_cm")) === null
+                ? boardError("board_width_cm")
+                : "",
+        );
+        frm._almdinaBoardDimensions = dimensions;
+        return dimensions;
+    }
+
+    function bindBoardDimensionInputs(frm) {
+        ["board_length_cm", "board_width_cm"].forEach(fieldname => {
+            const field = frm && frm.fields_dict && frm.fields_dict[fieldname];
+            const input = field && field.$input;
+            const element = input && typeof input.get === "function" ? input.get(0) : null;
+            if (!element || field.__almdinaDimensionValidationInput === element) return;
+            field.__almdinaDimensionValidationInput = element;
+            element.addEventListener("input", () => {
+                refreshBoardDimensionValidation(frm);
+                if (window.AlmdinaDoorCuttingFastEntry && typeof window.AlmdinaDoorCuttingFastEntry.refreshValidation === "function") {
+                    window.AlmdinaDoorCuttingFastEntry.refreshValidation(frm);
+                }
             });
+        });
+    }
+
+    function notifyBoardRequired() {
+        const message = __("Please enter board length and width first.");
+        if (frappe && typeof frappe.msgprint === "function") {
+            frappe.msgprint({ message, indicator: "orange" });
         }
+        return message;
     }
 
     function syncBoardDimensions(frm) {
@@ -197,6 +273,10 @@
         frm.doc.full_board_length_mm = length * 10;
         frm.doc.full_board_width_mm = width * 10;
         frm.dirty();
+        refreshBoardDimensionValidation(frm);
+        if (window.AlmdinaDoorCuttingFastEntry && typeof window.AlmdinaDoorCuttingFastEntry.refreshValidation === "function") {
+            window.AlmdinaDoorCuttingFastEntry.refreshValidation(frm);
+        }
     }
 
     frappe.ui.form.on("Door Cutting Order", {
@@ -220,6 +300,13 @@
         board_width_cm(frm) {
             syncBoardDimensions(frm);
         },
+    });
+
+    window.AlmdinaOrderDimensionValidation = Object.freeze({
+        boardDimensions,
+        refreshBoardDimensionValidation,
+        notifyBoardRequired,
+        positiveNumber,
     });
 
     window.AlmdinaOrderEdgeOptions = Object.freeze({

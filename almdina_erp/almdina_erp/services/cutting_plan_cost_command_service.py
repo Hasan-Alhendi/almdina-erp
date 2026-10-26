@@ -7,9 +7,8 @@ from frappe import _
 from frappe.utils import flt
 
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import APPROVED, DRAFT, SYSTEM
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
-    require_cutting_plan_capability,
+    require_cost_settings_edit,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
@@ -24,6 +23,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
     refresh_order_commercial_totals,
 )
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import physical_execution_for_snapshot
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 def _assert_cost_inputs_persisted(
@@ -67,6 +67,7 @@ def update_plan_cost_settings(
     board_rate_usd: float,
     cutting_cost_per_board_usd: float,
     offcut_price_usd: float | None = None,
+    invalidate_approval: bool = True,
 ) -> dict[str, Any]:
     """Update only plan-owned cost inputs and their derived financial result.
 
@@ -75,9 +76,8 @@ def update_plan_cost_settings(
     only the customer-facing commercial aggregates that are owned by the order.
     """
 
-    require_cutting_plan_capability(
+    require_cost_settings_edit(
         order,
-        Capability.EDIT_COST_SETTINGS,
         message=_("لا تملك صلاحية تعديل إعدادات تكلفة خطة القص لهذا الطلب."),
     )
     plan = current_cost_plan(order)
@@ -132,6 +132,21 @@ def update_plan_cost_settings(
         offcut_price_usd=plan.offcut_price_usd,
     )
     refresh_order_commercial_totals(order, plan)
+    if invalidate_approval:
+        from almdina_erp.almdina_erp.services.final_price_approval_service import (
+            maybe_invalidate_final_price_approval,
+        )
+
+        # Same-rate saves keep the fingerprint; changed board/cutting/offcut rates
+        # clear Approved pricing inside this transaction without needing cancel
+        # capability. A combined Cost workspace command defers this until all its
+        # financial inputs have been persisted.
+        maybe_invalidate_final_price_approval(
+            order.name,
+            reason="cost_settings_changed",
+            only_if_basis_changed=True,
+            order=order,
+        )
 
     return {
         "order_name": order.name,

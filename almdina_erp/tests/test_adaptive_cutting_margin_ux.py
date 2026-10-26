@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
     optimize_order_plan,
+)
+from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+    physical_edge_margins_mm,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
     domain_cutting_engine,
@@ -143,6 +148,106 @@ def test_normal_plan_keeps_preferred_trim_and_has_no_warning():
     assert "⚠" not in outcome.packing_score
 
 
+def test_slack_on_a_later_sheet_is_split_across_both_edges():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.5,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["applied_trim_length_cm"] == 0
+    sheets = snapshot["sheets"]
+    full = next(
+        sheet for sheet in sheets
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in sheets if sheet is not full)
+    assert full["applied_trim_width_cm"] == 0
+    assert full["applied_trim_length_cm"] == 0
+    door = full["pieces"][0]
+    assert (door["x"], door["y"], door["w"], door["h"]) == (0, 0, 122, 244)
+    assert row["applied_trim_width_cm"] == 0.5
+    assert row["applied_trim_length_cm"] == 0.5
+    pieces = row["pieces"]
+    assert len(pieces) == 3
+    assert min(piece["x"] for piece in pieces) == 0
+    assert max(piece["x"] + piece["w"] for piece in pieces) == 121
+    assert max(piece["y"] + piece["h"] for piece in pieces) == 243
+    xs = sorted(piece["x"] for piece in pieces)
+    assert xs[1] - (xs[0] + 40) == 0.5
+    assert xs[2] - (xs[1] + 40) == 0.5
+
+
+def test_fourteen_millimetres_with_three_millimetre_kerf_keeps_five_on_both_sides():
+    outcome = optimize_order_plan(
+        _command(
+            [
+                {
+                    "width_cm": 122,
+                    "length_cm": 244,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "width_cm": 40,
+                    "length_cm": 40,
+                    "qty": 3,
+                    "allow_rotation": 0,
+                },
+            ],
+            kerf_cm=0.3,
+        ),
+        engine=domain_cutting_engine,
+    )
+
+    snapshot = outcome.snapshot
+    assert not snapshot["unplaced"]
+    assert outcome.required_boards == 2
+    assert snapshot["applied_trim_width_cm"] == 0
+    assert snapshot["kerf_cm"] == 0.3
+    full = next(
+        sheet for sheet in snapshot["sheets"]
+        if any(piece["w"] >= 122 and piece["h"] >= 244 for piece in sheet["pieces"])
+    )
+    row = next(sheet for sheet in snapshot["sheets"] if sheet is not full)
+    assert physical_edge_margins_mm(full, snapshot) == {
+        "left": 0.0,
+        "right": 0.0,
+        "top": 0.0,
+        "bottom": 0.0,
+    }
+    pieces = sorted(row["pieces"], key=lambda piece: piece["x"])
+    assert [piece["w"] for piece in pieces] == [40, 40, 40]
+    assert pieces[1]["x"] - (pieces[0]["x"] + pieces[0]["w"]) == pytest.approx(0.3)
+    assert pieces[2]["x"] - (pieces[1]["x"] + pieces[1]["w"]) == pytest.approx(0.3)
+    margins = physical_edge_margins_mm(row, snapshot)
+    assert margins["left"] >= 5
+    assert margins["right"] >= 5
+    assert margins["bottom"] >= 5
+    assert margins["left"] + margins["right"] == pytest.approx(14)
+    assert pieces[0]["x"] == 0
+    assert pieces[-1]["x"] == pytest.approx(80.6)
+
+
 def test_impossible_piece_is_not_hidden_by_margin_relaxation():
     outcome = optimize_order_plan(
         _command(
@@ -172,16 +277,17 @@ def test_operator_warning_is_visible_idempotent_and_mobile_friendly():
     assert "function ensureMarginPolicyAlert" in source
     assert "normalizedMarginNotes" in source
     assert 'className = "dco-margin-policy-alert"' in source
-    assert "تنبيه هامش التشذيب" in source
+    assert 'translate("Trim margin warning")' in source
     assert "marginSignature" in source
     assert 'existing.dataset.marginSignature === signature' in source
     assert 'role", "status"' in source
     assert 'aria-live", "polite"' in source
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in styles
-    assert '["يمين", policy.right_mm]' in source
-    assert '["يسار", policy.left_mm]' in source
-    assert '["أعلى", policy.top_mm]' in source
-    assert '["أسفل", policy.bottom_mm]' in source
+    assert '["Margin right", margins.right]' in source
+    assert '["Margin left", margins.left]' in source
+    assert '["Margin top", margins.top]' in source
+    assert '["Margin bottom", margins.bottom]' in source
+    assert "physicalMarginsMm" in source
 
 
 def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
@@ -190,13 +296,18 @@ def test_zero_margin_edges_are_visually_marked_without_touching_cut_geometry():
 
     assert "function zeroMarginEdges" in source
     assert "function ensureOriginalBoardEdges" in source
-    assert "function buildOriginalEdgeMarker" in source
+    assert "function buildOriginalEdgeCaption" in source
+    assert "dco-board-original-edges" in source
+    assert "card.insertBefore(buildOriginalEdgeCaption(edges), board)" in source
+    assert "board.appendChild(buildOriginalEdgeMarker" not in source
     assert "dco-board-original-edge--top" in styles
     assert "dco-board-original-edge--bottom" in styles
     assert "dco-board-original-edge--left" in styles
     assert "dco-board-original-edge--right" in styles
-    assert "حافة أصلية · أعلى" in source
-    assert "حافة أصلية · أسفل" in source
+    assert "dco-board-original-edges" in styles
+    assert "position:static" in styles
+    assert '"Original edge · top"' in source
+    assert '"Original edge · bottom"' in source
     assert "originalEdgeSignature" in source
     assert "ZERO_MARGIN_EPSILON_MM" in source
     assert "ensureOriginalBoardEdges(planRoot, plan)" in source
@@ -206,10 +317,13 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
     styles = PLAN_CONTENT_STYLES.read_text(encoding="utf-8")
 
-    assert "const hasOriginalEdge = zeroEdges.length > 0" in source
-    assert "const detailNotes = hasOriginalEdge ? notes : []" in source
-    assert "تم تخفيض الهامش تلقائيًا بالقدر اللازم للحفاظ على قياسات القطع." in source
-    assert "تم استخدام حافة أصلية من اللوح؛ افحص استقامتها قبل التنفيذ." in source
+    # Use the actual physical margins across all sheets, not only a nominal
+    # plan policy. Show detailed notes only if every sheet uses an original edge.
+    assert "const margins = sharedPhysicalMargins(plan);" in source
+    assert "const hasOriginalEdge = Boolean(margins.anyOriginal);" in source
+    assert "const detailNotes = margins.everySheetOriginal ? notes : []" in source
+    assert 'translate("The margin was reduced automatically by the amount needed to keep the piece measurements.")' in source
+    assert 'translate("An original board edge was used; check that it is straight before cutting.")' in source
     assert "dco-margin-policy-alert__summary" in source
     assert "dco-margin-policy-alert__details" in source
     assert "dco-margin-policy-alert__row" in source
@@ -219,12 +333,12 @@ def test_margin_warning_is_compact_except_when_original_edge_is_used():
     assert "justify-content:space-between" in styles
 
 
-def test_cutting_plan_sections_are_always_arabic_for_factory_operator_ui():
+def test_cutting_plan_sections_use_locale_message_ids():
     source = PLAN_CONTENT_UX.read_text(encoding="utf-8")
 
     assert "function applyArabicPlanLabels" in source
     assert "function isArabic" not in source
-    assert 'cut_geometry_section: "إعدادات تنفيذ القص"' in source
-    assert 'optimizer_section: "محرك خطة القص"' in source
-    assert 'plan_section: "توزيع القطع على الألواح"' in source
+    assert 'cut_geometry_section: translate("Cut execution settings")' in source
+    assert 'optimizer_section: translate("Cutting plan engine")' in source
+    assert 'plan_section: translate("Piece layout on boards")' in source
     assert "applyArabicPlanLabels(frm);" in source

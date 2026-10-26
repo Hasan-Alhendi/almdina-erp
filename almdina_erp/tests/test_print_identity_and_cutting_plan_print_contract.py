@@ -12,10 +12,10 @@ SETTINGS_JSON = APP_ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / 
 SETTINGS_SERVICE = APP_ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 SETTINGS_PAGE = APP_ROOT / "almdina_erp" / "page" / "factory_production_settings" / "factory_production_settings.js"
 HOOKS = APP_ROOT / "hooks.py"
-IDENTITY_JS = APP_ROOT / "public" / "js" / "door_cutting_order_print_identity.js"
-DOCUMENT_PRINT_JS = APP_ROOT / "public" / "js" / "door_cutting_order_document_print_presenter.js"
-DOCUMENT_THEME_JS = APP_ROOT / "public" / "js" / "door_cutting_order_document_print_theme.js"
-CUTTING_PRINT_JS = APP_ROOT / "public" / "js" / "door_cutting_order_cutting_plan_renderer.js"
+IDENTITY_JS = APP_ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_print_identity.js"
+DOCUMENT_PRINT_JS = APP_ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_presenter.js"
+DOCUMENT_THEME_JS = APP_ROOT / "public" / "js" / "door_cutting_order" / "printing" / "door_cutting_order_document_print_theme.js"
+CUTTING_PRINT_JS = APP_ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_cutting_plan_renderer.js"
 
 
 def test_print_identity_is_configurable_without_hardcoded_phone_numbers():
@@ -40,17 +40,18 @@ def test_print_identity_is_configurable_without_hardcoded_phone_numbers():
 
 
 def test_settings_console_exposes_a_dedicated_print_identity_section():
-    source = SETTINGS_PAGE.read_text(encoding="utf-8")
-    required = [
-        'sectionCard("print_identity"',
+    view = (APP_ROOT / "public" / "js" / "factory_production_settings" / "view_model.js").read_text(encoding="utf-8")
+    dialogs = (APP_ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js").read_text(encoding="utf-8")
+    for fragment in (
+        'section("print_identity"',
         "هوية أوراق الطباعة",
         "اسم المعمل",
-        "لمحة مختصرة عن المعمل",
+        "لمحة عن المعمل",
         "العنوان",
         "أرقام التواصل",
-        'section === "print_identity"',
-    ]
-    assert not [fragment for fragment in required if fragment not in source]
+    ):
+        assert fragment in view
+    assert 'section === "print_identity"' in dialogs
 
 
 def test_print_identity_is_loaded_once_and_shared_by_all_order_prints():
@@ -60,13 +61,18 @@ def test_print_identity_is_loaded_once_and_shared_by_all_order_prints():
     theme = DOCUMENT_THEME_JS.read_text(encoding="utf-8")
     service = SETTINGS_SERVICE.read_text(encoding="utf-8")
 
-    assert hooks.index('"public/js/door_cutting_order_print_identity.js"') < hooks.index('"public/js/door_cutting_order_cutting_plan_renderer.js"')
+    assets = (APP_ROOT / "frontend_assets.py").read_text(encoding="utf-8")
+    identity_asset = "public/js/door_cutting_order/printing/door_cutting_order_print_identity.js"
+    presenter_asset = "public/js/door_cutting_order/printing/door_cutting_order_document_print_presenter.js"
+    assert assets.index(identity_asset) < assets.index(presenter_asset)
+    assert "door_cutting_order_cutting_plan_renderer.js" not in assets
+    assert "door_cutting_order_print_identity.js" not in hooks
     assert "get_print_identity" in identity
     assert "get_print_identity" in service
     assert "AlmdinaFactoryPrintIdentity" in documents
-    assert "factoryIdentityHtml" in documents
-    assert ".factory-name" in theme
-    assert ".factory-contacts" in theme
+    assert "resolvePrintIdentity" in documents
+    assert ".dco-unified-print-factory-name" in theme
+    assert ".dco-unified-print-factory-contacts" in theme
 
 
 def test_cutting_plan_print_uses_landscape_dynamic_pages_of_at_most_ten_boards():
@@ -75,18 +81,29 @@ def test_cutting_plan_print_uses_landscape_dynamic_pages_of_at_most_ten_boards()
         "const MAX_SHEETS_PER_PAGE = 10",
         "@page { size: A4 landscape; margin: 6mm; }",
         "function printGridColumns(count)",
-        "if (count <= 6) return 3",
-        "if (count <= 8) return 4",
-        "return 5",
+        "function printRowSizes(count)",
+        "if (count <= 6) return [count]",
+        "if (count === 8) return [4, 4]",
+        "return [5, Math.max(0, count - 5)].filter(Boolean)",
         "index += MAX_SHEETS_PER_PAGE",
         "page-break-after: always",
-        "لوح ${globalBoardIndex}",
+        'htmlText("Board {0}", [globalBoardIndex])',
         "AlmdinaFactoryPrintIdentity",
     ]
     assert not [fragment for fragment in required if fragment not in source]
 
-    for label in ("رقم الطلب", "اسم الزبون", "لون اللوح", "عدد الألواح", "عدد القطع", "قياس اللوح"):
+    for label in ("Order number", "Customer name", "Board color", "Board count", "Piece count", "Board size"):
         assert label in source
+
+    meta = source.split("function printOrderMetaHtml", 1)[1].split(
+        "function boardAspectFromCards", 1
+    )[0]
+    assert 'translate("Plan name")' not in meta
+    assert 'translate("Plan revision")' not in meta
+    assert 'data-resource-kind="OFFCUT"] .dco-sheet-board' in source
+    assert "background: #E5E7EB !important" in source
+    assert "stripPrintOnlyBoardChrome" in source
+    assert "printCardHtml" in source
 
 
 def test_section_scoped_settings_save_does_not_require_unrelated_mandatory_fields() -> None:
@@ -114,8 +131,9 @@ def test_cutting_plan_print_is_workshop_monochrome_and_preserves_board_aspect():
     required = [
         "boardAspectFromCards",
         "const boardHmm = boardWmm * aspect",
-        ".dco-edge-line { border-color: #111 !important; }",
-        ".dco-shaped-piece-outline polygon { fill: #fff !important; stroke: #111 !important; }",
+        ".dco-edge-line {",
+        "border-color: #e00000 !important;",
+        ".dco-shaped-piece-outline path { fill: #fff !important; stroke: #111 !important; }",
         "background: #fff !important",
     ]
     assert not [fragment for fragment in required if fragment not in source]

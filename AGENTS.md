@@ -27,6 +27,7 @@
 - لا توسّع Legacy compatibility facades ولا تبنِ Feature جديدًا فوق Tombstone/retired endpoint.
 - لا تضف Stock/Warehouse/Reservation/Consumption/Board Remnant behavior جديدًا؛ هذه خارج Active Product Scope v1.1.
 - لا تُضعف Test موجودًا كي يمر التعديل. أصلح السبب أو اشرح تعارض المتطلب مع الـContract.
+- أي نص يملكه التطبيق ويُضاف أو يُعدّل للمستخدم (واجهة، زر، رسالة، تقرير، طباعة/PDF) يلتزم إلزاميًا بـ`FE-ARCH-010 — Localization by Design`، مع الترجمة والاختبارات، حتى دون طلب صريح من المستخدم.
 - أي Schema/Data migration يجب أن يكون Idempotent ويُختبر مع `migrate` مرتين.
 
 ## قبل كتابة الكود
@@ -38,6 +39,7 @@ Goal:
 In scope:
 Out of scope:
 Invariants:
+Localization/i18n impact:
 Expected files/layers:
 Permission impact:
 Data/migration impact:
@@ -53,6 +55,7 @@ Rollback risk:
 - السلوك غير المرتبط لم يتغير.
 - Architecture boundaries محفوظة.
 - Security/financial boundaries محفوظة.
+- أي نص جديد أو معدل ظاهر للمستخدم يستوفي `FE-ARCH-010` مع الترجمات المطلوبة وأدلة الاختبار المناسبة.
 - اختبارات الوحدة/العقود ذات الصلة مضافة أو محدثة.
 - GitHub Actions المطلوبة خضراء.
 - Documentation تُحدّث إذا تغير Contract أو Workflow أو Capability أو UI entry point أو Deployment behavior.

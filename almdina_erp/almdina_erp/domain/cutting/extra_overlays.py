@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     EPSILON,
+    point_in_polygon,
     point_near_polygon,
+    point_to_polygon_distance,
     points_close,
     polygon_segments,
+    segment_distance,
     segments_intersect,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_OVERLAY_LAYER_BY_KIND,
-    EXTRA_PIECE_TYPE,
     extra_overlay_layer_for_kind,
 )
 
@@ -24,7 +27,7 @@ OVERLAY_HOST_MARGIN_MM = 3.0
 
 
 class ExtraOverlayError(ValueError):
-    """Raised when an Extra manufacturing overlay violates the DXF contract."""
+    """Raised when an add-on manufacturing overlay violates the DXF contract."""
 
     def __init__(
         self,
@@ -106,7 +109,7 @@ def overlay_path_contained_in_polygon(
     closed: bool = False,
     host_margin: float = 0.0,
 ) -> bool:
-    """True when every overlay vertex lies inside the Extra outline, including a small outside margin."""
+    """True when every overlay vertex lies inside the host outline, including a small outside margin."""
 
     points = tuple(path)
     if len(container) < 3 or len(points) < 2:
@@ -180,20 +183,137 @@ def _segment_escapes_polygon(
     )
 
 
+def _centerline_gap(
+    path: Sequence[Point],
+    polygon: Sequence[Point],
+    *,
+    tolerance: float,
+    closed: bool,
+) -> float:
+    """Outside clearance from a centerline to a piece. Zero when the centerline meets it."""
+
+    gap = math.inf
+    points = tuple(path)
+    for point in points:
+        if point_in_polygon(point, polygon, tolerance):
+            return 0.0
+        gap = min(gap, point_to_polygon_distance(point, polygon))
+    for segment in overlay_path_segments(points, closed=closed):
+        midpoint = (
+            (segment[0][0] + segment[1][0]) / 2.0,
+            (segment[0][1] + segment[1][1]) / 2.0,
+        )
+        if point_in_polygon(midpoint, polygon, tolerance):
+            return 0.0
+        for edge in polygon_segments(polygon):
+            if segments_intersect(segment, edge, tolerance):
+                return 0.0
+            gap = min(gap, segment_distance(segment, edge, tolerance))
+    return gap
+
+
+def _special_hosts(hosts: Sequence[ExtraOverlayHost]) -> tuple[ExtraOverlayHost, ...]:
+    return tuple(host for host in hosts if str(host.piece_type or "") == "Special")
+
+
+def _reject_unbound_overlay(
+    overlay: ExtraOverlayCandidate,
+    contained: Sequence[ExtraOverlayHost],
+    involved: Sequence[ExtraOverlayHost],
+) -> None:
+    """Fail closed when a mark is not tied to exactly one door."""
+
+    specials = _special_hosts((*contained, *involved))
+    if len(contained) != 1 and specials:
+        raise ExtraOverlayError(
+            "extra_overlay_special_ambiguous",
+            layer=overlay.layer,
+            kind=overlay.kind,
+        )
+    if len(contained) > 1 or len(involved) > 1:
+        raise ExtraOverlayError("extra_overlay_spans_hosts", layer=overlay.layer)
+    raise ExtraOverlayError("extra_overlay_floating", layer=overlay.layer)
+
+
+def _assign_liner_by_cutter_footprint(
+    overlay: ExtraOverlayCandidate,
+    hosts: Sequence[ExtraOverlayHost],
+    *,
+    tolerance: float,
+    cutter_radius_mm: float,
+    enforce_selection: bool,
+) -> AssignedExtraOverlay:
+    """Bind one liner path without treating a kerf-zone center as a second door.
+
+    The cutting gap between doors is the cutter kerf, not an extra safety margin.
+    A full-edge liner may place its center one cutter radius past the door outline,
+    so that center can sit in the kerf. That is not a collision. A collision is the
+    cutter disk entering the neighboring door's own area.
+    """
+
+    path = overlay.path
+    owners: list[ExtraOverlayHost] = []
+    intruded: list[ExtraOverlayHost] = []
+    intrusion_limit = cutter_radius_mm - tolerance
+    for host in hosts:
+        gap = _centerline_gap(
+            path,
+            host.polygon,
+            tolerance=tolerance,
+            closed=overlay.closed,
+        )
+        if gap <= tolerance:
+            owners.append(host)
+        if gap < intrusion_limit:
+            intruded.append(host)
+    if len(owners) != 1:
+        _reject_unbound_overlay(overlay, owners, intruded)
+    host = owners[0]
+    if enforce_selection and overlay.kind not in host.selected_codes:
+        raise ExtraOverlayError(
+            "extra_overlay_addon_not_selected",
+            layer=overlay.layer,
+            host_key=host.key,
+            kind=overlay.kind,
+            label=host.label,
+        )
+    return AssignedExtraOverlay(
+        host_key=host.key,
+        kind=overlay.kind,
+        layer=overlay.layer,
+        path=path,
+        closed=overlay.closed,
+    )
+
+
 def assign_extra_overlays(
     overlays: Sequence[ExtraOverlayCandidate],
     hosts: Sequence[ExtraOverlayHost],
     *,
     tolerance: float = EPSILON,
     host_margin: float = 0.0,
+    cutter_radius_mm: float = 0.0,
+    enforce_selection: bool = True,
 ) -> tuple[AssignedExtraOverlay, ...]:
-    """Bind overlay marks to Extra hosts without treating them as cut pieces."""
+    """Bind add-on overlay marks to their selected host without making cut pieces."""
 
     assigned: list[AssignedExtraOverlay] = []
+    radius = float(cutter_radius_mm or 0.0)
     for overlay in overlays:
         path = overlay.path
         if len(path) < 2:
             raise ExtraOverlayError("extra_overlay_invalid_path", layer=overlay.layer)
+        if overlay.kind == "liner" and radius > tolerance:
+            assigned.append(
+                _assign_liner_by_cutter_footprint(
+                    overlay,
+                    hosts,
+                    tolerance=tolerance,
+                    cutter_radius_mm=radius,
+                    enforce_selection=enforce_selection,
+                )
+            )
+            continue
         contained = tuple(
             host
             for host in hosts
@@ -204,9 +324,6 @@ def assign_extra_overlays(
                 closed=overlay.closed,
                 host_margin=host_margin,
             )
-        )
-        contained_extras = tuple(
-            host for host in contained if host.piece_type == EXTRA_PIECE_TYPE
         )
         intersecting = tuple(
             host
@@ -219,52 +336,31 @@ def assign_extra_overlays(
                 host_margin=host_margin,
             )
         )
-        intersecting_extras = tuple(
-            host for host in intersecting if host.piece_type == EXTRA_PIECE_TYPE
-        )
-        intersecting_others = tuple(
-            host for host in intersecting if host.piece_type != EXTRA_PIECE_TYPE
+        if len(contained) != 1:
+            _reject_unbound_overlay(overlay, contained, intersecting)
+        host = contained[0]
+        if enforce_selection and overlay.kind not in host.selected_codes:
+            raise ExtraOverlayError(
+                "extra_overlay_addon_not_selected",
+                layer=overlay.layer,
+                host_key=host.key,
+                kind=overlay.kind,
+                label=host.label,
+            )
+        assigned.append(
+            AssignedExtraOverlay(
+                host_key=host.key,
+                kind=overlay.kind,
+                layer=overlay.layer,
+                path=path,
+                closed=overlay.closed,
+            )
         )
 
-        if len(contained_extras) > 1 or len(intersecting_extras) > 1:
-            raise ExtraOverlayError(
-                "extra_overlay_spans_hosts",
-                layer=overlay.layer,
-            )
-        if len(contained_extras) == 1:
-            host = contained_extras[0]
-            if overlay.kind not in host.selected_codes:
-                raise ExtraOverlayError(
-                    "extra_overlay_addon_not_selected",
-                    layer=overlay.layer,
-                    host_key=host.key,
-                    kind=overlay.kind,
-                    label=host.label,
-                )
-            assigned.append(
-                AssignedExtraOverlay(
-                    host_key=host.key,
-                    kind=overlay.kind,
-                    layer=overlay.layer,
-                    path=path,
-                    closed=overlay.closed,
-                )
-            )
-            continue
-        if intersecting_others:
-            raise ExtraOverlayError(
-                "extra_overlay_on_non_extra",
-                layer=overlay.layer,
-                host_key=intersecting_others[0].key,
-            )
-        raise ExtraOverlayError(
-            "extra_overlay_floating",
-            layer=overlay.layer,
-        )
-
-    mismatches = extra_overlay_selection_mismatches(hosts, assigned)
-    if mismatches:
-        raise mismatches[0]
+    if enforce_selection:
+        mismatches = extra_overlay_selection_mismatches(hosts, assigned)
+        if mismatches:
+            raise mismatches[0]
     return tuple(assigned)
 
 
@@ -272,11 +368,13 @@ def extra_overlay_selection_mismatches(
     hosts: Sequence[ExtraOverlayHost],
     assigned: Sequence[AssignedExtraOverlay],
 ) -> tuple[ExtraOverlayError, ...]:
-    """Return Extra overlay kinds that do not match the order checkboxes.
+    """Return add-on overlay kinds that do not match the order checkboxes.
 
-    Each Extra host must have exactly one mark for every selected overlay kind
-    (liner, back groove, recessed handle) and none for unselected overlay kinds.
-    Double / full-door-double are commercial addons, not DXF overlay layers.
+    Each host must have at least one Liner mark when liner is selected, and
+    exactly one mark for back groove and recessed handle. Unselected overlay
+    kinds must have none. Intersecting liners may legally produce one or many
+    Liner entities. Double / full-door-double are commercial addons, not DXF
+    overlay layers.
     """
 
     found_by_host: dict[str | int, list[str]] = {}
@@ -285,8 +383,6 @@ def extra_overlay_selection_mismatches(
 
     errors: list[ExtraOverlayError] = []
     for host in hosts:
-        if host.piece_type != EXTRA_PIECE_TYPE:
-            continue
         found = found_by_host.get(host.key, [])
         selected = {
             code for code in host.selected_codes if code in EXTRA_OVERLAY_LAYER_BY_KIND
@@ -304,7 +400,7 @@ def extra_overlay_selection_mismatches(
                         label=host.label,
                     )
                 )
-            elif selected_kind and count > 1:
+            elif selected_kind and count > 1 and kind != "liner":
                 errors.append(
                     ExtraOverlayError(
                         "extra_overlay_addon_duplicate",

@@ -17,6 +17,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_piece_costs,
     calculate_special_pricing,
     calculate_waste,
+    round_value,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     ExtraAddonError,
@@ -25,7 +26,6 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     calculate_extra_addon_pricing,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
-    L_SHAPED_CORNER_TYPE,
     break_adjacent_sides,
     is_corner_cut,
 )
@@ -34,14 +34,16 @@ from .document_access import FrappeOrderDocumentAccess
 from .edge_profile_repository import FrappeEdgeProfileRepository
 
 
-def _l_shaped_dimension_overrides(row: Any) -> dict[str, float]:
-    """Shrink an L-Shaped corner's break-adjacent sides by the notch cut out of them.
+def _corner_side_dimension_overrides(row: Any) -> dict[str, float]:
+    """Use the actual remaining length for selected corner-adjacent outer sides.
 
-    Only the two sides touching the inner L notch lose length/width; the other
-    two sides keep the piece's full dimension. Returns kwargs for PieceCostInput.
+    For both corner geometries, the two outer sides touching the removed corner
+    use their physical remnants whenever selected. This is independent of the
+    corner-band mode; full-path normalization may simply clear those side flags.
     """
 
-    if str(row.piece_type or "") != L_SHAPED_CORNER_TYPE or not cint(row.edge_break):
+    piece_type = str(row.piece_type or "")
+    if not is_corner_cut(piece_type):
         return {}
 
     adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
@@ -101,7 +103,7 @@ class FrappeOrderCostingAdapter:
                     edge_width_bottom_type=str(
                         row.edge_width_bottom_type_override or ""
                     ),
-                    **_l_shaped_dimension_overrides(row),
+                    **_corner_side_dimension_overrides(row),
                 )
                 for row in (self.document.pieces or [])
             ),
@@ -121,20 +123,20 @@ class FrappeOrderCostingAdapter:
             row.edge_cost_usd = result.edge_cost_usd
             row.edge_rate_usd = self._legacy_rate(result)
 
-        self.document.total_area_m2 = summary.total_area_m2
-        self.document.total_edge_meters = summary.total_edge_meters
-        self.document.edge_cost_usd = summary.total_edge_cost_usd
-
         # Calculate break-edge (corner cut) costs for Clipped Corner and L-Shaped.
         # The four regular sides -- including an L-Shaped piece's break-adjacent
-        # ones, already shrunk above via _l_shaped_dimension_overrides -- are
+        # ones, already shrunk above via _corner_side_dimension_overrides -- are
         # priced through the normal edge_meters/edge_cost_usd above; this only
         # prices the diagonal/notch strap itself.
         rate_map = self.profiles.rate_map()
         corner_break_total = 0.0
+        break_only_meters_total = 0.0
+        break_only_cost_total = 0.0
 
         for row in self.document.pieces or []:
-            if not (is_corner_cut(row.piece_type) and cint(row.edge_break)):
+            full_path = bool(cint(getattr(row, "edge_break", 0)))
+            break_only = bool(cint(getattr(row, "edge_break_only", 0)))
+            if not (is_corner_cut(row.piece_type) and (full_path or break_only)):
                 row.edge_break_length_cm = 0
                 row.edge_break_meters = 0
                 row.edge_break_rate_usd = 0
@@ -157,6 +159,7 @@ class FrappeOrderCostingAdapter:
                     qty=cint(row.qty),
                     edge_break=cint(row.edge_break),
                     break_edge_rate_usd=break_rate,
+                    edge_break_only=cint(getattr(row, "edge_break_only", 0)),
                 )
             )
 
@@ -172,12 +175,35 @@ class FrappeOrderCostingAdapter:
             row.clipped_corner_edge_price_set_by = ""
             row.clipped_corner_edge_price_set_on = None
 
-            corner_break_total += break_result.break_edge_cost_usd
+            if break_only:
+                row.edge_meters = round_value(
+                    flt(row.edge_meters) + break_result.break_edge_meters,
+                    3,
+                )
+                row.edge_cost_usd = round_value(
+                    flt(row.edge_cost_usd) + break_result.break_edge_cost_usd,
+                    3,
+                )
+                if not flt(row.edge_rate_usd):
+                    row.edge_rate_usd = break_result.break_edge_rate_usd
+                break_only_meters_total += break_result.break_edge_meters
+                break_only_cost_total += break_result.break_edge_cost_usd
+            else:
+                corner_break_total += break_result.break_edge_cost_usd
 
+        self.document.total_area_m2 = summary.total_area_m2
+        self.document.total_edge_meters = round_value(
+            summary.total_edge_meters + break_only_meters_total,
+            3,
+        )
+        self.document.edge_cost_usd = round_value(
+            summary.total_edge_cost_usd + break_only_cost_total,
+            3,
+        )
         self.corner_break_edge_total_usd = corner_break_total
 
     def calculate_extra_addon_prices(self) -> None:
-        """Validate Extra selections and store an immutable sales-price snapshot."""
+        """Validate independent add-ons and store immutable sales-price snapshots."""
 
         settings = self.access.settings
         old_rows = self.access.old_piece_map()
@@ -274,57 +300,48 @@ class FrappeOrderCostingAdapter:
             )
         except ExtraAddonError as error:
             labels = {
-                "double": _("Double Edge Banding"),
+                "double": _("Double Edge"),
                 "full_door_double": _("Full Door Double"),
                 "liner": _("Liner"),
                 "back_groove": _("Back Groove"),
                 "recessed_handle_cutout": _("Recessed Handle Cutout"),
             }
             messages = {
-                "non_extra_addon_selection": _(
-                    "Extra add-ons can only be selected for a door of type Extra."
-                ),
-                "extra_addon_required": _(
-                    "Every Extra door must include at least one add-on."
-                ),
-                "extra_notes_required": _(
-                    "Notes are required for every Extra door."
+                "mutually_exclusive_double_addons": _(
+                    "Double Edge and Full Door Double cannot be selected together."
                 ),
                 "extra_quantity_invalid": _(
-                    "Extra door quantity must be greater than zero."
+                    "Door quantity must be greater than zero when an add-on is selected."
                 ),
                 "extra_addon_rate_invalid": _(
-                    "Extra add-on prices must be finite and non-negative."
+                    "Door add-on prices must be finite and non-negative."
                 ),
             }
             if error.code == "extra_addon_rate_not_configured":
                 frappe.throw(
                     _(
-                        "Configure a positive factory price for {0} before using this Extra add-on."
+                        "Configure a positive factory price for {0} before using this add-on."
                     ).format(labels.get(error.addon_code, error.addon_code))
                 )
-            frappe.throw(messages.get(error.code, _("Extra door add-on data is invalid.")))
+            frappe.throw(messages.get(error.code, _("Door add-on data is invalid.")))
 
         for row, result in zip(self.document.pieces or [], summary.pieces):
             old_row = old_rows.get(row.name)
-            previously_extra = bool(
+            previously_selected = bool(
                 old_row
-                and (
-                    str(getattr(old_row, "piece_type", None) or "Regular") == "Extra"
-                    or any(
-                        cint(getattr(old_row, fieldname, 0))
-                        for fieldname in (
-                            "extra_double",
-                            "extra_full_door_double",
-                            "extra_liner",
-                            "extra_back_groove",
-                            "extra_recessed_handle_cutout",
-                        )
+                and any(
+                    cint(getattr(old_row, fieldname, 0))
+                    for fieldname in (
+                        "extra_double",
+                        "extra_full_door_double",
+                        "extra_liner",
+                        "extra_back_groove",
+                        "extra_recessed_handle_cutout",
                     )
                 )
             )
             row._extra_addon_snapshot_required = bool(
-                result.applicable or previously_extra
+                result.applicable or previously_selected
             )
             row.extra_double_unit_price_usd = result.double_unit_price_usd
             row.extra_double_total_usd = result.double_total_usd

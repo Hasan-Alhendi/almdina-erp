@@ -81,8 +81,7 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
     source = UX_JS.read_text(encoding="utf-8")
     required_fragments = [
         'class="dco-fast-input" type="number"',
-        'data-field="width_cm"',
-        'data-field="length_cm"',
+        'data-field="${fieldname}"',
         'event.key === "Tab" && !event.shiftKey && fieldname === "width_cm"',
         "the browser moves directly to Length with zero Frappe row activation",
         'event.key === "Enter" && fieldname === "length_cm"',
@@ -135,8 +134,8 @@ def test_rotation_and_each_edge_side_have_independent_select_all_controls():
         "dco-column-select-all-input",
         "applyColumnToAll(frm, root, fieldname, !allChecked)",
         "checkbox.indeterminate",
-        "إلغاء تحديد الكل",
-        "تحديد الكل",
+        '__("Clear all")',
+        '__("Select all")',
         "dco-edge-header-grid",
         "Promise.allSettled(changedRows.map",
     ]
@@ -287,9 +286,9 @@ def test_fast_editor_binds_measurement_handlers_only_once():
     assert "if (root._dcoFastMeasurementsBound) return" in source
     assert "root._dcoFastMeasurementsBound = true" in source
     assert "const currentFrm = root._dcoFastEntryForm" in source
-    assert "function requirePieceDimensions(row, tr)" in source
-    assert "if (!row || !requirePieceDimensions(row, tr)) return" in source
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in source
+    assert "function requirePieceDimensions(frm, row, tr)" in source
+    assert "if (!row || !requirePieceDimensions(currentFrm, row, tr)) return" in source
+    assert "Please enter board length and width first." in source
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in source
     assert "window.AlmdinaClippedCornerEditor.open(currentFrm, row)" in source
     # html() replaces children of the wrapper; rebinding the wrapper on every

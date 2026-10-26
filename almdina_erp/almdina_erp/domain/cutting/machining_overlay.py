@@ -1,0 +1,268 @@
+"""Shared machining overlay registry.
+
+Liner, back groove, and recessed handle use one cutter-center toolpath.
+``kind`` selects the stored fields and DXF layer. It does not select an algorithm.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
+    LinerMeasurement,
+    LinerPiece,
+    compare_liner_path,
+    compare_liner_set_paths,
+    liner_toolpath_mm,
+    merged_liner_toolpaths_mm,
+)
+from almdina_erp.almdina_erp.domain.orders.liner_specs import (
+    LINER_SPECS_FIELD,
+    DoorLinerError,
+    door_liner_fields,
+    door_liners_from_source,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MachiningAddon:
+    kind: str
+    layer: str
+    enabled_field: str
+    side_field: str
+    offset_field: str
+    width_field: str
+    start_field: str
+    length_field: str
+
+
+MACHINING_ADDONS: tuple[MachiningAddon, ...] = (
+    MachiningAddon(
+        "liner",
+        "Liner",
+        "extra_liner",
+        "liner_reference_side",
+        "liner_offset_cm",
+        "liner_width_cm",
+        "liner_start_cm",
+        "liner_length_cm",
+    ),
+    MachiningAddon(
+        "back_groove",
+        "Rear Groove",
+        "extra_back_groove",
+        "back_groove_reference_side",
+        "back_groove_offset_cm",
+        "back_groove_width_cm",
+        "back_groove_start_cm",
+        "back_groove_length_cm",
+    ),
+    MachiningAddon(
+        "recessed_handle_cutout",
+        "Handle Recess",
+        "extra_recessed_handle_cutout",
+        "recessed_handle_reference_side",
+        "recessed_handle_offset_cm",
+        "recessed_handle_width_cm",
+        "recessed_handle_start_cm",
+        "recessed_handle_length_cm",
+    ),
+)
+MACHINING_ADDONS_BY_KIND = {addon.kind: addon for addon in MACHINING_ADDONS}
+MACHINING_GEOMETRY_FIELDS = tuple(
+    field
+    for addon in MACHINING_ADDONS
+    for field in (
+        addon.enabled_field,
+        addon.side_field,
+        addon.offset_field,
+        addon.width_field,
+        addon.start_field,
+        addon.length_field,
+    )
+) + (LINER_SPECS_FIELD,)
+
+
+def machining_addon(kind: str) -> MachiningAddon:
+    try:
+        return MACHINING_ADDONS_BY_KIND[str(kind)]
+    except KeyError as exc:
+        raise LinerGeometryError("unknown_machining_addon") from exc
+
+
+def _read(source: Any, name: str, default: Any = 0) -> Any:
+    if isinstance(source, Mapping):
+        return source.get(name, default)
+    return getattr(source, name, default)
+
+
+def _num(value: Any) -> float:
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number or number in (float("inf"), float("-inf")):
+        return 0.0
+    return number
+
+
+def machining_values(source: Any) -> dict[str, dict[str, Any]]:
+    """Read each add-on's stored parameters without sharing liner fields."""
+
+    values: dict[str, dict[str, Any]] = {}
+    for addon in MACHINING_ADDONS:
+        values[addon.kind] = {
+            "enabled": bool(_read(source, addon.enabled_field, 0)),
+            "side": str(_read(source, addon.side_field, "") or ""),
+            "offset_cm": _num(_read(source, addon.offset_field, 0)),
+            "width_cm": _num(_read(source, addon.width_field, 0)),
+            "start_cm": _num(_read(source, addon.start_field, 0)),
+            "length_cm": _num(_read(source, addon.length_field, 0)),
+        }
+    try:
+        liner_set = door_liners_from_source(source)
+    except DoorLinerError:
+        liner_set = None
+    if liner_set is not None and liner_set.liners:
+        values["liner"]["enabled"] = True
+        values["liner"]["width_cm"] = liner_set.width_cm
+        first = liner_set.first
+        if first is not None:
+            values["liner"]["side"] = first.side
+            values["liner"]["offset_cm"] = first.offset_cm
+            values["liner"]["start_cm"] = first.start_cm
+            values["liner"]["length_cm"] = first.length_cm
+        values["liner"]["liners"] = [
+            {
+                "id": spec.liner_id,
+                "side": spec.side,
+                "offset_cm": spec.offset_cm,
+                "start_cm": spec.start_cm,
+                "length_cm": spec.length_cm,
+            }
+            for spec in liner_set.liners
+        ]
+    else:
+        values["liner"]["liners"] = ()
+    return values
+
+
+def machining_metadata(source: Any) -> dict[str, Any]:
+    """Flat piece metadata for every machining add-on, including inactive zeros."""
+
+    payload: dict[str, Any] = {}
+    values = machining_values(source)
+    for addon in MACHINING_ADDONS:
+        spec = values[addon.kind]
+        payload[addon.enabled_field] = 1 if spec["enabled"] else 0
+        payload[addon.side_field] = spec["side"]
+        payload[addon.offset_field] = spec["offset_cm"]
+        payload[addon.width_field] = spec["width_cm"]
+        payload[addon.start_field] = spec["start_cm"]
+        payload[addon.length_field] = spec["length_cm"]
+    try:
+        payload[LINER_SPECS_FIELD] = door_liner_fields(door_liners_from_source(source)).get(
+            LINER_SPECS_FIELD, ""
+        )
+    except DoorLinerError:
+        payload[LINER_SPECS_FIELD] = str(_read(source, LINER_SPECS_FIELD, "") or "")
+    return payload
+
+
+def generate_toolpath(
+    *,
+    kind: str,
+    piece: LinerPiece,
+    reference_side: str,
+    offset_cm: float,
+    width_cm: float,
+    start_cm: float | None,
+    length_cm: float | None,
+    cutter_diameter_mm: float,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
+) -> list[tuple[float, float]]:
+    """Cutter-center zigzag. ``kind`` only checks that the add-on is registered."""
+
+    machining_addon(kind)
+    return liner_toolpath_mm(
+        piece,
+        reference_side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+
+
+def generate_liner_set_toolpaths(
+    *,
+    piece: LinerPiece,
+    specs: Sequence[Any],
+    width_cm: float,
+    cutter_diameter_mm: float,
+    start_sawn: Sequence[bool | None] | None = None,
+    end_sawn: Sequence[bool | None] | None = None,
+) -> list[list[tuple[float, float]]]:
+    """Cutter-center paths for every liner on a door after mill-region union."""
+
+    return merged_liner_toolpaths_mm(
+        piece,
+        specs,
+        width_cm,
+        cutter_diameter_mm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+
+
+def compare_overlay_path(
+    path,
+    piece: LinerPiece,
+    kind: str,
+    side: str,
+    offset_cm: float,
+    width_cm: float,
+    cutter_diameter_mm: float | None = None,
+    start_cm: float | None = None,
+    length_cm: float | None = None,
+    *,
+    start_sawn: bool | None = None,
+    end_sawn: bool | None = None,
+) -> LinerMeasurement:
+    """Geometric check shared by every machining add-on."""
+
+    machining_addon(kind)
+    return compare_liner_path(
+        path,
+        piece,
+        side,
+        offset_cm,
+        width_cm,
+        cutter_diameter_mm,
+        start_cm,
+        length_cm,
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+
+
+__all__ = [
+    "MACHINING_ADDONS",
+    "MACHINING_ADDONS_BY_KIND",
+    "MACHINING_GEOMETRY_FIELDS",
+    "MachiningAddon",
+    "compare_overlay_path",
+    "compare_liner_set_paths",
+    "generate_liner_set_toolpaths",
+    "generate_toolpath",
+    "machining_addon",
+    "machining_metadata",
+    "machining_values",
+]

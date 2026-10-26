@@ -139,7 +139,9 @@
         display: none !important;
     }
 
-    .dco-order-list .list-row-col:is(.name, .list-subject, .order_date, [data-fieldname="name"], [data-fieldname="order_date"]) {
+    /* Dates stay LTR. Subject/ID order is owned by door_cutting_order_list_rtl_subject.css
+     * so the checkbox remains at the logical start for both page directions. */
+    .dco-order-list .list-row-col:is(.order_date, [data-fieldname="order_date"]) {
         direction: ltr;
         unicode-bidi: isolate;
         font-variant-numeric: tabular-nums;
@@ -174,7 +176,7 @@
         padding: 3px 7px;
         border: 1px solid var(--border-color);
         border-radius: 999px;
-        background: var(--subtle-fg);
+        background: var(--alm-surface-muted, #f4f6f8);
         box-sizing: border-box;
         text-align: center;
     }
@@ -265,6 +267,10 @@
 
     .dco-order-list .dco-status-filter-slot [data-fieldname="current_assignee"] {
         width: 138px !important;
+    }
+
+    .dco-order-list .dco-status-filter-slot [data-fieldname="price_approval_status"] {
+        width: 128px !important;
     }
 
     .dco-order-list .dco-status-filter-slot .control-label,
@@ -386,6 +392,6 @@
 
     .dco-order-list .filter-section > .filter-selector .filter-button:hover,
     .dco-order-list .filter-section > .filter-selector .filter-x-button:hover {
-        background-color: var(--subtle-fg) !important;
+        background-color: var(--alm-surface-muted, #f4f6f8) !important;
     }
 }

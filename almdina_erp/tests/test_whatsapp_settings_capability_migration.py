@@ -29,11 +29,11 @@ class TestWhatsAppSettingsCapabilityMigration(unittest.TestCase):
         session = CAPABILITY_PRESENTATION[Capability.MANAGE_WHATSAPP_SESSION]
         messages = CAPABILITY_PRESENTATION[Capability.EDIT_WHATSAPP_MESSAGES]
         print_identity = CAPABILITY_PRESENTATION[Capability.EDIT_FACTORY_PRINT_IDENTITY]
-        self.assertEqual(session["label"], "إدارة جلسة واتساب")
+        self.assertEqual(session["label"], "Manage WhatsApp session")
         self.assertEqual(session["risk"], "critical")
-        self.assertEqual(messages["label"], "تعديل رسائل واتساب")
+        self.assertEqual(messages["label"], "Edit WhatsApp messages")
         self.assertEqual(messages["risk"], "sensitive")
-        self.assertIn("لا يشمل رسائل واتساب", print_identity["description"])
+        self.assertIn("Does not include WhatsApp messages", print_identity["description"])
 
     def test_backfill_is_idempotent_and_role_name_free(self) -> None:
         migration = MIGRATION.read_text(encoding="utf-8")

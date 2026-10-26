@@ -45,7 +45,7 @@ PIECE_GEOMETRY = DCO_JS / "cutting_plan" / "door_cutting_order_piece_geometry.js
 SECURE_DXF = DCO_JS / "cutting_plan" / "secure_dxf_export.js"
 ASSETS = APP_ROOT / "frontend_assets.py"
 
-PIECE_TYPE_OPTIONS = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+PIECE_TYPE_OPTIONS = "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
 
 
 def _fields(path: Path) -> dict[str, dict]:
@@ -58,6 +58,8 @@ def test_measurement_and_immutable_plan_schemas_store_clipped_corner_geometry():
     placed = _fields(PLAN_PIECE_JSON)
     assert detail["piece_type"]["options"] == PIECE_TYPE_OPTIONS
     assert placed["piece_type"]["options"] == PIECE_TYPE_OPTIONS
+    assert detail["edge_break_only"]["fieldtype"] == "Check"
+    assert detail["edge_break_only"]["default"] == "0"
 
     for fields in (detail, placed):
         assert fields["clipped_corner_position"]["options"] == (
@@ -81,12 +83,14 @@ def test_server_validates_defaults_and_carries_geometry_through_every_plan_snaps
     assert "width." in adapter
     assert '"clipped_corner_position": row.clipped_corner_position or ""' in plan_adapter
     assert '"edge_break": cint(getattr(row, "edge_break", 0))' in plan_adapter
+    assert '"edge_break_only": cint(getattr(row, "edge_break_only", 0))' in plan_adapter
 
     for source in (plan_adapter, primitives, export_service):
         assert "clipped_corner_position" in source
         assert "clipped_corner_width_cm" in source
         assert "clipped_corner_length_cm" in source
     assert '"edge_break": 1 if row.get("edge_break") else 0' in primitives
+    assert '"edge_break_only": 1 if row.get("edge_break_only") else 0' in primitives
     assert "doc._validate_special_shape_rows()" in export_service
     assert "doc._calculate_cutting_plan(settings, input_fingerprint)" in export_service
 
@@ -98,21 +102,23 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assets = ASSETS.read_text(encoding="utf-8")
 
     assert '<option value="Clipped Corner"' in operator
-    assert "الزاوية الكسر" in operator
+    assert '__("Clipped corner")' in operator
     assert '<option value="L-Shaped Corner"' in operator
     assert 'value: "L-Shaped Corner"' in extra_addons
-    assert 'labelAr: "الزاوية الكسر"' in extra_addons
+    assert 'label: "Clipped corner"' in extra_addons
     assert "AlmdinaClippedCornerEditor.open(currentFrm, row)" in operator
+    assert "frappe.model.new_names" in operator
+    assert "tr.dataset.rowName = row.name" in operator
     assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
     assert "isCornerCut" in operator
     assert "dco-corner-edges-summary" in operator
-    assert "اختيار القشاط من الشكل" in operator
+    assert '__("Choose banding on shape")' in operator
     assert ".dco-special-edges-disabled,\n                .dco-corner-edges-summary{" in operator
     assert "border:1px dashed rgba(176,112,28,.4)" in operator
     assert ".dco-clipped-corner-row .dco-col-edges" in operator
     assert 'toggle("edge_break"' not in operator
-    assert "قشاط الكسر" in editor
-    assert "قشاط الزاوية" in editor
+    assert '__("Break only")' in editor
+    assert '__("Corner banding")' in editor
     assert "data-corner-edge" in editor
     assert "data-corner-edges" in editor
     assert "applyEdgeBreakPolicy" in editor
@@ -122,18 +128,29 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert "dco-corner-position-grid" in editor
     assert "data-corner-preview" in editor
     assert "edgeBandSvgMarkup" in editor
-    assert 'set_value(row.doctype, row.name, "edge_break"' in editor
+    assert "function cornerValueUpdates" in editor
+    assert "function persistCornerValues" in editor
+    persistence = editor.split("function cornerValueUpdates", 1)[1]
+    persistence = persistence.split("function persistCornerValues", 1)[0]
+    assert persistence.index('updates.push(["edge_break_only", 0], ["edge_break", 1])') < persistence.index(
+        'updates.push(["edge_break", 0], ["edge_break_only", 1])'
+    )
+    assert "queueCornerApply(frm, async () =>" in editor
+    assert "await persistCornerValues(frm, locator, config, edgeDraft)" in editor
+    assert "return flushPendingCornerApply(frm)" in editor
+    assert "mappedRowName" in editor
+    assert "pieceInstanceId" in editor
     assert "refreshFastTable(frm)" in editor
     save_render = SAVE_RENDER_UX.read_text(encoding="utf-8")
     assert "function syncCornerEdgesSummary" in save_render
     assert "edgeSelectionSummary" in save_render
-    assert "جعل الجزءين المتبقيين متساويين" in editor
-    assert "المتبقي على ضلع العرض" in editor
+    assert '__("Make both remaining lengths equal")' in editor
+    assert '__("Remaining on width side")' in editor
     assert "data-corner-remaining" in editor
     assert "preserveRemainingOnResize" in editor
     assert "commitCornerResizeIfNeeded" in operator
     assert "captureCornerResizeSnapshot" in operator
-    assert "المستطيل الخارجي هو المساحة المحجوزة الآمنة" in editor
+    assert "outer rectangle remains the safe reserved area" in editor
     assert "let activeDialog = null" in editor
     assert "Prevent stacked corner dialogs" in editor
     open_fn = editor.split("function open(frm, row, options = {}) {", 1)[1]
@@ -145,7 +162,7 @@ def test_fast_measurements_offer_one_click_corner_settings_with_live_visual_prev
     assert open_fn.index("if (!dimensions.width || !dimensions.length)") < open_fn.index(
         "new frappe.ui.Dialog"
     )
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح إعداد الزاوية." in open_fn
+    assert "Enter the piece width and length before editing the corner." in open_fn
     assert 'const L_TYPE = "L-Shaped Corner"' in editor
     assert "cutStyle" in editor
     assert assets.index("door_cutting_order_clipped_corner_ux.js") < assets.index(

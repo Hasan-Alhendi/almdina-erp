@@ -14,25 +14,25 @@
 
         function enabledFilterLabel(value) {
             const labels = {
-                all: t("الكل"),
-                "1": t("مفعّل"),
-                "0": t("معطّل"),
+                all: t("All"),
+                "1": t("Enabled"),
+                "0": t("Disabled"),
             };
             return labels[String(value || "all")] || labels.all;
         }
 
         function enabledFilterValue(label) {
             const entries = [
-                ["all", t("الكل")],
-                ["1", t("مفعّل")],
-                ["0", t("معطّل")],
+                ["all", t("All")],
+                ["1", t("Enabled")],
+                ["0", t("Disabled")],
             ];
             const match = entries.find(([, text]) => text === label);
             return match ? match[0] : "all";
         }
 
         function enabledFilterOptions() {
-            return [t("الكل"), t("مفعّل"), t("معطّل")].join("\n");
+            return [t("All"), t("Enabled"), t("Disabled")].join("\n");
         }
 
         function dispose() {
@@ -61,7 +61,7 @@
                 parent: $searchMount,
                 fieldname: "search",
                 fieldtype: "Data",
-                placeholder: t("اكتب للبحث..."),
+                placeholder: t("Type to search..."),
                 value: state.search || "",
                 className: "aw-search-control-mount",
                 onlyInput: true,

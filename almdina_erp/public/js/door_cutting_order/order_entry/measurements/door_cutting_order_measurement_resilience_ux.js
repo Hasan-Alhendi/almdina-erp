@@ -4,15 +4,6 @@
     const STYLE_ID = "dco-measurement-resilience-css";
     const RESTORE_DELAYS = [0, 50];
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -64,7 +55,7 @@
                 min-width:31px;
                 border:1px solid var(--border-color,#ccd3da);
                 border-radius:7px;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
                 color:var(--text-muted,#607080);
                 cursor:pointer;
                 display:inline-grid;
@@ -96,14 +87,14 @@
                 margin:-23px -22px 0 0;
                 border-radius:50%;
                 background:#e0a21a;
-                box-shadow:0 0 0 2px var(--card-bg,#fff);
+                box-shadow:0 0 0 2px var(--alm-card,#ffffff);
             }
             .dco-notes-expand { position:relative; }
             .dco-notes-expand:disabled { opacity:.38; cursor:not-allowed; }
 
             .dco-large-notes-dialog .modal-dialog { max-width:min(760px,94vw) !important; }
             .dco-large-notes-dialog .modal-content { border-radius:16px; overflow:hidden; }
-            .dco-large-notes-dialog .modal-body { background:var(--subtle-fg,#f6f8fa); }
+            .dco-large-notes-dialog .modal-body { background:var(--alm-surface-muted,#f4f6f8); }
             .dco-large-notes-dialog textarea[data-fieldname="notes"] {
                 min-height:240px !important;
                 max-height:55vh;
@@ -112,7 +103,7 @@
                 border-radius:11px !important;
                 font-size:15px;
                 line-height:1.85;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
             }
             .dco-note-context {
                 display:flex;
@@ -123,7 +114,7 @@
                 padding:9px 11px;
                 border:1px solid var(--border-color,#dfe3e8);
                 border-radius:10px;
-                background:var(--card-bg,#fff);
+                background:var(--alm-card,#ffffff);
                 color:var(--text-muted,#607080);
                 font-size:12px;
             }
@@ -144,7 +135,7 @@
                 .dco-fast-table .dco-select-col,
                 .dco-fast-table .dco-col-no {
                     position:sticky;
-                    background:var(--card-bg,#fff) !important;
+                    background:var(--alm-card,#ffffff) !important;
                 }
                 .dco-fast-table .dco-select-col { right:0; z-index:7; }
                 .dco-fast-table .dco-col-no { right:32px; z-index:6; box-shadow:-5px 0 9px rgba(15,23,42,.055); }
@@ -175,10 +166,8 @@
 
     function noteButtonTitle(value) {
         const length = String(value || "").length;
-        if (!length) return isArabic() ? "فتح محرر ملاحظة كبيرة" : "Open large note editor";
-        return isArabic()
-            ? `فتح الملاحظة كاملة — ${length} حرف`
-            : `Open full note — ${length} characters`;
+        if (!length) return __("Open large note editor");
+        return __("Open full note — {0} characters", [length]);
     }
 
     function refreshNoteEditor(editor) {
@@ -222,23 +211,23 @@
         if (!row) return;
 
         const pieceNo = row.piece_no || row.idx || "—";
-        const context = `${row.width_cm || "—"} × ${row.length_cm || "—"} سم · ${isArabic() ? "العدد" : "Qty"}: ${row.qty || 1}`;
+        const context = `${row.width_cm || "—"} × ${row.length_cm || "—"} ${__("cm")} · ${__("Qty")}: ${row.qty || 1}`;
         const dialog = new frappe.ui.Dialog({
-            title: isArabic() ? `ملاحظات الدرفة رقم ${pieceNo}` : `Piece ${pieceNo} notes`,
+            title: __("Piece {0} notes", [pieceNo]),
             size: "large",
             fields: [
                 {
                     fieldname: "context",
                     fieldtype: "HTML",
-                    options: `<div class="dco-note-context"><b>${isArabic() ? "الدرفة" : "Piece"} #${escapeHtml(pieceNo)}</b><span>${escapeHtml(context)}</span><span>${isArabic() ? "يمكن كتابة ملاحظة طويلة متعددة الأسطر." : "Long multi-line notes are supported."}</span></div>`,
+                    options: `<div class="dco-note-context"><b>${__("Door piece")} #${escapeHtml(pieceNo)}</b><span>${escapeHtml(context)}</span><span>${__("Long multi-line notes are supported.")}</span></div>`,
                 },
                 {
                     fieldname: "notes",
                     fieldtype: "Small Text",
-                    label: isArabic() ? "الملاحظات الكاملة" : "Full notes",
+                    label: __("Full notes"),
                 },
             ],
-            primary_action_label: isArabic() ? "حفظ الملاحظة" : "Save note",
+            primary_action_label: __("Save note"),
             primary_action(values) {
                 const value = String(values.notes || "").trim();
                 row.notes = value;
@@ -248,7 +237,7 @@
                 Promise.resolve(frm.script_manager.trigger("notes", row.doctype, row.name)).catch(error => console.error(error));
                 dialog.hide();
                 frappe.show_alert({
-                    message: isArabic() ? "تم تحديث ملاحظة الدرفة." : "Piece note updated.",
+                    message: __("Piece note updated."),
                     indicator: "green",
                 });
             },

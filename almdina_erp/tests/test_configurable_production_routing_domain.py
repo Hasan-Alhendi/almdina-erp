@@ -166,7 +166,7 @@ class TestConfigurableProductionRoutingDomain(unittest.TestCase):
         self.assertNotIn('frappe.db.get_value("Production Stage"', order_ux)
         self.assertNotIn("Production Manager", routing_ux)
         self.assertIn("search_operational_roles", routing_ux)
-        self.assertIn("معاينة سير الإنتاج", routing_ux)
+        self.assertIn('translate("Preview production route")', routing_ux)
         self.assertIn("Capability.VIEW_PRODUCTION_ROUTINGS", master_data)
         self.assertIn("PROTECTED_SYSTEM_ROLES", master_data)
         self.assertNotIn("STAGE_ROLE_BY_TYPE", repository)

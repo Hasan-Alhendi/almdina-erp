@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     snapshot_geometry_index,
     validate_snapshot_material_layout,
 )
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
 from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     dimensions_match_exact,
     special_bbox_allowed_range_cm,
@@ -48,6 +49,84 @@ def _rects_overlap(a: dict[str, float], b: dict[str, float], tol: float = 1e-7) 
         or a["y"] + a["h"] <= b["y"] + tol
         or b["y"] + b["h"] <= a["y"] + tol
     )
+
+
+def _snapshot_pieces_by_sheet_id(
+    snapshot: dict[str, Any],
+) -> dict[tuple[int, int], dict[str, Any]]:
+    indexed: dict[tuple[int, int], dict[str, Any]] = {}
+    for sheet in snapshot.get("sheets") or []:
+        if not isinstance(sheet, dict):
+            continue
+        sheet_no = cint(sheet.get("sheet_no"))
+        for piece in sheet.get("pieces") or []:
+            if not isinstance(piece, dict):
+                continue
+            piece_id = cint(piece.get("id"))
+            if piece_id:
+                indexed[(sheet_no, piece_id)] = piece
+    return indexed
+
+
+def _placed_piece_layout_row(placed: Any, stored: dict[str, Any]) -> dict[str, Any]:
+    """Centimetre layout row merging child-table placement with snapshot contracts."""
+
+    row = {
+        "id": cint(placed.piece_id),
+        "label": placed.piece_label or "",
+        "x": flt(placed.x_mm) / 10.0,
+        "y": flt(placed.y_mm) / 10.0,
+        "w": flt(placed.width_mm) / 10.0,
+        "h": flt(placed.height_mm) / 10.0,
+        "piece_type": getattr(placed, "piece_type", None)
+        or stored.get("piece_type")
+        or "Regular",
+        "rotated": bool(cint(getattr(placed, "rotated", 0))),
+        "clipped_corner_position": (
+            getattr(placed, "clipped_corner_position", None)
+            or stored.get("clipped_corner_position")
+            or ""
+        ),
+        "clipped_corner_width_cm": flt(
+            getattr(placed, "clipped_corner_width_cm", None)
+            if getattr(placed, "clipped_corner_width_cm", None) not in (None, "")
+            else stored.get("clipped_corner_width_cm")
+        ),
+        "clipped_corner_length_cm": flt(
+            getattr(placed, "clipped_corner_length_cm", None)
+            if getattr(placed, "clipped_corner_length_cm", None) not in (None, "")
+            else stored.get("clipped_corner_length_cm")
+        ),
+        "special_shape_geometry_json": (
+            getattr(placed, "special_shape_geometry_json", None)
+            or stored.get("special_shape_geometry_json")
+            or ""
+        ),
+        "original_w": flt(
+            getattr(placed, "original_width_cm", None)
+            or stored.get("original_w")
+            or stored.get("width_cm")
+        ),
+        "original_h": flt(
+            getattr(placed, "original_length_cm", None)
+            or stored.get("original_h")
+            or stored.get("length_cm")
+        ),
+        "width_cm": flt(
+            getattr(placed, "original_width_cm", None)
+            or stored.get("original_w")
+            or stored.get("width_cm")
+        ),
+        "length_cm": flt(
+            getattr(placed, "original_length_cm", None)
+            or stored.get("original_h")
+            or stored.get("length_cm")
+        ),
+    }
+    for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
+        if stored.get(key) not in (None, "", []):
+            row[key] = stored[key]
+    return row
 
 
 def _expected_snapshot_pieces(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -185,25 +264,69 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
             issues.append(issue(PIECE_OUTSIDE_SHEET, CATEGORY_LAYOUT, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"sheet_no": sheet_no}))
 
     if not topology_aware:
+        # System plans often lack snapshot geometry.outer/holes, so topology-aware
+        # validation returns False. Reuse the shared Glass-nest layout rules with
+        # snapshot piece contracts instead of treating Glass as a solid rectangle.
+        kerf_cm = max(0.0, flt(plan.kerf_mm) / 10.0)
+        stored_by_sheet_id = _snapshot_pieces_by_sheet_id(snapshot)
         for sheet_no, pieces in pieces_by_sheet.items():
+            sheet_rows = [
+                _placed_piece_layout_row(
+                    piece,
+                    stored_by_sheet_id.get((sheet_no, cint(piece.piece_id))) or {},
+                )
+                for piece in pieces
+            ]
             for index, first in enumerate(pieces):
+                first_row = sheet_rows[index]
                 first_rect = {
                     "x": flt(first.x_mm),
                     "y": flt(first.y_mm),
                     "w": flt(first.width_mm),
                     "h": flt(first.height_mm),
                 }
-                for second in pieces[index + 1 :]:
+                for offset, second in enumerate(pieces[index + 1 :], start=index + 1):
+                    second_row = sheet_rows[offset]
                     second_rect = {
                         "x": flt(second.x_mm),
                         "y": flt(second.y_mm),
                         "w": flt(second.width_mm),
                         "h": flt(second.height_mm),
                     }
-                    if _rects_overlap(first_rect, second_rect):
-                        first_no, second_no = int(first.source_piece_no), int(second.source_piece_no)
-                        target = pair_target(first_no, second_no, sheet_no=sheet_no) if first_no != second_no else DxfIssueTarget(kind="order")
-                        issues.append(issue(MATERIAL_OVERLAP, CATEGORY_LAYOUT, target=target))
+                    fault = layout_pair_fault(
+                        first_row,
+                        second_row,
+                        kerf_cm=kerf_cm,
+                        sheet_pieces=sheet_rows,
+                        # layout_pair_fault expects centimetres; convert mm rects.
+                        first_rect={
+                            "x": first_rect["x"] / 10.0,
+                            "y": first_rect["y"] / 10.0,
+                            "w": first_rect["w"] / 10.0,
+                            "h": first_rect["h"] / 10.0,
+                        },
+                        second_rect={
+                            "x": second_rect["x"] / 10.0,
+                            "y": second_rect["y"] / 10.0,
+                            "w": second_rect["w"] / 10.0,
+                            "h": second_rect["h"] / 10.0,
+                        },
+                    )
+                    if fault is None:
+                        continue
+                    if fault == "kerf":
+                        # Kerf proximity for non-nested pairs is enforced later by
+                        # export kerf validation; this gate keeps the historical
+                        # MATERIAL_OVERLAP meaning for true collisions only.
+                        if not _rects_overlap(first_rect, second_rect):
+                            continue
+                    first_no, second_no = int(first.source_piece_no), int(second.source_piece_no)
+                    target = (
+                        pair_target(first_no, second_no, sheet_no=sheet_no)
+                        if first_no != second_no
+                        else DxfIssueTarget(kind="order")
+                    )
+                    issues.append(issue(MATERIAL_OVERLAP, CATEGORY_LAYOUT, target=target))
 
     for source in plan.sources or []:
         issues.extend(_validate_source_identity(source, plan, order))
@@ -299,9 +422,25 @@ def validate_cutting_plan_document(plan: Any) -> list[str]:
 
 
 def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
+        resolved_sheet_trim_cm,
+    )
+
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    persisted_sheets = {
+        int(sheet.get("sheet_no") or 0): sheet
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict)
+    }
     geometry_by_identity, has_geometry = snapshot_geometry_index(snapshot)
     consumed_geometry: set[tuple[int, int]] = set()
+    stored_pieces = {
+        (int(sheet.get("sheet_no") or 0), int(piece.get("id") or 0)): piece
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict)
+        for piece in (sheet.get("pieces") or [])
+        if isinstance(piece, dict)
+    }
     sheets: list[dict[str, Any]] = []
     pieces_by_sheet: dict[int, list[Any]] = {}
     for piece in plan.placed_pieces or []:
@@ -331,6 +470,13 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "clipped_corner_position": piece.clipped_corner_position or "",
                 "clipped_corner_width_cm": flt(piece.clipped_corner_width_cm),
                 "clipped_corner_length_cm": flt(piece.clipped_corner_length_cm),
+                "extra_liner": cint(getattr(piece, "extra_liner", 0)),
+                "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
+                "liner_offset_cm": flt(getattr(piece, "liner_offset_cm", 0)),
+                "liner_width_cm": flt(getattr(piece, "liner_width_cm", 0)),
+                "liner_start_cm": flt(getattr(piece, "liner_start_cm", 0)),
+                "liner_length_cm": flt(getattr(piece, "liner_length_cm", 0)),
+                "liner_specs_json": getattr(piece, "liner_specs_json", "") or "",
                 "special_shape_geometry_json": (
                     getattr(piece, "special_shape_geometry_json", "") or ""
                 ),
@@ -340,6 +486,7 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 "edge_width_top": cint(piece.edge_width_top),
                 "edge_width_bottom": cint(piece.edge_width_bottom),
                 "edge_break": cint(getattr(piece, "edge_break", 0)),
+                "edge_break_only": cint(getattr(piece, "edge_break_only", 0)),
                 "edge_type": piece.edge_type or "",
                 "notes": piece.notes or "",
                 "area_m2": flt(piece.original_width_cm) * flt(piece.original_length_cm) / 10000,
@@ -353,24 +500,48 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                     )
                 public_piece["geometry"] = geometry
                 consumed_geometry.add(identity)
+            stored = stored_pieces.get((sheet_no, piece_id)) or {}
+            persisted_holes = (
+                (public_piece.get("geometry") or {}).get("holes")
+                if isinstance(public_piece.get("geometry"), dict)
+                else None
+            )
+            if not persisted_holes:
+                for key in ("glass_margin_mm", "glass_hole_local_mm"):
+                    if stored.get(key) not in (None, "", []):
+                        public_piece[key] = stored[key]
+            host_id = stored.get("glass_host_piece_id")
+            if host_id not in (None, ""):
+                public_piece["glass_host_piece_id"] = host_id
             sheet_pieces.append(public_piece)
-        sheets.append(
-            {
-                "sheet_no": sheet_no,
-                "source_type": source.source_type,
-                "remnant": source.remnant,
-                "board_item": source.board_item,
-                "material": source.material or "",
-                "color": source.color or "",
-                "thickness_mm": flt(source.thickness_mm),
-                "full_width_cm": flt(source.full_width_mm) / 10,
-                "full_length_cm": flt(source.full_length_mm) / 10,
-                "usable_width_cm": flt(source.usable_width_mm) / 10,
-                "usable_length_cm": flt(source.usable_length_mm) / 10,
-                "source_area_m2": flt(source.source_area_m2),
-                "pieces": sheet_pieces,
-            }
-        )
+        persisted = persisted_sheets.get(sheet_no) or {}
+        rebuilt_sheet = {
+            "sheet_no": sheet_no,
+            "source_type": source.source_type,
+            "remnant": source.remnant,
+            "board_item": source.board_item,
+            "material": source.material or "",
+            "color": source.color or "",
+            "thickness_mm": flt(source.thickness_mm),
+            "full_width_cm": flt(source.full_width_mm) / 10,
+            "full_length_cm": flt(source.full_length_mm) / 10,
+            "usable_width_cm": flt(source.usable_width_mm) / 10,
+            "usable_length_cm": flt(source.usable_length_mm) / 10,
+            "source_area_m2": flt(source.source_area_m2),
+            "pieces": sheet_pieces,
+        }
+        for axis, key in (
+            ("x", "applied_trim_width_cm"),
+            ("y", "applied_trim_length_cm"),
+        ):
+            if key in persisted and persisted.get(key) is not None:
+                rebuilt_sheet[key] = flt(persisted.get(key))
+            rebuilt_sheet[key] = resolved_sheet_trim_cm(
+                rebuilt_sheet,
+                snapshot,
+                axis=axis,
+            )
+        sheets.append(rebuilt_sheet)
 
     if has_geometry and consumed_geometry != set(geometry_by_identity):
         missing = sorted(set(geometry_by_identity) - consumed_geometry)

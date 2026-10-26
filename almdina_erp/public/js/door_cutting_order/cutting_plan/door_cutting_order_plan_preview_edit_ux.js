@@ -56,17 +56,28 @@
         );
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     function saveBlockedReason(frm) {
         const owner = previewOwner();
         const state = previewSnapshot(frm);
-        if (state.status === "previewing") return "انتظر حتى تكتمل معاينة الخطة.";
-        if (state.status === "saving") return "جاري حفظ الخطة المختارة.";
-        if (state.status === "stale") return "تم تعديل الإعدادات. أعد الحساب لمعاينة الخطة الجديدة قبل الحفظ.";
-        if (state.status === "error") return "تعذرت المعاينة السابقة. أعد الحساب ثم احفظ.";
+        if (state.status === "previewing") return "Wait until the plan preview finishes.";
+        if (state.status === "saving") return "Saving the selected plan.";
+        if (state.status === "stale") return "The settings were changed. Recalculate to preview the new plan before saving.";
+        if (state.status === "error") return "The previous preview failed. Recalculate, then save.";
         if (state.status === "ready" && owner && !owner.isCommittable(frm)) {
-            return "المعاينة الحالية لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى ثم أعد الحساب.";
+            return "The current preview did not pass the engineering check. Try other settings, then recalculate.";
         }
-        return "أعد الحساب بهذه الإعدادات أولًا، ثم احفظ الخطة التي تظهر أمامك.";
+        return "Recalculate with these settings first, then save the plan shown in front of you.";
     }
 
     function syncSaveButton(frm) {
@@ -77,8 +88,8 @@
         const allowed = canSaveEditing(frm);
         button.disabled = !allowed;
         button.setAttribute("aria-disabled", allowed ? "false" : "true");
-        button.title = __(allowed
-            ? "حفظ نفس خطة المعاينة المعروضة الآن"
+        button.title = translate(allowed
+            ? "Save the preview plan shown now"
             : saveBlockedReason(frm));
     }
 
@@ -216,20 +227,22 @@
         return false;
     }
 
-    function showCommittedResult(workspacesRefreshed) {
+    function showCommittedResult(workspacesRefreshed, reconciled = false) {
         frappe.show_alert({
-            message: __(workspacesRefreshed
-                ? "تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها."
-                : "تم حفظ خطة المعاينة بنجاح، لكن تعذر تحديث العرض الآن. حدّث الصفحة لرؤية آخر خطة وتكلفة."),
-            indicator: workspacesRefreshed ? "green" : "orange",
-        }, workspacesRefreshed ? 5 : 7);
+            message: translate(reconciled
+                ? "The plan was verified on the server after its save response was lost."
+                : workspacesRefreshed
+                ? "The preview plan was saved and its related cost was updated."
+                : "The preview plan was saved, but the view could not be refreshed. Reload the page to see the latest plan and cost."),
+            indicator: reconciled || !workspacesRefreshed ? "orange" : "green",
+        }, reconciled || !workspacesRefreshed ? 7 : 5);
     }
 
     async function saveEditingCommand(frm, sessionContext = null) {
         if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
-            frappe.msgprint(__(saveBlockedReason(frm)));
+            frappe.msgprint(translate(saveBlockedReason(frm)));
             schedule(frm);
             return false;
         }
@@ -267,7 +280,7 @@
         if (view && typeof view.restorePersistedPresentation === "function") {
             view.restorePersistedPresentation(frm);
         }
-        showCommittedResult(workspacesRefreshed);
+        showCommittedResult(workspacesRefreshed, committed.reconciled_commit === true);
         schedule(frm);
         return true;
     }

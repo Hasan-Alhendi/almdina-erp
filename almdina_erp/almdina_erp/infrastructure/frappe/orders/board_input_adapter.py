@@ -5,8 +5,6 @@ from typing import Any
 import frappe
 from frappe import _
 
-from almdina_erp.almdina_erp.domain.orders.numeric_input import default_if_missing
-
 from .document_access import FrappeOrderDocumentAccess
 
 
@@ -26,18 +24,7 @@ class FrappeOrderBoardInputAdapter:
         if not description:
             frappe.throw(_("Board description is required."))
 
-        length_cm = self.access.finite(
-            default_if_missing(getattr(self.document, "board_length_cm", None), 244),
-            _("Board Length (CM)"),
-        )
-        width_cm = self.access.finite(
-            default_if_missing(getattr(self.document, "board_width_cm", None), 122),
-            _("Board Width (CM)"),
-        )
-        if length_cm <= 0:
-            frappe.throw(_("Board Length (CM) must be greater than zero."))
-        if width_cm <= 0:
-            frappe.throw(_("Board Width (CM) must be greater than zero."))
+        length_cm, width_cm = self.access.board_dimensions()
 
         self.document.board_description = description
         self.document.board_length_cm = length_cm

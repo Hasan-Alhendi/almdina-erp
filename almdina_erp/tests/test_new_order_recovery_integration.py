@@ -15,6 +15,9 @@ class _NoopOrderSaveGateway:
     def enforce_immutability(self) -> None:
         pass
 
+    def enforce_price_approval_integrity(self) -> None:
+        pass
+
     def set_piece_numbers(self) -> None:
         pass
 
@@ -28,6 +31,9 @@ class _NoopOrderSaveGateway:
         pass
 
     def calculate_cut_dimensions(self) -> None:
+        pass
+
+    def validate_machining_rows(self) -> None:
         pass
 
     def calculate_piece_costs(self) -> None:

@@ -11,6 +11,7 @@ from frappe.utils import cint, flt
 from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_policy import piece_fits_board
 
 
 _OLD_PIECE_FIELDS = [
@@ -23,11 +24,13 @@ _OLD_PIECE_FIELDS = [
     "clipped_corner_position",
     "clipped_corner_width_cm",
     "clipped_corner_length_cm",
+    "glass_margin_mm",
     "edge_long_right",
     "edge_long_left",
     "edge_width_top",
     "edge_width_bottom",
     "edge_break",
+    "edge_break_only",
     "edge_type",
     "special_shape_drawing_json",
     "special_shape_geometry_json",
@@ -40,14 +43,31 @@ _OLD_PIECE_FIELDS = [
     "special_shape_price_approved_by",
     "special_shape_price_approved_on",
     "extra_double",
+    "extra_double_reference_sides",
     "extra_double_unit_price_usd",
     "extra_full_door_double",
     "extra_full_door_double_unit_price_usd",
     "extra_liner",
+    "liner_reference_side",
+    "liner_offset_cm",
+    "liner_width_cm",
+    "liner_start_cm",
+    "liner_length_cm",
+    "liner_specs_json",
     "extra_liner_unit_price_usd",
     "extra_back_groove",
+    "back_groove_reference_side",
+    "back_groove_offset_cm",
+    "back_groove_width_cm",
+    "back_groove_start_cm",
+    "back_groove_length_cm",
     "extra_back_groove_unit_price_usd",
     "extra_recessed_handle_cutout",
+    "recessed_handle_reference_side",
+    "recessed_handle_offset_cm",
+    "recessed_handle_width_cm",
+    "recessed_handle_start_cm",
+    "recessed_handle_length_cm",
     "extra_recessed_handle_cutout_unit_price_usd",
 ]
 
@@ -132,6 +152,21 @@ class FrappeOrderDocumentAccess:
     def normalized_number(value: Any) -> float:
         return round(flt(value), 6)
 
+    def board_dimensions(self) -> tuple[float, float]:
+        length_cm = self.finite(
+            getattr(self.document, "board_length_cm", None),
+            _("Board Length (CM)"),
+        )
+        width_cm = self.finite(
+            getattr(self.document, "board_width_cm", None),
+            _("Board Width (CM)"),
+        )
+        if length_cm <= 0:
+            frappe.throw(_("Board Length (CM) must be greater than zero."))
+        if width_cm <= 0:
+            frappe.throw(_("Board Width (CM) must be greater than zero."))
+        return length_cm, width_cm
+
     def enforce_immutability(self) -> None:
         if self.document.is_new() or self.document.flags.get("allow_approved_edit"):
             return
@@ -143,6 +178,50 @@ class FrappeOrderDocumentAccess:
         )
 
         enforce_order_immutability_on_save(self.document, old)
+
+    def enforce_price_approval_integrity(self) -> None:
+        """Keep price-approval fields command-owned on ordinary order saves.
+
+        A stale form may still carry Unapproved after a successful approve (the
+        Cost workspace Store updates without rewriting ``frm.doc``). Restore the
+        trusted database values instead of failing the commercial save. Client
+        values never create, clear, or restore approval on their own.
+        """
+
+        from almdina_erp.almdina_erp.domain.orders.price_approval import (
+            reconcile_order_price_approval_fields,
+        )
+
+        allow_mutation = bool(self.document.flags.get("price_approval_action"))
+        is_new = bool(self.document.is_new())
+        previous_status = None
+        previous_link = None
+        if not is_new:
+            columns = {
+                str(column or "").strip()
+                for column in (frappe.db.get_table_columns("Door Cutting Order") or [])
+            }
+            if "price_approval_status" not in columns:
+                return
+            previous = frappe.db.get_value(
+                "Door Cutting Order",
+                self.document.name,
+                ["price_approval_status", "current_price_approval"],
+                as_dict=True,
+            ) or {}
+            previous_status = previous.get("price_approval_status")
+            previous_link = previous.get("current_price_approval")
+
+        trusted_status, trusted_link = reconcile_order_price_approval_fields(
+            previous_status=previous_status,
+            previous_link=previous_link,
+            incoming_status=getattr(self.document, "price_approval_status", None),
+            incoming_link=getattr(self.document, "current_price_approval", None),
+            allow_mutation=allow_mutation,
+            is_new=is_new,
+        )
+        self.document.price_approval_status = trusted_status
+        self.document.current_price_approval = trusted_link
 
     def set_piece_numbers(self) -> None:
         for index, row in enumerate(self.document.pieces or [], start=1):
@@ -186,6 +265,8 @@ class FrappeOrderDocumentAccess:
         if not self.document.pieces:
             frappe.throw(_("At least one piece row is required."))
 
+        board_length_cm, board_width_cm = self.board_dimensions()
+
         for index, row in enumerate(self.document.pieces or [], start=1):
             width = self.finite(
                 row.width_cm,
@@ -207,6 +288,25 @@ class FrappeOrderDocumentAccess:
                 frappe.throw(
                     _("Row {0}: Length must be greater than zero.").format(index)
                 )
+            if not piece_fits_board(
+                piece_width_cm=width,
+                piece_length_cm=length,
+                board_width_cm=board_width_cm,
+                board_length_cm=board_length_cm,
+                allow_rotation=bool(cint(getattr(row, "allow_rotation", 0))),
+            ):
+                frappe.throw(
+                    _(
+                        "Row {0}: Piece dimensions {1} × {2} cm do not fit "
+                        "the board {3} × {4} cm, even after allowed rotation."
+                    ).format(
+                        index,
+                        width,
+                        length,
+                        board_width_cm,
+                        board_length_cm,
+                    )
+                )
             if qty <= 0 or qty != int(qty):
                 frappe.throw(
                     _("Row {0}: Quantity must be a positive integer.").format(index)
@@ -219,24 +319,7 @@ class FrappeOrderDocumentAccess:
         if not description:
             frappe.throw(_("Board description is required."))
 
-        length_cm = self.finite(
-            default_if_missing(
-                getattr(self.document, "board_length_cm", None),
-                244,
-            ),
-            _("Board Length (CM)"),
-        )
-        width_cm = self.finite(
-            default_if_missing(
-                getattr(self.document, "board_width_cm", None),
-                122,
-            ),
-            _("Board Width (CM)"),
-        )
-        if length_cm <= 0:
-            frappe.throw(_("Board Length (CM) must be greater than zero."))
-        if width_cm <= 0:
-            frappe.throw(_("Board Width (CM) must be greater than zero."))
+        length_cm, width_cm = self.board_dimensions()
 
         self.document.board_description = description
         self.document.board_length_cm = length_cm

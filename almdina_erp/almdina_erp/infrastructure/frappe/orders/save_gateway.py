@@ -28,6 +28,7 @@ class FrappeDoorCuttingOrderSaveGateway:
         self.piece_policy = FrappeOrderPiecePolicyAdapter(
             document,
             self.access,
+            self.edge_profiles,
         )
         self.cut_dimensions = FrappeOrderCutDimensionAdapter(
             document,
@@ -43,6 +44,9 @@ class FrappeDoorCuttingOrderSaveGateway:
     def enforce_immutability(self) -> None:
         self.access.enforce_immutability()
 
+    def enforce_price_approval_integrity(self) -> None:
+        self.access.enforce_price_approval_integrity()
+
     def set_piece_numbers(self) -> None:
         self.access.set_piece_numbers()
 
@@ -57,6 +61,9 @@ class FrappeDoorCuttingOrderSaveGateway:
 
     def calculate_cut_dimensions(self) -> None:
         self.cut_dimensions.calculate_rows()
+
+    def validate_machining_rows(self) -> None:
+        self.piece_policy.validate_machining_rows()
 
     def calculate_piece_costs(self) -> None:
         self.costing.calculate_piece_rows()

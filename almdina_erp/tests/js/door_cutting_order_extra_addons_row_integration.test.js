@@ -94,25 +94,22 @@ vm.runInContext(
 const performance = fakeWindow.AlmdinaTablePerformanceUX;
 assert.ok(performance, "The in-place type mutation owner must be published");
 
-assert.equal(performance.setPieceType(frm, tr, "Extra"), row);
-assert.equal(row.piece_type, "Extra");
-assert.equal(classes.has("dco-extra-row"), true);
-
 row.extra_liner = 1;
 row.extra_double = 1;
-row.extra_full_door_double = 1;
-assert.equal(performance.setPieceType(frm, tr, "Regular"), row);
-assert.equal(row.piece_type, "Regular");
-assert.equal(row.extra_liner, 0);
-assert.equal(row.extra_double, 0);
-assert.equal(row.extra_full_door_double, 0);
-assert.equal(classes.has("dco-extra-row"), false);
-assert.ok(frm.dirtyCalls >= 2);
+assert.equal(performance.setPieceType(frm, tr, "Special"), row);
+assert.equal(row.piece_type, "Special");
+assert.equal(row.extra_liner, 1);
+assert.equal(row.extra_double, 1);
+assert.ok(frm.dirtyCalls >= 1);
+
+assert.equal(performance.setPieceType(frm, tr, "Clipped Corner"), row);
+assert.equal(row.piece_type, "Clipped Corner");
+assert.equal(row.extra_liner, 1);
+assert.equal(row.extra_double, 1);
 
 setTimeout(() => {
     assert.ok(triggered.includes("piece_type"));
-    assert.ok(triggered.includes("extra_liner"));
-    assert.ok(triggered.includes("extra_double"));
-    assert.ok(triggered.includes("extra_full_door_double"));
-    console.log("Extra add-ons in-place row integration passed");
+    assert.equal(triggered.includes("extra_liner"), false);
+    assert.equal(triggered.includes("extra_double"), false);
+    console.log("Independent add-ons survive in-place piece-type changes");
 }, 5);

@@ -79,6 +79,29 @@
         return typeof wrapper.is === "function" ? wrapper.is(":visible") : null;
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function sidebarLabel(expanded) {
+        return expanded
+            ? translate("Hide the side panel")
+            : translate("Show the side panel");
+    }
+
     class DcoFormSidebarController {
         constructor(frm) {
             this.frm = frm;
@@ -180,7 +203,7 @@
                     "panel-right",
                     () => this.toggleNativeSidebar(),
                     "almadina-dco-form-sidebar-toggle",
-                    "إظهار اللوحة الجانبية"
+                    sidebarLabel(false)
                 );
                 button = node(created);
             }
@@ -204,7 +227,7 @@
             toggle.classList.add("almadina-dco-form-sidebar-toggle");
             toggle.dataset.almdinaDcoSidebarToggle = "1";
             toggle.setAttribute("aria-expanded", String(expanded));
-            const label = expanded ? "إخفاء اللوحة الجانبية" : "إظهار اللوحة الجانبية";
+            const label = sidebarLabel(expanded);
             toggle.setAttribute("aria-label", label);
             const previousLabel = toggle.getAttribute("data-almdina-dco-sidebar-tooltip");
             toggle.setAttribute("title", label);

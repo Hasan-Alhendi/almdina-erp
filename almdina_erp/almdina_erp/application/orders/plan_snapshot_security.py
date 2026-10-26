@@ -24,6 +24,8 @@ _FINANCIAL_PLAN_KEYS = frozenset(
         "approved_cost",
         "costing_currency",
         "customer_quote_status",
+        "current_price_approval",
+        "price_approval_status",
         "special_shape_price_status",
         "special_shape_price_note",
         "special_shape_price_approved_by",

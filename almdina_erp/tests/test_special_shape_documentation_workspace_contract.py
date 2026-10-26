@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ast
+import csv
+import re
 import unittest
+from io import StringIO
 from pathlib import Path
 
 
@@ -13,6 +16,21 @@ SERVICE = APP / "services" / "special_shape_workspace_service.py"
 FACADE = PUBLIC / "js" / "door_cutting_order" / "drawing" / "special_shape_facade.js"
 DOCUMENTATION = PUBLIC / "js" / "special_shape_documentation"
 CSS = PUBLIC / "css" / "special_shape_documentation.css"
+
+
+def _direction_values(css: str, selector: str) -> list[str]:
+    blocks = re.findall(r"(?:^|}|,)\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    if not blocks:
+        raise AssertionError(f"missing rule {selector}")
+    return [
+        match.group(1).strip()
+        for block in blocks
+        for match in re.finditer(r"(?<![\w-])direction\s*:\s*([^;]+)", block)
+    ]
+
+
+def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
+    return any(len(row) >= 2 and row[0] == source and row[1] == arabic for row in csv.reader(StringIO(catalog)))
 
 
 def _function_calls(source: str, function_name: str) -> set[str]:
@@ -41,6 +59,39 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("__documentationOnly: true", facade)
         self.assertIn("__manufacturingGeometrySeparated: true", facade)
         self.assertNotIn("frappe.ui.Dialog", facade)
+
+    def test_inspection_link_forces_read_only_even_when_stage_grants_edit(self) -> None:
+        facade = FACADE.read_text(encoding="utf-8")
+        page = PAGE.read_text(encoding="utf-8")
+        controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
+        service = SERVICE.read_text(encoding="utf-8")
+        corner = (PUBLIC / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_clipped_corner_ux.js").read_text(encoding="utf-8")
+        operator = (PUBLIC / "js" / "door_cutting_order" / "order_entry" / "door_cutting_order_operator_ux.js").read_text(encoding="utf-8")
+        self.assertIn('if (readOnly) parts.push("view")', facade)
+        self.assertIn('readOnly: value[3] === "view"', page)
+        self.assertIn("context = route.readOnly", controller)
+        self.assertIn("can_edit: false", controller)
+        self.assertIn("Shell.mount(main, context)", controller)
+        self.assertIn('== "Delivered"', service)
+        self.assertIn('frappe.PermissionError', service)
+        self.assertIn("if (!readOnly) prepareRow(liveRow)", corner)
+        self.assertIn("else window.AlmdinaSpecialShapeEditor.view(currentFrm, row)", operator)
+
+
+    def test_delivered_documentation_denial_keeps_its_arabic_translation(self) -> None:
+        """Both read-only projection and write guard must deny delivered orders."""
+        service = SERVICE.read_text(encoding="utf-8")
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        message = "Special door documentation cannot be edited after the order is delivered."
+        self.assertIn(
+            'return {"can_edit": False, "reason": _("' + message + '"), "stage": None}',
+            service,
+        )
+        self.assertIn(
+            'frappe.throw(_("' + message + '"), frappe.PermissionError)',
+            service,
+        )
+        self.assertTrue(_catalog_has(catalog, message, "لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب."))
 
     def test_back_closes_opener_tab_then_falls_back_to_order_route(self) -> None:
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
@@ -105,17 +156,28 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
         controller = (DOCUMENTATION / "presentation" / "workspace_controller.js").read_text(encoding="utf-8")
         renderer = (DOCUMENTATION / "presentation" / "canvas_renderer.js").read_text(encoding="utf-8")
-        for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "قلم ذكي", "ملاحظات المصمم", "حفظ التوثيق"):
+        catalog = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        for label, arabic in (
+            ("Upload an image", "رفع صورة"),
+            ("Scan", "مسح بالسكانر"),
+            ("Capture with the camera", "التقاط بالكاميرا"),
+            ("Ready-made shape", "شكل جاهز"),
+            ("Smart pen", "قلم ذكي"),
+            ("Designer notes", "ملاحظات المصمم"),
+            ("Save documentation", "حفظ التوثيق"),
+            ("Download the original image for the designer", "تنزيل الصورة الأصلية للمصمم"),
+            ("This documents the customer order and is not a manufacturing file", "هذا توثيق لطلب العميل وليس ملف تصنيع"),
+            ("Download the scanner program — one-time setup", "تنزيل برنامج السكانر — تثبيت مرة واحدة"),
+        ):
             self.assertIn(label, shell)
+            self.assertTrue(_catalog_has(catalog, label, arabic))
         self.assertIn('class="ald-doc-workspace almdina-ui"', shell)
         self.assertIn("AlmdinaUi.button", shell)
         self.assertNotIn('class="ald-doc-primary"', shell)
-        self.assertIn("تنزيل الصورة الأصلية للمصمم", shell)
-        self.assertIn("هذا توثيق لطلب العميل وليس ملف تصنيع", shell)
         self.assertIn("pointerdown", controller)
         self.assertIn("Scanner.health()", controller)
         self.assertIn("Scanner.scan()", controller)
-        self.assertIn("تنزيل برنامج السكانر — تثبيت مرة واحدة", shell)
+        self.assertIn("Download the scanner program — one-time setup", shell)
         self.assertIn("Scanner.INSTALLER_URL", controller)
         self.assertNotIn("PowerShell", controller)
         self.assertIn("getCoalescedEvents", controller)
@@ -125,8 +187,16 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertIn("renderer.zoomAt", controller)
         self.assertIn("Ctrl+Z", shell)
         self.assertIn("Ctrl+Y", shell)
-        for label in ("اقتصاص الصورة", "اقتصاص تلقائي", "إعادة ضبط", "إلغاء", "تطبيق"):
+        for label, arabic in (
+            ("Crop the image", "اقتصاص الصورة"),
+            ("Auto crop", "اقتصاص تلقائي"),
+            ("Reset", "إعادة ضبط"),
+            ("Apply", "تطبيق"),
+        ):
             self.assertIn(label, shell)
+            self.assertTrue(_catalog_has(catalog, label, arabic))
+        self.assertIn('"Cancel"', shell)
+        self.assertTrue(_catalog_has(catalog, "Cancel", "إلغاء"))
         self.assertIn("renderer.cropRegion", controller)
         self.assertIn("renderer.suggestReferenceCrop", controller)
         self.assertIn("renderer.referenceImageSize", controller)
@@ -136,6 +206,23 @@ class TestSpecialShapeDocumentationWorkspaceContract(unittest.TestCase):
         self.assertNotIn("opacity: 0.72", controller)
         self.assertIn("context.globalAlpha = 1", renderer)
         self.assertNotIn("document.reference.opacity", renderer)
+
+    def test_drawing_stage_keeps_geometry_ltr_while_chrome_follows_workspace_dir(self) -> None:
+        css = CSS.read_text(encoding="utf-8")
+        shell = (DOCUMENTATION / "presentation" / "workspace_shell.js").read_text(encoding="utf-8")
+        self.assertIn("--ald-doc-ui-direction:ltr", css)
+        self.assertIn('.ald-doc-workspace[dir="rtl"] { --ald-doc-ui-direction:rtl; }', css)
+        self.assertIn('dir="${uiDirection()}"', shell)
+        for selector in (".ald-doc-layout", ".ald-doc-hint", ".ald-doc-toolbar", ".ald-doc-crop-toolbar"):
+            values = _direction_values(css, selector)
+            self.assertEqual(values, ["var(--ald-doc-ui-direction)"])
+        self.assertEqual(_direction_values(css, ".ald-doc-stage"), ["ltr"])
+        self.assertEqual(_direction_values(css, ".ald-doc-zoom-controls"), ["ltr"])
+        self.assertNotIn("direction:inherit", css)
+        for source in (css, shell):
+            self.assertNotIn("isArabic", source)
+            self.assertNotIn('["ar"', source)
+            self.assertNotIn("['ar'", source)
 
 
 if __name__ == "__main__":

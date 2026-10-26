@@ -51,8 +51,8 @@
             const normalized = String(payload || "");
             if (normalized.length > maxBytes) {
                 showMessage({
-                    title: t("ملف كبير جدًا"),
-                    message: t("حجم ملف الصلاحيات يتجاوز الحد المسموح."),
+                    title: t("File is too large"),
+                    message: t("Permissions file size exceeds the allowed limit."),
                     indicator: "red",
                 });
                 return;
@@ -62,8 +62,8 @@
                 if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("not-object");
             } catch (error) {
                 showMessage({
-                    title: t("ملف JSON غير صالح"),
-                    message: t("تعذر قراءة الملف ككائن JSON صحيح. لم يتم تغيير أي صلاحية."),
+                    title: t("Invalid JSON file"),
+                    message: t("Could not read the file as a valid JSON object. No permissions were changed."),
                     indicator: "red",
                 });
                 return;
@@ -71,9 +71,9 @@
             previewExternal(
                 () => previewImport(getSelectedRole(), normalized, {
                     freeze: true,
-                    freezeMessage: t("جاري التحقق من الصلاحيات..."),
+                    freezeMessage: t("Verifying permissions..."),
                 }),
-                t("تم التحقق من الملف وتحميله للمعاينة فقط. لن يتغير الدور قبل الحفظ.")
+                t("File validated and loaded for preview only. The role will not change before saving.")
             );
         }
 
@@ -82,8 +82,8 @@
             const maxBytes = getMaxBytes();
             if (file.size > maxBytes) {
                 showMessage({
-                    title: t("ملف كبير جدًا"),
-                    message: t("حجم ملف الصلاحيات يتجاوز الحد المسموح."),
+                    title: t("File is too large"),
+                    message: t("Permissions file size exceeds the allowed limit."),
                     indicator: "red",
                 });
                 return;
@@ -96,8 +96,8 @@
             reader.onerror = () => {
                 if (!isCurrentGeneration(generation)) return;
                 showMessage({
-                    title: t("تعذر قراءة الملف"),
-                    message: t("لم يتمكن المتصفح من قراءة ملف الصلاحيات."),
+                    title: t("Could not read the file"),
+                    message: t("The browser could not read the permissions file."),
                     indicator: "red",
                 });
             };
@@ -107,15 +107,15 @@
         function openImportDialog(generation) {
             if (!isActive() || !getSelectedRole() || !isCurrentGeneration(generation)) return null;
             const dialog = ownTransient(new frappe.ui.Dialog({
-                title: t("استيراد JSON"),
+                title: t("Import JSON"),
                 fields: [{
                     fieldname: "permissions_file",
                     fieldtype: "Attach",
-                    label: t("ملف الصلاحيات"),
+                    label: t("Permissions file"),
                     reqd: 1,
-                    description: t("الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة."),
+                    description: t("Import loads permissions for preview only; saving remains a separate step."),
                 }],
-                primary_action_label: t("معاينة"),
+                primary_action_label: t("Preview"),
                 primary_action(values) {
                     if (!isCurrentGeneration(generation)) return;
                     const attachField = dialog.fields_dict.permissions_file;
@@ -128,7 +128,7 @@
                     const fileUrl = values && values.permissions_file;
                     if (!fileUrl) {
                         frappe.show_alert({
-                            message: t("اختر ملف JSON أولاً."),
+                            message: t("Select a JSON file first."),
                             indicator: "orange",
                         });
                         return;
@@ -140,8 +140,8 @@
                     }).catch(() => {
                         if (!isCurrentGeneration(generation)) return;
                         showMessage({
-                            title: t("تعذر قراءة الملف"),
-                            message: t("لم يتمكن المتصفح من قراءة ملف الصلاحيات."),
+                            title: t("Could not read the file"),
+                            message: t("The browser could not read the permissions file."),
                             indicator: "red",
                         });
                     });

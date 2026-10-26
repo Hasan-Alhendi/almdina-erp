@@ -28,6 +28,7 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "edge_break_only",
         "edge_long_right_type_override",
         "edge_long_left_type_override",
         "edge_width_top_type_override",
@@ -35,8 +36,26 @@
         "clipped_corner_position",
         "clipped_corner_width_cm",
         "clipped_corner_length_cm",
+        "glass_margin_mm",
         "special_shape_geometry_json",
         "extra_full_door_double",
+        "extra_double_reference_sides",
+        "liner_reference_side",
+        "liner_offset_cm",
+        "liner_width_cm",
+        "liner_start_cm",
+        "liner_length_cm",
+        "liner_specs_json",
+        "back_groove_reference_side",
+        "back_groove_offset_cm",
+        "back_groove_width_cm",
+        "back_groove_start_cm",
+        "back_groove_length_cm",
+        "recessed_handle_reference_side",
+        "recessed_handle_offset_cm",
+        "recessed_handle_width_cm",
+        "recessed_handle_start_cm",
+        "recessed_handle_length_cm",
     ];
     const PIECE_COST_ONLY_FIELDS = [
         "extra_double",
@@ -49,14 +68,33 @@
         return window.AlmdinaWorkspaceSyncCoordinator || null;
     }
 
+    function documentContext() {
+        return window.AlmdinaDocumentContext || null;
+    }
+
+    function capture(frm) {
+        const context = documentContext();
+        return context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : { identity: `${frm.doctype}::${frm.doc.name}` };
+    }
+
+    function owns(frm, token) {
+        const context = documentContext();
+        return context && typeof context.isSameDocument === "function"
+            ? context.isSameDocument(frm, token)
+            : `${frm.doctype}::${frm.doc.name}` === token.identity;
+    }
+
     function normalizeResources(values) {
         return [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
     }
 
     function pendingImpact(frm) {
         if (!frm) return null;
-        if (!frm[IMPACT_KEY]) {
+        if (!frm[IMPACT_KEY] || !owns(frm, frm[IMPACT_KEY].owner)) {
             frm[IMPACT_KEY] = {
+                owner: capture(frm),
                 resources: [],
                 reasons: [],
                 specialPriceBasisChanged: false,
@@ -142,13 +180,14 @@
 
     async function reconcileAfterSave(frm) {
         const impact = frm && frm[IMPACT_KEY];
-        if (!impact || !(impact.resources || []).length) return false;
+        if (!impact || !owns(frm, impact.owner) || !(impact.resources || []).length) return false;
         frm[IMPACT_KEY] = null;
 
         const job = backgroundRecalc();
         if (job && typeof job.enqueueAfterSave === "function") {
             await job.enqueueAfterSave(frm, impact);
         }
+        if (!owns(frm, impact.owner)) return false;
 
         const coordinator = syncCoordinator();
         if (!coordinator || typeof coordinator.refresh !== "function") return false;
@@ -158,6 +197,7 @@
             activeOnly: true,
             reason: "order_saved",
         });
+        if (!owns(frm, impact.owner)) return false;
         clearSpecialPriceStaleMarkers(frm);
 
         const jobActive = Boolean(job && typeof job.isActive === "function" && job.isActive(frm));

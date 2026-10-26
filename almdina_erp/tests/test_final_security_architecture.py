@@ -19,6 +19,7 @@ PERMISSION_STATE = ROOT / "public" / "js" / "factory_permissions" / "state.js"
 PERMISSION_VIEW_MODEL = ROOT / "public" / "js" / "factory_permissions" / "view_model.js"
 PERMISSION_RENDERER = ROOT / "public" / "js" / "factory_permissions" / "renderer.js"
 PERMISSION_INTERACTIONS = ROOT / "public" / "js" / "factory_permissions" / "interactions.js"
+PERMISSION_DIALOGS = ROOT / "public" / "js" / "factory_permissions" / "dialogs.js"
 PERMISSION_CONTROLLER = ROOT / "public" / "js" / "factory_permissions" / "controller.js"
 PERMISSION_FRONTEND_MODULES = (
     PERMISSION_API,
@@ -26,6 +27,7 @@ PERMISSION_FRONTEND_MODULES = (
     PERMISSION_VIEW_MODEL,
     PERMISSION_RENDERER,
     PERMISSION_INTERACTIONS,
+    PERMISSION_DIALOGS,
     PERMISSION_CONTROLLER,
 )
 CUTTING_PLAN_SERVICE = SERVICES / "cutting_plan_service.py"
@@ -310,7 +312,16 @@ class TestFinalSecurityArchitecture(unittest.TestCase):
         self.assertIn("previewImport", controller)
         self.assertIn("previewExternal", controller)
         self.assertIn("updateRole", controller)
-        self.assertIn("لن يتم الحفظ تلقائيًا", browser_surface)
+        # The UI now stores English message IDs in JS and Arabic in translations/ar.csv.
+        message_id = "Import loads permissions for preview only; saving remains a separate step."
+        self.assertIn(f't("{message_id}")', browser_surface)
+        import csv
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
+        self.assertEqual(
+            translations.get(message_id),
+            "الاستيراد يحمّل الصلاحيات للمعاينة فقط؛ الحفظ يبقى خطوة مستقلة.",
+        )
         policy = TRANSFER_POLICY.read_text(encoding="utf-8")
         self.assertIn("build_permission_bundle", policy)
         self.assertIn("parse_permission_bundle", policy)

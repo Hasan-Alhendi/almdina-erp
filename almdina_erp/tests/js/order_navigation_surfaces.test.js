@@ -305,7 +305,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     listeners["almdina:permissions-updated"]();
     await flushPromises();
     assert.equal(
-        added.some(button => button.label === "إرسال للإنتاج" && !button.group),
+        added.some(button => button.label === "Send to production" && !button.group),
         true,
         "production actions must be rebuilt when the jqXHR-like permission refresh completes"
     );
@@ -315,7 +315,7 @@ async function verifyProductionActionsRecoverAfterPermissions() {
     // document/status key remains unchanged, so readiness must also verify that
     // the expected DOM/custom-button surface still exists.
     added.length = 0;
-    assert.ok(frm.custom_buttons["إرسال للإنتاج"], "the stale Frappe button cache remains");
+    assert.ok(frm.custom_buttons["Send to production"], "the stale Frappe button cache remains");
     assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), false);
     fakeWindow.AlmdinaShopFloorOrderUX.reconcileProductionActions(frm);
     assert.equal(fakeWindow.AlmdinaShopFloorOrderUX.productionActionsReady(frm), true);

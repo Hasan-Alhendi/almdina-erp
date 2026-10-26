@@ -94,41 +94,46 @@ def test_financial_print_ui_uses_server_authorized_payloads_only() -> None:
     assert "dco-cost-hero" not in presenter
     assert "dco-cost-actions-bar" in presenter
     assert '<div class="dco-cost-kpis">' not in presenter
-    assert "تسعير الدرفات الخاصة" in presenter
-    assert "تسعير قشاط درف الزاوية المقصوصة" in presenter
+    assert "Special door pricing" in presenter
     assert "specialPricingHtml(frm)" in presenter
-    assert "cutCornerPricingHtml(frm)" in presenter
-    assert "درفة خاصة رقم" in presenter
-    assert "درفة الزاوية الكسر" in presenter
-    assert "درفة زاوية L" in presenter
+    render_source = presenter.split("function render(frm)", 1)[1].split(
+        "function refreshInvoiceSection", 1
+    )[0]
+    assert "cutCornerPricingHtml(frm)" not in render_source
+    assert "Special door number" in presenter
+    assert "Clipped-corner door" in presenter
+    assert "L-shaped corner door" in presenter
     assert "specialDoorLabel(row)" in presenter
     assert "cutCornerDoorLabel(row)" in presenter
     assert "dco-invoice-total-card" in presenter
-    assert "الإجمالي النهائي للفاتورة" in presenter
-    assert "الإجمالي الحالي قبل الأسعار غير المسعرة" in presenter
+    assert "Final invoice total" in presenter
+    assert "Current total before unpriced items" in presenter
     assert "invoiceTotalCardHtml(frm)" in presenter
     assert "#Custom-" not in presenter
     assert "#CutCorner-" not in presenter
     assert "pendingCustomEdgePriceLabels" in presenter
     assert "pending: !ready" in presenter
-    assert "عرض الرسم" in presenter
-    assert "غير مسعّر" in presenter
-    assert "السعر الخاص الشامل" in presenter
-    assert "dco-view-cut-corner-sketch" in presenter
-    assert '__("تعديل السعر")' in permissions
-    assert "السعر الخاص الشامل للدرفة" in permissions
+    assert "Unpriced" in presenter
+    assert "Inclusive special price" in presenter
+    assert 'data-price-kind="clipped"' not in presenter
+    assert 'translate("Edit price")' in permissions
+    assert "Inclusive special door price" in permissions
     assert "update_clipped_corner_edge_price" in permissions
-    assert "تكلفة معالجة قشاط الزاوية المقصوصة" in permissions
+    assert "Clipped-corner edge processing cost" in permissions
     assert "orderIsEditable(frm)" in permissions
-    assert "frappe.almdina.orderCanEdit" in permissions
+    assert "frappe.almdina.orderCanEdit" not in permissions
     assert "almdina_edit_session_changed(frm)" in permissions
     # Pricing remains a financial-document gate below, but it must not block
     # persisting a Special/CutCorner measurement row itself.
     assert "أدخل أسعار قشاط" not in permissions
-    assert "before_save(frm)" not in permissions
-    assert "frappe.validated = false" not in permissions
+    assert "before_save(frm)" in permissions
+    before_save = permissions.split("before_save(frm)", 1)[1].split(
+        "onload_post_render(frm)", 1
+    )[0]
+    assert "pendingSpecialPrices(frm).length" in before_save
+    assert "Save special door prices from the Cost edit session." in before_save
     assert "pendingCustomEdgePriceLabels" in source
-    assert "لا يمكن طباعة فاتورة غير مكتملة" in source
+    assert "An incomplete invoice cannot be printed" in source
     assert "assert_order_editable(order)" in (
         ROOT / "almdina_erp" / "services" / "cost_permission_service.py"
     ).read_text(encoding="utf-8")

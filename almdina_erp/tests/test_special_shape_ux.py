@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+from io import StringIO
 from pathlib import Path
 
 
@@ -43,7 +45,7 @@ def _fields(path: Path) -> dict[str, dict]:
 
 def test_special_piece_schema_keeps_documentation_and_accounting_price_separate():
     fields = _fields(DETAIL_JSON)
-    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+    assert fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
     assert fields["special_shape_drawing_json"]["fieldtype"] == "Long Text"
     assert fields["special_shape_status"]["read_only"] == 1
     for fieldname in (
@@ -65,6 +67,10 @@ def test_order_schema_has_customer_quote_separate_from_internal_planned_cost():
     assert fields["customer_quote_total_usd"]["label"] == "Customer Quote Total USD"
     assert "Estimated" in fields["customer_quote_status"]["options"]
     assert "Approved" in fields["customer_quote_status"]["options"]
+
+
+def _catalog_has(catalog: str, source: str, arabic: str) -> bool:
+    return any(len(row) >= 2 and row[0] == source and row[1] == arabic for row in csv.reader(StringIO(catalog)))
 
 
 def test_special_estimate_defaults_are_configurable_and_start_at_zero():
@@ -96,15 +102,28 @@ def test_operator_opens_only_new_documentation_runtime():
     assert "__documentationOnly: true" in entry
     assert "__manufacturingGeometrySeparated: true" in entry
     assert "function hasBlankDimensions(row)" in entry
-    assert "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل." in entry
+    catalog = (APP_ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+    assert '__("Enter the door width and length first, then open the shape documentation.")' in entry
+    assert _catalog_has(
+        catalog,
+        "Enter the door width and length first, then open the shape documentation.",
+        "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل.",
+    )
     assert entry.index("if (!hasBlankDimensions(row))") < entry.index("await persistedRow")
-    assert "function requirePieceDimensions(row, tr)" in operator
-    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
+    assert "function requirePieceDimensions(frm, row, tr)" in operator
+    assert "if (!row || !requirePieceDimensions(currentFrm, row, tr)) return" in operator
     assert "door_drawing_v4" not in entry
     for tool in ("select", "pen", "line", "rect", "ellipse", "dimension", "text"):
         assert f'tool("{tool}"' in shell
-    for label in ("رفع صورة", "مسح بالسكانر", "التقاط بالكاميرا", "شكل جاهز", "ملاحظات المصمم"):
+    for label, arabic in (
+        ("Upload an image", "رفع صورة"),
+        ("Scan", "مسح بالسكانر"),
+        ("Capture with the camera", "التقاط بالكاميرا"),
+        ("Ready-made shape", "شكل جاهز"),
+        ("Designer notes", "ملاحظات المصمم"),
+    ):
         assert label in shell
+        assert _catalog_has(catalog, label, arabic)
     assert "Api.save(context.order.name, context.piece.name, D.toStored(document))" in controller
     assert "geometry" not in controller.lower()
     assert "function simplify(" in pen
@@ -151,30 +170,35 @@ def test_drawing_validation_and_special_measurement_edge_disable_remain_authorit
     assert "dco-special-edges-disabled" in operator
     assert 'if ((row.piece_type || "Regular") === "Special") return 0' in operator
     assert "clearSpecialMeasurementEdges" in operator
-    assert "جهات القشاط معطّلة من الجدول" in operator
+    assert "Edge banding is disabled for special doors in the measurements table" in operator
+
+
 def test_price_approval_is_capability_checked_audited_and_invalidated_by_geometry_changes():
     service = SERVICE_PY.read_text(encoding="utf-8")
+    cost_service = (APP_ROOT / "almdina_erp" / "services" / "cost_permission_service.py").read_text(encoding="utf-8")
     policy = PIECE_POLICY.read_text(encoding="utf-8")
     permissions = COST_PERMISSIONS.read_text(encoding="utf-8")
 
-    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" in service
-    assert "doctype_has_any_capability" in service
+    assert "SPECIAL_PRICE_APPROVAL_CAPABILITIES" not in service
+    assert "has_special_price_approval_permission" not in service
+    assert "doctype_has_any_capability" not in service
+    assert "approve_special_piece_price as save_special_price" in service
     assert "SPECIAL_PRICE_APPROVER_ROLES" not in service
-    assert "special_shape_price_approved_by = frappe.session.user" in service
-    assert "special_shape_price_approved_on = now_datetime()" in service
-    assert "order.save(ignore_permissions=True)" in service
+    assert '"special_shape_price_approved_by": frappe.session.user if approved else None' in cost_service
+    assert '"special_shape_price_approved_on": now_datetime() if approved else None' in cost_service
+    assert "order.save(ignore_permissions=True)" not in service
 
     assert "function canEditInlinePiecePrice(frm, piece)" in permissions
-    assert '"approve_special_price"' in permissions
+    assert '"edit_cost_settings"' in permissions
     assert "function applyInlinePriceToPiece(piece, kind, rawValue)" in permissions
     assert "function flushPendingPriceEdits(frm, options = {})" in permissions
-    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert "costApi.saveWorkspace" in permissions
     assert 'note: piece.special_shape_price_note || ""' in permissions
 
     assert "old_special_geometry != special_geometry" in policy
     assert "decision = evaluate_special_shape(" in policy
     assert "if decision.reset_price:" in policy
-    assert "document_has_capability(" in policy
+    assert "Special prices must be saved from the Cost edit session." in policy
 
 
 def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
@@ -191,7 +215,7 @@ def test_customer_quote_uses_full_board_and_cutting_costs_with_special_price():
     assert "boardCount * boardRate" in presenter
     assert "boardCount * cuttingRate" in presenter
     assert "function quoteTotal(frm)" in presenter
-    assert "cost_permission_service.approve_special_piece_price" in permissions
+    assert "costApi.saveWorkspace" in permissions
     assert "frm.doc.customer_quote_total_usd = costUx.quoteTotal(frm)" in permissions
 
 
@@ -215,7 +239,7 @@ def test_review_and_production_keep_special_drawing_optional_and_plan_approval_i
     assert "ensure_special_prices_approved" not in approval
     assert "pending_custom_edge_price_labels" in invoice
     assert "قبل طباعة الفاتورة" in invoice
-    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nExtra"
+    assert placed_piece_fields["piece_type"]["options"] == "Regular\nClipped Corner\nL-Shaped Corner\nSpecial\nGlass"
     assert '"piece_type": piece.get("piece_type") or "Regular"' in workspace
 
 
@@ -225,7 +249,9 @@ def test_cutting_plan_visually_audits_every_special_raw_piece():
     remnant_planning = REMNANT_PLANNING.read_text(encoding="utf-8")
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
-    assert "✦ درفة خاصة · خام CNC" in order_js
-    assert "render_piece_edge_lines(piece, geometryModel, clipId)" in order_js
+    assert 'htmlText("Special door · CNC raw")' in order_js
+    assert "const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));" in order_js
+    assert "geometry.resolve(manufacturingPiece)" in order_js
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in order_js
     assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning

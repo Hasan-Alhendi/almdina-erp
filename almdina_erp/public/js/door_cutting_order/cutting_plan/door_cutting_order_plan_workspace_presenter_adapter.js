@@ -16,8 +16,16 @@
         return window.AlmdinaWorkspaceKeepPaint || null;
     }
 
+    function identity(frm) {
+        return window.AlmdinaDocumentContext?.formIdentity?.(frm)
+            || `${frm?.doctype || frm?.doc?.doctype || ""}::${frm?.doc?.name || ""}`;
+    }
+
     function data(frm) {
         const state = snapshot(frm);
+        if (!frm?.doc || !state
+            || state.identity !== identity(frm)
+            || String(state.data?.order_name || "") !== String(frm.doc.name || "")) return null;
         const keeper = keepPaint();
         if (keeper && typeof keeper.presentationData === "function") {
             return keeper.presentationData(state);
@@ -37,14 +45,14 @@
 
     function planRow(frm, tab) {
         const owner = stateOwner();
-        return owner && typeof owner.planForTab === "function"
+        return data(frm) && owner && typeof owner.planForTab === "function"
             ? owner.planForTab(frm, tab)
             : null;
     }
 
     function activeRow(frm) {
         const owner = stateOwner();
-        return owner && typeof owner.displayedPlan === "function"
+        return data(frm) && owner && typeof owner.displayedPlan === "function"
             ? owner.displayedPlan(frm)
             : null;
     }
@@ -96,7 +104,7 @@
 
     function displayedPlanForTab(frm, tab) {
         const owner = stateOwner();
-        return owner && typeof owner.displayedPlanForTab === "function"
+        return data(frm) && owner && typeof owner.displayedPlanForTab === "function"
             ? parseSnapshot(owner.displayedPlanForTab(frm, tab))
             : getPlanForTab(frm, tab);
     }
@@ -208,9 +216,13 @@
     function pendingMessage(frm) {
         const state = snapshot(frm);
         if (state && state.status === "error") {
-            return __("تعذر تحميل خطة القص. أعد المحاولة.");
+            return (window.AlmdinaLocale && AlmdinaLocale.translate)
+                ? AlmdinaLocale.translate("Could not load the cutting plan. Try again.")
+                : __("Could not load the cutting plan. Try again.");
         }
-        return __("جاري تحميل خطة القص...");
+        return (window.AlmdinaLocale && AlmdinaLocale.translate)
+            ? AlmdinaLocale.translate("Loading the cutting plan...")
+            : __("Loading the cutting plan...");
     }
 
     function clearLegacySummary(frm) {
@@ -271,7 +283,7 @@
 
     function ready(frm) {
         const state = snapshot(frm);
-        return Boolean(state && state.status === "ready" && state.data);
+        return Boolean(data(frm) && state.status === "ready" && state.freshness !== "stale");
     }
 
     function paintPlanSurface(frm, legacyPainter) {
@@ -306,7 +318,9 @@
             printActivePlan(frm) {
                 if (!ready(frm)) {
                     ensureLoad(frm);
-                    frappe.msgprint(__("انتظر حتى يكتمل تحميل خطة القص ثم أعد الطباعة."));
+                    frappe.msgprint((window.AlmdinaLocale && AlmdinaLocale.translate)
+                        ? AlmdinaLocale.translate("Wait until the cutting plan finishes loading, then print again.")
+                        : __("Wait until the cutting plan finishes loading, then print again."));
                     return false;
                 }
                 project(frm);
@@ -327,9 +341,11 @@
         return true;
     }
 
-    function refreshCurrent() {
+    function refreshCurrent(event) {
         const frm = window.cur_frm;
         if (!frm || frm.doctype !== "Door Cutting Order") return;
+        if (event?.detail?.identity
+            && event.detail.identity !== identity(frm)) return;
         const tabs = window.AlmdinaPlanTabsUX;
         if (tabs && typeof tabs.renderDualTabs === "function" && tabs.shouldShowPlanTabs(frm)) {
             tabs.renderDualTabs(frm);

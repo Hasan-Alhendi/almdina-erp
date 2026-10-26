@@ -9,43 +9,30 @@
             side: "width_top",
             selectedField: "edge_width_top",
             overrideField: "edge_width_top_type_override",
-            labelAr: "العرض العلوي",
-            labelEn: "Top width edge",
+            label: "Top width side",
         },
         {
             side: "width_bottom",
             selectedField: "edge_width_bottom",
             overrideField: "edge_width_bottom_type_override",
-            labelAr: "العرض السفلي",
-            labelEn: "Bottom width edge",
+            label: "Bottom width side",
         },
         {
             side: "long_right",
             selectedField: "edge_long_right",
             overrideField: "edge_long_right_type_override",
-            labelAr: "الطول الأيمن",
-            labelEn: "Right long edge",
+            label: "Right length side",
         },
         {
             side: "long_left",
             selectedField: "edge_long_left",
             overrideField: "edge_long_left_type_override",
-            labelAr: "الطول الأيسر",
-            labelEn: "Left long edge",
+            label: "Left length side",
         },
     ];
     let activePopover = null;
     let dismissBound = false;
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -101,7 +88,7 @@
     function profileDetails(frm, value) {
         const profile = profileMap(frm).get(value);
         if (!profile) {
-            return isArabic() ? "نوع محفوظ سابقًا" : "Previously saved profile";
+            return __("Previously saved profile");
         }
         const thickness = Number(profile.thickness_mm || 0).toLocaleString("en-US", {
             maximumFractionDigits: 3,
@@ -109,7 +96,7 @@
         const rate = Number(profile.rate_usd_per_meter || 0).toLocaleString("en-US", {
             maximumFractionDigits: 2,
         });
-        return `${thickness} مم · $ ${rate}/م`;
+        return __("{0} mm · $ {1}/m", [thickness, rate]);
     }
 
     function installStyles() {
@@ -129,11 +116,11 @@
             .dco-all-sides-profile-button{
                 width:100%;max-width:100%;height:38px;min-height:38px;display:flex;align-items:center;
                 justify-content:center;gap:5px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);border-radius:7px;
-                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--text-color,#36414c);padding:2px 6px;
+                background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--alm-text-strong,#101828);padding:2px 6px;
                 font-size:9.5px;font-weight:850;line-height:1.1;cursor:pointer;outline:none
             }
             .dco-all-sides-profile-button:hover,.dco-all-sides-profile-button:focus{
-                border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
+                border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, var(--alm-card,#ffffff));box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
             }
             .dco-all-sides-profile-button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
             .dco-all-sides-profile-button .dco-bulk-chevron{font-size:11px;line-height:1;opacity:.72}
@@ -143,25 +130,25 @@
                 overflow:hidden!important;cursor:pointer;transition:background .14s ease,border-color .14s ease,box-shadow .14s ease,color .14s ease
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom{
-                background:#fff0b8!important;border-color:#c88a00!important;color:#674900!important;
+                background:color-mix(in srgb, #c88a00 16%, var(--alm-card,#ffffff))!important;border-color:#c88a00!important;color:#c88a00!important;
                 box-shadow:inset 0 0 0 1px rgba(200,138,0,.24),0 0 0 1px rgba(200,138,0,.08)!important
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom:hover{
-                background:#ffe79a!important;border-color:#aa7400!important
+                background:color-mix(in srgb, #aa7400 18%, var(--alm-card,#ffffff))!important;border-color:#aa7400!important
             }
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-custom .dco-check-mark{color:#674900!important}
             .dco-col-edges .dco-check-toggle.dco-edge-profile-target.is-edge-missing{
-                background:#fff0f0!important;border-color:#d94a4a!important;color:#9d2525!important
+                background:color-mix(in srgb, #d94a4a 12%, var(--alm-card,#ffffff))!important;border-color:#d94a4a!important;color:#d94a4a!important
             }
             #${POPOVER_ID}{
                 position:fixed;z-index:1065;width:min(292px,calc(100vw - 20px));max-height:min(390px,calc(100vh - 20px));
                 display:flex;flex-direction:column;border:1px solid var(--border-color,#cbd2d9);border-radius:12px;
-                background:var(--card-bg,#fff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
-                direction:rtl;color:var(--text-color,#172033)
+                background:var(--alm-card,#ffffff);box-shadow:0 14px 38px rgba(15,23,42,.22);overflow:hidden;
+                color:var(--text-color,#172033)
             }
             #${POPOVER_ID} .dco-edge-popover-head{
                 flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 7px;
-                border-bottom:1px solid var(--border-color,#e1e5e9);background:var(--subtle-fg,#f7f9fb)
+                border-bottom:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-surface-muted,#f4f6f8)
             }
             #${POPOVER_ID} .dco-edge-popover-head strong{font-size:12px;line-height:1.25}
             #${POPOVER_ID} .dco-edge-popover-head small{display:block;margin-top:2px;color:var(--text-muted,#65717d);font-size:9px;font-weight:600}
@@ -185,10 +172,10 @@
                 color:inherit;text-align:right;cursor:pointer
             }
             #${POPOVER_ID} .dco-edge-profile-option:hover,#${POPOVER_ID} .dco-edge-profile-option:focus{
-                border-color:color-mix(in srgb, var(--alm-primary, #172033) 42%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, #ffffff);outline:0
+                border-color:color-mix(in srgb, var(--alm-primary, #172033) 42%, transparent);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, var(--alm-card,#ffffff));outline:0
             }
-            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, #ffffff)}
-            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:#fff4cc}
+            #${POPOVER_ID} .dco-edge-profile-option.is-current{border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, var(--alm-card,#ffffff))}
+            #${POPOVER_ID} .dco-edge-profile-option.is-custom-current{border-color:#c88a00;background:color-mix(in srgb, #c88a00 14%, var(--alm-card,#ffffff))}
             #${POPOVER_ID} .dco-edge-profile-option b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
             #${POPOVER_ID} .dco-edge-profile-option small{grid-column:1;color:var(--text-muted,#65717d);font-size:8.5px;line-height:1.2}
             #${POPOVER_ID} .dco-edge-profile-option span{grid-column:2;grid-row:1/3;font-size:13px;font-weight:900;color:var(--alm-primary,#172033)}
@@ -218,9 +205,16 @@
         });
     }
 
-    function notifyChanged(frm, tr, row, fieldname) {
+    function notifyChanged(frm, tr, row, fieldname, changedFields = []) {
         frm.dirty();
         syncToggleVisuals(tr, row);
+
+        if (frm.script_manager && typeof frm.script_manager.trigger === "function") {
+            changedFields.forEach(name => {
+                Promise.resolve(frm.script_manager.trigger(name, row.doctype, row.name))
+                    .catch(error => console.error(error));
+            });
+        }
 
         const root = rootFor(frm);
         if (root) {
@@ -259,9 +253,19 @@
         const row = materialize(frm, tr);
         if (!row) return;
         if (lockedBreakSides(row).has(config.selectedField)) return;
-        row[config.selectedField] = 1;
-        row[config.overrideField] = String(overrideType || "").trim();
-        notifyChanged(frm, tr, row, config.overrideField);
+        const selectedType = String(overrideType || "").trim();
+        const changedFields = [];
+        if (Number(row[config.selectedField] || 0) !== 1) {
+            row[config.selectedField] = 1;
+            changedFields.push(config.selectedField);
+        }
+        if (String(row[config.overrideField] || "").trim() !== selectedType) {
+            row[config.overrideField] = selectedType;
+            changedFields.push(config.overrideField);
+        }
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, config.overrideField, changedFields);
+        }
     }
 
     function applyAllSides(frm, tr, selectedValue) {
@@ -271,12 +275,21 @@
             ? ""
             : String(selectedValue || "").trim();
         const locked = lockedBreakSides(row);
+        const changedFields = [];
         SIDE_CONFIG.forEach(config => {
             if (locked.has(config.selectedField)) return;
-            row[config.selectedField] = 1;
-            row[config.overrideField] = overrideType;
+            if (Number(row[config.selectedField] || 0) !== 1) {
+                row[config.selectedField] = 1;
+                changedFields.push(config.selectedField);
+            }
+            if (String(row[config.overrideField] || "").trim() !== overrideType) {
+                row[config.overrideField] = overrideType;
+                changedFields.push(config.overrideField);
+            }
         });
-        notifyChanged(frm, tr, row, "all_side_edge_profiles");
+        if (changedFields.length) {
+            notifyChanged(frm, tr, row, "all_side_edge_profiles", changedFields);
+        }
     }
 
     function ensureBulkHeader(root) {
@@ -288,10 +301,8 @@
             header.className = "dco-col-edge-bulk";
             edgeTypeHeader.insertAdjacentElement("afterend", header);
         }
-        header.textContent = isArabic() ? "تطبيق على الأربعة" : "Apply to all four";
-        header.title = isArabic()
-            ? "تفعيل الأضلاع الأربعة وتطبيق نوع قشاط واحد عليها"
-            : "Enable all four sides and apply one profile";
+        header.textContent = __("Apply to all four");
+        header.title = __("Enable all four sides and apply one profile");
     }
 
     function ensureBulkButton(frm, tr) {
@@ -305,7 +316,7 @@
             edgeTypeCell.insertAdjacentElement("afterend", cell);
         }
 
-        // Special / corner / Extra-without-toggles still need this column so notes
+        // Special / corner / rows without edge toggles still need this column so notes
         // stay on the same horizontal level as Regular rows.
         const hasEdgeButtons = Boolean(
             tr.querySelector(":scope > td.dco-col-edges .dco-edge-buttons")
@@ -333,11 +344,9 @@
             content.appendChild(button);
         }
 
-        button.innerHTML = `<span>${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}</span><span class="dco-bulk-chevron">⌄</span>`;
+        button.innerHTML = `<span>${__("Apply to all four")}</span><span class="dco-bulk-chevron">⌄</span>`;
         button.disabled = !isEditable(frm);
-        button.title = isArabic()
-            ? "افتح قائمة قابلة للتمرير وطبّق نوعًا واحدًا على الأضلاع الأربعة"
-            : "Open a scrollable list and apply one profile to all four sides";
+        button.title = __("Open a scrollable list and apply one profile to all four sides");
         button.setAttribute("aria-haspopup", "menu");
         button.setAttribute("aria-expanded", activePopover && activePopover.anchor === button ? "true" : "false");
     }
@@ -348,7 +357,7 @@
 
     function effectiveProfileLabel(frm, current) {
         const effective = current || String(frm.doc.default_edge_type || "").trim();
-        if (!effective) return isArabic() ? "غير محدد" : "Not selected";
+        if (!effective) return __("Not selected");
         const profile = profileMap(frm).get(effective);
         return String((profile && profile.label) || effective);
     }
@@ -360,13 +369,11 @@
         const selected = Boolean(row && row[config.selectedField]);
         const effective = current || String(frm.doc.default_edge_type || "").trim();
         const missing = selected && (!effective || (frm._dco_side_edge_profiles_loaded && !profileMap(frm).has(effective)));
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         const mode = current
-            ? (isArabic() ? "مخصص" : "Custom")
-            : (isArabic() ? "افتراضي" : "Default");
-        const instruction = isArabic()
-            ? "نقرة للتفعيل أو الإلغاء · نقرتان لاختيار النوع"
-            : "Click to toggle · Double-click to choose profile";
+            ? (__("Custom"))
+            : (__("Default"));
+        const instruction = __("Click to toggle · Double-click to choose profile");
 
         toggle.dataset.edgeSide = config.side;
         toggle.classList.add("dco-edge-profile-target");
@@ -404,9 +411,7 @@
             hint.className = "dco-side-edge-help";
             help.appendChild(hint);
         }
-        hint.textContent = isArabic()
-            ? "القشاط: نقرة للتفعيل والتعطيل، ونقرتان على الضلع لاختيار النوع؛ القوائم قابلة للتمرير"
-            : "Edge banding: click to toggle; double-click to choose a profile; lists are scrollable";
+        hint.textContent = __("Edge banding: click to toggle; double-click to choose a profile; lists are scrollable");
     }
 
     function closePopover() {
@@ -458,10 +463,10 @@
 
     function popoverOptionsHtml(frm, current) {
         const defaultType = String(frm.doc.default_edge_type || "").trim();
-        const defaultLabel = isArabic() ? "استخدام القشاط الافتراضي" : "Use default profile";
+        const defaultLabel = __("Use default profile");
         const defaultDescription = defaultType
-            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
-            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+            ? `${__("Default")}: ${effectiveProfileLabel(frm, "")}`
+            : (__("No order default selected"));
         return [
             profileOptionHtml("", defaultLabel, defaultDescription, current),
             ...profileEntries(frm, current).map(([value, label]) => (
@@ -473,12 +478,12 @@
     function bulkPopoverOptionsHtml(frm) {
         const defaultType = String(frm.doc.default_edge_type || "").trim();
         const defaultDescription = defaultType
-            ? `${isArabic() ? "الافتراضي" : "Default"}: ${effectiveProfileLabel(frm, "")}`
-            : (isArabic() ? "لم يُحدد نوع افتراضي للطلب" : "No order default selected");
+            ? `${__("Default")}: ${effectiveProfileLabel(frm, "")}`
+            : (__("No order default selected"));
         return [
             bulkProfileOptionHtml(
                 BULK_DEFAULT_VALUE,
-                isArabic() ? "الأربعة بالافتراضي" : "Default for all four",
+                __("Default for all four"),
                 defaultDescription
             ),
             ...profileEntries(frm).map(([value, label]) => (
@@ -492,10 +497,13 @@
         popover.id = POPOVER_ID;
         popover.setAttribute("role", "menu");
         popover.setAttribute("aria-label", ariaLabel);
+        const locale = window.AlmdinaLocale;
+        const direction = locale && typeof locale.direction === "function" ? locale.direction() : "";
+        if (direction === "ltr" || direction === "rtl") popover.setAttribute("dir", direction);
         popover.innerHTML = `
             <div class="dco-edge-popover-head">
                 <div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(subtitle)}</small></div>
-                <button type="button" class="dco-edge-popover-close" aria-label="${isArabic() ? "إغلاق" : "Close"}">×</button>
+                <button type="button" class="dco-edge-popover-close" aria-label="${__("Close")}">×</button>
             </div>
             <div class="dco-edge-popover-options">${optionsHtml}</div>`;
         return popover;
@@ -505,7 +513,8 @@
         const margin = 8;
         const anchorRect = anchor.getBoundingClientRect();
         const rect = popover.getBoundingClientRect();
-        let left = isArabic() ? anchorRect.right - rect.width : anchorRect.left;
+        const rtl = window.AlmdinaLocale ? AlmdinaLocale.isRTL() : document.documentElement.getAttribute("dir") !== "ltr";
+        let left = rtl ? anchorRect.right - rect.width : anchorRect.left;
         left = Math.max(margin, Math.min(window.innerWidth - rect.width - margin, left));
         let top = anchorRect.bottom + 6;
         if (top + rect.height > window.innerHeight - margin) {
@@ -544,12 +553,12 @@
         if (!row) return;
 
         const current = String(row[config.overrideField] || "").trim();
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         const popover = createPopover(
             label,
-            isArabic() ? "اختيار النوع يفعّل الضلع تلقائيًا" : "Choosing a profile enables the side",
+            __("Choosing a profile enables the side"),
             popoverOptionsHtml(frm, current),
-            isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`
+            __("Choose {0} profile", [label]),
         );
         mountPopover(popover, { frm, tr, config, anchor, kind: "side" });
         bindCloseButton(popover);
@@ -573,10 +582,10 @@
         closePopover();
         if (!materialize(frm, tr)) return;
 
-        const title = isArabic() ? "تطبيق على الأضلاع الأربعة" : "Apply to all four sides";
+        const title = __("Apply to all four sides");
         const popover = createPopover(
             title,
-            isArabic() ? "مرّر القائمة ثم اختر نوع القشاط" : "Scroll the list, then choose a profile",
+            __("Scroll the list, then choose a profile"),
             bulkPopoverOptionsHtml(frm),
             title
         );

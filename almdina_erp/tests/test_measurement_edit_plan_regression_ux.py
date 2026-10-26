@@ -19,7 +19,7 @@ def source(name: str) -> str:
     return (PUBLIC_JS / name).read_text(encoding="utf-8")
 
 
-def test_special_door_pricing_does_not_block_ordinary_save() -> None:
+def test_ordinary_save_only_blocks_uncommitted_special_financial_edits() -> None:
     cost_permissions = source("door_cutting_order/costing/door_cutting_order_cost_permissions_ux.js")
     adapter = PIECE_POLICY_ADAPTER.read_text(encoding="utf-8")
     validate_rows = adapter.split("def validate_rows(self)", 1)[1].split(
@@ -28,7 +28,12 @@ def test_special_door_pricing_does_not_block_ordinary_save() -> None:
 
     assert "pendingCustomEdgePriceLabels" not in cost_permissions
     assert "أدخل أسعار قشاط الدرفات الخاصة ودرفات الزاوية المقصوصة قبل الحفظ" not in cost_permissions
-    assert "frappe.validated = false" not in cost_permissions
+    before_save = cost_permissions.split("before_save(frm)", 1)[1].split(
+        "onload_post_render(frm)", 1
+    )[0]
+    assert "if (!pendingSpecialPrices(frm).length) return;" in before_save
+    assert "frappe.validated = false" in before_save
+    assert "Save special door prices from the Cost edit session." in before_save
     assert "ensure_custom_edge_prices" not in validate_rows
     # The explicit financial gate is retained for invoice/final-price flows.
     assert "def ensure_custom_edge_prices(self)" in adapter

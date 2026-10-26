@@ -9,19 +9,36 @@
         cost_tab: "cost",
     });
     const KIND_CONFIG = Object.freeze({
-        order: Object.freeze({ title: "معلومات الطلب" }),
-        plan: Object.freeze({ title: "خطة القص" }),
-        cost: Object.freeze({ title: "تكلفة الطلب" }),
+        order: Object.freeze({ title: "Order information" }),
+        plan: Object.freeze({ title: "Cutting plan" }),
+        cost: Object.freeze({ title: "Order cost" }),
     });
-    const EDIT_LABEL = "تعديل";
-    const SAVE_LABEL = "حفظ";
-    const CANCEL_LABEL = "إلغاء";
+    const EDIT_LABEL = "Edit order";
+    const SAVE_LABEL = "Save";
+    const CANCEL_LABEL = "Cancel";
     const TOOLBAR_CLASS = "dco-tab-edit-toolbar";
     const TOOLBAR_SLOT_CLASS = "dco-tab-edit-toolbar-slot";
     const PAGE_CLASS = "dco-tab-local-edit-actions";
     const STYLE_ID = "dco-tab-local-edit-actions-css-v2";
     const LEGACY_STYLE_IDS = ["dco-tab-local-edit-actions-css"];
     const BUSY_KEY = "__almdinaPageEditActionBusy";
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -48,7 +65,7 @@
                 .${PAGE_CLASS} .page-actions .dco-context-edit-cancel { display:none !important; }
                 .${TOOLBAR_CLASS} {
                     display:flex;align-items:center;justify-content:flex-end;gap:12px;margin:0;padding:0;border:0;
-                    border-radius:0;background:transparent;box-shadow:none;direction:rtl;
+                    border-radius:0;background:transparent;box-shadow:none;direction:inherit;
                 }
                 .${TOOLBAR_SLOT_CLASS} {
                     margin-inline-start:auto;list-style:none;display:flex;align-items:center;
@@ -74,7 +91,7 @@
                 }
                 .dco-plan-settings-readonly {
                     margin:0 0 2px;padding:0;border:0;border-radius:0;
-                    background:transparent;direction:rtl;
+                    background:transparent;direction:inherit;
                 }
                 .dco-plan-settings-readonly__strip {
                     display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:11px;line-height:1.5;
@@ -103,7 +120,7 @@
                     display:none !important;
                 }
                 .dco-a53-workspace-polish [data-fieldname="order_cost_invoice_html"][data-almdina-workspace-editing="1"]::before {
-                    content:"وضع التعديل مفعّل — غيّر القيم المطلوبة ثم استخدم «حفظ» أو «إلغاء» داخل هذا القسم." !important;
+                    content:attr(data-dco-edit-banner) !important;
                 }
                 @media (max-width:900px) {
                     .dco-plan-settings-readonly__strip { gap:5px 10px; }
@@ -243,7 +260,7 @@
         const slot = ensureToolbarSlot(frm);
         if (!slot) return null;
         const toolbar = document.createElement("div");
-        toolbar.className = `${TOOLBAR_CLASS} almdina-ui`;
+        toolbar.className = `${TOOLBAR_CLASS} almdina-ui alm-actions--compact`;
         toolbar.setAttribute("data-almdina-tab-edit-kind", kind);
         toolbar.setAttribute("data-compact", "1");
         slot.replaceChildren(toolbar);
@@ -261,12 +278,12 @@
 
     function editBlockedMessage(frm, kind, competingKind = null) {
         if (competingKind && competingKind !== kind) {
-            return "احفظ أو ألغِ التعديل المفتوح في القسم الآخر أولًا.";
+            return "Save or cancel the edit that is open in the other section first.";
         }
-        if (!permissionsResolved()) return "جاري التحقق من صلاحيات التعديل.";
-        if (kind === "order") return "لا تملك صلاحية تعديل الطلب أو أن حالته الحالية لا تسمح بالتعديل.";
-        if (kind === "plan") return "لا تملك صلاحية تعديل إعدادات خطة القص أو أن حالة الطلب الحالية لا تسمح بذلك.";
-        return "لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند.";
+        if (!permissionsResolved()) return "Checking edit permissions.";
+        if (kind === "order") return "You do not have permission to edit the order, or its current status does not allow editing.";
+        if (kind === "plan") return "You do not have permission to edit the cutting plan settings, or the current order status does not allow it.";
+        return "You do not have permission to edit the cost or the special door prices for this document.";
     }
 
     function button(label, className, disabled, title) {
@@ -285,9 +302,9 @@
             .replace(/\bbtn-danger\b/g, "")
             .replace(/\bbtn-success\b/g, "")
             .trim();
-        const attrs = title ? { title: __(title) } : {};
+        const attrs = title ? { title: translate(title) } : {};
         return ui.button({
-            label: __(label),
+            label: translate(label),
             variant,
             className: extraClass,
             disabled: Boolean(disabled),
@@ -335,7 +352,7 @@
 
     function patchToolbarButtons(toolbar, editing, actionBusy, editDisabled, blockMessage) {
         const status = toolbar.querySelector(`.${TOOLBAR_CLASS}__state`);
-        if (status) status.textContent = __(editing ? "وضع التعديل" : "وضع القراءة");
+        if (status) status.textContent = translate(editing ? "Edit mode" : "Read mode");
         const save = toolbar.querySelector(".dco-tab-edit-save");
         const cancel = toolbar.querySelector(".dco-tab-edit-cancel");
         const start = toolbar.querySelector(".dco-tab-edit-start");
@@ -343,7 +360,7 @@
         if (cancel) cancel.disabled = actionBusy;
         if (start) {
             start.disabled = editDisabled;
-            if (blockMessage) start.setAttribute("title", frappe.utils.escape_html(__(blockMessage)));
+            if (blockMessage) start.setAttribute("title", frappe.utils.escape_html(translate(blockMessage)));
             else start.removeAttribute("title");
         }
     }
@@ -383,13 +400,13 @@
         toolbar.setAttribute("data-almdina-action-mode", actionMode);
         toolbar.innerHTML = `
             <div class="${TOOLBAR_CLASS}__identity">
-                <strong class="${TOOLBAR_CLASS}__title">${frappe.utils.escape_html(__(config.title))}</strong>
-                <span class="${TOOLBAR_CLASS}__state">${frappe.utils.escape_html(__(editing ? "وضع التعديل" : "وضع القراءة"))}</span>
+                <strong class="${TOOLBAR_CLASS}__title">${frappe.utils.escape_html(translate(config.title))}</strong>
+                <span class="${TOOLBAR_CLASS}__state">${frappe.utils.escape_html(translate(editing ? "Edit mode" : "Read mode"))}</span>
             </div>
             <div class="${TOOLBAR_CLASS}__actions">
                 ${editing
-                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", actionBusy, "إلغاء التغييرات غير المحفوظة")
-                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", actionBusy, "حفظ تعديلات هذا القسم فقط")
+                    ? button(CANCEL_LABEL, "btn-default dco-tab-edit-cancel", actionBusy, "Discard the unsaved changes")
+                        + button(SAVE_LABEL, "btn-primary dco-tab-edit-save", actionBusy, "Save the changes in this section only")
                     : button(EDIT_LABEL, "btn-default dco-tab-edit-start", editDisabled, blockMessage)}
             </div>
         `;
@@ -488,22 +505,22 @@
         const row = planWorkspaceRow(frm) || {};
         const settings = row.settings || {};
         const values = [
-            ["الخوارزمية", planSettingValue(settings.packing_mode || "Auto Pro")],
-            ["آلة القص", planSettingValue(settings.cutting_machine_type || "Auto")],
-            ["سماكة القص Kerf", planSettingValue(settings.kerf_mm, " مم")],
-            ["هامش التشذيب", planSettingValue(settings.trim_margin_mm, " مم")],
-            ["مهلة التحسين", planSettingValue(settings.optimization_time_limit_sec, " ث")],
+            [translate("Algorithm"), planSettingValue(settings.packing_mode || "Auto Pro")],
+            [translate("Cutting machine"), planSettingValue(settings.cutting_machine_type || "Auto")],
+            [translate("Kerf thickness"), planSettingValue(settings.kerf_mm, " " + translate("mm"))],
+            [translate("Trim margin"), planSettingValue(settings.trim_margin_mm, " " + translate("mm"))],
+            [translate("Optimization time limit"), planSettingValue(settings.optimization_time_limit_sec, " " + translate("s"))],
         ];
         const pairs = values.map(([label, value]) => `
             <span class="dco-plan-settings-readonly__pair">
-                <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(__(label))}:</span>
+                <span class="dco-plan-settings-readonly__label">${frappe.utils.escape_html(label)}:</span>
                 <strong class="dco-plan-settings-readonly__value">${frappe.utils.escape_html(value)}</strong>
             </span>
         `).join("");
         wrapper.prepend(`
             <section class="dco-plan-settings-readonly" data-almdina-plan-settings-readonly="1">
                 <div class="dco-plan-settings-readonly__strip">
-                    <span class="dco-plan-settings-readonly__lead">${frappe.utils.escape_html(__("إعدادات الخطة:"))}</span>
+                    <span class="dco-plan-settings-readonly__lead">${frappe.utils.escape_html(translate("Plan settings:"))}</span>
                     ${pairs}
                 </div>
             </section>

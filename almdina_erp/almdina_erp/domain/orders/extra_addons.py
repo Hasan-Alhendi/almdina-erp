@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -8,7 +9,6 @@ from typing import Any
 from .costing import round_value
 
 
-EXTRA_PIECE_TYPE = "Extra"
 EXTRA_ADDON_CODES = (
     "double",
     "full_door_double",
@@ -23,6 +23,7 @@ EXTRA_ADDON_FIELD_BY_CODE = {
     "back_groove": "extra_back_groove",
     "recessed_handle_cutout": "extra_recessed_handle_cutout",
 }
+EXTRA_DOUBLE_SIDES_FIELD = "extra_double_reference_sides"
 FULL_DOOR_DOUBLE_CUT_MULTIPLIER = 2
 EXTRA_OVERLAY_LAYER_BY_KIND = {
     "liner": "Liner",
@@ -37,12 +38,91 @@ EXTRA_OVERLAY_KIND_BY_LAYER = {
 
 
 class ExtraAddonError(ValueError):
-    """Raised when an Extra-door selection or price violates a domain rule."""
+    """Raised when an add-on selection or price violates a domain rule."""
 
     def __init__(self, code: str, addon_code: str = "") -> None:
         super().__init__(code)
         self.code = code
         self.addon_code = addon_code
+
+
+def available_extra_double_sides(piece_type: str | None) -> tuple[str, ...]:
+    """Return the canonical side identifiers shared with the Liner editor."""
+
+    from ..cutting.liner_geometry import available_liner_sides
+
+    return tuple(available_liner_sides(piece_type or "Regular"))
+
+
+def normalize_extra_double_sides(
+    value: Any,
+    *,
+    piece_type: str | None,
+    enabled: bool,
+) -> tuple[str, ...]:
+    """Validate and normalize stored Double Edge side selections.
+
+    A missing value is the deliberate legacy representation and resolves to all
+    available sides. An explicit empty list is invalid when the add-on is on.
+    """
+
+    if str(piece_type or "") == "Special":
+        # A special door has no straight sides to select. Presence is the
+        # contract; location is completed later in the DXF.
+        return ()
+
+    if not enabled:
+        return ()
+
+    available = available_extra_double_sides(piece_type)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return available
+
+    raw = value
+    if isinstance(value, str):
+        try:
+            raw = json.loads(value)
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ExtraAddonError("double_edge_sides_invalid", "double") from error
+    if not isinstance(raw, (list, tuple, set, frozenset)):
+        raise ExtraAddonError("double_edge_sides_invalid", "double")
+
+    selected = tuple(
+        dict.fromkeys(
+            str(item or "").strip()
+            for item in raw
+            if str(item or "").strip()
+        )
+    )
+    if not selected:
+        raise ExtraAddonError("double_edge_sides_required", "double")
+    unavailable = tuple(side for side in selected if side not in available)
+    if unavailable:
+        raise ExtraAddonError("double_edge_side_unavailable", "double")
+    return tuple(side for side in available if side in selected)
+
+
+def serialize_extra_double_sides(sides: Iterable[str]) -> str:
+    """Persist a compact, deterministic JSON array for the child row field."""
+
+    return json.dumps(
+        list(
+            dict.fromkeys(
+                str(side).strip() for side in sides if str(side).strip()
+            )
+        ),
+        separators=(",", ":"),
+    )
+
+
+def extra_double_sides_for_row(row: Any) -> tuple[str, ...]:
+    """Resolve a row's selected sides, including the legacy all-sides fallback."""
+
+    return normalize_extra_double_sides(
+        _row_field(row, EXTRA_DOUBLE_SIDES_FIELD, ""),
+        piece_type=_row_field(row, "piece_type", "Regular"),
+        enabled=_truthy_flag(_row_field(row, "extra_double", 0)),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,13 +175,13 @@ class ExtraAddonPricingSummary:
 
 
 def extra_overlay_kind_for_layer(layer: str) -> str | None:
-    """Map a DXF layer name to an Extra overlay kind after case/whitespace normalize."""
+    """Map a DXF layer name to an add-on overlay kind after normalization."""
 
     return EXTRA_OVERLAY_KIND_BY_LAYER.get(str(layer or "").strip().upper())
 
 
 def extra_overlay_layer_for_kind(kind: str) -> str:
-    """Return the canonical DXF layer name for one Extra overlay kind."""
+    """Return the canonical DXF layer name for one add-on overlay kind."""
 
     return EXTRA_OVERLAY_LAYER_BY_KIND[str(kind)]
 
@@ -146,17 +226,12 @@ def calculate_extra_addon_pricing(
             )
             if bool(enabled)
         )
-        piece_type = str(piece.piece_type or "Regular")
-        if piece_type != EXTRA_PIECE_TYPE:
-            if selected:
-                raise ExtraAddonError("non_extra_addon_selection", selected[0])
+        if not selected:
             results.append(_empty_result())
             continue
 
-        if not selected:
-            raise ExtraAddonError("extra_addon_required")
-        if not str(piece.notes or "").strip():
-            raise ExtraAddonError("extra_notes_required")
+        if piece.double and piece.full_door_double:
+            raise ExtraAddonError("mutually_exclusive_double_addons", "double")
 
         qty = int(piece.qty or 0)
         if qty <= 0:
@@ -250,18 +325,11 @@ def _finite_non_negative(value: float) -> float:
 
 def extra_double_text_flags(
     *,
-    piece_type: str,
     extra_double: bool,
     extra_full_door_double: bool,
 ) -> dict[str, int]:
-    """Return Extra double checkboxes that DXF/plan TEXT marks may copy.
+    """Return independent double add-ons that DXF/plan TEXT marks may copy."""
 
-    These flags are operational workshop marks, not prices. Regular/Special
-    rows stay empty even if a checkbox leaked onto the row.
-    """
-
-    if str(piece_type or "").strip() != EXTRA_PIECE_TYPE:
-        return {}
     flags: dict[str, int] = {}
     if extra_double:
         flags["extra_double"] = 1
@@ -274,7 +342,6 @@ def extra_double_text_flags_by_source_no(rows: Iterable[Any]) -> dict[int, dict[
     flags: dict[int, dict[str, int]] = {}
     for index, row in enumerate(rows or [], start=1):
         attached = extra_double_text_flags(
-            piece_type=str(_row_field(row, "piece_type", "Regular") or "Regular"),
             extra_double=_truthy_flag(_row_field(row, "extra_double", 0)),
             extra_full_door_double=_truthy_flag(
                 _row_field(row, "extra_full_door_double", 0)
@@ -289,7 +356,7 @@ def apply_extra_double_text_flags_to_snapshot(
     snapshot: Any,
     rows: Iterable[Any],
 ) -> Any:
-    """Copy Extra double checkboxes onto matching snapshot pieces for DXF TEXT."""
+    """Copy double add-on checkboxes onto matching snapshot pieces for DXF TEXT."""
 
     if not isinstance(snapshot, dict):
         return snapshot
@@ -346,10 +413,10 @@ def _money(value: float) -> float:
 __all__ = [
     "EXTRA_ADDON_CODES",
     "EXTRA_ADDON_FIELD_BY_CODE",
+    "EXTRA_DOUBLE_SIDES_FIELD",
     "EXTRA_OVERLAY_KIND_BY_LAYER",
     "EXTRA_OVERLAY_LAYER_BY_KIND",
     "EXTRA_OVERLAY_LAYER_NAMES",
-    "EXTRA_PIECE_TYPE",
     "FULL_DOOR_DOUBLE_CUT_MULTIPLIER",
     "ExtraAddonError",
     "ExtraAddonPieceInput",
@@ -357,10 +424,14 @@ __all__ = [
     "ExtraAddonPricingSummary",
     "ExtraAddonRates",
     "apply_extra_double_text_flags_to_snapshot",
+    "available_extra_double_sides",
     "calculate_extra_addon_pricing",
+    "extra_double_sides_for_row",
     "extra_double_text_flags",
     "extra_double_text_flags_by_source_no",
     "extra_overlay_kind_for_layer",
     "extra_overlay_layer_for_kind",
     "physical_cut_quantity",
+    "normalize_extra_double_sides",
+    "serialize_extra_double_sides",
 ]

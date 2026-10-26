@@ -103,6 +103,27 @@
         if (String(target.text() || "") !== String(value || "")) target.text(value);
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     function installStyles() {
         if (document.getElementById("dco-simple-plan-controls-css")) return;
         $("head").append(`
@@ -152,6 +173,9 @@
             return !String(frm.doc.production_path || "").trim();
         }
         const stage = frm.__almdina_stage_context || {};
+        if (stage.actor_can_operate_current_stage !== undefined) {
+            return Boolean(stage.actor_can_operate_current_stage);
+        }
         if (stage.actor_is_current_assignee !== undefined) {
             return Boolean(stage.actor_is_current_assignee);
         }
@@ -199,15 +223,16 @@
         if (!frm.doc.current_production_stage) {
             if (String(frm.doc.status || "Draft").trim() === "Draft") return "";
             return String(frm.doc.production_path || "").trim()
-                ? __("الطلب غادر مراحل الإنتاج النشطة ولا يمكن تعديل خطة القص.")
+                ? "The order has left the active production stages and the cutting plan cannot be edited."
                 : "";
         }
         const stage = frm.__almdina_stage_context || {};
-        if (stage.actor_is_current_assignee === true) return "";
+        if (stage.actor_can_operate_current_stage === true) return "";
+        if (stage.actor_can_operate_current_stage === undefined && stage.actor_is_current_assignee === true) return "";
         if (stage.active_stage_assigned_to) {
-            return __("يمكنك عرض الخطة فقط لأن المرحلة الحالية مسندة إلى مستخدم آخر.");
+            return "You can only view the plan because the current stage is assigned to another user.";
         }
-        return __("أسند المرحلة الحالية إلى مستخدم قبل تعديل خطة القص.");
+        return "Assign the current stage to a user before editing the cutting plan.";
     }
 
     function canCalculate(frm) {
@@ -228,24 +253,24 @@
     }
 
     function recalculationDisabledReason(frm) {
-        if (frm.is_new()) return __("احفظ الطلب أولًا قبل حساب خطة القص.");
-        if (!workspaceReady(frm)) return __("انتظر حتى يكتمل تحميل خطة القص.");
+        if (frm.is_new()) return "Save the order before calculating the cutting plan.";
+        if (!workspaceReady(frm)) return "Wait until the cutting plan finishes loading.";
         const firstPlan = !hasSystemDraft(frm);
         if (!firstPlan && !workspaceEditing(frm)) {
-            return __("اضغط «تعديل» لتجربة إعدادات جديدة ثم أعد الحساب للمعاينة.");
+            return "Press “Edit” to try new settings, then recalculate to preview.";
         }
         const previews = previewOwner();
         if (previews && typeof previews.isBusy === "function" && previews.isBusy(frm)) {
-            return __("انتظر حتى تكتمل عملية المعاينة أو الحفظ الحالية.");
+            return "Wait until the current preview or save finishes.";
         }
         const approved = approvedPlanName(frm);
         const status = String(frm.doc.status || "Draft").trim();
         const preDispatchDraft = status === "Draft"
             && !String(frm.doc.current_production_stage || "").trim();
         if (approved && !isPlanningStage(frm) && !preDispatchDraft) {
-            return __("الخطة المعتمدة لا يمكن إعادة حسابها خارج مرحلة التخطيط.");
+            return "The approved plan cannot be recalculated outside the planning stage.";
         }
-        if (!can(frm, "recalculate_plan")) return __("تحتاج صلاحية «إعادة حساب الخطة» لتشغيل المحرك.");
+        if (!can(frm, "recalculate_plan")) return "You need the “Recalculate plan” permission to run the engine.";
         const stageReason = stageMutationBlockReason(frm);
         if (stageReason) return stageReason;
         return "";
@@ -259,7 +284,7 @@
         const boardUX = window.AlmdinaBoardTextUX;
         if (boardUX && typeof boardUX.syncInputs === "function") await boardUX.syncInputs(frm);
         if (!boardUX || !boardUX.canCalculatePlan(frm)) {
-            frappe.msgprint(__("أدخل صنف اللوح ومقاساته وقياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص."));
+            frappe.msgprint(translate("Enter the board item, its dimensions, and at least one valid measurement before calculating the cutting plan."));
             return false;
         }
         return true;
@@ -271,7 +296,7 @@
             return Boolean(await fastSave.persistPendingOrderInputs(frm));
         }
         if (frm && frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(__("تعذر تثبيت تعديلات القياسات قبل حساب خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not persist the measurement changes before calculating the cutting plan. Reload the page and try again."));
             return false;
         }
         return true;
@@ -300,7 +325,8 @@
     async function runRecalculation(frm) {
         await ensureWorkspaceLoaded(frm);
         if (!canCalculate(frm)) {
-            frappe.msgprint(recalculationDisabledReason(frm));
+            const reason = recalculationDisabledReason(frm);
+            frappe.msgprint(reason ? translate(reason) : reason);
             return false;
         }
 
@@ -308,7 +334,7 @@
         const previews = previewOwner();
         const transport = api();
         if (!settings || !transport) {
-            frappe.msgprint(__("تعذر تجهيز خدمة خطة القص. أعد تحميل الصفحة ثم حاول مرة أخرى."));
+            frappe.msgprint(translate("Could not prepare the cutting plan service. Reload the page and try again."));
             return false;
         }
         if (!(await preparePlanInputs(frm))) return false;
@@ -321,7 +347,7 @@
                 if (previews && typeof previews.reset === "function") previews.reset(frm);
                 await refreshWorkspaceOwners(frm);
                 frappe.show_alert({
-                    message: __("تم إنشاء خطة القص الأولى وحفظها وتحديث التكلفة."),
+                    message: translate("The first cutting plan was created, saved, and the cost was updated."),
                     indicator: "green",
                 }, 5);
                 return true;
@@ -331,7 +357,7 @@
             const ok = await previews.preview(frm, settings);
             if (ok) {
                 frappe.show_alert({
-                    message: __("تم إنشاء معاينة جديدة. راجعها ثم اضغط «حفظ» لاعتماد هذا التعديل على الخطة."),
+                    message: translate("A new preview was created. Review it, then press “Save” to apply this change to the plan."),
                     indicator: "blue",
                 }, 5);
             }
@@ -387,26 +413,26 @@
         if (!approvalAllowed(frm, source)) {
             const row = approvalRow(frm, source);
             if (workspaceEditing(frm)) {
-                frappe.msgprint(__("احفظ أو ألغِ تعديل إعدادات الخطة قبل الاعتماد."));
+                frappe.msgprint(translate("Save or cancel the plan settings edit before approval."));
             } else if (row && row.validation && row.validation.needs_recalculation) {
-                frappe.msgprint(
+                frappe.msgprint(translate(
                     source === "Custom"
-                        ? __("بيانات الطلب تغيّرت. ارفع DXF جديدًا يطابق القياسات الحالية ثم اعتمد الخطة.")
-                        : __("أعد حساب خطة القص وراجع النتيجة الجديدة قبل الاعتماد.")
-                );
+                        ? "The order data changed. Upload a new DXF that matches the current measurements, then approve the plan."
+                        : "Recalculate the cutting plan and review the new result before approval."
+                ));
             } else if (!can(frm, "approve_dxf")) {
-                frappe.msgprint(__("ليست لديك صلاحية اعتماد خطة القص."));
+                frappe.msgprint(translate("You do not have permission to approve the cutting plan."));
             } else {
                 const reason = stageMutationBlockReason(frm);
-                frappe.msgprint(reason || __("لا توجد خطة صالحة للاعتماد في الحالة الحالية."));
+                frappe.msgprint(translate(reason || "There is no valid plan to approve in the current state."));
             }
             return false;
         }
 
-        const sourceLabel = source === "Custom" ? __("خطة DXF المرفوعة") : __("خطة النظام الحالية");
-        const warning = approvedPlanName(frm)
-            ? __("يوجد اعتماد سابق. سيؤدي المتابعة إلى إنشاء اعتماد جديد واستبدال الخطة المعتمدة الحالية.")
-            : __("سيتم تثبيت هذه الخطة كنسخة الإنتاج النهائية.");
+        const sourceLabel = translate(source === "Custom" ? "Uploaded DXF plan" : "Current system plan");
+        const warning = translate(approvedPlanName(frm)
+            ? "An approval already exists. Continuing will create a new approval and replace the current approved plan."
+            : "This plan will be fixed as the final production copy.");
         const transport = api();
         if (!transport || typeof transport.approve !== "function") return false;
 
@@ -423,7 +449,7 @@
                         } else if (context && typeof context.ensureStageContext === "function") {
                             await context.ensureStageContext(frm, { force: true });
                         }
-                        frappe.show_alert({ message: __("تم اعتماد خطة القص للإنتاج."), indicator: "green" }, 5);
+                        frappe.show_alert({ message: translate("The cutting plan was approved for production."), indicator: "green" }, 5);
                         resolve(true);
                     } catch (error) {
                         console.error("Cutting plan approval failed", error);
@@ -442,17 +468,17 @@
         const allowed = approvalAllowed(frm, source);
         if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
         button.attr("aria-disabled", allowed ? "false" : "true");
-        setTextIfChanged(button, source === "Custom" ? __("اعتماد خطة DXF") : __("اعتماد خطة القص"));
+        setTextIfChanged(button, translate(source === "Custom" ? "Approve DXF plan" : "Approve cutting plan"));
         if (!allowed) {
             button.attr(
                 "title",
-                row && row.validation && row.validation.needs_recalculation
+                translate(row && row.validation && row.validation.needs_recalculation
                     ? (
                         source === "Custom"
-                            ? __("ارفع DXF جديدًا يطابق بيانات الطلب الحالية قبل الاعتماد")
-                            : __("أعد حساب الخطة قبل اعتمادها")
+                            ? "Upload a new DXF that matches the current order data before approval"
+                            : "Recalculate the plan before approving it"
                     )
-                    : __("الاعتماد غير متاح في حالة الطلب الحالية أو لا توجد صلاحية")
+                    : "Approval is unavailable in the current order state, or you do not have permission")
             );
         } else button.removeAttr("title");
     }
@@ -487,17 +513,19 @@
         const firstPlan = !hasSystemDraft(frm);
         setTextIfChanged(
             button,
-            firstPlan ? __("حساب خطة القص") : __("إعادة الحساب بالإعدادات الحالية")
+            translate(firstPlan ? "Calculate the cutting plan" : "Recalculate with the current settings")
         );
         const allowed = canCalculate(frm);
         if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
         button.attr("aria-disabled", allowed ? "false" : "true");
         button.attr(
             "title",
-            recalculationDisabledReason(frm)
-            || (firstPlan
-                ? __("إنشاء وحفظ أول خطة قص وتحديث التكلفة تلقائيًا")
-                : __("إنشاء معاينة مؤقتة بهذه الإعدادات قبل حفظ التعديل"))
+            translate(
+                recalculationDisabledReason(frm)
+                || (firstPlan
+                    ? "Create and save the first cutting plan and update the cost automatically"
+                    : "Create a temporary preview with these settings before saving the change")
+            )
         );
         const element = button.get(0);
         if (element && !element.__almdinaPlanCommandBound) {
@@ -523,6 +551,7 @@
             return;
         }
 
+        shell.attr("dir", uiDirection());
         const duplicated = shell.find(DUPLICATED_ACTIONS);
         if (duplicated.length) duplicated.remove();
         bindRecalculationAction(frm, shell.find(".dco-recalculate-plan").first());
@@ -533,16 +562,17 @@
             let message;
             if (!hasSystemDraft(frm) && can(frm, "recalculate_plan")) {
                 message = can(frm, "edit_optimizer_settings")
-                    ? "ابدأ بـ«حساب خطة القص». يمكنك تعديل الإعدادات أولًا أو استخدام إعدادات المصنع الحالية. سيتم حفظ الخطة وتحديث التكلفة تلقائيًا."
-                    : "ابدأ بـ«حساب خطة القص». ستستخدم إعدادات الخطة الحالية/إعدادات المصنع وتُحدَّث التكلفة تلقائيًا. تغيير الإعدادات يحتاج صلاحية مستقلة.";
+                    ? "Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically."
+                    : "Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.";
             } else if (can(frm, "edit_optimizer_settings")) {
-                message = "اضغط «تعديل» لتجربة الخوارزميات والإعدادات. إعادة الحساب تنشئ معاينة، ولا يُحفظ التعديل حتى تضغط «حفظ».";
+                message = "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
             } else if (can(frm, "recalculate_plan")) {
-                message = "يمكن إعادة تشغيل المحرك بالإعدادات المحفوظة. تغيير الخوارزمية أو Kerf أو Trim يحتاج صلاحية «تعديل خوارزمية القص».";
+                message = "The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.";
             } else {
-                message = "تحتاج صلاحية «إعادة حساب الخطة» لتشغيل محرك خطة القص.";
+                message = "You need the “Recalculate plan” permission to run the cutting plan engine.";
             }
-            setTextIfChanged(note, message);
+            note.attr("dir", uiDirection());
+            setTextIfChanged(note, translate(message));
         }
     }
 

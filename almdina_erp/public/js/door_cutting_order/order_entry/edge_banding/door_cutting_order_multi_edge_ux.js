@@ -6,20 +6,12 @@
     const EDGE_PROFILE_SAVE_METHOD = "almdina_erp.almdina_erp.services.edge_banding_lookup_service.save_order_edge_banding_override";
     const SIDE_ORDER = ["width_top", "width_bottom", "long_right", "long_left"];
     const SIDES = {
-        long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", labelAr: "الطول الأيمن", labelEn: "Right long edge", axis: "long" },
-        long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", labelAr: "الطول الأيسر", labelEn: "Left long edge", axis: "long" },
-        width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", labelAr: "العرض العلوي", labelEn: "Top width edge", axis: "width" },
-        width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", labelAr: "العرض السفلي", labelEn: "Bottom width edge", axis: "width" },
+        long_right: { selectedField: "edge_long_right", overrideField: "edge_long_right_type_override", label: "Right length side", axis: "long" },
+        long_left: { selectedField: "edge_long_left", overrideField: "edge_long_left_type_override", label: "Left length side", axis: "long" },
+        width_top: { selectedField: "edge_width_top", overrideField: "edge_width_top_type_override", label: "Top width side", axis: "width" },
+        width_bottom: { selectedField: "edge_width_bottom", overrideField: "edge_width_bottom_type_override", label: "Bottom width side", axis: "width" },
     };
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang || ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -292,9 +284,9 @@
         const config = SIDES[side];
         return {
             side,
-            side_label: isArabic() ? config.labelAr : config.labelEn,
+            side_label: __(config.label),
             axis: config.axis,
-            axis_label: config.axis === "long" ? "الطول" : "العرض",
+            axis_label: __(config.axis === "long" ? "Length" : "Width"),
             edge_type: item.type,
             custom: item.custom,
             thickness_mm: item.thickness,
@@ -322,20 +314,20 @@
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger{
                 display:flex!important;position:absolute;z-index:4;top:-10px;inset-inline-end:-4px;
                 align-items:center;justify-content:center;width:17px;height:17px;border-radius:999px;
-                border:1px solid var(--border-color,#cbd2d9);background:var(--card-bg,#fff);
+                border:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-card,#ffffff);
                 color:var(--text-muted,#64707d);font-size:12px!important;font-weight:900;line-height:1;
                 box-shadow:0 2px 5px rgba(15,23,42,.12);cursor:pointer;opacity:.42;
                 transition:transform .12s ease,opacity .12s ease,border-color .12s ease,background .12s ease;
             }
             .dco-col-edges .dco-check-toggle.is-checked>.dco-side-profile-trigger{opacity:.9}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger:hover{opacity:1;transform:translateY(-1px);border-color:var(--alm-primary,#172033)}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{opacity:1;background:#fff6db;border-color:#d7a514;color:#8b6400;box-shadow:0 2px 6px rgba(185,132,0,.2)}
-            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:#fff0f0;border-color:#df5a5a;color:#b72d2d;opacity:1}
+            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-custom{opacity:1;background:color-mix(in srgb, #d7a514 14%, var(--alm-card,#ffffff));border-color:#d7a514;color:#d7a514;box-shadow:0 2px 6px rgba(185,132,0,.2)}
+            .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-missing{background:color-mix(in srgb, #df5a5a 12%, var(--alm-card,#ffffff));border-color:#df5a5a;color:#df5a5a;opacity:1}
             .dco-col-edges .dco-check-toggle>.dco-side-profile-trigger.is-readonly{display:none!important}
             .dco-check-toggle.dco-edge-position-readonly{cursor:default!important}
             .dco-side-edge-help{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent);font-weight:700}
             .dco-side-edge-help b{font-size:12px}
-            .dco-side-profile-summary{padding:8px 10px;border:1px solid var(--border-color,#dfe3e8);border-radius:9px;background:var(--subtle-fg,#f7f9fb);line-height:1.7}
+            .dco-side-profile-summary{padding:8px 10px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:9px;background:var(--alm-surface-muted,#f4f6f8);line-height:1.7}
             .dco-side-profile-summary strong{display:block;font-size:13px}.dco-side-profile-summary span{font-size:11px;color:var(--text-muted,#66717e)}
         `;
         document.head.appendChild(style);
@@ -348,21 +340,20 @@
 
     function indicatorTitle(frm, row, side) {
         const config = SIDES[side];
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         if (!sideSelected(row, side)) {
-            return isArabic() ? `${label}: لا يوجد قشاط على هذا الضلع في الطلب` : `${label}: no edge banding on this side`;
+            return __("{0}: no edge banding on this side", [label]);
         }
         const type = effectiveType(frm, row, side);
         const profile = profileFor(frm, row, side);
-        const mode = overrideType(row, side) ? (isArabic() ? "مخصص" : "Custom") : (isArabic() ? "افتراضي" : "Default");
-        let meta = isArabic() ? "نوع غير متاح" : "Unavailable profile";
+        const mode = overrideType(row, side) ? (__("Custom")) : (__("Default"));
+        let meta = __("Unavailable profile");
         if (profile) {
-            meta = `${format(profile.thickness_mm)} مم`;
-            if (financialProfilesAvailable(frm)) {
-                meta += ` · $ ${money(profile.rate_usd_per_meter)}/م`;
-            }
+            meta = financialProfilesAvailable(frm)
+                ? __("{0} mm · $ {1}/m", [format(profile.thickness_mm), money(profile.rate_usd_per_meter)])
+                : __("{0} mm", [format(profile.thickness_mm)]);
         }
-        return `${label} — ${type || "—"} — ${mode} — ${meta}`;
+        return __("{0} — {1} — {2} — {3}", [label, type || "—", mode, meta]);
     }
 
     function decorateToggle(frm, row, toggle) {
@@ -373,7 +364,7 @@
             indicator = document.createElement("span");
             indicator.className = "dco-side-profile-trigger";
             indicator.setAttribute("role", "button");
-            indicator.setAttribute("aria-label", isArabic() ? "اختيار نوع القشاط لهذا الضلع" : "Choose this side edge profile");
+            indicator.setAttribute("aria-label", __("Choose this side edge profile"));
             indicator.dataset.edgeSide = side;
             toggle.appendChild(indicator);
         }
@@ -429,9 +420,7 @@
             hint.className = "dco-side-edge-help";
             help.appendChild(hint);
         }
-        hint.innerHTML = isArabic()
-            ? '<b>⌄</b><span>كل ضلع يأخذ الافتراضي؛ اضغط الرمز فوق ضلع عليه قشاط لاختيار نوع مختلف</span>'
-            : '<b>⌄</b><span>Each side uses the default; use the icon on a banded side to choose a different profile</span>';
+        hint.innerHTML = `<b>⌄</b><span>${__("Each side uses the default; use the icon on a banded side to choose a different profile")}</span>`;
     }
 
     function apply(frm) {
@@ -482,14 +471,14 @@
                 edge_type: nextType,
             },
             freeze: true,
-            freeze_message: isArabic() ? "جارٍ حفظ نوع القشاط..." : "Saving edge profile...",
+            freeze_message: __("Saving edge profile..."),
         }).then(response => {
             const message = (response && response.message) || {};
             applySavedPiece(row, message.piece || {});
             if (dialog) dialog.hide();
             schedule(frm);
             frappe.show_alert({
-                message: isArabic() ? "تم حفظ نوع القشاط." : "Edge profile saved.",
+                message: __("Edge profile saved."),
                 indicator: "green",
             });
             const root = rootFor(frm);
@@ -506,13 +495,12 @@
     function defaultSummary(frm) {
         const type = String(frm.doc.default_edge_type || "").trim();
         const profile = type ? profiles(frm).get(type) || null : null;
-        if (!type) return isArabic() ? "لم يتم اختيار قشاط افتراضي للطلب." : "No default edge profile selected.";
-        if (!profile) return `${esc(type)} — ${isArabic() ? "جاري تحميل البيانات أو النوع غير متاح" : "Loading or unavailable"}`;
-        let summary = `${esc(type)} — ${format(profile.thickness_mm)} مم`;
+        if (!type) return __("No default edge profile selected.");
+        if (!profile) return `${esc(type)} — ${__("Loading or unavailable")}`;
         if (financialProfilesAvailable(frm)) {
-            summary += ` — $ ${money(profile.rate_usd_per_meter)}/م`;
+            return `${esc(type)} — ${esc(__("{0} mm — $ {1}/m", [format(profile.thickness_mm), money(profile.rate_usd_per_meter)]))}`;
         }
-        return summary;
+        return `${esc(type)} — ${esc(__("{0} mm", [format(profile.thickness_mm)]))}`;
     }
 
     function profileSelectOptions(frm, current = "") {
@@ -540,10 +528,10 @@
         const row = materialize(frm, tr);
         if (!row) return;
         const config = SIDES[side];
-        const label = isArabic() ? config.labelAr : config.labelEn;
+        const label = __(config.label);
         if (!sideSelected(row, side)) {
             frappe.show_alert({
-                message: isArabic() ? `لا يوجد قشاط على ${label} في الطلب.` : `No edge banding is selected on ${label}.`,
+                message: __("No edge banding is selected on {0}.", [label]),
                 indicator: "orange",
             });
             return;
@@ -551,25 +539,23 @@
         const current = overrideType(row, side);
 
         const dialog = new frappe.ui.Dialog({
-            title: isArabic() ? `اختيار قشاط ${label}` : `Choose ${label} profile`,
+            title: __("Choose {0} profile", [label]),
             fields: [
                 {
                     fieldname: "default_summary",
                     fieldtype: "HTML",
-                    options: `<div class="dco-side-profile-summary"><strong>${isArabic() ? "القشاط الافتراضي" : "Default profile"}</strong><span>${defaultSummary(frm)}</span></div>`,
+                    options: `<div class="dco-side-profile-summary"><strong>${__("Default profile")}</strong><span>${defaultSummary(frm)}</span></div>`,
                 },
                 {
                     fieldname: "edge_type_override",
                     fieldtype: "Select",
                     options: profileSelectOptions(frm, current),
-                    label: isArabic() ? "نوع القشاط لهذا الضلع" : "Profile for this side",
-                    description: isArabic()
-                        ? "اترك الحقل فارغًا ليستخدم هذا الضلع القشاط الافتراضي للطلب."
-                        : "Leave empty to use the order default.",
+                    label: __("Profile for this side"),
+                    description: __("Leave empty to use the order default."),
                     default: current,
                 },
             ],
-            primary_action_label: isArabic() ? "حفظ النوع" : "Save profile",
+            primary_action_label: __("Save profile"),
             primary_action(values) {
                 const nextType = String(values.edge_type_override || "").trim();
                 commitOverride(frm, row, side, nextType, dialog).catch(error => {
@@ -584,7 +570,7 @@
             const reset = document.createElement("button");
             reset.type = "button";
             reset.className = "btn btn-default btn-sm";
-            reset.textContent = isArabic() ? "استخدام الافتراضي" : "Use default";
+            reset.textContent = __("Use default");
             reset.addEventListener("click", () => {
                 commitOverride(frm, row, side, "", dialog).catch(error => {
                     console.error("Failed to reset edge profile override", error);
@@ -689,11 +675,19 @@
         qty(frm) { schedule(frm); },
     });
 
+    function thicknessForType(frm, typeName) {
+        const name = String(typeName || "").trim();
+        if (!name) return null;
+        const profile = profiles(frm).get(name);
+        return profile ? num(profile.thickness_mm) : null;
+    }
+
     window.AlmdinaMultiEdgeBanding = {
         ensureProfiles,
         profiles,
         effectiveType,
         profileFor,
+        thicknessForType,
         calculate,
         details,
         detailForSide,

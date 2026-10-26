@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     const COST_INPUT_FIELDS = Object.freeze([
         "board_rate_usd",
         "cutting_cost_per_board_usd",
@@ -120,11 +137,9 @@
     }
 
     function orderIsEditable(frm) {
-        // Pricing has its own capabilities and its own Cost edit session. Do not
-        // call frappe.almdina.orderCanEdit() here: that helper intentionally also
-        // requires edit_order + the Order edit session and would couple two
-        // independent permission surfaces. Mirror the server-side
-        // assert_order_editable() lifecycle boundary instead.
+        // Cost Settings authority is evaluated on this document by the server
+        // snapshot and the financial save command. Keep its document lifecycle
+        // boundary aligned here without coupling it to the Order edit session.
         if (!frm || !frm.doc || frm.is_new()) return false;
         if (Number(frm.doc.docstatus || 0) !== 0) return false;
         if (String(frm.doc.revision_state || "Current") === "Superseded") return false;
@@ -132,9 +147,9 @@
     }
 
     function editSessionActive(frm) {
-        // Inline prices are part of the Cost tab, so the Cost edit session is the
-        // primary owner. Keep the Order session fallback for legacy callers that
-        // still save price edits through the order-level edit flow.
+        // Special pricing uses the Cost edit session exclusively. The Order
+        // session fallback remains for clipped-corner prices on their existing
+        // configured capability path.
         const costEditUx = window.AlmdinaCostEditSessionUX;
         if (
             costEditUx
@@ -165,9 +180,7 @@
             return piece.__almdina_pending_price_capability;
         }
         if (piece.piece_type === "Special") {
-            return piece.special_shape_price_status === "Approved"
-                ? "edit_special_price"
-                : "approve_special_price";
+            return "edit_cost_settings";
         }
         if (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner") {
             return piece.clipped_corner_edge_price_status === "Priced"
@@ -178,9 +191,20 @@
     }
 
     function canEditInlinePiecePrice(frm, piece) {
-        if (!frm || !piece || !orderIsEditable(frm) || !editSessionActive(frm)) {
+        if (!frm || !piece) {
             return false;
         }
+        if (piece.piece_type === "Special") {
+            const costEditUx = window.AlmdinaCostEditSessionUX;
+            return Boolean(
+                costEditUx
+                && typeof costEditUx.canEditCostSettings === "function"
+                && costEditUx.canEditCostSettings(frm)
+                && typeof costEditUx.isEditing === "function"
+                && costEditUx.isEditing(frm)
+            );
+        }
+        if (!orderIsEditable(frm) || !editSessionActive(frm)) return false;
         const capability = requiredInlinePriceCapability(piece);
         return Boolean(capability && can(frm, capability));
     }
@@ -242,6 +266,10 @@
 
     function rememberPendingCapability(piece, kind) {
         if (!piece || piece.__almdina_pending_price_capability) return;
+        if (kind !== "clipped") {
+            piece.__almdina_pending_price_capability = "edit_cost_settings";
+            return;
+        }
         if (kind === "clipped") {
             piece.__almdina_pending_price_capability =
                 piece.clipped_corner_edge_price_status === "Priced"
@@ -303,6 +331,22 @@
         return (frm.doc.pieces || []).filter((piece) => piece.__almdina_pending_price_edit);
     }
 
+    function pendingSpecialPrices(frm) {
+        return pendingPricePieces(frm)
+            .filter((piece) => piece.__almdina_pending_price_edit === "special")
+            .map((piece) => ({
+                piece_name: piece.name,
+                unit_price_usd: piece.special_shape_custom_unit_price_usd,
+                note: piece.special_shape_price_note || "",
+            }));
+    }
+
+    function clearPendingSpecialPrices(frm) {
+        pendingPricePieces(frm)
+            .filter((piece) => piece.__almdina_pending_price_edit === "special")
+            .forEach(clearPendingPriceMarker);
+    }
+
     function clearPendingPriceMarker(piece) {
         if (!piece) return;
         delete piece.__almdina_pending_price_edit;
@@ -326,10 +370,10 @@
     function rememberPricingCommandModified(frm, response) {
         const payload = response && response.message !== undefined
             ? response.message
-            : null;
+            : response;
         const modified = String(payload && payload.order_modified || "").trim();
         if (!modified) {
-            throw new Error(__("لم يعُد الخادم بنسخة الطلب بعد حفظ السعر."));
+            throw new Error("The server did not return the order revision after saving the price.");
         }
         frm.__almdina_pricing_command_modified = modified;
         return modified;
@@ -365,41 +409,43 @@
 
         const token = captureDocument(frm);
         const orderName = String(frm && frm.doc && frm.doc.name || "");
-        for (const piece of pending) {
+        const specialPrices = pendingSpecialPrices(frm);
+        if (specialPrices.length) {
+            const costApi = window.AlmdinaCostWorkspaceAPI;
+            if (!costApi || typeof costApi.saveWorkspace !== "function") return false;
+            const expectedModified = pricingExpectedModified(frm);
+            if (!expectedModified) {
+                throw new Error("Could not verify the current order revision. Reload the order and try again.");
+            }
+            const response = await costApi.saveWorkspace(
+                orderName,
+                { special_prices: specialPrices },
+                expectedModified
+            );
+            if (!documentStillCurrent(frm, token)) return false;
+            rememberPricingCommandModified(frm, response);
+            clearPendingSpecialPrices(frm);
+        }
+
+        for (const piece of pending.filter(row => row.__almdina_pending_price_edit === "clipped")) {
             if (!documentStillCurrent(frm, token)) return false;
             const expectedModified = pricingExpectedModified(frm);
             if (!expectedModified) {
-                throw new Error(__("تعذر التحقق من نسخة الطلب الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."));
+                throw new Error("Could not verify the current order revision. Reload the order and try again.");
             }
 
-            let response;
-            if (piece.__almdina_pending_price_edit === "clipped") {
-                response = await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
-                    args: {
-                        order_name: orderName,
-                        piece_name: piece.name,
-                        edge_price_usd: piece.clipped_corner_edge_price_usd,
-                        note: piece.clipped_corner_edge_price_note || "",
-                        expected_modified: expectedModified,
-                    },
-                    freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار القشاط..."),
-                });
-            } else {
-                response = await frappe.call({
-                    method: "almdina_erp.almdina_erp.services.cost_permission_service.approve_special_piece_price",
-                    args: {
-                        order_name: orderName,
-                        piece_name: piece.name,
-                        unit_price_usd: piece.special_shape_custom_unit_price_usd,
-                        note: piece.special_shape_price_note || "",
-                        expected_modified: expectedModified,
-                    },
-                    freeze: true,
-                    freeze_message: __("جاري اعتماد أسعار الدرف الخاصة..."),
-                });
-            }
+            const response = await frappe.call({
+                method: "almdina_erp.almdina_erp.services.cost_permission_service.update_clipped_corner_edge_price",
+                args: {
+                    order_name: orderName,
+                    piece_name: piece.name,
+                    edge_price_usd: piece.clipped_corner_edge_price_usd,
+                    note: piece.clipped_corner_edge_price_note || "",
+                    expected_modified: expectedModified,
+                },
+                freeze: true,
+                freeze_message: translate("Saving the edge prices..."),
+            });
             if (!documentStillCurrent(frm, token)) return false;
             rememberPricingCommandModified(frm, response);
             clearPendingPriceMarker(piece);
@@ -432,14 +478,14 @@
 
     function inlinePriceLabel(piece) {
         if (piece && piece.piece_type === "Special") {
-            return __("السعر الخاص الشامل للدرفة");
+            return translate("Inclusive special door price");
         }
         if (piece && (piece.piece_type === "Clipped Corner" || piece.piece_type === "L-Shaped Corner")) {
             return piece.piece_type === "L-Shaped Corner"
-                ? __("تكلفة معالجة قشاط زاوية L")
-                : __("تكلفة معالجة قشاط الزاوية المقصوصة");
+                ? translate("L-shaped corner edge processing cost")
+                : translate("Clipped-corner edge processing cost");
         }
-        return __("السعر");
+        return translate("Price");
     }
 
     function bindInlinePriceInputs(frm) {
@@ -454,7 +500,7 @@
             const priceLabel = inlinePriceLabel(piece);
             input.setAttribute(
                 "aria-label",
-                editable ? `${__("تعديل السعر")}: ${priceLabel}` : priceLabel
+                editable ? `${translate("Edit price")}: ${priceLabel}` : priceLabel
             );
             if (editable) {
                 input.removeAttribute("readonly");
@@ -473,7 +519,9 @@
                 input.getAttribute("data-price-kind"),
                 input.value
             );
-            markFormDirty(frm);
+            if (input.getAttribute("data-price-kind") === "clipped") {
+                markFormDirty(frm);
+            }
             const cell = input.closest(".dco-special-price-cell");
             if (cell) {
                 const priced = Number(input.value) > 0;
@@ -616,6 +664,11 @@
     }
 
     frappe.ui.form.on("Door Cutting Order", {
+        before_save(frm) {
+            if (!pendingSpecialPrices(frm).length) return;
+            frappe.validated = false;
+            frappe.msgprint(translate("Save special door prices from the Cost edit session."));
+        },
         onload_post_render(frm) {
             scheduleApply(frm);
         },
@@ -650,5 +703,7 @@
         flushPendingPriceEdits,
         discardPendingPriceEdits,
         pendingPricePieces,
+        pendingSpecialPrices,
+        clearPendingSpecialPrices,
     });
 })();

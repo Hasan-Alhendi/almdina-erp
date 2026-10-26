@@ -13,19 +13,49 @@ const source = fs.readFileSync(
     "utf8"
 );
 
+const ARABIC = {
+    Regular: "عادية",
+    Special: "خاصة",
+    "Clipped corner": "الزاوية الكسر",
+    "L-shaped corner": "زاوية L",
+    Glass: "درفة بلور",
+    "Piece type": "نوع الدرفة",
+    "Full Double": "دبل كامل",
+    Liner: "لاينر",
+    "Back Groove": "فرزة ظهر",
+    "Recessed Handle": "مسكة غطس",
+    "Recessed Handle Cutout": "حفر مسكة غطس",
+    "Double Edge": "دبل ضلع",
+    "Full Door Double": "دبل كامل الدرفة",
+    "Add-ons": "الإضافات",
+};
+let useArabic = true;
+function __(value) {
+    const text = Array.isArray(value) ? value[0] : value;
+    return useArabic ? (ARABIC[text] || text) : text;
+}
+
 const fakeWindow = {};
+const documentStub = { documentElement: { lang: "ar" } };
+const csv = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+const translations = new Map(csv.split(/\r?\n/).map(line => {
+    const delimiter = line.indexOf(",");
+    return delimiter < 0 ? ["", ""] : [line.slice(0, delimiter), line.slice(delimiter + 1).split(",")[0]];
+}));
+function translate(message) {
+    return documentStub.documentElement.lang === "ar"
+        ? (translations.get(String(message)) || String(message))
+        : String(message);
+}
 const context = vm.createContext({
     window: fakeWindow,
-    document: { documentElement: { lang: "ar" } },
+    document: documentStub,
+    __: translate,
     frappe: {
         boot: { lang: "ar" },
-        utils: {
-            escape_html(value) {
-                return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;");
-            },
-        },
-        ui: { form: { on() {} } },
+        utils: { escape_html(value) { return String(value); } },
     },
+    __,
     Object,
     Array,
     Boolean,
@@ -38,115 +68,112 @@ vm.runInContext(source, context);
 
 const api = fakeWindow.AlmdinaExtraDoorAddonsUX;
 assert.ok(api);
-assert.equal(api.TYPE, "Extra");
 assert.deepEqual(
-    JSON.parse(JSON.stringify(api.selectedFields({
-        piece_type: "Extra",
-        extra_double: 1,
-        extra_liner: 0,
-        extra_back_groove: 0,
-        extra_recessed_handle_cutout: 1,
-    }).map(item => item.fieldname))),
-    ["extra_double", "extra_recessed_handle_cutout"]
+    JSON.parse(JSON.stringify(api.PIECE_TYPES.map(item => item.value))),
+    ["Regular", "Special", "Clipped Corner", "L-Shaped Corner", "Glass"]
 );
 assert.deepEqual(
-    JSON.parse(JSON.stringify(api.selectedFields({
-        piece_type: "Extra",
-        extra_back_groove: 1,
-    }).map(item => item.fieldname))),
-    ["extra_back_groove"]
+    JSON.parse(JSON.stringify(api.FIELDS.map(item => item.button))),
+    ["Double Edge", "Full Double", "Liner", "Back Groove", "Recessed Handle"]
 );
+
+for (const pieceType of api.PIECE_TYPES.map(item => item.value)) {
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(api.selectedFields({
+            piece_type: pieceType,
+            extra_double: 1,
+            extra_liner: 1,
+        }).map(item => item.fieldname))),
+        ["extra_double", "extra_liner"]
+    );
+}
 
 assert.equal(api.physicalCutQuantity({ qty: 3, extra_full_door_double: 1 }), 6);
-assert.equal(api.physicalCutQuantity({ qty: 3 }), 3);
+assert.equal(api.physicalCutQuantity({ qty: 3, extra_liner: 1 }), 3);
 
-const regularPicker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
-assert.match(regularPicker, /<select class="dco-fast-select dco-piece-type-select"/);
-assert.match(regularPicker, /data-field="piece_type"/);
-assert.match(regularPicker, />عادية<\/option>/);
-assert.doesNotMatch(regularPicker, /dco-piece-type-trigger/);
-assert.doesNotMatch(regularPicker, /dco-extra-open-button/);
+const picker = api.renderTypePicker({ piece_type: "Regular" }, { editable: true });
+assert.match(picker, /<select class="dco-fast-select dco-piece-type-select"/);
+assert.match(picker, /data-field="piece_type"/);
+assert.match(picker, />عادية<\/option>/);
+assert.match(picker, />خاصة<\/option>/);
+assert.match(picker, />الزاوية الكسر<\/option>/);
+assert.match(picker, />زاوية L<\/option>/);
+assert.match(picker, /value="Glass"/);
+assert.match(picker, />درفة بلور<\/option>/);
+assert.doesNotMatch(picker, /value="Extra"/);
 
-const specialIndex = regularPicker.indexOf(">خاصة</option>");
-const cornerIndex = regularPicker.indexOf(">الزاوية الكسر</option>");
-const lCornerIndex = regularPicker.indexOf(">زاوية L</option>");
-const extraIndex = regularPicker.indexOf(">Extra</option>");
-assert.ok(specialIndex > regularPicker.indexOf(">عادية</option>"));
-assert.ok(cornerIndex > specialIndex);
-assert.ok(lCornerIndex > cornerIndex);
-assert.ok(extraIndex > lCornerIndex);
+const emptySummary = api.addonSummary({});
+assert.equal(emptySummary.label, "الإضافات");
+assert.equal(emptySummary.hidden, 0);
+assert.deepEqual(JSON.parse(JSON.stringify(emptySummary.names)), []);
+const emptyButton = api.renderAddonSummary({}, { editable: true });
+assert.match(emptyButton, /data-open-addons="1"/);
+assert.match(emptyButton, /الإضافات/);
+const readOnlySummary = api.renderAddonSummary({ extra_liner: 1 }, { editable: false, virtual: false });
+assert.match(readOnlySummary, /data-open-addons="1"/);
+assert.doesNotMatch(readOnlySummary, /disabled/);
+assert.match(api.renderAddonSummary({}, { editable: false, virtual: true }), /disabled/);
+assert.doesNotMatch(emptyButton, />0<|>\+0</);
 
-const emptyExtra = api.renderTypePicker({ piece_type: "Extra" }, { editable: true });
-assert.match(emptyExtra, /dco-piece-type-select/);
-assert.match(emptyExtra, /dco-extra-open-button/);
-assert.match(emptyExtra, /اختر إضافة واحدة على الأقل/);
+const one = api.addonSummary({ extra_liner: 1 });
+assert.deepEqual(JSON.parse(JSON.stringify(one.names)), ["لاينر"]);
+assert.equal(one.label, "لاينر");
+assert.match(api.renderAddonSummary({ extra_liner: 1 }, { editable: true }), /لاينر/);
 
-const selectedExtra = api.renderTypePicker(
-    { piece_type: "Extra", extra_liner: 1, extra_double: 1 },
-    { editable: true }
+const two = api.addonSummary({ extra_liner: 1, extra_back_groove: 1, extra_double: 0 });
+assert.equal(two.label, "لاينر · فرزة ظهر");
+assert.equal(two.hidden, 0);
+assert.equal(two.tooltip, "لاينر · فرزة ظهر");
+
+const many = api.addonSummary({
+    extra_double: 1,
+    extra_liner: 1,
+    extra_back_groove: 1,
+    extra_recessed_handle_cutout: 1,
+});
+assert.deepEqual(JSON.parse(JSON.stringify(many.names)), ["دبل ضلع", "لاينر", "فرزة ظهر", "مسكة غطس"]);
+assert.equal(many.label, "دبل ضلع · لاينر");
+assert.equal(many.hidden, 2);
+assert.equal(many.tooltip, "دبل ضلع · لاينر · فرزة ظهر · مسكة غطس");
+const manyButton = api.renderAddonSummary({
+    extra_double: 1,
+    extra_liner: 1,
+    extra_back_groove: 1,
+    extra_recessed_handle_cutout: 1,
+}, { editable: true });
+assert.match(manyButton, /دبل ضلع · لاينر/);
+assert.match(manyButton, /\+2/);
+assert.match(manyButton, /title="دبل ضلع · لاينر · فرزة ظهر · مسكة غطس"/);
+assert.doesNotMatch(manyButton, /✓|dco-check-mark/);
+
+useArabic = false;
+const english = api.addonSummary({ extra_recessed_handle_cutout: 1 });
+assert.equal(english.label, "Recessed Handle");
+useArabic = true;
+
+const row = { extra_double: 1, extra_full_door_double: 0 };
+assert.deepEqual(
+    JSON.parse(JSON.stringify(api.enforceMutualExclusivity(row, "extra_full_door_double", true))),
+    ["extra_full_door_double", "extra_double"]
 );
-assert.match(selectedExtra, /دبل قشاط، لاينر/);
-assert.match(selectedExtra, /dco-extra-open-count">2<\/b>/);
-
-const submenu = api.renderSubmenu({ piece_type: "Extra" });
-assert.match(submenu, /إضافات Extra/);
-assert.match(submenu, /لاينر/);
-assert.match(submenu, /فرزة ظهر/);
-assert.match(submenu, /دبل قشاط/);
-assert.match(submenu, /دبل كامل الدرفة/);
-assert.match(submenu, /حفر مسكة غطس/);
-assert.match(submenu, /يمكن اختيار أكثر من خيار/);
-assert.doesNotMatch(submenu, /data-piece-type-option/);
-assert.doesNotMatch(submenu, /تطبيق/);
-assert.doesNotMatch(submenu, /إلغاء/);
-
-const typeMenu = api.renderTypeMenu({ piece_type: "Regular" });
-assert.match(typeMenu, /data-piece-type-option="Regular"/);
-assert.match(typeMenu, /data-piece-type-option="Special"/);
-assert.match(typeMenu, /data-piece-type-option="Extra"/);
-assert.match(typeMenu, /dco-piece-type-has-submenu/);
-assert.match(typeMenu, /dco-piece-type-submenu-arrow/);
-assert.match(typeMenu, /aria-haspopup="menu"/);
-assert.match(typeMenu, /dco-piece-type-check/);
-assert.match(typeMenu, /aria-checked="true"/);
-assert.match(typeMenu, />عادية<\/span>/);
-assert.match(typeMenu, />Extra<\/span>/);
-assert.doesNotMatch(typeMenu, /dco-piece-type-trigger/);
-
-// In-place type refresh must preserve the actual native select node so the
-// table-performance owner can restore keyboard focus after changing the type.
-const nativeSelect = { value: "Regular", disabled: false };
-const nativeShell = {
-    dataset: {},
-    querySelector(selector) {
-        return selector === "select.dco-piece-type-select[data-field='piece_type']"
-            ? nativeSelect
-            : null;
-    },
-    querySelectorAll() { return []; },
-};
-const typeCell = {
-    querySelector(selector) {
-        return selector === ".dco-piece-type-native" ? nativeShell : null;
-    },
-};
-const tableRow = {
-    classList: { toggle() {} },
-    querySelector(selector) {
-        if (selector === ".dco-col-type") return typeCell;
-        if (selector === ".dco-col-notes") return null;
-        return null;
-    },
-};
-api.syncRowPresentation({}, tableRow, { piece_type: "Special" }, { editable: true });
-assert.strictEqual(
-    nativeShell.querySelector("select.dco-piece-type-select[data-field='piece_type']"),
-    nativeSelect
+assert.equal(row.extra_double, 0);
+assert.equal(row.extra_full_door_double, 1);
+assert.deepEqual(
+    JSON.parse(JSON.stringify(api.enforceMutualExclusivity(row, "extra_liner", true))),
+    ["extra_liner"]
 );
-assert.equal(nativeSelect.value, "Special");
-assert.equal(nativeSelect.disabled, false);
+assert.equal(row.extra_full_door_double, 1);
 
-assert.match(api.notesCueHtml({ piece_type: "Extra", notes: "" }), /اكتب تفاصيل التنفيذ/);
-assert.equal(api.notesCueHtml({ piece_type: "Extra", notes: "تم" }), "");
+const glass = { piece_type: "Glass", glass_margin_mm: 65 };
+assert.equal(api.reconcilePieceType({ dirty() {} }, glass), false);
+assert.equal(glass.piece_type, "Glass");
+assert.equal(glass.glass_margin_mm, 65);
 
-console.log("Extra door add-ons cascade-menu UX simulation passed");
+const legacy = { piece_type: "Extra", extra_liner: 1 };
+let dirtyCalls = 0;
+assert.equal(api.reconcilePieceType({ dirty() { dirtyCalls += 1; } }, legacy), true);
+assert.equal(legacy.piece_type, "Regular");
+assert.equal(legacy.extra_liner, 1);
+assert.equal(dirtyCalls, 1);
+
+console.log("Independent door add-ons UX simulation passed");

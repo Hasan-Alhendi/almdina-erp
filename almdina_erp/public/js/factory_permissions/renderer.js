@@ -13,6 +13,18 @@
 
         const t = (message, replacements) => replacements ? translate(message, replacements) : translate(message);
 
+        function uiDirection() {
+            const locale = window.AlmdinaLocale;
+            if (locale && typeof locale.direction === "function") {
+                const value = locale.direction();
+                if (value === "ltr" || value === "rtl") return value;
+            }
+            const root = typeof document !== "undefined" ? document.documentElement : null;
+            const dir = root && root.getAttribute("dir");
+            return dir === "ltr" ? "ltr" : "rtl";
+        }
+
+
         function icon(name, size) {
             if (frappe.utils && typeof frappe.utils.icon === "function") {
                 return frappe.utils.icon(name, size || "sm");
@@ -28,6 +40,21 @@
             return ui.button(options);
         }
 
+        function uiBadge(options) {
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.badge !== "function") {
+                throw new Error("AlmdinaUi.badge is required for Factory Permissions rendering");
+            }
+            return ui.badge(options);
+        }
+
+        const CAPABILITY_BADGE_TONES = Object.freeze({
+            standard: "info",
+            permission: "info",
+            sensitive: "warning",
+            critical: "danger",
+        });
+
         function uiControl(options) {
             const ui = window.AlmdinaUi;
             if (!ui || typeof ui.control !== "function") {
@@ -40,17 +67,17 @@
 
         function renderShell() {
             $main.html(`
-                <div class="almdina-ui apc-shell">
-                    <header class="apc-hero">
-                        <div class="apc-hero-copy">
-                            <div class="apc-eyebrow">${t("إدارة الصلاحيات")}</div>
+                <div class="almdina-ui apc-shell alm-page alm-page--admin" dir="${uiDirection()}">
+                    <header class="apc-hero alm-page-intro">
+                        <div class="apc-hero-copy alm-page-intro__copy">
+                            <div class="apc-eyebrow alm-page-intro__eyebrow">${t("Permission management")}</div>
                             <div class="apc-hero-title-row">
                                 <span class="apc-hero-icon" aria-hidden="true">${icon("shield", "md")}</span>
-                                <h2>${t("مصفوفة صلاحيات Almdina")}</h2>
+                                <h2 class="alm-page-intro__title">${t("Almdina permission matrix")}</h2>
                             </div>
-                            <p>${t("اختر الدور ثم امنحه الصلاحيات يدويًا من الصفر. لا توجد قوالب جاهزة ولا صلاحيات تلقائية. يمكن نقل مصفوفة موجودة عبر JSON بعد معاينتها، ولن يتم الحفظ تلقائيًا.")}</p>
+                            <p class="alm-page-intro__description">${t("Select a role, then grant it permissions manually from scratch. There are no ready-made templates or automatic permissions. An existing matrix can be transferred via JSON after previewing it, and nothing is saved automatically.")}</p>
                         </div>
-                        <div class="apc-actor apc-session-card" aria-label="${t("المستخدم الحالي")}"></div>
+                        <div class="apc-actor apc-session-card" aria-label="${t("Current user")}"></div>
                     </header>
 
                     <div class="apc-toolbar apc-toolbar--split">
@@ -59,13 +86,13 @@
                                 <div class="apc-panel-title-with-icon">
                                     <span class="apc-panel-icon" aria-hidden="true">${icon("users", "sm")}</span>
                                     <div>
-                                        <div class="apc-panel-kicker">${t("الدور النشط")}</div>
-                                        <div class="apc-panel-title">${t("الدور النشط ونقل الصلاحيات")}</div>
+                                        <div class="apc-panel-kicker">${t("Active role")}</div>
+                                        <div class="apc-panel-title">${t("Active role and permission transfer")}</div>
                                     </div>
                                 </div>
                                 <div class="apc-transfer-tools apc-transfer-tools--compact">
-                                    ${uiButton({ label: t("تصدير"), variant: "secondary", className: "apc-export apc-transfer-btn" })}
-                                    ${uiButton({ label: t("استيراد"), variant: "secondary", className: "apc-import apc-transfer-btn" })}
+                                    ${uiButton({ label: t("Export"), variant: "secondary", className: "apc-export apc-transfer-btn" })}
+                                    ${uiButton({ label: t("Import"), variant: "secondary", className: "apc-import apc-transfer-btn" })}
                                 </div>
                             </div>
                             <div class="apc-role-combo">
@@ -78,41 +105,41 @@
                                 <div class="apc-panel-title-with-icon">
                                     <span class="apc-panel-icon" aria-hidden="true">${icon("es-line-chart", "sm")}</span>
                                     <div>
-                                        <div class="apc-panel-kicker">${t("نظرة سريعة")}</div>
-                                        <div class="apc-panel-title">${t("ملخص الصلاحيات")}</div>
+                                        <div class="apc-panel-kicker">${t("Quick look")}</div>
+                                        <div class="apc-panel-title">${t("Permission summary")}</div>
                                     </div>
                                 </div>
                                 ${uiButton({
-                                    label: t("تحديد الكل / إلغاء"),
+                                    label: t("Select all / Clear"),
                                     variant: "secondary",
                                     className: "apc-bulk-toggle apc-select-all-global apc-link-toggle",
                                 })}
                             </div>
-                            <div class="apc-stats">
-                                <div class="apc-stat apc-stat-total"><strong class="apc-total-count">0</strong><span>${t("إجمالي")}</span></div>
-                                <div class="apc-stat apc-stat-enabled"><strong class="apc-enabled-count">0</strong><span>${t("مفعلة")}</span></div>
-                                <div class="apc-stat apc-stat-critical"><strong class="apc-critical-count">0</strong><span>${t("حرجة")}</span></div>
-                                <div class="apc-stat apc-stat-change"><strong class="apc-change-count">0</strong><span>${t("التعيينات")}</span></div>
+                            <div class="apc-stats alm-summary-grid">
+                                <div class="apc-stat apc-stat-total alm-summary-card" data-tone="neutral"><strong class="apc-total-count">0</strong><span>${t("Total")}</span></div>
+                                <div class="apc-stat apc-stat-enabled alm-summary-card" data-tone="success"><strong class="apc-enabled-count">0</strong><span>${t("Enabled")}</span></div>
+                                <div class="apc-stat apc-stat-critical alm-summary-card" data-tone="danger"><strong class="apc-critical-count">0</strong><span>${t("Critical")}</span></div>
+                                <div class="apc-stat apc-stat-change alm-summary-card" data-tone="info"><strong class="apc-change-count">0</strong><span>${t("Assignments")}</span></div>
                             </div>
                         </section>
                     </div>
 
-                    <div class="apc-loading apc-empty" role="status" aria-live="polite">${t("جاري تحميل مصفوفة الصلاحيات...")}</div>
+                    <div class="apc-loading apc-empty" role="status" aria-live="polite">${t("Loading permission matrix...")}</div>
                     <div class="apc-content" style="display:none">
                         <main class="apc-groups"></main>
-                        <aside class="apc-side" aria-label="${t("تفاصيل الصلاحيات")}">
+                        <aside class="apc-side" aria-label="${t("Permission details")}">
                             <div class="apc-panel apc-impact-panel"></div>
                             <div class="apc-panel apc-audit-panel"></div>
                         </aside>
                     </div>
                 </div>
-                <div class="apc-savebar" style="display:none" role="region" aria-label="${t("حفظ تغييرات الصلاحيات")}">
+                <div class="apc-savebar" style="display:none" role="region" aria-label="${t("Save permission changes")}">
                     <div class="apc-savebar-inner">
                         <div class="apc-save-actions">
-                            ${uiButton({ label: t("حفظ الصلاحيات"), variant: "primary", className: "apc-save" })}
-                            ${uiButton({ label: t("تراجع"), variant: "secondary", className: "apc-reset" })}
+                            ${uiButton({ label: t("Save permissions"), variant: "primary", className: "apc-save" })}
+                            ${uiButton({ label: t("Undo"), variant: "secondary", className: "apc-reset" })}
                         </div>
-                        <div class="apc-dirty" role="status" aria-live="polite" aria-atomic="true">${t("لا توجد تغييرات غير محفوظة")}</div>
+                        <div class="apc-dirty" role="status" aria-live="polite" aria-atomic="true">${t("No unsaved changes")}</div>
                     </div>
                 </div>
             `);
@@ -123,13 +150,13 @@
             const user = actor.user || "";
             $main.find(".apc-actor").html(`
                 <div class="apc-actor-copy">
-                    <span class="apc-actor-label">${t("الجلسة الإدارية النشطة")}</span>
+                    <span class="apc-actor-label">${t("Active admin session")}</span>
                     <div class="apc-actor-name-row">
                         <span class="apc-actor-status" aria-hidden="true"></span>
                         <strong class="apc-actor-name">${esc(name)}</strong>
                         <span class="apc-actor-check" aria-hidden="true">${icon("tick", "xs")}</span>
                     </div>
-                    <span class="apc-actor-email">${esc(user)}</span>
+                    <span class="apc-actor-email" dir="ltr">${esc(user)}</span>
                 </div>
             `);
         }
@@ -143,7 +170,7 @@
                 fieldname: "role",
                 fieldtype: "Link",
                 options: "Role",
-                placeholder: t("ابحث واختر دورًا..."),
+                placeholder: t("Search and select a role..."),
                 value: options.value || "",
                 readOnly: options.readOnly === true,
                 onlyInput: true,
@@ -207,7 +234,7 @@
                             <p>${esc(group.description)}</p>
                         </div>
                         ${uiButton({
-                            label: t("تحديد الكل"),
+                            label: t("Select all"),
                             variant: "secondary",
                             className: "apc-bulk-toggle apc-select-all-group",
                             attrs: { "data-group": group.key },
@@ -215,13 +242,15 @@
                     </div>
                     <div class="apc-group-body">${group.capabilities.map(renderCapability).join("")}</div>
                 </section>
-            `).join("") || `<div class="apc-empty">${t("لا توجد صلاحيات مسجلة.")}</div>`);
+            `).join("") || `<div class="apc-empty">${t("No permissions recorded.")}</div>`);
         }
 
         function renderCapability(capability) {
-            const badges = capability.badges.map(badge => (
-                `<span class="apc-badge ${esc(badge.kind)}">${esc(badge.label)}</span>`
-            )).join("");
+            const badges = capability.badges.map(badge => uiBadge({
+                label: badge.label,
+                tone: CAPABILITY_BADGE_TONES[badge.kind] || "neutral",
+                className: `apc-badge ${badge.kind}`,
+            })).join("");
             return `
                 <label class="apc-capability">
                     <span class="apc-switch">
@@ -253,13 +282,13 @@
                 $(this)
                     .toggleClass("is-all", allEnabled)
                     .attr("aria-pressed", allEnabled ? "true" : "false")
-                    .text(allEnabled ? t("إلغاء تحديد الكل") : t("تحديد الكل"));
+                    .text(allEnabled ? t("Deselect all") : t("Select all"));
             });
             const allEnabled = model.globalAllEnabled === true;
             $main.find(".apc-select-all-global")
                 .toggleClass("is-all", allEnabled)
                 .attr("aria-pressed", allEnabled ? "true" : "false")
-                .text(allEnabled ? t("إلغاء تحديد الكل") : t("تحديد الكل / إلغاء"));
+                .text(allEnabled ? t("Deselect all") : t("Select all / Clear"));
         }
 
         function renderImpact(model) {
@@ -268,28 +297,28 @@
             $main.find(".apc-impact-panel").html(`
                 <div class="apc-panel-title-row">
                     <div>
-                        <div class="apc-panel-kicker">${t("قبل الحفظ")}</div>
-                        <div class="apc-panel-title">${t("أثر الصلاحيات")}</div>
+                        <div class="apc-panel-kicker">${t("Before saving")}</div>
+                        <div class="apc-panel-title">${t("Permission impact")}</div>
                     </div>
                 </div>
                 ${warning}${source}
-                <div class="apc-impact-section"><strong>${t("الواجهة الافتراضية")}</strong><div class="apc-impact-value">${esc(model.home)}</div></div>
-                <div class="apc-impact-section"><strong>${t("مساحات العمل")}</strong><div class="apc-chip-row">${model.workspaces.map(item => `<span class="apc-chip">${esc(item)}</span>`).join("") || `<span class="apc-muted">${t("لا شيء")}</span>`}</div></div>
-                <div class="apc-impact-section"><strong>${t("الأقسام الحساسة")}</strong><div class="apc-chip-row">${model.sections.map(item => `<span class="apc-chip">${esc(item)}</span>`).join("") || `<span class="apc-muted">${t("لا شيء")}</span>`}</div></div>
-                <div class="apc-impact-section apc-impact-changes"><strong>${t("التغييرات")}</strong><div>${model.changes.map(change => `<div class="apc-change"><span>${esc(change.label)}</span><span>${esc(change.action)}</span></div>`).join("") || `<div class="apc-muted">${t("لا توجد تغييرات.")}</div>`}</div></div>
-                <div class="apc-impact-footnote"><span class="apc-impact-lock" aria-hidden="true">${icon("lock", "xs")}</span>${t("تُحدَّث المعاينة فورًا دون حفظ تلقائي.")}</div>
+                <div class="apc-impact-section"><strong>${t("Default interface")}</strong><div class="apc-impact-value">${esc(model.home)}</div></div>
+                <div class="apc-impact-section"><strong>${t("Workspaces")}</strong><div class="apc-chip-row">${model.workspaces.map(item => `<span class="apc-chip">${esc(item)}</span>`).join("") || `<span class="apc-muted">${t("Nothing")}</span>`}</div></div>
+                <div class="apc-impact-section"><strong>${t("Sensitive sections")}</strong><div class="apc-chip-row">${model.sections.map(item => `<span class="apc-chip">${esc(item)}</span>`).join("") || `<span class="apc-muted">${t("Nothing")}</span>`}</div></div>
+                <div class="apc-impact-section apc-impact-changes"><strong>${t("Changes")}</strong><div>${model.changes.map(change => `<div class="apc-change"><span>${esc(change.label)}</span><span>${esc(change.action)}</span></div>`).join("") || `<div class="apc-muted">${t("No changes.")}</div>`}</div></div>
+                <div class="apc-impact-footnote"><span class="apc-impact-lock" aria-hidden="true">${icon("lock", "xs")}</span>${t("Preview updates immediately without auto-save.")}</div>
             `);
         }
 
         function renderAudit(rows) {
             const auditBody = rows.length
                 ? `<div class="apc-audit-list">${rows.map(row => `<div class="apc-audit-item"><strong class="apc-audit-user">${esc(row.changedBy)}</strong><div class="apc-audit-time">${esc(row.changedOn)}</div><div class="apc-audit-change">${esc(row.changedCapabilities)}</div></div>`).join("")}</div>`
-                : `<div class="apc-audit-empty"><span class="apc-audit-empty-icon" aria-hidden="true">${icon("hourglass", "md")}</span><p>${t("لا يوجد سجل بعد.")}</p></div>`;
+                : `<div class="apc-audit-empty"><span class="apc-audit-empty-icon" aria-hidden="true">${icon("hourglass", "md")}</span><p>${t("No log yet.")}</p></div>`;
             $main.find(".apc-audit-panel").html(`
                 <div class="apc-panel-title-row">
                     <div>
-                        <div class="apc-panel-kicker">${t("سجل النشاط")}</div>
-                        <div class="apc-panel-title">${t("سجل الصلاحيات والتغييرات")}</div>
+                        <div class="apc-panel-kicker">${t("Activity log")}</div>
+                        <div class="apc-panel-title">${t("Permissions and changes log")}</div>
                     </div>
                 </div>
                 ${auditBody}
@@ -306,7 +335,7 @@
         function syncDirtyState(model) {
             $main.find(".apc-dirty")
                 .toggleClass("is-dirty", model.dirty)
-                .text(model.dirty ? t("لديك تغييرات غير محفوظة") : t("لا توجد تغييرات غير محفوظة"));
+                .text(model.dirty ? t("You have unsaved changes") : t("No unsaved changes"));
             $main.find(".apc-save").prop("disabled", !model.dirty || model.saving);
             $main.find(".apc-reset").prop("disabled", !model.dirty || model.saving);
             setRoleControlDisabled(model.saving);

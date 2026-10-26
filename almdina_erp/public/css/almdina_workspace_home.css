@@ -54,8 +54,8 @@ body.almdina-workspace-home #page-Workspaces .layout-main-section {
 }
 
 body.almdina-workspace-home #page-Workspaces .page-head {
-    background: var(--bg-color);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--alm-card);
+    border-bottom: 1px solid var(--alm-card-border);
 }
 
 body.almdina-workspace-home #page-Workspaces .navbar-breadcrumbs li:last-child .dropdown,
@@ -97,7 +97,6 @@ body.almdina-workspace-home .alm-workspace-section-head {
     justify-content: space-between;
     gap: 12px;
     width: 100%;
-    direction: rtl;
     margin: 0;
     padding: 0;
     font-size: 15px;
@@ -115,24 +114,28 @@ body.almdina-workspace-home .alm-workspace-section-head::before {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--alm-section-accent) 18%, transparent);
 }
 
+body.almdina-workspace-home .ce-header[data-alm-section="master"],
 body.almdina-workspace-home .widget.header[data-alm-section="master"],
 body.almdina-workspace-home .shortcut-widget-box[data-alm-section="master"],
 body.almdina-workspace-home .alm-shortcut[data-alm-section="master"] {
     --alm-section-accent: var(--alm-accent-blue);
 }
 
+body.almdina-workspace-home .ce-header[data-alm-section="system"],
 body.almdina-workspace-home .widget.header[data-alm-section="system"],
 body.almdina-workspace-home .shortcut-widget-box[data-alm-section="system"],
 body.almdina-workspace-home .alm-shortcut[data-alm-section="system"] {
     --alm-section-accent: var(--alm-accent-purple);
 }
 
+body.almdina-workspace-home .ce-header[data-alm-section="ops"],
 body.almdina-workspace-home .widget.header[data-alm-section="ops"],
 body.almdina-workspace-home .shortcut-widget-box[data-alm-section="ops"],
 body.almdina-workspace-home .alm-shortcut[data-alm-section="ops"] {
     --alm-section-accent: var(--alm-accent-warning);
 }
 
+body.almdina-workspace-home .ce-header[data-alm-section="reports"],
 body.almdina-workspace-home .widget.header[data-alm-section="reports"],
 body.almdina-workspace-home .shortcut-widget-box[data-alm-section="reports"],
 body.almdina-workspace-home .alm-shortcut[data-alm-section="reports"] {
@@ -173,7 +176,6 @@ body.almdina-workspace-home .shortcut-widget-box .widget-head {
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    direction: rtl;
     min-height: 0;
     width: 100%;
 }
@@ -181,7 +183,7 @@ body.almdina-workspace-home .shortcut-widget-box .widget-head {
 body.almdina-workspace-home .shortcut-widget-box .widget-label {
     flex: 1 1 auto;
     min-width: 0;
-    text-align: right;
+    text-align: start;
 }
 
 body.almdina-workspace-home .shortcut-widget-box .widget-title {
@@ -210,7 +212,7 @@ body.almdina-workspace-home .alm-workspace-shortcut-icon {
     height: 34px;
     border-radius: 9px;
     color: var(--alm-section-accent);
-    background: color-mix(in srgb, var(--alm-section-accent) 12%, #fff);
+    background: color-mix(in srgb, var(--alm-section-accent) 12%, var(--alm-card));
     border: 1px solid color-mix(in srgb, var(--alm-section-accent) 16%, transparent);
     overflow: visible;
 }
@@ -246,7 +248,7 @@ body.almdina-workspace-home .alm-workspace-shortcut-badge .indicator-pill svg {
 
 body.almdina-workspace-home .alm-workspace-shortcut-arrow {
     flex: 0 0 auto;
-    margin-inline-end: auto;
+    margin-inline-start: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;

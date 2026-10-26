@@ -33,8 +33,8 @@ def test_permission_context_and_shared_shell_load_before_global_presenters() -> 
     hooks_source = HOOKS_PATH.read_text(encoding="utf-8")
     permission_index = hooks_source.index("/assets/almdina_erp/js/permission_context.js")
     shell_index = hooks_source.index("/assets/almdina_erp/js/shared_shell.js")
-    operator_index = hooks_source.index("/assets/almdina_erp/js/arabic_operator_ui.js")
-    assert permission_index < shell_index < operator_index
+    assert permission_index < shell_index
+    assert "arabic_operator_ui.js" not in hooks_source
     assert "shop_floor_desk.js" not in hooks_source
     assert "order_entry_desk.js" not in hooks_source
 
@@ -142,7 +142,7 @@ def test_cutting_plan_tabs_use_capability_not_role_names() -> None:
     assert "view_system_cutting_plan" in source
     assert "view_uploaded_cutting_plan" in source
     assert "view_approved_cutting_plan" in source
-    assert "الخطة المعتمدة" in source
+    assert 'label: "Approved plan"' in source
     assert "frappe.user_roles" not in source
     assert "DUAL_ROLES" not in source
     for role in ("Order Entry", "Production Manager", "System Manager", "عامل رسم"):

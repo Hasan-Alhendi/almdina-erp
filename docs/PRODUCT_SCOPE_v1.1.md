@@ -9,7 +9,9 @@ For the full Arabic SRS and acceptance criteria, see
 ## Included
 
 - Free-text board description.
-- Board length and width, defaulting to 244 × 122 cm.
+- Board length and width entered by the operator for new orders; persisted values on
+  existing orders are preserved. The historical 244 × 122 cm dimensions remain
+  valid input values but are no longer injected automatically.
 - Door measurements and regular, clipped-corner and special shapes.
 - Per-side edge selection, edge thickness deductions and edge pricing.
 - Cutting optimization and immutable approved cutting plans.

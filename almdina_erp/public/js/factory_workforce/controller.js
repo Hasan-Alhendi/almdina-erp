@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     if (window.AlmdinaFactoryWorkforceController) return;
 
     function mount(wrapper) {
@@ -38,29 +67,29 @@
 
         const store = stateModule.create();
         const state = store.data;
-        const viewModel = viewModelModule.create({ translate: __ });
+        const viewModel = viewModelModule.create({ translate });
         const page = wrapper.page;
         if (!page) throw new Error("Factory workforce page shell is unavailable");
         const $main = $(wrapper).find(".layout-main-section");
         const renderer = rendererModule.create({
             $main,
             escapeHtml: value => frappe.utils.escape_html(String(value ?? "")),
-            translate: __,
+            translate,
         });
-        const dialogs = dialogsModule.create({ translate: __ });
+        const dialogs = dialogsModule.create({ translate });
         const toolbar = toolbarModule.create({
             $main,
             state,
             lifecycle: store.lifecycle,
             load,
-            translate: __,
+            translate,
         });
         let activation = null;
         let initialLoadPending = true;
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
-        page.set_primary_action(__("إنشاء مستخدم جديد"), openCreateDialog, "add");
+        page.set_primary_action(translate("Create new user"), openCreateDialog, "add");
         syncPrimaryAction();
-        page.add_inner_button(__("تحديث"), load, null, "refresh");
+        page.add_inner_button(translate("Refresh"), load, null, "refresh");
         interactionsModule.bind({
             $main,
             lifecycle: store.lifecycle,
@@ -166,7 +195,7 @@
             }).catch(error => {
                 if (!activation.isActive() || !store.requests.console.isCurrent(token)) return null;
                 toolbar.dispose();
-                renderer.renderError(errorMessage(error, __("تعذر تحميل البيانات.")));
+                renderer.renderError(errorMessage(error, translate("Could not load data.")));
                 return null;
             });
         }
@@ -181,7 +210,7 @@
                 .join("<br>");
             return {
                 ok: false,
-                message: __("لا يمكن إسناد أدوار تحتوي صفحات دخول مختلفة. عدّل Home Page في Role داخل Frappe أو اتركها فارغة في الأدوار الثانوية.")
+                message: translate("Roles with different login pages cannot be assigned. Edit the Home Page on the Role in Frappe or leave it empty on secondary roles.")
                     + `<div class="mt-2 text-muted">${details}</div>`,
             };
         }
@@ -197,12 +226,13 @@
             if (generation === null) return;
             dialogs.openCreate({
                 canAssignRoles: can("assign_user_roles"),
+                languages: state.languages,
                 roleOptions,
                 validateRoles,
                 onSubmit: payload => runMutation(
                     generation,
-                    () => api.createUser(payload, freezeOptions(__("جاري إنشاء المستخدم..."))),
-                    __("تم إنشاء المستخدم."),
+                    () => api.createUser(payload, freezeOptions(translate("Creating user..."))),
+                    translate("User created."),
                     true,
                     true
                 ),
@@ -221,12 +251,13 @@
                 user,
                 canEdit,
                 canAssignRoles,
+                languages: state.languages,
                 roleOptions,
                 validateRoles,
                 onSubmit: payload => runMutation(
                     generation,
-                    () => api.updateUser(user.email, payload, freezeOptions(__("جاري حفظ المستخدم..."))),
-                    __("تم تحديث المستخدم."),
+                    () => api.updateUser(user.email, payload, freezeOptions(translate("Saving user..."))),
+                    translate("User updated."),
                     true,
                     true
                 ),
@@ -241,8 +272,8 @@
                 user,
                 onSubmit: temporaryPassword => runMutation(
                     generation,
-                    () => api.resetPassword(user.email, temporaryPassword, freezeOptions(__("جاري تحديث كلمة المرور..."))),
-                    __("تم تحديث كلمة المرور دون تسجيل قيمتها."),
+                    () => api.resetPassword(user.email, temporaryPassword, freezeOptions(translate("Updating password..."))),
+                    translate("Password updated without logging its value."),
                     false,
                     true
                 ),
@@ -259,8 +290,8 @@
                 enabled,
                 onConfirm: () => runMutation(
                     generation,
-                    () => api.setEnabled(user.email, enabled, freezeOptions(__("جاري تحديث الحساب..."))),
-                    __("تم تحديث حالة المستخدم.")
+                    () => api.setEnabled(user.email, enabled, freezeOptions(translate("Updating the account..."))),
+                    translate("User status updated.")
                 ),
             });
         }
@@ -273,8 +304,8 @@
                 user,
                 onConfirm: () => runMutation(
                     generation,
-                    () => api.adoptUser(user.email, freezeOptions(__("جاري إضافة المستخدم إلى المعمل..."))),
-                    __("تمت إضافة المستخدم إلى المعمل. يمكنك الآن تعيين أدواره.")
+                    () => api.adoptUser(user.email, freezeOptions(translate("Adding user to the factory..."))),
+                    translate("User added to the factory. You can now assign their roles.")
                 ),
             });
         }
@@ -286,7 +317,7 @@
             const token = store.requests.audit.begin({ user: email });
             return api.getAudit(
                 user.email,
-                freezeOptions(__("جاري تحميل السجل..."))
+                freezeOptions(translate("Loading the log..."))
             ).then(data => {
                 if (!isCurrentGeneration(generation) || !store.requests.audit.isCurrent(token)) return;
                 const events = Array.isArray(data.events) ? data.events : [];

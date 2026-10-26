@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     const MODULE_VERSION = 6;
     const existingApi = window.AlmdinaCostPageLayoutUX;
     if (existingApi && Number(existingApi.version || 0) >= MODULE_VERSION) return;
@@ -41,7 +58,7 @@
             .dco-cost-invoice-section>.dco-cost-section-title{align-items:center;gap:14px}
             .dco-cost-invoice-heading{display:grid;gap:3px;min-width:0;flex:1}
             .dco-cost-invoice-heading>h4{margin:0}
-            .dco-cost-invoice-heading>span{display:block;max-width:100%;text-align:right}
+            .dco-cost-invoice-heading>span{display:block;max-width:100%;text-align:start}
             .dco-cost-invoice-actions{display:flex;align-items:center;justify-content:flex-start;gap:7px;flex:0 0 auto;margin-inline-start:auto}
             .dco-cost-invoice-actions .btn{width:auto!important;min-height:32px;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:850;white-space:nowrap;box-shadow:none}
             .dco-cost-measurements-section>.dco-cost-section-title{cursor:default}
@@ -138,7 +155,7 @@
     function ensureMeasurementToggle(frm) {
         const wrapper = costWrapper(frm);
         if (!wrapper.length) return false;
-        const section = sectionByTitle(wrapper, "جدول قياسات الطلب");
+        const section = sectionByTitle(wrapper, translate("Order measurement table"));
         if (!section.length) return false;
 
         section.addClass("dco-cost-measurements-section");
@@ -202,8 +219,8 @@
 
         const pricingSections = shell.children(".dco-cost-section").filter(function () {
             const title = $(this).children(".dco-cost-section-title").find("h4").first().text().trim();
-            return title === "تسعير الدرفات الخاصة"
-                || title === "تسعير قشاط درف الزاوية المقصوصة وزاوية L";
+            return title === translate("Special door pricing")
+                || title === translate("Clipped-corner and L-shaped edge pricing");
         });
         const hasBasicSettings = costSettingFields(frm).length > 0;
         if (!pricingSections.length && !hasBasicSettings) return false;
@@ -215,9 +232,9 @@
                     <div class="dco-cost-section-title dco-cost-settings-title">
                         <div class="dco-cost-settings-title-main">
                             <button type="button" class="dco-cost-settings-toggle"></button>
-                            <h4>إعدادات التكلفة</h4>
+                            <h4>${translate("Cost settings")}</h4>
                         </div>
-                        <span>الأسعار الأساسية وتسعير الدرف الخاصة</span>
+                        <span>${translate("Base prices and special door pricing")}</span>
                     </div>
                     <div class="dco-cost-settings-content">
                         <div class="dco-cost-settings-basic"></div>
@@ -238,7 +255,7 @@
         control.attr({
             type: "button",
             "aria-expanded": state ? "true" : "false",
-            "aria-label": "إعدادات التكلفة",
+            "aria-label": translate("Cost settings"),
         }).off("click.almdinaCostSettings").on("click.almdinaCostSettings", event => {
             event.preventDefault();
             uiState(frm).settingsExpanded = !costSettingsExpanded(frm);

@@ -1,6 +1,34 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     if (window.AlmdinaCostOffcutAssignmentUX) return;
 
     const STYLE_ID = "dco-cost-offcut-assignment-v1";
@@ -87,22 +115,53 @@
         const value = String(state || EMPTY_STATE);
         return ["CUSTOMER_FACTORY", "FACTORY_FACTORY", "CUSTOMER_CUSTOMER"].includes(value) ? value : "";
     }
+
+    function formatMeasureNumber(value) {
+        if (value == null || value === "") return null;
+        const number = typeof value === "number" ? value : Number(String(value).trim());
+        if (!Number.isFinite(number)) return null;
+        const text = number.toFixed(2).replace(/\.?0+$/, "");
+        return text === "-0" ? "0" : text;
+    }
+
+    function formatMeasureText(value) {
+        if (value == null || value === "") return null;
+        if (typeof value === "number") return formatMeasureNumber(value);
+        const text = String(value).trim();
+        if (!text) return null;
+        let sawNumber = false;
+        const formatted = text.replace(/-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (match) => {
+            const next = formatMeasureNumber(match);
+            if (next == null) return match;
+            sawNumber = true;
+            return next;
+        });
+        return sawNumber ? formatted : text;
+    }
+
     function rowLabel(item) {
         const number = item.piece_number || item.piece_no || item.sequence || item.piece_label || item.index || "—";
-        const width = item.width || item.width_cm || item.w;
-        const length = item.length || item.length_cm || item.h;
-        const measure = item.measurement || item.size || (width && length ? `${width} × ${length} سم` : "—");
+        const width = formatMeasureNumber(item.width ?? item.width_cm ?? item.w);
+        const length = formatMeasureNumber(item.length ?? item.length_cm ?? item.h);
+        const measure = formatMeasureText(item.measurement)
+            || formatMeasureText(item.size)
+            || (width != null && length != null ? translate("{0} × {1} cm", [width, length]) : "—");
         return { number, measure };
     }
     function rowHtml(item, editable) {
         const selected = optionForState(item.business_state);
         const disabled = editable ? "" : "disabled";
-        const options = [["CUSTOMER_FACTORY","المصدر الزبون · التنفيذ في المعمل"],["FACTORY_FACTORY","المصدر المعمل · التنفيذ في المعمل"],["CUSTOMER_CUSTOMER","المصدر الزبون · التنفيذ عند الزبون"]];
-        return `<tr class="dco-cost-offcut-row" data-piece-instance-id="${esc(item.piece_instance_id)}"><th scope="row"><strong>درفة ${esc(rowLabel(item).number)}</strong><span class="dco-cost-offcut-measure"> ${esc(rowLabel(item).measure)}</span></th><td class="dco-cost-offcut-options"><div class="dco-cost-offcut-option-group" role="radiogroup" aria-label="${esc(rowLabel(item))}">${options.map(([value,label]) => `<label class="dco-cost-offcut-option"><input type="radio" name="dco-offcut-${esc(item.piece_instance_id)}" value="${value}" ${selected===value?"checked":""} ${disabled}><span>${esc(label)}</span></label>`).join("")}</div></td></tr>`;
+        const options = [
+            ["CUSTOMER_FACTORY", translate("Source: customer · made at the factory")],
+            ["FACTORY_FACTORY", translate("Source: factory · made at the factory")],
+            ["CUSTOMER_CUSTOMER", translate("Source: customer · made at the customer")],
+        ];
+        const doorLabel = translate("Door {0}", [rowLabel(item).number]);
+        return `<tr class="dco-cost-offcut-row" data-piece-instance-id="${esc(item.piece_instance_id)}"><th scope="row"><strong>${esc(doorLabel)}</strong><span class="dco-cost-offcut-measure"> ${esc(rowLabel(item).measure)}</span></th><td class="dco-cost-offcut-options"><div class="dco-cost-offcut-option-group" role="radiogroup" aria-label="${esc(doorLabel)}">${options.map(([value,label]) => `<label class="dco-cost-offcut-option"><input type="radio" name="dco-offcut-${esc(item.piece_instance_id)}" value="${value}" ${selected===value?"checked":""} ${disabled}><span>${esc(label)}</span></label>`).join("")}</div></td></tr>`;
     }
 
     function html(offcut, editable) {
-        return `<section class="${ROOT_CLASS} dco-cost-section" aria-label="${esc(__("قطع النقص"))}"><div class="dco-cost-section-title"><div><h4>${esc(__("قطع النقص"))}</h4><span>اختر أحد الخيارات الثلاثة لكل درفة.</span></div><span class="dco-cost-offcut-count">${offcut.assignments.length} درفة</span></div><div class="dco-cost-offcut-table-wrap"><table class="dco-cost-offcut-table"><thead><tr><th>الدرفة</th><th>مصدر الكلفة ومكان التنفيذ</th></tr></thead><tbody>${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</tbody></table></div></section>`;
+        return `<section class="${ROOT_CLASS} dco-cost-section" dir="${esc(uiDirection())}" aria-label="${esc(translate("Offcut pieces"))}"><div class="dco-cost-section-title"><div><h4>${esc(translate("Offcut pieces"))}</h4><span>${esc(translate("Choose one of the three options for each door."))}</span></div><span class="dco-cost-offcut-count">${esc(translate("{0} doors", [offcut.assignments.length]))}</span></div><div class="dco-cost-offcut-table-wrap"><table class="dco-cost-offcut-table"><thead><tr><th>${esc(translate("Door"))}</th><th>${esc(translate("Cost source and execution place"))}</th></tr></thead><tbody>${offcut.assignments.map(item => rowHtml(item, editable)).join("")}</tbody></table></div></section>`;
     }
 
     function normalizeExecution(row) {
@@ -174,7 +233,7 @@
         const offcut = projection(frm);
         if (!api || typeof api.saveOffcutAssignments !== "function" || !policy
             || typeof policy.reconcileOffcutMutation !== "function" || !offcut) {
-            frappe.msgprint(__("تعذر تحميل مسار حفظ قطع النقص."));
+            frappe.msgprint(translate("Could not load the offcut save path."));
             return false;
         }
 
@@ -185,7 +244,7 @@
             await policy.reconcileOffcutMutation(frm, result);
             if (!documentStillCurrent(frm, token)) return false;
             frm.__almdina_offcut_pending_assignments = {};
-            frappe.show_alert({ message: __("تم حفظ تصنيف قطع النقص."), indicator: "green" }, 4);
+            frappe.show_alert({ message: translate("The offcut classification was saved."), indicator: "green" }, 4);
             return true;
         } finally {
 
@@ -205,7 +264,7 @@
     function installStyles() {
         if (document.getElementById(STYLE_ID)) return;
         $("<style>", { id: STYLE_ID, text: `
-            .${ROOT_CLASS}{direction:rtl}.dco-cost-offcut-table-wrap{overflow:auto;padding:10px 12px 12px}.dco-cost-offcut-table{width:100%;border-collapse:separate;border-spacing:0 7px;font-size:12px}.dco-cost-offcut-table th{padding:9px 10px;text-align:right;white-space:nowrap}.dco-cost-offcut-table tbody th,.dco-cost-offcut-table tbody td{padding:10px;border:1px solid var(--border-color,#e1e6ea);background:var(--card-bg,#fff);vertical-align:middle}.dco-cost-offcut-table tbody th{border-radius:10px 0 0 10px;width:24%;font-weight:900}.dco-cost-offcut-measure{display:inline-flex;margin-inline-start:10px;padding:3px 9px;border-radius:999px;background:var(--subtle-fg,#f4f6f8);color:var(--text-muted,#687481);font-size:11px;font-weight:800;white-space:nowrap}.dco-cost-offcut-table tbody td{border-right:0;border-radius:0 10px 10px 0}.dco-cost-offcut-option-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.dco-cost-offcut-option{display:flex;align-items:center;gap:7px;min-height:34px;margin:0;padding:7px 9px;border:1px solid var(--border-color,#e1e6ea);border-radius:9px;background:var(--subtle-fg,#f8fafc);font-size:11px;font-weight:800;cursor:pointer}.dco-cost-offcut-option:has(input:checked){border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent)}.dco-cost-offcut-option input{margin:0;accent-color:var(--alm-primary,#172033)}.dco-cost-offcut-option input:disabled+span{opacity:.72}.dco-cost-offcut-actions{display:flex;justify-content:flex-start;padding:0 12px 12px}@media(max-width:800px){.dco-cost-offcut-option-group{grid-template-columns:1fr}.dco-cost-offcut-table tbody th{width:32%}}
+            .${ROOT_CLASS}{}.dco-cost-offcut-table-wrap{overflow:auto;padding:10px 12px 12px}.dco-cost-offcut-table{width:100%;border-collapse:separate;border-spacing:0 7px;font-size:12px}.dco-cost-offcut-table th{padding:9px 10px;text-align:start;white-space:nowrap}.dco-cost-offcut-table tbody th,.dco-cost-offcut-table tbody td{padding:10px;border:1px solid var(--alm-card-border,#e4e8ee);background:var(--alm-card,#ffffff);vertical-align:middle}.dco-cost-offcut-table tbody th{border-radius:10px 0 0 10px;width:24%;font-weight:900}.dco-cost-offcut-measure{display:inline-flex;margin-inline-start:10px;padding:3px 9px;border-radius:999px;background:var(--alm-surface-muted,#f4f6f8);color:var(--alm-text-subtle,#667085);font-size:11px;font-weight:800;white-space:nowrap}.dco-cost-offcut-table tbody td{border-inline-end:0;border-radius:0 10px 10px 0}.dco-cost-offcut-option-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.dco-cost-offcut-option{display:flex;align-items:center;gap:7px;min-height:34px;margin:0;padding:7px 9px;border:1px solid var(--alm-card-border,#e4e8ee);border-radius:9px;background:var(--alm-surface-muted,#f4f6f8);font-size:11px;font-weight:800;cursor:pointer}.dco-cost-offcut-option:has(input:checked){border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 8%, transparent)}.dco-cost-offcut-option input{margin:0;accent-color:var(--alm-primary,#172033)}.dco-cost-offcut-option input:disabled+span{opacity:.72}.dco-cost-offcut-actions{display:flex;justify-content:flex-start;padding:0 12px 12px}@media(max-width:800px){.dco-cost-offcut-option-group{grid-template-columns:1fr}.dco-cost-offcut-table tbody th{width:32%}}
         ` }).appendTo("head");
     }
 
@@ -233,5 +292,13 @@
         return true;
     }
 
-    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({ render, hasPending, hasFactorySelection, savePending });
+    window.AlmdinaCostOffcutAssignmentUX = Object.freeze({
+        render,
+        hasPending,
+        hasFactorySelection,
+        savePending,
+        formatMeasureNumber,
+        formatMeasureText,
+        rowLabel,
+    });
 })();

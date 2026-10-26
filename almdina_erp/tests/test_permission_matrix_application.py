@@ -46,7 +46,7 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             for item in plan_group["capabilities"]
             if item["key"] == Capability.APPROVE_DXF
         )
-        self.assertEqual(approval["label"], "اعتماد خطة القص")
+        self.assertEqual(approval["label"], "Approve cutting plan")
         drawing_group = next(group for group in groups if group["key"] == "drawing")
         self.assertNotIn(
             Capability.APPROVE_DXF,
@@ -227,6 +227,8 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             Capability.EDIT_COST_SETTINGS,
             Capability.EDIT_SPECIAL_PRICE,
             Capability.APPROVE_SPECIAL_PRICE,
+            Capability.APPROVE_FINAL_PRICE,
+            Capability.CANCEL_FINAL_PRICE_APPROVAL,
             Capability.PRINT_INTERNAL_COST_REPORT,
         ):
             with self.subTest(action=action):
@@ -237,6 +239,17 @@ class TestPermissionMatrixApplication(unittest.TestCase):
             {Capability.PRINT_CUSTOMER_INVOICE: True}
         )
         self.assertFalse(customer[Capability.VIEW_COSTS])
+
+    def test_approve_final_price_does_not_grant_edit_or_special_price_capabilities(self) -> None:
+        state = normalize_capability_state({Capability.APPROVE_FINAL_PRICE: True})
+        self.assertTrue(state[Capability.VIEW_ORDERS])
+        self.assertTrue(state[Capability.VIEW_COSTS])
+        self.assertFalse(state[Capability.EDIT_COST_SETTINGS])
+        self.assertFalse(state[Capability.EDIT_ORDER])
+        self.assertFalse(state[Capability.APPROVE_SPECIAL_PRICE])
+        self.assertFalse(state[Capability.EDIT_SPECIAL_PRICE])
+        self.assertFalse(state[Capability.VIEW_ALL_ORDERS])
+        self.assertFalse(state[Capability.CANCEL_FINAL_PRICE_APPROVAL])
 
     def test_read_grants_also_project_select_for_linked_records(self) -> None:
         order = standard_permission_projection(

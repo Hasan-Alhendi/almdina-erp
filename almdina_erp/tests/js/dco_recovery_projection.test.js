@@ -48,6 +48,27 @@ const doc = {
         length_cm: 80,
         qty: 2,
         allow_rotation: 1,
+        extra_liner: 1,
+        liner_reference_side: "edge_long_right",
+        liner_offset_cm: 1.5,
+        liner_width_cm: 1.8,
+        liner_start_cm: 2,
+        liner_length_cm: 65,
+        extra_back_groove: 1,
+        back_groove_reference_side: "edge_width_bottom",
+        back_groove_offset_cm: 5,
+        back_groove_width_cm: 0.7,
+        back_groove_start_cm: 0,
+        back_groove_length_cm: 60,
+        extra_recessed_handle_cutout: 1,
+        recessed_handle_reference_side: "edge_width_top",
+        recessed_handle_offset_cm: 3,
+        recessed_handle_width_cm: 10,
+        recessed_handle_start_cm: 4,
+        recessed_handle_length_cm: 15,
+        extra_liner_unit_price_usd: 500,
+        extra_back_groove_total_usd: 1000,
+        extra_recessed_handle_cutout_unit_price_usd: 700,
         edge_long_right: 1,
         edge_long_left: 0,
         edge_width_top: 1,
@@ -70,6 +91,32 @@ assert.deepEqual(
 );
 assert.equal(dco.pieces[0].piece_key, "piece-recovery-uuid");
 assert.equal(dco.pieces[0].width_cm, 60);
+// Machining configuration must survive capture/restore without adding a second
+// geometry owner, while protected pricing remains outside Recovery.
+const machiningInputs = {
+    liner_reference_side: "edge_long_right",
+    liner_offset_cm: 1.5,
+    liner_width_cm: 1.8,
+    liner_start_cm: 2,
+    liner_length_cm: 65,
+    back_groove_reference_side: "edge_width_bottom",
+    back_groove_offset_cm: 5,
+    back_groove_width_cm: 0.7,
+    back_groove_start_cm: 0,
+    back_groove_length_cm: 60,
+    recessed_handle_reference_side: "edge_width_top",
+    recessed_handle_offset_cm: 3,
+    recessed_handle_width_cm: 10,
+    recessed_handle_start_cm: 4,
+    recessed_handle_length_cm: 15,
+};
+for (const [fieldname, expected] of Object.entries(machiningInputs)) {
+    assert.ok(Projection.PIECE_FIELDS.includes(fieldname), fieldname);
+    assert.equal(dco.pieces[0][fieldname], expected, fieldname);
+}
+assert.equal("extra_liner_unit_price_usd" in dco.pieces[0], false);
+assert.equal("extra_back_groove_total_usd" in dco.pieces[0], false);
+assert.equal("extra_recessed_handle_cutout_unit_price_usd" in dco.pieces[0], false);
 assert.equal("name" in dco.pieces[0], false);
 assert.equal("cut_width_cm" in dco.pieces[0], false);
 assert.equal("edge_cost_usd" in dco.pieces[0], false);
@@ -84,6 +131,10 @@ assert.equal(dcoPayload.cost_workspace_draft, null);
 assert.deepEqual(Array.from(dcoPayload.special_shape_drafts), []);
 const serialized = Projection.serialize(dcoPayload);
 assert.equal(Projection.serialize(Projection.deserialize(serialized)), Projection.serialize(dcoPayload));
+const restoredMachining = Projection.deserialize(serialized).dco.pieces[0];
+for (const [fieldname, expected] of Object.entries(machiningInputs)) {
+    assert.equal(restoredMachining[fieldname], expected, fieldname);
+}
 assert.equal(serialized, Projection.serialize(JSON.parse(serialized)));
 
 const plan = Projection.createPlanWorkspaceDraft({

@@ -1,42 +1,80 @@
 frappe.pages["factory-production-settings"].on_page_load = function (wrapper) {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
+
     const FOUNDATION = "/assets/almdina_erp/js/frontend_foundation.js";
     const PAGE_LIFECYCLE = "/assets/almdina_erp/js/page_revisit_refresh.js";
     const MODULES = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/factory_production_settings/api.js",
         "/assets/almdina_erp/js/factory_production_settings/state.js",
+        "/assets/almdina_erp/js/factory_production_settings/catalog_labels.js",
         "/assets/almdina_erp/js/factory_production_settings/view_model.js",
         "/assets/almdina_erp/js/factory_production_settings/renderer.js",
         "/assets/almdina_erp/js/factory_production_settings/interactions.js",
         "/assets/almdina_erp/js/factory_production_settings/dialogs.js",
         "/assets/almdina_erp/js/factory_production_settings/whatsapp_panel.js",
+        "/assets/almdina_erp/js/factory_production_settings/backup_panel.js",
         "/assets/almdina_erp/js/factory_production_settings/controller.js",
     ]);
-    const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css";
+    const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css?v=2";
 
     frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("إعدادات المعمل"),
+        title: translate("Factory settings"),
         single_column: true,
     });
     const $main = $(wrapper).find(".layout-main-section");
-    $main.html(`
-        <div class="aps-loading" role="status" aria-live="polite">
-            <span class="aps-loading-dot" aria-hidden="true"></span>
-            <div><strong>${__("جاري تحميل إعدادات المعمل")}</strong><span>${__("يتم تجهيز القيم والصلاحيات الحالية...")}</span></div>
-        </div>
-    `);
+    const ui = window.AlmdinaUi;
+
+    function paintState(kind, title, message) {
+        const body = ui && typeof ui.state === "function"
+            ? ui.state({ kind, title, message })
+            : `<div class="alm-state alm-state--${kind}" role="${kind === "error" ? "alert" : "status"}"><strong class="alm-state__title">${frappe.utils.escape_html(title || "")}</strong>${message ? `<span class="alm-state__message">${frappe.utils.escape_html(String(message))}</span>` : ""}</div>`;
+        $main.html(`<div class="almdina-ui">${body}</div>`);
+    }
+
+    paintState(
+        "loading",
+        translate("Loading factory settings"),
+        translate("Preparing current values and permissions...")
+    );
 
     function showBootstrapError(error) {
-        const fallback = __("تعذر تحميل إعدادات المعمل.");
+        const fallback = translate("Could not load factory settings.");
         const frontend = window.AlmdinaFrontend;
         const message = frontend && typeof frontend.errorMessage === "function"
             ? frontend.errorMessage(error, fallback)
             : String((error && error.message) || fallback);
-        const safe = frappe.utils.escape_html(String(message || fallback));
-        $main.html(`<div class="frappe-card" style="padding:24px;text-align:center">${safe}</div>`);
+        paintState("error", fallback, message);
         frappe.show_alert({ message, indicator: "red" }, 7);
     }
 

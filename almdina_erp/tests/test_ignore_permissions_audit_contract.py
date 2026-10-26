@@ -18,8 +18,11 @@ IGNORE_RE = re.compile(r"ignore_permissions\s*=\s*True")
 _REVIEWED_SITES: dict[str, str] = {
     "install.py": "MIGRATION",
     "almdina_erp/doctype/board_remnant/board_remnant.py": "LEGACY_INACTIVE",
+    "almdina_erp/infrastructure/backups/history.py": "SAFE",  # Internal backup operation audit records, not a public insert endpoint.
+    "almdina_erp/infrastructure/backups/restore_runner.py": "MIGRATION",  # Privileged background restore finalizer, not an HTTP request.
     "almdina_erp/infrastructure/frappe/canonical_permission_state_repository.py": "MIGRATION",
     "almdina_erp/infrastructure/frappe/cutting_plan_surface_metadata.py": "SAFE",
+    "almdina_erp/infrastructure/frappe/final_price_approval_gateway.py": "SAFE",  # Authorized price commands and same-transaction basis invalidation; guarded history flags.
     "almdina_erp/infrastructure/frappe/master_data_audit.py": "SAFE",
     "almdina_erp/infrastructure/frappe/notes_repository.py": "SAFE",
     "almdina_erp/infrastructure/frappe/order_cost_surface_metadata.py": "SAFE",
@@ -40,7 +43,8 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/services/order_revision_service.py": "SAFE",
     "almdina_erp/services/production_settings_service.py": "SAFE",
     "almdina_erp/services/production_stage_bootstrap_service.py": "SAFE",
-    "almdina_erp/services/special_shape_service.py": "SAFE",
+    "almdina_erp/services/user_language_service.py": "SAFE",  # POST-only authenticated current-user language edit.
+
 }
 
 
@@ -68,6 +72,22 @@ class TestIgnorePermissionsAuditContract(unittest.TestCase):
             f"removed={sorted(set(_REVIEWED_SITES) - found)}",
         )
         self.assertTrue(set(_REVIEWED_SITES.values()) <= {"SAFE", "MIGRATION", "LEGACY_INACTIVE"})
+
+    def test_final_price_approval_bypass_stays_command_scoped(self) -> None:
+        gateway = (
+            ROOT / "almdina_erp" / "infrastructure" / "frappe"
+            / "final_price_approval_gateway.py"
+        ).read_text(encoding="utf-8")
+        service = (
+            ROOT / "almdina_erp" / "services" / "final_price_approval_service.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("@frappe.whitelist()", gateway)
+        self.assertIn("document.flags.price_approval_action = True", gateway)
+        self.assertIn("document.flags.allow_price_approval_invalidate = True", gateway)
+        self.assertIn('order.check_permission("read")', service)
+        self.assertIn("require_document_capability(", service)
+        self.assertIn("require_cutting_plan_capability(", service)
 
     def test_permission_persistence_bypass_is_not_capability_authority(self) -> None:
         source = (

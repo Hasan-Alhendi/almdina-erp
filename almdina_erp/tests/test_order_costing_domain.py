@@ -204,7 +204,7 @@ class TestOrderCostingDomain(unittest.TestCase):
         summary = calculate_special_pricing(
             [
                 SpecialPricingPieceInput(
-                    piece_type="Extra",
+                    piece_type="Regular",
                     qty=2,
                     area_m2=0.8,
                     edge_cost_usd=2,

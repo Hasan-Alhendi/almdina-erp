@@ -153,6 +153,169 @@ def special_bbox_allowed_range_cm(
     )
 
 
+_L_NOTCH_LONG_SIDE = {
+    "Top Right": SIDE_LONG_RIGHT,
+    "Bottom Right": SIDE_LONG_RIGHT,
+    "Top Left": SIDE_LONG_LEFT,
+    "Bottom Left": SIDE_LONG_LEFT,
+}
+_L_NOTCH_WIDTH_SIDE = {
+    "Top Right": SIDE_WIDTH_TOP,
+    "Top Left": SIDE_WIDTH_TOP,
+    "Bottom Right": SIDE_WIDTH_BOTTOM,
+    "Bottom Left": SIDE_WIDTH_BOTTOM,
+}
+_OPPOSITE_SIDE = {
+    SIDE_LONG_RIGHT: SIDE_LONG_LEFT,
+    SIDE_LONG_LEFT: SIDE_LONG_RIGHT,
+    SIDE_WIDTH_TOP: SIDE_WIDTH_BOTTOM,
+    SIDE_WIDTH_BOTTOM: SIDE_WIDTH_TOP,
+}
+
+
+@dataclass(frozen=True)
+class LCornerAxisCut:
+    """One finished remnant and the raw length the DXF must cut."""
+
+    finished_remaining_cm: Decimal
+    terminator_mm: Decimal
+    inner_mm: Decimal | None
+    band_mm: Decimal | None
+    expected_raw_cm: Decimal | None
+
+
+@dataclass(frozen=True)
+class LCornerRawCut:
+    """Raw L notch in the order frame, before rotation or reflection.
+
+    ``clipped_corner_width_cm`` / ``clipped_corner_length_cm`` stay the finished
+    distances from the corner. The raw bite removes the outer band on the notch
+    side and adds the inner L-band thickness, because that band sits on the
+    material face of the notch. Each remnant deducts only the outer band at its
+    far end plus that same inner thickness. The two inner edges affect opposite
+    axes and are not added together.
+    """
+
+    proven: bool
+    raw_notch_width_cm: Decimal | None
+    raw_notch_length_cm: Decimal | None
+    width: LCornerAxisCut
+    length: LCornerAxisCut
+
+
+def l_shaped_raw_cut(
+    *,
+    finished_width_cm: object,
+    finished_length_cm: object,
+    notch_width_cm: object,
+    notch_length_cm: object,
+    position: str,
+    side_thickness_mm: Mapping[str, object] | None = None,
+    edge_break: bool = False,
+    edge_break_thickness_mm: object | None = None,
+) -> LCornerRawCut:
+    """Derive the raw L notch from finished corner distances and band thickness."""
+
+    width = normalize_cut_cm(finished_width_cm)
+    length = normalize_cut_cm(finished_length_cm)
+    notch_width = normalize_cut_cm(notch_width_cm)
+    notch_length = normalize_cut_cm(notch_length_cm)
+    sides = {
+        side: decimal_value((side_thickness_mm or {}).get(side, 0), label=side)
+        for side in (
+            SIDE_LONG_RIGHT,
+            SIDE_LONG_LEFT,
+            SIDE_WIDTH_TOP,
+            SIDE_WIDTH_BOTTOM,
+        )
+    }
+    inner: Decimal | None
+    if not edge_break:
+        inner = Decimal("0")
+    elif edge_break_thickness_mm is None:
+        inner = None
+    else:
+        inner = decimal_value(edge_break_thickness_mm, label="edge_break_thickness_mm")
+        if inner < 0:
+            raise CutDimensionError("سماكة قشاط زاوية L لا يمكن أن تكون سالبة.")
+
+    notch_long = _L_NOTCH_LONG_SIDE.get(position)
+    notch_width_side = _L_NOTCH_WIDTH_SIDE.get(position)
+    if notch_long is None or notch_width_side is None:
+        empty = LCornerAxisCut(Decimal("0"), Decimal("0"), inner, None, None)
+        return LCornerRawCut(False, None, None, empty, empty)
+
+    width_axis = _axis_cut(
+        finished_remaining_cm=width - notch_width,
+        terminator_mm=sides[_OPPOSITE_SIDE[notch_long]],
+        notch_side_mm=sides[notch_long],
+        finished_notch_cm=notch_width,
+        inner_mm=inner,
+    )
+    length_axis = _axis_cut(
+        finished_remaining_cm=length - notch_length,
+        terminator_mm=sides[_OPPOSITE_SIDE[notch_width_side]],
+        notch_side_mm=sides[notch_width_side],
+        finished_notch_cm=notch_length,
+        inner_mm=inner,
+    )
+    proven = inner is not None
+    return LCornerRawCut(
+        proven=proven,
+        raw_notch_width_cm=width_axis.raw_notch_cm if proven else None,
+        raw_notch_length_cm=length_axis.raw_notch_cm if proven else None,
+        width=LCornerAxisCut(
+            width_axis.finished_remaining_cm,
+            width_axis.terminator_mm,
+            inner,
+            width_axis.band_mm,
+            width_axis.expected_raw_cm,
+        ),
+        length=LCornerAxisCut(
+            length_axis.finished_remaining_cm,
+            length_axis.terminator_mm,
+            inner,
+            length_axis.band_mm,
+            length_axis.expected_raw_cm,
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class _AxisMath:
+    finished_remaining_cm: Decimal
+    terminator_mm: Decimal
+    band_mm: Decimal | None
+    expected_raw_cm: Decimal | None
+    raw_notch_cm: Decimal | None
+
+
+def _axis_cut(
+    *,
+    finished_remaining_cm: Decimal,
+    terminator_mm: Decimal,
+    notch_side_mm: Decimal,
+    finished_notch_cm: Decimal,
+    inner_mm: Decimal | None,
+) -> _AxisMath:
+    if inner_mm is None:
+        return _AxisMath(finished_remaining_cm, terminator_mm, None, None, None)
+    band_mm = terminator_mm + inner_mm
+    expected_raw = normalize_cut_cm(
+        finished_remaining_cm - (band_mm / MM_PER_CM)
+    )
+    raw_notch = normalize_cut_cm(
+        finished_notch_cm - (notch_side_mm / MM_PER_CM) + (inner_mm / MM_PER_CM)
+    )
+    return _AxisMath(
+        finished_remaining_cm,
+        terminator_mm,
+        band_mm,
+        expected_raw,
+        raw_notch,
+    )
+
+
 def dimensions_match_exact(
     actual_width_cm: object,
     actual_length_cm: object,

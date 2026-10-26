@@ -32,7 +32,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_a_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertLessEqual(len(self.page.splitlines()), 130)
         self.assertIn("frappe.ui.make_app_page", self.page)
         for asset in (
             "api.js",
@@ -122,9 +122,9 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             "aw-summary",
             "aw-card",
             "aw-audit",
-            "مستخدمو المعمل",
-            "مستخدمون غير مضافين إلى المعمل",
-            "إضافة إلى المعمل",
+            "Factory users",
+            "Users not added to the factory",
+            "Add to factory",
         ):
             self.assertIn(marker, self.renderer)
         for forbidden in (
@@ -176,7 +176,7 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             self.assertNotIn(forbidden, self.dialogs)
 
     def test_controller_is_orchestration_only(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 310)
+        self.assertLessEqual(len(self.controller.splitlines()), 340)
         for dependency in (
             "AlmdinaFactoryWorkforceApi",
             "AlmdinaFactoryWorkforceState",
@@ -212,8 +212,12 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
         self.assertIn('lifecycle.track(() => dispose(), "workforce-toolbar-owner")', self.toolbar)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui aw-shell"', self.renderer)
+        self.assertIn(
+            'class="almdina-ui aw-shell alm-page alm-page--admin"',
+            self.renderer,
+        )
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertIn("aw-search-mount", self.renderer)
         self.assertIn("aw-enabled-mount", self.renderer)
         self.assertNotIn('class="btn btn-primary aw-adopt-user"', self.renderer)
@@ -233,6 +237,16 @@ class FactoryWorkforceFrontendArchitectureTest(unittest.TestCase):
             self.assertIn(selector, self.css)
         self.assertNotIn("<style", self.renderer)
         self.assertNotIn("<style", self.controller)
+
+    def test_language_choices_come_from_the_server_catalog(self) -> None:
+        combined = "\n".join((self.dialogs, self.view_model, self.controller, self.state))
+        self.assertNotIn('["ar", "en"]', combined)
+        self.assertNotIn('user.language === "en"', self.view_model)
+        self.assertIn("languageField(config.languages", self.dialogs)
+        self.assertIn("languageName(user.language, data && data.languages)", self.view_model)
+        self.assertIn("data.languages = Array.isArray(payload.languages)", self.state)
+        self.assertIn("languages: state.languages", self.controller)
+        self.assertNotIn('dir="rtl"', self.renderer)
 
 
 if __name__ == "__main__":

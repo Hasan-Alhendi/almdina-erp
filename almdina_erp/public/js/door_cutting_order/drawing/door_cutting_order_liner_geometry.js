@@ -1,0 +1,1502 @@
+/* Parametric liner strip. Millimetres, origin at the piece top-left, y downward.
+   This is the client port of domain/cutting/liner_geometry.py. */
+(() => {
+    "use strict";
+
+    if (window.AlmdinaLinerGeometry) return;
+
+    const CLIPPED = "Clipped Corner";
+    const L_SHAPED = "L-Shaped Corner";
+    const SIDE_TOP = "edge_width_top";
+    const SIDE_BOTTOM = "edge_width_bottom";
+    const SIDE_LEFT = "edge_long_left";
+    const SIDE_RIGHT = "edge_long_right";
+    const SIDE_BREAK = "edge_break";
+    const SIDE_BREAK_ONLY = "edge_break_only";
+    const OUTER_SIDES = [SIDE_TOP, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT];
+    const TOLERANCE_MM = 0.25;
+    const BOARD_EDGE_TOLERANCE_MM = 0.05;
+    const SIDE_LABELS = {
+        [SIDE_TOP]: "أعلى",
+        [SIDE_BOTTOM]: "أسفل",
+        [SIDE_RIGHT]: "يمين",
+        [SIDE_LEFT]: "يسار",
+        [SIDE_BREAK]: "الكسر",
+        [SIDE_BREAK_ONLY]: "الكسر فقط",
+    };
+
+    function num(value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function hypot(dx, dy) {
+        return Math.sqrt((dx * dx) + (dy * dy));
+    }
+
+    function dist(a, b) {
+        return hypot(b[0] - a[0], b[1] - a[1]);
+    }
+
+    function availableSides(pieceType) {
+        if (pieceType === CLIPPED) return OUTER_SIDES.concat([SIDE_BREAK, SIDE_BREAK_ONLY]);
+        if (pieceType === L_SHAPED) return OUTER_SIDES.concat([SIDE_BREAK]);
+        if (!pieceType || pieceType === "Regular") return OUTER_SIDES.slice();
+        return [];
+    }
+
+    function normalizeSideSelection(value, pieceType, enabled) {
+        if (!enabled) return [];
+        const available = availableSides(pieceType);
+        if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+            return available.slice();
+        }
+        let raw = value;
+        if (typeof value === "string") {
+            try {
+                raw = JSON.parse(value);
+            } catch (error) {
+                return [];
+            }
+        }
+        if (!Array.isArray(raw)) return [];
+        const selected = new Set(raw.map(side => String(side || "").trim()).filter(Boolean));
+        return available.filter(side => selected.has(side));
+    }
+
+    function sideFlagsForSelection(piece, sides, rotated) {
+        const selected = new Set(normalizeSideSelection(
+            sides,
+            piece && (piece.pieceType || piece.piece_type),
+            true,
+        ));
+        const semantic = {
+            [SIDE_TOP]: selected.has(SIDE_TOP),
+            [SIDE_BOTTOM]: selected.has(SIDE_BOTTOM),
+            [SIDE_LEFT]: selected.has(SIDE_LEFT),
+            [SIDE_RIGHT]: selected.has(SIDE_RIGHT),
+            [SIDE_BREAK]: selected.has(SIDE_BREAK),
+            [SIDE_BREAK_ONLY]: selected.has(SIDE_BREAK_ONLY),
+        };
+        if (!rotated) return semantic;
+        return {
+            [SIDE_TOP]: semantic[SIDE_LEFT],
+            [SIDE_BOTTOM]: semantic[SIDE_RIGHT],
+            [SIDE_LEFT]: semantic[SIDE_BOTTOM],
+            [SIDE_RIGHT]: semantic[SIDE_TOP],
+            [SIDE_BREAK]: semantic[SIDE_BREAK],
+            [SIDE_BREAK_ONLY]: semantic[SIDE_BREAK_ONLY],
+        };
+    }
+
+    function sideLabel(side, pieceType) {
+        if (pieceType === L_SHAPED && side === SIDE_BREAK) return "زاوية L";
+        return SIDE_LABELS[side] || side;
+    }
+
+    function pieceFromRow(row) {
+        const source = row || {};
+        const width = num(source.cut_width_cm) || num(source.width_cm) || num(source.original_w) || num(source.w);
+        const length = num(source.cut_length_cm) || num(source.length_cm) || num(source.original_h) || num(source.h);
+        return {
+            pieceType: source.piece_type || "Regular",
+            widthCm: width,
+            lengthCm: length,
+            position: source.clipped_corner_position || "Top Right",
+            cutWidthCm: num(source.clipped_corner_width_cm),
+            cutLengthCm: num(source.clipped_corner_length_cm),
+        };
+    }
+
+    function cornerPolygon(piece, width, height, cutX, cutY) {
+        const position = piece.position || "Top Right";
+        const shaped = piece.pieceType === L_SHAPED;
+        const polygons = shaped
+            ? {
+                "Top Right": [[0, 0], [width - cutX, 0], [width - cutX, cutY], [width, cutY], [width, height], [0, height]],
+                "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY], [cutX, cutY]],
+                "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height - cutY], [width - cutX, height], [0, height]],
+                "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [cutX, height - cutY], [0, height - cutY]],
+            }
+            : {
+                "Top Right": [[0, 0], [width - cutX, 0], [width, cutY], [width, height], [0, height]],
+                "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY]],
+                "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
+                "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [0, height - cutY]],
+            };
+        return polygons[position] || null;
+    }
+
+    function piecePolygonMm(piece) {
+        const width = piece.widthCm * 10;
+        const height = piece.lengthCm * 10;
+        if (piece.pieceType !== CLIPPED && piece.pieceType !== L_SHAPED) {
+            return [[0, 0], [width, 0], [width, height], [0, height]];
+        }
+        const cutX = Math.min(Math.max(piece.cutWidthCm * 10, 0), width * 0.95);
+        const cutY = Math.min(Math.max(piece.cutLengthCm * 10, 0), height * 0.95);
+        return cornerPolygon(piece, width, height, cutX, cutY);
+    }
+
+    function edgePaths(piece) {
+        const width = piece.widthCm * 10;
+        const height = piece.lengthCm * 10;
+        if (piece.pieceType !== CLIPPED && piece.pieceType !== L_SHAPED) {
+            return {
+                [SIDE_TOP]: [[0, 0], [width, 0]],
+                [SIDE_BOTTOM]: [[0, height], [width, height]],
+                [SIDE_LEFT]: [[0, 0], [0, height]],
+                [SIDE_RIGHT]: [[width, 0], [width, height]],
+            };
+        }
+        const cutX = Math.min(Math.max(piece.cutWidthCm * 10, 0), width * 0.95);
+        const cutY = Math.min(Math.max(piece.cutLengthCm * 10, 0), height * 0.95);
+        const position = piece.position || "Top Right";
+        const clipped = {
+            "Top Right": {
+                [SIDE_TOP]: [[0, 0], [width - cutX, 0]],
+                [SIDE_RIGHT]: [[width, cutY], [width, height]],
+                [SIDE_BOTTOM]: [[width, height], [0, height]],
+                [SIDE_LEFT]: [[0, height], [0, 0]],
+                [SIDE_BREAK]: [[0, 0], [width - cutX, 0], [width, cutY], [width, height]],
+                [SIDE_BREAK_ONLY]: [[width - cutX, 0], [width, cutY]],
+            },
+            "Top Left": {
+                [SIDE_TOP]: [[cutX, 0], [width, 0]],
+                [SIDE_RIGHT]: [[width, 0], [width, height]],
+                [SIDE_BOTTOM]: [[width, height], [0, height]],
+                [SIDE_LEFT]: [[0, height], [0, cutY]],
+                [SIDE_BREAK]: [[width, 0], [cutX, 0], [0, cutY], [0, height]],
+                [SIDE_BREAK_ONLY]: [[cutX, 0], [0, cutY]],
+            },
+            "Bottom Right": {
+                [SIDE_TOP]: [[0, 0], [width, 0]],
+                [SIDE_RIGHT]: [[width, 0], [width, height - cutY]],
+                [SIDE_BOTTOM]: [[width - cutX, height], [0, height]],
+                [SIDE_LEFT]: [[0, height], [0, 0]],
+                [SIDE_BREAK]: [[width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
+                [SIDE_BREAK_ONLY]: [[width, height - cutY], [width - cutX, height]],
+            },
+            "Bottom Left": {
+                [SIDE_TOP]: [[0, 0], [width, 0]],
+                [SIDE_RIGHT]: [[width, 0], [width, height]],
+                [SIDE_BOTTOM]: [[width, height], [cutX, height]],
+                [SIDE_LEFT]: [[0, height - cutY], [0, 0]],
+                [SIDE_BREAK]: [[0, 0], [0, height - cutY], [cutX, height], [width, height]],
+                [SIDE_BREAK_ONLY]: [[0, height - cutY], [cutX, height]],
+            },
+        };
+        const shaped = {
+            "Top Right": { [SIDE_BREAK]: [[width - cutX, 0], [width - cutX, cutY], [width, cutY]] },
+            "Top Left": { [SIDE_BREAK]: [[cutX, 0], [cutX, cutY], [0, cutY]] },
+            "Bottom Right": { [SIDE_BREAK]: [[width, height - cutY], [width - cutX, height - cutY], [width - cutX, height]] },
+            "Bottom Left": { [SIDE_BREAK]: [[0, height - cutY], [cutX, height - cutY], [cutX, height]] },
+        };
+        const paths = Object.assign({}, clipped[position]);
+        if (piece.pieceType === L_SHAPED) {
+            paths[SIDE_BREAK] = shaped[position][SIDE_BREAK];
+            delete paths[SIDE_BREAK_ONLY];
+        }
+        return paths;
+    }
+
+    function edgeLengthMm(piece, side) {
+        return polylineLength((edgePaths(piece) || {})[side] || []);
+    }
+
+    function visualEdgeMarkerPaths(piece, side, offsetsMm) {
+        const reference = (edgePaths(piece) || {})[side];
+        const polygon = piecePolygonMm(piece);
+        if (!reference || reference.length < 2 || !polygon) return [];
+        const sign = inwardSign(reference, polygon);
+        return (offsetsMm || [])
+            .map(offset => Number(offset))
+            .filter(offset => Number.isFinite(offset) && offset >= 0)
+            .map(offset => offsetPolyline(reference, offset, sign));
+    }
+
+    function onSegment(point, start, end, tolerance) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const lengthSq = (dx * dx) + (dy * dy);
+        if (lengthSq <= 1e-12) return dist(point, start) <= tolerance;
+        const ratio = Math.min(1, Math.max(0, (((point[0] - start[0]) * dx) + ((point[1] - start[1]) * dy)) / lengthSq));
+        const nearest = [start[0] + (dx * ratio), start[1] + (dy * ratio)];
+        return dist(point, nearest) <= tolerance;
+    }
+
+    function pointInPolygon(point, polygon, tolerance = TOLERANCE_MM) {
+        if (!polygon || polygon.length < 3) return false;
+        for (let index = 0; index < polygon.length; index += 1) {
+            const start = polygon[index];
+            const end = polygon[(index + 1) % polygon.length];
+            if (onSegment(point, start, end, tolerance)) return true;
+        }
+        let inside = false;
+        for (let index = 0; index < polygon.length; index += 1) {
+            const start = polygon[index];
+            const end = polygon[(index + 1) % polygon.length];
+            if ((start[1] > point[1]) === (end[1] > point[1])) continue;
+            const crossingX = start[0] + ((point[1] - start[1]) * (end[0] - start[0]) / (end[1] - start[1]));
+            if (crossingX > point[0]) inside = !inside;
+        }
+        return inside;
+    }
+
+    function leftNormal(start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const length = hypot(dx, dy) || 1;
+        return [-dy / length, dx / length];
+    }
+
+    function inwardSign(polyline, polygon) {
+        let best = -1;
+        let segment = [polyline[0], polyline[1]];
+        for (let index = 0; index < polyline.length - 1; index += 1) {
+            const length = dist(polyline[index], polyline[index + 1]);
+            if (length > best) {
+                best = length;
+                segment = [polyline[index], polyline[index + 1]];
+            }
+        }
+        const normal = leftNormal(segment[0], segment[1]);
+        const midpoint = [(segment[0][0] + segment[1][0]) / 2, (segment[0][1] + segment[1][1]) / 2];
+        const probe = [midpoint[0] + normal[0], midpoint[1] + normal[1]];
+        return pointInPolygon(probe, polygon) ? 1 : -1;
+    }
+
+    function intersectOffsetLines(first, second) {
+        const direction = [first[1][0] - first[0][0], first[1][1] - first[0][1]];
+        const other = [second[1][0] - second[0][0], second[1][1] - second[0][1]];
+        const denominator = (direction[0] * other[1]) - (direction[1] * other[0]);
+        if (Math.abs(denominator) <= 1e-9) return null;
+        const step = (
+            ((second[0][0] - first[0][0]) * other[1])
+            - ((second[0][1] - first[0][1]) * other[0])
+        ) / denominator;
+        return [first[0][0] + (direction[0] * step), first[0][1] + (direction[1] * step)];
+    }
+
+    function offsetPolyline(polyline, distance, sign) {
+        const segments = [];
+        for (let index = 0; index < polyline.length - 1; index += 1) {
+            const normal = leftNormal(polyline[index], polyline[index + 1]);
+            const shift = [sign * normal[0] * distance, sign * normal[1] * distance];
+            segments.push([
+                [polyline[index][0] + shift[0], polyline[index][1] + shift[1]],
+                [polyline[index + 1][0] + shift[0], polyline[index + 1][1] + shift[1]],
+            ]);
+        }
+        if (!segments.length) return [];
+        const points = [segments[0][0]];
+        for (let index = 1; index < segments.length; index += 1) {
+            const joint = intersectOffsetLines(segments[index - 1], segments[index]);
+            points.push(joint || segments[index - 1][1]);
+        }
+        points.push(segments[segments.length - 1][1]);
+        return points;
+    }
+
+    function quantizeCm(value) {
+        return Math.round(num(value) * 1000) / 1000;
+    }
+
+    function contourNotchCm(input) {
+        const source = input || {};
+        const finished = {
+            cutWidthCm: num(source.notchWidthCm),
+            cutLengthCm: num(source.notchLengthCm),
+        };
+        if (source.pieceType !== L_SHAPED) return finished;
+        if (source.edgeBreak && (source.innerMm === null || source.innerMm === undefined)) {
+            return finished;
+        }
+        const pair = {
+            "Top Right": ["long_right", "width_top"],
+            "Bottom Right": ["long_right", "width_bottom"],
+            "Top Left": ["long_left", "width_top"],
+            "Bottom Left": ["long_left", "width_bottom"],
+        }[source.position || "Top Right"];
+        if (!pair) return finished;
+        const inner = source.edgeBreak ? num(source.innerMm) : 0;
+        const sides = source.sideThicknessMm || {};
+        return {
+            cutWidthCm: quantizeCm(finished.cutWidthCm - (num(sides[pair[0]]) / 10) + (inner / 10)),
+            cutLengthCm: quantizeCm(finished.cutLengthCm - (num(sides[pair[1]]) / 10) + (inner / 10)),
+        };
+    }
+
+    function validationCode(piece, side, offsetCm, widthCm) {
+        if (!(piece.widthCm > 0) || !(piece.lengthCm > 0)) return "missing_dimensions";
+        if (piece.pieceType === CLIPPED || piece.pieceType === L_SHAPED) {
+            if (!(piece.cutWidthCm > 0) || !(piece.cutLengthCm > 0)) return "missing_corner";
+            if (!["Top Right", "Top Left", "Bottom Right", "Bottom Left"].includes(piece.position)) {
+                return "invalid_corner";
+            }
+        }
+        if (!availableSides(piece.pieceType).includes(side)) return "side_unavailable";
+        const offset = Number(offsetCm);
+        const width = Number(widthCm);
+        if (!Number.isFinite(offset) || offset < 0) return "offset_invalid";
+        if (!Number.isFinite(width) || width <= 0) return "width_invalid";
+        const polygon = piecePolygonMm(piece);
+        const reference = edgePaths(piece)[side];
+        if (!polygon || !reference) return "side_unavailable";
+        const sign = inwardSign(reference, polygon);
+        const samples = offsetPolyline(reference, (offset + width) * 10, sign)
+            .concat(offsetPolyline(reference, offset * 10, sign));
+        if (samples.some(point => !pointInPolygon(point, polygon, TOLERANCE_MM))) return "strip_outside";
+        return "";
+    }
+
+    function regionPolygonMm(piece, side, offsetCm, widthCm, startCm, lengthCm) {
+        const error = validationCode(piece, side, offsetCm, widthCm);
+        if (error) {
+            const failure = new Error(error);
+            failure.code = error;
+            throw failure;
+        }
+        const polygon = piecePolygonMm(piece);
+        const prepared = preparedReference(piece, side, startCm, lengthCm);
+        const sign = inwardSign(prepared.reference, polygon);
+        const near = offsetPolyline(prepared.clipped, Number(offsetCm) * 10, sign);
+        const far = offsetPolyline(prepared.clipped, (Number(offsetCm) + Number(widthCm)) * 10, sign);
+        return near.concat(far.slice().reverse());
+    }
+
+    function regionReferenceMm(piece, side, startCm, lengthCm) {
+        return preparedReference(piece, side, startCm, lengthCm).clipped;
+    }
+
+    function stripPolygonMm(piece, side, offsetCm, widthCm) {
+        return regionPolygonMm(piece, side, offsetCm, widthCm, 0, null);
+    }
+
+    function cutterCenterOffsetsMm(widthMm, diameterMm) {
+        if (!Number.isFinite(widthMm) || !Number.isFinite(diameterMm) || diameterMm <= TOLERANCE_MM || widthMm <= TOLERANCE_MM) {
+            const error = new Error("cutter_diameter_invalid");
+            error.code = "cutter_diameter_invalid";
+            throw error;
+        }
+        if (widthMm + TOLERANCE_MM < diameterMm) {
+            const error = new Error("liner_narrower_than_cutter");
+            error.code = "liner_narrower_than_cutter";
+            throw error;
+        }
+        const radius = diameterMm / 2;
+        if (Math.abs(widthMm - diameterMm) <= TOLERANCE_MM) return [widthMm / 2];
+        const leading = [radius];
+        const trailing = [widthMm - radius];
+        while (trailing[0] - leading[leading.length - 1] > diameterMm + 1e-9) {
+            leading.push(leading[leading.length - 1] + diameterMm);
+            if (trailing[0] - leading[leading.length - 1] > diameterMm + 1e-9) {
+                trailing.unshift(trailing[0] - diameterMm);
+            }
+        }
+        return leading.concat(trailing);
+    }
+
+    function boundaryDistance(point, polygon) {
+        const edges = polygon.map((start, index) => [start, polygon[(index + 1) % polygon.length]]);
+        return Math.min(...edges.map(edge => pointSegDist(point, edge[0], edge[1])));
+    }
+
+    function pointSegDist(point, start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const lengthSq = (dx * dx) + (dy * dy);
+        if (lengthSq <= 1e-12) return dist(point, start);
+        const ratio = Math.min(1, Math.max(0, (((point[0] - start[0]) * dx) + ((point[1] - start[1]) * dy)) / lengthSq));
+        return dist(point, [start[0] + (dx * ratio), start[1] + (dy * ratio)]);
+    }
+
+    function rayExit(origin, direction, polygon) {
+        let best = null;
+        polygon.forEach((start, index) => {
+            const end = polygon[(index + 1) % polygon.length];
+            const edge = [end[0] - start[0], end[1] - start[1]];
+            const denominator = (direction[0] * edge[1]) - (direction[1] * edge[0]);
+            if (Math.abs(denominator) <= 1e-12) return;
+            const offset = [start[0] - origin[0], start[1] - origin[1]];
+            const travel = ((offset[0] * edge[1]) - (offset[1] * edge[0])) / denominator;
+            const along = ((offset[0] * direction[1]) - (offset[1] * direction[0])) / denominator;
+            if (travel <= 1e-6 || along < -1e-6 || along > 1 + 1e-6) return;
+            if (best === null || travel < best) best = travel;
+        });
+        if (best === null) return null;
+        return [origin[0] + (direction[0] * best), origin[1] + (direction[1] * best)];
+    }
+
+    function fail(code) {
+        const error = new Error(code);
+        error.code = code;
+        throw error;
+    }
+
+    function polylineLength(path) {
+        let length = 0;
+        for (let index = 1; index < path.length; index += 1) length += dist(path[index - 1], path[index]);
+        return length;
+    }
+
+    function pointAlong(path, distance) {
+        if (path.length < 2) fail("side_unavailable");
+        if (distance <= 1e-9) return { point: path[0], index: 0 };
+        let walked = 0;
+        for (let index = 1; index < path.length; index += 1) {
+            const start = path[index - 1];
+            const end = path[index];
+            const length = dist(start, end);
+            if (walked + length >= distance - 1e-9) {
+                const ratio = length <= 1e-12 ? 0 : Math.min(1, Math.max(0, (distance - walked) / length));
+                return {
+                    point: [start[0] + ((end[0] - start[0]) * ratio), start[1] + ((end[1] - start[1]) * ratio)],
+                    index: index - 1,
+                };
+            }
+            walked += length;
+        }
+        return { point: path[path.length - 1], index: path.length - 2 };
+    }
+
+    function subpolyline(path, startMm, endMm) {
+        const total = polylineLength(path);
+        if (startMm <= TOLERANCE_MM && endMm >= total - TOLERANCE_MM) return path.map(point => point.slice());
+        const start = pointAlong(path, startMm);
+        const end = pointAlong(path, endMm);
+        const points = [start.point];
+        for (let index = start.index + 1; index <= end.index; index += 1) {
+            if (dist(points[points.length - 1], path[index]) > 1e-6) points.push(path[index]);
+        }
+        if (dist(points[points.length - 1], end.point) > 1e-6) points.push(end.point);
+        if (points.length < 2) points.push(end.point);
+        return points;
+    }
+
+    function spanHitsBend(path, startMm, endMm) {
+        const total = polylineLength(path);
+        let walked = 0;
+        for (let index = 1; index < path.length - 1; index += 1) {
+            walked += dist(path[index - 1], path[index]);
+            if (walked <= TOLERANCE_MM || Math.abs(walked - total) <= TOLERANCE_MM) continue;
+            if (Math.abs(walked - startMm) <= TOLERANCE_MM || Math.abs(walked - endMm) <= TOLERANCE_MM) return true;
+        }
+        return false;
+    }
+
+    function resolvedSpanMm(reference, startCm, lengthCm) {
+        const edge = polylineLength(reference);
+        const start = Math.max(0, num(startCm) * 10);
+        if (num(startCm) < -TOLERANCE_MM / 10) fail("liner_start_invalid");
+        const explicit = !(lengthCm == null || lengthCm === "" || !(num(lengthCm) > 0));
+        let length = explicit ? num(lengthCm) * 10 : edge - start;
+        if (!(length > TOLERANCE_MM)) fail("liner_length_invalid");
+        if (start + length > edge + TOLERANCE_MM) fail("liner_span_exceeds_edge");
+        return { start, end: start + Math.min(length, edge - start), edge };
+    }
+
+    function preparedReference(piece, side, startCm, lengthCm) {
+        const reference = edgePaths(piece)[side];
+        if (!reference) fail("side_unavailable");
+        const span = resolvedSpanMm(reference, startCm, lengthCm);
+        if (spanHitsBend(reference, span.start, span.end)) fail("liner_span_on_corner");
+        return {
+            reference,
+            clipped: subpolyline(reference, span.start, span.end),
+            boundaryStart: span.start <= TOLERANCE_MM,
+            boundaryEnd: Math.abs(span.end - span.edge) <= TOLERANCE_MM,
+        };
+    }
+
+    function extendCenterline(polyline, extension, polygon, ends) {
+        const points = polyline.map(point => point.slice());
+        if (points.length < 2) fail("liner_extension_unsafe");
+        const which = ends || { start: true, end: true };
+        const pairs = [];
+        if (which.start) pairs.push([0, 1]);
+        if (which.end) pairs.push([points.length - 1, points.length - 2]);
+        pairs.forEach(pair => {
+            const origin = points[pair[0]];
+            const toward = points[pair[1]];
+            const delta = [origin[0] - toward[0], origin[1] - toward[1]];
+            const length = Math.hypot(delta[0], delta[1]) || 1;
+            const direction = [delta[0] / length, delta[1] / length];
+            const hit = boundaryDistance(origin, polygon) <= TOLERANCE_MM
+                ? origin
+                : rayExit(origin, direction, polygon);
+            if (!hit) {
+                const error = new Error("liner_extension_unsafe");
+                error.code = "liner_extension_unsafe";
+                throw error;
+            }
+            const amount = pair[0] === 0
+                ? (which.startExtension != null ? which.startExtension : extension)
+                : (which.endExtension != null ? which.endExtension : extension);
+            points[pair[0]] = [hit[0] + (direction[0] * amount), hit[1] + (direction[1] * amount)];
+        });
+        return points;
+    }
+
+    function centerlineMm(piece, side, offsetCm, widthCm, startCm, lengthCm) {
+        const error = validationCode(piece, side, offsetCm, widthCm);
+        if (error) fail(error);
+        const prepared = preparedReference(piece, side, startCm, lengthCm);
+        const polygon = piecePolygonMm(piece);
+        const sign = inwardSign(prepared.reference, polygon);
+        const distance = (num(offsetCm) * 10) + ((num(widthCm) * 10) / 2);
+        const reference = prepared.clipped;
+        return offsetPolyline(reference, distance, sign);
+    }
+
+    function quantizeCm(value) {
+        return Math.round(value * 10000) / 10000;
+    }
+
+    function positiveCm(value) {
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? number : null;
+    }
+
+    function pointNear(point, target, tolerance) {
+        return Math.abs(point[0] - target[0]) <= tolerance && Math.abs(point[1] - target[1]) <= tolerance;
+    }
+
+    function centerRecessedHandle(piece, side, widthCm, lengthCm) {
+        const source = piece || {};
+        const pieceType = String(source.pieceType || source.piece_type || "").trim();
+        if (pieceType !== "Regular") return { ok: false, code: "unsupported_piece_type" };
+        const resolved = String(side || "").trim() || SIDE_TOP;
+        const horizontal = resolved === SIDE_TOP || resolved === SIDE_BOTTOM;
+        const vertical = resolved === SIDE_LEFT || resolved === SIDE_RIGHT;
+        if (!horizontal && !vertical) return { ok: false, code: "side_unavailable" };
+        const doorWidth = positiveCm(source.widthCm);
+        const doorHeight = positiveCm(source.lengthCm);
+        const handleWidth = positiveCm(widthCm);
+        const handleLength = positiveCm(lengthCm);
+        if (doorWidth === null) return { ok: false, code: "door_width_invalid" };
+        if (doorHeight === null) return { ok: false, code: "door_height_invalid" };
+        if (handleLength === null) return { ok: false, code: "handle_length_invalid" };
+        if (handleWidth === null) return { ok: false, code: "handle_width_invalid" };
+        const span = horizontal ? doorWidth : doorHeight;
+        const depth = horizontal ? doorHeight : doorWidth;
+        if (handleLength > span + 1e-9) {
+            return { ok: false, code: horizontal ? "length_exceeds_door_width" : "length_exceeds_door_height" };
+        }
+        if (handleWidth > depth + 1e-9) {
+            return { ok: false, code: horizontal ? "width_exceeds_door_height" : "width_exceeds_door_width" };
+        }
+        const startCm = quantizeCm((span - handleLength) / 2);
+        const offsetCm = quantizeCm((depth - handleWidth) / 2);
+        if (startCm < 0 || offsetCm < 0) return { ok: false, code: "center_rejected" };
+        const host = {
+            pieceType: "Regular",
+            widthCm: doorWidth,
+            lengthCm: doorHeight,
+            position: source.position || "Top Right",
+            cutWidthCm: 0,
+            cutLengthCm: 0,
+        };
+        let line;
+        let polygon;
+        try {
+            line = centerlineMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+            polygon = regionPolygonMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+        } catch (error) {
+            return { ok: false, code: (error && error.code) || "center_rejected" };
+        }
+        if (!line || line.length < 2 || !polygon || polygon.length < 4) {
+            return { ok: false, code: "center_rejected" };
+        }
+        const doorCenter = [doorWidth * 5, doorHeight * 5];
+        const lineMid = [
+            (line[0][0] + line[line.length - 1][0]) / 2,
+            (line[0][1] + line[line.length - 1][1]) / 2,
+        ];
+        const polygonMid = polygon.reduce(
+            (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
+            [0, 0]
+        ).map(value => value / polygon.length);
+        if (!pointNear(lineMid, doorCenter, 0.05) || !pointNear(polygonMid, doorCenter, 0.05)) {
+            return { ok: false, code: "center_rejected" };
+        }
+        return { ok: true, code: "", side: resolved, startCm, offsetCm };
+    }
+
+    function collinearPoint(start, middle, end) {
+        const area = Math.abs(
+            ((middle[0] - start[0]) * (end[1] - start[1]))
+            - ((middle[1] - start[1]) * (end[0] - start[0]))
+        );
+        return area <= TOLERANCE_MM * Math.max(dist(start, end), 1);
+    }
+
+    function chainPresent(path, points) {
+        if (points.length < 2) return true;
+        for (let startIndex = 0; startIndex < path.length; startIndex += 1) {
+            if (dist(path[startIndex], points[0]) > TOLERANCE_MM) continue;
+            let cursor = 1;
+            for (let laterIndex = startIndex + 1; laterIndex < path.length; laterIndex += 1) {
+                const later = path[laterIndex];
+                if (dist(later, points[cursor]) <= TOLERANCE_MM) {
+                    cursor += 1;
+                    if (cursor === points.length) return true;
+                    continue;
+                }
+                if (!collinearPoint(points[cursor - 1], later, points[cursor])) break;
+            }
+        }
+        return false;
+    }
+
+    function spanPresent(path, endpoints) {
+        return chainPresent(path, endpoints) || chainPresent(path, endpoints.slice().reverse());
+    }
+
+    function prependClosure(path, endpoints) {
+        if (spanPresent(path, endpoints)) return path;
+        const ordered = endpoints.slice();
+        if (dist(ordered[ordered.length - 1], path[0]) > TOLERANCE_MM) ordered.reverse();
+        if (dist(ordered[ordered.length - 1], path[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+        return ordered.slice(0, -1).concat(path);
+    }
+
+    function appendClosure(path, endpoints, returnPass) {
+        if (spanPresent(path, endpoints)) return path.slice();
+        const points = path.slice();
+        const nearEnd = Math.min(dist(points[points.length - 1], endpoints[0]), dist(points[points.length - 1], endpoints[endpoints.length - 1]));
+        if (nearEnd > TOLERANCE_MM) {
+            const retrace = returnPass.slice();
+            if (dist(points[points.length - 1], retrace[0]) > TOLERANCE_MM) retrace.reverse();
+            if (dist(points[points.length - 1], retrace[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+            retrace.slice(1).forEach(point => points.push(point));
+        }
+        const ordered = endpoints.slice();
+        if (dist(points[points.length - 1], ordered[0]) > TOLERANCE_MM) ordered.reverse();
+        if (dist(points[points.length - 1], ordered[0]) > TOLERANCE_MM) fail("liner_extension_unsafe");
+        ordered.slice(1).forEach(point => points.push(point));
+        return points;
+    }
+
+    function resolveSawn(explicit, boundary) {
+        if (explicit == null) return boundary;
+        return Boolean(explicit) && boundary;
+    }
+
+    function boardEdge(start, end, board) {
+        if (!board) return false;
+        const sides = [
+            [0, num(board.minX)],
+            [0, num(board.maxX)],
+            [1, num(board.minY)],
+            [1, num(board.maxY)],
+        ];
+        return sides.some(([axis, value]) => (
+            Math.abs(start[axis] - value) <= BOARD_EDGE_TOLERANCE_MM
+            && Math.abs(end[axis] - value) <= BOARD_EDGE_TOLERANCE_MM
+        ));
+    }
+
+    function transformDirection(direction, mirrored, quarterTurns, width, height) {
+        const origin = transformPoint([0, 0], mirrored, quarterTurns, width, height);
+        const moved = transformPoint(direction, mirrored, quarterTurns, width, height);
+        return [moved[0] - origin[0], moved[1] - origin[1]];
+    }
+
+    function faceEdge(polygon, point, direction) {
+        const length = Math.hypot(direction[0], direction[1]) || 1;
+        const unit = [direction[0] / length, direction[1] / length];
+        let best = null;
+        let bestScore = -1;
+        polygon.forEach((start, index) => {
+            const end = polygon[(index + 1) % polygon.length];
+            if (pointSegDist(point, start, end) > TOLERANCE_MM) return;
+            const normal = leftNormal(start, end);
+            const score = Math.abs((normal[0] * unit[0]) + (normal[1] * unit[1]));
+            if (score > bestScore) {
+                best = [start, end];
+                bestScore = score;
+            }
+        });
+        return best;
+    }
+
+    function sawnBoundaryEnds(piece, linerPiece, board) {
+        if (!board) return null;
+        const prepared = preparedReference(
+            linerPiece,
+            piece.liner_reference_side,
+            piece.liner_start_cm,
+            piece.liner_length_cm
+        );
+        const polygon = placedPolygonMm(piece);
+        const width = linerPiece.widthCm * 10;
+        const height = linerPiece.lengthCm * 10;
+        const mirrored = Boolean(piece.corner_mirrored);
+        const turns = pieceQuarterTurns(piece);
+        function endSawn(atStart, boundary) {
+            if (!boundary) return false;
+            const clipped = prepared.clipped;
+            const origin = atStart ? clipped[0] : clipped[clipped.length - 1];
+            const toward = atStart ? clipped[1] : clipped[clipped.length - 2];
+            const direction = transformDirection(
+                [origin[0] - toward[0], origin[1] - toward[1]],
+                mirrored,
+                turns,
+                width,
+                height
+            );
+            const placed = placeLocalPath(piece, linerPiece, [origin])[0];
+            const edge = faceEdge(polygon, placed, direction);
+            if (!edge) return true;
+            return !boardEdge(edge[0], edge[1], board);
+        }
+        return {
+            startSawn: endSawn(true, prepared.boundaryStart),
+            endSawn: endSawn(false, prepared.boundaryEnd),
+        };
+    }
+
+    function toolpathMm(piece, side, offsetCm, widthCm, cutterDiameterMm, startCm, lengthCm, ends) {
+        const error = validationCode(piece, side, offsetCm, widthCm);
+        if (error) fail(error);
+        const centers = cutterCenterOffsetsMm(num(widthCm) * 10, num(cutterDiameterMm));
+        const polygon = piecePolygonMm(piece);
+        const prepared = preparedReference(piece, side, startCm, lengthCm);
+        const sign = inwardSign(prepared.reference, polygon);
+        const radius = num(cutterDiameterMm) / 2;
+        const startSawn = resolveSawn(ends && ends.startSawn, prepared.boundaryStart);
+        const endSawn = resolveSawn(ends && ends.endSawn, prepared.boundaryEnd);
+        const extendStart = prepared.boundaryStart;
+        const extendEnd = prepared.boundaryEnd;
+        const needsFlat = !startSawn || !endSawn;
+        if (needsFlat && centers.length < 2) fail("liner_flat_end_unmachinable");
+        const trimStart = extendStart ? 0 : radius;
+        const trimEnd = extendEnd ? 0 : radius;
+        if (polylineLength(prepared.clipped) + TOLERANCE_MM < trimStart + trimEnd) {
+            fail("liner_flat_end_unmachinable");
+        }
+        const lines = centers.map(center => {
+            let line = offsetPolyline(prepared.clipped, (num(offsetCm) * 10) + center, sign);
+            if (trimStart) line = subpolyline(line, trimStart, polylineLength(line));
+            if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
+            if (line.length < 2) fail("liner_flat_end_unmachinable");
+            if (extendStart || extendEnd) {
+                line = extendCenterline(line, radius, polygon, {
+                    start: extendStart,
+                    end: extendEnd,
+                });
+            }
+            return line;
+        });
+        let path = [];
+        lines.forEach((line, index) => {
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        if (!startSawn) path = prependClosure(path, lines.map(line => line[0]));
+        if (!endSawn) path = appendClosure(path, lines.map(line => line[line.length - 1]), lines[lines.length - 1]);
+        return path;
+    }
+
+    function segmentsCross(a, b, c, d) {
+        function side(p, q, r) {
+            return ((q[0] - p[0]) * (r[1] - p[1])) - ((q[1] - p[1]) * (r[0] - p[0]));
+        }
+        const ab = side(a, b, c) * side(a, b, d);
+        const cd = side(c, d, a) * side(c, d, b);
+        return ab < -1e-8 && cd < -1e-8;
+    }
+
+    function ringGapToSegment(ring, start, end) {
+        return Math.min(
+            ...ring.map(corner => pointSegDist(corner, start, end)),
+            ...ring.map((corner, cornerIndex) => Math.min(
+                pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
+                pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
+            ))
+        );
+    }
+
+    function pointInMaterial(point, outer, holes) {
+        if (!pointInPolygon(point, outer)) return false;
+        return !(holes || []).some(hole => pointInPolygon(point, hole));
+    }
+
+    function obstacleMaterial(obstacle) {
+        const outer = obstacleRing(obstacle);
+        const holes = obstacle && Array.isArray(obstacle.holes)
+            ? obstacle.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+            : [];
+        return { outer, holes };
+    }
+
+    function extensionConflictDetails(path, diameterMm, board, obstacles) {
+        const radius = num(diameterMm) / 2;
+        const blocks = obstacles || [];
+        for (let index = 0; index < path.length - 1; index += 1) {
+            const start = path[index];
+            const end = path[index + 1];
+            for (let obstacleIndex = 0; obstacleIndex < blocks.length; obstacleIndex += 1) {
+                const obstacle = blocks[obstacleIndex];
+                const material = obstacleMaterial(obstacle);
+                if (material.outer.length < 3) continue;
+                const boundaries = [material.outer].concat(material.holes);
+                const minimumDistanceMm = Math.min(
+                    ...boundaries.map(ring => ringGapToSegment(ring, start, end))
+                );
+                let rejectCondition = "";
+                if (
+                    pointInMaterial(start, material.outer, material.holes)
+                    || pointInMaterial(end, material.outer, material.holes)
+                ) {
+                    rejectCondition = "endpoint_in_material";
+                } else {
+                    const crossing = boundaries.some(ring => ring.some((corner, cornerIndex) => segmentsCross(
+                        start,
+                        end,
+                        corner,
+                        ring[(cornerIndex + 1) % ring.length]
+                    )));
+                    if (crossing) rejectCondition = "segment_crosses_material_boundary";
+                    else if (minimumDistanceMm < radius - TOLERANCE_MM) {
+                        rejectCondition = "clearance_below_cutter_radius";
+                    }
+                }
+                if (rejectCondition) {
+                    return {
+                        code: "liner_extension_hits_piece",
+                        segmentIndex: index,
+                        obstacleIndex,
+                        start: start.slice(),
+                        end: end.slice(),
+                        minimumDistanceMm,
+                        cutterRadiusMm: radius,
+                        rejectionThresholdMm: radius - TOLERANCE_MM,
+                        rejectCondition,
+                        obstacle: obstacle && obstacle.diagnostic ? obstacle.diagnostic : null,
+                    };
+                }
+            }
+        }
+        return null;
+    }
+
+    function extensionConflict(path, diameterMm, board, obstacles, onConflict) {
+        void board; // Off-board extensions remain valid; obstacles own material clearance.
+        const details = extensionConflictDetails(path, diameterMm, board, obstacles);
+        if (details && typeof onConflict === "function") onConflict(details);
+        return details ? details.code : "";
+    }
+
+    function obstacleRing(obstacle) {
+        if (obstacle && Array.isArray(obstacle.polygon) && obstacle.polygon.length >= 3) {
+            return obstacle.polygon;
+        }
+        const rect = obstacle || {};
+        return [
+            [num(rect.minX), num(rect.minY)],
+            [num(rect.maxX), num(rect.minY)],
+            [num(rect.maxX), num(rect.maxY)],
+            [num(rect.minX), num(rect.maxY)],
+        ];
+    }
+
+    function pieceQuarterTurns(piece) {
+        if (!piece) return 0;
+        if (Number.isInteger(piece.rotation_quarter_turns)) {
+            return ((piece.rotation_quarter_turns % 4) + 4) % 4;
+        }
+        if (Number.isInteger(piece.corner_rotation_quarter_turns)) {
+            return ((piece.corner_rotation_quarter_turns % 4) + 4) % 4;
+        }
+        return piece.rotated ? 1 : 0;
+    }
+
+    function samePlacedPiece(left, right) {
+        if (!left || !right) return false;
+        if (left === right) return true;
+        if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
+            return true;
+        }
+        const leftInstance = String(left.piece_instance_id || "").trim();
+        const rightInstance = String(right.piece_instance_id || "").trim();
+        if (leftInstance && leftInstance === rightInstance) return true;
+        return Boolean(left.label)
+            && String(left.label) === String(right.label || "")
+            && Number(left.x) === Number(right.x)
+            && Number(left.y) === Number(right.y);
+    }
+
+    function placementRingMm(piece) {
+        const x = num(piece && piece.x) * 10;
+        const y = num(piece && piece.y) * 10;
+        const width = num(piece && piece.w) * 10;
+        const height = num(piece && piece.h) * 10;
+        if (!(width > 0) || !(height > 0)) return [];
+        return [
+            [x, y],
+            [x + width, y],
+            [x + width, y + height],
+            [x, y + height],
+        ];
+    }
+
+    function placedPolygonMm(piece) {
+        const linerPiece = pieceFromRow(piece);
+        const polygon = piecePolygonMm(linerPiece);
+        if (!polygon) return [];
+        const turns = pieceQuarterTurns(piece);
+        const mirrored = Boolean(piece && piece.corner_mirrored);
+        const originX = num(piece && piece.x) * 10;
+        const originY = num(piece && piece.y) * 10;
+        return polygon.map(point => {
+            const placed = transformPoint(
+                point,
+                mirrored,
+                turns,
+                linerPiece.widthCm * 10,
+                linerPiece.lengthCm * 10
+            );
+            return [placed[0] + originX, placed[1] + originY];
+        });
+    }
+
+    function obstaclePolygonMm(piece) {
+        return obstacleGeometryMm(piece).outer;
+    }
+
+    function obstacleGeometryMm(piece) {
+        // Persisted usable-sheet geometry is already placed and rotated. Preserve
+        // its holes: a nested door may safely machine inside a Glass opening.
+        const outer = piece && piece.geometry && piece.geometry.outer;
+        if (Array.isArray(outer) && outer.length >= 3) {
+            const holes = Array.isArray(piece.geometry.holes)
+                ? piece.geometry.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+                    .map(hole => hole.map(point => [num(point[0]), num(point[1])]))
+                : [];
+            return {
+                outer: outer.map(point => [num(point[0]), num(point[1])]),
+                holes,
+                source: "persisted_geometry",
+            };
+        }
+        const type = String((piece && piece.piece_type) || "Regular");
+        // Regular doors: the optimizer/DXF placement box is authoritative. Parametric
+        // width_cm without the matching rotation flag can invent an oversized ring
+        // that falsely collides with a kerf-clear liner extension on a neighbour.
+        if (type !== CLIPPED && type !== L_SHAPED) {
+            const ring = placementRingMm(piece);
+            if (ring.length >= 3) {
+                const originX = num(piece && piece.x) * 10;
+                const originY = num(piece && piece.y) * 10;
+                const glassHole = piece && piece.glass_hole_local_mm;
+                const holes = type === "Glass" && Array.isArray(glassHole) && glassHole.length >= 3
+                    ? [glassHole.map(point => [
+                        originX + num(point[0]),
+                        originY + num(point[1]),
+                    ])]
+                    : [];
+                return { outer: ring, holes, source: holes.length ? "placement_with_glass_hole" : "placement_box" };
+            }
+        }
+        return { outer: placedPolygonMm(piece), holes: [], source: "placed_parametric_polygon" };
+    }
+
+    function sheetObstaclesMm(sheet, hostPiece) {
+        return ((sheet && sheet.pieces) || [])
+            .filter(piece => !samePlacedPiece(piece, hostPiece))
+            .map(piece => {
+                const geometry = obstacleGeometryMm(piece);
+                const diagnostic = {
+                    pieceId: piece && piece.id,
+                    label: String((piece && piece.label) || ""),
+                    positionCm: {
+                        x: num(piece && piece.x),
+                        y: num(piece && piece.y),
+                        w: num(piece && piece.w),
+                        h: num(piece && piece.h),
+                    },
+                    geometrySource: geometry.source || "fallback_rectangle",
+                };
+                if (geometry.outer.length >= 3) {
+                    return {
+                        polygon: geometry.outer,
+                        holes: geometry.holes,
+                        diagnostic,
+                    };
+                }
+                return {
+                    minX: num(piece && piece.x) * 10,
+                    minY: num(piece && piece.y) * 10,
+                    maxX: (num(piece && piece.x) + num(piece && piece.w)) * 10,
+                    maxY: (num(piece && piece.y) + num(piece && piece.h)) * 10,
+                    diagnostic,
+                };
+            });
+    }
+
+    function transformPoint(point, mirrored, quarterTurns, width, height) {
+        let x = point[0];
+        let y = point[1];
+        let boxWidth = width;
+        let boxHeight = height;
+        if (mirrored) x = boxWidth - x;
+        const turns = ((Number(quarterTurns) % 4) + 4) % 4;
+        for (let index = 0; index < turns; index += 1) {
+            const nextX = boxHeight - y;
+            y = x;
+            x = nextX;
+            const swap = boxWidth;
+            boxWidth = boxHeight;
+            boxHeight = swap;
+        }
+        return [x, y];
+    }
+
+    function roundMm(value) {
+        return Math.round(value * 1000) / 1000;
+    }
+
+    function linerView(piece, spec) {
+        return Object.assign({}, piece, {
+            liner_reference_side: spec.side,
+            liner_offset_cm: spec.offsetCm,
+            liner_width_cm: spec.widthCm,
+            liner_start_cm: spec.startCm,
+            liner_length_cm: spec.lengthCm,
+        });
+    }
+
+    function generateToolpath(options) {
+        const spec = options || {};
+        return toolpathMm(
+            spec.piece,
+            spec.referenceSide,
+            spec.offsetCm,
+            spec.widthCm,
+            spec.cutterDiameterMm,
+            spec.startCm,
+            spec.lengthCm,
+            spec.ends || null
+        );
+    }
+
+    function buildMachiningOverlay(piece, spec, mode) {
+        if (!piece || !spec) return null;
+        const kind = String(spec.kind || "liner");
+        const layer = String(spec.layer || "Liner");
+        const overlays = Array.isArray(piece.overlays) ? piece.overlays : [];
+        const toolpath = mode === "toolpath";
+        if (mode !== "visual") {
+            if (overlays.some(overlay => overlay && overlay.kind === kind)) return null;
+            if (piece.geometry && Array.isArray(piece.geometry.outer) && overlays.length) return null;
+        }
+        const side = String(spec.side || "").trim();
+        if (!side || !(num(spec.widthCm) > 0)) return null;
+        const host = linerView(piece, spec);
+        const linerPiece = pieceFromRow(host);
+        let local;
+        try {
+            if (toolpath) {
+                const diameter = num(piece.kerf_mm);
+                if (!(diameter > TOLERANCE_MM)) {
+                    return { kind, layer, synthetic: true, error: "cutter_diameter_invalid" };
+                }
+                const ends = piece.board ? sawnBoundaryEnds(host, linerPiece, piece.board) : null;
+                local = generateToolpath({
+                    type: kind,
+                    piece: linerPiece,
+                    referenceSide: side,
+                    offsetCm: spec.offsetCm,
+                    widthCm: spec.widthCm,
+                    startCm: spec.startCm,
+                    lengthCm: spec.lengthCm,
+                    cutterDiameterMm: diameter,
+                    ends,
+                });
+            } else if (kind === "recessed_handle_cutout") {
+                local = regionPolygonMm(
+                    linerPiece,
+                    side,
+                    spec.offsetCm,
+                    spec.widthCm,
+                    spec.startCm,
+                    spec.lengthCm
+                );
+            } else {
+                local = centerlineMm(
+                    linerPiece,
+                    side,
+                    spec.offsetCm,
+                    spec.widthCm,
+                    spec.startCm,
+                    spec.lengthCm
+                );
+            }
+        } catch (error) {
+            return {
+                kind,
+                layer,
+                synthetic: true,
+                error: error.code || "liner_extension_unsafe",
+            };
+        }
+        return {
+            kind,
+            layer,
+            synthetic: true,
+            geometry: {
+                schema_version: 1,
+                unit: "mm",
+                coordinate_space: "usable_sheet",
+                closed: !toolpath && kind === "recessed_handle_cutout",
+                toolpath,
+                path: placeLocalPath(piece, linerPiece, local),
+            },
+        };
+    }
+
+    function placeLocalPath(piece, linerPiece, local) {
+        const turns = pieceQuarterTurns(piece);
+        const mirrored = Boolean(piece.corner_mirrored);
+        const originX = num(piece.x) * 10;
+        const originY = num(piece.y) * 10;
+        return local.map(point => {
+            const placed = transformPoint(
+                point,
+                mirrored,
+                turns,
+                linerPiece.widthCm * 10,
+                linerPiece.lengthCm * 10
+            );
+            return [roundMm(placed[0] + originX), roundMm(placed[1] + originY)];
+        });
+    }
+
+    function linerSpec(piece) {
+        return {
+            kind: "liner",
+            layer: "Liner",
+            side: piece && piece.liner_reference_side,
+            offsetCm: piece && piece.liner_offset_cm,
+            widthCm: piece && piece.liner_width_cm,
+            startCm: piece && piece.liner_start_cm,
+            lengthCm: piece && piece.liner_length_cm,
+        };
+    }
+
+    function visualCenterline(piece) {
+        return buildMachiningOverlay(piece, linerSpec(piece), "visual");
+    }
+
+    function centerlineOverlay(piece) {
+        return buildMachiningOverlay(piece, linerSpec(piece), "centerline");
+    }
+
+    function syntheticOverlay(piece) {
+        return buildMachiningOverlay(piece, linerSpec(piece), "toolpath");
+    }
+
+    function contourNotchFromOrder(frm, row) {
+        const source = row || {};
+        const banding = window.AlmdinaMultiEdgeBanding;
+        const calculated = banding && typeof banding.calculate === "function"
+            ? banding.calculate(frm, source)
+            : null;
+        const sides = (calculated && calculated.sides) || {};
+        const thickness = {};
+        ["long_right", "long_left", "width_top", "width_bottom"].forEach(side => {
+            thickness[side] = sides[side] && sides[side].selected ? num(sides[side].thickness) : 0;
+        });
+        const typeName = source.edge_type || (frm && frm.doc && frm.doc.default_edge_type) || "";
+        let inner = null;
+        if (!Number(source.edge_break)) inner = 0;
+        else if (banding && typeof banding.thicknessForType === "function") {
+            inner = banding.thicknessForType(frm, typeName);
+        }
+        return contourNotchCm({
+            pieceType: source.piece_type,
+            notchWidthCm: source.clipped_corner_width_cm,
+            notchLengthCm: source.clipped_corner_length_cm,
+            position: source.clipped_corner_position,
+            sideThicknessMm: thickness,
+            edgeBreak: Boolean(Number(source.edge_break)),
+            innerMm: inner,
+        });
+    }
+
+    function summary(row) {
+        const parsed = parseDoorLiners(row);
+        if (!parsed.enabled || !parsed.liners.length) return "";
+        const piece = pieceFromRow(row);
+        if (parsed.liners.length === 1) {
+            const spec = parsed.liners[0];
+            return `${sideLabel(spec.side, piece.pieceType)} · ${num(spec.offsetCm)} / ${num(parsed.widthCm)} سم`;
+        }
+        return `${parsed.liners.length} · ${Math.round(num(parsed.widthCm) * 100) / 10} ${__("mm")}`;
+    }
+
+    function allocateLinerId(existing) {
+        let used = 0;
+        (existing || []).forEach(id => {
+            const match = String(id || "").trim().match(/^liner_(\d+)$/);
+            if (match) used = Math.max(used, Number(match[1]));
+        });
+        return `liner_${used + 1}`;
+    }
+
+    function parseDoorLiners(row) {
+        const enabled = Boolean(num(row && row.extra_liner));
+        const raw = row && row.liner_specs_json;
+        if (raw && String(raw).trim()) {
+            try {
+                const data = JSON.parse(raw);
+                const items = Array.isArray(data && data.liners) ? data.liners : [];
+                const liners = items.map((item, index) => ({
+                    id: String((item && (item.id || item.liner_id)) || (index === 0 ? "liner_1" : allocateLinerId(["liner_1"]))).trim(),
+                    side: String((item && (item.side || item.reference_side)) || "").trim(),
+                    offsetCm: num(item && (item.offset_cm != null ? item.offset_cm : item.offsetCm)),
+                    startCm: num(item && (item.start_cm != null ? item.start_cm : item.startCm)),
+                    lengthCm: num(item && (item.length_cm != null ? item.length_cm : item.lengthCm)),
+                }));
+                if (enabled && liners.length) {
+                    const widthCm = data.width_cm != null ? num(data.width_cm) : num(row && row.liner_width_cm);
+                    return { enabled: true, widthCm, liners };
+                }
+            } catch (error) {
+                /* fall through to scalar fields */
+            }
+        }
+        if (!enabled) return { enabled: false, widthCm: 0, liners: [] };
+        return {
+            enabled: true,
+            widthCm: num(row && row.liner_width_cm),
+            liners: [{
+                id: "liner_1",
+                side: String((row && row.liner_reference_side) || "").trim(),
+                offsetCm: num(row && row.liner_offset_cm),
+                startCm: num(row && row.liner_start_cm),
+                lengthCm: num(row && row.liner_length_cm),
+            }],
+        };
+    }
+
+    function serializeDoorLiners(payload) {
+        if (!payload || !payload.enabled || !(payload.liners || []).length) return "";
+        return JSON.stringify({
+            width_cm: num(payload.widthCm),
+            liners: payload.liners.map(spec => ({
+                id: spec.id,
+                side: spec.side,
+                offset_cm: num(spec.offsetCm),
+                start_cm: num(spec.startCm),
+                length_cm: num(spec.lengthCm),
+            })),
+        });
+    }
+
+    function millRegionsConnected(first, second) {
+        if (!first || first.length < 3 || !second || second.length < 3) return false;
+        if (first.some(point => pointInPolygon(point, second))) return true;
+        if (second.some(point => pointInPolygon(point, first))) return true;
+        for (let i = 0; i < first.length; i += 1) {
+            const a = first[i];
+            const b = first[(i + 1) % first.length];
+            for (let j = 0; j < second.length; j += 1) {
+                const c = second[j];
+                const d = second[(j + 1) % second.length];
+                if (segmentsCross(a, b, c, d)) return true;
+                if (pointSegDist(a, c, d) <= TOLERANCE_MM || pointSegDist(c, a, b) <= TOLERANCE_MM) return true;
+            }
+        }
+        return false;
+    }
+
+    function connectedLinerComponents(regions) {
+        const remaining = new Set(regions.map((_item, index) => index));
+        const components = [];
+        while (remaining.size) {
+            const seed = Math.min(...remaining);
+            const group = [seed];
+            remaining.delete(seed);
+            const queue = [seed];
+            while (queue.length) {
+                const current = queue.pop();
+                Array.from(remaining).forEach(other => {
+                    if (!millRegionsConnected(regions[current], regions[other])) return;
+                    remaining.delete(other);
+                    group.push(other);
+                    queue.push(other);
+                });
+            }
+            components.push(group.sort((a, b) => a - b));
+        }
+        return components;
+    }
+
+    function pointDeepInside(point, polygon, marginMm) {
+        if (!pointInPolygon(point, polygon, TOLERANCE_MM)) return false;
+        return boundaryDistance(point, polygon) > Math.max(marginMm, TOLERANCE_MM);
+    }
+
+    function regionAlreadyMilled(region, covered, marginMm) {
+        if (!region || region.length < 3 || !(covered || []).length) return false;
+        const inflate = Math.max(marginMm, TOLERANCE_MM);
+        const minX = Math.min(...region.map(point => point[0]));
+        const maxX = Math.max(...region.map(point => point[0]));
+        const minY = Math.min(...region.map(point => point[1]));
+        const maxY = Math.max(...region.map(point => point[1]));
+        const step = Math.max(inflate, 2);
+        for (let y = minY + step / 2; y <= maxY + 1e-9; y += step) {
+            for (let x = minX + step / 2; x <= maxX + 1e-9; x += step) {
+                const point = [x, y];
+                if (!pointInPolygon(point, region, TOLERANCE_MM)) continue;
+                if (!covered.some(previous => pointInPolygon(point, previous, inflate))) return false;
+            }
+        }
+        return true;
+    }
+
+    function clipPassAgainstCovered(line, covered, keepMarginMm) {
+        if (!line || line.length < 2 || !(covered || []).length) return line && line.length >= 2 ? [line.map(point => point.slice())] : [];
+        const length = polylineLength(line);
+        if (!(length > TOLERANCE_MM)) return [];
+        const step = Math.min(1, Math.max(length / 64, TOLERANCE_MM * 4));
+        const samples = [];
+        for (let cursor = 0; cursor <= length + 1e-9; cursor = Math.min(length, cursor + step)) {
+            const point = pointAlong(line, Math.min(cursor, length)).point;
+            const inside = covered.some(region => pointDeepInside(point, region, keepMarginMm));
+            samples.push({ point, inside });
+            if (cursor >= length) break;
+        }
+        const runs = [];
+        let current = [];
+        samples.forEach(sample => {
+            if (sample.inside) {
+                if (current.length >= 2) runs.push(current);
+                current = [];
+                return;
+            }
+            if (current.length && dist(current[current.length - 1], sample.point) <= TOLERANCE_MM) return;
+            current.push(sample.point);
+        });
+        if (current.length >= 2) runs.push(current);
+        return runs;
+    }
+
+    function chainCutterLines(lines) {
+        const path = [];
+        (lines || []).forEach((line, index) => {
+            if (!line || line.length < 2) return;
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        return path;
+    }
+
+    function mergedToolpathsMm(piece, specs, widthCm, cutterDiameterMm, endsByIndex) {
+        const items = (specs || []).filter(Boolean);
+        if (!items.length) return [];
+        const read = spec => ({
+            side: spec.side,
+            offsetCm: spec.offsetCm != null ? spec.offsetCm : spec.offset_cm,
+            startCm: spec.startCm != null ? spec.startCm : spec.start_cm,
+            lengthCm: spec.lengthCm != null ? spec.lengthCm : spec.length_cm,
+        });
+        if (items.length === 1) {
+            const spec = read(items[0]);
+            return [toolpathMm(
+                piece,
+                spec.side,
+                spec.offsetCm,
+                widthCm,
+                cutterDiameterMm,
+                spec.startCm,
+                spec.lengthCm,
+                endsByIndex && endsByIndex[0]
+            )];
+        }
+        const regions = items.map(spec => {
+            const item = read(spec);
+            return regionPolygonMm(piece, item.side, item.offsetCm, widthCm, item.startCm, item.lengthCm);
+        });
+        const radius = num(cutterDiameterMm) / 2;
+        const paths = [];
+        connectedLinerComponents(regions).forEach(component => {
+            const covered = [];
+            component.forEach(index => {
+                const spec = read(items[index]);
+                const ends = endsByIndex && endsByIndex[index];
+                if (covered.length && regionAlreadyMilled(regions[index], covered, radius)) {
+                    return;
+                }
+                if (!covered.length) {
+                    paths.push(toolpathMm(
+                        piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                        spec.startCm, spec.lengthCm, ends
+                    ));
+                    covered.push(regions[index]);
+                    return;
+                }
+                const generated = toolpathMm(
+                    piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                    spec.startCm, spec.lengthCm, Object.assign({}, ends || {}, { startSawn: true, endSawn: true })
+                );
+                const clipped = clipPassAgainstCovered(generated, covered, radius);
+                clipped.forEach(run => {
+                    if (run && run.length >= 2) paths.push(run);
+                });
+                covered.push(regions[index]);
+            });
+        });
+        return paths.filter(path => path && path.length >= 2);
+    }
+
+    window.AlmdinaLinerGeometry = Object.freeze({
+        toleranceMm: TOLERANCE_MM,
+        availableSides,
+        normalizeSideSelection,
+        sideFlagsForSelection,
+        sideLabel,
+        pieceFromRow,
+        piecePolygonMm,
+        edgePaths,
+        visualEdgeMarkerPaths,
+        edgeLengthMm,
+        validationCode,
+        stripPolygonMm,
+        regionPolygonMm,
+        regionReferenceMm,
+        cutterCenterOffsetsMm,
+        centerlineMm,
+        centerRecessedHandle,
+        toolpathMm,
+        generateToolpath,
+        buildMachiningOverlay,
+        extensionConflict,
+        extensionConflictDetails,
+        pieceQuarterTurns,
+        samePlacedPiece,
+        placementRingMm,
+        placedPolygonMm,
+        obstaclePolygonMm,
+        obstacleGeometryMm,
+        sheetObstaclesMm,
+        contourNotchCm,
+        contourNotchFromOrder,
+        transformPoint,
+        centerlineOverlay,
+        visualCenterline,
+        syntheticOverlay,
+        summary,
+        parseDoorLiners,
+        serializeDoorLiners,
+        allocateLinerId,
+        mergedToolpathsMm,
+        sawnBoundaryEnds,
+        placeLocalPath,
+    });
+})();

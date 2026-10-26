@@ -54,7 +54,7 @@ def is_overlay_framing_polygon(
     tolerance: float = EPSILON,
     host_margin: float = 0.0,
 ) -> bool:
-    """True when a smaller layer-0 box only frames Extra overlay marks on a real door."""
+    """True when a smaller layer-0 box only frames add-on marks on a real door."""
 
     if not overlays or len(polygon) < 3:
         return False
@@ -97,7 +97,7 @@ def classify_default_layer_polygons(
     non-framing closed contour is a cut, including a full-board door.
 
     Overlay visual boxes drawn on layer 0 (liner strip, handle pocket, etc.)
-    are not cut paths when they frame Extra overlay marks on a larger door.
+    are not cut paths when they frame add-on overlay marks on a larger door.
     """
 
     sheets: list[Polygon] = []

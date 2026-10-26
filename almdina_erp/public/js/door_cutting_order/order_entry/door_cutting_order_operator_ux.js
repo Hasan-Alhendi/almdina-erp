@@ -10,6 +10,12 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "edge_break_only",
+        "extra_double",
+        "extra_full_door_double",
+        "extra_liner",
+        "extra_back_groove",
+        "extra_recessed_handle_cutout",
     ]);
     const RECALC_FIELDS = new Set([
         "width_cm",
@@ -21,53 +27,33 @@
         "edge_width_top",
         "edge_width_bottom",
         "edge_break",
+        "edge_break_only",
         "edge_type",
         "piece_type",
         "notes",
+        "extra_double",
+        "extra_full_door_double",
+        "extra_liner",
+        "extra_back_groove",
+        "extra_recessed_handle_cutout",
     ]);
     const CELL_LABELS = {
-        ar: {
-            row: "رقم السطر",
-            type: "نوع الدرفة",
-            width: "العرض (سم)",
-            length: "الطول (سم)",
-            quantity: "العدد",
-            rotation: "السماح بالتدوير",
-            edges: "جهات القشاط",
-            edgeType: "نوع القشاط",
-            shape: "الشكل والرسم",
-            area: "المساحة",
-            edgeMeters: "متر القشاط",
-            notes: "ملاحظات",
-            remove: "حذف السطر",
-        },
-        en: {
-            row: "Row number",
-            type: "Piece type",
-            width: "Width (cm)",
-            length: "Length (cm)",
-            quantity: "Quantity",
-            rotation: "Allow rotation",
-            edges: "Edge sides",
-            edgeType: "Edge type",
-            shape: "Shape and drawing",
-            area: "Area",
-            edgeMeters: "Edge metres",
-            notes: "Notes",
-            remove: "Delete row",
-        },
+        row: "Row number",
+        type: "Piece type",
+        width: "Width (cm)",
+        length: "Length (cm)",
+        quantity: "Quantity",
+        rotation: "Allow rotation",
+        edges: "Edge sides",
+        edgeType: "Edge type",
+        shape: "Shape and drawing",
+        area: "Area",
+        edgeMeters: "Edge metres",
+        notes: "Notes",
+        remove: "Delete row",
     };
     let virtualSequence = 0;
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function escapeHtml(value) {
         return frappe.utils.escape_html(String(value ?? ""));
@@ -76,6 +62,55 @@
     function num(value) {
         if (value === null || value === undefined || value === "") return 0;
         return Number(String(value).replace(",", ".")) || 0;
+    }
+
+    function dimensionValidation() {
+        return window.AlmdinaOrderDimensionValidation || null;
+    }
+
+    function boardDimensions(frm) {
+        const api = dimensionValidation();
+        if (api && typeof api.boardDimensions === "function") return api.boardDimensions(frm);
+        // The operator is also exercised in isolation by focused frontend tests;
+        // the real DCO manifest always loads the board-dimension owner first.
+        if (!api) return { length: Infinity, width: Infinity, valid: true };
+        const length = num(frm && frm.doc && frm.doc.board_length_cm) > 0
+            ? num(frm.doc.board_length_cm)
+            : null;
+        const width = num(frm && frm.doc && frm.doc.board_width_cm) > 0
+            ? num(frm.doc.board_width_cm)
+            : null;
+        return { length, width, valid: length !== null && width !== null };
+    }
+
+    function pieceDimensionIssues(frm, row, values = {}) {
+        const board = boardDimensions(frm);
+        const widthValue = values.width_cm !== undefined ? values.width_cm : row && row.width_cm;
+        const lengthValue = values.length_cm !== undefined ? values.length_cm : row && row.length_cm;
+        const api = dimensionValidation();
+        const positive = api && typeof api.positiveNumber === "function"
+            ? api.positiveNumber
+            : value => num(value) > 0 ? num(value) : null;
+        const width = positive(widthValue);
+        const length = positive(lengthValue);
+        const issues = {};
+        if (!board.valid) {
+            issues.board = __("Please enter board length and width first.");
+            return issues;
+        }
+        if (width === null) issues.width_cm = __("Piece width must be a positive number.");
+        if (length === null) issues.length_cm = __("Piece length must be a positive number.");
+
+        // The inline editor validates the entered axes independently. Rotation
+        // remains an optimizer concern and must not swap these field messages.
+        if (length !== null && length > board.length) issues.length_cm = __("Exceeds board length");
+        if (width !== null && width > board.width) issues.width_cm = __("Exceeds board width");
+        return issues;
+    }
+
+    function showDimensionIssue(message) {
+        if (!message || typeof frappe?.msgprint !== "function") return;
+        frappe.msgprint({ message, indicator: "orange" });
     }
 
     function isEditable(frm) {
@@ -118,7 +153,7 @@
                 .dco-status-dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
 
                 .dco-fast-entry-shell {
-                    direction:rtl; border:1px solid var(--border-color,#dfe3e8); border-radius:14px; overflow:hidden;
+                    border:1px solid var(--border-color,#dfe3e8); border-radius:14px; overflow:hidden;
                     background:var(--card-bg,var(--fg-color,#fff));
                 }
                 .dco-fast-entry-toolbar {
@@ -140,18 +175,18 @@
                 .dco-fast-table td { border-bottom:1px solid var(--border-color,#edf0f2); padding:4px; vertical-align:middle; }
                 .dco-fast-table tbody tr:hover { background:var(--subtle-fg,rgba(0,0,0,.02)); }
                 .dco-fast-table tbody tr.dco-virtual-row { background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent); }
-                .dco-fast-table .dco-col-no { width:54px; text-align:center; font-weight:800; }
-                .dco-fast-table .dco-col-number { width:105px; }
-                .dco-fast-table .dco-col-qty { width:70px; }
-                .dco-fast-table .dco-col-type { width:112px; }
-                .dco-fast-table .dco-col-sketch { width:132px; text-align:center; }
-                .dco-fast-table .dco-col-rotate { width:72px; text-align:center; }
-                .dco-fast-table .dco-col-edges { width:310px; }
-                .dco-fast-table .dco-col-edge-type { width:160px; }
-                .dco-fast-table .dco-col-edge-bulk { width:122px; min-width:122px; max-width:122px; text-align:center; }
-                .dco-fast-table .dco-col-calc { width:88px; text-align:center; font-variant-numeric:tabular-nums; }
-                .dco-fast-table .dco-col-notes { width:300px; min-width:300px; }
-                .dco-fast-table .dco-col-delete { width:50px; text-align:center; }
+                .dco-fast-table .dco-col-no { width:46px; text-align:center; font-weight:800; }
+                .dco-fast-table .dco-col-number { width:92px; }
+                .dco-fast-table .dco-col-qty { width:62px; }
+                .dco-fast-table .dco-col-type { width:108px; }
+                .dco-fast-table .dco-col-sketch { width:90px; text-align:center; }
+                .dco-fast-table .dco-col-rotate { width:54px; text-align:center; }
+                .dco-fast-table .dco-col-edges { width:240px; }
+                .dco-fast-table .dco-col-edge-type { width:120px; }
+                .dco-fast-table .dco-col-edge-bulk { width:92px; min-width:92px; max-width:92px; text-align:center; }
+                .dco-fast-table .dco-col-calc { width:70px; text-align:center; font-variant-numeric:tabular-nums; }
+                .dco-fast-table .dco-col-notes { width:150px; min-width:150px; }
+                .dco-fast-table .dco-col-delete { width:40px; text-align:center; }
                 .dco-fast-input,.dco-fast-select {
                     width:100%; min-height:38px; border:1px solid var(--border-color,#ccd3da); border-radius:8px;
                     background:var(--control-bg,#fff); padding:6px 9px; font-size:15px; outline:none;
@@ -160,6 +195,9 @@
                 .dco-fast-input:focus,.dco-fast-select:focus {
                     border-color:var(--alm-primary,#172033); box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 13%, transparent);
                 }
+                .dco-fast-input.is-invalid { border-color:var(--red-500,#d63939); box-shadow:0 0 0 2px color-mix(in srgb, var(--red-500,#d63939) 12%, transparent); }
+                .dco-piece-dimension-error { display:block; max-width:100%; min-height:0; color:var(--red-600,#b42318); font-size:10px; line-height:1.2; text-align:start; white-space:normal; overflow-wrap:anywhere; }
+                .dco-piece-dimension-error:empty { display:none; }
                 .dco-edge-buttons { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
                 .dco-check-toggle {
                     min-height:34px; border:1px solid var(--border-color,#ccd3da); border-radius:8px; background:var(--card-bg,#fff);
@@ -236,20 +274,20 @@
             renderStableHtml(
                 field,
                 "_dcoBoardSummaryHtml",
-                `<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${isArabic() ? "أدخل صنف اللوح ومقاساته أولًا." : "Enter the board description and dimensions first."}</div>`
+                `<div class="dco-fast-entry-toolbar" style="margin-top:10px;border:1px solid var(--border-color,#dfe3e8);border-radius:10px">${__("Enter the board description and dimensions first.")}</div>`
             );
             return;
         }
         const lengthCm = Number(frm.doc.board_length_cm || 0);
         const widthCm = Number(frm.doc.board_width_cm || 0);
         const dimensions = lengthCm > 0 && widthCm > 0
-            ? `${widthCm} × ${lengthCm} ${isArabic() ? "سم" : "cm"}`
+            ? `${widthCm} × ${lengthCm} ${__("cm")}`
             : (frm.doc.full_board_width_mm && frm.doc.full_board_length_mm
-                ? `${frm.doc.full_board_width_mm} × ${frm.doc.full_board_length_mm} ${isArabic() ? "مم" : "mm"}`
+                ? `${frm.doc.full_board_width_mm} × ${frm.doc.full_board_length_mm} ${__("mm")}`
                 : "—");
         const tiles = [
-            [isArabic() ? "صنف اللوح" : "Board Item", boardDescription],
-            [isArabic() ? "المقاس الكامل للوح" : "Full Board Size", dimensions],
+            [__("Board Item"), boardDescription],
+            [__("Full Board Size"), dimensions],
         ];
         renderStableHtml(
             field,
@@ -266,7 +304,68 @@
     }
 
     function rowByName(frm, name) {
-        return (frm.doc.pieces || []).find(row => row.name === name) || null;
+        const requested = String(name || "").trim();
+        const names = frappe.model && frappe.model.new_names || {};
+        let current = requested;
+        const visited = new Set();
+        while (current && names[current] && !visited.has(current)) {
+            visited.add(current);
+            current = String(names[current] || "").trim();
+        }
+        return (frm.doc.pieces || []).find((row) => (
+            row.name === requested || row.name === current
+        )) || null;
+    }
+
+    function syncDimensionInputState(input, message) {
+        if (!input) return;
+        if (input.classList && typeof input.classList.toggle === "function") {
+            input.classList.toggle("is-invalid", Boolean(message));
+        } else if (input.classList) {
+            if (message && typeof input.classList.add === "function") input.classList.add("is-invalid");
+            if (!message && typeof input.classList.remove === "function") input.classList.remove("is-invalid");
+        }
+        if (message) input.setAttribute("aria-invalid", "true");
+        else input.removeAttribute("aria-invalid");
+        input._dcoLastAcceptedValue = message ? input._dcoLastAcceptedValue : input.value;
+    }
+
+    function syncRowDimensionValidation(frm, tr, row, values = {}) {
+        if (!tr || tr.classList.contains("dco-virtual-row")) return;
+        const issues = pieceDimensionIssues(frm, row, values);
+        ["width_cm", "length_cm"].forEach(fieldname => {
+            const input = tr.querySelector(`input[data-field='${fieldname}']`);
+            const error = tr.querySelector(`[data-field-error='${fieldname}']`);
+            const message = issues[fieldname] || "";
+            syncDimensionInputState(input, message);
+            if (error) error.textContent = message;
+        });
+    }
+
+    function refreshDimensionValidation(frm) {
+        const api = dimensionValidation();
+        if (api && typeof api.refreshBoardDimensionValidation === "function") {
+            api.refreshBoardDimensionValidation(frm);
+        }
+        const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
+        if (!root) return true;
+        root.querySelectorAll("tr[data-row-name]:not(.dco-virtual-row)").forEach(tr => {
+            const row = rowByName(frm, tr.dataset.rowName || "");
+            if (row) syncRowDimensionValidation(frm, tr, row);
+        });
+        return boardDimensions(frm).valid;
+    }
+
+    function guardDimensionInput(frm, input, event) {
+        if (!input || !["width_cm", "length_cm"].includes(input.dataset.field)) return false;
+        const board = boardDimensions(frm);
+        if (board.valid) return false;
+        if (event && event.cancelable) event.preventDefault();
+        const api = dimensionValidation();
+        if (api && typeof api.notifyBoardRequired === "function") api.notifyBoardRequired();
+        else showDimensionIssue(__("Please enter board length and width first."));
+        return true;
     }
 
     function reindexPieces(frm) {
@@ -296,6 +395,13 @@
         tr.classList.remove("dco-virtual-row");
         const no = tr.querySelector(".dco-row-number");
         if (no) no.textContent = row.idx;
+        // The row was rendered as virtual (its Add-ons button is disabled).
+        // Reconcile its owned controls at the materialization boundary without
+        // replacing the table or disrupting the fast-entry keyboard lifecycle.
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        if (extraAddons && typeof extraAddons.syncRowPresentation === "function") {
+            extraAddons.syncRowPresentation(frm, tr, row, { editable: isEditable(frm) });
+        }
         ensureSingleVirtualRow(frm);
         return row;
     }
@@ -319,6 +425,7 @@
         row.edge_width_top = 0;
         row.edge_width_bottom = 0;
         row.edge_break = 0;
+        row.edge_break_only = 0;
         row.edge_type = "";
         row.edge_long_right_type_override = "";
         row.edge_long_left_type_override = "";
@@ -341,22 +448,22 @@
                 <span class="dco-check-mark">${data && data[field] ? "✓" : ""}</span><span>${label}</span>
             </button>`;
         if (isBreakCorner) {
-            return `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${editable && !virtual ? "" : "disabled"} title="${isArabic() ? "افتح شكل الزاوية لاختيار جهات القشاط" : "Open the corner shape to choose banding sides"}">
-                            <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (isArabic() ? "بدون قشاط" : "No banding"))}</span>
-                            <small>${isArabic() ? "اختيار القشاط من الشكل" : "Choose banding on shape"}</small>
+            return `<button type="button" class="dco-corner-edges-summary" data-open-corner-edges="1" ${virtual ? "disabled" : ""} title="${__("Open the corner shape to choose banding sides")}">
+                            <span>${escapeHtml((cornerGeometry && typeof cornerGeometry.edgeSelectionSummary === "function" && cornerGeometry.edgeSelectionSummary(data)) || (__("No banding")))}</span>
+                            <small>${__("Choose banding on shape")}</small>
                         </button>`;
         }
         if (isSpecial) {
-            return `<button type="button" class="dco-special-edges-disabled" disabled title="${isArabic() ? "القشاط غير متاح للدرفة الخاصة من جدول القياسات" : "Edge banding is disabled for special doors in the measurements table"}">
-                            <span>${isArabic() ? "غير متاح" : "Unavailable"}</span>
-                            <small>${isArabic() ? "القشاط عبر السعر الخاص" : "Banding via special price"}</small>
+            return `<button type="button" class="dco-special-edges-disabled" disabled title="${__("Edge banding is disabled for special doors in the measurements table")}">
+                            <span>${__("Unavailable")}</span>
+                            <small>${__("Banding via special price")}</small>
                         </button>`;
         }
         return `<div class="dco-edge-buttons">
-                    ${toggle("edge_width_top", isArabic() ? "عرض أعلى" : "Top")}
-                    ${toggle("edge_width_bottom", isArabic() ? "عرض أسفل" : "Bottom")}
-                    ${toggle("edge_long_right", isArabic() ? "طول يمين" : "Long R")}
-                    ${toggle("edge_long_left", isArabic() ? "طول يسار" : "Long L")}
+                    ${toggle("edge_width_top", __("Top"))}
+                    ${toggle("edge_width_bottom", __("Bottom"))}
+                    ${toggle("edge_long_right", __("Long R"))}
+                    ${toggle("edge_long_left", __("Long L"))}
                 </div>`;
     }
 
@@ -366,6 +473,10 @@
         const edge = tr.querySelector("[data-calc='edge_meters']");
         if (area) area.textContent = localArea(row).toFixed(3);
         if (edge) edge.textContent = localEdgeMeters(row).toFixed(3);
+        const glass = window.AlmdinaGlassShape;
+        if (glass && typeof glass.syncShapeButton === "function") {
+            glass.syncShapeButton(tr, row);
+        }
     }
 
     function triggerChildField(frm, row, fieldname, delay = 0) {
@@ -389,7 +500,7 @@
             if (name) values.set(name, item.edge_type_name || name);
         });
         if (selected) values.set(selected, selected);
-        const first = `<option value="">${isArabic() ? "القشاط الرئيسي" : "Use default edge"}</option>`;
+        const first = `<option value="">${__("Use default edge")}</option>`;
         return first + [...values.entries()].map(([value,label]) => `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
     }
 
@@ -399,13 +510,20 @@
         const name = virtual ? `__virtual__${++virtualSequence}` : row.name;
         const index = virtual ? (frm.doc.pieces || []).length + 1 : (row.idx || row.piece_no || 1);
         const data = row || { qty:1 };
+        const dimensionIssues = virtual ? {} : pieceDimensionIssues(frm, data);
+        const dimensionInput = (fieldname, value) => {
+            const issue = dimensionIssues[fieldname] || "";
+            const invalid = issue ? " aria-invalid=\"true\"" : "";
+            return `<input class="dco-fast-input${issue ? " is-invalid" : ""}" type="number" inputmode="decimal" step="any" min="0" data-field="${fieldname}" value="${virtual ? "" : escapeHtml(value || "")}"${invalid} ${disabled}><div class="dco-piece-dimension-error" data-field-error="${fieldname}">${escapeHtml(issue)}</div>`;
+        };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const isClipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut({ piece_type: pieceType }));
-        const isExtra = pieceType === "Extra";
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
-        const labels = CELL_LABELS[isArabic() ? "ar" : "en"];
+        const labels = Object.fromEntries(
+            Object.entries(CELL_LABELS).map(([key, message]) => [key, __(message)])
+        );
         const toggle = (field, label, extra = "") => `
             <button type="button" class="dco-check-toggle ${data[field] ? "is-checked" : ""} ${extra}" data-check-field="${field}" aria-pressed="${data[field] ? "true" : "false"}" ${disabled}>
                 <span class="dco-check-mark">${data[field] ? "✓" : ""}</span><span>${label}</span>
@@ -423,82 +541,112 @@
         const cornerSummary = isClipped && cornerGeometry
             ? cornerGeometry.summary(data)
             : "";
-        const shapeIcon = isClipped
-            ? (cornerGeometry && cornerGeometry.typeIcon(data)) || "⌑"
-            : ((hasDrawing || hasExactGeometry) ? "✓" : "✎");
-        const shapeLabel = isClipped
-            ? (isArabic() ? "ضبط" : "Set")
-            : ((hasDrawing || hasExactGeometry)
-                ? (isArabic() ? "موثقة" : "Documented")
-                : (isArabic() ? "وثّق" : "Document"));
-        const shapeTitle = isClipped
-            ? `${isArabic() ? `ضبط ${cornerGeometry ? cornerGeometry.typeLabel(data) : "الزاوية"}` : `Configure ${cornerGeometry ? cornerGeometry.typeLabel(data, false) : "corner"}`}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-            : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
+        const glassApi = window.AlmdinaGlassShape;
+        const glassState = glassApi && typeof glassApi.shapeButtonState === "function"
+            ? glassApi.shapeButtonState(data, { editable, virtual })
+            : null;
+        const shapeIcon = glassState
+            ? glassState.icon
+            : (isClipped
+                ? (cornerGeometry && cornerGeometry.typeIcon(data)) || "⌑"
+                : ((hasDrawing || hasExactGeometry) ? "✓" : "✎"));
+        const shapeLabel = glassState
+            ? glassState.label
+            : (isClipped
+                ? (__("Set"))
+                : ((hasDrawing || hasExactGeometry)
+                    ? (__("Documented"))
+                    : (__("Document"))));
+        const shapeTitle = glassState
+            ? glassState.title
+            : (isClipped
+                ? `${__("Configure {0}", [cornerGeometry ? cornerGeometry.typeLabel(data) : __("corner")])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                : (__("Open image, measurements and notes documentation")));
+        const shapeEnabled = glassState
+            ? glassState.enabled
+            : ((isSpecial || isClipped) && !virtual);
         const nativePieceTypeSelect = `<select class="dco-fast-select" data-field="piece_type" ${disabled}>
-            <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${isArabic() ? "عادية" : "Regular"}</option>
-            <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${isArabic() ? "خاصة" : "Special"}</option>
-            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${isArabic() ? "الزاوية الكسر" : "Clipped corner"}</option>
-            <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${isArabic() ? "زاوية L" : "L-shaped corner"}</option>
-            <option value="Extra" ${pieceType === "Extra" ? "selected" : ""}>${isArabic() ? "إضافية" : "Extra"}</option>
+            <option value="Regular" ${pieceType === "Regular" ? "selected" : ""}>${__("Regular")}</option>
+            <option value="Special" ${pieceType === "Special" ? "selected" : ""}>${__("Special")}</option>
+            <option value="Clipped Corner" ${pieceType === "Clipped Corner" ? "selected" : ""}>${__("Clipped corner")}</option>
+            <option value="L-Shaped Corner" ${pieceType === "L-Shaped Corner" ? "selected" : ""}>${__("L-shaped corner")}</option>
+            <option value="Glass" ${pieceType === "Glass" ? "selected" : ""}>${__("Glass")}</option>
         </select>`;
         const pieceTypeControl = extraAddons && typeof extraAddons.renderTypePicker === "function"
             ? extraAddons.renderTypePicker(data, { editable, virtual })
             : nativePieceTypeSelect;
         const edgeTypeDisabled = (!editable || isSpecial) ? "disabled" : "";
         return `
-            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""} ${isExtra ? "dco-extra-row" : ""}">
+            <tr data-row-name="${escapeHtml(name)}" class="${virtual ? "dco-virtual-row" : ""} ${isSpecial ? "dco-special-row" : ""} ${isClipped ? "dco-clipped-corner-row" : ""}">
                 <td class="dco-col-no" data-label="${labels.row}"><span class="dco-row-number">${index}</span></td>
                 <td class="dco-col-type" data-label="${labels.type}">${pieceTypeControl}</td>
-                <td class="dco-col-number dco-col-width" data-label="${labels.width}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="width_cm" value="${virtual ? "" : escapeHtml(data.width_cm || "")}" ${disabled}></td>
-                <td class="dco-col-number dco-col-length" data-label="${labels.length}"><input class="dco-fast-input" type="number" inputmode="decimal" step="any" min="0" data-field="length_cm" value="${virtual ? "" : escapeHtml(data.length_cm || "")}" ${disabled}></td>
+                <td class="dco-col-number dco-col-width" data-label="${labels.width}">${dimensionInput("width_cm", data.width_cm)}</td>
+                <td class="dco-col-number dco-col-length" data-label="${labels.length}">${dimensionInput("length_cm", data.length_cm)}</td>
                 <td class="dco-col-qty" data-label="${labels.quantity}"><input class="dco-fast-input" type="number" inputmode="numeric" step="1" min="1" data-field="qty" value="${virtual ? "1" : escapeHtml(data.qty || 1)}" ${disabled}></td>
                 <td class="dco-col-rotate" data-label="${labels.rotation}">${toggle("allow_rotation", "↻", "dco-rotate-toggle")}</td>
                 <td class="dco-col-edges" data-label="${labels.edges}">${edgesCellHtml(frm, data, { editable, virtual })}</td>
                 <td class="dco-col-edge-type" data-label="${labels.edgeType}"><select class="dco-fast-select" data-field="edge_type" ${edgeTypeDisabled}>${edgeOptions(frm, virtual || isSpecial ? "" : (data.edge_type || ""))}</select></td>
-                <td class="dco-col-edge-bulk" data-label="${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}"></td>
-                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${hasDrawing || hasExactGeometry ? "is-documented" : ""} ${hasExactGeometry ? "is-exact-geometry" : ""} ${isClipped ? "is-clipped-corner" : ""}" ${(isSpecial || isClipped) && editable && !virtual ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
+                <td class="dco-col-edge-bulk" data-label="${__("Apply to all four")}"></td>
+                <td class="dco-col-sketch" data-label="${labels.shape}"><button type="button" class="dco-special-sketch-button ${!glassState && (hasDrawing || hasExactGeometry) ? "is-documented" : ""} ${!glassState && hasExactGeometry ? "is-exact-geometry" : ""} ${!glassState && isClipped ? "is-clipped-corner" : ""} ${glassState ? "is-glass" : ""} ${glassState && glassState.incomplete ? "is-incomplete" : ""}" ${shapeEnabled ? "" : "disabled"} title="${escapeHtml(shapeTitle)}">
                     <span aria-hidden="true">${shapeIcon}</span>
                     <span>${shapeLabel}</span>
                 </button></td>
                 <td class="dco-col-calc" data-label="${labels.area}" data-calc="area_m2">${virtual ? "0.000" : localArea(data).toFixed(3)}</td>
                 <td class="dco-col-calc" data-label="${labels.edgeMeters}" data-calc="edge_meters">${virtual ? "0.000" : localEdgeMeters(data).toFixed(3)}</td>
-                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}>${extraAddons && typeof extraAddons.notesCueHtml === "function" ? extraAddons.notesCueHtml(data) : ""}</td>
-                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${isArabic() ? "حذف السطر" : "Delete row"}">×</button>` : ""}</td>
+                ${extraAddons && typeof extraAddons.renderAddonSummary === "function"
+                    ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable, virtual })}</td>`
+                    : ""}
+                <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
+                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${__("Delete row")}">×</button>` : ""}</td>
             </tr>`;
+    }
+
+    function shellDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const dir = document.documentElement && document.documentElement.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
     }
 
     function shellHtml(frm) {
         const editable = isEditable(frm);
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        const visit = documentContext()?.capture?.(frm);
         const rows = (frm.doc.pieces || []).map(row => rowHtml(frm, row, false)).join("");
         const virtual = editable ? rowHtml(frm, { qty:1 }, true) : "";
         return `
-            <div class="dco-fast-entry-shell">
+            <div class="dco-fast-entry-shell" data-almdina-order="${escapeHtml(frm.doc.name || "")}" data-almdina-generation="${Number(visit?.generation || 0)}" dir="${shellDirection()}">
                 <div class="dco-fast-entry-toolbar">
                     <div class="dco-fast-help">
-                        <b>${isArabic() ? "إدخال سريع:" : "Fast entry:"}</b>
-                        <span class="dco-keyboard-flow">${isArabic() ? "العرض" : "Width"} → <kbd>Tab</kbd> → ${isArabic() ? "الطول" : "Length"} → <kbd>Enter</kbd> → ${isArabic() ? "العرض التالي فورًا" : "next width immediately"}</span>
-                        <span class="dco-help-secondary">${isArabic() ? "القشاط والتدوير: نقرة واحدة مباشرة دون تفعيل السطر." : "Edges and rotation toggle in one click without activating a row."}</span>
-                        <span class="dco-help-secondary">${isArabic() ? "في الدرفة الخاصة: جهات القشاط معطّلة من الجدول؛ يُدار القشاط عبر السعر الخاص." : "For a special door, edge sides are disabled in the table; banding is handled via the special price."}</span>
-                        <span class="dco-help-secondary">${isArabic() ? "الخاصة مع Liner: اكتب Liner في الملاحظات، وثّق الشكل، وأدخل السعر الخاص الشامل من التكلفة." : "Special + Liner: note Liner, document the shape, and use the inclusive custom price in Cost."}</span>
+                        <b>${__("Fast entry:")}</b>
+                        <span class="dco-keyboard-flow">${__("Width")} → <kbd>Tab</kbd> → ${__("Length")} → <kbd>Enter</kbd> → ${__("next width immediately")}</span>
+                        <span class="dco-help-secondary">${__("Edges and rotation toggle in one click without activating a row.")}</span>
+                        <span class="dco-help-secondary">${__("For a special door, edge sides are disabled in the table; banding is handled via the special price.")}</span>
+                        <span class="dco-help-secondary">${__("Add-ons are available for every type; Double and Full Door Double are mutually exclusive.")}</span>
+                        <span class="dco-help-secondary">${__("Selection is enough for a special door. Complete the add-on paths in the DXF before approval.")}</span>
                     </div>
-                    ${editable ? "" : `<span class="dco-fast-readonly-note">${isArabic() ? "الطلب للعرض فقط" : "Read only"}</span>`}
+                    ${editable ? "" : `<span class="dco-fast-readonly-note">${__("Read only")}</span>`}
                 </div>
                 <div class="dco-fast-entry-scroll">
                     <table class="dco-fast-table">
                         <thead><tr>
                             <th class="dco-col-no">#</th>
-                            <th class="dco-col-type">${isArabic() ? "نوع الدرفة" : "Piece type"}</th>
-                            <th class="dco-col-number">${isArabic() ? "العرض (سم)" : "Width (CM)"}</th>
-                            <th class="dco-col-number">${isArabic() ? "الطول (سم)" : "Length (CM)"}</th>
-                            <th class="dco-col-qty">${isArabic() ? "العدد" : "Qty"}</th>
-                            <th class="dco-col-rotate">${isArabic() ? "تدوير" : "Rotate"}</th>
-                            <th class="dco-col-edges">${isArabic() ? "جهات القشاط" : "Edge sides"}</th>
-                            <th class="dco-col-edge-type">${isArabic() ? "نوع القشاط" : "Edge type"}</th>
-                            <th class="dco-col-edge-bulk">${isArabic() ? "تطبيق على الأربعة" : "Apply to all four"}</th>
-                            <th class="dco-col-sketch">${isArabic() ? "الشكل" : "Shape"}</th>
-                            <th class="dco-col-calc">${isArabic() ? "المساحة" : "Area"}</th>
-                            <th class="dco-col-calc">${isArabic() ? "متر قشاط" : "Edge m"}</th>
-                            <th class="dco-col-notes">${isArabic() ? "ملاحظات" : "Notes"}</th>
+                            <th class="dco-col-type">${__("Piece type")}</th>
+                            <th class="dco-col-number">${__("Width (CM)")}</th>
+                            <th class="dco-col-number">${__("Length (CM)")}</th>
+                            <th class="dco-col-qty">${__("Qty")}</th>
+                            <th class="dco-col-rotate">${__("Rotate")}</th>
+                            <th class="dco-col-edges">${__("Edge sides")}</th>
+                            <th class="dco-col-edge-type">${__("Edge type")}</th>
+                            <th class="dco-col-edge-bulk">${__("Apply to all four")}</th>
+                            <th class="dco-col-sketch">${__("Shape")}</th>
+                            <th class="dco-col-calc">${__("Area")}</th>
+                            <th class="dco-col-calc">${__("Edge m")}</th>
+                            <th class="dco-col-addons">${__("Add-ons")}</th>
+                            <th class="dco-col-notes">${__("Notes")}</th>
                             <th class="dco-col-delete"></th>
                         </tr></thead>
                         <tbody>${rows}${virtual}</tbody>
@@ -615,6 +763,7 @@
         if (measurementLifecycle && typeof measurementLifecycle.rendered === "function") {
             measurementLifecycle.rendered(frm);
         }
+        refreshDimensionValidation(frm);
     }
 
     function captureMeasurementView(root) {
@@ -696,6 +845,17 @@
         return String(previous ?? "") === String(next ?? "");
     }
 
+    function liveRowDimensionValues(tr, row) {
+        const value = fieldname => {
+            const control = tr && tr.querySelector(`input[data-field='${fieldname}']`);
+            return control ? control.value : row && row[fieldname];
+        };
+        return {
+            width_cm: value("width_cm"),
+            length_cm: value("length_cm"),
+        };
+    }
+
     function virtualRowHasEnteredValue(tr) {
         if (!tr || !tr.classList.contains("dco-virtual-row")) return false;
         const width = tr.querySelector("input[data-field='width_cm']");
@@ -706,7 +866,22 @@
             || String(notes && notes.value || "").trim() !== "";
     }
 
+    function measurementInputOwned(frm, node) {
+        const shell = node?.matches?.(".dco-fast-entry-shell")
+            ? node : node?.closest?.(".dco-fast-entry-shell");
+        if (!shell?.dataset?.almdinaOrder) return true;
+        const visit = documentContext()?.capture?.(frm);
+        return String(frm?.doc?.name || "") === shell.dataset.almdinaOrder
+            && Number(visit?.generation || 0) === Number(shell.dataset.almdinaGeneration)
+            && (!window.cur_frm || window.cur_frm === frm);
+    }
+
     function syncInputToModel(frm, input, trigger = false) {
+        if (!measurementInputOwned(frm, input)) return null;
+        if (guardDimensionInput(frm, input, null)) {
+            input.value = input._dcoLastAcceptedValue || "";
+            return null;
+        }
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
         if (!tr || !fieldname) return null;
@@ -718,6 +893,12 @@
         if (!valuesEqual(fieldname, row[fieldname], value)) {
             row[fieldname] = value;
             frm.dirty();
+        }
+        if (["width_cm", "length_cm"].includes(fieldname)) {
+            input._dcoLastAcceptedValue = input.value;
+            // Validate the live controls, including temporary empty/incomplete
+            // input, without replacing the row or moving the active caret.
+            syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
         }
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);
@@ -751,6 +932,7 @@
         const field = frm && frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         const root = field && field.$wrapper ? field.$wrapper.get(0) : null;
         if (!root || !root.querySelectorAll) return false;
+        if (!measurementInputOwned(frm, root)) return false;
         let flushed = false;
         root.querySelectorAll(".dco-fast-input[data-field], .dco-fast-select[data-field]").forEach((control) => {
             const tr = control.closest("tr[data-row-name]");
@@ -769,15 +951,11 @@
         return document.activeElement === input;
     }
 
-    function requirePieceDimensions(row, tr) {
-        if (num(row && row.width_cm) > 0 && num(row && row.length_cm) > 0) return true;
-        frappe.msgprint({
-            title: isArabic() ? "أدخل المقاس أولًا" : "Enter dimensions first",
-            message: isArabic()
-                ? "أدخل عرض الدرفة وطولها أولًا، ثم افتح توثيق الشكل."
-                : "Enter the piece width and length before opening the shape.",
-            indicator: "orange",
-        });
+    function requirePieceDimensions(frm, row, tr) {
+        const issues = pieceDimensionIssues(frm, row);
+        if (!Object.keys(issues).length) return true;
+        const message = issues.width_cm || issues.length_cm || issues.board;
+        showDimensionIssue(message || __("Please enter board length and width first."));
         focusWidth(tr);
         return false;
     }
@@ -795,6 +973,34 @@
         next.scrollIntoView({ block:"nearest", inline:"nearest" });
     }
 
+    function applyCornerEdgeCheck(row, fieldname, cornerGeometry = window.AlmdinaClippedCornerGeometry) {
+        if (
+            !row
+            || !["edge_break", "edge_break_only"].includes(fieldname)
+            || !cornerGeometry
+            || typeof cornerGeometry.toggleEdgeSelection !== "function"
+        ) {
+            return [];
+        }
+        const policyFields = [
+            "edge_break",
+            "edge_break_only",
+            "edge_long_right",
+            "edge_long_left",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_long_right_type_override",
+            "edge_long_left_type_override",
+            "edge_width_top_type_override",
+            "edge_width_bottom_type_override",
+        ];
+        const previous = Object.fromEntries(
+            policyFields.map((name) => [name, row[name]])
+        );
+        cornerGeometry.toggleEdgeSelection(row, fieldname);
+        return policyFields.filter((name) => previous[name] !== row[name]);
+    }
+
     function toggleCheck(frm, button) {
         const tr = button.closest("tr[data-row-name]");
         const fieldname = button.dataset.checkField;
@@ -802,15 +1008,22 @@
         if (button.disabled || button.classList.contains("is-break-locked")) return;
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return;
+        const extraAddons = window.AlmdinaExtraDoorAddonsUX;
+        const addonField = Boolean(
+            extraAddons
+            && extraAddons.FIELD_NAMES
+            && extraAddons.FIELD_NAMES.has(fieldname)
+        );
         if (
             (row.piece_type || "Regular") === "Special"
             && fieldname !== "allow_rotation"
+            && !addonField
         ) {
             return;
         }
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         if (
-            fieldname !== "edge_break"
+            !["edge_break", "edge_break_only"].includes(fieldname)
             && cornerGeometry
             && typeof cornerGeometry.locksAdjacentSidesForBreak === "function"
             && cornerGeometry.locksAdjacentSidesForBreak(row)
@@ -819,23 +1032,47 @@
         ) {
             return;
         }
-        const next = row[fieldname] ? 0 : 1;
-        row[fieldname] = next;
-        if (fieldname === "edge_break" && cornerGeometry && typeof cornerGeometry.applyEdgeBreakPolicy === "function") {
-            cornerGeometry.applyEdgeBreakPolicy(row);
+        const machining = window.AlmdinaMachiningOverlay;
+        const machiningKind = machining && typeof machining.kindForField === "function"
+            ? machining.kindForField(fieldname)
+            : (fieldname === "extra_liner" ? "liner" : "");
+        if (
+            machiningKind
+            && (row.piece_type || "Regular") !== "Special"
+            && window.AlmdinaLinerEditor
+            && typeof window.AlmdinaLinerEditor.open === "function"
+        ) {
+            window.AlmdinaLinerEditor.open(frm, row, machiningKind);
+            return;
+        }
+        if (
+            ["edge_break", "edge_break_only"].includes(fieldname)
+            && cornerGeometry
+            && typeof cornerGeometry.toggleEdgeSelection === "function"
+        ) {
+            const changedFields = applyCornerEdgeCheck(row, fieldname, cornerGeometry);
             frm.dirty();
             updateCalculatedCells(tr, row);
-            triggerChildField(frm, row, fieldname, 0);
+            changedFields.forEach((name) => triggerChildField(frm, row, name, 0));
             renderFastMeasurements(frm);
             return;
         }
+        const next = row[fieldname] ? 0 : 1;
+        const changedFields = addonField && typeof extraAddons.enforceMutualExclusivity === "function"
+            ? extraAddons.enforceMutualExclusivity(row, fieldname, next)
+            : [fieldname];
+        if (!addonField) row[fieldname] = next;
         frm.dirty();
-        button.classList.toggle("is-checked", Boolean(next));
-        button.setAttribute("aria-pressed", next ? "true" : "false");
-        const mark = button.querySelector(".dco-check-mark");
-        if (mark) mark.textContent = next ? "✓" : "";
+        if (addonField && typeof extraAddons.syncAddonButtons === "function") {
+            extraAddons.syncAddonButtons(tr, row, true);
+        } else {
+            button.classList.toggle("is-checked", Boolean(next));
+            button.setAttribute("aria-pressed", next ? "true" : "false");
+            const mark = button.querySelector(".dco-check-mark");
+            if (mark) mark.textContent = next ? "✓" : "";
+        }
         updateCalculatedCells(tr, row);
-        triggerChildField(frm, row, fieldname, 0);
+        changedFields.forEach(changedField => triggerChildField(frm, row, changedField, 0));
     }
 
     function deleteRow(frm, tr) {
@@ -859,6 +1096,35 @@
         Promise.resolve(frm.script_manager.trigger("pieces_remove")).catch(() => {});
     }
 
+    function openPieceAddons(frm, tr) {
+        if (!frm || !tr) return;
+        const editable = isEditable(frm);
+        // Inspect saved data without flushing disabled controls or creating rows.
+        if (!editable && tr.classList.contains("dco-virtual-row")) return;
+        if (editable) {
+            const widthInput = tr.querySelector("input[data-field='width_cm']");
+            const lengthInput = tr.querySelector("input[data-field='length_cm']");
+            if (tr.classList.contains("dco-virtual-row")) {
+                if (!(num(widthInput && widthInput.value) > 0 && num(lengthInput && lengthInput.value) > 0)) {
+                    frappe.msgprint({
+                        title: __("Enter dimensions first"),
+                        message: __("Enter the piece width and length before editing add-ons."),
+                        indicator: "orange",
+                    });
+                    focusWidth(tr);
+                    return;
+                }
+            }
+            ["width_cm", "length_cm", "qty", "piece_type", "notes"].forEach((fieldname) => {
+                const input = tr.querySelector(`[data-field='${fieldname}']`);
+                if (input) syncInputToModel(frm, input, false);
+            });
+        }
+        const row = rowByName(frm, tr.dataset.rowName || "");
+        const dialog = window.AlmdinaDoorAddonsDialog;
+        if (row && dialog && typeof dialog.open === "function") dialog.open(frm, row);
+    }
+
     function bindFastMeasurements(frm) {
         const field = frm.fields_dict.pieces_fast_entry;
         if (!field || !field.$wrapper) return;
@@ -872,6 +1138,13 @@
         if (root._dcoFastMeasurementsBound) return;
         root._dcoFastMeasurementsBound = true;
 
+        root.addEventListener("beforeinput", event => {
+            const currentFrm = root._dcoFastEntryForm;
+            const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
+            if (!input || !root.contains(input) || !currentFrm) return;
+            guardDimensionInput(currentFrm, input, event);
+        }, true);
+
         root.addEventListener("focusin", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
@@ -879,14 +1152,17 @@
             const tr = input.closest("tr[data-row-name]");
             const row = rowByName(currentFrm, tr && tr.dataset.rowName);
             if (row) captureCornerResizeSnapshot(tr, row);
+            if (input) input._dcoLastAcceptedValue = input.value;
         });
 
+        // Capture the native input event before table extensions can consume its
+        // bubbling phase. The handler mutates only model values and error nodes.
         root.addEventListener("input", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
             if (!input || !root.contains(input) || !currentFrm) return;
             syncInputToModel(currentFrm, input, false);
-        });
+        }, true);
 
         root.addEventListener("change", event => {
             const currentFrm = root._dcoFastEntryForm;
@@ -911,6 +1187,7 @@
                         window.AlmdinaClippedCornerGeometry.applyEdgeBreakPolicy(row);
                     } else {
                         row.edge_break = 0;
+                        row.edge_break_only = 0;
                     }
                     renderFastMeasurements(currentFrm);
                 }
@@ -934,6 +1211,13 @@
             if (!input || !root.contains(input) || !currentFrm) return;
             const fieldname = input.dataset.field;
             const tr = input.closest("tr[data-row-name]");
+
+            if (["width_cm", "length_cm"].includes(fieldname)
+                && boardDimensions(currentFrm).valid === false
+                && !["Tab", "Shift", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Escape"].includes(event.key)) {
+                guardDimensionInput(currentFrm, input, event);
+                return;
+            }
 
             // Width -> Tab is intentionally untouched. Because this is a plain HTML
             // editor, the browser moves directly to Length with zero Frappe row activation.
@@ -961,7 +1245,7 @@
         });
 
         root.addEventListener("pointerdown", event => {
-            const button = event.target.closest(".dco-check-toggle,.dco-delete-row");
+            const button = event.target.closest(".dco-check-toggle,.dco-delete-row,.dco-addons-open");
             if (!button || !root.contains(button)) return;
             // No parent Frappe grid exists here, but stop pointer bubbling so no
             // surrounding form handler can turn a checkbox click into row activation.
@@ -971,6 +1255,13 @@
         root.addEventListener("click", event => {
             const currentFrm = root._dcoFastEntryForm;
             if (!currentFrm) return;
+            const addonsButton = event.target.closest("[data-open-addons]");
+            if (addonsButton && root.contains(addonsButton)) {
+                event.preventDefault();
+                event.stopPropagation();
+                openPieceAddons(currentFrm, addonsButton.closest("tr[data-row-name]"));
+                return;
+            }
             const check = event.target.closest(".dco-check-toggle[data-check-field]");
             if (check && root.contains(check)) {
                 event.preventDefault();
@@ -991,11 +1282,18 @@
                 event.stopPropagation();
                 const tr = sketch.closest("tr[data-row-name]");
                 const row = rowByName(currentFrm, tr && tr.dataset.rowName);
-                if (!row || !requirePieceDimensions(row, tr)) return;
+                if (!row || !requirePieceDimensions(currentFrm, row, tr)) return;
+                if (tr && tr.dataset.rowName !== row.name) tr.dataset.rowName = row.name;
+                const editable = isEditable(currentFrm);
                 if (window.AlmdinaClippedCornerGeometry && window.AlmdinaClippedCornerGeometry.isCornerCut(row) && window.AlmdinaClippedCornerEditor) {
-                    window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                    if (editable) window.AlmdinaClippedCornerEditor.open(currentFrm, row);
+                    else window.AlmdinaClippedCornerEditor.view(currentFrm, row);
+                } else if (window.AlmdinaGlassShape && window.AlmdinaGlassShape.isGlass(row)) {
+                    if (editable) window.AlmdinaGlassShape.open(currentFrm, row);
+                    else window.AlmdinaGlassShape.view(currentFrm, row);
                 } else if (window.AlmdinaSpecialShapeEditor) {
-                    window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
+                    if (editable) window.AlmdinaSpecialShapeEditor.open(currentFrm, row);
+                    else window.AlmdinaSpecialShapeEditor.view(currentFrm, row);
                 }
             }
         });
@@ -1034,6 +1332,68 @@
         renderFastMeasurements(frm);
     }
 
+    function validateMachiningAddonsBeforeSave(frm) {
+        const addons = window.AlmdinaDoorAddonsDialog;
+        if (!addons || typeof addons.validateOrder !== "function") return Promise.resolve();
+        const context = window.AlmdinaDocumentContext;
+        const token = context && typeof context.capture === "function"
+            ? context.capture(frm)
+            : null;
+        const edgeBanding = window.AlmdinaMultiEdgeBanding;
+        const shouldLoadProfiles = typeof addons.hasEnabledMachining !== "function"
+            || addons.hasEnabledMachining(frm);
+        const ready = shouldLoadProfiles
+            && edgeBanding
+            && typeof edgeBanding.ensureProfiles === "function"
+            ? edgeBanding.ensureProfiles(frm)
+            : Promise.resolve();
+        return Promise.resolve(ready).then(() => {
+            if (context && token && typeof context.isCurrent === "function"
+                && !context.isCurrent(frm, token)) {
+                const message = __("Order changed while validating machining add-ons. Try saving again.");
+                if (window.cur_frm === frm) {
+                    frappe.msgprint({
+                        title: __("Check machining add-ons"),
+                        message,
+                        indicator: "orange",
+                    });
+                }
+                return Promise.reject(new Error(message));
+            }
+            const issue = addons.validateOrder(frm);
+            if (!issue) return undefined;
+            const message = issue.message || __("Check the machining add-on settings before saving.");
+            frappe.msgprint({
+                title: __("Check machining add-ons"),
+                message,
+                indicator: "orange",
+            });
+            return Promise.reject(new Error(message));
+        });
+    }
+
+    function validateDimensionsBeforeSave(frm) {
+        const board = boardDimensions(frm);
+        if (!board.valid) {
+            const message = __("Please enter board length and width first.");
+            showDimensionIssue(message);
+            return Promise.reject(new Error(message));
+        }
+        const invalid = (frm.doc.pieces || []).map((row, index) => ({
+            row,
+            index: index + 1,
+            issues: pieceDimensionIssues(frm, row),
+        })).find(item => Object.keys(item.issues).length);
+        if (!invalid) return Promise.resolve();
+        const message = invalid.issues.width_cm || invalid.issues.length_cm || invalid.issues.board;
+        showDimensionIssue(__("Row {0}: {1}", [invalid.index, message]));
+        const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
+        const tr = root && root.querySelector(`tr[data-row-name='${invalid.row.name}']`);
+        if (tr) focusWidth(tr);
+        return Promise.reject(new Error(message));
+    }
+
     frappe.ui.form.on("Door Cutting Order", {
         onload_post_render(frm) { refreshOperatorUI(frm); },
         refresh(frm) { refreshOperatorUI(frm); },
@@ -1058,6 +1418,7 @@
         before_save(frm) {
             flushMeasurementInputs(frm);
             pruneEmptyTrailingRows(frm);
+            return validateDimensionsBeforeSave(frm).then(() => validateMachiningAddonsBeforeSave(frm));
         },
     });
 
@@ -1069,9 +1430,13 @@
             flush: flushMeasurementInputs,
             loadEdgeTypes,
             clearSpecialMeasurementEdges,
+            applyCornerEdgeCheck,
             edgesCellHtml,
             edgeOptions,
             isEditable,
+            pieceDimensionIssues,
+            refreshValidation: refreshDimensionValidation,
+            validateDimensionsBeforeSave,
         }
     );
 })();

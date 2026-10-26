@@ -110,7 +110,7 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn("for update", backend)
         self.assertIn("def _require_expected_document_version(", backend)
         self.assertIn("frappe.TimestampMismatchError", backend)
-        self.assertEqual(backend.count("expected_modified: str | None = None"), 2)
+        self.assertEqual(backend.count("expected_modified: str | None = None"), 4)
         self.assertEqual(
             backend.count("_require_expected_document_version(order, expected_modified)"),
             2,
@@ -123,21 +123,30 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
 
         # Authorization is evaluated before reporting a version mismatch so the
         # concurrency guard does not become a document-information side channel.
-        approval = backend.split("def approve_special_piece_price(", 1)[1].split(
+        cost_command = backend.split("def save_cost_workspace(", 1)[1].split(
             "@frappe.whitelist()", 1
+        )[0]
+        special_compatibility = backend.split("def approve_special_piece_price(", 1)[1].split(
+            "def update_clipped_corner_edge_price(", 1
         )[0]
         clipped = backend.split("def update_clipped_corner_edge_price(", 1)[1].split(
             "__all__", 1
         )[0]
-        for command in (approval, clipped):
-            self.assertLess(
-                command.index("require_document_capability(order, required_capability)"),
-                command.index("_require_expected_document_version(order, expected_modified)"),
-            )
-            self.assertLess(
-                command.index("_require_expected_document_version(order, expected_modified)"),
-                command.index("order.save(ignore_permissions=True)"),
-            )
+        self.assertLess(
+            cost_command.index("_require_cost_settings_edit(order)"),
+            cost_command.index("_require_expected_document_version(order, expected_modified)"),
+        )
+        self.assertIn("save_cost_workspace(", special_compatibility)
+        self.assertNotIn("require_document_capability", special_compatibility)
+        self.assertNotIn("order.save(", special_compatibility)
+        self.assertLess(
+            clipped.index("require_document_capability(order, required_capability)"),
+            clipped.index("_require_expected_document_version(order, expected_modified)"),
+        )
+        self.assertLess(
+            clipped.index("_require_expected_document_version(order, expected_modified)"),
+            clipped.index("order.save(ignore_permissions=True)"),
+        )
 
     def test_preview_cost_is_in_memory_and_gated_by_view_costs(self) -> None:
         backend = (
@@ -157,8 +166,8 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn('"total_cost_usd": flt(plan.total_cost_usd)', backend)
         self.assertIn("const cost = summary && summary.cost", presenter)
         self.assertIn("if (cost)", presenter)
-        self.assertIn("تكلفة الخطة المتوقعة", presenter)
-        self.assertIn("هذه الخطة وتكلفتها المعروضة للمعاينة فقط", presenter)
+        self.assertIn("Expected plan cost", presenter)
+        self.assertIn("This plan and its cost are only a preview", presenter)
 
     def test_committed_preview_reconciles_plan_then_cost(self) -> None:
         source = (
@@ -169,15 +178,15 @@ class TestWorkspaceFreshnessArchitecture(unittest.TestCase):
         self.assertIn("AlmdinaWorkspaceSyncCoordinator", source)
         self.assertIn('coordinator.invalidate(frm, ["plan", "cost"], "plan_changed")', source)
         self.assertIn('await coordinator.refresh(frm, ["plan", "cost"]', source)
-        self.assertIn("تم حفظ خطة المعاينة وتحديث التكلفة المرتبطة بها", source)
+        self.assertIn("The preview plan was saved", source)
 
     def test_freshness_ux_never_owns_persistence(self) -> None:
         source = (
             PUBLIC / "core" / "door_cutting_order_workspace_freshness_ux.js"
         ).read_text(encoding="utf-8")
-        self.assertIn("بانتظار التحديث", source)
-        self.assertIn("السعر السابق", source)
-        self.assertIn("هناك معاينة خطة غير محفوظة", source)
+        self.assertIn('translate("Waiting for update")', source)
+        self.assertIn('translate("Previous price")', source)
+        self.assertIn('translate("There is an unsaved plan preview")', source)
         self.assertIn("data-almdina-cost-freshness", source)
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("frm.save", source)

@@ -24,7 +24,7 @@
     ]);
     function scaffold(wrapper) {
         if (wrapper.querySelector(".layout-main-section")) return;
-        frappe.ui.make_app_page({ parent: wrapper, title: __("توثيق الدرفة الخاصة"), single_column: true });
+        frappe.ui.make_app_page({ parent: wrapper, title: __("Special door documentation"), single_column: true });
         if (!wrapper.querySelector(".layout-main-section")) throw new Error("Documentation page scaffold is unavailable");
     }
     function ensureStyle() {
@@ -46,8 +46,8 @@
         </style><div class="ald-doc-boot" role="status" aria-live="polite">
             <div class="ald-doc-boot-card">
                 <div class="ald-doc-boot-spinner" aria-hidden="true"></div>
-                <strong>جار فتح توثيق الدرفة…</strong>
-                <span>نجهّز الصورة وأدوات الرسم</span>
+                <strong>${frappe.utils.escape_html(__("Opening door documentation…"))}</strong>
+                <span>${frappe.utils.escape_html(__("Preparing the image and drawing tools"))}</span>
             </div>
         </div>`;
     }
@@ -68,10 +68,10 @@
             wrapper.__almdinaDocumentationController = factory.mount(wrapper); return wrapper.__almdinaDocumentationController;
         });
     }
-    function route() { const value = frappe.get_route(); return { orderName: String(value[1] || "").trim(), pieceName: String(value[2] || "").trim() }; }
-    function fail(wrapper, error) { console.error("Special-shape documentation bootstrap failed", error); scaffold(wrapper); wrapper.querySelector(".layout-main-section").innerHTML = '<div class="ald-doc-message is-error">تعذر تحميل مساحة التوثيق. أعد تحميل الصفحة ثم حاول مرة أخرى.</div>'; }
+    function route() { const value = frappe.get_route(); return { orderName: String(value[1] || "").trim(), pieceName: String(value[2] || "").trim(), readOnly: value[3] === "view" }; }
+    function fail(wrapper, error) { console.error("Special-shape documentation bootstrap failed", error); scaffold(wrapper); wrapper.querySelector(".layout-main-section").innerHTML = `<div class="ald-doc-message is-error">${frappe.utils.escape_html(__("Could not load the documentation workspace. Reload the page and try again."))}</div>`; }
     function enter() { document.body.classList.add("ald-special-shape-documentation-active"); }
     function leave() { document.body.classList.remove("ald-special-shape-documentation-active"); }
     frappe.pages[PAGE_ROUTE].on_page_load = wrapper => { scaffold(wrapper); $(wrapper).off("hide.aldDocumentation").on("hide.aldDocumentation", () => { leave(); const active = wrapper.__almdinaDocumentationController; if (active) active.suspend(); }); controller(wrapper).catch(error => fail(wrapper, error)); };
-    frappe.pages[PAGE_ROUTE].on_page_show = wrapper => { enter(); controller(wrapper).then(active => { const context = route(); if (!context.orderName || !context.pieceName) active.showRouteError("رابط التوثيق غير مكتمل. افتحه من داخل الطلب."); else active.open(context); }).catch(error => { leave(); fail(wrapper, error); }); };
+    frappe.pages[PAGE_ROUTE].on_page_show = wrapper => { enter(); controller(wrapper).then(active => { const context = route(); if (!context.orderName || !context.pieceName) active.showRouteError(__("The documentation link is incomplete. Open it from the order.")); else active.open(context); }).catch(error => { leave(); fail(wrapper, error); }); };
 })();

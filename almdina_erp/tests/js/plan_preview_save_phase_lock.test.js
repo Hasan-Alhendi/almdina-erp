@@ -21,6 +21,13 @@ function settings() {
         trim_margin_mm: 5, optimization_time_limit_sec: 30 };
 }
 
+function receipt(overrides = {}) {
+    return { exact_preview_commit: true, committed_preview_id: "D",
+        name: "DCO-1", cutting_plan: "CP-1", plan_revision: 1,
+        plan_source_type: "System", plan_status: "Draft", ...settings(),
+        ...overrides };
+}
+
 class Control {
     constructor(name, value) {
         this.name = name;
@@ -71,6 +78,7 @@ function environment() {
     const seed = settings();
     let previewFlight = null;
     let previewPending = false;
+    let canonical = null;
     const host = {
         length: 1, editor: false, fields: new Map(), recalculate: new Control(null, "recalculate"),
         delegated: null,
@@ -109,12 +117,20 @@ function environment() {
     const frm = {
         doctype: "Door Cutting Order",
         doc: { doctype: "Door Cutting Order", name: "DCO-1", docstatus: 0, status: "Draft" },
+        __generation: 1,
         fields_dict: { plan_control_actions: { $wrapper: host } },
         is_new() { return false; }, is_dirty() { return false; },
         trigger(event) { handlers.forEach(map => map[event] && map[event](this)); },
     };
     const window = {
         cur_frm: frm,
+        AlmdinaDocumentContext: {
+            formIdentity(form) { return `Door Cutting Order::${form.doc.name}`; },
+            capture(form) { return { identity: this.formIdentity(form), generation: form.__generation }; },
+            isSameDocument(form, token) { return this.formIdentity(form) === token.identity; },
+            isCurrent(form, token) { return window.cur_frm === form
+                && this.isSameDocument(form, token) && form.__generation === token.generation; },
+        },
         addEventListener() {},
         dispatchEvent() {},
         requestAnimationFrame(callback) { callback(); },
@@ -130,11 +146,14 @@ function environment() {
                 calls.push(["preview", requested.packing_mode]);
                 if (previewPending) { previewFlight = deferred(); return previewFlight.promise; }
                 return Promise.resolve({
-                    preview_id: "D", plan: { sheets: [{}] },
+                    preview_id: "D", order_name: "DCO-1", plan: { sheets: [{}] },
+                    source_plan_name: "CP-1", source_plan_revision: 1,
+                    source_plan_modified: "before",
                     summary: { settings: requested, validation: { status: "Valid", needs_recalculation: false } },
                 });
             },
             commitPreview(_name, id) { calls.push(["commit", id]); return commitFlight.promise; },
+            load(name) { calls.push(["read", name]); return Promise.resolve(canonical); },
         },
     };
     const frappe = {
@@ -156,7 +175,8 @@ function environment() {
     ]) vm.runInContext(source(file), context, { filename: file });
     const store = window.AlmdinaWorkspaceStore.create("plan");
     const requestId = store.beginLoad("Door Cutting Order::DCO-1");
-    store.resolveLoad("Door Cutting Order::DCO-1", requestId, { approved_plan: "" });
+    store.resolveLoad("Door Cutting Order::DCO-1", requestId, { approved_plan: "",
+        order_name: "DCO-1", plans: { system_draft: { name: "CP-1", revision: 1 } } });
     window.AlmdinaPlanWorkspaceState = {
         storeFor() { return store; }, snapshot() { return store.snapshot(); },
         load() { return Promise.resolve(store.snapshot()); },
@@ -164,9 +184,13 @@ function environment() {
     const coordinator = window.AlmdinaDcoEditSessionCoordinator;
     const preview = window.AlmdinaPlanPreviewSession;
     return { frm, host, store, coordinator, preview, commitFlight, calls,
+        advanceGeneration() { frm.__generation += 1; },
+        setCanonical(data) { canonical = data; },
         setPreviewPending() { previewPending = true; },
         finishPreview(id, requested) {
-            previewFlight.resolve({ preview_id: id, plan: { sheets: [{}] },
+            previewFlight.resolve({ preview_id: id, order_name: "DCO-1", plan: { sheets: [{}] },
+                source_plan_name: "CP-1", source_plan_revision: 1,
+                source_plan_modified: "before",
                 summary: { settings: requested, validation: { status: "Valid", needs_recalculation: false } } });
         },
     };
@@ -201,10 +225,60 @@ async function run() {
     assert.equal(success.preview.snapshot(success.frm).status, "saving");
     assert.equal(success.preview.snapshot(success.frm).previewId, "D");
     assert.equal(success.frm.__almdinaPlanPreviewSession.generation, generation);
-    success.commitFlight.resolve({ committed: true });
+    success.commitFlight.resolve(receipt());
     assert.equal(await saving, true);
     assert.deepEqual(success.calls.filter(call => call[0] === "commit"), [["commit", "D"]]);
     assert.equal(success.coordinator.snapshot(success.frm).phase, "idle");
+
+    const lost = environment();
+    await ready(lost);
+    lost.setCanonical({ order_name: "DCO-1", plans: { system_draft: {
+        name: "CP-1", revision: 1, modified: "after", source_type: "System", status: "Draft",
+        settings: settings(), validation: { status: "Valid", needs_recalculation: false },
+        snapshot_json: JSON.stringify({ sheets: [{}] }),
+    } } });
+    const lostSave = lost.coordinator.save(lost.frm, "plan");
+    lost.commitFlight.reject(new Error("response lost after durable commit"));
+    assert.equal(await lostSave, true, "independent canonical read confirms the durable commit");
+    assert.deepEqual(lost.calls.filter(call => call[0] === "commit"), [["commit", "D"]]);
+    assert.equal(lost.calls.filter(call => call[0] === "read").length, 1);
+    assert.equal(lost.coordinator.snapshot(lost.frm).phase, "idle");
+
+    const staleRead = environment();
+    await ready(staleRead);
+    staleRead.setCanonical({ order_name: "DCO-1", plans: { system_draft: {
+        name: "CP-1", revision: 1, modified: "before", source_type: "System", status: "Draft",
+        settings: settings(), validation: { status: "Valid" },
+        snapshot_json: JSON.stringify({ sheets: [{}] }),
+    } } });
+    const staleSave = staleRead.coordinator.save(staleRead.frm, "plan");
+    staleRead.commitFlight.resolve(null);
+    assert.equal(await staleSave, false);
+    assert.equal(staleRead.preview.snapshot(staleRead.frm).status, "stale");
+    assert.equal(staleRead.coordinator.snapshot(staleRead.frm).phase, "editing");
+    assert.equal(staleRead.store.snapshot().editing, true);
+
+    for (const [label, response] of [
+        ["null", null], ["false", false], ["undefined", undefined],
+        ["wrong preview", receipt({ committed_preview_id: "other" })],
+        ["wrong order", receipt({ name: "DCO-2" })],
+        ["wrong plan", receipt({ cutting_plan: "CP-2" })],
+        ["missing marker", receipt({ exact_preview_commit: undefined })],
+        ["wrong kerf", receipt({ kerf_mm: 4 })],
+        ["missing kerf", receipt({ kerf_mm: null })],
+        ["wrong mode", receipt({ packing_mode: "auto_pro" })],
+        ["wrong revision", receipt({ plan_revision: 2 })],
+    ]) {
+        const bad = environment();
+        await ready(bad);
+        const pending = bad.coordinator.save(bad.frm, "plan");
+        bad.commitFlight.resolve(response);
+        assert.equal(await pending, false, label);
+        assert.equal(bad.coordinator.snapshot(bad.frm).phase, "editing", label);
+        assert.equal(bad.store.snapshot().editing, true, label);
+        assert.equal(bad.preview.snapshot(bad.frm).status, "stale", label);
+        assert.equal(bad.calls.filter(call => call[0] === "commit").length, 1, label);
+    }
 
     const failure = environment();
     await ready(failure);
@@ -225,11 +299,22 @@ async function run() {
     const old = identity.frm.__almdinaPlanPreviewSession;
     const identitySave = identity.coordinator.save(identity.frm, "plan");
     identity.frm.doc.name = "DCO-2";
-    identity.commitFlight.resolve({ committed: true });
+    identity.commitFlight.resolve(receipt());
     assert.equal(await identitySave, false);
     assert.equal(identity.frm.__almdinaPlanPreviewSession, old);
     assert.equal(old.status, "saving", "the old completion must not alter the new document state");
     assert.equal(identity.coordinator.snapshot(identity.frm).phase, "idle");
+
+    const revisit = environment();
+    await ready(revisit);
+    const oldVisitSave = revisit.coordinator.save(revisit.frm, "plan");
+    revisit.advanceGeneration();
+    assert.equal(revisit.preview.displayedPreviewRow(revisit.frm), null);
+    assert.equal(revisit.preview.isCommittable(revisit.frm), false);
+    revisit.commitFlight.resolve(receipt());
+    assert.equal(await oldVisitSave, false);
+    assert.equal(revisit.coordinator.snapshot(revisit.frm).phase, "idle");
+    assert.equal(revisit.calls.filter(call => call[0] === "commit").length, 1);
 
     // Preview remains editable until Save begins.
     const previewing = environment();

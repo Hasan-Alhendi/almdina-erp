@@ -109,8 +109,11 @@ def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
         assert "hasExactCutPath(piece)" in source
         assert "AlmdinaSpecialShapeGeometry" not in source
     assert "AlmdinaCuttingPlanPieceGeometry" in plan_renderer
-    assert "geometry.resolve(piece)" in plan_renderer
+    assert "const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));" in plan_renderer
+    assert "geometry.resolve(manufacturingPiece)" in plan_renderer
+    assert "const exactSpecial = piece.piece_type === \"Special\"" in plan_renderer
+    assert "&& geometryModel.exact;" in plan_renderer
     assert "shapeOutput.dxfPoints(piece" in secure_dxf
     assert "dco-special-exact-piece" in plan_renderer
-    assert "◆ درفة خاصة · مسار هندسي" in plan_renderer
+    assert 'htmlText("Special door · geometric path")' in plan_renderer
     assert not (ROOT / "public" / "js" / "door_cutting_order_workflow.js").exists()

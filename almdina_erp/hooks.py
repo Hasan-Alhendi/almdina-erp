@@ -52,6 +52,7 @@ permission_query_conditions = {
     "Door Cutting Order": "almdina_erp.permissions.door_cutting_order_query",
     "Production Stage": "almdina_erp.permissions.production_stage_query",
     "Cutting Plan": "almdina_erp.permissions.cutting_plan_query",
+    "Door Cutting Price Approval": "almdina_erp.permissions.door_cutting_price_approval_query",
     "Customer": "almdina_erp.resource_permissions.customer_query",
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_query",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_query",
@@ -61,6 +62,7 @@ has_permission = {
     "Door Cutting Order": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.door_cutting_order_has_permission",
     "Production Stage": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.production_stage_has_permission",
     "Cutting Plan": "almdina_erp.almdina_erp.infrastructure.frappe.native_document_permissions.cutting_plan_has_permission",
+    "Door Cutting Price Approval": "almdina_erp.permissions.door_cutting_price_approval_has_permission",
     "Customer": "almdina_erp.resource_permissions.customer_has_permission",
     "Edge Banding Type": "almdina_erp.resource_permissions.edge_banding_type_has_permission",
     "Production Routing": "almdina_erp.resource_permissions.production_routing_has_permission",
@@ -69,6 +71,14 @@ has_permission = {
 
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
+
+scheduler_events = {
+    "cron": {
+        "* * * * *": [
+            "almdina_erp.almdina_erp.services.backup_restore_service.scheduled_backup_tick",
+        ],
+    },
+}
 
 override_whitelisted_methods = {
     "frappe.desk.desktop.get_desktop_page":

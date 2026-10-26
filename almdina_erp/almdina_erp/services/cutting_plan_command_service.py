@@ -303,6 +303,14 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
                 _("ارفع ملف DXF صالحًا وتحقق منه قبل اعتماد الخطة."),
                 frappe.ValidationError,
             )
+        # Invalid saw centers fail at upload. Absent paths are generated only
+        # after this approval when the manufacturing DXF is exported.
+        saw_status = str(getattr(plan, "saw_center_status", None) or "").strip()
+        if saw_status not in {"", "Unknown", "Absent", "Present", "Legacy"}:
+            frappe.throw(
+                _("مسارات القص في ملف DXF غير صالحة ولا يمكن اعتماد خطة تصنيع غير مضمونة."),
+                frappe.ValidationError,
+            )
 
 
 def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
@@ -401,6 +409,16 @@ def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
 
     _set_drawing_dxf_status(order, "Uploaded")
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
 
 
 def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
@@ -439,6 +457,18 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     repository.save_document(plan, allow_status_transition=True)
     _set_approved_plan_relation(order, plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Production status alone must not clear price approval; only a real basis shift.
+    # Plan identity alone is ignored when board count and commercial totals match.
+    invalidated = maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_authority_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
 
     return {
         "name": order.name,
@@ -446,6 +476,7 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
         "cutting_plan": plan.name,
         "revision": cint(plan.revision),
         "approved_plan_source": _legacy_plan_source(source_type),
+        "final_price_approval_invalidated": bool(invalidated),
     }
 
 
@@ -516,8 +547,21 @@ def recalculate_system_plan(
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
     repository.save_document(plan)
     refresh_order_commercial_totals(order, plan)
+    from almdina_erp.almdina_erp.services.final_price_approval_service import (
+        maybe_invalidate_final_price_approval,
+    )
+
+    # Non-authority draft recalculation keeps the official cost plan unchanged.
+    # Same board count + commercial basis keeps Approved (algorithm identity ignored).
+    invalidated = maybe_invalidate_final_price_approval(
+        order.name,
+        reason="cost_plan_basis_changed",
+        only_if_basis_changed=True,
+        order=order,
+    )
     result = plan_payload(plan, order)
     result["changed_fields"] = changed
+    result["final_price_approval_invalidated"] = bool(invalidated)
     return result
 
 

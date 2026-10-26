@@ -30,7 +30,7 @@
 | مشرف إنتاج | [11 — المهام اليومية](11_COMMON_TASKS.md) | [03 — Workflow](03_WORKFLOWS.md) |
 | مسؤول صلاحيات | [04 — Security/Permissions](04_SECURITY_PERMISSIONS.md) | [11 — المهام اليومية](11_COMMON_TASKS.md) |
 | Support | [12 — Troubleshooting](12_TROUBLESHOOTING.md) | [06 — UI/Data Map](06_DATA_UI_MAP.md) |
-| Developer | [02 — Architecture](02_ARCHITECTURE.md) | [07 — Change Rules](07_CHANGE_RULES.md) + [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md) + [14 — Refactor Closure](14_FRONTEND_REFACTOR_CLOSURE.md) + [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md) عند تعديل دورة حياة الواجهة |
+| Developer | [02 — Architecture](02_ARCHITECTURE.md) | [07 — Change Rules](07_CHANGE_RULES.md) + [13 — Frontend Architecture](13_FRONTEND_ARCHITECTURE.md) + [Design System Ownership](../design_system/TOKEN_OWNERSHIP.md) + [14 — Refactor Closure](14_FRONTEND_REFACTOR_CLOSURE.md) + [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md) عند تعديل دورة حياة الواجهة |
 | DCO Recovery | [16 — DCO Recovery State Ownership](16_DCO_RECOVERY_STATE_OWNERSHIP.md) | [17 — Local Recovery Infrastructure](17_DCO_LOCAL_RECOVERY_INFRASTRUCTURE.md) + [18 — NEW DCO Recovery](18_DCO_NEW_RECOVERY.md) + [15 — Frontend Lifecycle](15_FRONTEND_LIFECYCLE_STANDARD.md) + [05 — Cutting/Drawing/DXF](05_CUTTING_DRAWING_DXF.md) |
 | Coding AI | `AGENTS.md` | [02](02_ARCHITECTURE.md) + [07](07_CHANGE_RULES.md) + [13](13_FRONTEND_ARCHITECTURE.md) + [14](14_FRONTEND_REFACTOR_CLOSURE.md) + [15](15_FRONTEND_LIFECYCLE_STANDARD.md) لأي Frontend lifecycle change |
 | QA | [08 — Testing/Quality](08_TESTING_QUALITY.md) | [03](03_WORKFLOWS.md) + [04](04_SECURITY_PERMISSIONS.md) |
@@ -56,6 +56,7 @@
 - [16 — DCO Recovery State Ownership & Lifecycle Contracts](16_DCO_RECOVERY_STATE_OWNERSHIP.md)
 - [17 — DCO Local Recovery Infrastructure](17_DCO_LOCAL_RECOVERY_INFRASTRUCTURE.md)
 - [18 — NEW DCO Recovery & First-Insert Reconciliation](18_DCO_NEW_RECOVERY.md)
+- [Design System — Token Ownership](../design_system/TOKEN_OWNERSHIP.md)
 - [Architecture Freeze](ARCHITECTURE_FREEZE.md)
 
 ## قاعدة “مصدر الحقيقة”

@@ -50,10 +50,13 @@
             margin:0 !important;
             min-height:0 !important;
         }
-        /* Read mode: plan_control_actions is display:none; collapse leftover section-body padding. */
-        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-fieldname="plan_control_actions"][style*="display: none"]),
-        .dco-operator-form .dco-plan-actions-section:has([data-fieldname="plan_control_actions"][style*="display: none"]),
-        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-almdina-workspace-editing="0"][data-fieldname="plan_control_actions"]) {
+        .dco-operator-form [data-fieldname="plan_control_actions"][data-almdina-plan-bootstrap="1"] {
+            display:block !important;
+        }
+        /* Keep the authorized first System-plan action reachable in read mode. */
+        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-fieldname="plan_control_actions"][style*="display: none"]):not(:has([data-almdina-plan-bootstrap="1"])),
+        .dco-operator-form .dco-plan-actions-section:has([data-fieldname="plan_control_actions"][style*="display: none"]):not(:has([data-almdina-plan-bootstrap="1"])),
+        .dco-operator-form .form-section[data-fieldname="plan_actions_section"]:has([data-almdina-workspace-editing="0"][data-fieldname="plan_control_actions"]):not(:has([data-almdina-plan-bootstrap="1"])) {
             display:none !important;
             height:0 !important;
             margin:0 !important;
@@ -134,7 +137,7 @@
             padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
             border:1px solid var(--border-color,#dfe3e8) !important;
             border-radius:14px !important;
-            background:linear-gradient(180deg,rgba(248,250,252,.92),rgba(248,250,252,.55)) !important;
+            background:linear-gradient(180deg,color-mix(in srgb, var(--alm-surface-muted,#f4f6f8) 92%, transparent),color-mix(in srgb, var(--alm-surface-muted,#f4f6f8) 55%, transparent)) !important;
             box-shadow:none !important;
             width:100% !important;
             max-width:none !important;
@@ -155,7 +158,7 @@
             max-width:620px;
             padding:5px 9px;
             border-radius:999px;
-            background:var(--card-bg,#fff);
+            background:var(--alm-card,#ffffff);
             border:1px solid var(--border-color,#e2e8f0);
             font-size:10px !important;
             line-height:1.45 !important;
@@ -228,7 +231,7 @@
             flex-wrap:wrap !important;
             align-items:stretch !important;
             gap:8px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             margin:0 0 6px !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-special-raw-coverage {
@@ -249,16 +252,28 @@
             align-items:center !important;
             gap:8px 14px !important;
             padding:7px 10px !important;
-            border:1px solid #c5ccd3 !important;
+            border:1px solid var(--alm-card-border,#e4e8ee) !important;
             border-radius:8px !important;
-            background:#f8fafc !important;
+            background:var(--alm-surface-muted,#f4f6f8) !important;
+            color:var(--alm-text-strong,#101828) !important;
             font-size:11px !important;
             font-weight:700 !important;
             line-height:1.2 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend-title {
+            color:var(--alm-text-strong,#101828) !important;
             font-weight:900 !important;
             white-space:nowrap !important;
+        }
+        /* Legend copy only — never retarget in-board .dco-extra-addon-text marks. */
+        [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend-item > span:not(.dco-extra-addon-text):not(.dco-extra-addon-legend-swatch) {
+            color:var(--alm-text-secondary,#344054) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend .dco-extra-addon-text[data-addon-kind="double"] {
+            color:var(--alm-accent-purple,#7c3aed) !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend .dco-extra-addon-text[data-addon-kind="full_door_double"] {
+            color:var(--alm-accent-success,#10b981) !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn {
@@ -270,7 +285,7 @@
             border-radius:0 !important;
             background:transparent !important;
             box-shadow:none !important;
-            color:var(--alm-text-muted, var(--text-muted,#687481)) !important;
+            color:var(--alm-text-subtle, #667085) !important;
             font-weight:650 !important;
             line-height:1.3;
             transition:color .16s ease, font-weight .16s ease;
@@ -290,14 +305,15 @@
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:hover:not(:disabled):not(.is-active),
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn:hover:not(:disabled):not(.is-active) {
-            color:var(--text-color, #1f272e) !important;
+            color:var(--alm-text-secondary, #344054) !important;
             background:transparent !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn.is-active,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn.is-active,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn[aria-selected="true"],
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn[aria-selected="true"] {
-            color:var(--alm-primary, #172033) !important;
+            /* brand-soft-fg stays navy in Light and becomes readable blue in Dark */
+            color:var(--alm-brand-soft-fg, #172033) !important;
             background:transparent !important;
             font-weight:850 !important;
         }
@@ -305,7 +321,7 @@
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn.is-active::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn[aria-selected="true"]::after,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs--underline .btn[aria-selected="true"]::after {
-            background:var(--alm-primary, #172033);
+            background:var(--alm-brand-soft-fg, #172033);
             transform:scaleX(1);
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs .btn:focus-visible,
@@ -338,27 +354,27 @@
             display:flex !important;
             align-items:flex-start !important;
             gap:8px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             margin:0 0 10px !important;
             padding:8px 10px !important;
-            border:1px solid #e0b34c !important;
+            border:1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24)) !important;
             border-radius:10px !important;
-            background:linear-gradient(135deg,#fff9e8,#fffdf6) !important;
-            color:#5f4508 !important;
+            background:linear-gradient(135deg,var(--alm-warning-bg,#fff7e8),color-mix(in srgb, var(--alm-warning,#b45309) 4%, var(--alm-card,#ffffff))) !important;
+            color:var(--alm-status-warning-fg, #b45309) !important;
             box-shadow:none !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-uploaded-plan-mismatch-banner {
             display:flex !important;
             align-items:flex-start !important;
             gap:12px !important;
-            direction:rtl !important;
+            direction:inherit !important;
             width:100% !important;
             box-sizing:border-box !important;
             margin:0 0 14px !important;
             padding:14px 16px !important;
             border:2px solid #d9480f !important;
             border-radius:12px !important;
-            background:#fff4e6 !important;
+            background:color-mix(in srgb, var(--alm-warning,#b45309) 10%, var(--alm-card,#ffffff)) !important;
             color:#9c2b00 !important;
             box-shadow:0 1px 0 rgba(217,72,15,.14) !important;
         }
@@ -442,86 +458,50 @@
             align-items:center;
             min-height:22px;
             padding:2px 7px;
-            border:1px solid rgba(143,103,13,.22);
+            border:1px solid var(--alm-status-warning-border, rgba(180, 83, 9, 0.24));
             border-radius:999px;
-            background:rgba(255,255,255,.78);
+            background:color-mix(in srgb, var(--alm-card,#ffffff) 78%, transparent);
+            color:var(--alm-status-warning-fg, #b45309);
             font-size:9.5px !important;
             font-weight:850 !important;
             white-space:nowrap;
         }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__edge.is-zero {
-            border-color:#d18a00;
-            background:#fff2c9;
-            color:#704700;
+            border-color:var(--alm-warning, #b45309);
+            background:color-mix(in srgb, var(--alm-warning,#b45309) 16%, var(--alm-card,#ffffff));
+            color:var(--alm-status-warning-fg, #b45309);
         }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge {
-            position:absolute;
-            z-index:30;
-            pointer-events:none;
-            color:#7a4d00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top {
-            top:1px;
-            left:0;
-            right:0;
-            border-top:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom {
-            bottom:1px;
-            left:0;
-            right:0;
-            border-bottom:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left {
-            top:0;
-            bottom:0;
-            left:1px;
-            border-left:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right {
-            top:0;
-            bottom:0;
-            right:1px;
-            border-right:3px dashed #d18a00;
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
-            position:absolute;
-            display:inline-flex;
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edges,
+        .dco-board-focus .dco-board-original-edges {
+            display:flex;
+            flex-wrap:wrap;
             align-items:center;
-            justify-content:center;
-            min-height:17px;
-            padding:1px 5px;
-            border:1px solid rgba(209,138,0,.38);
-            border-radius:999px;
-            background:rgba(255,248,225,.94);
-            box-shadow:0 1px 3px rgba(80,54,0,.08);
-            color:#704700;
-            direction:rtl;
+            gap:1px 6px;
+            margin:0 0 2px;
+            padding:0;
+            direction:inherit;
+            line-height:1.15;
+            pointer-events:none;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge,
+        .dco-board-focus .dco-board-original-edge {
+            position:static;
+            color:#8a5a00;
             font-family:Tahoma,Arial,sans-serif;
-            font-size:8px;
-            font-weight:900;
-            line-height:1.1;
+            font-size:9px;
+            font-weight:700;
+            line-height:1.15;
             white-space:nowrap;
         }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top .dco-board-original-edge__label {
-            top:3px;
-            left:50%;
-            transform:translateX(-50%);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom .dco-board-original-edge__label {
-            bottom:3px;
-            left:50%;
-            transform:translateX(-50%);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left .dco-board-original-edge__label {
-            top:50%;
-            left:3px;
-            transform:translate(-50%,-50%) rotate(-90deg);
-        }
-        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right .dco-board-original-edge__label {
-            top:50%;
-            right:3px;
-            transform:translate(50%,-50%) rotate(90deg);
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--top,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--bottom,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--left,
+        [data-fieldname="cutting_plan_html"] .dco-board-original-edge--right,
+        .dco-board-focus .dco-board-original-edge--top,
+        .dco-board-focus .dco-board-original-edge--bottom,
+        .dco-board-focus .dco-board-original-edge--left,
+        .dco-board-focus .dco-board-original-edge--right {
+            position:static;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery {
             display:grid !important;
@@ -549,7 +529,7 @@
             padding:5px !important;
             border:1px solid var(--border-color,#e2e6ea) !important;
             border-radius:10px !important;
-            background:var(--card-bg,#fff) !important;
+            background:var(--alm-card,#ffffff) !important;
             box-shadow:none !important;
             page-break-inside:avoid;
             break-inside:avoid;
@@ -569,18 +549,20 @@
             min-height:27px;
             margin:0 0 4px !important;
             padding:0 0 5px !important;
-            border-bottom:1px solid var(--border-color,#edf0f3);
+            border-bottom:1px solid var(--alm-card-border,#e4e8ee);
+            color:var(--alm-text-strong,#101828) !important;
             font-size:10.5px !important;
             line-height:1.3 !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :first-child {
+            color:var(--alm-text-strong,#101828) !important;
             font-size:11.5px !important;
             font-weight:900 !important;
             white-space:nowrap;
         }
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-sheet-title > :nth-child(2) {
             min-width:0;
-            color:var(--text-muted,#68737d);
+            color:var(--alm-text-subtle,#667085) !important;
             font-size:9px !important;
             font-weight:750 !important;
             white-space:nowrap;
@@ -594,10 +576,10 @@
             min-width:27px;
             min-height:25px;
             padding:3px 6px;
-            border:1px solid var(--border-color,#dce2e7);
+            border:1px solid var(--alm-card-border,#e4e8ee);
             border-radius:7px;
-            background:var(--subtle-fg,#f6f8fa);
-            color:var(--text-color,#26313b);
+            background:var(--alm-surface-muted,#f4f6f8);
+            color:var(--alm-text-strong,#101828);
             font-size:9.5px;
             font-weight:850;
             line-height:1;
@@ -606,7 +588,7 @@
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:hover,
         [data-fieldname="cutting_plan_html"] .dco-board-gallery .dco-board-focus-trigger:focus-visible {
             border-color:#9caab6;
-            background:var(--card-bg,#fff);
+            background:var(--alm-card,#ffffff);
             outline:none;
             box-shadow:0 0 0 2px rgba(80,105,130,.12);
         }
@@ -655,9 +637,9 @@
             overflow:hidden;
             border:1px solid rgba(255,255,255,.45);
             border-radius:16px;
-            background:var(--card-bg,#fff);
+            background:var(--alm-card,#ffffff);
             box-shadow:0 24px 80px rgba(0,0,0,.28);
-            direction:rtl;
+            direction:inherit;
         }
         .dco-board-focus__header {
             flex:0 0 auto;
@@ -668,7 +650,7 @@
             min-height:58px;
             padding:9px 12px;
             border-bottom:1px solid var(--border-color,#dfe3e8);
-            background:var(--card-bg,#fff);
+            background:var(--alm-card,#ffffff);
         }
         .dco-board-focus__identity {
             min-width:0;
@@ -703,7 +685,7 @@
             overflow:hidden;
             border:1px solid var(--border-color,#dfe3e8);
             border-radius:9px;
-            background:var(--subtle-fg,#f6f8fa);
+            background:var(--alm-surface-muted,#f4f6f8);
         }
         .dco-board-focus__zoom button,
         .dco-board-focus__fit {
@@ -720,12 +702,12 @@
             padding:0 10px;
             border:1px solid var(--border-color,#dfe3e8);
             border-radius:9px;
-            background:var(--subtle-fg,#f6f8fa);
+            background:var(--alm-surface-muted,#f4f6f8);
             font-size:11px;
         }
         .dco-board-focus__zoom button:hover,
         .dco-board-focus__fit:hover {
-            background:var(--card-bg,#fff);
+            background:var(--alm-card,#ffffff);
         }
         .dco-board-focus__zoom-value {
             min-width:52px;
@@ -741,7 +723,7 @@
             place-items:center;
             border:1px solid var(--border-color,#dfe3e8);
             border-radius:9px;
-            background:var(--subtle-fg,#f6f8fa);
+            background:var(--alm-surface-muted,#f4f6f8);
             color:var(--text-color,#202a33);
             font-size:20px;
             line-height:1;
@@ -755,7 +737,7 @@
             align-items:flex-start;
             justify-content:center;
             padding:10px 18px 18px;
-            background:var(--subtle-fg,#f7f9fb);
+            background:var(--alm-surface-muted,#f4f6f8);
             overscroll-behavior:contain;
         }
         .dco-board-focus .dco-sheet-card {
@@ -853,9 +835,8 @@
                 white-space:normal;
                 line-height:1.45 !important;
             }
-            [data-fieldname="cutting_plan_html"] .dco-board-original-edge__label {
-                font-size:7px;
-                padding:1px 4px;
+            [data-fieldname="cutting_plan_html"] .dco-board-original-edge {
+                font-size:8px;
             }
             .dco-board-focus { padding:2px; }
             .dco-board-focus__dialog { width:100%;height:99vh;border-radius:10px; }

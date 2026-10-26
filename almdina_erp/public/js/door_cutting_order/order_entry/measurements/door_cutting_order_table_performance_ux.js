@@ -5,15 +5,6 @@
     const CHILD_DOCTYPE = "Door Cutting Order Detail";
     let virtualSequence = 0;
 
-    function isArabic() {
-        const lang = String(
-            (frappe.boot && frappe.boot.lang) ||
-            (frappe.boot && frappe.boot.user && frappe.boot.user.language) ||
-            document.documentElement.lang ||
-            ""
-        ).toLowerCase();
-        return lang === "ar" || lang.startsWith("ar-");
-    }
 
     function isEditable(frm) {
         if (window.frappe && frappe.almdina && frappe.almdina.orderCanEdit) {
@@ -58,8 +49,8 @@
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-select-all";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد كل الأسطر" : "Select all rows");
-            checkbox.title = isArabic() ? "تحديد كل الأسطر" : "Select all rows";
+            checkbox.setAttribute("aria-label", __("Select all rows"));
+            checkbox.title = __("Select all rows");
             cell.appendChild(checkbox);
         }
     }
@@ -91,8 +82,8 @@
             checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.className = "dco-row-selector";
-            checkbox.setAttribute("aria-label", isArabic() ? "تحديد السطر" : "Select row");
-            checkbox.title = isArabic() ? "تحديد هذا السطر" : "Select this row";
+            checkbox.setAttribute("aria-label", __("Select row"));
+            checkbox.title = __("Select this row");
             cell.appendChild(checkbox);
         }
         checkbox.dataset.rowName = name;
@@ -152,7 +143,7 @@
     function resetVirtualClone(frm, clone) {
         clone.dataset.rowName = `__virtual__perf_${Date.now()}_${++virtualSequence}`;
         clone.classList.add("dco-virtual-row");
-        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-extra-row", "dco-row-selected");
+        clone.classList.remove("dco-special-row", "dco-clipped-corner-row", "dco-row-selected");
 
         const selectorCell = clone.querySelector(":scope > td.dco-select-col");
         if (selectorCell) selectorCell.replaceChildren();
@@ -175,8 +166,6 @@
                 { editable: isEditable(frm), virtual: true }
             );
         }
-        clone.querySelectorAll(".dco-extra-notes-cue").forEach(cue => cue.remove());
-
         clone.querySelectorAll("button.dco-check-toggle[data-check-field]").forEach(button => {
             button.classList.remove("is-checked");
             button.setAttribute("aria-pressed", "false");
@@ -187,11 +176,11 @@
         const sketch = clone.querySelector("button.dco-special-sketch-button");
         if (sketch) {
             sketch.disabled = true;
-            sketch.classList.remove("is-documented", "is-clipped-corner");
+            sketch.classList.remove("is-documented", "is-clipped-corner", "is-glass", "is-incomplete");
             const icon = sketch.querySelector("span:first-child");
             const label = sketch.querySelector("span:last-child");
             if (icon) icon.textContent = "✎";
-            if (label) label.textContent = isArabic() ? "وثّق" : "Document";
+            if (label) label.textContent = __("Document");
         }
 
         clone.querySelectorAll("[data-calc]").forEach(cell => { cell.textContent = "0.000"; });
@@ -238,7 +227,6 @@
         const special = row.piece_type === "Special";
         const cornerGeometry = window.AlmdinaClippedCornerGeometry;
         const clipped = Boolean(cornerGeometry && cornerGeometry.isCornerCut(row));
-        const extra = row.piece_type === "Extra";
         const shapeOutput = window.AlmdinaShapeOutputContract;
         const drawing = Boolean(
             shapeOutput
@@ -251,7 +239,6 @@
         );
         tr.classList.toggle("dco-special-row", special);
         tr.classList.toggle("dco-clipped-corner-row", clipped);
-        tr.classList.toggle("dco-extra-row", extra);
 
         const fastEntry = window.AlmdinaDoorCuttingFastEntry;
         const edgesCell = tr.querySelector("td.dco-col-edges");
@@ -272,26 +259,36 @@
 
         const sketch = tr.querySelector("button.dco-special-sketch-button");
         if (sketch) {
-            const cornerSummary = clipped && cornerGeometry
-                ? cornerGeometry.summary(row)
-                : "";
-            sketch.disabled = !((special || clipped) && isEditable(frm));
-            sketch.classList.toggle("is-documented", special && (drawing || exact));
-            sketch.classList.toggle("is-exact-geometry", exact);
-            sketch.classList.toggle("is-clipped-corner", clipped);
-            const icon = sketch.querySelector("span:first-child");
-            const label = sketch.querySelector("span:last-child");
-            if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
-            if (label) {
-                label.textContent = clipped
-                    ? (isArabic() ? "ضبط" : "Set")
-                    : ((drawing || exact)
-                        ? (isArabic() ? "موثقة" : "Documented")
-                        : (isArabic() ? "وثّق" : "Document"));
+            const glassApi = window.AlmdinaGlassShape;
+            const glass = Boolean(glassApi && glassApi.isGlass(row));
+            if (glass && typeof glassApi.syncShapeButton === "function") {
+                glassApi.syncShapeButton(tr, row, {
+                    editable: isEditable(frm),
+                    virtual: false,
+                });
+            } else {
+                const cornerSummary = clipped && cornerGeometry
+                    ? cornerGeometry.summary(row)
+                    : "";
+                sketch.classList.remove("is-glass", "is-incomplete");
+                sketch.disabled = !((special || clipped) && isEditable(frm));
+                sketch.classList.toggle("is-documented", special && (drawing || exact));
+                sketch.classList.toggle("is-exact-geometry", exact);
+                sketch.classList.toggle("is-clipped-corner", clipped);
+                const icon = sketch.querySelector("span:first-child");
+                const label = sketch.querySelector("span:last-child");
+                if (icon) icon.textContent = clipped ? (cornerGeometry.typeIcon(row) || "⌑") : ((drawing || exact) ? "✓" : "✎");
+                if (label) {
+                    label.textContent = clipped
+                        ? (__("Set"))
+                        : ((drawing || exact)
+                            ? (__("Documented"))
+                            : (__("Document")));
+                }
+                sketch.title = clipped
+                    ? `${__("Configure {0}", [cornerGeometry.typeLabel(row)])}${cornerSummary ? ` — ${cornerSummary}` : ""}`
+                    : (__("Open image, measurements and notes documentation"));
             }
-            sketch.title = clipped
-                ? `${isArabic() ? `ضبط ${cornerGeometry.typeLabel(row)}` : `Configure ${cornerGeometry.typeLabel(row, false)}`}${cornerSummary ? ` — ${cornerSummary}` : ""}`
-                : (isArabic() ? "افتح توثيق الصورة والقياسات والملاحظات" : "Open image, measurements and notes documentation");
         }
 
         const extraAddons = window.AlmdinaExtraDoorAddonsUX;
@@ -349,6 +346,7 @@
                 row.edge_width_top = 0;
                 row.edge_width_bottom = 0;
                 row.edge_break = 0;
+                row.edge_break_only = 0;
                 row.edge_type = "";
             }
         }

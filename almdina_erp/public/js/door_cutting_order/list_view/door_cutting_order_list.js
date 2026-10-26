@@ -14,51 +14,79 @@
     ]);
     const KANBAN_VIEW_PATCH_KEY = "__almdinaDcoCardPresentationInstalled";
     const MOBILE_CARD_STYLESHEET_ID = "almdina-dco-mobile-list-css";
-    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9";
+    const MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=11";
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     const STATUS_LABELS = Object.freeze({
-        Draft: "مسودة",
-        "Pending Review": "بانتظار المراجعة",
-        Approved: "معتمد",
-        "Ready for Delivery": "جاهز للتسليم",
-        Delivered: "تم التسليم",
-        Completed: "تم الإنجاز",
-        Rejected: "مرفوض",
-        "On Hold": "متوقف",
-        Cancelled: "ملغى",
+        Draft: "Draft",
+        "Pending Review": "Pending Review",
+        Approved: "Approved",
+        "Ready for Delivery": "Ready for delivery",
+        Delivered: "Delivered",
+        Completed: "Order completed",
+        Rejected: "Order rejected",
+        "On Hold": "Order on hold",
+        Cancelled: "Cancelled",
     });
     const MOBILE_CARD_STATES = Object.freeze({
         in_progress: Object.freeze({
-            label: "قيد التنفيذ",
+            label: "In progress",
             cardClass: "is-in-progress",
             icon: "activity",
             history: false,
         }),
         ready: Object.freeze({
-            label: "جاهز للبدء",
+            label: "Ready to start",
             cardClass: "is-ready",
             icon: "play",
             history: false,
         }),
         ready_for_delivery: Object.freeze({
-            label: "جاهز للتسليم",
+            label: "Ready for delivery",
             cardClass: "is-ready-for-delivery",
             icon: "package",
             history: false,
         }),
         completed: Object.freeze({
-            label: "تم الإنجاز",
+            label: "Order completed",
             cardClass: "is-completed",
             icon: "circle-check",
             history: true,
         }),
         delivered: Object.freeze({
-            label: "تم التسليم",
+            label: "Delivered",
             cardClass: "is-delivered",
             icon: "truck",
             history: true,
         }),
         cancelled: Object.freeze({
-            label: "ملغى",
+            label: "Cancelled",
             cardClass: "is-cancelled",
             icon: "x",
             history: true,
@@ -66,17 +94,17 @@
     });
     const MOBILE_ACTION_PRESENTATION = Object.freeze({
         start: Object.freeze({
-            label: "بدء العمل",
+            label: "Start work",
             className: "is-start",
             icon: "play",
         }),
         handoff: Object.freeze({
-            label: "إنهاء العمل",
+            label: "Finish work",
             className: "is-finish",
             icon: "check",
         }),
         deliver: Object.freeze({
-            label: "تم التسليم",
+            label: "Delivered",
             className: "is-deliver",
             icon: "package-check",
         }),
@@ -98,7 +126,7 @@
         delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 }),
     });
     const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort";
-    const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي";
+    const OVERVIEW_DEFAULT_SORT_LABEL = "Default sort";
     const OVERVIEW_DEFAULT_SORT_MIGRATION_KEY = "dco.overviewDefaultSort.v1";
     const DESKTOP_DELIVERY_ROW_CLASS = Object.freeze({
         ready_for_delivery: "dco-list-row-ready-for-delivery",
@@ -112,13 +140,21 @@
     ]);
     const STATUS_FILTER_SLOT_CLASS = "dco-status-filter-slot";
     const STATUS_FILTER_FIELDNAME = "status";
-    const STATUS_FILTER_ALL_LABEL = "كل الحالات";
+    const STATUS_FILTER_ALL_LABEL = "All statuses";
     const ASSIGNEE_FILTER_FIELDNAME = "current_assignee";
-    const ASSIGNEE_FILTER_ALL_LABEL = "كل العمال";
+    const ASSIGNEE_FILTER_ALL_LABEL = "All workers";
+    const PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status";
+    const PRICE_APPROVAL_FILTER_ALL_LABEL = "All price statuses";
+    const PRICE_APPROVAL_STATUS_APPROVED = "Approved";
+    const PRICE_APPROVAL_STATUS_UNAPPROVED = "Unapproved";
     const DEFAULT_STATUS_OPTIONS = Object.freeze([
         Object.freeze({ value: "Draft", label: "Draft" }),
         Object.freeze({ value: "Delivered", label: "Delivered" }),
         Object.freeze({ value: "Cancelled", label: "Cancelled" }),
+    ]);
+    const PRICE_APPROVAL_FILTER_OPTIONS = Object.freeze([
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_APPROVED, label: "Approved" }),
+        Object.freeze({ value: PRICE_APPROVAL_STATUS_UNAPPROVED, label: "Unapproved" }),
     ]);
     let loadedStatusOptions = [...DEFAULT_STATUS_OPTIONS];
     let loadedAssigneeOptions = [];
@@ -313,7 +349,7 @@
         const root = rootNode(listview);
         if (!root) return [];
         return [...root.querySelectorAll(
-            ".list-search input, .list-search .form-control, input[data-fieldname='name'], input[placeholder*='ID']"
+            ".list-search input, .list-search .form-control, input[data-fieldname='name'], input[data-dco-order-search='1']"
         )];
     }
 
@@ -344,12 +380,65 @@
         return options;
     }
 
+    function queryFilterFact(filter, doctype) {
+        if (!Array.isArray(filter)) return null;
+        if (filter.length >= 4) {
+            if (filter[0] !== doctype) return null;
+            return { field: filter[1], operator: String(filter[2] || "=").toLowerCase(), value: filter[3] };
+        }
+        if (filter.length === 3) {
+            return { field: filter[0], operator: String(filter[1] || "=").toLowerCase(), value: filter[2] };
+        }
+        if (filter.length === 2) {
+            return { field: filter[0], operator: "=", value: filter[1] };
+        }
+        return null;
+    }
+
+    function filterIncludesValue(fact, expected) {
+        if (!fact) return false;
+        if (fact.operator === "=") return String(fact.value || "").trim() === expected;
+        if (fact.operator === "in" && Array.isArray(fact.value)) {
+            return fact.value.some(value => String(value || "").trim() === expected);
+        }
+        return false;
+    }
+
+    function applyPriceApprovalScopeFilter(args, doctype) {
+        // This is a ListView query policy, not a mutation of commercial approval history.
+        // All-price views retain cancellations; price-filtered views omit them unless
+        // the user explicitly requested Cancelled through a status filter.
+        if (!args || doctype !== METHODS.doctype || !Array.isArray(args.filters)) return args;
+        const facts = args.filters.map(filter => queryFilterFact(filter, doctype));
+        const priceFiltered = facts.some(fact =>
+            fact && fact.field === PRICE_APPROVAL_FILTER_FIELDNAME
+            && (filterIncludesValue(fact, PRICE_APPROVAL_STATUS_APPROVED)
+                || filterIncludesValue(fact, PRICE_APPROVAL_STATUS_UNAPPROVED))
+        );
+        if (!priceFiltered) return args;
+
+        const statusFilters = [
+            ...facts,
+            ...(Array.isArray(args.or_filters)
+                ? args.or_filters.map(filter => queryFilterFact(filter, doctype)) : []),
+        ].filter(fact => fact && fact.field === STATUS_FILTER_FIELDNAME);
+        if (statusFilters.some(fact =>
+            filterIncludesValue(fact, "Cancelled")
+            || (fact.operator === "!=" && String(fact.value || "").trim() === "Cancelled")
+        )) return args;
+
+        return {
+            ...args,
+            filters: [...args.filters, [doctype, STATUS_FILTER_FIELDNAME, "!=", "Cancelled"]],
+        };
+    }
+
     function installCombinedSearch(listview) {
         if (!listview || listview._dcoCombinedSearchInstalled || typeof listview.get_args !== "function") return;
         const originalGetArgs = listview.get_args.bind(listview);
 
         listview.get_args = function dcoCombinedSearchArgs() {
-            const args = originalGetArgs();
+            const args = applyPriceApprovalScopeFilter(originalGetArgs(), this.doctype);
             const field = searchField(this);
             const term = normalizedTerm(field && typeof field.get_value === "function" ? field.get_value() : "");
             if (!term) return args;
@@ -370,24 +459,25 @@
     function applySearchHint(listview) {
         const field = searchField(listview);
         if (field && field.df) {
-            field.df.label = "اسم العميل أو رقم الطلب";
-            field.df.description = "ابحث باسم العميل أو رقم الطلب مثل DCO-2026-00004";
+            field.df.label = translate("Customer name or order number");
+            field.df.description = translate("Search by customer name or order number, for example DCO-2026-00004");
         }
         if (field && typeof field.set_label === "function") {
-            field.set_label("اسم العميل أو رقم الطلب");
+            field.set_label(translate("Customer name or order number"));
         }
 
         const root = rootNode(listview);
         if (root) {
             const wrapper = field && field.wrapper ? (field.wrapper.nodeType ? field.wrapper : field.wrapper[0]) : null;
             const label = wrapper && wrapper.querySelector(".control-label");
-            if (label) label.textContent = "اسم العميل أو رقم الطلب";
+            if (label) label.textContent = translate("Customer name or order number");
         }
 
         searchInputs(listview).forEach(input => {
-            input.placeholder = "ابحث باسم العميل أو رقم الطلب (ID)";
-            input.setAttribute("aria-label", "البحث باسم العميل أو رقم الطلب");
-            input.title = "يمكن البحث باسم العميل أو رقم الطلب مثل DCO-2026-00004";
+            input.setAttribute("data-dco-order-search", "1");
+            input.placeholder = translate("Search by customer name or order number");
+            input.setAttribute("aria-label", translate("Search by customer name or order number"));
+            input.title = translate("You can search by customer name or order number, for example DCO-2026-00004");
         });
     }
 
@@ -411,27 +501,37 @@
 
     function statusFilterOptions() {
         return [
-            { value: "", label: __(STATUS_FILTER_ALL_LABEL) },
+            { value: "", label: translate(STATUS_FILTER_ALL_LABEL) },
             ...loadedStatusOptions.map(option => ({
                 value: option.value,
-                label: __(option.label),
+                label: translate(option.label),
             })),
         ];
     }
 
-    function statusFilterConfig() {
+    function statusFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
         return {
             fieldtype: "Select",
             fieldname: STATUS_FILTER_FIELDNAME,
-            label: __("Status"),
-            options: statusFilterOptions(),
+            label: labelFor("Status"),
+            options: localize
+                ? statusFilterOptions()
+                : [
+                    { value: "", label: STATUS_FILTER_ALL_LABEL },
+                    ...loadedStatusOptions.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
             condition: "=",
         };
     }
 
     function assigneeFilterOptions() {
         return [
-            { value: "", label: __(ASSIGNEE_FILTER_ALL_LABEL) },
+            { value: "", label: translate(ASSIGNEE_FILTER_ALL_LABEL) },
             ...loadedAssigneeOptions.map(option => ({
                 value: option.value,
                 label: option.label,
@@ -439,12 +539,52 @@
         ];
     }
 
-    function assigneeFilterConfig() {
+    function assigneeFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
         return {
             fieldtype: "Select",
             fieldname: ASSIGNEE_FILTER_FIELDNAME,
-            label: __("العامل الحالي"),
-            options: assigneeFilterOptions(),
+            label: labelFor("Current worker"),
+            options: localize
+                ? assigneeFilterOptions()
+                : [
+                    { value: "", label: ASSIGNEE_FILTER_ALL_LABEL },
+                    ...loadedAssigneeOptions.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
+            condition: "=",
+        };
+    }
+
+    function priceApprovalFilterOptions() {
+        return [
+            { value: "", label: translate(PRICE_APPROVAL_FILTER_ALL_LABEL) },
+            ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                value: option.value,
+                label: translate(option.label),
+            })),
+        ];
+    }
+
+    function priceApprovalFilterConfig(options = {}) {
+        const localize = options.localize !== false;
+        const labelFor = (message) => (localize ? translate(message) : message);
+        return {
+            fieldtype: "Select",
+            fieldname: PRICE_APPROVAL_FILTER_FIELDNAME,
+            label: labelFor("Price approval status"),
+            options: localize
+                ? priceApprovalFilterOptions()
+                : [
+                    { value: "", label: PRICE_APPROVAL_FILTER_ALL_LABEL },
+                    ...PRICE_APPROVAL_FILTER_OPTIONS.map(option => ({
+                        value: option.value,
+                        label: option.label,
+                    })),
+                ],
             condition: "=",
         };
     }
@@ -458,6 +598,12 @@
     function assigneeFilterField(listview) {
         return listview && listview.page && listview.page.fields_dict
             ? listview.page.fields_dict[ASSIGNEE_FILTER_FIELDNAME]
+            : null;
+    }
+
+    function priceApprovalFilterField(listview) {
+        return listview && listview.page && listview.page.fields_dict
+            ? listview.page.fields_dict[PRICE_APPROVAL_FILTER_FIELDNAME]
             : null;
     }
 
@@ -508,22 +654,46 @@
 
     function applyStatusFilterHint(listview) {
         const field = statusFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Status");
+            if (typeof field.set_label === "function") field.set_label(translate("Status"));
+        }
         const wrapper = controlWrapper(field);
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
         if (!select) return;
-        select.setAttribute("aria-label", __("Status"));
-        select.setAttribute("title", __(STATUS_FILTER_ALL_LABEL));
+        select.setAttribute("aria-label", translate("Status"));
+        select.setAttribute("title", translate(STATUS_FILTER_ALL_LABEL));
     }
 
     function applyAssigneeFilterHint(listview) {
         const field = assigneeFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Current worker");
+            if (typeof field.set_label === "function") field.set_label(translate("Current worker"));
+        }
         const wrapper = controlWrapper(field);
         if (!wrapper || typeof wrapper.querySelector !== "function") return;
         const select = wrapper.querySelector("select");
         if (!select) return;
-        select.setAttribute("aria-label", __("العامل الحالي"));
-        select.setAttribute("title", __(ASSIGNEE_FILTER_ALL_LABEL));
+        select.setAttribute("aria-label", translate("Current worker"));
+        select.setAttribute("title", translate(ASSIGNEE_FILTER_ALL_LABEL));
+    }
+
+    function applyPriceApprovalFilterHint(listview) {
+        const field = priceApprovalFilterField(listview);
+        if (field && field.df) {
+            field.df.label = translate("Price approval status");
+            if (typeof field.set_label === "function") {
+                field.set_label(translate("Price approval status"));
+            }
+        }
+        const wrapper = controlWrapper(field);
+        if (!wrapper || typeof wrapper.querySelector !== "function") return;
+        const select = wrapper.querySelector("select");
+        if (!select) return;
+        select.setAttribute("aria-label", translate("Price approval status"));
+        select.setAttribute("title", translate(PRICE_APPROVAL_FILTER_ALL_LABEL));
     }
 
     function applyLoadedStatusFilterOptions(listview, rows) {
@@ -590,8 +760,8 @@
         return root.querySelector(".mobile-id-filter .frappe-control[data-fieldname='name']")
             || root.querySelector(".standard-filter-section .frappe-control[data-fieldname='name']")
             || root.querySelector(".standard-filter-section .frappe-control[data-fieldname='customer']")
-            || root.querySelector(".standard-filter-section input[placeholder*='ابحث']")?.closest(".frappe-control")
-            || root.querySelector(".mobile-id-filter input[placeholder*='ابحث']")?.closest(".frappe-control");
+            || root.querySelector(".standard-filter-section [data-dco-order-search='1']")?.closest(".frappe-control")
+            || root.querySelector(".mobile-id-filter [data-dco-order-search='1']")?.closest(".frappe-control");
     }
 
     function reconcileMobileListToolbarLayout(listview) {
@@ -613,14 +783,17 @@
         const root = rootNode(listview);
         const statusWrapper = controlWrapper(statusFilterField(listview));
         const assigneeWrapper = controlWrapper(assigneeFilterField(listview));
+        const priceWrapper = controlWrapper(priceApprovalFilterField(listview));
         if (!root || !statusWrapper || !assigneeWrapper) return false;
 
         const target = ensureStatusFilterSlot(root);
         if (!target) return false;
         if (statusWrapper.parentNode !== target) target.appendChild(statusWrapper);
         if (assigneeWrapper.parentNode !== target) target.appendChild(assigneeWrapper);
+        if (priceWrapper && priceWrapper.parentNode !== target) target.appendChild(priceWrapper);
         applyStatusFilterHint(listview);
         applyAssigneeFilterHint(listview);
+        applyPriceApprovalFilterHint(listview);
         return true;
     }
 
@@ -681,7 +854,7 @@
 
     function mobileActionLabel(action) {
         const presentation = actionPresentation(action);
-        return presentation ? __(presentation.label) : (action && action.label || "");
+        return presentation ? translate(presentation.label) : (action && action.label || "");
     }
 
     function mobileActionClass(action) {
@@ -697,16 +870,16 @@
     function mobileActionConfirmation(action, doc) {
         const orderName = displayValue(doc && doc.name);
         if (action && action.kind === "deliver") {
-            return `${__("هل تؤكد تسليم الطلب للعميل؟")} ${orderName}`;
+            return `${translate("Confirm delivery of the order to the customer?")} ${orderName}`;
         }
         if (action && action.kind === "handoff") {
-            return `${__("هل تريد تأكيد إنهاء العمل على الطلب؟")} ${orderName}`;
+            return `${translate("Confirm finishing work on the order?")} ${orderName}`;
         }
-        return `${__("هل تريد بدء العمل على الطلب؟")} ${orderName}`;
+        return `${translate("Do you want to start work on the order?")} ${orderName}`;
     }
 
     function fallbackStatusLabel(doc) {
-        return __(STATUS_LABELS[doc.status] || doc.status || "غير محدد");
+        return translate(STATUS_LABELS[doc.status] || doc.status || "Unspecified");
     }
 
     function productionStageLabel(doc) {
@@ -720,7 +893,7 @@
     function overviewStageLabel(doc) {
         const status = String(doc && doc.status || "").trim();
         if (status === "Delivered" || status === "Ready for Delivery") {
-            return __(STATUS_LABELS[status] || status);
+            return translate(STATUS_LABELS[status] || status);
         }
         const department = productionStageLabel(doc);
         if (department) return department;
@@ -732,7 +905,7 @@
         if (!definition) return null;
         return Object.freeze({
             key,
-            label: __(definition.label),
+            label: translate(definition.label),
             cardClass: definition.cardClass,
             icon: definition.icon,
             history: definition.history === true,
@@ -843,7 +1016,7 @@
             <div class="dco-card-customer-block">
                 <span class="dco-card-customer-avatar" aria-hidden="true">${iconSvg("user")}</span>
                 <div class="dco-card-customer-copy">
-                    <span class="dco-card-eyebrow">${escapeHtml(__("اسم العميل"))}</span>
+                    <span class="dco-card-eyebrow">${escapeHtml(translate("Customer name"))}</span>
                     <strong class="dco-card-customer-name">${escapeHtml(model.customer)}</strong>
                 </div>
             </div>
@@ -853,12 +1026,12 @@
     function renderOrderLink(model) {
         return `
             <div class="dco-card-order-row">
-                <span class="dco-card-order-label">${escapeHtml(__("ID الطلب"))}</span>
+                <span class="dco-card-order-label">${escapeHtml(translate("Order ID"))}</span>
                 <button
                     type="button"
                     class="dco-card-order-link"
-                    aria-label="${escapeHtml(__("فتح الطلب"))} ${escapeHtml(model.orderId)}"
-                    title="${escapeHtml(__("فتح الطلب"))}"
+                    aria-label="${escapeHtml(translate("Open the order"))} ${escapeHtml(model.orderId)}"
+                    title="${escapeHtml(translate("Open the order"))}"
                 >
                     <span>${escapeHtml(model.orderId)}</span>
                     ${iconSvg("chevron", "dco-card-order-chevron")}
@@ -872,7 +1045,7 @@
             <div class="dco-card-info-tile ${escapeHtml(className || "")}">
                 <span class="dco-card-info-icon" aria-hidden="true">${iconSvg(iconName)}</span>
                 <div class="dco-card-info-copy">
-                    <span>${escapeHtml(__(label))}</span>
+                    <span>${escapeHtml(translate(label))}</span>
                     <strong>${escapeHtml(value)}</strong>
                 </div>
             </div>
@@ -930,7 +1103,7 @@
                 data-order-name="${escapeHtml(doc.name)}"
                 data-card-state="${escapeHtml(model.state.key)}"
                 data-selectable="${hasSelection ? "1" : "0"}"
-                dir="rtl"
+                dir="${escapeHtml(uiDirection())}"
             >
                 <header class="dco-card-header">
                     ${renderCustomer(model)}
@@ -940,10 +1113,10 @@
                     </div>
                 </header>
                 ${renderOrderLink(model)}
-                <section class="dco-card-info-grid" aria-label="${escapeHtml(__("بيانات الطلب"))}">
-                    ${renderInfoTile("لون اللوح", model.boardColor, "board", "is-board")}
-                    ${renderInfoTile("لون القشاط", model.edgeColor, "droplet", "is-edge-color")}
-                    ${renderInfoTile("نوع القشاط", model.edgeType, "layers", "is-edge-type")}
+                <section class="dco-card-info-grid" aria-label="${escapeHtml(translate("Order details"))}">
+                    ${renderInfoTile("Board color", model.boardColor, "board", "is-board")}
+                    ${renderInfoTile("Edge color", model.edgeColor, "droplet", "is-edge-color")}
+                    ${renderInfoTile("Edge type", model.edgeType, "layers", "is-edge-type")}
                 </section>
                 ${renderDate(model)}
                 ${renderAction(model)}
@@ -1289,12 +1462,12 @@
         if (!options.some(option => option && option.fieldname === OVERVIEW_DEFAULT_SORT_FIELD)) {
             options.unshift({
                 fieldname: OVERVIEW_DEFAULT_SORT_FIELD,
-                label: OVERVIEW_DEFAULT_SORT_LABEL,
+                label: translate(OVERVIEW_DEFAULT_SORT_LABEL),
             });
         }
         selector.args.options = options;
         selector.labels = selector.labels || {};
-        selector.labels[OVERVIEW_DEFAULT_SORT_FIELD] = OVERVIEW_DEFAULT_SORT_LABEL;
+        selector.labels[OVERVIEW_DEFAULT_SORT_FIELD] = translate(OVERVIEW_DEFAULT_SORT_LABEL);
     }
 
     function normalizedSortOrder(sortOrder) {
@@ -1305,7 +1478,7 @@
         selector.args = selector.args || {};
         selector.args.sort_by = OVERVIEW_DEFAULT_SORT_FIELD;
         selector.args.sort_order = "desc";
-        selector.args.sort_by_label = OVERVIEW_DEFAULT_SORT_LABEL;
+        selector.args.sort_by_label = translate(OVERVIEW_DEFAULT_SORT_LABEL);
         if (typeof selector.set_value === "function") {
             selector.set_value(OVERVIEW_DEFAULT_SORT_FIELD, "desc");
         } else {
@@ -1641,20 +1814,22 @@
             "order_notes",
             "current_department", "current_assignee",
             "current_production_stage",
+            "price_approval_status",
         ])],
         custom_filter_configs: [
             ...(Array.isArray(existing.custom_filter_configs) ? existing.custom_filter_configs : []),
-            statusFilterConfig(),
-            assigneeFilterConfig(),
+            statusFilterConfig({ localize: false }),
+            assigneeFilterConfig({ localize: false }),
+            priceApprovalFilterConfig({ localize: false }),
         ],
         formatters: Object.assign({}, existing.formatters || {}, {
             current_department(value, df, doc) {
                 let label = value || "";
-                if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
-                else if (doc.status === "Delivered") label = __("تم التسليم");
+                if (doc.status === "Ready for Delivery") label = translate("Ready for delivery");
+                else if (doc.status === "Delivered") label = translate("Delivered");
                 else if (value === "تسليم") {
-                    if (doc.status === "Ready for Delivery") label = __("جاهز للتسليم");
-                    else if (doc.status === "Delivered") label = __("تم التسليم");
+                    if (doc.status === "Ready for Delivery") label = translate("Ready for delivery");
+                    else if (doc.status === "Delivered") label = translate("Delivered");
                 }
                 return listTextHtml(label);
             },
@@ -1691,6 +1866,8 @@
         desktopDeliveryRowState,
         isPhoneLayout,
         kanbanCardFields,
+        installCombinedSearch,
+        applyPriceApprovalScopeFilter,
         installOverviewDefaultSort,
         isOverviewDefaultSortActive,
         overviewDefaultSortField: OVERVIEW_DEFAULT_SORT_FIELD,
@@ -1699,6 +1876,8 @@
         overviewDefaultSortSql,
         overviewListState,
         overviewStageLabel,
+        priceApprovalFilterConfig,
+        priceApprovalFilterOptions,
         productionStageLabel,
         personalQueueState,
         quickActionContext,

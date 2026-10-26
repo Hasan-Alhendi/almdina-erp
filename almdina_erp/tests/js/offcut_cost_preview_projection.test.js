@@ -84,7 +84,7 @@ const fakeWindow = {
     AlmdinaOrderCostUX: legacy,
     AlmdinaCostWorkspaceState: {
         snapshot() {
-            return { status: "ready", data: payload };
+            return { identity: "Door Cutting Order::DCO-178-PREVIEW", status: "ready", data: payload };
         },
         canView() {
             return true;
@@ -166,8 +166,10 @@ assert.equal(legacyInvoiceCalls, 0, "ready Cost workspace must not rebuild invoi
 assert.equal(api.invoiceTotal(frm), 87);
 assert.equal(api.quoteTotal(frm), 87);
 assert.equal(frm.doc.pieces[0].qty, 5, "customer requirement qty must remain unchanged");
-assert.equal(frm.doc.pieces[0].factory_execution_qty, 4);
-assert.equal(frm.doc.pieces[1].factory_execution_qty, 0);
+assert.equal(frm.doc.pieces[0].factory_execution_qty, undefined,
+    "Cost read metadata must remain in the workspace instead of entering the DCO save model");
+assert.equal(payload.pieces[0].factory_execution_qty, 4);
+assert.equal(payload.pieces[1].factory_execution_qty, 0);
 assert.equal(
     source.includes("setTimeout("),
     false,
@@ -381,7 +383,10 @@ function verifyEditSessionBindsStablePresenterInput() {
                 status: "ready",
                 editing,
                 draft: editing ? { ...draft } : null,
-                data: { order: { ...draft } },
+                data: {
+                    order: { ...draft },
+                    can_edit_cost_settings: true,
+                },
                 dirty: false,
             };
         },

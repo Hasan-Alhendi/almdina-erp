@@ -1,15 +1,169 @@
 from __future__ import annotations
 
-import unittest
 import math
+import unittest
+from types import SimpleNamespace
 
 from almdina_erp.almdina_erp.domain.orders.costing import (
     BreakEdgeCostInput,
+    CostingError,
     calculate_break_edge_cost,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.orders.costing_adapter import (
+    FrappeOrderCostingAdapter,
 )
 
 
 class TestBreakEdgeCosting(unittest.TestCase):
+    def test_corner_outer_sides_use_remaining_lengths_in_every_position(self) -> None:
+        adjacent_by_position = {
+            "Top Right": {"edge_width_top", "edge_long_right"},
+            "Top Left": {"edge_width_top", "edge_long_left"},
+            "Bottom Right": {"edge_width_bottom", "edge_long_right"},
+            "Bottom Left": {"edge_width_bottom", "edge_long_left"},
+        }
+        full_length_by_side = {
+            "edge_width_top": 100,
+            "edge_width_bottom": 100,
+            "edge_long_right": 80,
+            "edge_long_left": 80,
+        }
+        cut_by_side = {
+            "edge_width_top": 30,
+            "edge_width_bottom": 30,
+            "edge_long_right": 20,
+            "edge_long_left": 20,
+        }
+
+        for piece_type in ("Clipped Corner", "L-Shaped Corner"):
+            for position, adjacent_sides in adjacent_by_position.items():
+                for selected_side, full_length in full_length_by_side.items():
+                    with self.subTest(
+                        piece_type=piece_type,
+                        position=position,
+                        selected_side=selected_side,
+                    ):
+                        flags = {side: 0 for side in full_length_by_side}
+                        flags[selected_side] = 1
+                        row = SimpleNamespace(
+                            piece_type=piece_type,
+                            width_cm=100,
+                            length_cm=80,
+                            qty=2,
+                            **flags,
+                            edge_long_right_type_override="",
+                            edge_long_left_type_override="",
+                            edge_width_top_type_override="",
+                            edge_width_bottom_type_override="",
+                            edge_break=0,
+                            edge_break_only=0,
+                            clipped_corner_position=position,
+                            clipped_corner_width_cm=30,
+                            clipped_corner_length_cm=20,
+                            edge_type="Standard",
+                        )
+                        document = SimpleNamespace(
+                            pieces=[row],
+                            default_edge_type="Standard",
+                        )
+                        adapter = FrappeOrderCostingAdapter(
+                            document,
+                            access=None,
+                            profiles=SimpleNamespace(
+                                rate_map=lambda: {"Standard": 2.5}
+                            ),
+                            engine_version="test",
+                        )
+
+                        adapter.calculate_piece_rows()
+
+                        expected_cm = full_length
+                        if selected_side in adjacent_sides:
+                            expected_cm -= cut_by_side[selected_side]
+                        expected_meters = expected_cm * 2 / 100
+                        self.assertEqual(row.edge_meters, expected_meters)
+                        self.assertEqual(row.edge_cost_usd, expected_meters * 2.5)
+
+    def test_costing_adapter_merges_break_only_into_normal_edge_totals(self) -> None:
+        row = SimpleNamespace(
+            piece_type="Clipped Corner",
+            width_cm=50,
+            length_cm=50,
+            qty=1,
+            edge_long_right=0,
+            edge_long_left=1,
+            edge_width_top=0,
+            edge_width_bottom=0,
+            edge_long_right_type_override="",
+            edge_long_left_type_override="",
+            edge_width_top_type_override="",
+            edge_width_bottom_type_override="",
+            edge_break=0,
+            edge_break_only=1,
+            clipped_corner_position="Top Right",
+            clipped_corner_width_cm=10,
+            clipped_corner_length_cm=10,
+            edge_type="Standard",
+        )
+        document = SimpleNamespace(
+            pieces=[row],
+            default_edge_type="Standard",
+        )
+        profiles = SimpleNamespace(rate_map=lambda: {"Standard": 2.5})
+
+        adapter = FrappeOrderCostingAdapter(
+            document,
+            access=None,
+            profiles=profiles,
+            engine_version="test",
+        )
+        adapter.calculate_piece_rows()
+
+        self.assertEqual(row.edge_break_meters, 0.141)
+        self.assertEqual(row.edge_meters, 0.641)
+        self.assertEqual(row.edge_cost_usd, 1.604)
+        self.assertEqual(document.total_edge_meters, 0.641)
+        self.assertEqual(document.edge_cost_usd, 1.604)
+
+    def test_clipped_corner_break_only_uses_diagonal_and_normal_rate(self) -> None:
+        result = calculate_break_edge_cost(
+            BreakEdgeCostInput(
+                piece_type="Clipped Corner",
+                width_cm=100,
+                length_cm=80,
+                corner_width_cm=30,
+                corner_length_cm=40,
+                qty=3,
+                edge_break=0,
+                edge_break_only=1,
+                break_edge_rate_usd=2.0,
+            )
+        )
+
+        self.assertEqual(result.break_edge_length_cm, 50)
+        self.assertEqual(result.break_edge_meters, 1.5)
+        self.assertEqual(result.break_edge_cost_usd, 3.0)
+        self.assertEqual(result.break_edge_unit_price_usd, 1.0)
+
+    def test_full_path_and_break_only_are_rejected_together(self) -> None:
+        with self.assertRaisesRegex(
+            CostingError,
+            "mutually_exclusive_corner_edge_options",
+        ):
+            calculate_break_edge_cost(
+                BreakEdgeCostInput(
+                    piece_type="Clipped Corner",
+                    width_cm=100,
+                    length_cm=80,
+                    corner_width_cm=30,
+                    corner_length_cm=40,
+                    qty=1,
+                    edge_break=1,
+                    edge_break_only=1,
+                    break_edge_rate_usd=2.0,
+                )
+            )
+
     def test_clipped_corner_pythagorean_geometry(self) -> None:
         """Clipped Corner: remnant sides + diagonal hypotenuse."""
         result = calculate_break_edge_cost(

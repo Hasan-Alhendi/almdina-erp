@@ -33,8 +33,10 @@ const fakeWindow = {
     AlmdinaCostWorkspaceState: {
         snapshot() {
             return {
+                identity: "Door Cutting Order::DCO-TEST-0001",
                 status: "ready",
                 data: {
+                    order_name: "DCO-TEST-0001",
                     order: {},
                     pieces: [{
                         name: "ROW-1",

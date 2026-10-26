@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import csv
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,13 @@ REGISTRY = (
 
 
 class TestPlanPreviewSessionExactCommit(unittest.TestCase):
+    def assert_arabic_message(self, message_id: str, expected_arabic: str) -> None:
+        # Ensure the user-visible Arabic text is provided by the translation catalog,
+        # not by hard-coded JS strings. Preserve copy while locale changes.
+        with (ROOT / "translations" / "ar.csv").open(encoding="utf-8", newline="") as handle:
+            translations = {row[0]: row[1] for row in csv.reader(handle) if len(row) >= 2}
+        self.assertEqual(translations.get(message_id), expected_arabic)
+
     def test_application_preview_contract_is_framework_neutral(self) -> None:
         source = (
             APP / "application" / "cutting" / "plan_preview_session.py"
@@ -62,6 +70,13 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertNotIn("optimize_order_plan", commit)
         self.assertIn("session.source_plan_modified", commit)
         self.assertIn("session.user != frappe.session.user", commit)
+        self.assertIn("result['committed_preview_id'] = token", commit)
+        self.assertIn("result['exact_preview_commit'] = True", commit)
+        self.assertLess(commit.index("repository.save_document(plan)"),
+                        commit.index("result['exact_preview_commit'] = True"))
+        self.assertIn("'source_plan_name': source_plan.name", preview)
+        self.assertIn("'source_plan_revision': int(source_plan.revision or 0)", preview)
+        self.assertIn("'source_plan_modified': str(source_plan.modified or '')", preview)
 
     def test_exact_commit_recomputes_input_fingerprint_and_rejects_invalid_geometry(self) -> None:
         source = (
@@ -94,8 +109,8 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
         self.assertIn("__almdinaPlanPreviewSession", source)
         self.assertIn("almdina:plan-preview-updated", source)
-        self.assertIn("api.preview(frm.doc.name", source)
-        self.assertIn("api.commitPreview(frm.doc.name, previewId)", source)
+        self.assertIn("api.preview(orderName", source)
+        self.assertIn("api.commitPreview(orderName, previewId)", source)
         self.assertIn("function isCommittable(frm)", source)
         self.assertIn('String(validation.status || "") === "Valid"', source)
         self.assertNotIn("AlmdinaWorkspaceStore", source)
@@ -110,7 +125,13 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("owner.invalidate(frm)", source)
         self.assertIn("await owner.commit(frm)", source)
         self.assertNotIn("legacy.saveEditing(frm)", source)
-        self.assertIn("المعاينة الحالية لم تنجح في التحقق الهندسي", source)
+        message_id = "The current preview did not pass the engineering check. Try other settings, then recalculate."
+        self.assertIn(message_id, source)
+        self.assertIn("owner.isCommittable(frm)", source)
+        self.assert_arabic_message(
+            message_id,
+            "المعاينة الحالية لم تنجح في التحقق الهندسي. جرّب إعدادات أخرى ثم أعد الحساب.",
+        )
         self.assertNotIn("<style", source)
         self.assertNotIn("renderer.build", source)
 
@@ -120,9 +141,20 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
         self.assertIn("function renderPersistedEditingState(frm, status)", source)
         self.assertIn("function renderPreviewPlan(frm, previewState, committable)", source)
-        self.assertIn("المعاينة السابقة أصبحت قديمة", source)
-        self.assertIn("الخطة المعروضة أدناه هي الخطة المحفوظة", source)
-        self.assertIn("معاينة غير صالحة للحفظ", source)
+        stale_title = "The previous preview is out of date"
+        stale_message = (
+            "You changed a setting after the last preview. The plan shown below is the saved plan; "
+            "recalculate to see the new result."
+        )
+        invalid_label = "Preview cannot be saved"
+        for message_id in (stale_title, stale_message, invalid_label):
+            self.assertIn(message_id, source)
+        self.assert_arabic_message(stale_title, "المعاينة السابقة أصبحت قديمة")
+        self.assert_arabic_message(
+            stale_message,
+            "غيّرت أحد الإعدادات بعد آخر معاينة. الخطة المعروضة أدناه هي الخطة المحفوظة؛ أعد الحساب لرؤية النتيجة الجديدة.",
+        )
+        self.assert_arabic_message(invalid_label, "معاينة غير صالحة للحفظ")
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("api.preview", source)
         self.assertNotIn("api.commitPreview", source)
@@ -168,9 +200,14 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
 
         self.assertLess(manifest.index(api), manifest.index(state))
         self.assertIn(page, manifest)
+        # Count declarations in the Plan bundle, not subsequent references in
+        # the lazy loader, which may load a registered dependent asset later.
+        plan_assets = registry.split("readyGlobals: Object.freeze([", 1)[0]
         for asset in (preview, edit, presenter, preview_edit):
             self.assertNotIn(f'public/js/door_cutting_order/cutting_plan/{asset}', manifest)
-            self.assertEqual(registry.count(asset), 1)
+            self.assertEqual(plan_assets.count(asset), 1)
+        self.assertIn("requireAssets([previewEditAsset])", registry)
+        self.assertIn('"AlmdinaPlanPreviewEditUX"', registry)
         self.assertLess(registry.index(preview), registry.index(edit))
         self.assertLess(registry.index(edit), registry.index(presenter))
         self.assertLess(registry.index(presenter), registry.index(preview_edit))

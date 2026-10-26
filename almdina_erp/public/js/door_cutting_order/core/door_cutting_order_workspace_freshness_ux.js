@@ -6,6 +6,23 @@
     const STYLE_ID = "dco-workspace-freshness-ux-v1";
     const BANNER_CLASS = "dco-workspace-freshness-banner";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
     }
@@ -60,7 +77,7 @@
                 display:none!important;
             }
             [data-fieldname="order_cost_invoice_html"][data-almdina-cost-freshness="stale"] .dco-invoice-total-card::after{
-                content:"بانتظار التحديث";display:inline-flex;align-items:center;min-height:32px;padding:5px 10px;
+                content:attr(data-dco-pending-update);display:inline-flex;align-items:center;min-height:32px;padding:5px 10px;
                 border-radius:999px;background:#fff3d8;color:#875812;font-size:11px;font-weight:900;
             }
             .dco-special-price-card.is-basis-stale{
@@ -83,8 +100,8 @@
     function staleMessage(reason) {
         if (reason === "special_price_basis_changed") {
             return {
-                title: __("تغيّر أساس تسعير درفة خاصة"),
-                body: __("تم تغيير القياس أو العدد أو نوع القطعة. السعر المعتمد السابق لم يعد صالحًا، ولن يُعامل كقيمة حالية. احفظ الطلب لتثبيت التغيير ثم أدخل السعر الجديد."),
+                title: translate("The special door pricing basis changed"),
+                body: translate("The measurement, quantity, or piece type changed. The previous approved price is no longer valid and will not be treated as a current value. Save the order to keep the change, then enter the new price."),
             };
         }
         if (reason === "plan_recalculation_required") {
@@ -94,29 +111,29 @@
                 const state = typeof job.snapshot === "function" ? job.snapshot(frm) : null;
                 if (state && state.stalled) {
                     return {
-                        title: __("حساب التكلفة ما زال في الانتظار"),
-                        body: __("تم حفظ القياسات. تكلفة الألواح والقص ستتحدث عند بدء العامل الخلفي أو بعد إعادة الحساب اليدوي."),
+                        title: translate("The cost calculation is still waiting"),
+                        body: translate("The measurements were saved. Board and cutting costs will update when the background worker starts or after a manual recalculation."),
                     };
                 }
                 return {
-                    title: __("جاري إعادة حساب خطة القص والتكلفة في الخلفية"),
-                    body: __("تم حفظ التغييرات. تكلفة الألواح والقص لن تعتبر نهائية حتى يكتمل الحساب التلقائي."),
+                    title: translate("Recalculating the cutting plan and cost in the background"),
+                    body: translate("The changes were saved. Board and cutting costs are not final until the automatic calculation finishes."),
                 };
             }
             return {
-                title: __("التكلفة بانتظار خطة القص الجديدة"),
-                body: __("تم حفظ تغييرات تؤثر على توزيع القطع. تكلفة الألواح والقص لن تعتبر نهائية حتى إعادة حساب خطة القص وحفظ النتيجة الجديدة."),
+                title: translate("The cost is waiting for the new cutting plan"),
+                body: translate("Saved changes affect piece placement. Board and cutting costs are not final until the cutting plan is recalculated and the new result is saved."),
             };
         }
         if (reason === "plan_changed") {
             return {
-                title: __("جاري مزامنة التكلفة"),
-                body: __("تم تغيير خطة القص المحفوظة. يتم تحديث التكلفة من النسخة المعتمدة على الخادم."),
+                title: translate("Synchronizing the cost"),
+                body: translate("The saved cutting plan changed. The cost is being updated from the server copy."),
             };
         }
         return {
-            title: __("بيانات التكلفة تحتاج تحديثًا"),
-            body: __("تم تغيير بيانات تؤثر على التكلفة. القيم السابقة معروضة كسياق فقط ولا تعتبر نهائية حتى الحفظ والتحديث."),
+            title: translate("The cost data needs an update"),
+            body: translate("Data that affects the cost changed. Previous values are shown as context only and are not final until they are saved and refreshed."),
         };
     }
 
@@ -138,11 +155,9 @@
         const expected = money(cost.total_cost_usd);
         return {
             title: state.status === "saving"
-                ? __("يتم الآن اعتماد معاينة خطة القص")
-                : __("هناك معاينة خطة غير محفوظة"),
-            body: __("التكلفة الرسمية أدناه تخص الخطة المحفوظة. المعاينة الحالية تستخدم {0} لوحًا وتكلفتها المتوقعة $ {1}. احفظ خطة القص لاعتماد هذه القيم.")
-                .replace("{0}", String(boards))
-                .replace("{1}", expected),
+                ? translate("The cutting plan preview is being applied")
+                : translate("There is an unsaved plan preview"),
+            body: translate("The official cost below belongs to the saved plan. The current preview uses {0} boards and its expected cost is $ {1}. Save the cutting plan to apply these values.", [String(boards), expected]),
         };
     }
 
@@ -150,6 +165,12 @@
         const wrapper = costWrapper(frm);
         if (!wrapper) return;
         wrapper.attr("data-almdina-cost-freshness", String(state && state.freshness || "unknown"));
+        const pendingLabel = state && state.freshness === "stale" ? translate("Waiting for update") : "";
+        wrapper.find(".dco-invoice-total-card").each(function markPending() {
+            const card = $(this);
+            if (pendingLabel) card.attr("data-dco-pending-update", pendingLabel);
+            else card.removeAttr("data-dco-pending-update");
+        });
         wrapper.children(`.${BANNER_CLASS}`).remove();
 
         if (state && state.freshness === "stale") {
@@ -199,11 +220,11 @@
             }
             const previous = Number(piece.special_shape_custom_unit_price_usd || 0);
             const previousText = previous > 0
-                ? ` ${__("السعر السابق")}: $${money(previous)} — `
+                ? ` ${translate("Previous price")}: $${money(previous)} — `
                 : " ";
             card.append(`
                 <div class="dco-special-price-basis-stale-note">
-                    ${frappe.utils.escape_html(previousText + __("لم يعد صالحًا بعد تغيير أساس التسعير، ولن يدخل كقيمة نهائية."))}
+                    ${frappe.utils.escape_html(previousText + translate("It is no longer valid after the pricing basis changed, and it will not be used as a final value."))}
                 </div>
             `);
         });
@@ -220,7 +241,7 @@
                 button.attr("data-almdina-freshness-disabled", "1");
                 button.prop("disabled", true);
                 button.attr("aria-disabled", "true");
-                button.attr("title", __("حدّث التكلفة أولًا قبل طباعة فاتورة نهائية."));
+                button.attr("title", translate("Update the cost before printing a final invoice."));
                 return;
             }
             if (button.attr("data-almdina-freshness-disabled") === "1") {

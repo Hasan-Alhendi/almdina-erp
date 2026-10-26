@@ -33,18 +33,20 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         cls.css = CSS.read_text(encoding="utf-8")
 
     def test_page_is_thin_composition_root(self) -> None:
-        self.assertLessEqual(len(self.page.splitlines()), 100)
+        self.assertLessEqual(len(self.page.splitlines()), 135)
         self.assertIn("frappe.ui.make_app_page", self.page)
         metadata = json.loads(PAGE_JSON.read_text(encoding="utf-8"))
         self.assertEqual(metadata["roles"], [])
         for asset in (
             "api.js",
             "state.js",
+            "catalog_labels.js",
             "view_model.js",
             "renderer.js",
             "interactions.js",
             "dialogs.js",
             "whatsapp_panel.js",
+            "backup_panel.js",
             "controller.js",
         ):
             self.assertIn(f"/assets/almdina_erp/js/factory_production_settings/{asset}", self.page)
@@ -63,6 +65,10 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "create_whatsapp_session",
             "reconnect_whatsapp_session",
             "get_whatsapp_qr",
+            "get_backup_context",
+            "create_backup_now",
+            "test_ssh_connection",
+            "request_restore",
         ):
             self.assertIn(endpoint, self.api)
             for other in (
@@ -128,7 +134,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "aps-legacy",
             "aps-whatsapp",
             "aps-audit",
-            "تعديل هذا القسم",
+            "Edit this section",
         ):
             self.assertIn(marker, self.renderer)
         for forbidden in (
@@ -170,7 +176,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("production_settings_service", self.dialogs)
 
     def test_controller_only_orchestrates_api_state_and_presenters(self) -> None:
-        self.assertLessEqual(len(self.controller.splitlines()), 220)
+        self.assertLessEqual(len(self.controller.splitlines()), 255)
         for dependency in (
             "AlmdinaFactoryProductionSettingsApi",
             "AlmdinaFactoryProductionSettingsState",
@@ -193,8 +199,9 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertNotIn("aps-section", self.controller)
 
     def test_renderer_uses_central_design_system_for_buttons(self) -> None:
-        self.assertIn('class="almdina-ui aps-shell"', self.renderer)
+        self.assertIn('class="almdina-ui aps-shell alm-page alm-page--admin"', self.renderer)
         self.assertIn("AlmdinaUi.button", self.renderer)
+        self.assertIn("AlmdinaUi.badge", self.renderer)
         self.assertNotIn('class="btn btn-primary aps-edit"', self.renderer)
         self.assertIn("/assets/almdina_erp/js/almdina_ui.js", self.page)
 

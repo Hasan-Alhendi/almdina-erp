@@ -13,25 +13,25 @@
     const SECTION_COPY = Object.freeze({
         order_details_section: Object.freeze({
             className: "dco-order-intake-card",
-            title: "بيانات الطلب",
-            subtitle: "معلومات العميل والطلب الأساسية.",
+            title: "Order details",
+            subtitle: "Customer and basic order information.",
         }),
         board_section: Object.freeze({
             className: "dco-material-edge-card",
-            title: "المادة والقشاط",
-            subtitle: "حدد اللوح والقشاط الافتراضي لهذا الطلب.",
+            title: "Material and edge banding",
+            subtitle: "Choose the board and the default edge banding for this order.",
         }),
         pieces_section: Object.freeze({
             className: "dco-measurements-card",
-            title: "قياسات الدرف",
-            subtitle: "أدخل أبعاد وكميات القطع؛ هذا هو سطح العمل الرئيسي للطلب.",
+            title: "Door measurements",
+            subtitle: "Enter piece dimensions and quantities; this is the main work surface for the order.",
         }),
     });
 
     const ALWAYS_VISIBLE_FIELDS = Object.freeze({
-        order_notes: "أضف ملاحظة للطلب…",
-        order_cutting_machine: "اختر آلة القص",
-        edge_color: "أدخل لون القشاط",
+        order_notes: "Add an order note…",
+        order_cutting_machine: "Choose the cutting machine",
+        edge_color: "Enter the edge color",
     });
 
     const INTAKE_ROWS = Object.freeze({
@@ -180,7 +180,6 @@
                     display: flex !important;
                     flex-direction: column !important;
                     flex: 1 1 auto;
-                    direction: rtl;
                     width: 100% !important;
                     max-width: none !important;
                     margin: 0 !important;
@@ -289,7 +288,6 @@
                 }
                 .${ROOT_CLASS} .dco-intake-row {
                     display: grid;
-                    direction: rtl;
                     gap: 10px 16px;
                     align-items: start;
                     width: 100%;
@@ -357,7 +355,6 @@
                 }
                 .${ROOT_CLASS} .dco-material-row {
                     display: grid;
-                    direction: rtl;
                     gap: 10px 14px;
                     align-items: start;
                     width: 100%;
@@ -564,7 +561,7 @@
             body.insertBefore(heading, body.firstChild || null);
         }
         const meta = fieldname === "pieces_section"
-            ? `<span class="dco-order-section-heading__meta">${pieceCount(frm)} قطعة</span>`
+            ? `<span class="dco-order-section-heading__meta">${frappe.utils.escape_html(__("{0} pieces", [pieceCount(frm)]))}</span>`
             : "";
         heading.innerHTML = `
             <div class="dco-order-section-heading__copy">
@@ -775,7 +772,7 @@
         const overridden = current !== defaultColor;
         wrapper.append(`
             <span class="dco-edge-color-origin ${overridden ? "is-override" : ""}">
-                ${frappe.utils.escape_html(__(overridden ? "معدل لهذا الطلب" : "مأخوذ تلقائيًا من نوع القشاط"))}
+                ${frappe.utils.escape_html(__(overridden ? "Custom for this order" : "Taken automatically from the edge type"))}
             </span>
         `);
     }

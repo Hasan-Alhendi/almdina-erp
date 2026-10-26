@@ -19,23 +19,39 @@
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-title,
 .dco-form-presentation-shell .page-head.dco-responsive-head .title-area {
-    flex: 1 1 100% !important;
-    width: 100% !important;
+    /* Share the head row with actions; wrap to a full row when space is tight. */
+    flex: 1 1 14rem !important;
+    width: auto !important;
     min-width: 0 !important;
     max-width: 100% !important;
 }
 
-.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions {
-    flex: 1 1 100% !important;
-    width: 100% !important;
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-title .ellipsis,
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-title .title-text,
+.dco-form-presentation-shell .page-head.dco-responsive-head .title-area .ellipsis {
     min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+.dco-form-presentation-shell .page-head.dco-responsive-head .page-actions {
+    /* Stay in normal flow so title/breadcrumb and actions never paint over each other. */
+    position: static !important;
+    inset: auto !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100%) !important;
     margin: 0 !important;
+    margin-inline-start: auto !important;
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
     flex-wrap: wrap !important;
     gap: 6px !important;
     overflow: visible !important;
+    transform: none !important;
 }
 
 .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions,
@@ -81,8 +97,8 @@
 .dco-operator-form .form-tabs-list,
 .dco-operator-form .dco-sticky-tabs,
 .dco-operator-form .form-tabs-list.dco-sticky-tabs {
-    background: var(--card-bg, #fff) !important;
-    border: 1px solid var(--border-color, #dfe3e8) !important;
+    background: var(--alm-card, #ffffff) !important;
+    border: 1px solid var(--alm-card-border, #e4e8ee) !important;
     border-bottom: 1px solid var(--alm-card-border, #e4e8ee) !important;
     border-radius: var(--alm-radius-card, 16px) !important;
     box-shadow: 0 2px 10px rgba(15, 23, 42, .04) !important;
@@ -119,7 +135,7 @@
     /* Below Bootstrap/Frappe modal backdrop (1050) and modal (1055). */
     z-index: 1020 !important;
     margin: 0 !important;
-    background: var(--card-bg, #fff) !important;
+    background: var(--alm-card, #ffffff) !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -136,7 +152,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 
 .dco-operator-form .dco-sticky-tabs .nav-tabs,
 .dco-operator-form .dco-sticky-tabs .form-tabs-list {
-    background: var(--card-bg, #fff) !important;
+    background: var(--alm-card, #ffffff) !important;
     margin-bottom: 0 !important;
 }
 
@@ -159,7 +175,7 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     border: 1px solid transparent !important;
     border-radius: var(--alm-radius-button, 10px) !important;
     background: transparent !important;
-    color: var(--text-color, #1f272e) !important;
+    color: var(--alm-text-strong, #101828) !important;
     box-shadow: none !important;
 }
 
@@ -209,22 +225,27 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 @media (min-width: 721px) {
     .dco-form-presentation-shell .page-head.dco-responsive-head .standard-items-section {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         gap: 6px !important;
         width: auto !important;
-        flex: 0 1 auto !important;
+        flex: 1 1 auto !important;
         min-width: 0 !important;
+        max-width: calc(100%) !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions,
     .dco-form-presentation-shell .page-head.dco-responsive-head.dco-stable-actions-head .page-actions {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         width: auto !important;
-        max-width: none !important;
-        flex: 0 1 auto !important;
+        max-width: calc(100%) !important;
+        flex: 1 1 auto !important;
+        position: static !important;
+        inset: auto !important;
+        transform: none !important;
+        margin-inline-start: auto !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .custom-actions,
@@ -232,10 +253,12 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .standard-actions,
     .dco-form-presentation-shell .page-head.dco-responsive-head .page-actions .menu-btn-group {
         display: flex !important;
-        flex-wrap: nowrap !important;
+        flex-wrap: wrap !important;
         align-items: center !important;
         width: auto !important;
-        flex: 0 0 auto !important;
+        max-width: calc(100%) !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
     }
 
     .dco-form-presentation-shell .page-head.dco-responsive-head .standard-actions > .search-bar {
@@ -254,8 +277,8 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
-        background: var(--control-bg, var(--alm-secondary-hover-bg, #f4f5f6)) !important;
-        border: 1px solid var(--alm-border, var(--border-color, #dfe3e8)) !important;
+        background: var(--alm-surface-muted, #f4f6f8) !important;
+        border: 1px solid var(--alm-card-border, #e4e8ee) !important;
         border-radius: var(--alm-radius-button, 8px) !important;
         box-shadow: none !important;
         cursor: pointer !important;
@@ -355,10 +378,10 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
         min-height: 38px !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
-        background: var(--control-bg, var(--alm-secondary-hover-bg, #f4f5f6)) !important;
-        border: 1px solid var(--alm-border, var(--border-color, #dfe3e8)) !important;
+        background: var(--alm-surface-muted, #f4f6f8) !important;
+        border: 1px solid var(--alm-card-border, #e4e8ee) !important;
         border-radius: var(--alm-radius-button, 8px) !important;
-        color: var(--alm-secondary-text, var(--text-color, #1f272e)) !important;
+        color: var(--alm-text-strong, #101828) !important;
         box-shadow: none !important;
     }
 
@@ -463,14 +486,20 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     display:flex!important;
     visibility:visible!important;
     opacity:1!important;
-    flex-wrap:nowrap!important;
+    flex-wrap:wrap!important;
     align-items:center!important;
     gap:6px!important;
 }
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
+    position:static!important;
+    inset:auto!important;
+    transform:none!important;
     margin:0!important;
+    margin-inline-start:auto!important;
     justify-content:flex-start!important;
-    flex:0 0 auto!important;
+    flex:1 1 auto!important;
+    width:auto!important;
+    max-width:calc(100%)!important;
 }
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn,
 .dco-form-presentation-shell .page-head.dco-stable-actions-head .custom-actions > .btn-group,
@@ -490,12 +519,15 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 }
 }
 
-/* Measurement toolbar: exactly one centered title and three actions on the left. */
+/* Measurement toolbar: one title plus print / expand / help icon actions in normal flow. */
 .dco-operator-form .dco-fast-entry-toolbar {
     position:relative!important;
     display:flex!important;
+    flex-wrap:wrap!important;
     align-items:center!important;
-    justify-content:center!important;
+    justify-content:flex-start!important;
+    column-gap:9px!important;
+    row-gap:6px!important;
     min-height:42px!important;
     padding:5px 8px!important;
 }
@@ -503,45 +535,50 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     display:none!important;
 }
 .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help {
-    flex:0 1 auto!important;
+    flex:1 1 12rem!important;
     width:auto!important;
     min-width:0!important;
-    margin:0 auto!important;
-    padding:0 116px!important;
+    max-width:calc(100%)!important;
+    margin:0!important;
+    padding:0!important;
     display:flex!important;
     align-items:center!important;
-    justify-content:center!important;
+    justify-content:flex-start!important;
     overflow:hidden!important;
-    text-align:center!important;
+    text-align:start!important;
 }
 .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help > :not(.dco-measurement-title) {
     display:none!important;
 }
 .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-title {
     display:block!important;
+    min-width:0!important;
     max-width:100%!important;
     font-size:14px!important;
     font-weight:850!important;
     line-height:1.25!important;
-    text-align:center!important;
+    text-align:start!important;
     white-space:nowrap!important;
     overflow:hidden!important;
     text-overflow:ellipsis!important;
 }
 .dco-operator-form .dco-fast-entry-toolbar > .dco-measurement-table-actions {
-    position:absolute!important;
-    left:8px!important;
-    top:50%!important;
-    transform:translateY(-50%)!important;
-    order:100!important;
-    direction:ltr!important;
+    position:static!important;
+    inset:auto!important;
+    transform:none!important;
+    order:0!important;
+    direction:inherit!important;
     display:flex!important;
+    flex-wrap:wrap!important;
     align-items:center!important;
     gap:5px!important;
     width:auto!important;
+    max-width:calc(100%)!important;
     margin:0!important;
+    margin-inline-start:auto!important;
     flex:0 0 auto!important;
 }
+.dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help {
     width:32px!important;
     min-width:32px!important;
@@ -552,22 +589,39 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     align-items:center!important;
     justify-content:center!important;
     padding:0!important;
-    border:1px solid var(--border-color,#d8dee5)!important;
+    overflow:hidden!important;
+    border:1px solid var(--alm-card-border,#e4e8ee)!important;
     border-radius:8px!important;
-    background:var(--card-bg,var(--fg-color,#fff))!important;
-    color:var(--text-color,#36414c)!important;
+    background:var(--alm-card,#ffffff)!important;
+    color:var(--alm-text-strong,#101828)!important;
+    box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
+    white-space:nowrap!important;
+}
+.dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button svg {
+    width:16px!important;
+    height:16px!important;
+    display:block!important;
+    fill:none!important;
+    stroke:currentColor!important;
+    stroke-width:1.8!important;
+    stroke-linecap:round!important;
+    stroke-linejoin:round!important;
+    pointer-events:none!important;
+}
+.dco-operator-form .dco-fast-entry-toolbar .dco-input-help {
     font-family:Georgia,serif!important;
     font-size:17px!important;
     font-weight:700!important;
     font-style:italic!important;
     line-height:1!important;
-    box-shadow:0 1px 2px rgba(15,23,42,.035)!important;
 }
+.dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:hover,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help:hover {
     border-color:var(--alm-primary,#172033)!important;
     background:color-mix(in srgb, var(--alm-primary, #172033) 6%, transparent)!important;
     color:var(--alm-primary,#172033)!important;
 }
+.dco-operator-form .dco-fast-entry-toolbar .dco-measurement-table-actions .dco-toolbar-icon-button:focus-visible,
 .dco-operator-form .dco-fast-entry-toolbar .dco-input-help:focus-visible {
     outline:2px solid var(--alm-primary,#172033)!important;
     outline-offset:2px!important;
@@ -586,19 +640,19 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
 }
 @media(min-width:992px){
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
-        position:fixed!important;
-        left:calc(16px + var(--dco-viewport-left-compensation, 0px))!important;
-        right:auto!important;
-        top:10px!important;
+        position:static!important;
+        inset:auto!important;
         transform:none!important;
-        z-index:1025!important;
-        width:max-content!important;
-        max-width:calc(100vw - 32px)!important;
+        z-index:auto!important;
+        width:auto!important;
+        max-width:calc(100%)!important;
+        margin-inline-start:auto!important;
     }
 }
 @media(max-width:991px){
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
         position:static!important;
+        inset:auto!important;
         transform:none!important;
         margin-inline-start:auto!important;
     }
@@ -607,12 +661,15 @@ body.modal-open .dco-operator-form .form-tabs-list.dco-sticky-tabs.dco-tabs-is-f
     .dco-form-presentation-shell .page-head.dco-stable-actions-head .page-actions {
         margin-inline-start:0!important;
         width:100%!important;
-        max-width:100%!important;
+        max-width:calc(100%)!important;
     }
 }
 @media(max-width:560px){
     .dco-operator-form .dco-fast-entry-toolbar .dco-fast-help {
-        padding-inline:108px!important;
+        flex:1 1 100%!important;
+    }
+    .dco-operator-form .dco-fast-entry-toolbar > .dco-measurement-table-actions {
+        margin-inline-start:0!important;
     }
     .dco-operator-form .dco-fast-entry-toolbar .dco-measurement-title {
         font-size:12px!important;

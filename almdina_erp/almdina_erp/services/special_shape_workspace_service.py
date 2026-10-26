@@ -54,7 +54,7 @@ def _order(order_name: str) -> Any:
     require_any_document_capability(
         order,
         (Capability.VIEW_DRAWING_WORKSPACE, Capability.EDIT_SPECIAL_DRAWING),
-        message=_("لا تملك صلاحية فتح مساحة توثيق الدرفة الخاصة لهذا الطلب."),
+        message=_("You do not have permission to open the special door documentation workspace for this order."),
     )
     return order
 
@@ -65,9 +65,9 @@ def _piece(order: Any, piece_name: str) -> Any:
         if str(row.name) != name:
             continue
         if str(row.piece_type or "Regular") != "Special":
-            frappe.throw(_("مساحة التوثيق متاحة للدرف الخاصة فقط."))
+            frappe.throw(_("The documentation workspace is available for special doors only."))
         return row
-    frappe.throw(_("الدرفة المحددة لا تنتمي إلى هذا الطلب."), frappe.DoesNotExistError)
+    frappe.throw(_("The selected door does not belong to this order."), frappe.DoesNotExistError)
 
 
 def _route_active(order: Any) -> bool:
@@ -78,8 +78,10 @@ def _route_active(order: Any) -> bool:
 
 
 def _edit_state(order: Any) -> dict[str, Any]:
+    if str(getattr(order, "status", "") or "").strip() == "Delivered":
+        return {"can_edit": False, "reason": _("Special door documentation cannot be edited after the order is delivered."), "stage": None}
     if not document_has_capability(order, Capability.EDIT_SPECIAL_DRAWING):
-        return {"can_edit": False, "reason": _("ليس لديك صلاحية تعديل توثيق الدرف الخاصة."), "stage": None}
+        return {"can_edit": False, "reason": _("You do not have permission to edit special door documentation."), "stage": None}
     if _route_active(order):
         stage = current_stage_operational_access(order)
         allowed = bool(stage.get("actor_holds_operational_role"))
@@ -88,14 +90,16 @@ def _edit_state(order: Any) -> dict[str, Any]:
         getattr(order, "status", None),
         revision_state=getattr(order, "revision_state", None),
     )
-    return {"can_edit": bool(allowed), "reason": "" if allowed else _("يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك."), "stage": None}
+    return {"can_edit": bool(allowed), "reason": "" if allowed else _("Documentation can be edited when the order state allows it."), "stage": None}
 
 
 def _assert_editable(order: Any) -> None:
+    if str(getattr(order, "status", "") or "").strip() == "Delivered":
+        frappe.throw(_("Special door documentation cannot be edited after the order is delivered."), frappe.PermissionError)
     require_document_capability(
         order,
         Capability.EDIT_SPECIAL_DRAWING,
-        message=_("لا تملك صلاحية تعديل توثيق الدرف الخاصة."),
+        message=_("You are not allowed to edit special door documentation."),
     )
     if _route_active(order):
         require_stage_operational_access(order)
@@ -109,14 +113,14 @@ def _serialize(payload: dict[str, Any]) -> str:
 
 def _validate_canvas(documentation: dict[str, Any], piece: Any) -> None:
     if documentation.get("schema") != DOCUMENTATION_SCHEMA or int(documentation.get("version") or 0) != DOCUMENTATION_VERSION:
-        frappe.throw(_("مساحة التوثيق تقبل العقد الحالي فقط."))
+        frappe.throw(_("The documentation workspace accepts only the current contract."))
     canvas = documentation.get("canvas") or {}
     expected_width = float(piece.width_cm or 0) * 10
     expected_height = float(piece.length_cm or 0) * 10
     if not math.isclose(float(canvas.get("widthMm") or 0), expected_width, rel_tol=0, abs_tol=_DIMENSION_TOLERANCE_MM):
-        frappe.throw(_("عرض التوثيق لا يطابق عرض الدرفة."))
+        frappe.throw(_("The documentation width does not match the door width."))
     if not math.isclose(float(canvas.get("heightMm") or 0), expected_height, rel_tol=0, abs_tol=_DIMENSION_TOLERANCE_MM):
-        frappe.throw(_("طول التوثيق لا يطابق طول الدرفة."))
+        frappe.throw(_("The documentation length does not match the door length."))
 
 
 def _reference_file(file_url: str, piece: Any) -> Any:
@@ -133,7 +137,7 @@ def _reference_file(file_url: str, piece: Any) -> Any:
         or str(file_row.attached_to_doctype or "") != "Door Cutting Order Detail"
         or str(file_row.attached_to_name or "") != str(piece.name)
     ):
-        frappe.throw(_("الصورة المرجعية لا تنتمي إلى هذه الدرفة."), frappe.PermissionError)
+        frappe.throw(_("The reference image does not belong to this door."), frappe.PermissionError)
     return file_row
 
 
@@ -162,20 +166,20 @@ def _decode_image(file_name: str, content_base64: str) -> tuple[str, bytes]:
     extension = os.path.splitext(safe_name)[1].lower()
     signature = _IMAGE_SIGNATURES.get(extension)
     if not safe_name or signature is None:
-        frappe.throw(_("استخدم صورة JPG أو PNG أو WEBP فقط."))
+        frappe.throw(_("Use a JPG, PNG, or WEBP image only."))
     encoded = str(content_base64 or "")
     if "," in encoded and encoded.lstrip().startswith("data:"):
         encoded = encoded.split(",", 1)[1]
     if len(encoded) > ((_MAX_REFERENCE_IMAGE_BYTES * 4) // 3) + 16:
-        frappe.throw(_("حجم الصورة يتجاوز 8 MB."))
+        frappe.throw(_("The image is larger than 8 MB."))
     try:
         content = base64.b64decode(encoded, validate=True)
     except (ValueError, binascii.Error):
-        frappe.throw(_("تعذر قراءة محتوى الصورة."))
+        frappe.throw(_("Could not read the image content."))
     if not content or len(content) > _MAX_REFERENCE_IMAGE_BYTES:
-        frappe.throw(_("حجم الصورة يتجاوز 8 MB."))
+        frappe.throw(_("The image is larger than 8 MB."))
     if not signature(content):
-        frappe.throw(_("محتوى الصورة لا يطابق امتداد الملف."))
+        frappe.throw(_("The image content does not match the file extension."))
     return safe_name, content
 
 
@@ -189,7 +193,7 @@ def get_drawing_workspace(order_name: str, piece_name: str) -> dict[str, Any]:
         "piece": _piece_payload(piece),
         "permissions": {"can_view": True, "can_edit": edit["can_edit"], "edit_reason": edit["reason"]},
         "stage": edit["stage"],
-        "manufacturing_notice": _("هذا توثيق لطلب العميل وليس ملف تصنيع"),
+        "manufacturing_notice": _("This documents the customer order and is not a manufacturing file"),
     }
 
 
@@ -224,7 +228,7 @@ def save_documentation_workspace(
     piece = _piece(order, piece_name)
     documentation = validate_special_shape_drawing(documentation_json)
     if not documentation:
-        frappe.throw(_("أضف توثيقًا قبل الحفظ."))
+        frappe.throw(_("Add documentation before saving."))
     _validate_canvas(documentation, piece)
     _validate_reference_scope(documentation, piece)
 

@@ -24,7 +24,8 @@ def _source(path: Path) -> str:
 
 def test_secure_export_uses_r12_ascii_and_simple_line_entities():
     src = _source(SECURE_DXF)
-    assert 'const DXF_VERSION = "AC1009"' in src
+    assert 'const DXF_VERSION = "AC1015"' in src
+    assert 'pair(100, "AcDbPolyline")' in src
     assert 'pair(0, "LINE")' in src
     assert 'pair(10, dxfNumber(x1))' in src
     assert 'pair(11, dxfNumber(x2))' in src
@@ -77,7 +78,8 @@ def test_autocad_export_button_is_distinct_from_legacy_exporter():
 def test_export_keeps_required_cut_and_preview_layers():
     src = _source(SECURE_DXF)
     assert 'rectangle("SHEET_OUTLINE"' in src
-    assert 'rectangle("CUT_PATH"' in src
+    assert 'line(SAW_CENTER_LAYER' in src
+    assert 'closedPath(FINISHED_GEOMETRY_LAYER' in src
     assert 'const fullWidth = num(sheet.full_width_cm || plan.full_board_width_cm) * 10' in src
     assert 'const pieceWidth = num(piece.w) * 10' in src
     assert 'pair(0, "LINE")' in src
@@ -90,10 +92,8 @@ def test_export_keeps_required_cut_and_preview_layers():
 def test_export_uses_resolved_per_axis_trim_without_rewriting_optimizer_spacing():
     src = _source(SECURE_DXF)
     assert "function appliedTrimMm(plan, sheet)" in src
-    assert "sheet && sheet.applied_trim_width_cm" in src
-    assert "sheet && sheet.applied_trim_length_cm" in src
-    assert "plan.applied_trim_width_cm" in src
-    assert "plan.applied_trim_length_cm" in src
+    assert "function sheetTrimCm(plan, sheet, axis)" in src
+    assert 'axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm"' in src
     assert "const appliedTrim = appliedTrimMm(plan, sheet);" in src
     assert "const x = offsetX + appliedTrim.width + num(piece.x) * 10;" in src
     assert (
@@ -148,7 +148,7 @@ def test_dxf_import_service_is_wired_for_round_trip():
 
 def test_secure_export_declares_exact_layer_table_count():
     src = _source(SECURE_DXF)
-    assert "const DXF_LAYER_COUNT = 8" in src
+    assert "const DXF_LAYER_COUNT = 9" in src
     assert 'pair(2, "LAYER") + pair(70, DXF_LAYER_COUNT)' in src
 
 
@@ -225,7 +225,7 @@ def test_rebuild_autocad_dxf_rejects_non_line_geometry():
     output = io.StringIO()
     source.write(output)
 
-    with pytest.raises(ValueError, match="LINE and TEXT entities only"):
+    with pytest.raises(ValueError, match="unsupported entities: CIRCLE"):
         rebuild_autocad_dxf(output.getvalue().encode("ascii"))
 
 
@@ -285,6 +285,78 @@ def test_rebuild_autocad_dxf_decodes_arabic_text_escapes():
     assert {label.dxf.text for label in labels} == {"دبل القشاط", "دبل كامل"}
     assert all(str(label.dxf.style) == "Tahoma" for label in labels)
     assert all(str(label.dxf.layer) == "text" for label in labels)
+
+def test_exported_linear_dxf_survives_autocad_normalization(tmp_path):
+    import os
+    import subprocess
+
+    client_path = tmp_path / "client.dxf"
+    env = os.environ.copy()
+    env["LINER_DXF_OUT"] = str(client_path)
+    subprocess.run(
+        ["node", str(ROOT / "tests" / "js" / "secure_dxf_topology_export.test.js")],
+        check=True,
+        env=env,
+    )
+    raw = client_path.read_bytes()
+    source = ezdxf.read(io.StringIO(raw.decode("ascii").replace("\r\n", "\n")))
+    source_entities = list(source.modelspace())
+    source_types = [entity.dxftype() for entity in source_entities]
+    assert "LINE" in source_types
+    assert "TEXT" in source_types
+    source_paths = [
+        entity for entity in source_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
+    ]
+    assert len(source_paths) == 1
+    assert source_paths[0].closed is False
+    source_points = [(float(point[0]), float(point[1])) for point in source_paths[0].get_points("xy")]
+    assert len(source_points) == 8
+    source_regions = [
+        entity for entity in source_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    assert source_regions and all(entity.closed for entity in source_regions)
+    assert {entity.dxf.layer for entity in source_entities if entity.dxftype() == "LINE"} >= {
+        "SHEET_OUTLINE",
+        "GEOMETRY",
+    }
+    source_saw_paths = [entity for entity in source_entities if entity.dxf.layer == "CUT_PATH"]
+    assert len(source_saw_paths) == 1
+    assert source_saw_paths[0].dxftype() == "LWPOLYLINE"
+    assert source_saw_paths[0].closed is True
+    source_saw_points = list(source_saw_paths[0].get_points("xy"))
+    assert source_saw_points == [(2.5, 507.5), (507.5, 507.5), (507.5, 2.5), (2.5, 2.5)]
+
+    normalized = rebuild_autocad_dxf(raw)
+    result = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
+    assert result.dxfversion == "AC1024"
+    result_entities = list(result.modelspace())
+    assert len(result_entities) == len(source_entities)
+    result_paths = [
+        entity for entity in result_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
+    ]
+    assert len(result_paths) == 1
+    assert result_paths[0].closed is False
+    assert [(float(point[0]), float(point[1])) for point in result_paths[0].get_points("xy")] == source_points
+    result_regions = [
+        entity for entity in result_entities
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "GEOMETRY"
+    ]
+    assert len(result_regions) == len(source_regions)
+    assert {entity.dxf.layer for entity in result_entities if entity.dxftype() == "LINE"} >= {
+        "SHEET_OUTLINE",
+        "GEOMETRY",
+    }
+    result_saw_paths = [entity for entity in result_entities if entity.dxf.layer == "CUT_PATH"]
+    assert len(result_saw_paths) == 1
+    assert result_saw_paths[0].dxftype() == "LWPOLYLINE"
+    assert result_saw_paths[0].closed is True
+    assert list(result_saw_paths[0].get_points("xy")) == source_saw_points
+    assert any(entity.dxftype() == "TEXT" for entity in result_entities)
+    assert result.audit().has_errors is False
+
 
 def test_secure_dxf_export_asset_is_cache_busted():
     registry = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cutting_order_workspace_asset_registry.js"

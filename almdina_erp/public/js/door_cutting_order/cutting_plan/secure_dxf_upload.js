@@ -7,6 +7,17 @@
     const UPLOAD_METHOD =
         "almdina_erp.almdina_erp.services.shop_floor_service.upload_production_dxf";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        return String(message == null ? "" : message);
+    }
+
     function activateUploadedPlan(frm) {
         if (!frm) return;
         frm.__almdina_active_plan_tab = "Custom";
@@ -18,7 +29,7 @@
 
     function uploadProductionDxf(frm) {
         if (!frm || frm.is_new()) {
-            frappe.msgprint(__("احفظ الطلب قبل رفع ملف DXF."));
+            frappe.msgprint(translate("Save the order before uploading a DXF file."));
             return null;
         }
 
@@ -29,6 +40,11 @@
 
         const orderName = frm.doc.name;
         const replacing = Boolean(frm.doc.production_dxf);
+        const context = window.AlmdinaDocumentContext;
+        const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
+        const ownsUpload = () => context
+            ? Boolean(owner && typeof context.isCurrent === "function" && context.isCurrent(frm, owner))
+            : Boolean(frm.doc && frm.doc.name === orderName);
 
         // Security contract: create a brand-new private File without a document
         // attachment. The server owns authorization, geometry validation, and the
@@ -47,19 +63,17 @@
                         file_url: file.file_url,
                     },
                     freeze: true,
-                    freeze_message: __("جاري التحقق من ملف DXF وتطبيق الخطة..."),
+                    freeze_message: translate("Validating the DXF file and applying the plan..."),
                 }).then(() => {
+                    if (!ownsUpload()) return null;
                     frappe.show_alert({
                         message: replacing
-                            ? __("تم استبدال ملف DXF والتحقق منه.")
-                            : __("تم رفع ملف DXF والتحقق منه."),
+                            ? translate("The DXF file was replaced and validated.")
+                            : translate("The DXF file was uploaded and validated."),
                         indicator: "green",
                     }, 5);
-                    if (frm.doc && frm.doc.name === orderName) {
-                        activateUploadedPlan(frm);
-                        return frm.reload_doc();
-                    }
-                    return null;
+                    activateUploadedPlan(frm);
+                    return frm.reload_doc();
                 });
             },
         });

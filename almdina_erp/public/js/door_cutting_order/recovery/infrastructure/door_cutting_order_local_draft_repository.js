@@ -6,7 +6,7 @@
 
     const RECORD_SCHEMA_VERSION = 2;
     const LEGACY_RECORD_SCHEMA_VERSION = 1;
-    const DEFAULT_MAX_PAYLOAD_BYTES = 512 * 1024;
+    const DEFAULT_MAX_PAYLOAD_BYTES = 1792 * 1024;
     const TARGET_DOCTYPE = "Door Cutting Order";
     const OFFICIAL_SAVE_STATES = Object.freeze({
         ACTIVE: "ACTIVE",
@@ -106,7 +106,10 @@
         }
         const gateway = options.gateway || indexed.createGateway(options);
         const clock = typeof options.clock === "function" ? options.clock : () => new Date().toISOString();
-        const maxPayloadBytes = Math.max(1024, Number(options.maxPayloadBytes) || DEFAULT_MAX_PAYLOAD_BYTES);
+        const configuredLimit = Number(options.maxPayloadBytes);
+        const maxPayloadBytes = Number.isFinite(configuredLimit) && configuredLimit >= 1024
+            ? Math.floor(configuredLimit)
+            : DEFAULT_MAX_PAYLOAD_BYTES;
         const TextEncoderImpl = options.TextEncoder || window.TextEncoder;
 
         function payloadBytes(serialized) {

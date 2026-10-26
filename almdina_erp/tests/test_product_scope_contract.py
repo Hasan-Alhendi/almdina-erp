@@ -243,7 +243,6 @@ class TestProductScopeContract(unittest.TestCase):
 
         navigation_owners = (
             ROOT / "public" / "js" / "shared_shell.js",
-            ROOT / "public" / "js" / "arabic_operator_ui.js",
             ROOT / "almdina_erp" / "application" / "security" / "surface_access.py",
             ROOT / "almdina_erp" / "application" / "security" / "workspace_visibility.py",
             *sorted((ROOT / "almdina_erp" / "workspace").rglob("*.json")),

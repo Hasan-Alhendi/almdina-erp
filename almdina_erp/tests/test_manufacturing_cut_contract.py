@@ -235,6 +235,54 @@ def test_full_door_double_expands_manufacturing_copies_without_changing_stored_q
     ]
 
 
+def test_plan_fingerprint_tracks_glass_type_and_margin_without_staling_empty_rows():
+    order = _order(_piece())
+    plan = _plan()
+    baseline = plan_input_fingerprint(order, plan)
+
+    order.pieces[0].glass_margin_mm = 0
+    assert plan_input_fingerprint(order, plan) == baseline
+    order.pieces[0].glass_margin_mm = None
+    assert plan_input_fingerprint(order, plan) == baseline
+    assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+        order.pieces[0]
+    )
+
+    order.pieces[0].glass_margin_mm = 65
+    assert plan_input_fingerprint(order, plan) == baseline
+    assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+        order.pieces[0]
+    )
+    for piece_type in ("Clipped Corner", "L-Shaped Corner", "Special"):
+        order.pieces[0].piece_type = piece_type
+        order.pieces[0].glass_margin_mm = 65
+        with_unused_margin = plan_input_fingerprint(order, plan)
+        assert "glass_margin_mm" not in FrappeCutDimensionPlanAdapter.piece_row_as_dict(
+            order.pieces[0]
+        )
+        order.pieces[0].glass_margin_mm = None
+        assert plan_input_fingerprint(order, plan) == with_unused_margin
+        assert with_unused_margin != baseline
+
+    order.pieces[0].piece_type = "Regular"
+    order.pieces[0].glass_margin_mm = None
+    assert plan_input_fingerprint(order, plan) == baseline
+
+    order.pieces[0].piece_type = "Glass"
+    typed = plan_input_fingerprint(order, plan)
+    assert typed != baseline
+
+    order.pieces[0].glass_margin_mm = 65
+    with_margin = plan_input_fingerprint(order, plan)
+    assert with_margin != typed
+    assert FrappeCutDimensionPlanAdapter.piece_row_as_dict(order.pieces[0])[
+        "glass_margin_mm"
+    ] == 65
+
+    order.pieces[0].glass_margin_mm = 66
+    assert plan_input_fingerprint(order, plan) != with_margin
+
+
 def test_plan_fingerprint_changes_when_persisted_cut_dimension_changes():
     order = _order(_piece(cut_width_cm=59.9))
     first = plan_input_fingerprint(order, _plan())
@@ -270,6 +318,15 @@ def test_plan_fingerprint_changes_when_qty_or_board_size_changes():
 
     order.pieces[0].qty = 1
     order.full_board_width_mm = 1830
+    assert plan_input_fingerprint(order, plan) != first
+
+
+def test_plan_fingerprint_changes_when_full_door_double_changes_physical_quantity():
+    order = _order(_piece(qty=2, extra_full_door_double=0))
+    plan = _plan()
+    first = plan_input_fingerprint(order, plan)
+
+    order.pieces[0].extra_full_door_double = 1
     assert plan_input_fingerprint(order, plan) != first
 
 
@@ -340,14 +397,14 @@ def test_strict_dxf_import_proxy_preserves_extra_overlay_addon_flags():
         width_deduction_mm=Decimal("0"),
         length_deduction_mm=Decimal("1.000"),
         allow_rotation=0,
-        piece_type="Extra",
+        piece_type="Regular",
         qty=1,
         side_profiles=(),
     )
     proxy = _proxy_order(
         _order(
             _piece(
-                piece_type="Extra",
+                piece_type="Regular",
                 extra_liner=1,
                 extra_back_groove=1,
                 extra_recessed_handle_cutout=1,

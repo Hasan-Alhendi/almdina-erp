@@ -8,7 +8,14 @@ from typing import Any
 
 from .evaluation import evaluate_plan, validate_plan
 from .kerf_layout import pack_with_stable_kerf
-from .primitives import num, prune_free_rects, split_free_rect
+from .glass_opening_dxf import record_glass_opening
+from .primitives import (
+    double_edge_metadata,
+    liner_metadata,
+    num,
+    prune_free_rects,
+    split_free_rect,
+)
 from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
 
 AUTO_FAST = "Auto"
@@ -183,7 +190,11 @@ def _largest_reusable_free_area(
 
 
 def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
-    """Estimate distinct straight cut lines and their total span."""
+    """Estimate distinct straight cut lines and their total span.
+
+    Pieces nested inside a Glass opening are cut from the opening waste, not as
+    additional free-board saw lines, so they are excluded from this estimate.
+    """
 
     total_lines = 0
     total_length = 0.0
@@ -194,6 +205,8 @@ def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
         vertical: dict[float, list[tuple[float, float]]] = {}
         horizontal: dict[float, list[tuple[float, float]]] = {}
         for piece in sheet.get("pieces") or []:
+            if piece.get("glass_host_piece_id") not in (None, ""):
+                continue
             x = num(piece.get("x"))
             y = num(piece.get("y"))
             width = num(piece.get("w"))
@@ -750,15 +763,19 @@ def _solve_cp_sat(
             "rotated": rotated,
             "area_m2": num(piece.get("area_m2")),
             "notes": piece.get("notes") or "",
+            **liner_metadata(piece),
+            **double_edge_metadata(piece),
             "edge_long_right": 1 if piece.get("edge_long_right") else 0,
             "edge_long_left": 1 if piece.get("edge_long_left") else 0,
             "edge_width_top": 1 if piece.get("edge_width_top") else 0,
             "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
             "edge_break": 1 if piece.get("edge_break") else 0,
+            "edge_break_only": 1 if piece.get("edge_break_only") else 0,
             "edge_type": piece.get("edge_type") or "",
             "edge_rate_usd": num(piece.get("edge_rate_usd")),
             "edge_cost_usd": num(piece.get("edge_cost_usd")),
         }
+        record_glass_opening(placed, piece, rotated=rotated)
         sheets_by_bin.setdefault(chosen, []).append(placed)
 
     sheets: list[dict[str, Any]] = []
@@ -907,7 +924,7 @@ def optimize_plan(
     }
 
     if mode == AUTO_FAST:
-        return auto_fast(
+        baseline = auto_fast(
             pieces,
             board_w_cm,
             board_h_cm,
@@ -915,8 +932,8 @@ def optimize_plan(
             machine_type,
             **metric_kwargs,
         )
-    if mode == AUTO_PRO:
-        return auto_pro(
+    elif mode == AUTO_PRO:
+        baseline = auto_pro(
             pieces,
             board_w_cm,
             board_h_cm,
@@ -924,8 +941,8 @@ def optimize_plan(
             machine_type,
             **metric_kwargs,
         )
-    if mode == DEEP_SEARCH:
-        return deep_search(
+    elif mode == DEEP_SEARCH:
+        baseline = deep_search(
             pieces,
             board_w_cm,
             board_h_cm,
@@ -934,8 +951,8 @@ def optimize_plan(
             time_limit_sec,
             **metric_kwargs,
         )
-    if mode == OPTIMAL_SEARCH:
-        return optimal_search(
+    elif mode == OPTIMAL_SEARCH:
+        baseline = optimal_search(
             pieces,
             board_w_cm,
             board_h_cm,
@@ -945,23 +962,35 @@ def optimize_plan(
             exact_piece_limit,
             **metric_kwargs,
         )
+    else:
+        baseline = run_single_method(
+            pieces,
+            board_w_cm,
+            board_h_cm,
+            kerf_cm,
+            mode,
+        )
+        baseline = enrich_plan_metrics(
+            baseline,
+            mode,
+            machine_type,
+            **metric_kwargs,
+        )
+        baseline["optimization_mode"] = "Manual"
+        baseline["attempts"] = 1
 
-    manual = run_single_method(
+    from .glass_opening_nesting import nest_glass_openings
+
+    return nest_glass_openings(
+        baseline,
         pieces,
         board_w_cm,
         board_h_cm,
         kerf_cm,
-        mode,
-    )
-    manual = enrich_plan_metrics(
-        manual,
-        mode,
-        machine_type,
+        machine_type=machine_type,
+        time_limit_sec=time_limit_sec,
         **metric_kwargs,
     )
-    manual["optimization_mode"] = "Manual"
-    manual["attempts"] = 1
-    return manual
 
 
 __all__ = [

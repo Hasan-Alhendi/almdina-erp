@@ -6,9 +6,9 @@
     const STYLE_ID = "dco-cutting-machine-inline-row-css";
     const OPTIONS = Object.freeze([
         Object.freeze({ value: "CNC", label: "CNC" }),
-        Object.freeze({ value: "مشرحة", label: "مشرحة" }),
+        Object.freeze({ value: "مشرحة", label: "Panel Saw" }),
     ]);
-    const REQUIRED_MESSAGE = "يجب اختيار نوع آلة القص";
+    const REQUIRED_MESSAGE = "Select the cutting machine type";
 
     function fieldNode(frm) {
         const field = frm && frm.fields_dict && frm.fields_dict.order_cutting_machine;
@@ -209,7 +209,7 @@
             group = document.createElement("div");
             group.className = "dco-cutting-machine-radios";
             group.setAttribute("role", "radiogroup");
-            group.setAttribute("aria-label", __("نوع آلة القص"));
+            group.setAttribute("aria-label", __("Cutting machine type"));
             group.setAttribute("aria-required", "true");
             OPTIONS.forEach((option) => {
                 const label = document.createElement("label");

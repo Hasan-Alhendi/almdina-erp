@@ -32,10 +32,10 @@ def test_shop_floor_polish_has_clear_arabic_hierarchy_and_feedback_states() -> N
     ):
         assert marker in renderer
 
-    assert "متابعة مراحل الإنتاج" in renderer
-    assert "طلباتك التشغيلية" in renderer
-    assert "معلومات المستخدم" in renderer
-    assert "تعذر تحديث صالة الإنتاج" in renderer
+    assert "Follow production stages" in renderer
+    assert "Your operational orders" in renderer
+    assert "User information" in renderer
+    assert "Could not refresh the shop floor" in renderer
 
 
 def test_shop_floor_polish_keeps_actionable_and_completed_work_visually_distinct() -> None:
@@ -45,7 +45,8 @@ def test_shop_floor_polish_keeps_actionable_and_completed_work_visually_distinct
     assert 'terminal || completed ? "" : quickActionHtml(row, mode)' in renderer
     assert 'completed ? " is-completed" : ""' in renderer
     assert ".almdina-sf-order-card.is-completed" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: #dcfce7 !important;" not in css
     assert ".almdina-sf-list-title.is-completed" in css
     assert '.almdina-sf-order-card[data-status="Pending"]' in css
     assert '.almdina-sf-order-card[data-status="In Progress"]' in css
@@ -71,7 +72,7 @@ def test_shop_floor_polish_is_dense_responsive_touch_safe_and_accessible() -> No
     assert "overscroll-behavior-inline: contain" in css
     assert "-webkit-overflow-scrolling: touch" in css
     assert 'attrs: { "aria-label": `${action.label}' in renderer
-    assert 'attrs: { "aria-label": `${__("فتح الطلب")}' in renderer
+    assert 'attrs: { "aria-label": `${translate("Open the order")}' in renderer
 
 
 def test_shop_floor_polish_moves_page_visuals_out_of_inline_style_attributes() -> None:

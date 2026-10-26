@@ -6,6 +6,68 @@
 	const SIMULATE_METHOD =
 		"almdina_erp.almdina_erp.services.order_plan_permission_service.simulate_optimizer_plan";
 
+	// Compatibility: historical department value, not UI copy.
+	const DRAWING_DEPARTMENT = "رسم";
+	const KNOWN_STRATEGY_KEYS = new Set([
+		"Auto",
+		"Auto Pro",
+		"Deep Search",
+		"Optimal Search",
+		"MaxRects Best Short Side",
+		"MaxRects Best Area",
+		"MaxRects Bottom Left",
+		"MaxRects Contact Point",
+		"MaxRects Width",
+		"MaxRects Length",
+		"Shelf Horizontal",
+		"Shelf Vertical",
+		"Shelf First Fit",
+		"Shelf Next Fit",
+		"Guillotine Short Axis",
+		"Guillotine Long Axis",
+		"Guillotine Best Area Fit",
+		"Guillotine Best Short Side Fit",
+		"Guillotine Best Long Side Fit",
+		"Skyline Bottom Left",
+		"Skyline Best Fit",
+	]);
+
+	function translate(message, replacements) {
+		const locale = window.AlmdinaLocale;
+		if (locale && typeof locale.translate === "function") {
+			return locale.translate(message, replacements);
+		}
+		if (typeof __ === "function") {
+			return replacements === undefined ? __(message) : __(message, replacements);
+		}
+		let text = String(message == null ? "" : message);
+		if (Array.isArray(replacements)) {
+			replacements.forEach((value, index) => {
+				text = text.split(`{${index}}`).join(String(value));
+			});
+		}
+		return text;
+	}
+
+	function uiDirection() {
+		const locale = window.AlmdinaLocale;
+		if (locale && typeof locale.direction === "function") {
+			const value = locale.direction();
+			if (value === "ltr" || value === "rtl") return value;
+		}
+		const root = typeof document !== "undefined" ? document.documentElement : null;
+		const dir = root && root.getAttribute("dir");
+		return dir === "ltr" ? "ltr" : "rtl";
+	}
+
+	function knownStrategyText(methodKey, methodLabel) {
+		const key = String(methodKey ?? "").trim();
+		if (KNOWN_STRATEGY_KEYS.has(key)) return translate(key);
+		const label = String(methodLabel ?? "").trim();
+		if (label) return label;
+		return key || "—";
+	}
+
 	const PACKING_MODES = [
 		"Auto Pro",
 		"Auto",
@@ -43,7 +105,7 @@
 
 	function isDrawingStage(frm) {
 		if (frm.doc.status === "At Drawing") return true;
-		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === "رسم";
+		return frm.__almdina_stage_type === "Drawing" || frm.doc.current_department === DRAWING_DEPARTMENT;
 	}
 
 	function holdsStageOperationalRole(frm) {
@@ -69,7 +131,7 @@
 				&& !String(frm.doc.current_production_stage || "").trim();
 			const isDrawing = status === "At Drawing"
 				|| frm.__almdina_stage_type === "Drawing"
-				|| frm.doc.current_department === "رسم";
+				|| frm.doc.current_department === DRAWING_DEPARTMENT;
 			if (!preDispatchDraft && !isDrawing) return false;
 		}
 		if (frm.doc.current_production_stage) return holdsStageOperationalRole(frm);
@@ -105,8 +167,10 @@
 			detail &&
 			meta &&
 			can("recalculate_plan") &&
-			detail.actor_holds_operational_role &&
-			isAssignedToCurrentUser(detail.current_assignee) &&
+			(detail.actor_can_operate_current_stage === true
+				|| (detail.actor_can_operate_current_stage === undefined
+					&& detail.actor_holds_operational_role
+					&& isAssignedToCurrentUser(detail.current_assignee))) &&
 			!detail.approved_plan
 		);
 	}
@@ -161,44 +225,44 @@
 		const wastePercent = total > 0 ? ((waste / total) * 100).toFixed(1) : "0.0";
 		return `
 			<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:12px">
-				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الألواح")}</span><b style="font-size:19px">${sheets.length}</b></div>
-				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الهدر")}</span><b style="font-size:19px">${wastePercent}%</b></div>
-				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${__("الخوارزمية")}</span><b style="font-size:13px">${escape(plan.method_label || plan.optimization_mode || "-")}</b></div>
+				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${escape(translate("Sheets"))}</span><b style="font-size:19px;direction:ltr;">${sheets.length}</b></div>
+				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${escape(translate("Plan waste"))}</span><b style="font-size:19px;direction:ltr;">${wastePercent}%</b></div>
+				<div class="frappe-card" style="padding:10px 12px"><span style="display:block;font-size:11px;color:var(--text-muted)">${escape(translate("Algorithm"))}</span><b style="font-size:13px">${escape(knownStrategyText(plan.method_key || plan.optimization_mode, plan.method_label || plan.optimization_mode || "—"))}</b></div>
 			</div>`;
 	}
 
 	function buildDrawingPanelHtml(plan, packingMode, mayEditSettings, previewOnly = false) {
 		const disabled = mayEditSettings ? "" : "disabled";
 		const options = PACKING_MODES.map(
-			(mode) => `<option value="${escape(mode)}" ${packingMode === mode ? "selected" : ""}>${escape(__(mode))}</option>`
+			(mode) => `<option value="${escape(mode)}" ${packingMode === mode ? "selected" : ""}>${escape(translate(mode))}</option>`
 		).join("");
-		const title = previewOnly ? __("تجربة خوارزميات القص") : __("محرك خطة الرسم");
+		const title = previewOnly ? translate("Try cutting algorithms") : translate("Drawing plan engine");
 		const intro = previewOnly
-			? __("جرّب أي خوارزمية وقارن النتيجة. هذه معاينة فقط ولا تغيّر خطة الطلب المحفوظة.")
-			: __("إعادة الحساب وتغيير الخوارزمية يتبعان صلاحيات خطة القص، ولا يحتاجان صلاحية التكلفة.");
+			? translate("Try any algorithm and compare the result. This is a preview only and does not change the saved order plan.")
+			: translate("Recalculation and algorithm changes follow cutting plan permissions and do not need the cost permission.");
 		const badge = previewOnly
-			? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,159,10,.12);color:#a15c00;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">${__("معاينة فقط")}</span>`
-			: `<span style="display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);color:var(--alm-primary,#172033);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${__("إعادة الحساب متاحة")}</span>`;
+			? `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,159,10,.12);color:#a15c00;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">${escape(translate("Preview only"))}</span>`
+			: `<span style="display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent);color:var(--alm-primary,#172033);border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800">✓ ${escape(translate("Recalculation is available"))}</span>`;
 		return `
-			<div class="almdina-ui dco-drawing-plan-panel" style="direction:rtl;border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
+			<div class="almdina-ui dco-drawing-plan-panel" dir="${escape(uiDirection())}" style="border:1px solid var(--border-color,#dfe3e8);border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--card-bg,#fff),var(--subtle-fg,#f8fafc));margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,.035)">
 				<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
-					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${title}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${intro}</p></div>
+					<div><h4 style="margin:0 0 5px;font-size:16px;font-weight:900">${escape(title)}</h4><p style="margin:0;color:var(--text-muted,#6b7280);font-size:12px">${escape(intro)}</p></div>
 					${badge}
 				</div>
 				<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
 					<select class="form-control input-sm" style="max-width:240px;min-height:36px" data-drawing-mode ${disabled}>${options}</select>
 					${uiButton({
-						label: previewOnly ? __("عرض النتيجة") : __("إعادة الحساب"),
+						label: previewOnly ? translate("Show the result") : translate("Recalculate plan"),
 						variant: "primary",
 						size: "btn-sm",
 						className: "",
 						attrs: { "data-drawing-recalc": "" },
 					})}
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro" ${disabled}>${__("أفضل توزيع متقدم")}</button>
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search" ${disabled}>${__("بحث معمق")}</button>
-					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search" ${disabled}>${__("بحث أمثل")}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Auto Pro" ${disabled}>${escape(translate("Auto Pro"))}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Deep Search" ${disabled}>${escape(translate("Deep Search"))}</button>
+					<button type="button" class="btn btn-default btn-sm" data-drawing-mode-btn="Optimal Search" ${disabled}>${escape(translate("Optimal Search"))}</button>
 				</div>
-				${mayEditSettings ? "" : `<div class="text-muted" style="font-size:11px;margin-top:8px">${__("تغيير الخوارزمية يحتاج صلاحية «تعديل خوارزمية القص». يمكنك إعادة الحساب بالخوارزمية الحالية.")}</div>`}
+				${mayEditSettings ? "" : `<div class="text-muted" style="font-size:11px;margin-top:8px">${escape(translate("Changing the algorithm needs the “Edit cutting algorithm” permission. You can recalculate with the current algorithm."))}</div>`}
 				${summaryCards(plan)}
 			</div>`;
 	}
@@ -220,10 +284,10 @@
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
 				args: recalculationArgs(orderName, detail, packingMode, mayEditSettings),
 				freeze: true,
-				freeze_message: __("جاري حساب خطة القص..."),
+				freeze_message: translate("Calculating the cutting plan..."),
 			})
 			.then((response) => {
-				frappe.show_alert({ message: __("تم تحديث خطة النظام."), indicator: "green" });
+				frappe.show_alert({ message: translate("The system plan was updated."), indicator: "green" });
 				if (typeof onSuccess === "function") {
 					return onSuccess(response.message || {}, packingMode);
 				}
@@ -240,7 +304,7 @@
 				method: SIMULATE_METHOD,
 				args: recalculationArgs(frm.doc.name, frm.doc, mode, true),
 				freeze: true,
-				freeze_message: __("جاري تجربة الخوارزمية..."),
+				freeze_message: translate("Trying the algorithm..."),
 			})
 			.then((r) => {
 				if (!context.isCurrent(frm, identity)) return r.message;
@@ -248,7 +312,7 @@
 					packing_mode: mode,
 				});
 				frappe.show_alert({
-					message: __("هذه نتيجة معاينة. لم يطرأ أي تغيير على الطلب."),
+					message: translate("This is a preview result. The order was not changed."),
 					indicator: "orange",
 				});
 				renderPanel(frm);
@@ -273,11 +337,11 @@
 				method: "almdina_erp.almdina_erp.services.shop_floor_service.recalculate_drawing_plan",
 				args: recalculationArgs(orderName, frm.doc, packingMode, mayEditSettings),
 				freeze: true,
-				freeze_message: __("جاري حساب خطة القص..."),
+				freeze_message: translate("Calculating the cutting plan..."),
 			})
 			.then((r) => {
 				if (!context.isCurrent(frm, identity)) return r.message;
-				frappe.show_alert({ message: __("تم تحديث خطة النظام."), indicator: "green" });
+				frappe.show_alert({ message: translate("The system plan was updated."), indicator: "green" });
 				return frm.reload_doc().then(() => {
 					if (revisionUx && typeof revisionUx.restorePrimaryAfterPlanEngine === "function") {
 						revisionUx.restorePrimaryAfterPlanEngine(frm, wasEditing);

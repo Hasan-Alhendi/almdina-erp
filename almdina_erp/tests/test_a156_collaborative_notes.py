@@ -123,8 +123,8 @@ def test_a156_collaboration_actions_are_explicit_assignable_capabilities() -> No
     assert add_definition.custom is True
     assert important_definition.custom is True
 
-    assert CAPABILITY_PRESENTATION[Capability.ADD_INTERNAL_NOTE]["label"] == "إضافة ملاحظة داخلية"
-    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["label"] == "تعيين الملاحظة المهمة"
+    assert CAPABILITY_PRESENTATION[Capability.ADD_INTERNAL_NOTE]["label"] == "Add internal note"
+    assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["label"] == "Set important note"
     assert CAPABILITY_PRESENTATION[Capability.MANAGE_IMPORTANT_NOTE]["risk"] == "sensitive"
 
     normalized = normalize_capability_state({Capability.ADD_INTERNAL_NOTE: True})
@@ -246,12 +246,14 @@ def test_a156_notes_panel_is_reusable_rtl_and_independent_from_form_save() -> No
     css = source(CSS)
 
     assert '"/assets/almdina_erp/js/notes/notes_panel.js"' in manifest
-    assert '"/assets/almdina_erp/css/notes.css"' in manifest
+    assert '"/assets/almdina_erp/css/notes.css?v=1"' in manifest
     assert 'const MAX_LENGTH = 500' in panel
     assert 'data-notes-tab="order"' in panel
     assert 'data-notes-tab="customer"' in panel
-    assert "تعيين كملاحظة مهمة" in panel
-    assert "الملاحظة المهمة الحالية" in panel
+    assert '__("Mark as important")' in panel
+    assert '__("Current important note")' in panel
+    assert "تعيين كملاحظة مهمة" not in panel
+    assert "الملاحظة المهمة الحالية" not in panel
     assert 'dir="rtl"' in panel
     assert "state.pendingRequest" in panel
     assert "requestIdFor(key)" in panel

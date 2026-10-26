@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+    canonical_glass_margin_mm,
+)
+
 @dataclass(frozen=True, slots=True)
 class PlanBoardInput:
     item: str
@@ -38,6 +42,7 @@ class PlanPieceInput:
     clipped_corner_position: str
     clipped_corner_width_cm: float
     clipped_corner_length_cm: float
+    glass_margin_mm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +59,7 @@ class PlanMetadataPiece:
     area_m2: float
     notes: str
     edge_break: int = 0
+    edge_break_only: int = 0
     edge_long_type: str = ""
     edge_width_type: str = ""
     edge_long_rate_usd: float = 0
@@ -64,6 +70,8 @@ class PlanMetadataPiece:
     edge_long_left_type: str = ""
     edge_width_top_type: str = ""
     edge_width_bottom_type: str = ""
+    extra_double: int = 0
+    extra_double_reference_sides: str = ""
 
 
 def build_plan_input_payload(
@@ -95,20 +103,31 @@ def build_plan_input_payload(
             "min_remnant_area_m2": optimizer.min_remnant_area_m2,
         },
         "pieces": [
-            {
-                "index": piece.index,
-                "width_cm": piece.width_cm,
-                "length_cm": piece.length_cm,
-                "qty": piece.qty,
-                "allow_rotation": piece.allow_rotation,
-                "piece_type": piece.piece_type,
-                "clipped_corner_position": piece.clipped_corner_position,
-                "clipped_corner_width_cm": piece.clipped_corner_width_cm,
-                "clipped_corner_length_cm": piece.clipped_corner_length_cm,
-            }
+            _plan_piece_payload(piece)
             for piece in pieces
         ],
     }
+
+
+def _plan_piece_payload(piece: PlanPieceInput) -> dict[str, Any]:
+    payload = {
+        "index": piece.index,
+        "width_cm": piece.width_cm,
+        "length_cm": piece.length_cm,
+        "qty": piece.qty,
+        "allow_rotation": piece.allow_rotation,
+        "piece_type": piece.piece_type,
+        "clipped_corner_position": piece.clipped_corner_position,
+        "clipped_corner_width_cm": piece.clipped_corner_width_cm,
+        "clipped_corner_length_cm": piece.clipped_corner_length_cm,
+    }
+    glass_margin_mm = canonical_glass_margin_mm(
+        piece.glass_margin_mm,
+        piece.piece_type,
+    )
+    if glass_margin_mm is not None:
+        payload["glass_margin_mm"] = glass_margin_mm
+    return payload
 
 
 def build_plan_metadata_payload(
@@ -124,11 +143,14 @@ def build_plan_metadata_payload(
             {
                 "index": piece.index,
                 "piece_type": piece.piece_type,
+                "extra_double": piece.extra_double,
+                "extra_double_reference_sides": piece.extra_double_reference_sides,
                 "edge_long_right": piece.edge_long_right,
                 "edge_long_left": piece.edge_long_left,
                 "edge_width_top": piece.edge_width_top,
                 "edge_width_bottom": piece.edge_width_bottom,
                 "edge_break": piece.edge_break,
+                "edge_break_only": piece.edge_break_only,
                 "edge_long_right_type": (
                     piece.edge_long_right_type
                     or piece.edge_long_type

@@ -6,6 +6,7 @@ from typing import Sequence
 from .dxf_geometry import (
     EPSILON,
     bbox,
+    is_axis_aligned_rectangle,
     point_in_polygon,
     polygon_distance,
     polygons_overlap,
@@ -15,6 +16,16 @@ from .piece_cut_dimensions import dimensions_match_exact
 
 Point = tuple[float, float]
 Polygon = tuple[Point, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ForbiddenRotationEvidence:
+    """A minimum, globally feasible set of confirmed forbidden rotations."""
+
+    rotation_count: int
+    source_piece_nos: tuple[int, ...]
+    measurements_mm: tuple[tuple[float, float, float, float], ...]
+    expected_piece_index: int | None = None
 
 
 class DxfTopologyError(ValueError):
@@ -31,6 +42,7 @@ class DxfTopologyError(ValueError):
         expected_height: float | None = None,
         actual_width: float | None = None,
         actual_height: float | None = None,
+        rotation_evidence: Sequence[ForbiddenRotationEvidence] = (),
     ) -> None:
         self.code = code
         self.first_key = first_key
@@ -40,6 +52,7 @@ class DxfTopologyError(ValueError):
         self.expected_height = expected_height
         self.actual_width = actual_width
         self.actual_height = actual_height
+        self.rotation_evidence = tuple(rotation_evidence)
         super().__init__(code)
 
 
@@ -55,9 +68,23 @@ class ExpectedPieceEvidence:
     height: float
     allow_rotation: bool
     # Shape freedom is distinct from manufacturing-envelope freedom. Special
-    # pieces may use arbitrary valid polygons, but their bbox must still match
-    # the persisted cut dimensions below.
+    # pieces may use any valid non-rectangular polygon, but their bbox must
+    # still match the persisted cut dimensions below.
     arbitrary_outline: bool = False
+    # Empty leaves the historical dimension-only match. Regular requires an
+    # axis-aligned rectangle. Special requires a non-rectangle. Glass and
+    # corner types keep their own geometric checks.
+    piece_type: str = ""
+    source_piece_no: int | None = None
+    copy_no: int | None = None
+    # Optional Glass evidence used only to demote a uniquely proven opening
+    # contour that otherwise matches another piece size (fail-closed otherwise).
+    is_glass: bool = False
+    glass_margin_mm: float | None = None
+    long_left_mm: float = 0.0
+    long_right_mm: float = 0.0
+    width_bottom_mm: float = 0.0
+    width_top_mm: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,7 +279,28 @@ def validate_material_layout(
                 )
 
 
-def _dimensions_match(
+def outline_compatible_with_piece_type(
+    polygon: Sequence[Point],
+    piece_type: str,
+    *,
+    tolerance: float,
+) -> bool:
+    """Regular is a rectangle. Special is any other valid outer contour.
+
+    Glass and corner pieces are not reclassified here. Their geometric
+    contracts stay in the validators that already own those shapes.
+    """
+
+    kind = str(piece_type or "")
+    if kind not in {"Regular", "Special"}:
+        return True
+    rectangular = is_axis_aligned_rectangle(polygon, tolerance)
+    if kind == "Regular":
+        return rectangular
+    return not rectangular
+
+
+def _size_match(
     contour: ContourCandidate,
     expected: ExpectedPieceEvidence,
     *,
@@ -274,17 +322,39 @@ def _dimensions_match(
     )
 
 
+def _dimensions_match(
+    contour: ContourCandidate,
+    expected: ExpectedPieceEvidence,
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
+) -> bool:
+    if not _size_match(
+        contour,
+        expected,
+        dimension_tolerance=dimension_tolerance,
+    ):
+        return False
+    return outline_compatible_with_piece_type(
+        contour.polygon,
+        expected.piece_type,
+        tolerance=geometry_tolerance,
+    )
+
+
 def _matches_any_expected(
     contour: ContourCandidate,
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
 ) -> bool:
     return any(
         _dimensions_match(
             contour,
             expected_piece,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         for expected_piece in expected
     )
@@ -295,12 +365,14 @@ def _inventory_assignment(
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
     excluded_edge: tuple[int, int] | None = None,
 ) -> tuple[int, ...] | None:
     """Return one expected-piece index per selected contour, if injective.
 
     Every piece, including Special, is bound to its persisted manufacturing
-    envelope. The contour itself may be any valid polygon inside that envelope.
+    envelope. Regular also requires a rectangle, and Special requires any
+    other valid outer contour. Glass and corner pieces keep their own checks.
     """
     if len(selected) > len(expected):
         return None
@@ -314,6 +386,7 @@ def _inventory_assignment(
                 contour,
                 expected_piece,
                 dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
             )
         ]
         if not matches:
@@ -347,68 +420,364 @@ def _inventory_assignment(
     return tuple(contour_to_expected[index] for index in range(len(selected)))
 
 
+def _minimum_cost_assignment(
+    costs: Sequence[Sequence[int | None]],
+) -> tuple[int, tuple[int, ...], tuple[int, ...], tuple[int, ...]] | None:
+    """Find a deterministic minimum-cost perfect matching in O(n^3)."""
+    size = len(costs)
+    if any(len(row) != size for row in costs):
+        return None
+    if size == 0:
+        return 0, (), (), ()
+
+    infinity = 10**12
+    row_potential = [0] * (size + 1)
+    column_potential = [0] * (size + 1)
+    column_owner = [0] * (size + 1)
+    previous_column = [0] * (size + 1)
+
+    for row_number in range(1, size + 1):
+        column_owner[0] = row_number
+        current_column = 0
+        best_slack = [infinity] * (size + 1)
+        visited_columns = [False] * (size + 1)
+        while True:
+            visited_columns[current_column] = True
+            current_row = column_owner[current_column]
+            delta = infinity
+            next_column = 0
+            for column_number in range(1, size + 1):
+                if visited_columns[column_number]:
+                    continue
+                cost = costs[current_row - 1][column_number - 1]
+                if cost is not None:
+                    reduced_cost = (
+                        cost
+                        - row_potential[current_row]
+                        - column_potential[column_number]
+                    )
+                    if reduced_cost < best_slack[column_number]:
+                        best_slack[column_number] = reduced_cost
+                        previous_column[column_number] = current_column
+                if best_slack[column_number] < delta:
+                    delta = best_slack[column_number]
+                    next_column = column_number
+            if delta == infinity:
+                return None
+            for column_number in range(size + 1):
+                if visited_columns[column_number]:
+                    row_potential[column_owner[column_number]] += delta
+                    column_potential[column_number] -= delta
+                else:
+                    best_slack[column_number] -= delta
+            current_column = next_column
+            if column_owner[current_column] == 0:
+                break
+
+        while True:
+            prior_column = previous_column[current_column]
+            column_owner[current_column] = column_owner[prior_column]
+            current_column = prior_column
+            if current_column == 0:
+                break
+
+    assignment = [-1] * size
+    for column_number in range(1, size + 1):
+        assignment[column_owner[column_number] - 1] = column_number - 1
+    if any(column < 0 for column in assignment):
+        return None
+    if any(costs[row][column] is None for row, column in enumerate(assignment)):
+        return None
+    total = sum(costs[row][column] for row, column in enumerate(assignment))
+    return total, tuple(assignment), tuple(row_potential), tuple(column_potential)
+
+
+def _strong_components(graph: Sequence[Sequence[int]]) -> tuple[int, ...]:
+    """Return strongly connected component IDs using iterative Kosaraju traversal."""
+    reverse_graph: list[list[int]] = [[] for _ in graph]
+    for node, neighbours in enumerate(graph):
+        for neighbour in neighbours:
+            reverse_graph[neighbour].append(node)
+
+    visited: set[int] = set()
+    finishing_order: list[int] = []
+    for start in range(len(graph)):
+        if start in visited:
+            continue
+        visited.add(start)
+        stack = [(start, 0)]
+        while stack:
+            node, offset = stack[-1]
+            if offset < len(graph[node]):
+                neighbour = graph[node][offset]
+                stack[-1] = (node, offset + 1)
+                if neighbour not in visited:
+                    visited.add(neighbour)
+                    stack.append((neighbour, 0))
+            else:
+                finishing_order.append(node)
+                stack.pop()
+
+    component_ids = [-1] * len(graph)
+    component_id = 0
+    for start in reversed(finishing_order):
+        if component_ids[start] != -1:
+            continue
+        component_ids[start] = component_id
+        stack = [start]
+        while stack:
+            node = stack.pop()
+            for neighbour in reverse_graph[node]:
+                if component_ids[neighbour] == -1:
+                    component_ids[neighbour] = component_id
+                    stack.append(neighbour)
+        component_id += 1
+    return tuple(component_ids)
+
+
+def _optimal_assignment_edges(
+    costs: Sequence[Sequence[int | None]],
+    assignment: Sequence[int],
+    row_potential: Sequence[int],
+    column_potential: Sequence[int],
+) -> tuple[set[tuple[int, int]], tuple[int, ...]]:
+    """Return edges participating in any minimum-cost perfect matching."""
+    size = len(costs)
+    graph: list[list[int]] = [[] for _ in range(size * 2)]
+    tight_edges: set[tuple[int, int]] = set()
+    for row in range(size):
+        for column in range(size):
+            cost = costs[row][column]
+            if cost is None:
+                continue
+            if cost == row_potential[row + 1] + column_potential[column + 1]:
+                tight_edges.add((row, column))
+                if assignment[row] == column:
+                    graph[size + column].append(row)
+                else:
+                    graph[row].append(size + column)
+
+    component_ids = _strong_components(graph)
+    possible_edges = {
+        (row, column)
+        for row, column in tight_edges
+        if assignment[row] == column
+        or component_ids[row] == component_ids[size + column]
+    }
+    return possible_edges, component_ids
+
+
+def _matching_components(
+    size: int,
+    possible_edges: set[tuple[int, int]],
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    """Partition the optimal-edge graph into independent matching components."""
+    graph: list[list[int]] = [[] for _ in range(size * 2)]
+    for row, column in possible_edges:
+        contour_node = size + column
+        graph[row].append(contour_node)
+        graph[contour_node].append(row)
+
+    visited: set[int] = set()
+    components = []
+    for start, neighbours in enumerate(graph):
+        if start in visited or not neighbours:
+            continue
+        visited.add(start)
+        stack = [start]
+        nodes = []
+        while stack:
+            node = stack.pop()
+            nodes.append(node)
+            for neighbour in graph[node]:
+                if neighbour not in visited:
+                    visited.add(neighbour)
+                    stack.append(neighbour)
+        rows = tuple(sorted(node for node in nodes if node < size))
+        contours = tuple(sorted(node - size for node in nodes if node >= size))
+        components.append((rows, contours))
+    return tuple(sorted(components, key=lambda item: item[0][0] if item[0] else size))
+
+
 def _forbidden_rotation_error(
     contours: Sequence[ContourCandidate],
     expected: Sequence[ExpectedPieceEvidence],
     *,
     dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
 ) -> DxfTopologyError | None:
-    """Diagnose one canonically rotated edge forced by relaxed matching."""
+    """Diagnose the minimum forbidden rotations across all feasible assignments.
+
+    The minimum-cost bipartite matching separates the existence and count of
+    rotation violations from the identity of interchangeable copies. Tight-edge
+    components identify which assignments are equally valid; only edges that
+    occur in every optimum retain individual copy identity.
+    """
     relaxed = tuple(
         ExpectedPieceEvidence(
-            width=piece.width, height=piece.height, allow_rotation=True,
+            width=piece.width,
+            height=piece.height,
+            allow_rotation=True,
             arbitrary_outline=piece.arbitrary_outline,
-        ) for piece in expected
-    )
-    candidate_indexes = tuple(
-        contour for contour in contours
-        if _matches_any_expected(contour, relaxed, dimension_tolerance=dimension_tolerance)
-    )
-    if len(candidate_indexes) != len(expected):
-        return None
-    assignment = _inventory_assignment(
-        candidate_indexes, relaxed, dimension_tolerance=dimension_tolerance
-    )
-    if assignment is None:
-        return None
-    forbidden = []
-    for contour_index, (contour, piece_index) in enumerate(zip(candidate_indexes, assignment)):
-        piece = expected[piece_index]
-        if piece.allow_rotation:
-            continue
-        min_x, min_y, max_x, max_y = bbox(contour.polygon)
-        width, height = max_x - min_x, max_y - min_y
-        actual_width_cm = width / 10.0
-        actual_height_cm = height / 10.0
-        expected_width_cm = piece.width / 10.0
-        expected_height_cm = piece.height / 10.0
-        exact_direct = dimensions_match_exact(
-            actual_width_cm, actual_height_cm,
-            expected_width_cm, expected_height_cm,
+            piece_type=piece.piece_type,
+            source_piece_no=piece.source_piece_no,
+            copy_no=piece.copy_no,
         )
-        exact_rotated = dimensions_match_exact(
-            actual_width_cm, actual_height_cm,
-            expected_height_cm, expected_width_cm,
-        )
-        rotated_only = exact_rotated and not exact_direct
-        if rotated_only and piece.arbitrary_outline:
-            # Special-shape acceptance diagnostics are intentionally unchanged.
-            return None
-        if rotated_only and _inventory_assignment(
-            candidate_indexes,
+        for piece in expected
+    )
+    candidates = tuple(
+        contour
+        for contour in contours
+        if _matches_any_expected(
+            contour,
             relaxed,
             dimension_tolerance=dimension_tolerance,
-            excluded_edge=(contour_index, piece_index),
-        ) is None:
-            forbidden.append((contour, piece_index, width, height, piece))
-    if len(forbidden) != 1:
+            geometry_tolerance=geometry_tolerance,
+        )
+    )
+    size = len(expected)
+    if len(candidates) != size or size == 0:
         return None
-    contour, piece_index, width, height, piece = forbidden[0]
+
+    costs: list[list[int | None]] = []
+    measurements: dict[tuple[int, int], tuple[float, float, float, float]] = {}
+    for piece in expected:
+        row_costs: list[int | None] = []
+        direct_piece = ExpectedPieceEvidence(
+            width=piece.width,
+            height=piece.height,
+            allow_rotation=False,
+            arbitrary_outline=piece.arbitrary_outline,
+            piece_type=piece.piece_type,
+            source_piece_no=piece.source_piece_no,
+            copy_no=piece.copy_no,
+        )
+        for contour_index, contour in enumerate(candidates):
+            if _dimensions_match(
+                contour,
+                direct_piece,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            ):
+                row_costs.append(0)
+                continue
+
+            min_x, min_y, max_x, max_y = bbox(contour.polygon)
+            actual_width = max_x - min_x
+            actual_height = max_y - min_y
+            actual_width_cm = actual_width / 10.0
+            actual_height_cm = actual_height / 10.0
+            expected_width_cm = piece.width / 10.0
+            expected_height_cm = piece.height / 10.0
+            exact_rotated = dimensions_match_exact(
+                actual_width_cm,
+                actual_height_cm,
+                expected_height_cm,
+                expected_width_cm,
+            )
+            if piece.allow_rotation and _dimensions_match(
+                contour,
+                piece,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            ):
+                row_costs.append(0)
+            elif exact_rotated and (
+                not piece.arbitrary_outline or piece.piece_type in {"Regular", "Special"}
+            ):
+                row_costs.append(1)
+                measurements[(len(costs), contour_index)] = (
+                    actual_width,
+                    actual_height,
+                    piece.width,
+                    piece.height,
+                )
+            else:
+                row_costs.append(None)
+        costs.append(row_costs)
+
+    solved = _minimum_cost_assignment(costs)
+    if solved is None:
+        return None
+    minimum_rotations, assignment, row_potential, column_potential = solved
+    if minimum_rotations <= 0:
+        return None
+
+    possible_edges, component_ids = _optimal_assignment_edges(
+        costs,
+        assignment,
+        row_potential,
+        column_potential,
+    )
+    evidence: list[ForbiddenRotationEvidence] = []
+    for expected_indexes, contour_indexes in _matching_components(size, possible_edges):
+        chosen_rotations = [
+            (row, assignment[row])
+            for row in expected_indexes
+            if costs[row][assignment[row]] == 1
+        ]
+        if not chosen_rotations:
+            continue
+
+        forced_rotations = [
+            (row, column)
+            for row, column in chosen_rotations
+            if component_ids[row] != component_ids[size + column]
+        ]
+        for row, column in forced_rotations:
+            measurement = measurements[(row, column)]
+            source_piece_no = expected[row].source_piece_no
+            evidence.append(
+                ForbiddenRotationEvidence(
+                    rotation_count=1,
+                    source_piece_nos=(source_piece_no,) if source_piece_no is not None else (),
+                    measurements_mm=(measurement,),
+                    expected_piece_index=row,
+                )
+            )
+
+        remaining_count = len(chosen_rotations) - len(forced_rotations)
+        if remaining_count <= 0:
+            continue
+        forced_edges = set(forced_rotations)
+        possible_rotation_edges = [
+            (row, column)
+            for row in expected_indexes
+            for column in contour_indexes
+            if (row, column) in possible_edges
+            and costs[row][column] == 1
+            and (row, column) not in forced_edges
+        ]
+        source_piece_nos = tuple(sorted({
+            int(expected[row].source_piece_no)
+            for row, _column in possible_rotation_edges
+            if expected[row].source_piece_no is not None
+        }))
+        possible_measurements = tuple(sorted({
+            measurements[(row, column)]
+            for row, column in possible_rotation_edges
+        }))
+        evidence.append(
+            ForbiddenRotationEvidence(
+                rotation_count=remaining_count,
+                source_piece_nos=source_piece_nos,
+                measurements_mm=possible_measurements,
+            )
+        )
+
+    if not evidence or sum(item.rotation_count for item in evidence) != minimum_rotations:
+        return None
+
+    only = evidence[0] if len(evidence) == 1 else None
+    only_measurement = only.measurements_mm[0] if only and len(only.measurements_mm) == 1 else None
     return DxfTopologyError(
-        "FORBIDDEN_ROTATION", first_key=contour.key,
-        expected_piece_index=piece_index,
-        expected_width=piece.width, expected_height=piece.height,
-        actual_width=width, actual_height=height,
+        "FORBIDDEN_ROTATION",
+        expected_piece_index=only.expected_piece_index if only else None,
+        actual_width=only_measurement[0] if only_measurement else None,
+        actual_height=only_measurement[1] if only_measurement else None,
+        expected_width=only_measurement[2] if only_measurement else None,
+        expected_height=only_measurement[3] if only_measurement else None,
+        rotation_evidence=evidence,
     )
 
 
@@ -458,6 +827,305 @@ def _validate_part_topology(
     return True
 
 
+# Matches glass_opening_nesting.MAX_NESTING_DEPTH: outer Glass → inner Glass →
+# one more guest. Contour ownership must not invent deeper hole chains.
+_MAX_HOLE_NESTING_DEPTH = 2
+
+
+def _innermost_owners(
+    owners: Sequence[ContourCandidate],
+    *,
+    geometry_tolerance: float,
+) -> tuple[ContourCandidate, ...]:
+    """Owners that do not themselves contain another candidate owner."""
+
+    return tuple(
+        owner
+        for owner in owners
+        if not any(
+            other.key != owner.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                other.polygon,
+                tolerance=geometry_tolerance,
+            )
+            for other in owners
+        )
+    )
+
+
+def _contour_bbox_area(contour: ContourCandidate) -> float:
+    min_x, min_y, max_x, max_y = bbox(contour.polygon)
+    return max(0.0, max_x - min_x) * max(0.0, max_y - min_y)
+
+
+def _measured_axis_insets(
+    outer: Polygon,
+    hole: Polygon,
+    *,
+    tolerance: float,
+) -> dict[str, float] | None:
+    if not is_axis_aligned_rectangle(outer, tolerance) or not is_axis_aligned_rectangle(
+        hole, tolerance
+    ):
+        return None
+    outer_box = bbox(outer)
+    hole_box = bbox(hole)
+    return {
+        "left": hole_box[0] - outer_box[0],
+        "right": outer_box[2] - hole_box[2],
+        "bottom": hole_box[1] - outer_box[1],
+        "top": outer_box[3] - hole_box[3],
+    }
+
+
+def _expected_glass_insets(evidence: ExpectedPieceEvidence) -> dict[str, float] | None:
+    margin = evidence.glass_margin_mm
+    if margin is None:
+        return None
+    return {
+        "left": float(margin) - float(evidence.long_left_mm or 0.0),
+        "right": float(margin) - float(evidence.long_right_mm or 0.0),
+        "bottom": float(margin) - float(evidence.width_bottom_mm or 0.0),
+        "top": float(margin) - float(evidence.width_top_mm or 0.0),
+    }
+
+
+def _proven_glass_opening_pair(
+    host: ContourCandidate,
+    hole: ContourCandidate,
+    evidence: ExpectedPieceEvidence,
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> bool:
+    """True when hole is the unique finished Glass opening of host."""
+
+    if not evidence.is_glass:
+        return False
+    if not _dimensions_match(
+        host,
+        evidence,
+        dimension_tolerance=dimension_tolerance,
+        geometry_tolerance=geometry_tolerance,
+    ):
+        return False
+    expected_insets = _expected_glass_insets(evidence)
+    if expected_insets is None:
+        return False
+    if any(value <= geometry_tolerance for value in expected_insets.values()):
+        return False
+    if not polygon_strictly_contains_polygon(
+        host.polygon, hole.polygon, tolerance=geometry_tolerance
+    ):
+        return False
+    if validate_polygon(hole.polygon, geometry_tolerance):
+        return False
+    measured = _measured_axis_insets(
+        host.polygon,
+        hole.polygon,
+        tolerance=geometry_tolerance,
+    )
+    if measured is None:
+        return False
+    # Direct orientation and 180° share axis pairs; 90° swaps width/length hosts
+    # are already filtered by _dimensions_match when rotation is allowed.
+    direct = all(
+        abs(measured[side] - expected_insets[side]) <= geometry_tolerance
+        for side in ("left", "right", "bottom", "top")
+    )
+    flipped = all(
+        abs(measured[side] - expected_insets[pair]) <= geometry_tolerance
+        for side, pair in (
+            ("left", "right"),
+            ("right", "left"),
+            ("bottom", "top"),
+            ("top", "bottom"),
+        )
+    )
+    return direct or flipped
+
+
+def _demote_proven_glass_openings(
+    selected: Sequence[ContourCandidate],
+    leftovers: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> tuple[tuple[ContourCandidate, ...], tuple[ContourCandidate, ...]] | None:
+    """Demote nested piece-like contours that uniquely prove to be Glass openings.
+
+    Used only when selected count exceeds expected count. Never guesses: each
+    demoted contour must match exactly one Glass host's finished opening, and
+    the resulting selected set must match the expected inventory exactly.
+    """
+
+    excess = len(selected) - len(expected)
+    if excess <= 0:
+        return None
+    glass_evidence = tuple(item for item in expected if item.is_glass)
+    if not glass_evidence:
+        return None
+
+    nested = tuple(
+        contour
+        for contour in selected
+        if any(
+            owner.key != contour.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                contour.polygon,
+                tolerance=geometry_tolerance,
+            )
+            for owner in selected
+        )
+    )
+    if len(nested) < excess:
+        return None
+
+    proposals: list[tuple[ContourCandidate, ContourCandidate, ExpectedPieceEvidence]] = []
+    for hole in nested:
+        containers = [
+            owner
+            for owner in selected
+            if owner.key != hole.key
+            and polygon_strictly_contains_polygon(
+                owner.polygon,
+                hole.polygon,
+                tolerance=geometry_tolerance,
+            )
+        ]
+        tight = _innermost_owners(containers, geometry_tolerance=geometry_tolerance)
+        if len(tight) != 1:
+            continue
+        host = tight[0]
+        matches = [
+            evidence
+            for evidence in glass_evidence
+            if _proven_glass_opening_pair(
+                host,
+                hole,
+                evidence,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            )
+        ]
+        if len(matches) != 1:
+            continue
+        proposals.append((hole, host, matches[0]))
+
+    if len(proposals) < excess:
+        return None
+
+    # Prefer larger demoted openings first so a host keeps its finished hole
+    # rather than a smaller nested piece of the same size class.
+    proposals = sorted(
+        proposals,
+        key=lambda item: (-_contour_bbox_area(item[0]), item[0].key, item[1].key),
+    )
+    chosen: list[ContourCandidate] = []
+    used_hosts: set[int] = set()
+    used_evidence: set[int] = set()
+    for hole, host, evidence in proposals:
+        if len(chosen) >= excess:
+            break
+        evidence_id = id(evidence)
+        if host.key in used_hosts or evidence_id in used_evidence:
+            continue
+        # A Glass row owns at most one opening.
+        used_hosts.add(host.key)
+        used_evidence.add(evidence_id)
+        chosen.append(hole)
+
+    if len(chosen) != excess:
+        return None
+    demote_keys = {contour.key for contour in chosen}
+    next_selected = tuple(
+        contour for contour in selected if contour.key not in demote_keys
+    )
+    if len(next_selected) != len(expected):
+        return None
+    if (
+        _inventory_assignment(
+            next_selected,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+        is None
+    ):
+        return None
+    next_leftovers = tuple(
+        sorted(
+            (*leftovers, *chosen),
+            key=_contour_sort_key,
+        )
+    )
+    return next_selected, next_leftovers
+
+
+def _hole_nesting_depth_ok(
+    parts: Sequence[ResolvedPartGeometry],
+    *,
+    geometry_tolerance: float,
+) -> bool:
+    """Reject host chains deeper than the optimizer nesting contract."""
+
+    by_key = {part.contour_key: part for part in parts}
+
+    def host_of(part: ResolvedPartGeometry) -> int | None:
+        containers = [
+            other
+            for other in parts
+            if other.contour_key != part.contour_key
+            and any(
+                polygon_strictly_contains_polygon(
+                    hole,
+                    part.geometry.outer,
+                    tolerance=geometry_tolerance,
+                )
+                for hole in other.geometry.holes
+            )
+        ]
+        if not containers:
+            return None
+        # Innermost host among parts that own a containing hole.
+        tight = [
+            owner
+            for owner in containers
+            if not any(
+                other.contour_key != owner.contour_key
+                and polygon_strictly_contains_polygon(
+                    owner.geometry.outer,
+                    other.geometry.outer,
+                    tolerance=geometry_tolerance,
+                )
+                for other in containers
+            )
+        ]
+        if len(tight) != 1:
+            return None
+        return tight[0].contour_key
+
+    for part in parts:
+        depth = 0
+        cursor: int | None = part.contour_key
+        seen: set[int] = set()
+        while cursor is not None:
+            if cursor in seen:
+                return False
+            seen.add(cursor)
+            host = host_of(by_key[cursor])
+            if host is None:
+                break
+            depth += 1
+            if depth > _MAX_HOLE_NESTING_DEPTH:
+                return False
+            cursor = host
+    return True
+
+
 def _classify_selection(
     selected: Sequence[ContourCandidate],
     leftovers: Sequence[ContourCandidate],
@@ -467,9 +1135,10 @@ def _classify_selection(
 ) -> ResolvedTopology | None:
     """Attach each proven hole to exactly one selected outer contour.
 
-    This function resolves structural ownership only. Material overlap and Kerf
-    remain a separate domain validation step so classification never hides a
-    placement error behind a generic ownership failure.
+    When several selected outers contain the same leftover (Glass inside Glass),
+    ownership goes to the innermost outer. Material overlap and Kerf remain a
+    separate domain validation step so classification never hides a placement
+    error behind a generic ownership failure.
     """
     holes_by_owner: dict[int, list[ContourCandidate]] = {
         contour.key: [] for contour in selected
@@ -484,9 +1153,10 @@ def _classify_selection(
                 tolerance=geometry_tolerance,
             )
         ]
-        if len(owners) != 1:
+        tight = _innermost_owners(owners, geometry_tolerance=geometry_tolerance)
+        if len(tight) != 1:
             return None
-        holes_by_owner[owners[0].key].append(hole)
+        holes_by_owner[tight[0].key].append(hole)
 
     parts: list[ResolvedPartGeometry] = []
     for contour in selected:
@@ -518,6 +1188,93 @@ def _classify_selection(
     return ResolvedTopology(parts=tuple(sorted(parts, key=lambda part: part.contour_key)))
 
 
+def diagnostic_piece_contours(
+    contours: Sequence[ContourCandidate],
+    expected_pieces: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float = EPSILON,
+    include_nested_piece_candidates: bool = True,
+) -> tuple[ContourCandidate, ...]:
+    """Return contours with the same piece evidence used by topology resolution.
+
+    This inventory view is diagnostic only. It does not accept or reject a DXF;
+    it excludes structural holes while retaining nested contours whose dimensions
+    prove they may be independent pieces.
+    """
+    ordered = tuple(sorted(contours, key=_contour_sort_key))
+    roots = _root_contours(ordered, geometry_tolerance=geometry_tolerance)
+    if not include_nested_piece_candidates:
+        return roots
+    root_keys = {contour.key for contour in roots}
+    selected_keys = root_keys | {
+        contour.key
+        for contour in ordered
+        if _matches_any_expected(
+            contour,
+            expected_pieces,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+    }
+    return tuple(contour for contour in ordered if contour.key in selected_keys)
+
+
+def _outline_class_mismatch(
+    contours: Sequence[ContourCandidate],
+    expected: Sequence[ExpectedPieceEvidence],
+    *,
+    dimension_tolerance: float,
+    geometry_tolerance: float,
+) -> DxfTopologyError | None:
+    """Report a size match rejected only because Regular/Special outline differs."""
+
+    for contour in contours:
+        dimension_hits = [
+            piece
+            for piece in expected
+            if _size_match(
+                contour,
+                piece,
+                dimension_tolerance=dimension_tolerance,
+            )
+        ]
+        if not dimension_hits:
+            continue
+        if any(
+            outline_compatible_with_piece_type(
+                contour.polygon,
+                piece.piece_type,
+                tolerance=geometry_tolerance,
+            )
+            for piece in dimension_hits
+        ):
+            continue
+        kinds = {str(piece.piece_type or "") for piece in dimension_hits}
+        min_x, min_y, max_x, max_y = bbox(contour.polygon)
+        actual_width = max_x - min_x
+        actual_height = max_y - min_y
+        sample = dimension_hits[0]
+        rectangular = is_axis_aligned_rectangle(contour.polygon, geometry_tolerance)
+        if rectangular and "Special" in kinds and "Regular" not in kinds:
+            return DxfTopologyError(
+                "SPECIAL_OUTLINE_IS_RECTANGLE",
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=sample.width,
+                expected_height=sample.height,
+            )
+        if not rectangular and "Regular" in kinds and "Special" not in kinds:
+            return DxfTopologyError(
+                "REGULAR_OUTLINE_NOT_RECTANGLE",
+                actual_width=actual_width,
+                actual_height=actual_height,
+                expected_width=sample.width,
+                expected_height=sample.height,
+            )
+    return None
+
+
 def resolve_contour_ownership(
     contours: Sequence[ContourCandidate],
     expected_pieces: Sequence[ExpectedPieceEvidence],
@@ -532,8 +1289,8 @@ def resolve_contour_ownership(
     * a contour not contained by another contour must be an actual piece;
     * every actual piece, including Special, must match the persisted cut-width
       and cut-length envelope (or its allowed rotation);
-    * a Special outer may still be concave or otherwise non-rectangular as long
-      as its valid polygon has the required manufacturing bounding box;
+    * a Regular outer must be an axis-aligned rectangle, and a Special outer
+      must not be one; Glass and corner pieces are not reclassified by that rule;
     * a nested contour matching expected piece dimensions remains an actual piece
       candidate (supporting pieces placed inside proven holes);
     * a nested contour without piece evidence can be considered a hole only when
@@ -565,6 +1322,7 @@ def resolve_contour_ownership(
             contour,
             expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
     )
     selected_keys = {
@@ -581,30 +1339,59 @@ def resolve_contour_ownership(
         diagnostic = _forbidden_rotation_error(
             ordered_contours, expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         if diagnostic is not None:
             raise diagnostic
-        raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
-    if len(selected) > len(expected):
-        if _inventory_assignment(
-            roots,
+        outline_error = _outline_class_mismatch(
+            ordered_contours,
             expected,
             dimension_tolerance=dimension_tolerance,
-        ) is None:
-            raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
-        raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+            geometry_tolerance=geometry_tolerance,
+        )
+        if outline_error is not None:
+            raise outline_error
+        raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
+    if len(selected) > len(expected):
+        demoted = _demote_proven_glass_openings(
+            selected,
+            leftovers,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+        if demoted is None:
+            if _inventory_assignment(
+                roots,
+                expected,
+                dimension_tolerance=dimension_tolerance,
+                geometry_tolerance=geometry_tolerance,
+            ) is None:
+                raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
+            raise DxfTopologyError("AMBIGUOUS_CONTOUR_OWNERSHIP")
+        selected, leftovers = demoted
     assignment = _inventory_assignment(
         selected,
         expected,
         dimension_tolerance=dimension_tolerance,
+        geometry_tolerance=geometry_tolerance,
     )
     if assignment is None:
         diagnostic = _forbidden_rotation_error(
             ordered_contours, expected,
             dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
         )
         if diagnostic is not None:
             raise diagnostic
+        outline_error = _outline_class_mismatch(
+            ordered_contours,
+            expected,
+            dimension_tolerance=dimension_tolerance,
+            geometry_tolerance=geometry_tolerance,
+        )
+        if outline_error is not None:
+            raise outline_error
         raise DxfTopologyError("EXPECTED_PIECE_MISMATCH")
 
     topology = _classify_selection(
@@ -620,6 +1407,11 @@ def resolve_contour_ownership(
         raise DxfTopologyError(
             "UNRESOLVED_CONTOUR_OWNERSHIP" if leftovers else "INVALID_PART_TOPOLOGY"
         )
+    if not _hole_nesting_depth_ok(
+        topology.parts,
+        geometry_tolerance=geometry_tolerance,
+    ):
+        raise DxfTopologyError("UNRESOLVED_CONTOUR_OWNERSHIP")
     return topology
 
 
@@ -632,9 +1424,11 @@ __all__ = [
     "ResolvedPartGeometry",
     "ResolvedTopology",
     "containing_hole",
+    "diagnostic_piece_contours",
     "material_footprints_overlap",
     "polygon_contains_polygon",
     "polygon_strictly_contains_polygon",
+    "outline_compatible_with_piece_type",
     "resolve_contour_ownership",
     "validate_material_layout",
 ]

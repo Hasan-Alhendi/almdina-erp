@@ -9,17 +9,24 @@
         ));
     }
 
+    function translate(message) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") return locale.translate(message);
+        if (typeof __ === "function") return __(message);
+        return String(message == null ? "" : message);
+    }
+
     function validatePlanInputs(frm) {
         if (!String(frm.doc.board_description || "").trim()) {
-            frappe.msgprint("أدخل صنف اللوح أولًا، مثال: MDF أبيض 18 مم.");
+            frappe.msgprint(translate("Enter the board item first, for example: MDF white 18 mm."));
             return false;
         }
         if (Number(frm.doc.board_length_cm || 0) <= 0 || Number(frm.doc.board_width_cm || 0) <= 0) {
-            frappe.msgprint("أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.");
+            frappe.msgprint(translate("Enter a board length and width greater than zero before calculating the cutting plan."));
             return false;
         }
         if (!validPieces(frm).length) {
-            frappe.msgprint("أدخل قياسًا واحدًا صحيحًا على الأقل قبل حساب خطة القص.");
+            frappe.msgprint(translate("Enter at least one valid measurement before calculating the cutting plan."));
             return false;
         }
         return true;
@@ -31,6 +38,14 @@
             await boardUX.syncInputs(frm);
         }
         if (!validatePlanInputs(frm)) return false;
+        const measurements = window.AlmdinaDoorCuttingFastEntry;
+        if (measurements && typeof measurements.validateDimensionsBeforeSave === "function") {
+            try {
+                await measurements.validateDimensionsBeforeSave(frm);
+            } catch (_error) {
+                return false;
+            }
+        }
         return true;
     }
 

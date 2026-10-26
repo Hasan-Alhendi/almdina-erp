@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -7,17 +9,128 @@ from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     PieceGeometry,
     PiecePolicyError,
     SpecialPrice,
+    apply_edge_break_policy,
     drawing_token,
     evaluate_special_shape,
     geometry_changed,
     pricing_basis_changed,
     protected_price_changed,
+    piece_fits_board,
     reset_price_values,
     resolve_clipped_corner,
 )
 
 
 class TestOrderPiecePolicyDomain(unittest.TestCase):
+    def test_piece_fit_accepts_equal_dimensions_and_allowed_rotation(self) -> None:
+        self.assertTrue(
+            piece_fits_board(
+                piece_width_cm=210,
+                piece_length_cm=280,
+                board_width_cm=210,
+                board_length_cm=280,
+            )
+        )
+        self.assertTrue(
+            piece_fits_board(
+                piece_width_cm=150,
+                piece_length_cm=90,
+                board_width_cm=100,
+                board_length_cm=160,
+                allow_rotation=True,
+            )
+        )
+        self.assertFalse(
+            piece_fits_board(
+                piece_width_cm=161,
+                piece_length_cm=101,
+                board_width_cm=100,
+                board_length_cm=220,
+                allow_rotation=True,
+            )
+        )
+
+    def test_glass_piece_type_import_is_order_independent(self) -> None:
+        """Fresh processes must import the order policy and cutting engine in either order."""
+        modules = (
+            "almdina_erp.almdina_erp.domain.orders.piece_policy",
+            "almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf",
+        )
+        for first, second in (modules, tuple(reversed(modules))):
+            with self.subTest(first=first):
+                script = (
+                    "from importlib import import_module; "
+                    f"first = import_module({first!r}); "
+                    f"second = import_module({second!r}); "
+                    "assert first.GLASS_TYPE == second.GLASS_TYPE == 'Glass'"
+                )
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    cwd=Path(__file__).resolve().parents[2],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
+    def test_corner_edge_modes_are_mutually_exclusive(self) -> None:
+        with self.assertRaisesRegex(
+            PiecePolicyError,
+            "mutually_exclusive_corner_edge_options",
+        ):
+            apply_edge_break_policy(
+                piece_type="Clipped Corner",
+                clipped_corner_position="Top Right",
+                edge_break=1,
+                edge_break_only=1,
+                edge_long_right=0,
+                edge_long_left=0,
+                edge_width_top=0,
+                edge_width_bottom=0,
+            )
+
+    def test_break_only_keeps_one_clipped_corner_outer_side_independent(self) -> None:
+        decision = apply_edge_break_policy(
+            piece_type="Clipped Corner",
+            clipped_corner_position="Top Right",
+            edge_break=0,
+            edge_break_only=1,
+            edge_long_right=1,
+            edge_long_left=0,
+            edge_width_top=0,
+            edge_width_bottom=0,
+        )
+
+        self.assertEqual(decision.edge_break, 0)
+        self.assertEqual(decision.edge_break_only, 1)
+        self.assertEqual(decision.edge_long_right, 1)
+        self.assertEqual(decision.edge_width_top, 0)
+        self.assertEqual(decision.cleared_sides, ())
+
+    def test_break_only_with_both_adjacent_sides_becomes_full_path(self) -> None:
+        decision = apply_edge_break_policy(
+            piece_type="Clipped Corner",
+            clipped_corner_position="Top Right",
+            edge_break=0,
+            edge_break_only=1,
+            edge_long_right=1,
+            edge_long_left=1,
+            edge_width_top=1,
+            edge_width_bottom=1,
+        )
+
+        self.assertEqual(decision.edge_break, 1)
+        self.assertEqual(decision.edge_break_only, 0)
+        self.assertEqual(decision.edge_long_right, 0)
+        self.assertEqual(decision.edge_width_top, 0)
+        self.assertEqual(decision.edge_long_left, 1)
+        self.assertEqual(decision.edge_width_bottom, 1)
+        self.assertEqual(
+            decision.cleared_sides,
+            ("edge_width_top", "edge_long_right"),
+        )
+
     def test_drawing_token_is_stable_for_mapping_input(self) -> None:
         first = drawing_token({"elements": [], "version": 1})
         second = drawing_token({"version": 1, "elements": []})
@@ -168,8 +281,8 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
             "Document the special door shape before approving its price.",
             approval_source,
         )
-        self.assertIn('if (piece.piece_type or "Regular") != "Special":', approval_source)
-        self.assertIn("has_special_price_approval_permission", approval_source)
+        self.assertIn("save_special_price", approval_source)
+        self.assertNotIn("has_special_price_approval_permission", approval_source)
 
     def test_protected_price_change_detects_approval_fields(self) -> None:
         old = SpecialPrice(
@@ -256,6 +369,13 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
         )
 
         self.assertIn("L-Shaped Corner", PIECE_TYPES)
+        self.assertNotIn("Extra", PIECE_TYPES)
+        self.assertEqual(
+            PIECE_TYPES,
+            frozenset(("Regular", "Clipped Corner", "L-Shaped Corner", "Special", "Glass")),
+        )
+        self.assertIn("Glass", PIECE_TYPES)
+        self.assertFalse(is_corner_cut("Glass"))
         self.assertTrue(is_corner_cut("Clipped Corner"))
         self.assertTrue(is_corner_cut(L_SHAPED_CORNER_TYPE))
         self.assertFalse(is_corner_cut("Regular"))
@@ -349,7 +469,6 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
 
         self.assertTrue(measurement_edges_disabled_for_piece("Special"))
         self.assertFalse(measurement_edges_disabled_for_piece("Regular"))
-        self.assertFalse(measurement_edges_disabled_for_piece("Extra"))
         self.assertFalse(measurement_edges_disabled_for_piece("Clipped Corner"))
 
         disabled = apply_special_measurement_edge_policy(piece_type="Special")
@@ -364,6 +483,128 @@ class TestOrderPiecePolicyDomain(unittest.TestCase):
 
         enabled = apply_special_measurement_edge_policy(piece_type="Regular")
         self.assertFalse(enabled.disabled)
+
+    def test_glass_margin_uses_central_millimetre_conversion(self) -> None:
+        from decimal import Decimal
+
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            GLASS_TYPE,
+            canonical_glass_margin_mm,
+            is_glass,
+            pricing_basis_changed,
+            validate_glass_opening,
+        )
+
+        self.assertTrue(is_glass(GLASS_TYPE))
+        self.assertFalse(is_glass("Regular"))
+        opening = validate_glass_opening(
+            outer_width_cm=Decimal("52.1"),
+            outer_length_cm=Decimal("72.5"),
+            glass_margin_mm=65,
+        )
+        self.assertEqual(opening.margin_mm, Decimal("65"))
+        self.assertEqual(opening.opening_width_mm, Decimal("391"))
+        self.assertEqual(opening.opening_length_mm, Decimal("595"))
+
+        with self.assertRaisesRegex(PiecePolicyError, "glass_margin_must_be_positive"):
+            validate_glass_opening(
+                outer_width_cm=52.1,
+                outer_length_cm=72.5,
+                glass_margin_mm=0,
+            )
+        with self.assertRaisesRegex(PiecePolicyError, "glass_margin_must_be_positive"):
+            validate_glass_opening(
+                outer_width_cm=52.1,
+                outer_length_cm=72.5,
+                glass_margin_mm=None,
+            )
+        with self.assertRaisesRegex(PiecePolicyError, "glass_opening_must_be_positive"):
+            validate_glass_opening(
+                outer_width_cm=Decimal("52.1"),
+                outer_length_cm=Decimal("72.5"),
+                glass_margin_mm=Decimal("260.5"),
+            )
+
+        self.assertIsNone(canonical_glass_margin_mm(None, "Glass"))
+        self.assertIsNone(canonical_glass_margin_mm(0, "Glass"))
+        self.assertIsNone(canonical_glass_margin_mm("", "Glass"))
+        self.assertEqual(canonical_glass_margin_mm("65", "Glass"), 65.0)
+        self.assertIsNone(canonical_glass_margin_mm(65, "Regular"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "Clipped Corner"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "L-Shaped Corner"))
+        self.assertIsNone(canonical_glass_margin_mm(65, "Special"))
+        self.assertIsNone(canonical_glass_margin_mm(65))
+
+    def test_glass_margin_changes_geometry_without_repricing_basis(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            pricing_basis_changed,
+        )
+
+        stored = PieceGeometry(
+            piece_type="Glass",
+            width_cm=52.1,
+            length_cm=72.5,
+            qty=2,
+            edge_long_right=1,
+            edge_width_top=1,
+            glass_margin_mm=65,
+        )
+        same = PieceGeometry(
+            piece_type="Glass",
+            width_cm=52.1,
+            length_cm=72.5,
+            qty=2,
+            edge_long_right=1,
+            edge_width_top=1,
+            glass_margin_mm=65,
+        )
+        changed_margin = PieceGeometry(
+            piece_type="Glass",
+            width_cm=52.1,
+            length_cm=72.5,
+            qty=2,
+            edge_long_right=1,
+            edge_width_top=1,
+            glass_margin_mm=66,
+        )
+        changed_type = PieceGeometry(
+            piece_type="Regular",
+            width_cm=52.1,
+            length_cm=72.5,
+            qty=2,
+            edge_long_right=1,
+            edge_width_top=1,
+            glass_margin_mm=65,
+        )
+
+        self.assertFalse(geometry_changed(stored, same, drawing_changed=False))
+        self.assertTrue(geometry_changed(stored, changed_margin, drawing_changed=False))
+        self.assertFalse(pricing_basis_changed(stored, changed_margin))
+        self.assertTrue(pricing_basis_changed(stored, changed_type))
+
+    def test_glass_keeps_regular_edge_selection(self) -> None:
+        from almdina_erp.almdina_erp.domain.orders.piece_policy import (
+            apply_special_measurement_edge_policy,
+            measurement_edges_disabled_for_piece,
+        )
+
+        decision = apply_edge_break_policy(
+            piece_type="Glass",
+            clipped_corner_position="Top Right",
+            edge_break=1,
+            edge_long_right=1,
+            edge_long_left=0,
+            edge_width_top=1,
+            edge_width_bottom=0,
+        )
+        self.assertEqual(decision.edge_break, 0)
+        self.assertEqual(decision.edge_break_only, 0)
+        self.assertEqual(decision.edge_long_right, 1)
+        self.assertEqual(decision.edge_width_top, 1)
+        self.assertFalse(measurement_edges_disabled_for_piece("Glass"))
+        self.assertFalse(
+            apply_special_measurement_edge_policy(piece_type="Glass").disabled
+        )
 
 
 if __name__ == "__main__":

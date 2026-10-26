@@ -52,8 +52,8 @@ const fakeWindow = {
         parse() {
             return null;
         },
-        print(_frm, planOverride) {
-            printCalls.push(planOverride);
+        print(frm, planOverride, hint) {
+            printCalls.push({frm, planOverride, hint});
             return planOverride;
         },
     },
@@ -88,7 +88,7 @@ const fullOnly = {
         { sheet_no: 9, full_board_no: 3, resource_kind: "FULL_BOARD", pieces: [piece("3:1")] },
     ],
 };
-assert.deepEqual(labels(fullOnly), ["لوح 1", "لوح 2", "لوح 3"]);
+assert.deepEqual(labels(fullOnly), ["Board 1", "Board 2", "Board 3"]);
 
 const mixed = {
     sheets: [
@@ -103,7 +103,7 @@ const mixed = {
         assignment("4:1", "FACTORY_FACTORY", "فضلة من المعمل — تنفيذ في المعمل"),
     ],
 };
-assert.deepEqual(labels(mixed), ["لوح 1", "نقص", "لوح 2", "نقص", "لوح 3"]);
+assert.deepEqual(labels(mixed), ["Board 1", "Offcut", "Board 2", "Offcut", "Board 3"]);
 
 const legacy = {
     sheets: [
@@ -113,7 +113,7 @@ const legacy = {
         { sheet_no: 14, resource_kind: "FULL_BOARD", pieces: [piece("L:4")] },
     ],
 };
-assert.deepEqual(labels(legacy), ["نقص", "لوح 1", "نقص", "لوح 2"]);
+assert.deepEqual(labels(legacy), ["Offcut", "Board 1", "Offcut", "Board 2"]);
 
 const allOffcut = {
     sheets: [
@@ -121,9 +121,9 @@ const allOffcut = {
         { sheet_no: 22, resource_kind: "OFFCUT", pieces: [piece("O:2")] },
     ],
 };
-assert.deepEqual(labels(allOffcut), ["نقص", "نقص"]);
-assert.equal(labels(allOffcut).some(label => label.startsWith("لوح")), false);
-assert.equal(labels(allOffcut).some(label => /نقص\s+\d/.test(label)), false);
+assert.deepEqual(labels(allOffcut), ["Offcut", "Offcut"]);
+assert.equal(labels(allOffcut).some(label => label.startsWith("Board")), false);
+assert.equal(labels(allOffcut).some(label => /Offcut\s+\d/.test(label)), false);
 
 const statePlan = {
     sheets: [
@@ -141,12 +141,12 @@ const statePlan = {
     ],
 };
 const stateProjection = presentation.project(statePlan)[0];
-assert.equal(stateProjection.primary_label, "نقص");
+assert.equal(stateProjection.primary_label, "Offcut");
 assert.deepEqual(Array.from(stateProjection.business_context_labels), [
     "فضلة من الزبون — تنفيذ في المعمل",
     "فضلة من الزبون — تنفيذ عند الزبون",
     "فضلة من المعمل — تنفيذ في المعمل",
-    "غير محدد",
+    "Unassigned",
 ]);
 assert.deepEqual(Array.from(stateProjection.piece_instance_ids), ["S:1", "S:2", "S:3", "S:4"]);
 
@@ -159,7 +159,7 @@ const invalidStatePlan = {
     ],
 };
 const invalidProjection = presentation.project(invalidStatePlan)[0];
-assert.deepEqual(Array.from(invalidProjection.business_context_labels), ["غير محدد"]);
+assert.deepEqual(Array.from(invalidProjection.business_context_labels), ["Unassigned"]);
 assert.doesNotMatch(
     presentation.decorateHtml(renderRaw(invalidStatePlan), invalidStatePlan),
     /فضلة من المعمل — تنفيذ عند الزبون/
@@ -176,7 +176,7 @@ assert.deepEqual(immutablePlan.sheets[1].pieces[0].geometry.outer, [[0, 0], [100
 const decoratedHtml = fakeWindow.AlmdinaCuttingPlanRender.build({}, mixed);
 const primaryHeadings = [...decoratedHtml.matchAll(/dco-sheet-title[^>]*>\s*<div>([^<]+)<\/div>/g)]
     .map(match => match[1]);
-assert.deepEqual(primaryHeadings, ["لوح 1", "نقص", "لوح 2", "نقص", "لوح 3"]);
+assert.deepEqual(primaryHeadings, ["Board 1", "Offcut", "Board 2", "Offcut", "Board 3"]);
 assert.match(decoratedHtml, /فضلة من الزبون — تنفيذ في المعمل/);
 assert.match(decoratedHtml, /فضلة من المعمل — تنفيذ في المعمل/);
 assert.equal((decoratedHtml.match(/dco-offcut-business-context"/g) || []).length, 2);
@@ -190,8 +190,14 @@ const visibleFrm = {
         },
     },
 };
-fakeWindow.AlmdinaCuttingPlanRender.print(visibleFrm, mixed);
-assert.equal(printCalls.at(-1), null, "print must clone the already projected visible plan for screen/print parity");
+const ownedHint = {tab: "System", row: {name: "OWNED-PLAN", revision: 3}};
+fakeWindow.AlmdinaCuttingPlanRender.print(visibleFrm, mixed, ownedHint);
+assert.strictEqual(printCalls.at(-1).frm, visibleFrm,
+    "a mounted DOM plan cannot replace the active Form identity");
+assert.strictEqual(printCalls.at(-1).planOverride, mixed,
+    "the canonical renderer must verify the requested geometry even when a DOM plan is visible");
+assert.strictEqual(printCalls.at(-1).hint, ownedHint,
+    "the canonical renderer must receive selected tab, row and revision");
 
 const hiddenFrm = {
     fields_dict: {
@@ -201,6 +207,8 @@ const hiddenFrm = {
     },
 };
 fakeWindow.AlmdinaCuttingPlanRender.print(hiddenFrm, mixed);
-assert.strictEqual(printCalls.at(-1), mixed, "legacy print fallback must preserve the explicit plan override");
+assert.strictEqual(printCalls.at(-1).frm, hiddenFrm);
+assert.strictEqual(printCalls.at(-1).planOverride, mixed,
+    "an unmounted plan must preserve the explicit geometry for canonical verification");
 
 console.log("ALMADINA-179 OFFCUT plan presentation simulation passed");

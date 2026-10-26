@@ -34,9 +34,18 @@ class DoorCuttingOrderController(DoorCuttingOrder):
 
     def on_update(self) -> None:
         invalidate_stale_draft_plans(self)
-        # Extra add-ons are order-owned commercial inputs. Refresh the quote after
+        # Door add-ons are order-owned commercial inputs. Refresh the quote after
         # persistence without creating, recalculating, or mutating Cutting Plan.
         refresh_order_commercial_totals(self)
+        # Price-approval validity only: never starts plan recalculation/optimizer.
+        # Must run inside the same Document.save transaction and must not catch
+        # failures: a raised error rolls back the measurement/pricing write with
+        # the failed invalidation (Approved must not survive a committed change).
+        from almdina_erp.almdina_erp.services.final_price_approval_service import (
+            maybe_invalidate_final_price_after_order_save,
+        )
+
+        maybe_invalidate_final_price_after_order_save(self)
 
     def ensure_special_shapes_documented(self) -> None:
         self._gateway().ensure_special_shapes_documented()

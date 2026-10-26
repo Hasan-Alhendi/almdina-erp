@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const source = fs.readFileSync(
-    path.resolve(__dirname, "../../public/js/door_cutting_order_action_permission_guard.js"),
+    path.resolve(__dirname, "../../public/js/door_cutting_order/core/door_cutting_order_action_permission_guard.js"),
     "utf8"
 );
 
@@ -38,8 +38,8 @@ const fakeWindow = {
         schedule(_frm, _key, callback) { callback(); },
     },
     AlmdinaCuttingPlanRender: {
-        print(targetFrm, planOverride) {
-            rendererCalls.push({ targetFrm, planOverride });
+        print(targetFrm, planOverride, hint) {
+            rendererCalls.push({ targetFrm, planOverride, hint });
             return true;
         },
     },
@@ -96,10 +96,13 @@ vm.runInContext(source, context, {
 handlers.refresh(frm);
 
 const override = { sheets: [{ source: "Approved" }] };
-fakeWindow.AlmdinaCuttingPlanRender.print(frm, override);
+const hint = { tab: "Approved", row: { name: "PLAN-OWNED", revision: 4 } };
+fakeWindow.AlmdinaCuttingPlanRender.print(frm, override, hint);
 assert.equal(rendererCalls.length, 1);
 assert.equal(rendererCalls[0].targetFrm, frm);
 assert.equal(rendererCalls[0].planOverride, override, "the permission wrapper must preserve the selected plan source");
+assert.equal(rendererCalls[0].hint, hint,
+    "the permission wrapper must preserve the selected row and revision for the canonical renderer");
 assert.equal(
     fakeWindow.AlmdinaOrderDocumentPrint.printAuthorizedInvoice,
     authorizedInvoice,

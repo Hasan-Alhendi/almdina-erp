@@ -13,6 +13,8 @@ class OrderSaveGateway(Protocol):
 
     def enforce_immutability(self) -> None: ...
 
+    def enforce_price_approval_integrity(self) -> None: ...
+
     def set_piece_numbers(self) -> None: ...
 
     def validate_piece_inputs(self) -> None: ...
@@ -23,6 +25,8 @@ class OrderSaveGateway(Protocol):
 
     def calculate_cut_dimensions(self) -> None: ...
 
+    def validate_machining_rows(self) -> None: ...
+
     def calculate_piece_costs(self) -> None: ...
 
     def calculate_extra_addon_prices(self) -> None: ...
@@ -32,11 +36,13 @@ def process_order_save(gateway: OrderSaveGateway) -> None:
     """Validate and prepare one order without touching Cutting Plan state."""
 
     gateway.enforce_immutability()
+    gateway.enforce_price_approval_integrity()
     gateway.set_piece_numbers()
     gateway.validate_piece_inputs()
     gateway.validate_piece_policies()
     gateway.load_board_snapshot()
     gateway.calculate_cut_dimensions()
+    gateway.validate_machining_rows()
     gateway.calculate_piece_costs()
     gateway.calculate_extra_addon_prices()
 

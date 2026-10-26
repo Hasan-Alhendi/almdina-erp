@@ -62,18 +62,35 @@
         );
     }
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
     function deny(message) {
-        frappe.msgprint(__(message));
+        frappe.msgprint(translate(message));
     }
 
     function secureInvoicePrint(frm) {
         if (!can(frm, "print_customer_invoice")) {
-            deny("ليس لديك صلاحية طباعة فاتورة الزبون.");
+            deny("You do not have permission to print the customer invoice.");
             return Promise.resolve(false);
         }
         const toolbar = window.AlmdinaCustomerInvoiceToolbarUX;
         if (!toolbar || typeof toolbar.printCustomerInvoice !== "function") {
-            deny("تعذر تحميل خدمة فاتورة الزبون الآمنة. أعد تحميل الصفحة.");
+            deny("Could not load the customer invoice print service. Reload the page and try again.");
             return Promise.resolve(false);
         }
         return Promise.resolve(toolbar.printCustomerInvoice(frm));
@@ -97,12 +114,14 @@
             }
             if (!allowed) {
                 button.title = locked
-                    ? "الخطة معتمدة ومقفلة"
+                    ? translate("The plan is approved and locked")
                     : modeButton && !mayEditOptimizer
-                        ? "لا تملك صلاحية تعديل إعدادات المحسّن"
-                        : "لا تملك صلاحية إعادة حساب خطة القص";
-            } else if (button.title && button.title.includes("صلاحية")) {
+                        ? translate("You do not have permission to edit the optimizer settings")
+                        : translate("You do not have permission to recalculate the cutting plan");
+                button.setAttribute("data-dco-permission-title", "1");
+            } else if (button.getAttribute("data-dco-permission-title") === "1" || (button.title && button.title.includes("صلاحية"))) {
                 button.removeAttribute("title");
+                button.removeAttribute("data-dco-permission-title");
             }
         });
 
@@ -148,7 +167,7 @@
         actions.print = targetFrm => {
             const active = targetFrm || window.cur_frm || frm;
             if (!can(active, "print_measurements")) {
-                deny("ليس لديك صلاحية طباعة القياسات.");
+                deny("You do not have permission to print the measurements.");
                 return false;
             }
             return originalPrint(active);
@@ -172,7 +191,7 @@
             printMeasurements(targetFrm) {
                 const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_measurements")) {
-                    deny("ليس لديك صلاحية طباعة القياسات.");
+                    deny("You do not have permission to print the measurements.");
                     return Promise.resolve(false);
                 }
                 return originalMeasurements
@@ -191,13 +210,13 @@
             && typeof renderer.print === "function"
         ) {
             const originalRendererPrint = renderer.print.bind(renderer);
-            renderer.print = (targetFrm, planOverride = null) => {
+            renderer.print = (targetFrm, planOverride = null, hint = null) => {
                 const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_cutting_plan")) {
-                    deny("ليس لديك صلاحية طباعة خطة القص.");
+                    deny("You do not have permission to print the cutting plan.");
                     return false;
                 }
-                return originalRendererPrint(active, planOverride);
+                return originalRendererPrint(active, planOverride, hint);
             };
             renderer.__almdinaPrintPermissionGuarded = true;
         }
@@ -212,7 +231,7 @@
             tabs.printActivePlan = targetFrm => {
                 const active = targetFrm || window.cur_frm || frm;
                 if (!can(active, "print_cutting_plan")) {
-                    deny("ليس لديك صلاحية طباعة خطة القص.");
+                    deny("You do not have permission to print the cutting plan.");
                     return false;
                 }
                 return originalTabsPrint(active);
@@ -243,14 +262,14 @@
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("الخطة معتمدة ومقفلة ولا يمكن إعادة حسابها.");
+                    deny("The plan is approved and locked");
                     return;
                 }
                 if (!can(activeFrm, "recalculate_plan")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("ليس لديك صلاحية إعادة حساب خطة القص.");
+                    deny("You do not have permission to recalculate the cutting plan");
                     return;
                 }
                 const documentContext = window.AlmdinaDocumentContext;
@@ -265,14 +284,14 @@
                     const reason = typeof documentContext.stageMutationBlockReason === "function"
                         ? documentContext.stageMutationBlockReason(activeFrm)
                         : "";
-                    deny(reason || "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية.");
+                    deny(reason || "You can view this order only. Its current stage is outside your operational roles.");
                     return;
                 }
                 if (planButton.matches(MODE_ACTION_SELECTOR) && !can(activeFrm, "edit_optimizer_settings")) {
                     event.preventDefault();
                     event.stopPropagation();
                     event.stopImmediatePropagation();
-                    deny("ليس لديك صلاحية تغيير إعدادات المحسّن.");
+                    deny("You do not have permission to edit the optimizer settings");
                 }
             }
         }, true);
@@ -300,7 +319,7 @@
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();
-            deny("ليس لديك صلاحية طباعة القياسات.");
+            deny("You do not have permission to print the measurements.");
         }, true);
     }
 

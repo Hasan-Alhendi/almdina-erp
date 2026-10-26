@@ -53,7 +53,6 @@ def _piece_type_label(value: Any) -> str:
         "Special": "خاصة",
         "Clipped Corner": "الزاوية الكسر",
         "L-Shaped Corner": "زاوية L",
-        "Extra": "إضافية",
         "Regular": "عادية",
     }.get(_text(value, "Regular"), "عادية")
 
@@ -62,7 +61,7 @@ def _extra_addon_labels(piece: Mapping[str, Any]) -> list[str]:
     return [
         label
         for fieldname, label in (
-            ("extra_double", "دبل قشاط"),
+            ("extra_double", "دبل ضلع"),
             ("extra_full_door_double", "دبل كامل الدرفة"),
             ("extra_liner", "Liner"),
             ("extra_back_groove", "فرزة ظهر"),
@@ -116,6 +115,32 @@ def _measurement_rows(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, Any
     return rows
 
 
+def _allocate_addon_cents(entries: list[tuple[dict[str, Any], float]]) -> None:
+    """Round the aggregate saved add-on amount, then allocate cents by remainder.
+
+    Individual half-cent rounding can otherwise overcharge when several
+    prorated add-ons share one commercial door. Largest remainders get the
+    remaining cents, with invoice order as a stable tie-breaker; no arbitrary
+    adjustment of the last line and no re-pricing of unit rates.
+    """
+    if not entries or any(amount < 0 for _, amount in entries):
+        return
+    raw_cents = [amount * 100 for _, amount in entries]
+    assigned_cents = [math.floor(value) for value in raw_cents]
+    target_cents = int(round(_money(sum(amount for _, amount in entries)) * 100))
+    cents_remaining = target_cents - sum(assigned_cents)
+    if not 0 <= cents_remaining <= len(entries):
+        raise ValueError("addon_rounding_allocation_invalid")
+    priority = sorted(
+        range(len(entries)),
+        key=lambda index: (-(raw_cents[index] - assigned_cents[index]), index),
+    )
+    for index in priority[:cents_remaining]:
+        assigned_cents[index] += 1
+    for (line, _amount), cents in zip(entries, assigned_cents):
+        line["amount_usd"] = cents / 100
+
+
 def _customer_invoice_lines(
     order: Mapping[str, Any],
     pieces: Sequence[Mapping[str, Any]],
@@ -135,6 +160,7 @@ def _customer_invoice_lines(
     )
     board_description = _text(_value(order, "board_description"))
     lines: list[dict[str, Any]] = []
+    addon_amounts: list[tuple[dict[str, Any], float]] = []
 
     if board_count or material_amount:
         lines.append(
@@ -200,21 +226,54 @@ def _customer_invoice_lines(
     edge_groups: dict[tuple[str, float], dict[str, Any]] = defaultdict(
         lambda: {"meters": 0.0, "amount": 0.0}
     )
+
+    def add_edge_group(
+        edge_type: str,
+        rate: float,
+        meters: float,
+        amount: float,
+    ) -> None:
+        if meters <= 0:
+            return
+        group = edge_groups[(edge_type, rate)]
+        group["meters"] += meters
+        group["amount"] += amount
+
     for piece in edge_source:
-        if _factory_quantity(piece) <= 0:
+        factory_quantity = _factory_quantity(piece)
+        if factory_quantity <= 0:
             continue
         # Includes Clipped/L-Shaped corner pieces. Sides adjacent to the break
         # are already cleared to zero (Clipped) or shrunk to the dimension
         # remaining after the notch cut (L-Shaped) by the costing adapter, so
         # edge_meters/edge_cost_usd here are already correct as-is.
-        meters = _number(_value(piece, "edge_meters"))
-        if meters <= 0:
-            continue
         edge_type = _text(_value(piece, "edge_type"), "قشاط")
         rate = _number(_value(piece, "edge_rate_usd"))
-        group = edge_groups[(edge_type, rate)]
-        group["meters"] += meters
-        group["amount"] += _number(_value(piece, "edge_cost_usd")) or meters * rate
+        meters = _number(_value(piece, "edge_meters"))
+        amount = _number(_value(piece, "edge_cost_usd"))
+
+        if _number(_value(piece, "edge_break_only")):
+            break_rate = _number(_value(piece, "edge_break_rate_usd"))
+            break_meters = (
+                _number(_value(piece, "edge_break_length_cm"))
+                * factory_quantity
+                / 100
+            )
+            break_amount = break_meters * break_rate
+            add_edge_group(
+                edge_type,
+                rate,
+                max(0.0, meters - break_meters),
+                max(0.0, amount - break_amount),
+            )
+            add_edge_group(edge_type, break_rate, break_meters, break_amount)
+        else:
+            add_edge_group(
+                edge_type,
+                rate,
+                meters,
+                amount if amount or not rate else meters * rate,
+            )
 
     for (edge_type, rate), group in sorted(edge_groups.items()):
         lines.append(
@@ -262,7 +321,11 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "special_shape_price_note")),
                 }
             )
-        elif is_corner_cut(piece_type):
+        elif (
+            is_corner_cut(piece_type)
+            and _number(_value(piece, "edge_break"))
+            and _number(_value(piece, "edge_break_length_cm")) > 0
+        ):
             # Quantity is the break strap's own length (meters, for the factory
             # quantity actually billed), rate is the doubled per-meter price,
             # and amount is their product -- matches clipped_corner_edge_price_usd
@@ -281,56 +344,72 @@ def _customer_invoice_lines(
                     "note": _text(_value(piece, "clipped_corner_edge_price_note")),
                 }
             )
-        elif piece_type == "Extra":
-            specs = (
-                (
-                    "extra_double",
-                    "extra_double_unit_price_usd",
-                    "extra_double_total_usd",
-                    "دبل قشاط",
-                ),
-                (
-                    "extra_full_door_double",
-                    "extra_full_door_double_unit_price_usd",
-                    "extra_full_door_double_total_usd",
-                    "دبل كامل الدرفة",
-                ),
-                (
-                    "extra_liner",
-                    "extra_liner_unit_price_usd",
-                    "extra_liner_total_usd",
-                    "Liner",
-                ),
-                (
-                    "extra_back_groove",
-                    "extra_back_groove_unit_price_usd",
-                    "extra_back_groove_total_usd",
-                    "فرزة ظهر",
-                ),
-                (
-                    "extra_recessed_handle_cutout",
-                    "extra_recessed_handle_cutout_unit_price_usd",
-                    "extra_recessed_handle_cutout_total_usd",
-                    "حفر مسكة غطس",
-                ),
-            )
-            for flag_field, rate_field, amount_field, label in specs:
-                amount = _number(_value(piece, amount_field))
-                if not _number(_value(piece, flag_field)) and amount <= 0:
-                    continue
-                rate = _number(_value(piece, rate_field))
-                lines.append(
-                    {
-                        "type": "extra_addon",
-                        "description": f"إضافة {label} — درفة رقم {index}",
-                        "quantity": quantity,
-                        "unit": "درفة",
-                        "rate_usd": _money(rate),
-                        "amount_usd": _money(rate * quantity if rate else amount),
-                        "note": _text(_value(piece, "notes")),
-                    }
-                )
 
+        # Physical execution counts manufactured copies; the commercial
+        # projection supplies the billable door quantity for every add-on.
+        # Old snapshots without that projection retain ordered quantity.
+        addon_quantity = max(
+            0.0,
+            _number(_value(piece, "addon_billable_qty"))
+            if "addon_billable_qty" in piece
+            else float(_quantity(_value(piece, "qty"))),
+        )
+        specs = (
+            (
+                "extra_double",
+                "extra_double_unit_price_usd",
+                "extra_double_total_usd",
+                "دبل ضلع",
+            ),
+            (
+                "extra_full_door_double",
+                "extra_full_door_double_unit_price_usd",
+                "extra_full_door_double_total_usd",
+                "دبل كامل الدرفة",
+            ),
+            (
+                "extra_liner",
+                "extra_liner_unit_price_usd",
+                "extra_liner_total_usd",
+                "Liner",
+            ),
+            (
+                "extra_back_groove",
+                "extra_back_groove_unit_price_usd",
+                "extra_back_groove_total_usd",
+                "فرزة ظهر",
+            ),
+            (
+                "extra_recessed_handle_cutout",
+                "extra_recessed_handle_cutout_unit_price_usd",
+                "extra_recessed_handle_cutout_total_usd",
+                "حفر مسكة غطس",
+            ),
+        )
+        for flag_field, rate_field, amount_field, label in specs:
+            amount = _number(_value(piece, amount_field))
+            if not _number(_value(piece, flag_field)) and amount <= 0:
+                continue
+            rate = _number(_value(piece, rate_field))
+            # Already prorated by the commercial execution projection. Retain
+            # its unrounded value until all add-ons can share cent allocation.
+            billable_amount = (
+                amount if amount_field in piece and piece[amount_field] is not None
+                else rate * addon_quantity
+            )
+            line = {
+                "type": "extra_addon",
+                "description": f"إضافة {label} — درفة رقم {index}",
+                "quantity": addon_quantity,
+                "unit": "درفة",
+                "rate_usd": _money(rate),
+                "amount_usd": _money(billable_amount),
+                "note": _text(_value(piece, "notes")),
+            }
+            lines.append(line)
+            addon_amounts.append((line, billable_amount))
+
+    _allocate_addon_cents(addon_amounts)
     return lines
 
 

@@ -371,6 +371,16 @@ def _apply_snapshot(
     )
     plan.input_fingerprint = fingerprint
     plan.plan_needs_recalculation = 0
+    saw_center_status = str(snapshot.get("saw_center_status") or "").strip()
+    if str(plan.source_type or "") == "System":
+        # System design exports omit saw centers until Production approval.
+        saw_center_status = "Absent"
+        snapshot["saw_center_status"] = "Absent"
+    elif saw_center_status not in {"Absent", "Present", "Legacy"}:
+        saw_center_status = "Unknown"
+        snapshot["saw_center_status"] = saw_center_status
+    if hasattr(plan, "saw_center_status"):
+        plan.saw_center_status = saw_center_status
     plan.snapshot_json = frappe.as_json(snapshot)
 
     plan.set("sources", [])
@@ -442,9 +452,32 @@ def _apply_snapshot(
                     "original_width_cm": flt(piece.get("original_w")),
                     "original_length_cm": flt(piece.get("original_h")),
                     "piece_type": piece.get("piece_type") or "Regular",
+                    "extra_double": 1 if piece.get("extra_double") else 0,
+                    "extra_double_reference_sides": piece.get(
+                        "extra_double_reference_sides"
+                    ) or "",
                     "clipped_corner_position": piece.get("clipped_corner_position") or "",
                     "clipped_corner_width_cm": flt(piece.get("clipped_corner_width_cm")),
                     "clipped_corner_length_cm": flt(piece.get("clipped_corner_length_cm")),
+                    "extra_liner": 1 if piece.get("extra_liner") else 0,
+                    "liner_reference_side": piece.get("liner_reference_side") or "",
+                    "liner_offset_cm": flt(piece.get("liner_offset_cm")),
+                    "liner_width_cm": flt(piece.get("liner_width_cm")),
+                    "liner_start_cm": flt(piece.get("liner_start_cm")),
+                    "liner_length_cm": flt(piece.get("liner_length_cm")),
+                    "liner_specs_json": piece.get("liner_specs_json") or "",
+                    "extra_back_groove": 1 if piece.get("extra_back_groove") else 0,
+                    "back_groove_reference_side": piece.get("back_groove_reference_side") or "",
+                    "back_groove_offset_cm": flt(piece.get("back_groove_offset_cm")),
+                    "back_groove_width_cm": flt(piece.get("back_groove_width_cm")),
+                    "back_groove_start_cm": flt(piece.get("back_groove_start_cm")),
+                    "back_groove_length_cm": flt(piece.get("back_groove_length_cm")),
+                    "extra_recessed_handle_cutout": 1 if piece.get("extra_recessed_handle_cutout") else 0,
+                    "recessed_handle_reference_side": piece.get("recessed_handle_reference_side") or "",
+                    "recessed_handle_offset_cm": flt(piece.get("recessed_handle_offset_cm")),
+                    "recessed_handle_width_cm": flt(piece.get("recessed_handle_width_cm")),
+                    "recessed_handle_start_cm": flt(piece.get("recessed_handle_start_cm")),
+                    "recessed_handle_length_cm": flt(piece.get("recessed_handle_length_cm")),
                     "special_shape_geometry_json": piece.get("special_shape_geometry_json") or "",
                     "rotated": 1 if piece.get("rotated") else 0,
                     "edge_long_right": 1 if piece.get("edge_long_right") else 0,
@@ -452,6 +485,7 @@ def _apply_snapshot(
                     "edge_width_top": 1 if piece.get("edge_width_top") else 0,
                     "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
                     "edge_break": 1 if piece.get("edge_break") else 0,
+                    "edge_break_only": 1 if piece.get("edge_break_only") else 0,
                     "edge_type": piece.get("edge_type") or "",
                     "notes": piece.get("notes") or "",
                 },

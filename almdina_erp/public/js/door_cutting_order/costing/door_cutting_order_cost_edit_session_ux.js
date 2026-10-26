@@ -1,6 +1,23 @@
 (() => {
     "use strict";
 
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
+    }
+
     if (window.AlmdinaCostEditSessionUX) return;
 
     const COST_SETTING_FIELDS = Object.freeze([
@@ -9,8 +26,8 @@
     ]);
     const OFFCUT_PRICE_FIELD = "offcut_price_usd";
     const REQUIRED_COST_LABELS = Object.freeze({
-        board_rate_usd: "سعر اللوح",
-        cutting_cost_per_board_usd: "أجور القص / لوح",
+        board_rate_usd: "Board price",
+        cutting_cost_per_board_usd: "Cutting charge / board",
     });
     const STATUS_KEY = "__almdinaFocusedCostStatus";
     const STATUS_OWNER_KEY = "__almdinaFocusedCostStatusOwnerInstalled";
@@ -78,25 +95,33 @@
         return true;
     }
 
+    function serverAllowsCostSettingsEdit(frm) {
+        const state = workspaceSnapshot(frm);
+        if (!state || state.status !== "ready" || !state.data) return null;
+        if (!Object.prototype.hasOwnProperty.call(state.data, "can_edit_cost_settings")) {
+            return null;
+        }
+        return Boolean(state.data.can_edit_cost_settings);
+    }
+
     function canEditCostSettings(frm) {
         if (!baseDocumentEditable(frm)) return false;
+        if (!hasCostSettingsCapability(frm)) return false;
+        // The snapshot is the same effective document-level decision enforced by
+        // the financial command. Missing/stale authority fails closed until reload.
+        return serverAllowsCostSettingsEdit(frm) === true;
+    }
+
+    function hasCostSettingsCapability(frm) {
         return Boolean(can(frm, "view_costs") && can(frm, "edit_cost_settings"));
     }
 
     function canEditPiecePrices(frm) {
-        if (!baseDocumentEditable(frm)) return false;
-        // Canonical price commands call assert_order_editable(), which is Draft-only.
-        if (String(frm.doc.status || "Draft") !== "Draft") return false;
-        return Boolean(
-            can(frm, "view_costs")
-            && (can(frm, "approve_special_price") || can(frm, "edit_special_price"))
-        );
+        return canEditCostSettings(frm);
     }
 
     function canEditCostWorkspace(frm) {
-        // One visual edit session hosts independent financial authorities. Owning
-        // price approval must never imply edit_cost_settings, and vice versa.
-        return canEditCostSettings(frm) || canEditPiecePrices(frm);
+        return canEditCostSettings(frm);
     }
 
     function workspaceSnapshot(frm) {
@@ -293,11 +318,12 @@
         });
         if (!missing.length) return true;
 
-        const labels = missing.map((fieldname) => __(REQUIRED_COST_LABELS[fieldname] || fieldname));
+        const labels = missing.map((fieldname) => REQUIRED_COST_LABELS[fieldname] || fieldname);
         frappe.msgprint({
-            title: __("حقول مطلوبة"),
-            message: __("يجب إدخال القيم التالية من صفحة التكلفة قبل الحفظ: {0}")
-                .replace("{0}", labels.join("، ")),
+            title: translate("Required fields"),
+            message: translate("Enter these cost-page values before saving: {0}", [
+                labels.map(label => translate(label)).join(", "),
+            ]),
             indicator: "orange",
         });
         const fieldEditor = editor();
@@ -320,6 +346,19 @@
         const owner = priceOwner();
         if (!owner || typeof owner.pendingPricePieces !== "function") return [];
         return owner.pendingPricePieces(frm) || [];
+    }
+
+    function pendingSpecialPrices(frm) {
+        const owner = priceOwner();
+        if (!owner || typeof owner.pendingSpecialPrices !== "function") return [];
+        return owner.pendingSpecialPrices(frm) || [];
+    }
+
+    function clearPendingSpecialPrices(frm) {
+        const owner = priceOwner();
+        if (owner && typeof owner.clearPendingSpecialPrices === "function") {
+            owner.clearPendingSpecialPrices(frm);
+        }
     }
 
     async function flushPendingPriceEdits(frm, options = {}) {
@@ -345,12 +384,15 @@
     }
 
     async function startEditing(frm, sessionContext = null) {
-        if (!canEditCostWorkspace(frm)) {
-            frappe.msgprint(__("لا تملك صلاحية تعديل التكلفة أو تسعير الدرف الخاصة لهذا المستند."));
+        // A read-only snapshot is needed to obtain the server's document-level
+        // decision. Local capability checks may start that GET, but never grant
+        // the edit session until the returned decision is true.
+        if (!baseDocumentEditable(frm) || !hasCostSettingsCapability(frm)) {
+            frappe.msgprint(translate("You do not have permission to edit the cost or special-door prices for this document."));
             return false;
         }
         if (frm.is_dirty && frm.is_dirty()) {
-            frappe.msgprint(__("احفظ أو ألغِ تعديلات الطلب الحالية قبل فتح تعديل التكلفة."));
+            frappe.msgprint(translate("Save or cancel the current order edits before opening cost editing."));
             return false;
         }
 
@@ -361,19 +403,23 @@
             if (!documentStillCurrent(frm, token)) return false;
             console.error("Cost workspace load failed while starting edit", error);
             frappe.msgprint({
-                title: __("تعذر تحميل التكلفة"),
-                message: __("تعذر تحميل بيانات التكلفة الحالية. أعد تحميل الطلب ثم حاول مرة أخرى."),
+                title: translate("Could not load the cost"),
+                message: translate("Could not load the current cost data. Reload the order and try again."),
                 indicator: "red",
             });
             return false;
         }
         if (!documentStillCurrent(frm, token)) return false;
         if (!sessionIsCurrent(frm, sessionContext)) return false;
+        if (!canEditCostWorkspace(frm)) {
+            frappe.msgprint(translate("Your permissions or this document state no longer allow editing this section."));
+            return false;
+        }
 
         const store = storeFor(frm);
         const seed = currentSettings(frm);
         if (!store || !seed) {
-            frappe.msgprint(__("تعذر تحميل بيانات التكلفة الحالية."));
+            frappe.msgprint(translate("Could not load the current cost data."));
             return false;
         }
 
@@ -381,8 +427,8 @@
         const startedState = store.snapshot();
         if (!started || !startedState || startedState.editing !== true) {
             frappe.msgprint({
-                title: __("تعذر بدء التعديل"),
-                message: __("لم تصبح بيانات التكلفة جاهزة لوضع التعديل. أعد المحاولة بعد اكتمال التحميل."),
+                title: translate("Could not start editing"),
+                message: translate("The cost data is not ready for editing. Try again after loading finishes."),
                 indicator: "orange",
             });
             return false;
@@ -429,7 +475,7 @@
             await cancelEditing(frm, sessionContext);
             if (!sessionIsCurrent(frm, sessionContext)) return false;
             if (window.cur_frm === frm) {
-                frappe.msgprint(__("لم تعد صلاحياتك أو حالة هذا المستند تسمح بتعديل هذا القسم."));
+                frappe.msgprint(translate("Your permissions or this document state no longer allow editing this section."));
             }
             return false;
         }
@@ -473,7 +519,7 @@
 
         if (canEditCostSettings(frm)) {
             const api = window.AlmdinaCostWorkspaceAPI;
-            if (!api || typeof api.saveSettings !== "function") return false;
+            if (!api || typeof api.saveWorkspace !== "function") return false;
 
             // Capture the visible controls exactly once. Validation, dirty detection,
             // and transport all consume this same payload so the UI can never show
@@ -489,27 +535,62 @@
             const payload = normalizeCostSettings(captured);
             store.replaceDraft(payload);
             const pending = store.snapshot();
+            const specialPrices = pendingSpecialPrices(frm);
+
+            if (pending.dirty && !canEditCostSettings(frm)) {
+                frappe.msgprint({
+                    title: translate("Missing permission"),
+                    message: translate("You do not have permission to edit cost settings."),
+                    indicator: "orange",
+                });
+                return false;
+            }
 
             if (pending.dirty && !validateRequiredCostSettings(frm, captured)) {
                 return false;
             }
 
-            if (pending.dirty) {
-                const saved = await api.saveSettings(orderName, payload);
-                if (!documentStillCurrent(frm, token)) return false;
-                if (!sessionIsCurrent(frm, sessionContext)) return false;
-                if (!validSavedSnapshot(saved)) {
+            if (pending.dirty || specialPrices.length) {
+                const expectedModified = String(
+                    currentState.data && currentState.data.order_modified
+                    || frm.doc.modified
+                    || ""
+                ).trim();
+                if (!expectedModified) {
                     frappe.msgprint({
-                        title: __("تعذر حفظ التكلفة"),
-                        message: __("لم يعُد الخادم ببيانات التكلفة المحفوظة. لم يتم إغلاق وضع التعديل."),
+                        title: translate("Could not save the cost"),
+                        message: translate("Could not verify the current order revision. Reload the order and try again."),
                         indicator: "red",
                     });
                     return false;
                 }
+                const saved = await api.saveWorkspace(
+                    orderName,
+                    {
+                        cost_settings: pending.dirty ? payload : null,
+                        special_prices: specialPrices,
+                    },
+                    expectedModified
+                );
+                if (!documentStillCurrent(frm, token)) return false;
+                if (!sessionIsCurrent(frm, sessionContext)) return false;
+                if (!validSavedSnapshot(saved)) {
+                    frappe.msgprint({
+                        title: translate("Could not save the cost"),
+                        message: translate("The server did not return the saved cost data. Editing was not closed."),
+                        indicator: "red",
+                    });
+                    return false;
+                }
+                clearPendingSpecialPrices(frm);
                 if (owner && typeof owner.commit === "function") {
                     owner.commit(frm, saved);
                 } else {
                     store.commit(saved);
+                }
+                const approvalUx = window.AlmdinaFinalPriceApprovalUX;
+                if (approvalUx && typeof approvalUx.consumeInvalidationSignal === "function") {
+                    approvalUx.consumeInvalidationSignal(frm, saved, token);
                 }
             } else {
                 store.cancelEdit();
@@ -525,9 +606,9 @@
         projectCurrent(frm);
         applyFieldAccess(frm);
 
-        // Special/clipped prices belong to their capability-protected commands,
-        // but the Cost tab Save action owns this user intent. Flush them here,
-        // after the settings draft closes, and reload one authoritative snapshot.
+        // Clipped-corner pricing keeps its independent command. Special prices
+        // were already part of the unified Cost save above; flush only remaining
+        // clipped edits and reload one authoritative snapshot.
         const hadPendingPrices = pendingPricePieces(frm).length > 0;
         if (hadPendingPrices) {
             const flushed = await flushPendingPriceEdits(frm, { refresh: false });
@@ -546,7 +627,7 @@
         sync(frm);
         signalEditChanged(frm);
         frappe.show_alert({
-            message: __("تم حفظ تعديلات التكلفة وإعادة القسم إلى وضع القراءة."),
+            message: translate("The cost and special door price edits were saved and the section returned to read-only."),
             indicator: "green",
         }, 5);
         return true;

@@ -43,9 +43,9 @@
     align-items: center;
     min-height: 24px;
     padding: 2px 9px;
-    border: 1px solid var(--border-color, #dfe3e8);
+    border: 1px solid var(--alm-card-border, #e4e8ee);
     border-radius: 999px;
-    background: var(--subtle-fg, #f4f5f6);
+    background: var(--alm-surface-muted, #f4f6f8);
     font-weight: 650;
 }
 
@@ -53,14 +53,14 @@
 .dco-order-list .list-row-container.dco-list-row-completed,
 .dco-order-list .list-row-container.dco-list-row-completed > .list-row,
 .dco-order-list .list-row-container.dco-list-row-completed > .list-row .list-row-col {
-    background: #dcfce7 !important;
-    border-color: #86efac !important;
+    background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;
+    border-color: color-mix(in srgb, #16a34a 40%, var(--alm-card, #ffffff)) !important;
 }
 
 .dco-order-list .list-row-container.dco-list-row-completed:hover,
 .dco-order-list .list-row-container.dco-list-row-completed > .list-row:hover,
 .dco-order-list .list-row-container.dco-list-row-completed > .list-row:hover .list-row-col {
-    background: #bbf7d0 !important;
+    background: color-mix(in srgb, #16a34a 22%, var(--alm-card, #ffffff)) !important;
 }
 
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery,
@@ -68,8 +68,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery .list-row-col {
-    background: #ecfdf3 !important;
-    background-color: #ecfdf3 !important;
+    background: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;
     border-color: #16a34a !important;
 }
 
@@ -78,8 +78,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-ready-for-delivery:hover .list-row-col {
-    background: #bbf7d0 !important;
-    background-color: #bbf7d0 !important;
+    background: color-mix(in srgb, #16a34a 18%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #16a34a 18%, var(--alm-card, #ffffff)) !important;
 }
 
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered,
@@ -87,8 +87,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered .list-row-col {
-    background: #a7f3d0 !important;
-    background-color: #a7f3d0 !important;
+    background: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;
     border-color: #047857 !important;
 }
 
@@ -97,8 +97,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-delivered:hover .list-row-col {
-    background: #6ee7b7 !important;
-    background-color: #6ee7b7 !important;
+    background: color-mix(in srgb, #047857 32%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #047857 32%, var(--alm-card, #ffffff)) !important;
 }
 
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled,
@@ -106,8 +106,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled .list-row-col {
-    background: #fecaca !important;
-    background-color: #fecaca !important;
+    background: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;
     border-color: #b91c1c !important;
 }
 
@@ -116,8 +116,8 @@
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .level-left,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .level-right,
 .dco-order-list:not(.dco-order-card-layout) .list-row-container.dco-list-row-cancelled:hover .list-row-col {
-    background: #fca5a5 !important;
-    background-color: #fca5a5 !important;
+    background: color-mix(in srgb, #b91c1c 28%, var(--alm-card, #ffffff)) !important;
+    background-color: color-mix(in srgb, #b91c1c 28%, var(--alm-card, #ffffff)) !important;
 }
 
 /* Completed worker history is hidden when the actor lacks view_shop_floor_history. */
@@ -126,19 +126,19 @@
 }
 
 .dco-order-list .dco-mobile-order-card.dco-list-row-completed {
-    background: #dcfce7 !important;
-    border-color: #86efac !important;
+    background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;
+    border-color: color-mix(in srgb, #16a34a 40%, var(--alm-card, #ffffff)) !important;
 }
 
 .almdina-sf-list.is-completed .shop-floor-order-card,
 .almdina-sf-order-card.is-completed {
-    background: #dcfce7 !important;
-    border-color: #86efac !important;
+    background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;
+    border-color: color-mix(in srgb, #16a34a 40%, var(--alm-card, #ffffff)) !important;
 }
 
 .almdina-sf-list.is-completed .shop-floor-order-card:hover,
 .almdina-sf-order-card.is-completed:hover {
-    background: #bbf7d0 !important;
+    background: color-mix(in srgb, #16a34a 22%, var(--alm-card, #ffffff)) !important;
 }
 
 .dco-order-list .filter-section {

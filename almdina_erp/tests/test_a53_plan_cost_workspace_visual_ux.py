@@ -104,12 +104,12 @@ def test_a53_visual_states_are_explicit_accessible_and_arabic_first() -> None:
     assert 'node.setAttribute("aria-busy", "true")' in visual
     assert 'node.setAttribute("aria-live", "polite")' in visual
     assert '"idle", "loading", "ready", "error"' in visual
-    assert "وضع التعديل مفعّل" in visual
-    assert "اضغط «حفظ» من أعلى الصفحة" in visual
+    assert "data-dco-edit-banner" in visual
+    assert "content:attr(data-dco-edit-banner)" in visual
     assert '[data-fieldname="plan_control_actions"][data-almdina-workspace-editing="1"]::before' in visual
     assert "content:none !important" in visual
     assert "dco-plan-stale-copy" in source(FAST_SAVE := ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_fast_save_ux.js")
-    assert "تحتاج إعادة حساب" in FAST_SAVE.read_text(encoding="utf-8")
+    assert 'translateCopy("⚡ Recalculation needed")' in FAST_SAVE.read_text(encoding="utf-8")
     assert "dco-plan-settings-editor__action-bar" in source(VISUAL)
     manifest = (ROOT / "frontend_assets.py").read_text(encoding="utf-8")
     assert "door_cutting_order_plan_workspace_layout.css" in manifest
@@ -223,7 +223,7 @@ def test_plan_edit_surface_styles_stay_scoped_to_the_edit_session() -> None:
     assert "dco-piece-size-mm" in renderer
     assert "dco-sheet-stats-read" in renderer
     assert "dco-piece-size { display: none !important; }" in renderer
-    assert "إعدادات القص" in edit_session
+    assert 'translate("Cutting settings")' in edit_session
     assert "dco-plan-settings-editor__settings-row" in edit_session
     assert "dco-plan-settings-editor__recalc-btn" in edit_session
     assert "dco-plan-preview-badge" in preview

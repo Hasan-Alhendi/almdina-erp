@@ -27,6 +27,8 @@ class Capability:
     EDIT_COST_SETTINGS = "edit_cost_settings"
     EDIT_SPECIAL_PRICE = "edit_special_price"
     APPROVE_SPECIAL_PRICE = "approve_special_price"
+    APPROVE_FINAL_PRICE = "approve_final_price"
+    CANCEL_FINAL_PRICE_APPROVAL = "cancel_final_price_approval"
     PRINT_MEASUREMENTS = "print_measurements"
     PRINT_CUSTOMER_INVOICE = "print_customer_invoice"
     PRINT_INTERNAL_COST_REPORT = "print_internal_cost_report"
@@ -82,6 +84,8 @@ class Capability:
     EDIT_FACTORY_PRINT_IDENTITY = "edit_factory_print_identity"
     MANAGE_WHATSAPP_SESSION = "manage_whatsapp_session"
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
+    MANAGE_BACKUPS = "manage_backups"
+    RESTORE_BACKUPS = "restore_backups"
 
     # Master data
     VIEW_PRODUCTION_ROUTINGS = "view_production_routings"
@@ -148,6 +152,13 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_COST_SETTINGS, Capability.EDIT_COST_SETTINGS, CUTTING_PLAN_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.EDIT_SPECIAL_PRICE, Capability.EDIT_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
     CapabilityDefinition(Capability.APPROVE_SPECIAL_PRICE, Capability.APPROVE_SPECIAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(Capability.APPROVE_FINAL_PRICE, Capability.APPROVE_FINAL_PRICE, _ORDER_DOCTYPE, "costing"),
+    CapabilityDefinition(
+        Capability.CANCEL_FINAL_PRICE_APPROVAL,
+        Capability.CANCEL_FINAL_PRICE_APPROVAL,
+        _ORDER_DOCTYPE,
+        "costing",
+    ),
     CapabilityDefinition(Capability.PRINT_MEASUREMENTS, Capability.PRINT_MEASUREMENTS, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_CUSTOMER_INVOICE, Capability.PRINT_CUSTOMER_INVOICE, _ORDER_DOCTYPE, "documents"),
     CapabilityDefinition(Capability.PRINT_INTERNAL_COST_REPORT, Capability.PRINT_INTERNAL_COST_REPORT, _ORDER_DOCTYPE, "documents"),
@@ -210,6 +221,8 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.EDIT_FACTORY_PRINT_IDENTITY, Capability.EDIT_FACTORY_PRINT_IDENTITY, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.MANAGE_WHATSAPP_SESSION, Capability.MANAGE_WHATSAPP_SESSION, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_WHATSAPP_MESSAGES, Capability.EDIT_WHATSAPP_MESSAGES, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.EDIT_PRODUCTION_ROUTINGS, "write", _ROUTING_DOCTYPE, "master_data", False),

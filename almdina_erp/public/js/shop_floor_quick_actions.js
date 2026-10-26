@@ -1,6 +1,35 @@
 (() => {
     "use strict";
 
+
+    function translate(message, replacements) {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.translate === "function") {
+            return locale.translate(message, replacements);
+        }
+        if (typeof __ === "function") {
+            return replacements === undefined ? __(message) : __(message, replacements);
+        }
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split("{" + index + "}").join(String(value));
+            });
+        }
+        return text;
+    }
+
+    function uiDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") {
+            const value = locale.direction();
+            if (value === "ltr" || value === "rtl") return value;
+        }
+        const root = typeof document !== "undefined" ? document.documentElement : null;
+        const dir = root && root.getAttribute("dir");
+        return dir === "ltr" ? "ltr" : "rtl";
+    }
+
     const SHOP_FLOOR_STYLESHEET_ID = "almdina-shop-floor-responsive-css";
     const SHOP_FLOOR_STYLESHEET_HREF = "/assets/almdina_erp/css/shop_floor_responsive.css";
     const WORKER_DROPDOWN_STYLESHEET_ID = "almdina-shop-floor-worker-dropdown-css";
@@ -39,21 +68,21 @@
         if (context && context.canDeliver === true) {
             return {
                 kind: "deliver",
-                label: __("تم التسليم"),
+                label: translate("Delivered"),
                 indicator: "success",
             };
         }
         if (context && context.canStart === true) {
             return {
                 kind: "start",
-                label: __("بدء العمل"),
+                label: translate("Start work"),
                 indicator: "primary",
             };
         }
         if (context && context.canHandoff === true) {
             return {
                 kind: "handoff",
-                label: __("إنهاء وإرسال"),
+                label: translate("Finish and send"),
                 indicator: "success",
             };
         }
@@ -123,7 +152,7 @@
             method,
             args,
             freeze: true,
-            freeze_message: freezeMessage || __("جاري تحديث مسار الإنتاج..."),
+            freeze_message: freezeMessage || translate("Updating the production route..."),
         }).then(response => {
             const data = response.message || {};
             if (!boundary.isCurrent()) {
@@ -149,7 +178,7 @@
             method: METHODS.start,
             args: { stage_name: context.stage },
             button: options.button,
-            successMessage: __("تم بدء العمل."),
+            successMessage: translate("Work has started."),
             onSuccess: options.onSuccess,
             onError: options.onError,
             lifecycle: options.lifecycle,
@@ -161,8 +190,8 @@
             method: METHODS.deliver,
             args: { order_name: context.order },
             button: options.button,
-            successMessage: __("تم تسليم الطلب للعميل."),
-            freezeMessage: __("جاري تسجيل تسليم الطلب..."),
+            successMessage: translate("The order was delivered to the customer."),
+            freezeMessage: translate("Recording order delivery..."),
             onSuccess: options.onSuccess,
             onError: options.onError,
             lifecycle: options.lifecycle,
@@ -174,7 +203,7 @@
             method: METHODS.handoff,
             args: { stage_name: context.stage },
             button: options.button,
-            successMessage: __("الطلب جاهز للتسليم."),
+            successMessage: translate("The order is ready for delivery."),
             onSuccess: options.onSuccess,
             onError: options.onError,
             lifecycle: options.lifecycle,
@@ -187,7 +216,7 @@
         const boundary = lifecycleBoundary(options);
         if (!boundary.isCurrent()) return null;
         const surface = frappe.confirm(
-            __("تأكيد إنهاء آخر مرحلة واعتبار الطلب جاهزًا للتسليم؟"),
+            translate("Confirm finishing the last stage and marking the order ready for delivery?"),
             () => {
                 if (boundary.isCurrent()) finish();
             }
@@ -209,7 +238,7 @@
                 ${choice.meta ? `<span class="almdina-worker-dropdown-option-meta">${escapeHtml(choice.meta)}</span>` : ""}
             </button>
         `).join("");
-        const displayValue = selected ? selected.label : __("اختر العامل");
+        const displayValue = selected ? selected.label : translate("Choose a worker");
 
         return `
             <div class="almdina-worker-dropdown-field">
@@ -267,7 +296,7 @@
                 }
                 if (!selected) {
                     frappe.show_alert({
-                        message: __("اختر العامل التالي أولاً."),
+                        message: translate("Choose the next worker first."),
                         indicator: "orange",
                     });
                     if (trigger) trigger.focus();
@@ -280,6 +309,9 @@
         boundary.ownTransient(dialog, "worker-dialog");
         if (!boundary.isCurrent()) return dialog;
         dialog.show();
+        if (dialog.$wrapper && typeof dialog.$wrapper.attr === "function") {
+            dialog.$wrapper.attr("dir", uiDirection());
+        }
         const field = dialog.fields_dict && dialog.fields_dict.next_assignee_dropdown;
         const root = field && field.$wrapper && field.$wrapper[0];
         if (!root) return dialog;
@@ -395,7 +427,7 @@
             : [];
         if (!workers.length) {
             const surface = frappe.msgprint(
-                __("لا يوجد عمال متاحون للدور {0} في القسم التالي.", [
+                translate("No workers are available for role {0} in the next department.", [
                     handoffContext.operational_role || "",
                 ])
             );
@@ -404,12 +436,12 @@
 
         const nextDepartment = handoffContext.next_department
             || handoffContext.next_stage_type
-            || __("القسم التالي");
+            || translate("Next department");
         return createWorkerDropdownDialog({
-            title: __("إنهاء وإرسال"),
-            label: `${__("العامل التالي")} — ${nextDepartment}`,
+            title: translate("Finish and send"),
+            label: `${translate("Next worker")} — ${nextDepartment}`,
             workers,
-            primaryLabel: __("إرسال"),
+            primaryLabel: translate("Send"),
             lifecycle: options.lifecycle,
             onSubmit(nextAssignee, dialog) {
                 if (!boundary.isCurrent()) return null;
@@ -421,7 +453,7 @@
                         next_assignee: nextAssignee,
                     },
                     button: options.button,
-                    successMessage: __("تم إنهاء المرحلة وإرسال الطلب للقسم التالي."),
+                    successMessage: translate("The stage was finished and the order was sent to the next department."),
                     onSuccess: options.onSuccess,
                     onError: options.onError,
                     lifecycle: options.lifecycle,
@@ -473,10 +505,11 @@
         }).then(response => {
             if (!boundary.isCurrent()) return null;
             const stage = response.message || {};
-            if (stage.actor_holds_operational_role === false) {
-                const surface = frappe.msgprint(__(
-                    "يمكنك عرض هذا الطلب فقط. مرحلته الحالية ليست ضمن أدوارك التشغيلية."
-                ));
+            const canOperateCurrentStage = stage.actor_can_operate_current_stage !== undefined
+                ? stage.actor_can_operate_current_stage === true
+                : stage.actor_holds_operational_role !== false;
+            if (!canOperateCurrentStage) {
+                const surface = frappe.msgprint(translate("You can view this order only. Its current stage is outside your operational roles."));
                 boundary.ownTransient(surface, "not-operational-role");
                 return null;
             }
@@ -484,7 +517,7 @@
                 ? stage.can_start_stage === true
                 : stage.can_handoff_stage === true;
             if (!stillAllowed) {
-                const surface = frappe.msgprint(__("لم يعد هذا الإجراء متاحًا في حالة الطلب الحالية."));
+                const surface = frappe.msgprint(translate("This action is no longer available in the current order state."));
                 boundary.ownTransient(surface, "action-unavailable");
                 return null;
             }

@@ -150,7 +150,7 @@ def test_phone_measurements_use_labelled_cards_without_fixed_table_width():
         "labels.remove",
     ):
         assert f'data-label="${{{label_key}}}"' in operator
-    assert 'cell.dataset.label = isArabic() ? "تحديد السطر" : "Select row"' in bulk
+    assert 'cell.dataset.label = __("Select row")' in bulk
 
 
 def test_phone_controls_are_touch_sized_and_primary_surfaces_stack():
@@ -249,9 +249,9 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'class="dco-card-state-icon"' in list_source
     assert 'class="dco-card-order-link"' in list_source
     assert 'class="dco-card-info-grid"' in list_source
-    assert 'renderInfoTile("لون اللوح", model.boardColor' in list_source
-    assert 'renderInfoTile("لون القشاط", model.edgeColor' in list_source
-    assert 'renderInfoTile("نوع القشاط", model.edgeType' in list_source
+    assert 'renderInfoTile("Board color", model.boardColor' in list_source
+    assert 'renderInfoTile("Edge color", model.edgeColor' in list_source
+    assert 'renderInfoTile("Edge type", model.edgeType' in list_source
     assert '"default_edge_type"' in list_source
     assert 'class="dco-card-workflow"' not in list_source
     assert 'class="dco-card-assignee"' not in list_source
@@ -261,7 +261,7 @@ def test_mobile_order_list_uses_reference_card_and_server_authorized_actions():
     assert 'if (!applyCardLayoutClass(listview)) {' in list_source
     assert "containers.forEach(removeMobileCard);" in list_source
     assert "ensureMobileCardStylesheet();" in list_source
-    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=9"' in list_source
+    assert 'MOBILE_CARD_STYLESHEET_HREF = "/assets/almdina_erp/css/door_cutting_order_mobile_list.css?v=11"' in list_source
     assert ".dco-order-list.dco-order-card-layout" in mobile_css
     scoped_result_rule = mobile_css.split(
         ".dco-order-list.dco-order-card-layout .result {",
@@ -308,15 +308,20 @@ def test_order_list_status_filter_uses_frappe_standard_filter_contract():
     list_source = source(LIST_UX)
 
     assert "custom_filter_configs:" in list_source
-    assert "function statusFilterConfig()" in list_source
+    assert "function statusFilterConfig(options = {})" in list_source
+    assert "statusFilterConfig({ localize: false })" in list_source
+    assert "assigneeFilterConfig({ localize: false })" in list_source
+    assert "priceApprovalFilterConfig({ localize: false })" in list_source
+    assert 'PRICE_APPROVAL_FILTER_FIELDNAME = "price_approval_status"' in list_source
     assert "function reconcileStatusFilterLayout(listview)" in list_source
     assert "function reconcileMobileListToolbarLayout(listview)" in list_source
     assert "data-dco-list-toolbar-slot" in list_source
     assert "function hydrateStatusFilterOptions(listview)" in list_source
     assert 'STATUS_FILTER_FIELDNAME = "status"' in list_source
-    assert 'STATUS_FILTER_ALL_LABEL = "كل الحالات"' in list_source
+    assert 'STATUS_FILTER_ALL_LABEL = "All statuses"' in list_source
     assert "get_status_filter_options" in list_source
-    assert 'label: __("Status")' in list_source
+    assert 'label: labelFor("Status")' in list_source
+    assert 'field.df.label = translate("Status")' in list_source
     assert ".dco-status-filter-slot" in css
     assert ".dco-order-list .dco-status-filter-slot" in css
     assert ".dco-order-list.dco-order-card-layout .page-form" in css
@@ -375,7 +380,8 @@ def test_desktop_keeps_legacy_ordering_while_mobile_uses_five_states():
     assert "ordered.forEach(container => result.appendChild(container));" in list_source
     assert ".list-row-container.dco-list-row-completed > .list-row" in css
     assert ".list-row-container.dco-list-row-completed > .list-row .list-row-col" in css
-    assert "background: #dcfce7 !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 14%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: #dcfce7 !important;" not in css
     assert ".list-row-container.dco-list-row-history-hidden" in css
     assert "display: none !important;" in css
 
@@ -402,12 +408,15 @@ def test_desktop_list_colors_ready_for_delivery_and_delivered_rows_only():
     assert ".list-row-container.dco-list-row-ready-for-delivery .level-right" in css
     assert ".list-row-container.dco-list-row-delivered .level-right" in css
     assert ".list-row-container.dco-list-row-cancelled .level-right" in css
-    assert "background: #ecfdf3 !important;" in css
-    assert "background: #a7f3d0 !important;" in css
-    assert "background: #fecaca !important;" in css
+    assert "background: color-mix(in srgb, #16a34a 8%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: color-mix(in srgb, #047857 22%, var(--alm-card, #ffffff)) !important;" in css
+    assert "background: color-mix(in srgb, #b91c1c 18%, var(--alm-card, #ffffff)) !important;" in css
     assert "border-color: #16a34a !important;" in css
     assert "border-color: #047857 !important;" in css
     assert "border-color: #b91c1c !important;" in css
+    assert "background: #ecfdf3 !important;" not in css
+    assert "background: #a7f3d0 !important;" not in css
+    assert "background: #fecaca !important;" not in css
     assert "applyDesktopDeliveryRowColors(listview)" in list_source
     assert 'department === "جاهز للتسليم"' in list_source
     assert 'department === "تم التسليم"' in list_source
@@ -432,7 +441,7 @@ def test_overview_list_puts_delivered_orders_last_for_view_all_orders():
     assert "const OVERVIEW_LIST_SORT_RULES = Object.freeze({" in list_source
     assert 'delivered: Object.freeze({ rank: 1, field: "modified", direction: -1 })' in list_source
     assert 'const OVERVIEW_DEFAULT_SORT_FIELD = "__dco_default_sort"' in list_source
-    assert 'const OVERVIEW_DEFAULT_SORT_LABEL = "الترتيب الافتراضي"' in list_source
+    assert 'const OVERVIEW_DEFAULT_SORT_LABEL = "Default sort"' in list_source
     assert "function isOverviewDefaultSortActive(listview)" in list_source
     assert "function shouldSelectOverviewDefaultSort(sortBy, storage)" in list_source
     assert "function installOverviewDefaultSort(listview)" in list_source

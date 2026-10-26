@@ -39,7 +39,7 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=15"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=18"', manifest)
         self.assertIn('"/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)
@@ -87,7 +87,7 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('fieldname === "board_description" ? " dco-list-board-pill" : ""', source)
         self.assertIn('.dco-list-filterable-text.dco-list-board-pill', css)
         self.assertIn('border-radius: 999px;', css)
-        self.assertIn('background: var(--subtle-fg);', css)
+        self.assertIn('background: var(--alm-surface-muted, #f4f6f8);', css)
 
     def test_edge_color_is_plain_text_instead_of_a_pill(self) -> None:
         css = LIST_CSS.read_text(encoding="utf-8")
@@ -170,7 +170,8 @@ class TestDcoCompactListUx(unittest.TestCase):
         self.assertIn('--dco-col-basis: 150px;', css)
         self.assertIn('.current_production_stage, [data-fieldname="current_production_stage"]', css)
         self.assertIn('.department_status, [data-fieldname="department_status"]', css)
-        self.assertIn('.name, .list-subject, .order_date, [data-fieldname="name"]', css)
+        self.assertIn('.order_date, [data-fieldname="order_date"]', css)
+        self.assertIn("direction: ltr;", css)
         self.assertIn('.dco-order-list .list-row-head > .level-right', css)
         self.assertIn('.dco-order-list .list-row > .level-right', css)
         self.assertIn('display: none !important;', css)
@@ -211,6 +212,10 @@ class TestDcoCompactListUx(unittest.TestCase):
         css = LIST_CSS.read_text(encoding="utf-8")
 
         self.assertIn('.dco-order-list .dco-status-filter-slot {', css)
+        self.assertIn(
+            '.dco-order-list .dco-status-filter-slot [data-fieldname="price_approval_status"]',
+            css,
+        )
         self.assertIn('display: inline-flex !important;', css)
         self.assertIn('gap: 5px !important;', css)
         self.assertIn('width: auto !important;', css)

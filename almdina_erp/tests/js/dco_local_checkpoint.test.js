@@ -12,6 +12,7 @@ const scheduledFrames = new Map();
 const cleanups = new WeakMap();
 const writes = [];
 let failWrites = false;
+let repositoryUnavailable = false;
 let uuidSequence = 0;
 let officialSaveCalls = 0;
 let planSnapshot = null;
@@ -33,6 +34,58 @@ function workspaceStore(readSnapshot) {
 
 const planStore = workspaceStore(() => planSnapshot);
 const costStore = workspaceStore(() => costSnapshot);
+
+class FakeElement {
+    constructor(tagName) {
+        this.nodeType = 1;
+        this.tagName = String(tagName || "div").toUpperCase();
+        this.children = [];
+        this.parentNode = null;
+        this.attributes = {};
+        this.dataset = {};
+        this.classNames = new Set();
+        this.classList = {
+            add: (...names) => names.forEach((name) => this.classNames.add(name)),
+        };
+        this.hidden = false;
+        this.textContent = "";
+    }
+
+    get isConnected() {
+        return this.connectedRoot === true || Boolean(this.parentNode && this.parentNode.isConnected);
+    }
+
+    set className(value) {
+        this.classNames = new Set(String(value || "").split(/\s+/).filter(Boolean));
+    }
+
+    appendChild(child) {
+        child.remove();
+        child.parentNode = this;
+        this.children.push(child);
+        return child;
+    }
+
+    remove() {
+        if (!this.parentNode) return;
+        this.parentNode.children = this.parentNode.children.filter((child) => child !== this);
+        this.parentNode = null;
+    }
+
+    querySelector(selector) {
+        for (const child of this.children) {
+            if (selector === ".page-head" && child.classNames.has("page-head")) return child;
+            if (selector === ".dco-recovery-status" && child.classNames.has("dco-recovery-status")) return child;
+            const nested = child.querySelector(selector);
+            if (nested) return nested;
+        }
+        return null;
+    }
+
+    setAttribute(name, value) {
+        this.attributes[name] = String(value);
+    }
+}
 
 const repository = {
     createIdentity() {
@@ -64,8 +117,21 @@ const DocumentContext = {
     isSameDocument(frm, token) { return token && token.form === frm; },
     formIdentity(frm) { return identity(frm); },
     registerCleanup(frm, key, cleanup) {
-        cleanups.set(frm, { key, cleanup });
+        let effects = cleanups.get(frm);
+        if (!effects) {
+            effects = new Map();
+            cleanups.set(frm, effects);
+        }
+        effects.set(key, cleanup);
         return true;
+    },
+    advanceGeneration(frm) {
+        const effects = cleanups.get(frm);
+        if (effects) {
+            [...effects.values()].forEach((cleanup) => cleanup());
+            effects.clear();
+        }
+        frm._almdinaDocumentContextGeneration = Number(frm._almdinaDocumentContextGeneration || 0) + 1;
     },
     scheduleFrame(frm, key, callback) {
         scheduledFrames.set(`${identity(frm)}::${key}`, callback);
@@ -76,6 +142,7 @@ const DocumentContext = {
 const fakeDocument = {
     visibilityState: "visible",
     addEventListener(name, callback) { documentListeners.set(name, callback); },
+    createElement(tagName) { return new FakeElement(tagName); },
 };
 const fakeWindow = {
     location: { host: "erp.example.test" },
@@ -147,7 +214,12 @@ function run(relative) {
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_recovery_projection.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_checkpoint_session.js");
 run("../../public/js/door_cutting_order/recovery/application/door_cutting_order_new_recovery.js");
-fakeWindow.AlmdinaDcoRecovery.LocalDraftRepository = Object.freeze({ create: () => repository });
+fakeWindow.AlmdinaDcoRecovery.LocalDraftRepository = Object.freeze({
+    create: () => {
+        if (repositoryUnavailable) throw new Error("IndexedDB unavailable");
+        return repository;
+    },
+});
 fakeWindow.AlmdinaDcoRecovery.LocalAssetRepository = Object.freeze({ create: () => ({}) });
 run("../../public/js/door_cutting_order/recovery/presentation/door_cutting_order_local_checkpoint.js");
 
@@ -184,6 +256,33 @@ function runFrame(frm) {
 }
 
 (async () => {
+    repositoryUnavailable = true;
+    const unavailableForm = form("DCO-2026-00000");
+    const pageRoot = new FakeElement("div");
+    pageRoot.connectedRoot = true;
+    const pageHead = new FakeElement("div");
+    pageHead.className = "page-head";
+    pageRoot.appendChild(pageHead);
+    unavailableForm.page = { wrapper: pageRoot };
+    fakeWindow.cur_frm = unavailableForm;
+    handlers["Door Cutting Order"].onload(unavailableForm);
+    const firstError = pageHead.querySelector(".dco-recovery-status");
+    assert.ok(firstError, "repository failure is presented in reused form chrome");
+    assert.equal(firstError.dataset.recoveryState, "ERROR");
+
+    DocumentContext.advanceGeneration(unavailableForm);
+    assert.equal(firstError.isConnected, false, "unowned repository error UI is removed with its document generation");
+    assert.equal(pageHead.querySelector(".dco-recovery-status"), null);
+
+    unavailableForm.doc.name = "DCO-2026-00001";
+    handlers["Door Cutting Order"].onload(unavailableForm);
+    const nextGenerationError = pageHead.querySelector(".dco-recovery-status");
+    assert.ok(nextGenerationError, "the reused page chrome can show the next document's own error");
+    assert.notEqual(nextGenerationError, firstError);
+    DocumentContext.advanceGeneration(unavailableForm);
+    assert.equal(nextGenerationError.isConnected, false);
+    repositoryUnavailable = false;
+
     const editForm = form("DCO-2026-00001");
     fakeWindow.cur_frm = editForm;
     handlers["Door Cutting Order"].onload(editForm);
