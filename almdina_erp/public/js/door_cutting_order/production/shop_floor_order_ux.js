@@ -589,10 +589,10 @@
 		}
 
 		const identity = capture(frm);
-		const request = frappe.call({
+		const request = Promise.resolve(frappe.call({
 			method: "almdina_erp.almdina_erp.services.shop_floor_service.get_revert_targets",
 			args: { order_name: frm.doc.name },
-		}).then((response) => {
+		})).then((response) => {
 			if (!isCurrent(frm, identity) || revertTargetsKey(frm) !== key) return [];
 			const rows = Array.isArray(response.message) ? response.message : [];
 			frm.__almdinaRevertTargetsKey = key;

@@ -566,6 +566,11 @@ def _production_facts(
     route_starts_with_planning: bool = False,
 ) -> ProductionActionFacts:
     actor = repository.current_user()
+    route = (
+        _production_route(repository, str(_value(order, "production_path")))
+        if stage and _value(order, "production_path") else None
+    )
+    stage_type = str(_value(stage, "stage_type") or "")
     return ProductionActionFacts(
         order_status=_effective_order_status(repository, order, stage),
         production_path=_value(order, "production_path"),
@@ -583,6 +588,7 @@ def _production_facts(
         actor_roles=(),
         is_admin=actor == "Administrator",
         has_factory_work=bool(_value(order, "has_factory_work", True)),
+        stage_is_planning=bool(route and route.contains(stage_type) and route.stage(stage_type).is_planning_stage),
     )
 
 
@@ -976,3 +982,4 @@ __all__ = [
     "get_revert_targets",
     "get_shop_floor_context",
 ]
+

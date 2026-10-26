@@ -179,6 +179,7 @@ class TestStage12SecurityGate(unittest.TestCase):
             capabilities={Capability.START_ASSIGNED_STAGE},
             facts=ProductionActionFacts(
                 order_status="At Edge Banding",
+                has_cutting_plan=True,
                 current_stage_name="STAGE-EDGE",
                 stage_name="STAGE-EDGE",
                 stage_type="Edge Banding",

@@ -155,6 +155,17 @@ jobs:
       - name: Run plan payload and fingerprint tests
         run: python -m unittest -v almdina_erp.tests.test_order_plan_payloads
 
+      - name: Validate versioned cutting-plan fingerprint compatibility
+        run: |
+          python -m unittest -v \
+            almdina_erp.tests.test_plan_fingerprint_compatibility \
+            almdina_erp.tests.test_fingerprint_final_hardening \
+            almdina_erp.tests.test_plan_upgrade_contract \
+            almdina_erp.tests.test_plan_upgrade_audit
+
+      - name: Validate cutting-plan lifecycle safety
+        run: python -m unittest -v almdina_erp.tests.test_cutting_plan_lifecycle_safety
+
       - name: Run order costing tests
         run: |
           python -m unittest -v \
@@ -307,6 +318,10 @@ jobs:
           node almdina_erp/tests/js/cutting_machine_inline_row.test.js
           node almdina_erp/tests/js/plan_source_tab_edit_lock.test.js
           node almdina_erp/tests/js/uploaded_plan_mismatch_banner.test.js
+          node almdina_erp/tests/js/plan_preview_locale.test.js
+          node almdina_erp/tests/js/historical_plan_workspace_selection.test.js
+          node almdina_erp/tests/js/historical_plan_export_policy.test.js
+          node almdina_erp/tests/js/jqxhr_finally_compatibility.test.js
           node almdina_erp/tests/js/order_measurement_save_flush.test.js
           node almdina_erp/tests/js/corner_edge_apply_save_lifecycle.test.js
           node almdina_erp/tests/js/corner_edge_tab_navigation.test.js

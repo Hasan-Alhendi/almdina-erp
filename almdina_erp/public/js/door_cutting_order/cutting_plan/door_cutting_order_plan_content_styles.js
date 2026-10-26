@@ -400,6 +400,28 @@
             font-weight:700 !important;
             line-height:1.6 !important;
         }
+        [data-fieldname="cutting_plan_html"] .dco-plan-historical-banner {
+            display:flex !important;
+            flex-direction:column !important;
+            gap:3px !important;
+            margin:0 0 12px !important;
+            padding:9px 12px !important;
+            border:1px solid var(--alm-border,#d7dde4) !important;
+            border-radius:9px !important;
+            background:var(--alm-muted-bg,#f6f7f8) !important;
+            color:var(--alm-text-muted,#59636e) !important;
+            box-shadow:none !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-historical-banner__title {
+            font-size:13px !important;
+            font-weight:700 !important;
+            line-height:1.4 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-plan-historical-banner__summary {
+            font-size:12px !important;
+            font-weight:400 !important;
+            line-height:1.5 !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert__icon {
             flex:0 0 auto;
             font-size:16px !important;

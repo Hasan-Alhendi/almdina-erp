@@ -72,7 +72,11 @@
     }
 
     function hasSystemDraft(frm) {
-        return Boolean(plans(frm).system_draft);
+        const row = plans(frm).system_draft;
+        const owner = stateOwner();
+        return Boolean(row && (owner && typeof owner.isCurrentDraftRow === "function"
+            ? owner.isCurrentDraftRow(row)
+            : String(row.status || "") === "Draft"));
     }
 
     function activePlan(frm) {
