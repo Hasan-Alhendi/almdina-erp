@@ -103,6 +103,17 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertEqual(self.response["filecontent"], ORIGINAL_DXF)
         self.assertEqual(self.response["filename"], result["filename"])
 
+    def test_cancelled_uploaded_plan_remains_available_as_original_archive(self) -> None:
+        cancelled = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Cancelled",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        result = self._run(plan_source="custom", plan=cancelled)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+        self.assertEqual(self.response["filecontent"], ORIGINAL_DXF)
+
     def test_system_plan_does_not_enter_original_download(self) -> None:
         with self.assertRaises(_FakeThrow) as exc_info:
             self._run(plan_source="system")
@@ -134,6 +145,47 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertNotIn("file_url", download)
         self.assertIn("order_name", download)
         self.assertIn("plan_source", download)
+
+    def test_delivered_uploaded_tab_keeps_original_bytes_even_without_saw_paths(self) -> None:
+        self.order.status = "Delivered"
+        self.order.approved_plan = "PLAN-1"
+        approved_absent = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Approved",
+            saw_center_status="Absent",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        # Do not change the pre-delivery CNC safety contract.
+        self.order.status = "At Drawing"
+        with self.assertRaises(_FakeThrow):
+            self._run(plan_source="custom", plan=approved_absent)
+
+        self.order.status = "Delivered"
+        result = self._run(plan_source="custom", plan=approved_absent)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+
+        # The Approved tab remains manufacturing-only: it must not ship a
+        # designer file without cut paths as if it were CNC-ready.
+        with self.assertRaises(_FakeThrow) as exc_info:
+            self._run(plan_source="approved", plan=approved_absent)
+        self.assertIn("مسارات قص جاهزة للتصنيع", str(exc_info.exception))
+
+    def test_current_approved_present_upload_keeps_original_bytes(self) -> None:
+        self.order.approved_plan = "PLAN-1"
+        approved_present = SimpleNamespace(
+            name="PLAN-1",
+            door_cutting_order="DCO-2026-00018",
+            status="Approved",
+            saw_center_status="Present",
+            dxf_file="/private/files/corrected.dxf",
+        )
+        result = self._run(plan_source="custom", plan=approved_present)
+        self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
+        repeated = self._run(plan_source="approved", plan=approved_present)
+        self.assertEqual(repeated, result)
+        self.assertEqual(Path(self.path).read_bytes(), ORIGINAL_DXF)
+
 
 
 if __name__ == "__main__":

@@ -29,6 +29,10 @@ _GEOMETRY_ERROR_AR = {
     "zero_area": "مساحة المسار تساوي صفرًا",
     "self_intersection": "المسار يتقاطع مع نفسه",
 }
+_CORNER_DIMENSION_CODES = {
+    codes.L_CORNER_NOTCH_MISMATCH,
+    codes.CLIPPED_CORNER_DIMENSIONS_MISMATCH,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +212,40 @@ def _l_notch_difference_lines(axes: Any) -> tuple[str, ...]:
             )
         )
     return tuple(lines)
+
+
+def _corner_remaining_size(params: Mapping[str, Any], key: str) -> str:
+    values = params.get(key)
+    if not isinstance(values, Mapping):
+        return ""
+    if values.get("width") is None or values.get("length") is None:
+        return ""
+    return _size_cm(values.get("width"), values.get("length"))
+
+
+def _corner_dimension_highlight(params: Mapping[str, Any]) -> str:
+    finished = _corner_remaining_size(params, "expected_finished_remaining_cm")
+    raw = _corner_remaining_size(params, "expected_raw_remaining_cm")
+    actual = _corner_remaining_size(params, "actual_raw_remaining_cm")
+    if not finished or not actual:
+        return ""
+    if raw and raw != finished:
+        return _(
+            "Order finished dimensions: {0}. Required raw dimensions after edge banding: {1}. DXF dimensions: {2}."
+        ).format(finished, raw, actual)
+    return _("Order dimensions: {0}. DXF dimensions: {1}.").format(
+        finished,
+        actual,
+    )
+
+
+def _corner_copy_target(issue: DxfValidationIssue, fallback: str) -> str:
+    if issue.target.source_piece_no is None or issue.target.copy_no is None:
+        return fallback
+    return _("Door {0} — copy {1}.").format(
+        issue.target.source_piece_no,
+        issue.target.copy_no,
+    )
 
 
 def _action_for_context(action: str, context: str) -> str:
@@ -508,6 +546,23 @@ def _present_glass_opening(
     return PresentedDxfError(problem, target_text, action, code, issue.category)
 
 
+def _overlay_kind_label(kind: Any) -> str:
+    labels = {
+        "liner": _("liner"),
+        "back_groove": _("back groove"),
+        "recessed_handle_cutout": _("recessed handle"),
+    }
+    return labels.get(str(kind or ""), _("add-on"))
+
+
+def _group_size_cm(params: Mapping[str, Any]) -> tuple[str, str] | None:
+    width = params.get("width_cm")
+    height = params.get("height_cm")
+    if width is None or height is None:
+        return None
+    return format_cm(width), format_cm(height)
+
+
 def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     params = dict(issue.params or {})
     target_text = present_target(issue.target, params=params)
@@ -610,6 +665,14 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.SAW_CENTER_INVALID:
+        return PresentedDxfError(
+            "مسارات مركز الريشة على طبقة CUT_PATH غير صحيحة أو غير مكتملة ولا يمكن اعتمادها بأمان.",
+            "طبقة CUT_PATH.",
+            "احذف مسارات CUT_PATH غير الصحيحة واترك توليدها بعد الاعتماد، أو صحّحها بالكامل وفق Kerf ثم أعد الرفع. لا يُقبل إصلاح جزئي.",
+            code,
+            issue.category,
+        )
     if code == codes.SHEET_OPEN:
         return PresentedDxfError(
             "حدود اللوح غير مغلقة.",
@@ -688,6 +751,19 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             action = _("Add a distinct machining reference that establishes the door orientation then re-upload the DXF.")
         return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.CORNER_EDGE_UNRESOLVED:
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
+        )
+        if candidate_rows and issue.target.kind == codes.TARGET_CONTOUR:
+            candidates = "، ".join(str(row) for row in candidate_rows)
+            target_text = _("Possible doors: {0}. Additional contour information: {1}").format(
+                candidates,
+                target_text,
+            )
         reason = str(params.get("reason") or "")
         if reason == "break_thickness_unknown":
             problem = "تعذر التحقق من أبعاد زاوية L لأن سماكة قشاط الزاوية الداخلي غير معروفة."
@@ -703,14 +779,30 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             action = "اجعل محيط الدرفة مطابقًا لزاوية L أو الزاوية الكسر في الطلب بعد دوران 0 أو 90 أو 180 أو 270 درجة، أو بعد انعكاس واحد مع إحدى هذه الدورانات. المقاس الخارجي وحده لا يكفي."
         return PresentedDxfError(problem, target_text, action, code, issue.category)
     if code == codes.L_CORNER_NOTCH_MISMATCH:
-        l_target = target_text[:-1] + " — زاوية L." if target_text.endswith(".") else f"{target_text} — زاوية L."
+        corner_target = _corner_copy_target(issue, target_text)
+        target_base = corner_target[:-1] if corner_target.endswith(".") else corner_target
+        l_target = _("{0} — L corner.").format(target_base)
         return PresentedDxfError(
-            "أبعاد زاوية L في ملف DXF لا تطابق أبعاد القص المطلوبة بعد احتساب سماكات القشاطات.",
+            _("The L-corner dimensions in the DXF do not match the order."),
             l_target,
-            "راجع أبعاد التجويف الداخلي في AutoCAD، وعدّل البعد الموضح ليطابق مقاس القص الخام المطلوب، ثم أعد رفع الملف.",
+            _("Correct the L-corner dimensions in the DXF file, then upload it again."),
             code,
             issue.category,
             _l_notch_difference_lines(params.get("axes")),
+            _corner_dimension_highlight(params),
+        )
+    if code == codes.CLIPPED_CORNER_DIMENSIONS_MISMATCH:
+        corner_target = _corner_copy_target(issue, target_text)
+        target_base = corner_target[:-1] if corner_target.endswith(".") else corner_target
+        clipped_target = _("{0} — clipped corner.").format(target_base)
+        return PresentedDxfError(
+            _("The clipped-corner dimensions in the DXF do not match the order."),
+            clipped_target,
+            _("Correct the clipped-corner dimensions in the DXF file, then upload it again."),
+            code,
+            issue.category,
+            _l_notch_difference_lines(params.get("axes")),
+            _corner_dimension_highlight(params),
         )
 
     if code == codes.FORBIDDEN_ROTATION:
@@ -777,6 +869,7 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
 
     if code == codes.CUT_SIZE_MISMATCH:
+        outline_layer = "GEOMETRY" if params.get("outline_layer") == "GEOMETRY" else "CUT_PATH"
         actual = _size_cm(
             params.get("actual_width_cm", params.get("actual_w")),
             params.get("actual_height_cm", params.get("actual_h")),
@@ -787,10 +880,10 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
         if params.get("expected_width_cm") is not None or params.get("expected_w") is not None:
             problem = f"مقاس القص غير مطابق. الموجود {actual} والمطلوب {expected}."
-            action = f"اجعل CUT_PATH بمقاس {expected}."
+            action = _("Set {0} to the required cut size {1}.").format(outline_layer, expected)
         else:
             problem = f"مقاس القص غير مطابق. الموجود {actual}."
-            action = "طابق مقاس القص المحفوظ في الطلب على CUT_PATH."
+            action = _("Match the saved order cut size on {0}.").format(outline_layer)
         return PresentedDxfError(problem, target_text, action, code, issue.category)
 
     if code == codes.SPECIAL_SIZE_MISMATCH:
@@ -820,6 +913,69 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             problem,
             target_text,
             _special_range_action(params),
+            code,
+            issue.category,
+        )
+
+    if code == codes.REGULAR_OUTLINE_NOT_RECTANGLE:
+        return PresentedDxfError(
+            _("A regular door could not be matched because the DXF contour is not a rectangle."),
+            target_text,
+            _("Replace the contour with an axis-aligned rectangle that matches the ordered cut size."),
+            code,
+            issue.category,
+        )
+    if code == codes.SPECIAL_OUTLINE_IS_RECTANGLE:
+        return PresentedDxfError(
+            _("A special door could not be matched because the DXF contour is a rectangle."),
+            target_text,
+            _("Use a non-rectangular contour whose outer dimensions match the ordered special door."),
+            code,
+            issue.category,
+        )
+    if code in {
+        codes.SPECIAL_ADDON_GROUP_EXTRA,
+        codes.SPECIAL_ADDON_GROUP_MISSING,
+        codes.SPECIAL_ADDON_GROUP_SPLIT,
+    }:
+        size = _group_size_cm(params)
+        kind = _overlay_kind_label(params.get("overlay_kind"))
+        kinds = [
+            _overlay_kind_label(item)
+            for item in (params.get("overlay_kinds") or ())
+        ]
+        if code == codes.SPECIAL_ADDON_GROUP_EXTRA:
+            problem = (
+                _("The special-door group {0} × {1} cm has an extra {2} that the order does not require.").format(size[0], size[1], kind)
+                if size
+                else _("A special-door group has an extra add-on that the order does not require.")
+            )
+            action = _("Remove the extra add-on path, or add that add-on to the order.")
+        elif code == codes.SPECIAL_ADDON_GROUP_MISSING:
+            problem = (
+                _("The special-door group {0} × {1} cm is missing a required {2}.").format(size[0], size[1], kind)
+                if size
+                else _("A special-door group is missing a required add-on.")
+            )
+            if params.get("found_on_piece_type") == "Regular":
+                problem = f"{problem} {_('That path is on a regular door and is not counted for the special door.')}"
+            action = _("Draw the missing add-on on a special door in this size group.")
+        elif size and len(kinds) >= 2:
+            problem = _(
+                "{0} and {1} are on different special doors, but the order requires them on the same door ({2} × {3} cm)."
+            ).format(kinds[0], kinds[1], size[0], size[1])
+            action = _("Put the required add-ons on the same special-door contour.")
+        else:
+            problem = _("Add-ons that belong on the same special door are split across different doors.")
+            action = _("Put the required add-ons on the same special-door contour.")
+        return PresentedDxfError(problem, target_text, action, code, issue.category)
+    if code == codes.SPECIAL_OVERLAY_AMBIGUOUS:
+        return PresentedDxfError(
+            _("The {0} path could not be tied to exactly one special door.").format(
+                _overlay_kind_label(params.get("overlay_kind"))
+            ),
+            target_text,
+            _("Move the add-on path so it belongs to exactly one special door."),
             code,
             issue.category,
         )
@@ -900,6 +1056,19 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         return PresentedDxfError("هوية القطعة لا تطابق هوية الطلب المحفوظة.", target_text, "أعد حساب الخطة أو استورد DXF من الطلب الحالي.", code, issue.category)
 
     if code == codes.PIECE_IDENTITY_AMBIGUOUS:
+        candidate_rows = tuple(
+            sorted({
+                int(row)
+                for row in (params.get("candidate_source_piece_nos") or ())
+                if str(row).isdigit()
+            })
+        )
+        if candidate_rows:
+            candidates = "، ".join(str(row) for row in candidate_rows)
+            target_text = _("Possible doors: {0}. Additional contour information: {1}").format(
+                candidates,
+                target_text,
+            )
         return PresentedDxfError(
             "هوية مسار القص ملتبسة بين أكثر من قطعة.",
             target_text,
@@ -946,6 +1115,18 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.KERF_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
         pair_subject, pair_object = _pair_nouns(issue)
+        guest_label = str(params.get("glass_frame_guest_label") or "").strip()
+        host_label = str(params.get("glass_frame_host_label") or "").strip()
+        if guest_label and host_label:
+            guest_no = guest_label.split(".", 1)[0]
+            host_no = host_label.split(".", 1)[0]
+            return PresentedDxfError(
+                f"الدرفة {guest_no} تتداخل مع إطار البلور في الدرفة {host_no}.",
+                target_text,
+                f"حرّك الدرفة داخل الفتحة مع ترك مسافة Kerf لا تقل عن {kerf} مم عن الإطار.",
+                code,
+                issue.category,
+            )
         if pair_subject == "مسارا القص":
             return PresentedDxfError("المسافة بين مساري القص أقل من Kerf.", target_text, f"اجعل المسافة {kerf} مم أو أكثر.", code, issue.category)
         return PresentedDxfError(
@@ -1275,6 +1456,41 @@ def _glass_group_target(group: Sequence[DxfValidationIssue]) -> str:
     return present_issue(first).target
 
 
+def _corner_group_signature(item: DxfValidationIssue) -> tuple[str, ...]:
+    params = item.params or {}
+    return (
+        item.code,
+        item.category,
+        str(item.target.source_piece_no or ""),
+        repr(params.get("expected_finished_remaining_cm") or {}),
+        repr(params.get("expected_raw_remaining_cm") or {}),
+        repr(params.get("actual_raw_remaining_cm") or {}),
+        repr(params.get("axes") or ()),
+    )
+
+
+def _corner_group_target(group: Sequence[DxfValidationIssue]) -> str:
+    first = group[0]
+    piece_no = first.target.source_piece_no
+    copies = sorted({
+        int(item.target.copy_no)
+        for item in group
+        if item.target.copy_no is not None
+    })
+    if piece_no is None or not copies:
+        return present_issue(first).target
+    if len(copies) == 1:
+        return present_issue(first).target
+    if copies == list(range(copies[0], copies[-1] + 1)):
+        return _("Door {0} — copies {1} through {2}.").format(
+            piece_no,
+            copies[0],
+            copies[-1],
+        )
+    listed = "، ".join(str(copy_no) for copy_no in copies)
+    return _("Door {0} — copies {1}.").format(piece_no, listed)
+
+
 def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidationIssue]]:
     """Group by cause and corrective action, retaining per-issue evidence."""
     grouped: list[list[DxfValidationIssue]] = []
@@ -1307,6 +1523,14 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
                 codes.TARGET_CONTOUR_PAIR,
             }
         )
+        if item.code in _CORNER_DIMENSION_CODES and item.target.source_piece_no is not None:
+            key = _corner_group_signature(item)
+            if key in index_by_key:
+                grouped[index_by_key[key]].append(item)
+                continue
+            index_by_key[key] = len(grouped)
+            grouped.append([item])
+            continue
         if item.code in _GLASS_CODES and item.target.source_piece_no is not None:
             key = _glass_group_signature(item)
             if key in index_by_key:
@@ -1354,6 +1578,18 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
             presented.action,
             presented.code,
             presented.category,
+        )
+    if group[0].code in _CORNER_DIMENSION_CODES:
+        presented = present_issue(group[0])
+        return PresentedDxfError(
+            presented.problem,
+            _corner_group_target(group),
+            presented.action,
+            presented.code,
+            presented.category,
+            presented.details,
+            presented.highlight,
+            presented.detail_table,
         )
     first = present_issue(group[0])
     contour_nos = [item.target.contour_no for item in group if item.target.contour_no is not None]
@@ -1483,7 +1719,7 @@ def render_error_cards_html(
         if item.code not in _GLASS_CODES and (item.details or item.detail_table):
             summary = (
                 "تفاصيل الاختلاف"
-                if item.code == codes.L_CORNER_NOTCH_MISMATCH
+                if item.code in _CORNER_DIMENSION_CODES
                 else "عرض كل المواضع المتأثرة"
             )
             lines = "".join(f"<li>{html.escape(detail)}</li>" for detail in item.details)

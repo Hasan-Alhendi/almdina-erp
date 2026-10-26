@@ -130,7 +130,7 @@ def test_special_shape_button_resolves_documentation_workspace_at_click_time():
     operator = _source(OPERATOR)
     editor = _source(EDITOR)
     assert 'event.target.closest(".dco-special-sketch-button, .dco-corner-edges-summary")' in operator
-    assert "if (!row || !requirePieceDimensions(row, tr)) return" in operator
+    assert "if (!row || !requirePieceDimensions(currentFrm, row, tr)) return" in operator
     assert "window.AlmdinaSpecialShapeEditor.open(currentFrm, row)" in operator
     assert "window.AlmdinaSpecialShapeEditor = Object.freeze(facade);" in editor
     assert "__documentationOnly: true" in editor
@@ -165,7 +165,7 @@ def test_plan_dxf_and_browser_surfaces_do_not_reimplement_exact_shape_policy():
         assert ".isExact(" not in source, path
     assert "AlmdinaCuttingPlanPieceGeometry" in _source(PLAN_RENDERER)
     plan_renderer = _source(PLAN_RENDERER)
-    assert "const manufacturingPiece = pieceWithLinerSpec(frm, piece);" in plan_renderer
+    assert "const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));" in plan_renderer
     assert "geometry.resolve(manufacturingPiece)" in plan_renderer
     assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in plan_renderer
     assert "contract.points(piece, widthMm, heightMm)" in _source(PIECE_GEOMETRY)

@@ -71,11 +71,11 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         self.assertIn("def _validate_clipped_corner", source)
         self.assertNotIn("math.isclose", source)
 
-    def test_active_special_price_policy_uses_configurable_capabilities(self) -> None:
+    def test_generic_order_save_cannot_write_special_financial_prices(self) -> None:
         source = ACTIVE_ADAPTER_PATH.read_text(encoding="utf-8")
-        self.assertIn("document_has_capability", source)
-        self.assertIn("Capability.APPROVE_SPECIAL_PRICE", source)
-        self.assertIn("Capability.EDIT_SPECIAL_PRICE", source)
+        self.assertIn("Special prices must be saved from the Cost edit session.", source)
+        self.assertNotIn("Capability.APPROVE_SPECIAL_PRICE", source)
+        self.assertNotIn("Capability.EDIT_SPECIAL_PRICE", source)
         self.assertNotIn("has_special_price_approval_role", source)
         self.assertNotIn("Accounts Management", source)
         self.assertNotIn("System Manager", source)
@@ -95,9 +95,10 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         approval_source = source.split("def approve_special_piece_price(", 1)[1].split(
             "@frappe.whitelist()", 1
         )[0]
-        self.assertIn("Capability.APPROVE_SPECIAL_PRICE", approval_source)
-        self.assertIn("Capability.EDIT_SPECIAL_PRICE", approval_source)
-        self.assertIn('piece.piece_type or "Regular"', approval_source)
+        self.assertIn("save_cost_workspace", approval_source)
+        self.assertIn("expected_modified=expected_modified", approval_source)
+        self.assertNotIn("Capability.APPROVE_SPECIAL_PRICE", approval_source)
+        self.assertNotIn("Capability.EDIT_SPECIAL_PRICE", approval_source)
         self.assertNotIn("special_shape_status", approval_source)
         self.assertNotIn("Documented", approval_source)
 
@@ -105,14 +106,12 @@ class TestOrderPiecePolicyAdapter(unittest.TestCase):
         permission_source = COST_PERMISSION_UX_PATH.read_text(encoding="utf-8")
         self.assertIn("AlmdinaCostEditSessionUX", permission_source)
         self.assertIn("costEditUx.isEditing(frm)", permission_source)
-        self.assertIn(
-            "cost_permission_service.approve_special_piece_price",
-            permission_source,
-        )
+        self.assertIn("costApi.saveWorkspace", permission_source)
         self.assertIn("discardPendingPriceEdits", permission_source)
-        self.assertIn("__almdina_pending_price_capability", permission_source)
+        self.assertIn('"edit_cost_settings"', permission_source)
         self.assertNotIn("frappe.almdina.orderCanEdit(frm)", permission_source)
         self.assertIn('return String(frm.doc.status || "Draft") === "Draft";', permission_source)
+        self.assertIn("return Boolean(\n                costEditUx", permission_source)
 
         edit_source = COST_EDIT_SESSION_UX_PATH.read_text(encoding="utf-8")
         self.assertIn("flushPendingPriceEdits", edit_source)

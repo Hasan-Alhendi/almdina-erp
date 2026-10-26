@@ -116,7 +116,7 @@ def test_uploaded_tab_keeps_accepted_plan_and_warns_on_order_mismatch():
     assert "select_uploaded_workspace_plan(rows)" in query
     assert "_latest(rows, status=DRAFT, source_type=UPLOADED_DXF)" not in query
     assert "function uploadedPlanMismatched(frm)" in tabs
-    assert "function mismatchBanner()" in tabs
+    assert "function mismatchBanner(frm, tab)" in tabs
     assert "dco-uploaded-plan-mismatch-banner" in tabs
     assert "This order was changed and the plan no longer matches" in tabs
     assert "The plan does not match the order" in tabs

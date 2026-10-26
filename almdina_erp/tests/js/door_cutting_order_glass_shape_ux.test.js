@@ -158,6 +158,13 @@ assert.equal(api.shapeButtonState(stored, { editable: true, virtual: false }), n
 stored.piece_type = "Glass";
 const glassButton = api.shapeButtonState(stored, { editable: true, virtual: false });
 assert.equal(glassButton.enabled, true);
+assert.equal(api.shapeButtonState(stored, { editable: false, virtual: false }).enabled, true);
+assert.equal(api.shapeButtonState(stored, { editable: false, virtual: true }).enabled, false);
+assert.equal(typeof api.view, "function");
+assert.match(source, /if \(readOnly\) \{[\s\S]*?input.disabled = true/);
+assert.match(operator, /AlmdinaGlassShape\.view\(currentFrm, row\)/);
+assert.match(operator, /AlmdinaClippedCornerEditor\.view\(currentFrm, row\)/);
+assert.match(operator, /AlmdinaSpecialShapeEditor\.view\(currentFrm, row\)/);
 assert.equal(glassButton.incomplete, false);
 assert.match(glassButton.label, /6\.5/);
 assert.match(glassButton.label, /سم/);

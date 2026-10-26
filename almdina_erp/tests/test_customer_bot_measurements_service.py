@@ -162,7 +162,7 @@ class CustomerBotMeasurementsServiceTests(unittest.TestCase):
         self.assertIn("41.5", html)
         self.assertIn("92", html)
         self.assertIn("ملاحظة الزبون", html)
-        self.assertIn("Double edge banding", html)
+        self.assertIn("Add-ons: Double Edge", html)
         self.assertIn("EDGE-GOLD", html)
         for hidden in (
             "98765.43",

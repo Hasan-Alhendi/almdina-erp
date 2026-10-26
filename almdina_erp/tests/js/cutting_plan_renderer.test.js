@@ -21,15 +21,24 @@ const pieceGeometrySource = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js"),
     "utf8"
 );
+const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
 
 const fakeWindow = {};
+const rendererDiagnostics = [];
+const testConsole = Object.assign({}, console, {
+    error: (...args) => rendererDiagnostics.push(args),
+});
 const context = vm.createContext({
     window: fakeWindow,
-    console,
+    console: testConsole,
     JSON,
     Number,
     String,
     Math,
+    Set,
     // Frappe identity-language translation still interpolates positional values.
     __: (message, values) => {
         let output = String(message);
@@ -229,7 +238,7 @@ assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width=
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
 assert.match(html, /Door add-on symbols/);
-assert.match(html, /Edge banding double/);
+assert.match(html, /Double Edge/);
 assert.match(html, /Full door double/);
 assert.doesNotMatch(html, /dco-extra-addon-marks/);
 assert.match(html, /data-geometry-id="pg-/);
@@ -279,15 +288,17 @@ assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="double"/
 assert.match(extraAddonHtml, /dco-extra-addon-text[^>]*data-addon-kind="full_door_double"/);
 assert.match(extraAddonHtml, /data-addon-kind="double"/);
 assert.match(extraAddonHtml, /data-addon-kind="full_door_double"/);
-assert.match(extraAddonHtml, /data-addon-slot="top-end"/);
 assert.match(extraAddonHtml, /data-addon-slot="top-start"/);
 assert.match(extraAddonHtml, /dco-extra-addon-mark/);
-assert.match(extraAddonHtml, /Edge banding double/);
+assert.match(extraAddonHtml, /Double Edge/);
 assert.match(extraAddonHtml, /Full door double/);
 assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-icon/);
 assert.match(extraAddonHtml, /dco-extra-overlay/);
 assert.match(extraAddonHtml, /data-overlay-layer="Liner"/);
 assert.match(extraAddonHtml, /dco-extra-addon-legend/);
+assert.match(extraAddonHtml, /#5a2d82/);
+assert.match(extraAddonHtml, /data-double-edge-lines="1"/);
+assert.doesNotMatch(extraAddonHtml, /dco-extra-addon-mark[^>]*data-addon-kind="double"/);
 
 const regularOnlyFrm = {
     doc: {
@@ -318,6 +329,39 @@ assert.match(regularOnlyHtml, /data-addon-kind="full_door_double"/);
 assert.match(regularOnlyHtml, /dco-extra-addon-legend/);
 assert.doesNotMatch(regularOnlyHtml, /dco-sheet-text-labels/);
 assert.match(regularOnlyHtml, /dco-piece-number/);
+
+const selectedDoublePlan = {
+    ...regularOnlyPlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...plan.sheets[0].pieces[0],
+            piece_type: "Regular",
+            extra_double: 1,
+            extra_double_reference_sides: '["edge_width_top"]',
+        }],
+    }],
+};
+const selectedDoubleHtml = renderer.build(regularOnlyFrm, selectedDoublePlan);
+assert.match(selectedDoubleHtml, /data-double-edge-side="edge_width_top"/);
+assert.doesNotMatch(selectedDoubleHtml, /data-double-edge-side="edge_long_left"/);
+assert.equal((selectedDoubleHtml.match(/data-double-edge-line-index="1"/g) || []).length, 1);
+assert.match(selectedDoubleHtml, /border-top:1\.4px solid #5a2d82/);
+
+const selectedDoubleWithBandPlan = {
+    ...selectedDoublePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            ...selectedDoublePlan.sheets[0].pieces[0],
+            edge_width_top: 1,
+        }],
+    }],
+};
+const selectedDoubleWithBandHtml = renderer.build(regularOnlyFrm, selectedDoubleWithBandPlan);
+assert.match(selectedDoubleWithBandHtml, /top:3px;left:16\.667%;width:66\.666%;border-top:3px solid #d00000/);
+assert.match(selectedDoubleWithBandHtml, /top:8px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
+assert.match(selectedDoubleWithBandHtml, /top:11px;left:16\.667%;width:66\.666%;border-top:1\.4px solid #5a2d82/);
 
 const pastFiftyPlan = {
     ...plan,
@@ -499,6 +543,76 @@ vm.runInContext(
     context,
     { filename: "door_cutting_order_machining_overlay.js" }
 );
+
+// Real persisted regression CP-2026-00092 / DCO 26-00112. Preview and DXF
+// consume this same usable-sheet snapshot. Door 5.1 is inside the opening of
+// rotated Glass door 1.1; the opening is void, not obstacle material.
+const previewHost = nestedGlassRegressionSnapshot.sheets[0].pieces.find(piece => piece.label === "5.1");
+const previewObstacles = fakeWindow.AlmdinaLinerGeometry.sheetObstaclesMm(
+    nestedGlassRegressionSnapshot.sheets[0],
+    Object.assign({}, previewHost)
+);
+assert.equal(previewObstacles.length, nestedGlassRegressionSnapshot.sheets[0].pieces.length - 1);
+assert.equal(previewObstacles.some(obstacle => obstacle.diagnostic.pieceId === previewHost.id), false);
+const previewGlassObstacle = previewObstacles.find(obstacle => obstacle.diagnostic.label === "1.1");
+assert.equal(previewGlassObstacle.diagnostic.geometrySource, "placement_with_glass_hole");
+assert.equal(previewGlassObstacle.holes.length, 1);
+
+const previewFrm = {
+    doc: {
+        name: "26-00112",
+        // Deliberately different: the frozen plan Kerf (3 mm) is authoritative.
+        kerf_mm: 9,
+        pieces: [
+            {}, {}, {}, {},
+            {
+                // Deliberately different: a live order edit must not rewrite
+                // the already-frozen plan path consumed by Preview and DXF.
+                extra_liner: 1,
+                liner_reference_side: "edge_width_bottom",
+                liner_offset_cm: 1,
+                liner_width_cm: 1.8,
+                piece_type: "Regular",
+                width_cm: 10,
+                length_cm: 10,
+            },
+        ],
+    },
+};
+for (const approvalStatus of ["Draft", "Approved"]) {
+    const previewPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+    previewPlan.approval_status = approvalStatus;
+    previewPlan.saw_center_status = approvalStatus === "Approved" ? "Generated" : "Absent";
+    const previewHtml = renderer.build(previewFrm, previewPlan);
+    assert.match(previewHtml, /data-overlay-kind="liner"/);
+    assert.doesNotMatch(previewHtml, /data-liner-toolpath-error="liner_extension_hits_piece"/);
+    assert.doesNotMatch(previewHtml, /CUT_PATH/);
+}
+
+const trueCollisionPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+const trueCollisionGlass = trueCollisionPlan.sheets[0].pieces.find(piece => piece.label === "1.1");
+trueCollisionGlass.glass_hole_local_mm = [
+    [100, 59], [939, 59], [939, 1939], [100, 1939],
+];
+rendererDiagnostics.length = 0;
+const trueCollisionHtml = renderer.build(previewFrm, trueCollisionPlan);
+assert.match(trueCollisionHtml, /data-liner-toolpath-error="liner_extension_hits_piece"/);
+const trueCollisionDiagnostic = rendererDiagnostics
+    .map(args => args[1])
+    .find(item => item && item.host && item.host.label === "5.1"
+        && item.neighbour && item.neighbour.label === "1.1");
+assert.ok(trueCollisionDiagnostic);
+assert.equal(trueCollisionDiagnostic.neighbour.geometrySource, "placement_with_glass_hole");
+assert.equal(trueCollisionDiagnostic.cutterRadiusMm, 1.5);
+assert.equal(JSON.stringify(trueCollisionDiagnostic.linerPathMm[0]), JSON.stringify([80.5, 492.5]));
+assert.ok(Number.isFinite(trueCollisionDiagnostic.minimumDistanceMm));
+assert.ok([
+    "endpoint_in_material",
+    "segment_crosses_material_boundary",
+    "clearance_below_cutter_radius",
+].includes(trueCollisionDiagnostic.rejectCondition));
+assert.ok(Array.isArray(trueCollisionDiagnostic.linerPathMm));
+
 const symbolPlan = {
     usable_board_width_cm: 122,
     usable_board_length_cm: 244,
@@ -578,6 +692,39 @@ assert.ok(Math.abs(grooveSpan.dy - 31.25) < 0.3, grooveSymbol[1]);
 assert.ok(grooveSpan.dx < 0.2);
 assert.match(handleSymbol[0], /width="20"/);
 assert.doesNotMatch(handleSymbol[0], /width="100"/);
+function handleRect(markup) {
+    const tag = markup.match(/<rect class="dco-extra-overlay-path dco-extra-overlay-handle"[^>]*>/);
+    assert.ok(tag);
+    const read = (name) => Number(tag[0].match(new RegExp(`${name}="([^"]+)"`))[1]);
+    return { x: read("x"), y: read("y"), w: read("width"), h: read("height") };
+}
+const drawnHandle = handleRect(symbolHtml);
+assert.ok(Math.abs(drawnHandle.w - 20) < 0.05, drawnHandle.w);
+assert.ok(Math.abs(drawnHandle.h - 1.875) < 0.05, drawnHandle.h);
+function placedHandle(lengthCm, widthCm) {
+    const nextPlan = JSON.parse(JSON.stringify(symbolPlan));
+    const nextFrm = {
+        doc: {
+            ...symbolFrm.doc,
+            pieces: [{
+                ...symbolFrm.doc.pieces[0],
+                recessed_handle_length_cm: lengthCm,
+                recessed_handle_width_cm: widthCm,
+            }],
+        },
+    };
+    return handleRect(renderer.build(nextFrm, nextPlan));
+}
+const longHandle = placedHandle(32.9, 3.8);
+const shortHandle = placedHandle(13.6, 3.8);
+const narrowHandle = placedHandle(10.3, 0.4);
+assert.ok(longHandle.w > shortHandle.w * 2, `${longHandle.w} vs ${shortHandle.w}`);
+assert.ok(Math.abs(longHandle.h - shortHandle.h) < 0.05);
+assert.ok(Math.abs(longHandle.w - 32.9) < 0.05, longHandle.w);
+assert.ok(Math.abs(shortHandle.w - 13.6) < 0.05, shortHandle.w);
+assert.ok(Math.abs(longHandle.h - 4.75) < 0.05, longHandle.h);
+assert.ok(Math.abs(narrowHandle.h - 0.5) < 0.05, narrowHandle.h);
+assert.ok(narrowHandle.h < 1.1);
 
 const diagonalPlan = {
     ...symbolPlan,
@@ -670,5 +817,92 @@ assert.equal(JSON.stringify(renderer.physicalMarginsMm(marginPlan, marginPlan.sh
 const marginHtml = renderer.build({ doc: { name: "26-00107" } }, marginPlan);
 const trimWidths = [...marginHtml.matchAll(/data-trim-width-cm="([^"]+)"/g)].map(match => match[1]);
 assert.deepEqual(trimWidths, ["0", "0.5"]);
+
+const nestedGlassPlan = {
+    usable_board_width_cm: 100,
+    usable_board_length_cm: 100,
+    full_board_width_cm: 100,
+    full_board_length_cm: 100,
+    kerf_cm: 0.3,
+    trim_cm: 0,
+    sheets: [{
+        sheet_no: 1,
+        // Adversarial order: guests before hosts must still paint above openings.
+        pieces: [
+            {
+                id: 3,
+                label: "3.1",
+                x: 12,
+                y: 12,
+                w: 10,
+                h: 10,
+                original_w: 10,
+                original_h: 10,
+                piece_type: "Regular",
+                glass_host_piece_id: 2,
+            },
+            {
+                id: 2,
+                label: "2.1",
+                x: 6,
+                y: 6,
+                w: 30,
+                h: 30,
+                original_w: 30,
+                original_h: 30,
+                piece_type: "Glass",
+                glass_margin_mm: 50,
+                glass_hole_local_mm: [[50, 50], [250, 50], [250, 250], [50, 250]],
+                glass_host_piece_id: 1,
+            },
+            {
+                id: 4,
+                label: "4.1",
+                x: 18,
+                y: 8,
+                w: 8,
+                h: 8,
+                original_w: 8,
+                original_h: 8,
+                piece_type: "Regular",
+                glass_host_piece_id: 1,
+            },
+            {
+                id: 1,
+                label: "1.1",
+                x: 0,
+                y: 0,
+                w: 50,
+                h: 50,
+                original_w: 50,
+                original_h: 50,
+                piece_type: "Glass",
+                glass_margin_mm: 50,
+                glass_hole_local_mm: [[50, 50], [450, 50], [450, 450], [50, 450]],
+            },
+        ],
+    }],
+};
+const nestedHtml = renderer.build({ doc: { name: "DCO-NEST-PREVIEW" } }, nestedGlassPlan);
+assert.equal((nestedHtml.match(/data-piece-type="Glass"/g) || []).length, 2);
+assert.equal((nestedHtml.match(/data-piece-type="Regular"/g) || []).length, 2);
+assert.match(nestedHtml, /data-glass-host="2"/);
+assert.match(nestedHtml, /data-glass-host="1"/);
+assert.match(nestedHtml, /data-nest-depth="0"/);
+assert.match(nestedHtml, /data-nest-depth="1"/);
+assert.match(nestedHtml, /data-nest-depth="2"/);
+assert.match(nestedHtml, /z-index:2;/);
+assert.match(nestedHtml, /z-index:3;/);
+assert.match(nestedHtml, /z-index:4;/);
+assert.match(nestedHtml, /fill-rule="evenodd"/);
+assert.match(nestedHtml, /dco-vector-piece/);
+assert.match(nestedHtml, /dco-piece-number/);
+assert.equal((nestedHtml.match(/dco-shaped-piece-outline/g) || []).length, 2);
+assert.doesNotMatch(nestedHtml, /undefined/);
+
+const nestedPrintRoot = renderer.build({ doc: { name: "DCO-NEST-PRINT" } }, nestedGlassPlan);
+assert.match(nestedPrintRoot, /data-glass-host="1"/);
+assert.match(nestedPrintRoot, /data-nest-depth="2"/);
+assert.equal((nestedPrintRoot.match(/data-piece-type="/g) || []).length, 4);
 
 console.log("Cutting-plan renderer simulation passed");

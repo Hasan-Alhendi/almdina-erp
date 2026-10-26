@@ -53,6 +53,7 @@ class ProductionActionFacts:
     actor_roles: tuple[str, ...] = ()
     is_admin: bool = False
     has_factory_work: bool = True
+    stage_is_planning: bool = False
 
 
 def _decision(
@@ -198,12 +199,28 @@ def decide_production_action(
             )
         return _decision(action, True, "allowed", "")
 
-    if not facts.actor or facts.assigned_to != facts.actor:
+    if not facts.is_admin and (
+        not facts.actor or facts.assigned_to != facts.actor
+    ):
         return _decision(
             action,
             False,
             "not_assigned",
             "هذه المرحلة مسندة إلى مستخدم آخر.",
+        )
+
+    # Pending Start and direct Handoff both initiate new physical work. A stage
+    # already In Progress/Paused may finish; its next Pending stage is rechecked.
+    # Planning must remain operable to resolve the plan; its existing exit gate
+    # still requires a current approved plan. Administrator obeys this gate too.
+    if (
+        facts.stage_status == "Pending"
+        and not facts.stage_is_planning
+        and (not facts.has_cutting_plan or facts.plan_needs_recalculation)
+    ):
+        return _decision(
+            action, False, "production_plan_unverified",
+            "Review and verify the cutting plan before starting new manufacturing work.",
         )
 
     if action == Capability.START_ASSIGNED_STAGE:

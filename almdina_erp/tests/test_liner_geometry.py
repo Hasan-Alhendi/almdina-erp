@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     has_self_intersection,
     point_in_polygon,
+    polygon_segments,
+    segment_distance,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     GEOMETRY_TOLERANCE_MM,
@@ -23,11 +28,20 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_activation_error,
     cutter_center_offsets_mm,
+    extension_conflict,
+    extension_conflict_details,
+    center_recessed_handle,
     liner_centerline_mm,
     liner_toolpath_mm,
+    obstacle_geometry_mm,
     sawn_liner_ends,
     liner_strip_polygon_mm,
+    merged_liner_toolpaths_mm,
+    mill_regions_connected,
+    liner_region_polygon_mm,
+    compare_liner_set_paths,
     piece_polygon_mm,
+    resolved_liner_span_mm,
     transform_point,
     validation_code,
 )
@@ -308,6 +322,26 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
     strip = liner_strip_polygon_mm(raw_piece, "edge_break", 1, 0.8)
     assert compare_liner_path(strip, raw_piece, "edge_break", 1, 0.8).ok
     assert not compare_liner_path(strip, finished_piece, "edge_break", 1, 0.8).ok
+
+
+def test_l_edge_break_uses_effective_path_for_input_length():
+    piece = LinerPiece(
+        "L-Shaped Corner", 60, 60, "Top Right", 30.1, 30.1, 30, 30
+    )
+    _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
+    assert effective_length == pytest.approx(602)
+    assert error == ""
+    start, length, error = resolved_liner_span_mm(piece, "edge_break", 0, 0)
+    assert (start, length) == pytest.approx((0, 602))
+    assert error == ""
+
+
+@pytest.mark.parametrize("position", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"])
+def test_l_inner_reference_length_is_orientation_independent(position):
+    piece = LinerPiece("L-Shaped Corner", 60, 60, position, 30.1, 30.1, 30, 30)
+    _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
+    assert effective_length == pytest.approx(602)
+    assert error == ""
 
 
 def test_cutter_centers_cover_width_without_crossing_it():
@@ -636,6 +670,125 @@ def test_an_uncut_board_edge_closes_the_liner_and_a_real_cut_does_not():
     assert break_end is True
 
 
+def test_obstacle_polygon_uses_placement_box_for_regular_doors():
+    from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+        extension_conflict,
+        obstacle_polygon_mm,
+        placed_polygon_mm,
+    )
+
+    mismatched = {
+        "piece_type": "Regular",
+        "x": 0,
+        "y": 0,
+        "w": 40,
+        "h": 50,
+        "width_cm": 50,
+        "length_cm": 40,
+        "rotated": 0,
+    }
+    assert obstacle_polygon_mm(mismatched) == [
+        (0.0, 0.0),
+        (400.0, 0.0),
+        (400.0, 500.0),
+        (0.0, 500.0),
+    ]
+    assert placed_polygon_mm(mismatched)[1][0] == pytest.approx(500.0)
+    path = [(407.5, 0.0), (407.5, 500.0)]
+    assert extension_conflict(path, 5.0, None, [{"polygon": obstacle_polygon_mm(mismatched)}]) == ""
+    assert (
+        extension_conflict(path, 5.0, None, [{"polygon": placed_polygon_mm(mismatched)}])
+        == "liner_extension_hits_piece"
+    )
+
+
+def test_real_snapshot_nested_glass_hole_is_not_solid_liner_obstacle():
+    fixture_path = Path(__file__).parent / "fixtures" / "liner_extension_nested_glass_snapshot.json"
+    snapshot = json.loads(fixture_path.read_text(encoding="utf-8"))
+    pieces = snapshot["sheets"][0]["pieces"]
+    glass = next(piece for piece in pieces if piece["label"] == "1.1")
+    door_five = next(piece for piece in pieces if piece["label"] == "5.1")
+    liner = LinerPiece(
+        door_five["piece_type"],
+        door_five["original_w"],
+        door_five["original_h"],
+        door_five["clipped_corner_position"],
+        door_five["clipped_corner_width_cm"],
+        door_five["clipped_corner_length_cm"],
+    )
+    origin = (door_five["x"] * 10.0, door_five["y"] * 10.0)
+    trim_x = snapshot["applied_trim_width_cm"] * 10.0
+    trim_y = snapshot["applied_trim_length_cm"] * 10.0
+    board = (
+        -trim_x,
+        -trim_y,
+        snapshot["full_board_width_cm"] * 10.0 - trim_x,
+        snapshot["full_board_length_cm"] * 10.0 - trim_y,
+    )
+    start_sawn, end_sawn = sawn_liner_ends(
+        liner,
+        door_five["liner_reference_side"],
+        origin_mm=origin,
+        mirrored=False,
+        quarter_turns=0,
+        board=board,
+    )
+    local_path = liner_toolpath_mm(
+        liner,
+        door_five["liner_reference_side"],
+        door_five["liner_offset_cm"],
+        door_five["liner_width_cm"],
+        snapshot["kerf_cm"] * 10.0,
+        door_five["liner_start_cm"],
+        door_five["liner_length_cm"],
+        start_sawn=start_sawn,
+        end_sawn=end_sawn,
+    )
+    path = [(x + origin[0], y + origin[1]) for x, y in local_path]
+    expected_path = [
+        (80.5, 492.5), (80.5, 1075.5), (663.5, 1075.5), (663.5, 1078.5),
+        (77.5, 1078.5), (77.5, 492.5), (74.5, 492.5), (74.5, 1081.5),
+        (663.5, 1081.5), (663.5, 1084.5), (71.5, 1084.5), (71.5, 492.5),
+        (68.5, 492.5), (68.5, 1087.5), (663.5, 1087.5), (663.5, 1090.5),
+        (65.5, 1090.5), (65.5, 492.5),
+    ]
+    assert len(path) == len(expected_path)
+    for actual, expected in zip(path, expected_path):
+        assert actual == pytest.approx(expected)
+
+    obstacle = obstacle_geometry_mm(glass)
+    assert obstacle["source"] == "placement_with_glass_hole"
+    expected_hole = [(59.0, 491.0), (939.0, 491.0), (939.0, 2371.0), (59.0, 2371.0)]
+    for actual, expected in zip(obstacle["holes"][0], expected_hole):
+        assert actual == pytest.approx(expected)
+    legacy = extension_conflict_details(
+        path,
+        3.0,
+        board,
+        [{"polygon": obstacle["outer"], "diagnostic": {"label": "1.1"}}],
+    )
+    assert legacy is not None
+    assert legacy["obstacle"] == {"label": "1.1"}
+    assert legacy["reject_condition"] == "endpoint_in_material"
+    assert legacy["segment_index"] == 0
+    assert legacy["minimum_distance_mm"] == pytest.approx(60.5)
+    assert legacy["cutter_radius_mm"] == pytest.approx(1.5)
+
+    hole_clearance = min(
+        segment_distance(segment, edge)
+        for segment in zip(path, path[1:])
+        for edge in polygon_segments(obstacle["holes"][0])
+    )
+    assert hole_clearance == pytest.approx(1.5)
+    obstacles = []
+    for piece in pieces:
+        if piece["label"] == "5.1":
+            continue
+        material = obstacle_geometry_mm(piece)
+        obstacles.append({"outer": material["outer"], "holes": material["holes"]})
+    assert extension_conflict(path, 3.0, board, obstacles) == ""
+
+
 def test_previously_exported_board_edge_liner_still_matches():
     full = LinerPiece("Regular", 122, 244)
     legacy = liner_toolpath_mm(
@@ -653,3 +806,123 @@ def test_previously_exported_board_edge_liner_still_matches():
     assert compare_liner_path(
         legacy, full, "edge_width_top", 0, 1.8, 5, start_sawn=False, end_sawn=False
     ).ok
+
+
+def test_center_recessed_handle_uses_existing_fields_and_door_center():
+    door = LinerPiece("Regular", 60, 80)
+    placed = center_recessed_handle(door, "", 3.8, 32.9)
+    assert placed.ok
+    assert placed.side == "edge_width_top"
+    assert placed.start_cm == pytest.approx(13.55)
+    assert placed.offset_cm == pytest.approx(38.1)
+    line = liner_centerline_mm(door, placed.side, placed.offset_cm, 3.8, placed.start_cm, 32.9)
+    midpoint = ((line[0][0] + line[-1][0]) / 2, (line[0][1] + line[-1][1]) / 2)
+    assert midpoint[0] == pytest.approx(300)
+    assert midpoint[1] == pytest.approx(400)
+
+    vertical = center_recessed_handle(door, "edge_long_right", 3.8, 32.9)
+    assert vertical.ok
+    assert vertical.side == "edge_long_right"
+    assert vertical.start_cm == pytest.approx(23.55)
+    assert vertical.offset_cm == pytest.approx(28.1)
+    vertical_line = liner_centerline_mm(
+        door, vertical.side, vertical.offset_cm, 3.8, vertical.start_cm, 32.9
+    )
+    vertical_mid = (
+        (vertical_line[0][0] + vertical_line[-1][0]) / 2,
+        (vertical_line[0][1] + vertical_line[-1][1]) / 2,
+    )
+    assert vertical_mid == pytest.approx((300, 400))
+
+    fractional = center_recessed_handle(door, "edge_width_bottom", 3.7, 10.3)
+    assert fractional.ok
+    assert fractional.start_cm == pytest.approx(24.85)
+    assert fractional.offset_cm == pytest.approx(38.15)
+
+    too_long = center_recessed_handle(LinerPiece("Regular", 30, 80), "edge_width_top", 3.8, 32.9)
+    assert not too_long.ok
+    assert too_long.code == "length_exceeds_door_width"
+    assert too_long.start_cm == 0
+    assert too_long.offset_cm == 0
+    for piece_type in ("L-Shaped Corner", "Clipped Corner", "Glass", "Special"):
+        rejected = center_recessed_handle(LinerPiece(piece_type, 60, 80), "edge_long_left", 3.8, 32.9)
+        assert rejected.ok is False
+        assert rejected.code == "unsupported_piece_type"
+
+
+def _spec(side: str, offset_cm: float = 2, start_cm: float = 0, length_cm: float = 0):
+    return {
+        "side": side,
+        "offset_cm": offset_cm,
+        "start_cm": start_cm,
+        "length_cm": length_cm,
+    }
+
+
+def test_single_liner_merged_path_matches_historical_toolpath():
+    piece = _regular()
+    spec = _spec("edge_width_top")
+    merged = merged_liner_toolpaths_mm(piece, [spec], 1.5, 5)
+    historical = liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5, 0, 0)
+    assert merged == [historical]
+    assert compare_liner_set_paths(merged, piece, [spec], 1.5, 5).ok
+
+
+def test_parallel_liners_stay_separate_and_identical_liners_do_not_repeat():
+    piece = _regular()
+    parallel = [_spec("edge_width_top", 2), _spec("edge_width_top", 8)]
+    paths = merged_liner_toolpaths_mm(piece, parallel, 1.5, 5)
+    assert len(paths) == 2
+    assert compare_liner_set_paths(paths, piece, parallel, 1.5, 5).ok
+
+    identical = [_spec("edge_width_top", 2), _spec("edge_width_top", 2)]
+    same = merged_liner_toolpaths_mm(piece, identical, 1.5, 5)
+    assert len(same) == 1
+    assert same[0] == liner_toolpath_mm(piece, "edge_width_top", 2, 1.5, 5, 0, 0)
+    assert compare_liner_set_paths(same, piece, identical, 1.5, 5).ok
+
+
+def test_l_t_plus_and_three_liner_unions_cover_connected_mill_regions():
+    piece = _regular()
+    width = 1.5
+    diameter = 5
+    ell = [_spec("edge_width_top", 2), _spec("edge_long_left", 2)]
+    tee = [_spec("edge_width_top", 2), _spec("edge_long_left", 18, 0, 25)]
+    plus = [_spec("edge_width_top", 20), _spec("edge_long_left", 18)]
+    three = [_spec("edge_width_top", 2), _spec("edge_long_left", 2), _spec("edge_width_bottom", 2)]
+    for specs in (ell, tee, plus, three):
+        regions = [
+            liner_region_polygon_mm(piece, spec["side"], spec["offset_cm"], width, spec["start_cm"], spec["length_cm"])
+            for spec in specs
+        ]
+        assert mill_regions_connected(regions[0], regions[1])
+        paths = merged_liner_toolpaths_mm(piece, specs, width, diameter)
+        solo = [
+            liner_toolpath_mm(
+                piece, spec["side"], spec["offset_cm"], width, diameter, spec["start_cm"], spec["length_cm"]
+            )
+            for spec in specs
+        ]
+        assert 1 <= len(paths) <= len(specs)
+        assert mill_regions_connected(regions[0], regions[1])
+        assert compare_liner_set_paths(paths, piece, specs, width, diameter).ok
+        assert compare_liner_set_paths([], piece, specs, width, diameter).ok is False
+
+
+def test_partial_overlap_and_internal_span_do_not_repeat_mill_area():
+    piece = _regular()
+    width = 1.5
+    diameter = 5
+    overlapping = [
+        _spec("edge_width_top", 2, 0, 25),
+        _spec("edge_width_top", 2, 15, 25),
+    ]
+    internal = [_spec("edge_long_left", 4, 8, 20)]
+    overlap_paths = merged_liner_toolpaths_mm(piece, overlapping, width, diameter)
+    assert 1 <= len(overlap_paths) <= 2
+    assert compare_liner_set_paths(overlap_paths, piece, overlapping, width, diameter).ok
+    internal_paths = merged_liner_toolpaths_mm(piece, internal, width, diameter)
+    historical = liner_toolpath_mm(piece, "edge_long_left", 4, width, diameter, 8, 20)
+    assert internal_paths == [historical]
+    extra = overlap_paths + [liner_toolpath_mm(piece, "edge_width_bottom", 2, width, diameter, 0, 0)]
+    assert compare_liner_set_paths(extra, piece, overlapping, width, diameter).ok is False

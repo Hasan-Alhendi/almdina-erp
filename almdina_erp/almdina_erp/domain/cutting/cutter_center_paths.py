@@ -12,6 +12,7 @@ across door material.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import Sequence
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
@@ -23,6 +24,73 @@ Shape = tuple[Sequence[Point], Sequence[Sequence[Point]]]
 COLLINEAR_TOLERANCE_MM = 0.05
 
 
+@dataclass(frozen=True, slots=True)
+class CutterCenterPath:
+    """One exported toolpath; closed paths preserve per-ring DXF identity."""
+
+    points: tuple[Point, ...]
+    closed: bool
+
+
+def cutter_center_paths(
+    shapes: Sequence[Shape],
+    radius_mm: float,
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+    board: Sequence[float] | None = None,
+) -> list[CutterCenterPath]:
+    """Return independent closed offsets, with a safe board-edge fallback.
+
+    A ring wholly inside the physical board is exported as one closed path,
+    matching AutoCAD Multi Offset. A ring that uses a physical board edge
+    keeps the established contract that this raw edge is not cut; its remaining
+    centers are emitted as open, deduplicated segments instead.
+    """
+
+    radius = max(0.0, float(radius_mm or 0.0))
+    prepared = _prepare_shapes(shapes)
+    if not prepared:
+        return []
+
+    closed_paths: list[CutterCenterPath] = []
+    open_segments: list[Segment] = []
+    for outer, holes in prepared:
+        for ring in [outer, *[hole for hole in holes if len(hole) >= 3]]:
+            offset = (
+                ring
+                if radius <= tolerance
+                else _offset_closed(ring, radius, _waste_sign(ring, prepared, radius))
+            )
+            if len(offset) < 3:
+                continue
+            board_edges = {
+                index
+                for index, start in enumerate(ring)
+                if board is not None
+                and _edge_on_board(
+                    start,
+                    ring[(index + 1) % len(ring)],
+                    board,
+                    tolerance,
+                )
+            }
+            if not board_edges:
+                closed_paths.append(CutterCenterPath(tuple(offset), True))
+                continue
+            for index, start in enumerate(offset):
+                if index in board_edges:
+                    continue
+                end = offset[(index + 1) % len(offset)]
+                if math.dist(start, end) > tolerance:
+                    open_segments.append((start, end))
+
+    open_paths = [
+        CutterCenterPath((start, end), False)
+        for start, end in _merge_collinear(open_segments, tolerance)
+    ]
+    return [*closed_paths, *open_paths]
+
+
 def cutter_center_segments(
     shapes: Sequence[Shape],
     radius_mm: float,
@@ -30,42 +98,34 @@ def cutter_center_segments(
     tolerance: float = COLLINEAR_TOLERANCE_MM,
     board: Sequence[float] | None = None,
 ) -> list[Segment]:
-    """Return unique saw-center segments for every outer ring and hole.
+    """Return the canonical segment-network view of the exported paths.
 
-    ``board`` is ``(min_x, min_y, max_x, max_y)`` in the same coordinates as
-    the rings. A finished edge lying on that physical boundary is not a cut.
-    Trim, a shared kerf, and every edge that leaves the board are still
-    emitted. Omitting ``board`` keeps every edge.
+    This compatibility view is used by import validation and older callers.
+    Coincident sides from independent Multi Offset contours collapse to one
+    physical center line before comparison.
     """
 
-    radius = max(0.0, float(radius_mm or 0.0))
-    prepared = [(_open_ring(outer), [_open_ring(hole) for hole in holes]) for outer, holes in shapes]
-    prepared = [(outer, holes) for outer, holes in prepared if len(outer) >= 3]
-    if not prepared:
-        return []
     segments: list[Segment] = []
-    for outer, holes in prepared:
-        rings = [outer, *[hole for hole in holes if len(hole) >= 3]]
-        for ring in rings:
-            if radius <= tolerance:
-                offset = ring
-            else:
-                sign = _waste_sign(ring, prepared, radius)
-                offset = _offset_closed(ring, radius, sign)
-            if len(offset) < 3:
-                continue
-            count = len(ring)
-            for index, finished_start in enumerate(ring):
-                finished_end = ring[(index + 1) % count]
-                if board is not None and _edge_on_board(
-                    finished_start, finished_end, board, tolerance
-                ):
-                    continue
-                start = offset[index]
-                end = offset[(index + 1) % len(offset)]
-                if math.dist(start, end) > tolerance:
-                    segments.append((start, end))
+    for path in cutter_center_paths(
+        shapes,
+        radius_mm,
+        tolerance=tolerance,
+        board=board,
+    ):
+        segments.extend(zip(path.points, path.points[1:]))
+        if path.closed and len(path.points) >= 3:
+            segments.append((path.points[-1], path.points[0]))
     return _merge_collinear(segments, tolerance)
+
+
+def _prepare_shapes(
+    shapes: Sequence[Shape],
+) -> list[tuple[list[Point], list[list[Point]]]]:
+    prepared = [
+        (_open_ring(outer), [_open_ring(hole) for hole in holes])
+        for outer, holes in shapes
+    ]
+    return [(outer, holes) for outer, holes in prepared if len(outer) >= 3]
 
 
 def _edge_on_board(
@@ -245,4 +305,131 @@ def _line_distance(point: Point, origin: Point, normal: Point) -> float:
     return abs((point[0] - origin[0]) * normal[0] + (point[1] - origin[1]) * normal[1])
 
 
-__all__ = ["COLLINEAR_TOLERANCE_MM", "cutter_center_segments"]
+SAW_CENTER_ABSENT = "absent"
+SAW_CENTER_MATCH = "match"
+SAW_CENTER_INVALID = "invalid"
+
+
+def _finite_segments(
+    segments: Sequence[Segment],
+    *,
+    tolerance: float,
+) -> list[Segment]:
+    cleaned: list[Segment] = []
+    for start, end in segments:
+        try:
+            a = (float(start[0]), float(start[1]))
+            b = (float(end[0]), float(end[1]))
+        except (TypeError, ValueError, IndexError):
+            continue
+        if not all(math.isfinite(value) for value in (*a, *b)):
+            continue
+        if math.dist(a, b) <= tolerance:
+            continue
+        cleaned.append((a, b))
+    return cleaned
+
+
+def _segment_cover_length(
+    candidate: Segment,
+    cover: Segment,
+    *,
+    tolerance: float,
+) -> float:
+    """Return how much of ``candidate`` lies on ``cover``; 0 when not collinear."""
+
+    origin, end = cover
+    dx = end[0] - origin[0]
+    dy = end[1] - origin[1]
+    length = math.hypot(dx, dy)
+    if length <= tolerance:
+        return 0.0
+    direction = (dx / length, dy / length)
+    normal = (-direction[1], direction[0])
+    start, finish = candidate
+    if (
+        _line_distance(start, origin, normal) > tolerance
+        or _line_distance(finish, origin, normal) > tolerance
+    ):
+        return 0.0
+    other_dx = finish[0] - start[0]
+    other_dy = finish[1] - start[1]
+    other_length = math.hypot(other_dx, other_dy)
+    if other_length <= tolerance:
+        return 0.0
+    sine = abs(direction[0] * other_dy - direction[1] * other_dx) / other_length
+    if sine > tolerance:
+        return 0.0
+    start_t = (start[0] - origin[0]) * direction[0] + (start[1] - origin[1]) * direction[1]
+    end_t = (finish[0] - origin[0]) * direction[0] + (finish[1] - origin[1]) * direction[1]
+    low, high = (min(start_t, end_t), max(start_t, end_t))
+    overlap = min(high, length) - max(low, 0.0)
+    return max(0.0, overlap)
+
+
+def saw_center_segments_match(
+    observed: Sequence[Segment],
+    expected: Sequence[Segment],
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> bool:
+    """True when observed saw centers cover the expected set without extras."""
+
+    left = _merge_collinear(_finite_segments(observed, tolerance=tolerance), tolerance)
+    right = _merge_collinear(_finite_segments(expected, tolerance=tolerance), tolerance)
+    if len(left) != len(right):
+        return False
+    if not left:
+        return True
+    remaining = list(right)
+    for candidate in left:
+        candidate_length = math.dist(candidate[0], candidate[1])
+        match_index = None
+        for index, cover in enumerate(remaining):
+            covered = _segment_cover_length(candidate, cover, tolerance=tolerance)
+            reverse = _segment_cover_length(cover, candidate, tolerance=tolerance)
+            cover_length = math.dist(cover[0], cover[1])
+            if (
+                abs(covered - candidate_length) <= tolerance
+                and abs(reverse - cover_length) <= tolerance
+            ):
+                match_index = index
+                break
+        if match_index is None:
+            return False
+        remaining.pop(match_index)
+    return not remaining
+
+
+def classify_saw_center_segments(
+    observed: Sequence[Segment],
+    expected: Sequence[Segment],
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> str:
+    """Classify uploaded CUT_PATH centers against the finished-geometry engine.
+
+    ``absent`` means the designer left manufacturing paths empty so approval may
+    generate them. ``match`` keeps the designer paths. ``invalid`` rejects the
+    file; partial paths are never repaired.
+    """
+
+    cleaned = _finite_segments(observed, tolerance=tolerance)
+    if not cleaned:
+        return SAW_CENTER_ABSENT
+    if saw_center_segments_match(cleaned, expected, tolerance=tolerance):
+        return SAW_CENTER_MATCH
+    return SAW_CENTER_INVALID
+
+
+__all__ = [
+    "COLLINEAR_TOLERANCE_MM",
+    "CutterCenterPath",
+    "SAW_CENTER_ABSENT",
+    "SAW_CENTER_INVALID",
+    "SAW_CENTER_MATCH",
+    "classify_saw_center_segments",
+    "cutter_center_paths",
+    "cutter_center_segments",
+    "saw_center_segments_match",
+]

@@ -254,7 +254,7 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
             pdf,
             ("41.5", "63.25"),
             arabic=(
-                "دبل قشاط",
+                "دبل ضلع",
                 "جدول قياسات الطلب",
                 "تسليم مع المفصلات",
                 "مقبض علوي",
@@ -298,7 +298,7 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
             self.assertIn(width, folded)
         self.assertNotIn(self.secret, text)
         self.assertNotIn(self.internal, text)
-        for token in ("دبل قشاط", "لاينر", "فرزة ظهر", "حفر مسكة غطس", "دبل كامل الدرفة"):
+        for token in ("دبل ضلع", "لاينر", "فرزة ظهر", "حفر مسكة غطس", "دبل كامل الدرفة"):
             self._assert_arabic(many.documents[0].content, text, token)
         folder = Path("/tmp/almdina-customer-bot-measurements")
         folder.mkdir(parents=True, exist_ok=True)

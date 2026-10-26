@@ -24,11 +24,9 @@ def decide_stage_assignment_access(
     Before a route exists, capabilities and the feature lifecycle are sufficient.
     A planned production path on Draft is still pre-dispatch, not a finished
     shop-floor route. Once dispatched, an active stage belongs to its explicit
-    assignee. A finished route with no active stage cannot be mutated.
+    assignee except for Administrator. A finished route with no active stage
+    cannot be mutated.
     """
-
-    if is_admin:
-        return StageAssignmentDecision(True, "allowed", "")
 
     if not has_current_stage:
         if has_production_path:
@@ -42,6 +40,11 @@ def decide_stage_assignment_access(
                 "لا يمكن تعديل الطلب بعد مغادرته مراحل الإنتاج النشطة.",
             )
         return StageAssignmentDecision(True, "pre_production", "")
+
+    # Administrator bypasses ownership of an active stage, not its lifecycle.
+    # A finished route with no current stage remains closed above.
+    if is_admin:
+        return StageAssignmentDecision(True, "allowed", "")
 
     resolved_actor = str(actor or "").strip()
     resolved_assignee = str(assigned_to or "").strip()

@@ -286,7 +286,7 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             "def plan_input_fingerprint", 1
         )[1].split("def calculate_system_plan", 1)[0]
         for field in (
-            '"version": 2',
+            '"version": version',
             '"order_revision"',
             '"board"',
             '"settings"',

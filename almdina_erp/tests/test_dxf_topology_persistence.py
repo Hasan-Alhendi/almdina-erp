@@ -241,6 +241,87 @@ def test_export_reconstruction_rebinds_geometry_by_piece_id_not_dimensions():
     assert pieces[1]["geometry"] == first_geometry
 
 
+def test_uploaded_nested_glass_host_survives_reload_export_rebuild():
+    owner = _geometry(
+        ((0, 0), (400, 0), (400, 400), (0, 400)),
+        (((50, 50), (350, 50), (350, 350), (50, 350)),),
+    )
+    guest = _geometry(((80, 80), (200, 80), (200, 200), (80, 200)))
+    persisted = sanitize_plan_snapshot(
+        {
+            "kerf_cm": 0.3,
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "pieces": [
+                        {
+                            "id": 1,
+                            "label": "1.1",
+                            "piece_type": "Glass",
+                            "x": 0,
+                            "y": 0,
+                            "w": 40,
+                            "h": 40,
+                            "geometry": owner,
+                            "glass_margin_mm": 50,
+                        },
+                        {
+                            "id": 2,
+                            "label": "2.1",
+                            "piece_type": "Regular",
+                            "x": 8,
+                            "y": 8,
+                            "w": 12,
+                            "h": 12,
+                            "geometry": guest,
+                            "glass_host_piece_id": 1,
+                        },
+                    ],
+                }
+            ],
+            "validation": {"is_valid": True, "errors": []},
+            "unplaced": [],
+        }
+    )
+    # Reload boundary: snapshot JSON only; placed_pieces lack host fields.
+    reloaded = sanitize_plan_snapshot(json.loads(json.dumps(persisted)))
+    host_piece = _saved_piece(1, "1.1", 0)
+    host_piece.piece_type = "Glass"
+    host_piece.width_mm = 400
+    host_piece.height_mm = 400
+    host_piece.original_width_cm = 40
+    host_piece.original_length_cm = 40
+    guest_piece = _saved_piece(2, "2.1", 80)
+    guest_piece.width_mm = 120
+    guest_piece.height_mm = 120
+    guest_piece.original_width_cm = 12
+    guest_piece.original_length_cm = 12
+    plan = SimpleNamespace(
+        snapshot_json=json.dumps(reloaded),
+        placed_pieces=[host_piece, guest_piece],
+        sources=[_source()],
+        engine_version="dxf-import-v2",
+        method_key="custom_dxf",
+        method_label="Uploaded DXF",
+        full_board_width_mm=1000,
+        full_board_length_mm=1000,
+        usable_board_width_mm=1000,
+        usable_board_length_mm=1000,
+        kerf_mm=3,
+        trim_margin_mm=0,
+        used_area_m2=0.1744,
+        total_source_area_m2=1,
+        waste_area_m2=0.8256,
+        required_boards=1,
+    )
+
+    rebuilt = _plan_to_export_snapshot(plan)
+    by_id = {int(piece["id"]): piece for piece in rebuilt["sheets"][0]["pieces"]}
+    assert by_id[1]["geometry"]["holes"]
+    assert by_id[2]["glass_host_piece_id"] == 1
+    assert validate_snapshot_material_layout(rebuilt, required_clearance_mm=3.0) is True
+
+
 def test_export_reconstruction_keeps_sheet_trim_when_plan_trim_is_zero():
     persisted = {
         "applied_trim_width_cm": 0,

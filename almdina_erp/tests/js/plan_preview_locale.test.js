@@ -198,7 +198,7 @@ context.window.AlmdinaPlanWorkspaceState = {
         return {
             status: "ready",
             editing: true,
-            data: { plans: { system_draft: { settings: {} } }, approved_plan: "" },
+            data: { plans: { system_draft: { status: "Draft", settings: {} } }, approved_plan: "" },
         };
     },
     activePlan() { return { settings: {} }; },

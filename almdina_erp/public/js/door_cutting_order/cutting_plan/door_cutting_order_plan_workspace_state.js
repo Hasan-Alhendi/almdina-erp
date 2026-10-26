@@ -234,15 +234,26 @@
         return ownedSnapshot(frm, store);
     }
 
+    function isCurrentDraftRow(row) {
+        return Boolean(row && String(row.status || "") === "Draft"
+            && String(row.display_context || "current_draft") === "current_draft");
+    }
+
     function activePlan(frm, preferredSource = "System") {
         const state = snapshot(frm);
         const data = state && state.data;
         const plans = data && data.plans;
         if (!plans) return null;
+        const systemDraft = isCurrentDraftRow(plans.system_draft) ? plans.system_draft : null;
+        const uploadedDraft = isCurrentDraftRow(plans.uploaded_draft) ? plans.uploaded_draft : null;
+        const approved = plans.approved
+            && String(plans.approved.status || "") === "Approved"
+            && String(plans.approved.display_context || "current_approved") === "current_approved"
+            ? plans.approved : null;
         if (preferredSource === "Uploaded DXF") {
-            return plans.uploaded_draft || plans.approved || plans.system_draft || null;
+            return uploadedDraft || approved || systemDraft || null;
         }
-        return plans.system_draft || plans.approved || plans.uploaded_draft || null;
+        return systemDraft || approved || uploadedDraft || null;
     }
 
     function planForTab(frm, tab) {
@@ -293,6 +304,7 @@
 
     const owner = Object.freeze({
         canView,
+        isCurrentDraftRow,
         storeFor,
         reset,
         invalidate,

@@ -176,7 +176,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(
             [line["description"] for line in payload["lines"]],
             [
-                "إضافة دبل قشاط — درفة رقم 1",
+                "إضافة دبل ضلع — درفة رقم 1",
                 "إضافة Liner — درفة رقم 1",
                 "إضافة فرزة ظهر — درفة رقم 1",
             ],
@@ -185,7 +185,7 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(payload["totals"][0]["value_usd"], 19.0)
         self.assertEqual(payload["measurements"][0]["piece_type"], "عادية")
         self.assertIn(
-            "إضافات: دبل قشاط، Liner، فرزة ظهر",
+            "إضافات: دبل ضلع، Liner، فرزة ظهر",
             payload["measurements"][0]["notes"],
         )
 

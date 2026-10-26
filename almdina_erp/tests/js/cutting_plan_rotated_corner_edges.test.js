@@ -64,6 +64,8 @@ const context = vm.createContext({
     "drawing/door_cutting_order_special_shape_geometry.js",
     "drawing/door_cutting_order_shape_output_contract.js",
     "drawing/door_cutting_order_clipped_corner_ux.js",
+    "drawing/door_cutting_order_liner_geometry.js",
+    "drawing/door_cutting_order_liner_ux.js",
     "cutting_plan/door_cutting_order_piece_geometry.js",
     "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
 ].forEach((relativePath) => {
@@ -196,6 +198,319 @@ function turnedGeometry(pieceType, turns) {
 
 const systemPiece = { ...basePiece("L-Shaped Corner"), w: 80, h: 40, rotated: true };
 const systemBands = polylines(renderer.build(frm, planFor(systemPiece)));
+const mixedLDoublePiece = {
+    ...basePiece("L-Shaped Corner"),
+    edge_width_top: 0,
+    edge_long_left: 0,
+    edge_long_right: 1,
+    edge_break: 0,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break", "edge_long_right"]',
+};
+const mixedLDoubleHtml = renderer.build(frm, planFor(mixedLDoublePiece));
+assert.equal((mixedLDoubleHtml.match(/dco-edge-break-svg/g) || []).length, 2);
+assert.ok((mixedLDoubleHtml.match(/stroke="#5a2d82"/g) || []).length >= 2);
+assert.match(mixedLDoubleHtml, /stroke="#d00000"/);
+const breakOnlyPurplePaths = (html) => [...html.matchAll(
+    /class="dco-edge-line-svg dco-edge-break-svg"[^>]*stroke="#5a2d82"[^>]*points="([^"]+)"/g,
+)].map(match => match[1]);
+const breakWithNormalHtml = renderer.build(frm, planFor({
+    ...mixedLDoublePiece,
+    edge_break: 1,
+}));
+assert.equal(breakOnlyPurplePaths(mixedLDoubleHtml).length, 2);
+assert.equal(breakOnlyPurplePaths(breakWithNormalHtml).length, 2);
+assert.notDeepEqual(
+    breakOnlyPurplePaths(mixedLDoubleHtml),
+    breakOnlyPurplePaths(breakWithNormalHtml),
+    "the L break edge uses its own normal-band state",
+);
+const lRightDoublePiece = {
+    ...basePiece("L-Shaped Corner"),
+    edge_width_top: 0,
+    edge_long_left: 0,
+    edge_long_right: 1,
+    edge_break: 0,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_long_right"]',
+};
+const lRightDoubleHtml = renderer.build(frm, planFor(lRightDoublePiece));
+assert.doesNotMatch(lRightDoubleHtml, /dco-edge-break-svg/);
+assert.ok((lRightDoubleHtml.match(/stroke="#5a2d82"/g) || []).length >= 2);
+
+function parsePolyline(points) {
+    return String(points || "").trim().split(/\s+/).filter(Boolean).map(pair => pair.split(",").map(Number));
+}
+
+function distanceToPath(point, path) {
+    let best = Infinity;
+    for (let index = 0; index < path.length - 1; index += 1) {
+        const start = path[index];
+        const end = path[index + 1];
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const lengthSq = (dx * dx) + (dy * dy);
+        if (lengthSq <= 1e-9) {
+            best = Math.min(best, Math.hypot(point[0] - start[0], point[1] - start[1]));
+            continue;
+        }
+        const ratio = Math.max(0, Math.min(1, (((point[0] - start[0]) * dx) + ((point[1] - start[1]) * dy)) / lengthSq));
+        best = Math.min(best, Math.hypot(point[0] - (start[0] + (dx * ratio)), point[1] - (start[1] + (dy * ratio))));
+    }
+    return best;
+}
+
+function parallelGap(inner, outer) {
+    const samples = inner.slice();
+    for (let index = 0; index < inner.length - 1; index += 1) {
+        samples.push([
+            (inner[index][0] + inner[index + 1][0]) / 2,
+            (inner[index][1] + inner[index + 1][1]) / 2,
+        ]);
+    }
+    const distances = samples.map(point => distanceToPath(point, outer));
+    return {
+        min: Math.min(...distances),
+        max: Math.max(...distances),
+    };
+}
+
+function purpleBreakPaths(html) {
+    return [...String(html).matchAll(
+        /data-double-edge-side="edge_break"[\s\S]*?<polyline[^>]*stroke="#5a2d82"[^>]*points="([^"]+)"/g,
+    )].map(match => parsePolyline(match[1]));
+}
+
+function redBreakPath(html) {
+    const match = String(html).match(
+        /<svg class="dco-piece-edge-svg"[\s\S]*?<polyline class="dco-edge-line-svg dco-edge-break-svg"[^>]*points="([^"]+)"/,
+    );
+    return match ? parsePolyline(match[1]) : null;
+}
+
+const bandedBreak = purpleBreakPaths(breakWithNormalHtml);
+const redBreak = redBreakPath(breakWithNormalHtml);
+assert.equal(bandedBreak.length, 2);
+assert.ok(redBreak, "the normal L strap is drawn in the same viewBox");
+const firstGap = parallelGap(bandedBreak[0], redBreak);
+const secondGap = parallelGap(bandedBreak[1], redBreak);
+assert.ok(firstGap.min > 2.4, `first purple line stays clear of the strap (${firstGap.min})`);
+assert.ok(secondGap.min > firstGap.min + 1.5, "the two purple lines stay apart");
+assert.ok(firstGap.max - firstGap.min < 1.5, "both legs of the L use the same viewBox offset");
+assert.doesNotMatch(breakWithNormalHtml, /stroke="#e00000"/);
+assert.doesNotMatch(breakWithNormalHtml, /transform="scale\(/);
+
+const unbandedBreak = purpleBreakPaths(mixedLDoubleHtml);
+assert.equal(unbandedBreak.length, 2);
+const unbandedSpread = parallelGap(unbandedBreak[1], unbandedBreak[0]);
+assert.ok(unbandedSpread.min > 1.8, "two purple lines stay apart without a strap");
+assert.ok(
+    parallelGap(unbandedBreak[0], bandedBreak[0]).min > 1,
+    "a break without a strap is not pushed out by the other edge's strap",
+);
+
+const smallL = {
+    ...basePiece("L-Shaped Corner"),
+    w: 12,
+    h: 18,
+    edge_width_top: 0,
+    edge_long_left: 0,
+    edge_long_right: 0,
+    edge_break: 1,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break"]',
+};
+const smallHtml = renderer.build(frm, planFor(smallL));
+const smallPurple = purpleBreakPaths(smallHtml);
+const smallRed = redBreakPath(smallHtml);
+assert.equal(smallPurple.length, 2);
+assert.ok(parallelGap(smallPurple[0], smallRed).min > 4, "a small L keeps a visible gap after the viewBox conversion");
+assert.ok(parallelGap(smallPurple[1], smallPurple[0]).min > 2, "a small L keeps the two lines apart");
+
+const manySides = {
+    ...basePiece("L-Shaped Corner"),
+    edge_width_top: 1,
+    edge_long_left: 0,
+    edge_long_right: 0,
+    edge_width_bottom: 0,
+    edge_break: 0,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_width_top","edge_long_left","edge_break"]',
+};
+const manyHtml = renderer.build(frm, planFor(manySides));
+["edge_width_top", "edge_long_left", "edge_break"].forEach(side => {
+    assert.equal((manyHtml.match(new RegExp(`data-double-edge-side="${side}"`, "g")) || []).length, 2, side);
+});
+assert.equal((manyHtml.match(/data-double-edge-side="edge_long_right"/g) || []).length, 0);
+const topDouble = manyHtml.match(/data-double-edge-side="edge_width_top"[\s\S]*?points="([^"]+)"/);
+const leftDouble = manyHtml.match(/data-double-edge-side="edge_long_left"[\s\S]*?points="([^"]+)"/);
+assert.notEqual(topDouble[1], leftDouble[1], "a banded side and an unbanded side do not share an offset");
+
+const rotatedDouble = {
+    ...basePiece("L-Shaped Corner"),
+    w: 80,
+    h: 40,
+    rotated: true,
+    edge_break: 1,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break"]',
+};
+const rotatedHtml = renderer.build(frm, planFor(rotatedDouble));
+const uprightHtml = renderer.build(frm, planFor({
+    ...basePiece("L-Shaped Corner"),
+    edge_break: 1,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break"]',
+}));
+assert.notEqual(purpleBreakPaths(rotatedHtml).join("|"), purpleBreakPaths(uprightHtml).join("|"));
+assert.ok(parallelGap(purpleBreakPaths(rotatedHtml)[0], redBreakPath(rotatedHtml)).min > 2.4);
+
+const mirrorSource = {
+    ...basePiece("L-Shaped Corner"),
+    clipped_corner_width_cm: 10,
+    clipped_corner_length_cm: 24,
+};
+let mirroredPoints = reflectX(geometry.points(mirrorSource, 400, 800), 400);
+let mirroredWidth = 400;
+let mirroredHeight = 800;
+const mirroredTurn = rotateClockwise(mirroredPoints, mirroredWidth, mirroredHeight);
+mirroredPoints = mirroredTurn.points;
+mirroredWidth = mirroredTurn.width;
+mirroredHeight = mirroredTurn.height;
+const mirroredPiece = {
+    ...mirrorSource,
+    w: mirroredWidth / 10,
+    h: mirroredHeight / 10,
+    rotated: true,
+    corner_rotation_quarter_turns: 1,
+    corner_mirrored: 1,
+    edge_break: 1,
+    edge_long_left: 1,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break","edge_long_left"]',
+    geometry: {
+        schema_version: 1,
+        unit: "mm",
+        coordinate_space: "usable_sheet",
+        outer: mirroredPoints.map(([x, y]) => [x + 100, y + 200]),
+        holes: [],
+    },
+};
+const mirroredUprightHtml = renderer.build(frm, planFor({
+    ...mirrorSource,
+    edge_break: 1,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break"]',
+}));
+const mirroredHtml = renderer.build(frm, planFor(mirroredPiece));
+assert.equal(purpleBreakPaths(mirroredHtml).length, 2);
+assert.notEqual(purpleBreakPaths(mirroredHtml).join("|"), purpleBreakPaths(mirroredUprightHtml).join("|"));
+assert.ok(parallelGap(purpleBreakPaths(mirroredHtml)[0], redBreakPath(mirroredHtml)).min > 2);
+assert.equal((mirroredHtml.match(/data-double-edge-side="edge_long_left"/g) || []).length, 0,
+    "mirroring moves the selected semantic left edge onto its visual side");
+assert.equal((mirroredHtml.match(/data-double-edge-side="edge_width_bottom"/g) || []).length, 2);
+
+const bevel = {
+    ...basePiece("Clipped Corner"),
+    edge_width_top: 0,
+    edge_long_left: 0,
+    edge_long_right: 0,
+    edge_break: 1,
+    edge_break_only: 0,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_break"]',
+};
+const bevelHtml = renderer.build(frm, planFor(bevel));
+const bevelPurple = purpleBreakPaths(bevelHtml);
+assert.equal(bevelPurple.length, 2);
+assert.ok(parallelGap(bevelPurple[0], redBreakPath(bevelHtml)).min > 2.4);
+assert.ok(parallelGap(bevelPurple[1], bevelPurple[0]).min > 1.5);
+
+const regularMixed = {
+    id: "regular-mixed",
+    x: 10,
+    y: 10,
+    w: 30,
+    h: 50,
+    original_w: 30,
+    original_h: 50,
+    area_m2: 0.15,
+    label: "9.1",
+    piece_type: "Regular",
+    edge_width_top: 1,
+    edge_long_left: 0,
+    extra_double: 1,
+    extra_double_reference_sides: '["edge_width_top","edge_long_left"]',
+};
+const regularMixedHtml = renderer.build(frm, planFor(regularMixed));
+assert.match(regularMixedHtml, /top:8px;[^"]*border-top:1\.4px solid #5a2d82/);
+assert.match(regularMixedHtml, /top:11px;[^"]*border-top:1\.4px solid #5a2d82/);
+assert.match(regularMixedHtml, /left:4\.5px;[^"]*border-left:1\.4px solid #5a2d82/);
+assert.match(regularMixedHtml, /left:7\.5px;[^"]*border-left:1\.4px solid #5a2d82/);
+assert.doesNotMatch(regularMixedHtml, /<svg class="dco-piece-double-edge-svg[\s\S]*?<text/);
+
+const doubleSvg = mixedLDoubleHtml.match(/<svg class="dco-piece-double-edge-svg[\s\S]*?<\/svg>/);
+assert.ok(doubleSvg);
+assert.doesNotMatch(doubleSvg[0], /<text|دبل قشاط|دبل ضلع|دبل القشاط/);
+assert.match(mixedLDoubleHtml, /Double Edge/);
+assert.match(
+    read("cutting_plan/door_cutting_order_cutting_plan_renderer.js"),
+    /\.dco-piece-double-edge-svg \.dco-edge-line-svg[\s\S]*?#5a2d82 !important/,
+);
+
+const previewRow = {
+    piece_type: "L-Shaped Corner",
+    width_cm: 40,
+    length_cm: 80,
+    clipped_corner_position: "Top Right",
+    clipped_corner_width_cm: 8,
+    clipped_corner_length_cm: 16,
+    edge_long_right: 1,
+    edge_break: 0,
+    extra_double: 1,
+};
+const previewPiece = fakeWindow.AlmdinaLinerGeometry.pieceFromRow(previewRow);
+const previewDraft = {
+    piece: previewPiece,
+    row: previewRow,
+    kind: "liner",
+    enabled: false,
+    side: "edge_break",
+    offsetCm: 0,
+    widthCm: 1,
+    startCm: 0,
+    lengthCm: 0,
+    fullLength: true,
+};
+const previewHtml = fakeWindow.AlmdinaLinerEditor.previewSvg(previewDraft, {
+    multi: true,
+    doubleSides: ["edge_break", "edge_long_right"],
+});
+const previewBanded = fakeWindow.AlmdinaLinerEditor.previewSvg({
+    ...previewDraft,
+    row: { ...previewRow, edge_break: 1 },
+}, {
+    multi: true,
+    doubleSides: ["edge_break", "edge_long_right"],
+});
+function previewSidePoints(html, side) {
+    const block = String(html).match(new RegExp(`<g data-double-edge-side="${side}">([\\s\\S]*?)</g>`));
+    assert.ok(block, side);
+    return [...block[1].matchAll(/points="([^"]+)"/g)].map(match => match[1]);
+}
+assert.equal(previewSidePoints(previewHtml, "edge_break").length, 2);
+assert.equal(previewSidePoints(previewHtml, "edge_long_right").length, 2);
+assert.notEqual(
+    previewSidePoints(previewHtml, "edge_break").join("|"),
+    previewSidePoints(previewBanded, "edge_break").join("|"),
+    "preview offsets each L edge from its own strap",
+);
+assert.equal(
+    previewSidePoints(previewHtml, "edge_long_right").join("|"),
+    previewSidePoints(previewBanded, "edge_long_right").join("|"),
+);
+assert.match(previewHtml, /stroke="#5a2d82"/);
+assert.doesNotMatch(previewHtml, /<text[^>]*>[^<]*دبل/);
 const legacyPiece = {
     ...systemPiece,
     edge_width_top: systemPiece.edge_long_left,
@@ -355,3 +670,25 @@ assert.match(chordPlain, /dco-edge-break-only-svg/);
 assert.match(notchPlain, /dco-edge-break-svg/);
 assert.notEqual(polylines(chordPlain).join("|"), polylines(chordMirror).join("|"), "the clipped diagonal follows the reflection");
 assert.notEqual(polylines(notchPlain).join("|"), polylines(notchMirror).join("|"), "the L notch follows the reflection");
+
+const previewBandPiece = {
+    ...basePiece("Clipped Corner"),
+    edge_break: 0,
+    edge_break_only: 0,
+    edge_width_top: 1,
+    edge_width_bottom: 0,
+    edge_long_left: 0,
+    edge_long_right: 1,
+};
+const insetReference = geometry.clippedEdgePaths(previewBandPiece, 400, 800, { insetPx: 4 });
+const insetPreview = geometry.edgeBandSvgMarkup(previewBandPiece, 400, 800, {
+    inheritStroke: false,
+    insetPx: 4,
+    endTrimPx: 6,
+});
+const previewLines = polylines(insetPreview).map(line => line.split(" ").map(point => point.split(",").map(Number)));
+assert.equal(previewLines.length, 2);
+assert.ok(Math.abs(previewLines[0][0][0] - insetReference.top[0][0] - 6) < 0.1);
+assert.ok(Math.abs(previewLines[0].at(-1)[0] - insetReference.top.at(-1)[0] + 6) < 0.1);
+assert.ok(Math.abs(previewLines[1][0][1] - insetReference.right[0][1] - 6) < 0.1);
+assert.ok(Math.abs(previewLines[1].at(-1)[1] - insetReference.right.at(-1)[1] + 6) < 0.1);

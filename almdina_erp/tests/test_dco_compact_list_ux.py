@@ -39,7 +39,7 @@ class TestDcoCompactListUx(unittest.TestCase):
             'door_cutting_order_compact_list_ux.js?v=13"'
         )
 
-        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=17"', manifest)
+        self.assertIn('"/assets/almdina_erp/css/door_cutting_order_list.css?v=18"', manifest)
         self.assertIn('"/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14"', manifest)
         self.assertIn(compact_global, manifest)
         self.assertIn(canonical, manifest)

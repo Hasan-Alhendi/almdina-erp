@@ -27,6 +27,9 @@ from almdina_erp.almdina_erp.domain.orders.production_authorization import (
     decide_production_action,
 )
 from almdina_erp.almdina_erp.domain.orders.production_routing import ProductionRoute
+from almdina_erp.almdina_erp.domain.orders.stage_assignment_access import (
+    decide_stage_assignment_access,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import (
     DRAWING_CAPABILITIES,
     PLANNING_CAPABILITIES,
@@ -318,6 +321,17 @@ def _enrich_stage_rows(
             current_stage
             and str(_value(current_stage, "assigned_to") or "").strip() == actor
         )
+        actor_can_operate_current_stage = bool(
+            current_stage
+            and decide_stage_assignment_access(
+                actor=actor,
+                assigned_to=_value(current_stage, "assigned_to"),
+                has_current_stage=True,
+                has_production_path=bool(production_path),
+                is_admin=actor == "Administrator",
+                order_status=_effective_order_status(repository, order, current_stage),
+            ).allowed
+        )
         enriched.append(
             {
                 **dict(stage),
@@ -346,6 +360,7 @@ def _enrich_stage_rows(
                 ),
                 "current_stage_operational_role": current_role,
                 "actor_is_current_assignee": actor_is_current_assignee,
+                "actor_can_operate_current_stage": actor_can_operate_current_stage,
                 # Compatibility key for existing presenters. Its value is now
                 # assignment-based; no operational role grants an action.
                 "actor_holds_current_stage_role": actor_is_current_assignee,
@@ -551,6 +566,11 @@ def _production_facts(
     route_starts_with_planning: bool = False,
 ) -> ProductionActionFacts:
     actor = repository.current_user()
+    route = (
+        _production_route(repository, str(_value(order, "production_path")))
+        if stage and _value(order, "production_path") else None
+    )
+    stage_type = str(_value(stage, "stage_type") or "")
     return ProductionActionFacts(
         order_status=_effective_order_status(repository, order, stage),
         production_path=_value(order, "production_path"),
@@ -568,6 +588,7 @@ def _production_facts(
         actor_roles=(),
         is_admin=actor == "Administrator",
         has_factory_work=bool(_value(order, "has_factory_work", True)),
+        stage_is_planning=bool(route and route.contains(stage_type) and route.stage(stage_type).is_planning_stage),
     )
 
 
@@ -711,6 +732,7 @@ def _active_stage_snapshot(
             "active_stage_assigned_to": None,
             "active_stage_operational_role": None,
             "actor_is_current_assignee": False,
+            "actor_can_operate_current_stage": False,
             "actor_holds_operational_role": False,
             "can_start_stage": False,
             "can_handoff_stage": False,
@@ -728,9 +750,18 @@ def _active_stage_snapshot(
     stage_status = str(_value(stage, "status") or "")
     stage_type = str(_value(stage, "stage_type") or "")
     operational_role = _resolve_operational_role(repository, order, stage) or ""
+    actor = repository.current_user()
     actor_is_current_assignee = bool(
-        str(_value(stage, "assigned_to") or "").strip() == repository.current_user()
+        str(_value(stage, "assigned_to") or "").strip() == actor
     )
+    actor_can_operate_current_stage = decide_stage_assignment_access(
+        actor=actor,
+        assigned_to=_value(stage, "assigned_to"),
+        has_current_stage=True,
+        has_production_path=bool(_value(order, "production_path")),
+        is_admin=actor == "Administrator",
+        order_status=_effective_order_status(repository, order, stage),
+    ).allowed
     production_path = _value(order, "production_path")
     can_handoff_to = None
     route = _production_route(repository, str(production_path or ""))
@@ -759,6 +790,7 @@ def _active_stage_snapshot(
         "active_stage_assigned_to": _value(stage, "assigned_to"),
         "active_stage_operational_role": operational_role or None,
         "actor_is_current_assignee": actor_is_current_assignee,
+        "actor_can_operate_current_stage": actor_can_operate_current_stage,
         # Compatibility key for existing frontend modules; assignment is now the
         # authority, not role membership.
         "actor_holds_operational_role": actor_is_current_assignee,
@@ -913,7 +945,7 @@ def get_order_detail(
         and Capability.RECALCULATE_PLAN in document_capabilities
         and not approved_plan
         and planning_stage_active
-        and stage_snapshot.get("actor_is_current_assignee")
+        and stage_snapshot.get("actor_can_operate_current_stage")
     )
 
     return {
@@ -950,3 +982,4 @@ __all__ = [
     "get_revert_targets",
     "get_shop_floor_context",
 ]
+

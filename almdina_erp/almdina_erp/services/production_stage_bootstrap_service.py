@@ -10,6 +10,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository imp
     required_piece_qty,
 )
 
+from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_command_context import (
+    authorized_stage_activation,
+)
+
 
 def _log_event(
     stage: Any,
@@ -110,7 +114,9 @@ def ensure_default_stages(
         else:
             stage.status = "Pending"
 
-        stage.insert(ignore_permissions=True)
+        # Preserve trusted historical auto-completion; this is not a worker Start.
+        with authorized_stage_activation(stage):
+            stage.insert(ignore_permissions=True)
         _log_event(
             stage,
             "Created",

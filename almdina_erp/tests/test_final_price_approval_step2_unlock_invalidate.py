@@ -133,6 +133,36 @@ class TestFinalPriceApprovalStep2UnlockInvalidate(unittest.TestCase):
                 price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
             )
         )
+        self.assertFalse(
+            can_edit_cost_settings_for_order(
+                has_edit_cost_settings=True,
+                has_view_costs=False,
+                price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
+            )
+        )
+        for kwargs in (
+            {"order_status": "Cancelled"},
+            {"revision_state": "Superseded"},
+            {"docstatus": 1},
+            {"docstatus": 2},
+        ):
+            with self.subTest(**kwargs):
+                self.assertFalse(
+                    can_edit_cost_settings_for_order(
+                        has_edit_cost_settings=True,
+                        price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
+                        **kwargs,
+                    )
+                )
+        for stage in ("Draft", "Pending Review", "Rejected", "Delivered"):
+            with self.subTest(stage=stage):
+                self.assertTrue(
+                    can_edit_cost_settings_for_order(
+                        has_edit_cost_settings=True,
+                        price_approval_status=PRICE_APPROVAL_STATUS_APPROVED,
+                        order_status=stage,
+                    )
+                )
         decision = decide_final_price_approval_actions(
             has_approve_final_price=True,
             has_view_costs=True,

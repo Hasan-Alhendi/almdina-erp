@@ -45,6 +45,7 @@
         liner_start_invalid: "Liner start must be zero or greater.",
         liner_length_invalid: "Liner length must be greater than zero.",
         liner_span_exceeds_edge: "Liner start plus length exceeds the reference side.",
+        liner_span_exceeds_edge_detail: "{0}: reference side length is {1} cm, start is {2} cm, entered length is {3} cm; maximum allowed length is {4} cm.",
         liner_flat_end_unmachinable: "A flat end cannot be machined with this bit and length.",
         liner_span_on_corner: "The liner limit sits on a bend that has no single direction.",
     };
@@ -55,14 +56,31 @@
         edge_width_top: "Left to right",
         edge_width_bottom: "Left to right",
     };
+    const HANDLE_STANDARD_SIZES_MM = Object.freeze([
+        Object.freeze({ id: "38x329", widthMm: 38, lengthMm: 329 }),
+        Object.freeze({ id: "38x296", widthMm: 38, lengthMm: 296 }),
+        Object.freeze({ id: "38x230.5", widthMm: 38, lengthMm: 230.5 }),
+        Object.freeze({ id: "38x199", widthMm: 38, lengthMm: 199 }),
+        Object.freeze({ id: "38x167", widthMm: 38, lengthMm: 167 }),
+        Object.freeze({ id: "38x136", widthMm: 38, lengthMm: 136 }),
+        Object.freeze({ id: "37x103", widthMm: 37, lengthMm: 103 }),
+    ]);
+    const CENTER_HANDLE_MESSAGES = {
+        unsupported_piece_type: "Cannot center the handle on this door type.",
+        side_unavailable: "Cannot center the handle because the reference side is unavailable.",
+        door_width_invalid: "Cannot center the handle because the door width is missing or invalid.",
+        door_height_invalid: "Cannot center the handle because the door height is missing or invalid.",
+        handle_length_invalid: "Cannot center the handle because its length is missing or invalid.",
+        handle_width_invalid: "Cannot center the handle because its width is missing or invalid.",
+        length_exceeds_door_width: "Cannot center the handle because its length exceeds the door width.",
+        length_exceeds_door_height: "Cannot center the handle because its length exceeds the door height.",
+        width_exceeds_door_height: "Cannot center the handle because its width exceeds the door height.",
+        width_exceeds_door_width: "Cannot center the handle because its width exceeds the door width.",
+        center_rejected: "Cannot center the handle.",
+    };
 
     function edgeCm(piece, side) {
-        const path = (geometry().edgePaths(piece) || {})[side] || [];
-        let length = 0;
-        for (let index = 1; index < path.length; index += 1) {
-            length += Math.hypot(path[index][0] - path[index - 1][0], path[index][1] - path[index - 1][1]);
-        }
-        return length / 10;
+        return geometry().edgeLengthMm(piece, side) / 10;
     }
 
     function num(value) {
@@ -74,6 +92,23 @@
         return Math.round(num(value) * 10) / 10;
     }
 
+    function formatInput(value, places) {
+        if (!Number.isFinite(Number(value))) return "";
+        return Number(Number(value).toFixed(places)).toString();
+    }
+
+    function inputNumber(input) {
+        if (!input || String(input.value).trim() === "") return NaN;
+        const value = Number(input.value);
+        return Number.isFinite(value) ? value : NaN;
+    }
+
+    function storedNumber(value, fallback) {
+        if (value === undefined || value === null || String(value).trim() === "") return fallback;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : NaN;
+    }
+
     function widthMm(cm) {
         return rounded(num(cm) * 10);
     }
@@ -83,9 +118,11 @@
     }
 
     function dimensions(row) {
+        const cutWidth = row && row.cut_width_cm;
+        const cutLength = row && row.cut_length_cm;
         return {
-            width: num(row && row.cut_width_cm) || num(row && row.width_cm),
-            length: num(row && row.cut_length_cm) || num(row && row.length_cm),
+            width: cutWidth !== undefined && cutWidth !== null ? num(cutWidth) : num(row && row.width_cm),
+            length: cutLength !== undefined && cutLength !== null ? num(cutLength) : num(row && row.length_cm),
         };
     }
 
@@ -100,25 +137,208 @@
         if (validStored) side = rawSide;
         else if (!rawSide && !(options && options.blankWhenMissing)) side = sides[0] || "";
         const edge = edgeCm(piece, side);
-        const storedLength = num(row && row[addon.length]);
-        return {
+        const rawLength = row && row[addon.length];
+        const storedLength = Number(rawLength);
+        const missingLength = rawLength === undefined || rawLength === null || String(rawLength).trim() === "";
+        const validStoredLength = missingLength || Number.isFinite(storedLength);
+        const fullLength = missingLength || (validStoredLength && storedLength === 0);
+        const hasStoredValues = Boolean(
+            rawSide
+            || Number(row && row[addon.enabled])
+            || num(row && row[addon.offset])
+            || num(row && row[addon.width])
+            || num(row && row[addon.start])
+            || (!missingLength && storedLength !== 0)
+        );
+        const startCm = storedNumber(row && row[addon.start], 0);
+        const legacyCheckboxOnly = Boolean(
+            row && row.name && !row.__islocal
+            && Number(row && row[addon.enabled])
+            && !rawSide
+            && num(row && row[addon.offset]) <= 0
+            && num(row && row[addon.width]) <= 0
+        );
+        const draft = {
             piece,
             row,
             kind: addon.kind,
             side,
-            offsetCm: rawSide ? num(row[addon.offset]) : 2,
-            widthCm: rawSide ? num(row[addon.width]) : 1.5,
-            startCm: rawSide ? num(row && row[addon.start]) : 0,
-            lengthCm: rawSide && storedLength > 0 ? storedLength : edge,
+            offsetCm: hasStoredValues ? storedNumber(row && row[addon.offset], 0) : 2,
+            widthCm: hasStoredValues ? storedNumber(row && row[addon.width], 0) : 1.5,
+            startCm,
+            lengthCm: fullLength ? Math.max(0, edge - startCm) : storedLength,
+            fullLength,
+            legacyCheckboxOnly,
             edgeCm: edge,
             enabled: Boolean(Number(row && row[addon.enabled])),
         };
+        if (addon.kind === "liner") attachLinerSet(draft, row, options);
+        return draft;
     }
 
-    function validationMessage(draft) {
-        if (!draft || !draft.side) return localize(MESSAGES.choose_side, draft && draft.kind);
+    function attachLinerSet(draft, row, options) {
+        const api = geometry();
+        const parsed = api && typeof api.parseDoorLiners === "function"
+            ? api.parseDoorLiners(row || {})
+            : null;
+        const fallbackId = (api && typeof api.allocateLinerId === "function")
+            ? "liner_1"
+            : "liner_1";
+        if (!parsed || !parsed.liners || !parsed.liners.length) {
+            draft.linerId = fallbackId;
+            draft.liners = [linerItemFromDraft(draft)];
+            return draft;
+        }
+        if (parsed.enabled) draft.enabled = true;
+        if (Number.isFinite(parsed.widthCm) && parsed.widthCm > 0) draft.widthCm = parsed.widthCm;
+        const assignedIds = [];
+        const allowedSides = api.availableSides(draft.piece.pieceType);
+        const usedJson = Boolean(row && row.liner_specs_json && String(row.liner_specs_json).trim());
+        draft.liners = parsed.liners.map((item, index) => {
+            const rawItemSide = String(item.side || "").trim();
+            const itemSide = allowedSides.includes(rawItemSide)
+                ? rawItemSide
+                : (index === 0 ? draft.side : "");
+            const itemStart = Number.isFinite(Number(item.startCm)) ? Number(item.startCm) : 0;
+            const storedLength = Number(item.lengthCm);
+            const missingLength = item.lengthCm === undefined || item.lengthCm === null || String(item.lengthCm).trim() === "";
+            const itemFull = missingLength || storedLength === 0;
+            const itemEdge = edgeCm(draft.piece, itemSide);
+            let linerId = String(item.id || "").trim();
+            if (!linerId) {
+                linerId = index === 0 ? fallbackId : api.allocateLinerId(assignedIds);
+            }
+            assignedIds.push(linerId);
+            return {
+                id: linerId,
+                side: itemSide,
+                offsetCm: Number.isFinite(Number(item.offsetCm)) ? Number(item.offsetCm) : (index === 0 ? draft.offsetCm : 2),
+                startCm: index === 0 && !usedJson ? draft.startCm : itemStart,
+                lengthCm: index === 0 && !usedJson
+                    ? draft.lengthCm
+                    : (itemFull ? Math.max(0, itemEdge - itemStart) : storedLength),
+                fullLength: index === 0 && !usedJson ? draft.fullLength : itemFull,
+                edgeCm: itemEdge,
+                legacyCheckboxOnly: index === 0 ? draft.legacyCheckboxOnly : false,
+            };
+        });
+        return hydrateLinerDraft(draft);
+    }
+
+    function linerItemFromDraft(draft) {
+        return {
+            id: draft.linerId || "liner_1",
+            side: draft.side,
+            offsetCm: draft.offsetCm,
+            startCm: draft.startCm,
+            lengthCm: draft.lengthCm,
+            fullLength: Boolean(draft.fullLength),
+            edgeCm: draft.edgeCm,
+            legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
+        };
+    }
+
+    function linerItems(draft) {
+        if (draft && Array.isArray(draft.liners) && draft.liners.length) return draft.liners;
+        if (!draft || draft.kind !== "liner") return [];
+        return [linerItemFromDraft(draft)];
+    }
+
+    function hydrateLinerDraft(draft) {
+        if (!draft || draft.kind !== "liner") return draft;
+        const items = linerItems(draft);
+        const first = items[0];
+        if (!first) return draft;
+        draft.linerId = first.id;
+        draft.side = first.side;
+        draft.offsetCm = first.offsetCm;
+        draft.startCm = first.startCm;
+        draft.lengthCm = first.lengthCm;
+        draft.fullLength = first.fullLength;
+        draft.edgeCm = first.edgeCm;
+        if (first.legacyCheckboxOnly !== undefined) draft.legacyCheckboxOnly = first.legacyCheckboxOnly;
+        draft.liners = items;
+        return draft;
+    }
+
+    function itemDraft(draft, item) {
+        return Object.assign({}, draft, item, {
+            kind: "liner",
+            widthCm: draft.widthCm,
+            enabled: draft.enabled,
+            piece: draft.piece,
+            row: draft.row,
+            liners: null,
+        });
+    }
+
+    function validationIssue(draft) {
+        if (!draft) return { code: "missing_draft", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, "liner") };
+        if (draft.kind === "liner" && Array.isArray(draft.liners) && draft.liners.length) {
+            if (draft.legacyCheckboxOnly && draft.liners.length === 1) return null;
+            const items = draft.liners;
+            for (let index = 0; index < items.length; index += 1) {
+                const item = index === 0
+                    ? Object.assign({}, items[0], {
+                        side: draft.side,
+                        offsetCm: draft.offsetCm,
+                        startCm: draft.startCm,
+                        lengthCm: draft.lengthCm,
+                        fullLength: draft.fullLength,
+                        edgeCm: draft.edgeCm,
+                    })
+                    : items[index];
+                const issue = validationIssue(itemDraft(draft, item));
+                if (issue) return Object.assign({}, issue, { linerId: item.id, linerIndex: index });
+            }
+            return null;
+        }
+        if (draft.legacyCheckboxOnly) return null;
+        if (!draft.side) return { code: "choose_side", field: "side", fields: ["side"], message: localize(MESSAGES.choose_side, draft.kind) };
+        const availableSides = geometry().availableSides(draft.piece && draft.piece.pieceType);
+        if (!availableSides.includes(draft.side)) {
+            return { code: "side_unavailable", field: "side", fields: ["side"], message: localize(MESSAGES.side_unavailable, draft.kind) };
+        }
+        if (!Number.isFinite(draft.offsetCm) || draft.offsetCm < 0) {
+            return { code: "offset_invalid", field: "offset", fields: ["offset"], message: localize(MESSAGES.offset_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.widthCm) || draft.widthCm <= 0) {
+            return { code: "width_invalid", field: "width", fields: ["width"], message: localize(MESSAGES.width_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.startCm) || draft.startCm < 0) {
+            return { code: "liner_start_invalid", field: "start", fields: ["start"], message: localize(MESSAGES.liner_start_invalid, draft.kind) };
+        }
+        const availableLengthCm = edgeCm(draft.piece, draft.side);
+        const maximumLengthCm = availableLengthCm - draft.startCm;
+        if (maximumLengthCm <= 0) {
+            return { code: "liner_length_invalid", field: "start", fields: ["start", "length"], message: localize(MESSAGES.liner_length_invalid, draft.kind) };
+        }
+        if (!Number.isFinite(draft.lengthCm) || draft.lengthCm <= 0) {
+            return { code: "liner_length_invalid", field: "length", fields: ["length"], message: localize(MESSAGES.liner_length_invalid, draft.kind) };
+        }
+        const spanToleranceCm = geometry().toleranceMm / 10;
+        if (!draft.fullLength && draft.lengthCm > maximumLengthCm + spanToleranceCm) {
+            const issueText = __(MESSAGES.liner_span_exceeds_edge_detail, [
+                noun(draft.kind),
+                formatInput(availableLengthCm, 3),
+                formatInput(draft.startCm, 3),
+                formatInput(draft.lengthCm, 3),
+                formatInput(Math.max(0, maximumLengthCm), 3),
+            ]);
+            return {
+                code: "liner_span_exceeds_edge",
+                field: "length",
+                fields: ["start", "length"],
+                message: issueText,
+                availableLengthCm,
+                maximumLengthCm,
+            };
+        }
         const code = geometry().validationCode(draft.piece, draft.side, draft.offsetCm, draft.widthCm);
-        if (code) return localize(MESSAGES[code] || code, draft && draft.kind);
+        if (code) {
+            const field = code === "offset_invalid" ? "offset" : code === "width_invalid" ? "width" : "side";
+            return { code, field, fields: [field], message: localize(MESSAGES[code] || code, draft.kind) };
+        }
         try {
             geometry().centerlineMm(
                 draft.piece,
@@ -126,12 +346,23 @@
                 draft.offsetCm,
                 draft.widthCm,
                 draft.startCm,
-                draft.lengthCm
+                draft.fullLength ? 0 : draft.lengthCm
             );
         } catch (error) {
-            return localize(MESSAGES[error.code] || error.code || "Liner settings are invalid.", draft && draft.kind);
+            const field = error.code === "liner_start_invalid" ? "start" : "length";
+            return {
+                code: error.code || "invalid_geometry",
+                field,
+                fields: [field],
+                message: localize(MESSAGES[error.code] || error.code || "Liner settings are invalid.", draft.kind),
+            };
         }
-        return "";
+        return null;
+    }
+
+    function validationMessage(draft) {
+        const issue = validationIssue(draft);
+        return issue ? issue.message : "";
     }
 
     function mapPoint(point, frame, piece) {
@@ -160,24 +391,38 @@
             : machiningTone(draft.kind);
         const width = role === "active" ? 2.2 : (role === "quiet" ? 1.2 : 1.4);
         let center = "";
-        try {
-            const line = api.centerlineMm(
-                piece,
-                draft.side,
-                draft.offsetCm,
-                draft.widthCm,
-                draft.startCm,
-                draft.lengthCm
-            ).map(point => mapPoint(point, frame, piece));
-            center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
-        } catch (error) {
-            center = "";
+        if (draft.kind !== "recessed_handle_cutout") {
+            try {
+                const line = api.centerlineMm(
+                    piece,
+                    draft.side,
+                    draft.offsetCm,
+                    draft.widthCm,
+                    draft.startCm,
+                    draft.lengthCm
+                ).map(point => mapPoint(point, frame, piece));
+                center = `<polyline data-liner-center="1" data-machining-kind="${esc(draft.kind)}" points="${pointsAttr(line)}" fill="none" stroke="${tone.stroke}" stroke-width="${role === "quiet" ? 1.2 : 1.8}" stroke-dasharray="5 3" stroke-linecap="butt"/>`;
+            } catch (error) {
+                center = "";
+            }
         }
-        const polygon = api.stripPolygonMm(piece, draft.side, draft.offsetCm, draft.widthCm)
+        const polygon = api.regionPolygonMm(
+            piece,
+            draft.side,
+            draft.offsetCm,
+            draft.widthCm,
+            draft.startCm,
+            draft.fullLength ? 0 : draft.lengthCm
+        )
             .map(point => mapPoint(point, frame, piece));
         const strip = `<polygon class="dco-liner-strip" data-liner-strip="1" data-machining-kind="${esc(draft.kind)}" data-machining-role="${esc(role)}" points="${pointsAttr(polygon)}" fill="${tone.fill}" stroke="${tone.stroke}" stroke-width="${width}"/>`;
         if (role === "quiet") return `${strip}${center}`;
-        const reference = paths[draft.side].map(point => mapPoint(point, frame, piece));
+        const reference = api.regionReferenceMm(
+            piece,
+            draft.side,
+            draft.startCm,
+            draft.fullLength ? 0 : draft.lengthCm
+        ).map(point => mapPoint(point, frame, piece));
         const near = polygon.slice(0, reference.length);
         const far = polygon.slice(reference.length).slice().reverse();
         const anchor = Math.floor(reference.length / 2);
@@ -212,26 +457,114 @@
                 inheritStroke: false,
                 color: "#b42318",
                 strokeWidth: 3,
+                insetPx: 4,
+                endTrimPx: 6,
             })
             : [
-                [Number(source.edge_width_top), [[frame.x, frame.y], [frame.x + frame.width, frame.y]]],
-                [Number(source.edge_width_bottom), [[frame.x, frame.y + frame.height], [frame.x + frame.width, frame.y + frame.height]]],
-                [Number(source.edge_long_left), [[frame.x, frame.y], [frame.x, frame.y + frame.height]]],
-                [Number(source.edge_long_right), [[frame.x + frame.width, frame.y], [frame.x + frame.width, frame.y + frame.height]]],
+                [Number(source.edge_width_top), "edge_width_top", [[frame.x + 6, frame.y + 4], [frame.x + frame.width - 6, frame.y + 4]]],
+                [Number(source.edge_width_bottom), "edge_width_bottom", [[frame.x + 6, frame.y + frame.height - 4], [frame.x + frame.width - 6, frame.y + frame.height - 4]]],
+                [Number(source.edge_long_left), "edge_long_left", [[frame.x + 4, frame.y + 6], [frame.x + 4, frame.y + frame.height - 6]]],
+                [Number(source.edge_long_right), "edge_long_right", [[frame.x + frame.width - 4, frame.y + 6], [frame.x + frame.width - 4, frame.y + frame.height - 6]]],
             ].filter(entry => entry[0]).map((entry, index) => (
-                `<polyline data-liner-edge="1" data-liner-edge-index="${index}" points="${pointsAttr(entry[1])}" fill="none" stroke="#b42318" stroke-width="3" stroke-linecap="round"/>`
+                `<polyline data-liner-edge="1" data-liner-edge-side="${entry[1]}" data-liner-edge-index="${index}" points="${pointsAttr(entry[2])}" fill="none" stroke="#b42318" stroke-width="3" stroke-linecap="round"/>`
             )).join("");
         return { api, piece, frame, outline, bands };
+    }
+
+    function doubleEdgeSidesFromRow(row) {
+        const source = row || {};
+        const api = geometry();
+        if (!Number(source.extra_double)) return [];
+        if (api && typeof api.normalizeSideSelection === "function") {
+            return api.normalizeSideSelection(
+                source.extra_double_reference_sides,
+                source.piece_type || "Regular",
+                true,
+            );
+        }
+        return [];
+    }
+
+    function doubleEdgeMarkup(row, scene, sides) {
+        const selected = (sides || []).filter(Boolean);
+        if (!selected.length) return "";
+        const source = row || {};
+        const api = scene.api;
+        const flags = typeof api.sideFlagsForSelection === "function"
+            ? api.sideFlagsForSelection(scene.piece, selected, false)
+            : {};
+        const corner = window.AlmdinaClippedCornerGeometry;
+        if (corner && typeof corner.isCornerCut === "function" && corner.isCornerCut(source)
+            && typeof corner.edgeBandSvgMarkup === "function") {
+            const fields = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right", "edge_break", "edge_break_only"];
+            const markup = fields.filter(side => flags[side]).map(side => {
+                const normalBand = flagsForSource(source, side);
+                const insets = normalBand ? [8, 11] : [4.5, 7.5];
+                const sidePiece = { ...source };
+                fields.forEach(name => {
+                    sidePiece[name] = name === side ? 1 : 0;
+                });
+                const lines = insets.map(inset => corner.edgeBandSvgMarkup(sidePiece, scene.frame.width, scene.frame.height, {
+                    offsetX: scene.frame.x,
+                    offsetY: scene.frame.y,
+                    inheritStroke: false,
+                    color: "#5a2d82",
+                    strokeWidth: 1.4,
+                    insetPx: inset,
+                    endTrimPx: 6,
+                })).filter(Boolean).join("");
+                return lines ? `<g data-double-edge-side="${side}">${lines}</g>` : "";
+            }).join("");
+            return markup ? `<g data-double-edge-lines="1">${markup}</g>` : "";
+        }
+        return selected.map((side) => {
+            const normalBand = flagsForSource(source, side);
+            const insetPx = normalBand ? [8, 11] : [4.5, 7.5];
+            const offsetsMm = insetPx.map(offset => (offset / Math.max(Number(scene.frame.scale) || 1, 0.001)) * 10);
+            const paths = typeof api.visualEdgeMarkerPaths === "function"
+                ? api.visualEdgeMarkerPaths(scene.piece, side, offsetsMm)
+                : [];
+            return paths.map((path, index) => `<polyline data-double-edge-line="1" data-double-edge-line-index="${index}" data-double-edge-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="#5a2d82" stroke-width="1.4" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`).join("");
+        }).join("");
+    }
+
+    function flagsForSource(source, side) {
+        return Boolean(Number(source && source[side]));
+    }
+
+    function doubleEdgeHitMarkup(scene, sides) {
+        const api = scene.api;
+        const selected = new Set(sides || []);
+        return api.availableSides(scene.piece.pieceType).map((side) => {
+            const path = api.edgePaths(scene.piece)[side];
+            if (!path) return "";
+            const active = selected.has(side);
+            return `<polyline class="dco-double-side ${active ? "is-selected" : ""}" data-double-side="${side}" points="${pointsAttr(path.map(point => mapPoint(point, scene.frame, scene.piece)))}" fill="none" stroke="transparent" stroke-width="14" stroke-linecap="round"/>`;
+        }).join("");
     }
 
     function previewSvg(draft, options) {
         const scene = previewScene(draft);
         const multi = Boolean(options && options.multi);
-        const quiet = multi
-            ? (options.companions || []).filter(item => (
-                item && item.enabled && item.kind !== draft.kind
-            )).map(item => machiningLayer(item, scene.frame, scene.piece, "quiet")).join("")
+        const double = doubleEdgeMarkup(
+            draft.row,
+            scene,
+            options && options.doubleSides,
+        );
+        const doubleHits = options && options.doubleInteractive
+            ? doubleEdgeHitMarkup(scene, options.doubleSides)
             : "";
+        const extraLiners = draft.kind === "liner" && draft.enabled
+            ? linerItems(draft).slice(1).map(item => itemDraft(draft, item))
+            : [];
+        const quiet = [
+            ...(multi
+                ? (options.companions || []).filter(item => (
+                    item && item.enabled && item.kind !== draft.kind
+                ))
+                : []),
+            ...extraLiners,
+        ].map(item => machiningLayer(item, scene.frame, scene.piece, "quiet")).join("");
         const active = multi
             ? (draft.enabled ? machiningLayer(draft, scene.frame, scene.piece, "active") : "")
             : machiningLayer(draft, scene.frame, scene.piece, "legacy");
@@ -245,6 +578,8 @@
         return `<svg viewBox="0 0 420 280" dir="ltr" role="img" aria-label="${esc(label)}">
             <polygon points="${pointsAttr(scene.outline)}" fill="#fff7e8" stroke="#8a5700" stroke-width="2"/>
             ${scene.bands}
+            ${double}
+            ${doubleHits}
             ${hits}
             ${quiet}
             ${active}
@@ -252,36 +587,151 @@
         </svg>`;
     }
 
-    function controlsHtml(draft) {
+    function handleSizeById(id) {
+        return HANDLE_STANDARD_SIZES_MM.find(size => size.id === id) || null;
+    }
+
+    function matchingHandleSize(widthCm, lengthCm) {
+        const widthMm = num(widthCm) * 10;
+        const lengthMm = num(lengthCm) * 10;
+        return HANDLE_STANDARD_SIZES_MM.find(size => (
+            Math.abs(widthMm - size.widthMm) <= 0.05
+            && Math.abs(lengthMm - size.lengthMm) <= 0.05
+        )) || null;
+    }
+
+    function handleSizeLabel(size) {
+        return `${formatInput(size.widthMm, 2)} × ${formatInput(size.lengthMm, 2)} ${__("mm")}`;
+    }
+
+    function handleCenteringAllowed(draft) {
+        const rowType = draft && draft.row ? draft.row.piece_type : "";
+        const pieceType = draft && draft.piece ? draft.piece.pieceType : "";
+        return String(rowType || pieceType || "").trim() === "Regular";
+    }
+
+    function centerHandleMessage(code) {
+        return __(CENTER_HANDLE_MESSAGES[code] || CENTER_HANDLE_MESSAGES.center_rejected);
+    }
+
+    function applyStandardHandleSize(draft, size) {
+        return Object.assign({}, draft, {
+            widthCm: size.widthMm / 10,
+            lengthCm: size.lengthMm / 10,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+        });
+    }
+
+    function centerHandleDraft(draft) {
+        if (!handleCenteringAllowed(draft)) {
+            return { ok: false, code: "unsupported_piece_type", draft };
+        }
+        const api = geometry();
+        const result = api && typeof api.centerRecessedHandle === "function"
+            ? api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm)
+            : { ok: false, code: "center_rejected" };
+        if (!result.ok) return { ok: false, code: result.code, draft };
+        const next = Object.assign({}, draft, {
+            side: result.side,
+            startCm: result.startCm,
+            fullLength: false,
+            legacyCheckboxOnly: false,
+            edgeCm: edgeCm(draft.piece, result.side),
+        });
+        const issue = validationIssue(next);
+        if (issue) return { ok: false, code: issue.code, message: issue.message, draft };
+        return { ok: true, draft: next };
+    }
+
+    function writeMachiningInputs(root, draft) {
+        if (!root || !draft) return;
+        const offset = root.querySelector("[data-liner-offset]");
+        const width = root.querySelector("[data-liner-width]");
+        const start = root.querySelector("[data-liner-start]");
+        const length = root.querySelector("[data-liner-length]");
+        if (offset) offset.value = formatInput(draft.offsetCm, 3);
+        if (width) width.value = formatInput(num(draft.widthCm) * 10, 2);
+        if (start) start.value = formatInput(draft.startCm, 3);
+        if (length) length.value = formatInput(draft.lengthCm, 3);
+    }
+
+    function handleIsCentered(draft) {
+        if (!handleCenteringAllowed(draft) || !draft || !draft.piece) return false;
+        const api = geometry();
+        if (!api || typeof api.centerRecessedHandle !== "function") return false;
+        const placed = api.centerRecessedHandle(draft.piece, draft.side, draft.widthCm, draft.lengthCm);
+        if (!placed.ok || String(draft.side || "") !== placed.side) return false;
+        return Math.abs(num(draft.startCm) - placed.startCm) <= 0.0001;
+    }
+
+    function syncHandleChoices(root, draft) {
+        if (!root || !draft || draft.kind !== "recessed_handle_cutout") return;
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        root.querySelectorAll("[data-handle-size]").forEach(button => {
+            const selected = Boolean(match) && button.getAttribute("data-handle-size") === match.id;
+            button.classList.toggle("is-active", selected);
+            button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+        const center = root.querySelector("[data-handle-center]");
+        if (!center) return;
+        const centered = handleIsCentered(draft);
+        const allowed = handleCenteringAllowed(draft);
+        center.hidden = !allowed;
+        center.classList.toggle("is-active", centered);
+        center.setAttribute("aria-pressed", centered ? "true" : "false");
+        const centerRow = center.parentElement;
+        if (centerRow && centerRow.classList.contains("dco-handle-center-row")) centerRow.hidden = !allowed;
+    }
+
+    function handleChoicesHtml(draft) {
+        if (!draft || draft.kind !== "recessed_handle_cutout") return "";
+        const match = matchingHandleSize(draft.widthCm, draft.lengthCm);
+        const chips = HANDLE_STANDARD_SIZES_MM.map(size => {
+            const selected = Boolean(match) && match.id === size.id;
+            return `<button type="button" class="dco-handle-size ${selected ? "is-active" : ""}" data-handle-size="${size.id}" aria-pressed="${selected ? "true" : "false"}" dir="ltr">${esc(handleSizeLabel(size))}</button>`;
+        }).join("");
+        const centerHidden = handleCenteringAllowed(draft) ? "" : " hidden";
+        const centered = handleIsCentered(draft);
+        return `<div class="dco-corner-section-label">${esc(__("Standard sizes"))}</div>
+                <div class="dco-handle-size-grid" data-handle-sizes>${chips}</div>
+                <div class="dco-handle-center-row"${centerHidden}><button type="button" class="dco-handle-size dco-handle-center ${centered ? "is-active" : ""}" data-handle-center="1" aria-pressed="${centered ? "true" : "false"}"${centerHidden}>${esc(__("Center Handle"))}</button></div>`;
+    }
+
+    function controlsHtml(draft, options) {
         const api = geometry();
         const sides = api.availableSides(draft.piece.pieceType).map(side => `
             <button type="button" class="dco-corner-position ${side === draft.side ? "is-active" : ""}" data-liner-side="${side}" aria-pressed="${side === draft.side ? "true" : "false"}">
                 ${esc(api.sideLabel(side, draft.piece.pieceType))}
             </button>`).join("");
         const addon = addonFor(draft.kind);
+        const omitWidth = Boolean(options && options.omitWidth);
         const widthLabel = addon.kind === "liner" ? __("Liner Width") : __("Machining Width");
         const startLabel = addon.kind === "liner" ? __("Liner Start Position") : __("Machining Start");
         const lengthLabel = addon.kind === "liner" ? __("Liner Length") : __("Machining Length");
+        const widthField = omitWidth ? "" : `<div class="dco-corner-input-wrap">
+                        <label>${esc(widthLabel)}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                    </div>`;
+        const distanceLabel = omitWidth ? __("Distance and length") : __("Distance and width");
         return `<div data-liner-fields data-machining-kind="${esc(addon.kind)}">
                 <div class="dco-corner-section-label">${esc(__("Reference Side"))}</div>
                 <div class="dco-corner-position-grid" data-liner-sides>${sides}</div>
-                <div class="dco-corner-section-label">${esc(__("Distance and width"))}</div>
+                ${handleChoicesHtml(draft)}
+                <div class="dco-corner-section-label">${esc(distanceLabel)}</div>
                 <div class="dco-corner-input-grid">
                     <div class="dco-corner-input-wrap">
                         <label>${esc(__("Edge Offset"))}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-offset value="${rounded(draft.offsetCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-offset value="${formatInput(draft.offsetCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
-                    <div class="dco-corner-input-wrap">
-                        <label>${esc(widthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-width value="${widthMm(draft.widthCm)}"><span>${esc(__("mm"))}</span></div>
-                    </div>
+                    ${widthField}
                     <div class="dco-corner-input-wrap">
                         <label>${esc(startLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="0.1" data-liner-start value="${rounded(draft.startCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-start value="${formatInput(draft.startCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                     <div class="dco-corner-input-wrap">
                         <label>${esc(lengthLabel)}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0.1" step="0.1" data-liner-length value="${rounded(draft.lengthCm)}"><span>${esc(__("cm"))}</span></div>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-length value="${formatInput(draft.lengthCm, 3)}"><span>${esc(__("cm"))}</span></div>
                     </div>
                 </div>
                 <div class="dco-corner-help" data-liner-available>${esc(__("Available Length"))}: ${rounded(draft.edgeCm)} ${esc(__("cm"))}</div>
@@ -290,12 +740,117 @@
             </div>`;
     }
 
+    function linerSetHtml(draft) {
+        const items = linerItems(draft);
+        const shared = `<div class="dco-liner-shared">
+                <div class="dco-corner-section-label">${esc(__("Liner Width"))}</div>
+                <div class="dco-corner-input-grid">
+                    <div class="dco-corner-input-wrap">
+                        <label>${esc(__("Liner Width"))}</label>
+                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                    </div>
+                </div>
+            </div>`;
+        const sections = items.map((item, index) => {
+            const removable = items.length > 1;
+            const remove = removable
+                ? `<button type="button" class="btn btn-default btn-sm dco-liner-remove-item" data-liner-remove-item="${esc(item.id)}" aria-label="${esc(__("Remove liner {0}", [index + 1]))}">${esc(__("Remove"))}</button>`
+                : "";
+            return `<section class="dco-liner-item" data-liner-item="${esc(item.id)}">
+                <div class="dco-liner-item-head">
+                    <div class="dco-corner-section-label">${esc(__("Liner {0}", [index + 1]))}</div>
+                    ${remove}
+                </div>
+                ${controlsHtml(itemDraft(draft, item), { omitWidth: true })}
+            </section>`;
+        }).join("");
+        return `<div class="dco-liner-set" data-liner-set>
+            ${shared}
+            ${sections}
+            <button type="button" class="btn btn-default btn-sm dco-liner-add" data-add-liner="1">${esc(__("Add liner"))}</button>
+        </div>`;
+    }
+
+    function addLiner(draft) {
+        const api = geometry();
+        const items = linerItems(draft).map(item => Object.assign({}, item));
+        const id = api && typeof api.allocateLinerId === "function"
+            ? api.allocateLinerId(items.map(item => item.id))
+            : `liner_${items.length + 1}`;
+        const sides = api.availableSides(draft.piece.pieceType);
+        const side = sides[0] || "";
+        const edge = edgeCm(draft.piece, side);
+        items.push({
+            id,
+            side,
+            offsetCm: 2,
+            startCm: 0,
+            lengthCm: Math.max(0, edge),
+            fullLength: true,
+            edgeCm: edge,
+            legacyCheckboxOnly: false,
+        });
+        draft.liners = items;
+        draft.enabled = true;
+        draft.legacyCheckboxOnly = false;
+        return hydrateLinerDraft(draft);
+    }
+
+    function removeLiner(draft, linerId) {
+        const items = linerItems(draft).filter(item => item.id !== linerId);
+        if (!items.length) return draft;
+        draft.liners = items;
+        return hydrateLinerDraft(draft);
+    }
+
+    function readLinerSet(root, piece, previous, changedField, changedItemId) {
+        if (!root || !previous) return previous;
+        if (!root.querySelector("[data-liner-item]")) {
+            return readDraft(root, piece, previous.enabled, previous.row, "liner", previous, changedField);
+        }
+        const widthInput = root.querySelector("[data-liner-width]");
+        const widthCm = inputNumber(widthInput) / 10;
+        const items = [];
+        root.querySelectorAll("[data-liner-item]").forEach(section => {
+            const id = section.getAttribute("data-liner-item");
+            const previousItem = (previous.liners || []).find(item => item.id === id);
+            const host = Object.assign({}, previous, previousItem || {}, { kind: "liner", liners: null });
+            const next = readDraft(
+                section,
+                piece,
+                true,
+                previous.row,
+                "liner",
+                host,
+                changedItemId === id ? changedField : "",
+            );
+            items.push({
+                id,
+                side: next.side,
+                offsetCm: next.offsetCm,
+                startCm: next.startCm,
+                lengthCm: next.lengthCm,
+                fullLength: next.fullLength,
+                edgeCm: next.edgeCm,
+                legacyCheckboxOnly: false,
+            });
+        });
+        const draft = Object.assign({}, previous, {
+            widthCm: Number.isFinite(widthCm) ? widthCm : previous.widthCm,
+            liners: items,
+            enabled: previous.enabled,
+            legacyCheckboxOnly: false,
+        });
+        return hydrateLinerDraft(draft);
+    }
+
     function editorHtml(row, draft) {
         const addon = addonFor(draft.kind);
         const removeLabel = addon.kind === "liner" ? __("Remove liner") : __("Remove add-on");
         const remove = draft.enabled
             ? `<button type="button" class="btn btn-default btn-sm" data-liner-remove>${esc(removeLabel)}</button>`
             : "";
+        const fields = addon.kind === "liner" ? linerSetHtml(draft) : controlsHtml(draft);
         return `<div class="dco-corner-editor" data-liner-editor data-machining-kind="${esc(addon.kind)}">
             <section class="dco-corner-preview-panel">
                 <div class="dco-corner-preview-head">
@@ -304,7 +859,7 @@
                 <div class="dco-corner-preview" data-liner-preview>${previewSvg(draft)}</div>
             </section>
             <section class="dco-corner-controls">
-                ${controlsHtml(draft)}
+                ${fields}
                 <button type="button" class="btn btn-default btn-sm" data-liner-cancel>${esc(__("Cancel"))}</button>
                 ${remove}
             </section>
@@ -312,37 +867,53 @@
     }
 
     function selectSide(draft, piece, nextSide) {
-        const previousEdge = draft.edgeCm;
-        const previousLength = draft.lengthCm;
-        const previousStart = draft.startCm;
         const nextEdge = edgeCm(piece, nextSide);
-        const wasFull = previousStart <= 0.05 && Math.abs(previousLength - previousEdge) < 0.05;
         draft.side = nextSide;
         draft.edgeCm = nextEdge;
-        if (wasFull || draft.startCm + draft.lengthCm > nextEdge + 0.05) {
-            if (wasFull || draft.startCm >= nextEdge) draft.startCm = 0;
-            draft.lengthCm = Math.max(0.1, nextEdge - draft.startCm);
+        if (draft.fullLength) draft.lengthCm = Math.max(0, nextEdge - draft.startCm);
+        draft.legacyCheckboxOnly = false;
+        if (draft.kind === "liner" && Array.isArray(draft.liners) && draft.liners[0]) {
+            draft.liners[0].side = draft.side;
+            draft.liners[0].edgeCm = draft.edgeCm;
+            draft.liners[0].lengthCm = draft.lengthCm;
+            draft.liners[0].fullLength = draft.fullLength;
+            draft.liners[0].legacyCheckboxOnly = false;
         }
         return draft;
     }
 
-    function readDraft(root, piece, enabled, row, kind) {
+    function readDraft(root, piece, enabled, row, kind, previous, changedField) {
         const offset = root.querySelector("[data-liner-offset]");
         const width = root.querySelector("[data-liner-width]");
         const start = root.querySelector("[data-liner-start]");
         const length = root.querySelector("[data-liner-length]");
         const active = root.querySelector("[data-liner-sides] .is-active");
         const side = active ? active.getAttribute("data-liner-side") : "";
+        const startCm = inputNumber(start);
+        const edge = edgeCm(piece, side);
+        const fullLength = Boolean(previous && previous.fullLength && changedField !== "length");
+        const rawLength = inputNumber(length);
+        const lengthCm = fullLength && changedField === "start"
+            ? Math.max(0, edge - startCm)
+            : rawLength;
+        const offsetCm = inputNumber(offset);
+        const widthCm = inputNumber(width) / 10;
         return {
             piece,
             row: row || null,
             kind: kind || "liner",
             side,
-            offsetCm: offset ? Number(offset.value) : NaN,
-            widthCm: width ? Number(width.value) / 10 : NaN,
-            startCm: start ? Number(start.value) : 0,
-            lengthCm: length ? Number(length.value) : NaN,
-            edgeCm: edgeCm(piece, side),
+            offsetCm,
+            widthCm,
+            startCm,
+            lengthCm,
+            fullLength,
+            legacyCheckboxOnly: Boolean(previous && previous.legacyCheckboxOnly
+                && !changedField
+                && !(Number.isFinite(offsetCm) && offsetCm > 0)
+                && !(Number.isFinite(widthCm) && widthCm > 0)
+                && !side),
+            edgeCm: edge,
             enabled,
         };
     }
@@ -359,11 +930,12 @@
         const available = root.querySelector("[data-liner-available]");
         const direction = root.querySelector("[data-liner-direction]");
         const message = validationMessage(draft);
-        if (available) available.textContent = `${__("Available Length")}: ${rounded(draft.edgeCm)} ${__("cm")}`;
+        if (available) available.textContent = `${__("Available Length")}: ${formatInput(draft.edgeCm, 3)} ${__("cm")}`;
         if (direction) {
             direction.textContent = `${__("Measurement Direction")}: ${__(DIRECTION[draft.side] || "Along the selected edge")}`;
         }
         if (help) help.textContent = message;
+        syncHandleChoices(root, draft);
         if (dialog && dialog.get_primary_btn) {
             dialog.get_primary_btn().prop("disabled", Boolean(message));
         }
@@ -378,12 +950,21 @@
 
     function hostPiece(frm, row) {
         const api = geometry();
-        const piece = api.pieceFromRow(row);
+        const banding = window.AlmdinaMultiEdgeBanding;
+        const calculated = banding && typeof banding.calculate === "function"
+            ? banding.calculate(frm, row)
+            : null;
         const size = dimensions(row);
-        piece.widthCm = size.width || piece.widthCm;
-        piece.lengthCm = size.length || piece.lengthCm;
+        const source = calculated ? {
+            ...row,
+            cut_width_cm: calculated.cutWidth,
+            cut_length_cm: calculated.cutLength,
+        } : row;
+        const piece = api.pieceFromRow(source);
+        piece.widthCm = calculated ? calculated.cutWidth : size.width;
+        piece.lengthCm = calculated ? calculated.cutLength : size.length;
         if (typeof api.contourNotchFromOrder === "function") {
-            const notch = api.contourNotchFromOrder(frm, row);
+            const notch = api.contourNotchFromOrder(frm, source);
             piece.cutWidthCm = notch.cutWidthCm;
             piece.cutLengthCm = notch.cutLengthCm;
         }
@@ -403,11 +984,35 @@
         const addon = addonFor(kind || (draft && draft.kind));
         const values = {};
         values[addon.enabled] = enabled ? 1 : 0;
+        if (addon.kind === "liner") {
+            const items = enabled ? linerItems(draft) : [];
+            const first = items[0];
+            values[addon.side] = enabled && first ? first.side : "";
+            values[addon.offset] = enabled && first ? first.offsetCm : 0;
+            values[addon.width] = enabled ? draft.widthCm : 0;
+            values[addon.start] = enabled && first ? first.startCm : 0;
+            values[addon.length] = enabled && first ? (first.fullLength ? 0 : first.lengthCm) : 0;
+            const api = geometry();
+            values.liner_specs_json = enabled && api && typeof api.serializeDoorLiners === "function"
+                ? api.serializeDoorLiners({
+                    enabled: true,
+                    widthCm: draft.widthCm,
+                    liners: items.map(item => ({
+                        id: item.id,
+                        side: item.side,
+                        offsetCm: item.offsetCm,
+                        startCm: item.startCm,
+                        lengthCm: item.fullLength ? 0 : item.lengthCm,
+                    })),
+                })
+                : "";
+            return values;
+        }
         values[addon.side] = enabled ? draft.side : "";
         values[addon.offset] = enabled ? draft.offsetCm : 0;
         values[addon.width] = enabled ? draft.widthCm : 0;
         values[addon.start] = enabled ? draft.startCm : 0;
-        values[addon.length] = enabled ? draft.lengthCm : 0;
+        values[addon.length] = enabled ? (draft.fullLength ? 0 : draft.lengthCm) : 0;
         return values;
     }
 
@@ -524,6 +1129,8 @@
         const piece = hostPiece(frm, row);
         let draft = draftFromRow(row, addon.kind);
         draft.piece = piece;
+        draft.edgeCm = edgeCm(piece, draft.side);
+        if (draft.fullLength) draft.lengthCm = Math.max(0, draft.edgeCm - draft.startCm);
         const title = addon.kind === "liner"
             ? __("Liner — Door piece {0}", [row.piece_no || row.idx || ""])
             : __("{0} — Door piece {1}", [__(addon.title), row.piece_no || row.idx || ""]);
@@ -534,7 +1141,7 @@
             primary_action() {
                 const root = dialog.$wrapper.find("[data-liner-editor]").get(0);
                 if (!root) return;
-                draft = readDraft(root, piece, true, row, addon.kind);
+                draft = readDraft(root, piece, true, row, addon.kind, draft);
                 const message = paint(root, draft, dialog);
                 if (message) {
                     frappe.msgprint({
@@ -562,12 +1169,45 @@
         root.addEventListener("click", (event) => {
             const side = event.target.closest("[data-liner-side]");
             if (side && root.contains(side)) {
-                draft = readDraft(root, piece, draft.enabled, row, addon.kind);
+                draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft);
                 draft = selectSide(draft, piece, side.getAttribute("data-liner-side"));
                 const startInput = root.querySelector("[data-liner-start]");
                 const lengthInput = root.querySelector("[data-liner-length]");
-                if (startInput) startInput.value = rounded(draft.startCm);
-                if (lengthInput) lengthInput.value = rounded(draft.lengthCm);
+                if (startInput) startInput.value = formatInput(draft.startCm, 3);
+                if (lengthInput) lengthInput.value = formatInput(draft.lengthCm, 3);
+                paint(root, draft, dialog);
+                return;
+            }
+            const sizeButton = event.target.closest("[data-handle-size]");
+            if (sizeButton && root.contains(sizeButton) && addon.kind === "recessed_handle_cutout") {
+                const size = handleSizeById(sizeButton.getAttribute("data-handle-size"));
+                if (!size) return;
+                draft = applyStandardHandleSize(
+                    readDraft(root, piece, true, row, addon.kind, draft, "length"),
+                    size
+                );
+                writeMachiningInputs(root, draft);
+                paint(root, draft, dialog);
+                return;
+            }
+            const centerButton = event.target.closest("[data-handle-center]");
+            if (centerButton && root.contains(centerButton) && addon.kind === "recessed_handle_cutout") {
+                const current = readDraft(root, piece, draft.enabled, row, addon.kind, draft, "offset");
+                const outcome = centerHandleDraft(current);
+                if (!outcome.ok) {
+                    paint(root, current, dialog);
+                    const message = outcome.message || centerHandleMessage(outcome.code);
+                    const help = root.querySelector("[data-liner-help]");
+                    if (help) help.textContent = message;
+                    frappe.msgprint({
+                        title: __("Center Handle"),
+                        message,
+                        indicator: "orange",
+                    });
+                    return;
+                }
+                draft = Object.assign({}, outcome.draft, { enabled: true });
+                writeMachiningInputs(root, draft);
                 paint(root, draft, dialog);
                 return;
             }
@@ -584,24 +1224,57 @@
                 });
             }
         });
-        root.addEventListener("input", () => {
-            draft = readDraft(root, piece, draft.enabled, row, addon.kind);
+        root.addEventListener("input", (event) => {
+            const target = event && event.target;
+            const changedField = target && target.matches && target.matches("[data-liner-start]")
+                ? "start"
+                : target && target.matches && target.matches("[data-liner-length]")
+                    ? "length"
+                    : target && target.matches && target.matches("[data-liner-offset]")
+                        ? "offset"
+                        : target && target.matches && target.matches("[data-liner-width]")
+                            ? "width"
+                            : "";
+            draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft, changedField);
+            if (draft.fullLength && changedField === "start") {
+                const lengthInput = root.querySelector("[data-liner-length]");
+                if (lengthInput) lengthInput.value = formatInput(draft.lengthCm, 3);
+            }
             paint(root, draft, dialog);
         });
         return true;
     }
 
-    window.AlmdinaLinerEditor = Object.freeze({
+        window.AlmdinaLinerEditor = Object.freeze({
         open,
         applyLiner,
         previewSvg,
+        doubleEdgeMarkup,
+        doubleEdgeSidesFromRow,
         validationMessage,
+        validationIssue,
         draftFromRow,
+        edgeLengthCm: edgeCm,
         valuesFor,
+        formatInputCm: value => formatInput(value, 3),
         controlsHtml,
+        linerSetHtml,
+        linerItems,
+        addLiner,
+        removeLiner,
+        readLinerSet,
         readDraft,
         selectSide,
         hostPiece,
         paint,
+        handleStandardSizes: HANDLE_STANDARD_SIZES_MM,
+        matchingHandleSize,
+        applyStandardHandleSize,
+        centerHandleDraft,
+        centerHandleMessage,
+        handleCenteringAllowed,
+        syncHandleChoices,
+        handleIsCentered,
+        writeMachiningInputs,
     });
 })();

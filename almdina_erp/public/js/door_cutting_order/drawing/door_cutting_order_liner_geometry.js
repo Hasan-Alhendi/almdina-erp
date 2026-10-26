@@ -45,6 +45,50 @@
         return [];
     }
 
+    function normalizeSideSelection(value, pieceType, enabled) {
+        if (!enabled) return [];
+        const available = availableSides(pieceType);
+        if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+            return available.slice();
+        }
+        let raw = value;
+        if (typeof value === "string") {
+            try {
+                raw = JSON.parse(value);
+            } catch (error) {
+                return [];
+            }
+        }
+        if (!Array.isArray(raw)) return [];
+        const selected = new Set(raw.map(side => String(side || "").trim()).filter(Boolean));
+        return available.filter(side => selected.has(side));
+    }
+
+    function sideFlagsForSelection(piece, sides, rotated) {
+        const selected = new Set(normalizeSideSelection(
+            sides,
+            piece && (piece.pieceType || piece.piece_type),
+            true,
+        ));
+        const semantic = {
+            [SIDE_TOP]: selected.has(SIDE_TOP),
+            [SIDE_BOTTOM]: selected.has(SIDE_BOTTOM),
+            [SIDE_LEFT]: selected.has(SIDE_LEFT),
+            [SIDE_RIGHT]: selected.has(SIDE_RIGHT),
+            [SIDE_BREAK]: selected.has(SIDE_BREAK),
+            [SIDE_BREAK_ONLY]: selected.has(SIDE_BREAK_ONLY),
+        };
+        if (!rotated) return semantic;
+        return {
+            [SIDE_TOP]: semantic[SIDE_LEFT],
+            [SIDE_BOTTOM]: semantic[SIDE_RIGHT],
+            [SIDE_LEFT]: semantic[SIDE_BOTTOM],
+            [SIDE_RIGHT]: semantic[SIDE_TOP],
+            [SIDE_BREAK]: semantic[SIDE_BREAK],
+            [SIDE_BREAK_ONLY]: semantic[SIDE_BREAK_ONLY],
+        };
+    }
+
     function sideLabel(side, pieceType) {
         if (pieceType === L_SHAPED && side === SIDE_BREAK) return "زاوية L";
         return SIDE_LABELS[side] || side;
@@ -154,6 +198,21 @@
             delete paths[SIDE_BREAK_ONLY];
         }
         return paths;
+    }
+
+    function edgeLengthMm(piece, side) {
+        return polylineLength((edgePaths(piece) || {})[side] || []);
+    }
+
+    function visualEdgeMarkerPaths(piece, side, offsetsMm) {
+        const reference = (edgePaths(piece) || {})[side];
+        const polygon = piecePolygonMm(piece);
+        if (!reference || reference.length < 2 || !polygon) return [];
+        const sign = inwardSign(reference, polygon);
+        return (offsetsMm || [])
+            .map(offset => Number(offset))
+            .filter(offset => Number.isFinite(offset) && offset >= 0)
+            .map(offset => offsetPolyline(reference, offset, sign));
     }
 
     function onSegment(point, start, end, tolerance) {
@@ -304,6 +363,10 @@
         const near = offsetPolyline(prepared.clipped, Number(offsetCm) * 10, sign);
         const far = offsetPolyline(prepared.clipped, (Number(offsetCm) + Number(widthCm)) * 10, sign);
         return near.concat(far.slice().reverse());
+    }
+
+    function regionReferenceMm(piece, side, startCm, lengthCm) {
+        return preparedReference(piece, side, startCm, lengthCm).clipped;
     }
 
     function stripPolygonMm(piece, side, offsetCm, widthCm) {
@@ -486,6 +549,80 @@
         return offsetPolyline(reference, distance, sign);
     }
 
+    function quantizeCm(value) {
+        return Math.round(value * 10000) / 10000;
+    }
+
+    function positiveCm(value) {
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? number : null;
+    }
+
+    function pointNear(point, target, tolerance) {
+        return Math.abs(point[0] - target[0]) <= tolerance && Math.abs(point[1] - target[1]) <= tolerance;
+    }
+
+    function centerRecessedHandle(piece, side, widthCm, lengthCm) {
+        const source = piece || {};
+        const pieceType = String(source.pieceType || source.piece_type || "").trim();
+        if (pieceType !== "Regular") return { ok: false, code: "unsupported_piece_type" };
+        const resolved = String(side || "").trim() || SIDE_TOP;
+        const horizontal = resolved === SIDE_TOP || resolved === SIDE_BOTTOM;
+        const vertical = resolved === SIDE_LEFT || resolved === SIDE_RIGHT;
+        if (!horizontal && !vertical) return { ok: false, code: "side_unavailable" };
+        const doorWidth = positiveCm(source.widthCm);
+        const doorHeight = positiveCm(source.lengthCm);
+        const handleWidth = positiveCm(widthCm);
+        const handleLength = positiveCm(lengthCm);
+        if (doorWidth === null) return { ok: false, code: "door_width_invalid" };
+        if (doorHeight === null) return { ok: false, code: "door_height_invalid" };
+        if (handleLength === null) return { ok: false, code: "handle_length_invalid" };
+        if (handleWidth === null) return { ok: false, code: "handle_width_invalid" };
+        const span = horizontal ? doorWidth : doorHeight;
+        const depth = horizontal ? doorHeight : doorWidth;
+        if (handleLength > span + 1e-9) {
+            return { ok: false, code: horizontal ? "length_exceeds_door_width" : "length_exceeds_door_height" };
+        }
+        if (handleWidth > depth + 1e-9) {
+            return { ok: false, code: horizontal ? "width_exceeds_door_height" : "width_exceeds_door_width" };
+        }
+        const startCm = quantizeCm((span - handleLength) / 2);
+        const offsetCm = quantizeCm((depth - handleWidth) / 2);
+        if (startCm < 0 || offsetCm < 0) return { ok: false, code: "center_rejected" };
+        const host = {
+            pieceType: "Regular",
+            widthCm: doorWidth,
+            lengthCm: doorHeight,
+            position: source.position || "Top Right",
+            cutWidthCm: 0,
+            cutLengthCm: 0,
+        };
+        let line;
+        let polygon;
+        try {
+            line = centerlineMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+            polygon = regionPolygonMm(host, resolved, offsetCm, handleWidth, startCm, handleLength);
+        } catch (error) {
+            return { ok: false, code: (error && error.code) || "center_rejected" };
+        }
+        if (!line || line.length < 2 || !polygon || polygon.length < 4) {
+            return { ok: false, code: "center_rejected" };
+        }
+        const doorCenter = [doorWidth * 5, doorHeight * 5];
+        const lineMid = [
+            (line[0][0] + line[line.length - 1][0]) / 2,
+            (line[0][1] + line[line.length - 1][1]) / 2,
+        ];
+        const polygonMid = polygon.reduce(
+            (sum, point) => [sum[0] + point[0], sum[1] + point[1]],
+            [0, 0]
+        ).map(value => value / polygon.length);
+        if (!pointNear(lineMid, doorCenter, 0.05) || !pointNear(polygonMid, doorCenter, 0.05)) {
+            return { ok: false, code: "center_rejected" };
+        }
+        return { ok: true, code: "", side: resolved, startCm, offsetCm };
+    }
+
     function collinearPoint(start, middle, end) {
         const area = Math.abs(
             ((middle[0] - start[0]) * (end[1] - start[1]))
@@ -596,7 +733,7 @@
         const width = linerPiece.widthCm * 10;
         const height = linerPiece.lengthCm * 10;
         const mirrored = Boolean(piece.corner_mirrored);
-        const turns = piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         function endSawn(atStart, boundary) {
             if (!boundary) return false;
             const clipped = prepared.clipped;
@@ -672,36 +809,85 @@
         return ab < -1e-8 && cd < -1e-8;
     }
 
-    function extensionConflict(path, diameterMm, board, obstacles) {
+    function ringGapToSegment(ring, start, end) {
+        return Math.min(
+            ...ring.map(corner => pointSegDist(corner, start, end)),
+            ...ring.map((corner, cornerIndex) => Math.min(
+                pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
+                pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
+            ))
+        );
+    }
+
+    function pointInMaterial(point, outer, holes) {
+        if (!pointInPolygon(point, outer)) return false;
+        return !(holes || []).some(hole => pointInPolygon(point, hole));
+    }
+
+    function obstacleMaterial(obstacle) {
+        const outer = obstacleRing(obstacle);
+        const holes = obstacle && Array.isArray(obstacle.holes)
+            ? obstacle.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+            : [];
+        return { outer, holes };
+    }
+
+    function extensionConflictDetails(path, diameterMm, board, obstacles) {
         const radius = num(diameterMm) / 2;
         const blocks = obstacles || [];
         for (let index = 0; index < path.length - 1; index += 1) {
             const start = path[index];
             const end = path[index + 1];
             for (let obstacleIndex = 0; obstacleIndex < blocks.length; obstacleIndex += 1) {
-                const ring = obstacleRing(blocks[obstacleIndex]);
-                if (ring.length < 3) continue;
-                if (pointInPolygon(start, ring) || pointInPolygon(end, ring)) {
-                    return "liner_extension_hits_piece";
-                }
-                const crossing = ring.some((corner, cornerIndex) => segmentsCross(
-                    start,
-                    end,
-                    corner,
-                    ring[(cornerIndex + 1) % ring.length]
-                ));
-                if (crossing) return "liner_extension_hits_piece";
-                const gap = Math.min(
-                    ...ring.map(corner => pointSegDist(corner, start, end)),
-                    ...ring.map((corner, cornerIndex) => Math.min(
-                        pointSegDist(start, corner, ring[(cornerIndex + 1) % ring.length]),
-                        pointSegDist(end, corner, ring[(cornerIndex + 1) % ring.length])
-                    ))
+                const obstacle = blocks[obstacleIndex];
+                const material = obstacleMaterial(obstacle);
+                if (material.outer.length < 3) continue;
+                const boundaries = [material.outer].concat(material.holes);
+                const minimumDistanceMm = Math.min(
+                    ...boundaries.map(ring => ringGapToSegment(ring, start, end))
                 );
-                if (gap < radius - TOLERANCE_MM) return "liner_extension_hits_piece";
+                let rejectCondition = "";
+                if (
+                    pointInMaterial(start, material.outer, material.holes)
+                    || pointInMaterial(end, material.outer, material.holes)
+                ) {
+                    rejectCondition = "endpoint_in_material";
+                } else {
+                    const crossing = boundaries.some(ring => ring.some((corner, cornerIndex) => segmentsCross(
+                        start,
+                        end,
+                        corner,
+                        ring[(cornerIndex + 1) % ring.length]
+                    )));
+                    if (crossing) rejectCondition = "segment_crosses_material_boundary";
+                    else if (minimumDistanceMm < radius - TOLERANCE_MM) {
+                        rejectCondition = "clearance_below_cutter_radius";
+                    }
+                }
+                if (rejectCondition) {
+                    return {
+                        code: "liner_extension_hits_piece",
+                        segmentIndex: index,
+                        obstacleIndex,
+                        start: start.slice(),
+                        end: end.slice(),
+                        minimumDistanceMm,
+                        cutterRadiusMm: radius,
+                        rejectionThresholdMm: radius - TOLERANCE_MM,
+                        rejectCondition,
+                        obstacle: obstacle && obstacle.diagnostic ? obstacle.diagnostic : null,
+                    };
+                }
             }
         }
-        return "";
+        return null;
+    }
+
+    function extensionConflict(path, diameterMm, board, obstacles, onConflict) {
+        void board; // Off-board extensions remain valid; obstacles own material clearance.
+        const details = extensionConflictDetails(path, diameterMm, board, obstacles);
+        if (details && typeof onConflict === "function") onConflict(details);
+        return details ? details.code : "";
     }
 
     function obstacleRing(obstacle) {
@@ -717,11 +903,51 @@
         ];
     }
 
+    function pieceQuarterTurns(piece) {
+        if (!piece) return 0;
+        if (Number.isInteger(piece.rotation_quarter_turns)) {
+            return ((piece.rotation_quarter_turns % 4) + 4) % 4;
+        }
+        if (Number.isInteger(piece.corner_rotation_quarter_turns)) {
+            return ((piece.corner_rotation_quarter_turns % 4) + 4) % 4;
+        }
+        return piece.rotated ? 1 : 0;
+    }
+
+    function samePlacedPiece(left, right) {
+        if (!left || !right) return false;
+        if (left === right) return true;
+        if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
+            return true;
+        }
+        const leftInstance = String(left.piece_instance_id || "").trim();
+        const rightInstance = String(right.piece_instance_id || "").trim();
+        if (leftInstance && leftInstance === rightInstance) return true;
+        return Boolean(left.label)
+            && String(left.label) === String(right.label || "")
+            && Number(left.x) === Number(right.x)
+            && Number(left.y) === Number(right.y);
+    }
+
+    function placementRingMm(piece) {
+        const x = num(piece && piece.x) * 10;
+        const y = num(piece && piece.y) * 10;
+        const width = num(piece && piece.w) * 10;
+        const height = num(piece && piece.h) * 10;
+        if (!(width > 0) || !(height > 0)) return [];
+        return [
+            [x, y],
+            [x + width, y],
+            [x + width, y + height],
+            [x, y + height],
+        ];
+    }
+
     function placedPolygonMm(piece) {
         const linerPiece = pieceFromRow(piece);
         const polygon = piecePolygonMm(linerPiece);
         if (!polygon) return [];
-        const turns = piece && piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         const mirrored = Boolean(piece && piece.corner_mirrored);
         const originX = num(piece && piece.x) * 10;
         const originY = num(piece && piece.y) * 10;
@@ -735,6 +961,80 @@
             );
             return [placed[0] + originX, placed[1] + originY];
         });
+    }
+
+    function obstaclePolygonMm(piece) {
+        return obstacleGeometryMm(piece).outer;
+    }
+
+    function obstacleGeometryMm(piece) {
+        // Persisted usable-sheet geometry is already placed and rotated. Preserve
+        // its holes: a nested door may safely machine inside a Glass opening.
+        const outer = piece && piece.geometry && piece.geometry.outer;
+        if (Array.isArray(outer) && outer.length >= 3) {
+            const holes = Array.isArray(piece.geometry.holes)
+                ? piece.geometry.holes.filter(hole => Array.isArray(hole) && hole.length >= 3)
+                    .map(hole => hole.map(point => [num(point[0]), num(point[1])]))
+                : [];
+            return {
+                outer: outer.map(point => [num(point[0]), num(point[1])]),
+                holes,
+                source: "persisted_geometry",
+            };
+        }
+        const type = String((piece && piece.piece_type) || "Regular");
+        // Regular doors: the optimizer/DXF placement box is authoritative. Parametric
+        // width_cm without the matching rotation flag can invent an oversized ring
+        // that falsely collides with a kerf-clear liner extension on a neighbour.
+        if (type !== CLIPPED && type !== L_SHAPED) {
+            const ring = placementRingMm(piece);
+            if (ring.length >= 3) {
+                const originX = num(piece && piece.x) * 10;
+                const originY = num(piece && piece.y) * 10;
+                const glassHole = piece && piece.glass_hole_local_mm;
+                const holes = type === "Glass" && Array.isArray(glassHole) && glassHole.length >= 3
+                    ? [glassHole.map(point => [
+                        originX + num(point[0]),
+                        originY + num(point[1]),
+                    ])]
+                    : [];
+                return { outer: ring, holes, source: holes.length ? "placement_with_glass_hole" : "placement_box" };
+            }
+        }
+        return { outer: placedPolygonMm(piece), holes: [], source: "placed_parametric_polygon" };
+    }
+
+    function sheetObstaclesMm(sheet, hostPiece) {
+        return ((sheet && sheet.pieces) || [])
+            .filter(piece => !samePlacedPiece(piece, hostPiece))
+            .map(piece => {
+                const geometry = obstacleGeometryMm(piece);
+                const diagnostic = {
+                    pieceId: piece && piece.id,
+                    label: String((piece && piece.label) || ""),
+                    positionCm: {
+                        x: num(piece && piece.x),
+                        y: num(piece && piece.y),
+                        w: num(piece && piece.w),
+                        h: num(piece && piece.h),
+                    },
+                    geometrySource: geometry.source || "fallback_rectangle",
+                };
+                if (geometry.outer.length >= 3) {
+                    return {
+                        polygon: geometry.outer,
+                        holes: geometry.holes,
+                        diagnostic,
+                    };
+                }
+                return {
+                    minX: num(piece && piece.x) * 10,
+                    minY: num(piece && piece.y) * 10,
+                    maxX: (num(piece && piece.x) + num(piece && piece.w)) * 10,
+                    maxY: (num(piece && piece.y) + num(piece && piece.h)) * 10,
+                    diagnostic,
+                };
+            });
     }
 
     function transformPoint(point, mirrored, quarterTurns, width, height) {
@@ -859,7 +1159,7 @@
     }
 
     function placeLocalPath(piece, linerPiece, local) {
-        const turns = piece.rotated ? 1 : 0;
+        const turns = pieceQuarterTurns(piece);
         const mirrored = Boolean(piece.corner_mirrored);
         const originX = num(piece.x) * 10;
         const originY = num(piece.y) * 10;
@@ -928,27 +1228,263 @@
     }
 
     function summary(row) {
-        if (!row || !Number(row.extra_liner) || !row.liner_reference_side) return "";
+        const parsed = parseDoorLiners(row);
+        if (!parsed.enabled || !parsed.liners.length) return "";
         const piece = pieceFromRow(row);
-        return `${sideLabel(row.liner_reference_side, piece.pieceType)} · ${num(row.liner_offset_cm)} / ${num(row.liner_width_cm)} سم`;
+        if (parsed.liners.length === 1) {
+            const spec = parsed.liners[0];
+            return `${sideLabel(spec.side, piece.pieceType)} · ${num(spec.offsetCm)} / ${num(parsed.widthCm)} سم`;
+        }
+        return `${parsed.liners.length} · ${Math.round(num(parsed.widthCm) * 100) / 10} ${__("mm")}`;
+    }
+
+    function allocateLinerId(existing) {
+        let used = 0;
+        (existing || []).forEach(id => {
+            const match = String(id || "").trim().match(/^liner_(\d+)$/);
+            if (match) used = Math.max(used, Number(match[1]));
+        });
+        return `liner_${used + 1}`;
+    }
+
+    function parseDoorLiners(row) {
+        const enabled = Boolean(num(row && row.extra_liner));
+        const raw = row && row.liner_specs_json;
+        if (raw && String(raw).trim()) {
+            try {
+                const data = JSON.parse(raw);
+                const items = Array.isArray(data && data.liners) ? data.liners : [];
+                const liners = items.map((item, index) => ({
+                    id: String((item && (item.id || item.liner_id)) || (index === 0 ? "liner_1" : allocateLinerId(["liner_1"]))).trim(),
+                    side: String((item && (item.side || item.reference_side)) || "").trim(),
+                    offsetCm: num(item && (item.offset_cm != null ? item.offset_cm : item.offsetCm)),
+                    startCm: num(item && (item.start_cm != null ? item.start_cm : item.startCm)),
+                    lengthCm: num(item && (item.length_cm != null ? item.length_cm : item.lengthCm)),
+                }));
+                if (enabled && liners.length) {
+                    const widthCm = data.width_cm != null ? num(data.width_cm) : num(row && row.liner_width_cm);
+                    return { enabled: true, widthCm, liners };
+                }
+            } catch (error) {
+                /* fall through to scalar fields */
+            }
+        }
+        if (!enabled) return { enabled: false, widthCm: 0, liners: [] };
+        return {
+            enabled: true,
+            widthCm: num(row && row.liner_width_cm),
+            liners: [{
+                id: "liner_1",
+                side: String((row && row.liner_reference_side) || "").trim(),
+                offsetCm: num(row && row.liner_offset_cm),
+                startCm: num(row && row.liner_start_cm),
+                lengthCm: num(row && row.liner_length_cm),
+            }],
+        };
+    }
+
+    function serializeDoorLiners(payload) {
+        if (!payload || !payload.enabled || !(payload.liners || []).length) return "";
+        return JSON.stringify({
+            width_cm: num(payload.widthCm),
+            liners: payload.liners.map(spec => ({
+                id: spec.id,
+                side: spec.side,
+                offset_cm: num(spec.offsetCm),
+                start_cm: num(spec.startCm),
+                length_cm: num(spec.lengthCm),
+            })),
+        });
+    }
+
+    function millRegionsConnected(first, second) {
+        if (!first || first.length < 3 || !second || second.length < 3) return false;
+        if (first.some(point => pointInPolygon(point, second))) return true;
+        if (second.some(point => pointInPolygon(point, first))) return true;
+        for (let i = 0; i < first.length; i += 1) {
+            const a = first[i];
+            const b = first[(i + 1) % first.length];
+            for (let j = 0; j < second.length; j += 1) {
+                const c = second[j];
+                const d = second[(j + 1) % second.length];
+                if (segmentsCross(a, b, c, d)) return true;
+                if (pointSegDist(a, c, d) <= TOLERANCE_MM || pointSegDist(c, a, b) <= TOLERANCE_MM) return true;
+            }
+        }
+        return false;
+    }
+
+    function connectedLinerComponents(regions) {
+        const remaining = new Set(regions.map((_item, index) => index));
+        const components = [];
+        while (remaining.size) {
+            const seed = Math.min(...remaining);
+            const group = [seed];
+            remaining.delete(seed);
+            const queue = [seed];
+            while (queue.length) {
+                const current = queue.pop();
+                Array.from(remaining).forEach(other => {
+                    if (!millRegionsConnected(regions[current], regions[other])) return;
+                    remaining.delete(other);
+                    group.push(other);
+                    queue.push(other);
+                });
+            }
+            components.push(group.sort((a, b) => a - b));
+        }
+        return components;
+    }
+
+    function pointDeepInside(point, polygon, marginMm) {
+        if (!pointInPolygon(point, polygon, TOLERANCE_MM)) return false;
+        return boundaryDistance(point, polygon) > Math.max(marginMm, TOLERANCE_MM);
+    }
+
+    function regionAlreadyMilled(region, covered, marginMm) {
+        if (!region || region.length < 3 || !(covered || []).length) return false;
+        const inflate = Math.max(marginMm, TOLERANCE_MM);
+        const minX = Math.min(...region.map(point => point[0]));
+        const maxX = Math.max(...region.map(point => point[0]));
+        const minY = Math.min(...region.map(point => point[1]));
+        const maxY = Math.max(...region.map(point => point[1]));
+        const step = Math.max(inflate, 2);
+        for (let y = minY + step / 2; y <= maxY + 1e-9; y += step) {
+            for (let x = minX + step / 2; x <= maxX + 1e-9; x += step) {
+                const point = [x, y];
+                if (!pointInPolygon(point, region, TOLERANCE_MM)) continue;
+                if (!covered.some(previous => pointInPolygon(point, previous, inflate))) return false;
+            }
+        }
+        return true;
+    }
+
+    function clipPassAgainstCovered(line, covered, keepMarginMm) {
+        if (!line || line.length < 2 || !(covered || []).length) return line && line.length >= 2 ? [line.map(point => point.slice())] : [];
+        const length = polylineLength(line);
+        if (!(length > TOLERANCE_MM)) return [];
+        const step = Math.min(1, Math.max(length / 64, TOLERANCE_MM * 4));
+        const samples = [];
+        for (let cursor = 0; cursor <= length + 1e-9; cursor = Math.min(length, cursor + step)) {
+            const point = pointAlong(line, Math.min(cursor, length)).point;
+            const inside = covered.some(region => pointDeepInside(point, region, keepMarginMm));
+            samples.push({ point, inside });
+            if (cursor >= length) break;
+        }
+        const runs = [];
+        let current = [];
+        samples.forEach(sample => {
+            if (sample.inside) {
+                if (current.length >= 2) runs.push(current);
+                current = [];
+                return;
+            }
+            if (current.length && dist(current[current.length - 1], sample.point) <= TOLERANCE_MM) return;
+            current.push(sample.point);
+        });
+        if (current.length >= 2) runs.push(current);
+        return runs;
+    }
+
+    function chainCutterLines(lines) {
+        const path = [];
+        (lines || []).forEach((line, index) => {
+            if (!line || line.length < 2) return;
+            const sequence = index % 2 ? line.slice().reverse() : line.slice();
+            if (path.length && dist(path[path.length - 1], sequence[0]) <= 1e-6) sequence.shift();
+            sequence.forEach(point => path.push(point));
+        });
+        return path;
+    }
+
+    function mergedToolpathsMm(piece, specs, widthCm, cutterDiameterMm, endsByIndex) {
+        const items = (specs || []).filter(Boolean);
+        if (!items.length) return [];
+        const read = spec => ({
+            side: spec.side,
+            offsetCm: spec.offsetCm != null ? spec.offsetCm : spec.offset_cm,
+            startCm: spec.startCm != null ? spec.startCm : spec.start_cm,
+            lengthCm: spec.lengthCm != null ? spec.lengthCm : spec.length_cm,
+        });
+        if (items.length === 1) {
+            const spec = read(items[0]);
+            return [toolpathMm(
+                piece,
+                spec.side,
+                spec.offsetCm,
+                widthCm,
+                cutterDiameterMm,
+                spec.startCm,
+                spec.lengthCm,
+                endsByIndex && endsByIndex[0]
+            )];
+        }
+        const regions = items.map(spec => {
+            const item = read(spec);
+            return regionPolygonMm(piece, item.side, item.offsetCm, widthCm, item.startCm, item.lengthCm);
+        });
+        const radius = num(cutterDiameterMm) / 2;
+        const paths = [];
+        connectedLinerComponents(regions).forEach(component => {
+            const covered = [];
+            component.forEach(index => {
+                const spec = read(items[index]);
+                const ends = endsByIndex && endsByIndex[index];
+                if (covered.length && regionAlreadyMilled(regions[index], covered, radius)) {
+                    return;
+                }
+                if (!covered.length) {
+                    paths.push(toolpathMm(
+                        piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                        spec.startCm, spec.lengthCm, ends
+                    ));
+                    covered.push(regions[index]);
+                    return;
+                }
+                const generated = toolpathMm(
+                    piece, spec.side, spec.offsetCm, widthCm, cutterDiameterMm,
+                    spec.startCm, spec.lengthCm, Object.assign({}, ends || {}, { startSawn: true, endSawn: true })
+                );
+                const clipped = clipPassAgainstCovered(generated, covered, radius);
+                clipped.forEach(run => {
+                    if (run && run.length >= 2) paths.push(run);
+                });
+                covered.push(regions[index]);
+            });
+        });
+        return paths.filter(path => path && path.length >= 2);
     }
 
     window.AlmdinaLinerGeometry = Object.freeze({
+        toleranceMm: TOLERANCE_MM,
         availableSides,
+        normalizeSideSelection,
+        sideFlagsForSelection,
         sideLabel,
         pieceFromRow,
         piecePolygonMm,
         edgePaths,
+        visualEdgeMarkerPaths,
+        edgeLengthMm,
         validationCode,
         stripPolygonMm,
         regionPolygonMm,
+        regionReferenceMm,
         cutterCenterOffsetsMm,
         centerlineMm,
+        centerRecessedHandle,
         toolpathMm,
         generateToolpath,
         buildMachiningOverlay,
         extensionConflict,
+        extensionConflictDetails,
+        pieceQuarterTurns,
+        samePlacedPiece,
+        placementRingMm,
         placedPolygonMm,
+        obstaclePolygonMm,
+        obstacleGeometryMm,
+        sheetObstaclesMm,
         contourNotchCm,
         contourNotchFromOrder,
         transformPoint,
@@ -956,5 +1492,11 @@
         visualCenterline,
         syntheticOverlay,
         summary,
+        parseDoorLiners,
+        serializeDoorLiners,
+        allocateLinerId,
+        mergedToolpathsMm,
+        sawnBoundaryEnds,
+        placeLocalPath,
     });
 })();

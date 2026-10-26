@@ -68,7 +68,7 @@
             wrapper.__almdinaDocumentationController = factory.mount(wrapper); return wrapper.__almdinaDocumentationController;
         });
     }
-    function route() { const value = frappe.get_route(); return { orderName: String(value[1] || "").trim(), pieceName: String(value[2] || "").trim() }; }
+    function route() { const value = frappe.get_route(); return { orderName: String(value[1] || "").trim(), pieceName: String(value[2] || "").trim(), readOnly: value[3] === "view" }; }
     function fail(wrapper, error) { console.error("Special-shape documentation bootstrap failed", error); scaffold(wrapper); wrapper.querySelector(".layout-main-section").innerHTML = `<div class="ald-doc-message is-error">${frappe.utils.escape_html(__("Could not load the documentation workspace. Reload the page and try again."))}</div>`; }
     function enter() { document.body.classList.add("ald-special-shape-documentation-active"); }
     function leave() { document.body.classList.remove("ald-special-shape-documentation-active"); }

@@ -11,7 +11,7 @@
         Object.freeze({ value: "Glass", label: "Glass" }),
     ]);
     const FIELDS = Object.freeze([
-        Object.freeze({ fieldname: "extra_double", label: "Double Edge Banding", button: "Double Banding" }),
+        Object.freeze({ fieldname: "extra_double", label: "Double Edge", button: "Double Edge" }),
         Object.freeze({ fieldname: "extra_full_door_double", label: "Full Door Double", button: "Full Double" }),
         Object.freeze({ fieldname: "extra_liner", label: "Liner", button: "Liner" }),
         Object.freeze({ fieldname: "extra_back_groove", label: "Back Groove", button: "Back Groove" }),
@@ -79,7 +79,7 @@
 
     function renderAddonSummary(row, options = {}) {
         const summary = addonSummary(row);
-        const disabled = options.editable === false ? "disabled" : "";
+        const disabled = options.virtual ? "disabled" : "";
         const active = summary.names.length ? "is-active" : "";
         const badge = summary.hidden
             ? `<span class="dco-addons-more" aria-hidden="true">+${summary.hidden}</span>`

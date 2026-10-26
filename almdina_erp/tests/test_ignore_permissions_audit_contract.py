@@ -44,7 +44,6 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/services/order_revision_service.py": "SAFE",
     "almdina_erp/services/production_settings_service.py": "SAFE",
     "almdina_erp/services/production_stage_bootstrap_service.py": "SAFE",
-    "almdina_erp/services/special_shape_service.py": "SAFE",
     "almdina_erp/services/user_language_service.py": "SAFE",  # POST-only authenticated current-user language edit.
 
 }

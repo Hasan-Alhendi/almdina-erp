@@ -9,9 +9,14 @@ const source = fs.readFileSync(
     path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/secure_dxf_export.js"),
     "utf8"
 );
+const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
+    path.resolve(__dirname, "../fixtures/liner_extension_nested_glass_snapshot.json"),
+    "utf8"
+));
 
 let nextPlan = null;
 let originalUpload = null;
+let preferOriginalUpload = false;
 let lastCallMethod = "";
 let downloadedDxf = "";
 let downloadedName = "";
@@ -114,7 +119,17 @@ const fakeFrappe = {
                 },
             });
         }
-        return Promise.resolve({ message: { plan: nextPlan } });
+        const source = String((opts.args && opts.args.plan_source) || "").toLowerCase();
+        const explicit = nextPlan && Object.prototype.hasOwnProperty.call(nextPlan, "include_saw_centers")
+            ? Boolean(nextPlan.include_saw_centers)
+            : null;
+        return Promise.resolve({
+            message: {
+                plan: nextPlan,
+                prefer_original_upload: preferOriginalUpload,
+                include_saw_centers: explicit === null ? source === "approved" : explicit,
+            },
+        });
     },
     show_alert() {},
     throw(message) {
@@ -141,6 +156,7 @@ const context = vm.createContext({
     Math,
     Object,
     Array,
+    Set,
     Error,
     Promise,
     Uint8Array,
@@ -220,7 +236,7 @@ function geometry(outer, holes = []) {
     };
 }
 
-function cutPathLineCount(dxf) {
+function cutPathEntityCount(dxf) {
     return (dxf.match(/8\r\nCUT_PATH\r\n/g) || []).length;
 }
 
@@ -268,11 +284,11 @@ async function run() {
     downloadedDxf = "";
     downloadedName = "";
     lastCallMethod = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-TOPOLOGY", "system");
+    await fakeFrappe.almdina.export_order_dxf("DCO-TOPOLOGY", "approved");
     assert.ok(downloadedDxf);
     assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
-    // Owner outer + owner hole + nested outer = 12 CUT_PATH LINE entities.
-    assert.equal(cutPathLineCount(downloadedDxf), 12);
+    // Owner outer + owner hole + nested outer = three independent contours.
+    assert.equal(cutPathEntityCount(downloadedDxf), 3);
     // Top-left usable-sheet [0,0] becomes physical DXF [5,995] with 5 mm trim.
     assert.match(downloadedDxf, /10\r\n5\r\n20\r\n995\r\n/);
     // Hole geometry must survive into the emitted DXF rather than rectangle fallback.
@@ -294,8 +310,8 @@ async function run() {
     };
     downloadedDxf = "";
     lastCallMethod = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-LEGACY", "system");
-    assert.equal(cutPathLineCount(downloadedDxf), 4);
+    await fakeFrappe.almdina.export_order_dxf("DCO-LEGACY", "approved");
+    assert.equal(cutPathEntityCount(downloadedDxf), 1);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -317,8 +333,8 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS", "system");
-    assert.equal(cutPathLineCount(downloadedDxf), 8);
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS", "approved");
+    assert.equal(cutPathEntityCount(downloadedDxf), 2);
     assert.match(downloadedDxf, /10\r\n75\r\n20\r\n925\r\n/);
     assert.match(downloadedDxf, /10\r\n466\r\n20\r\n330\r\n/);
 
@@ -345,8 +361,139 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-TWO", "system");
-    assert.equal(cutPathLineCount(downloadedDxf), 16);
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-TWO", "approved");
+    assert.equal(cutPathEntityCount(downloadedDxf), 4);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        kerf_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [
+                {
+                    id: 1,
+                    label: "1.1",
+                    source_piece_no: 1,
+                    x: 0,
+                    y: 0,
+                    w: 40,
+                    h: 40,
+                    piece_type: "Glass",
+                    glass_margin_mm: 50,
+                    glass_hole_local_mm: [[50, 50], [350, 50], [350, 350], [50, 350]],
+                },
+                {
+                    id: 2,
+                    label: "2.1",
+                    source_piece_no: 2,
+                    x: 6,
+                    y: 6,
+                    w: 10,
+                    h: 10,
+                    piece_type: "Regular",
+                    glass_host_piece_id: 1,
+                },
+                {
+                    id: 3,
+                    label: "3.1",
+                    source_piece_no: 3,
+                    x: 17,
+                    y: 6,
+                    w: 8,
+                    h: 8,
+                    piece_type: "Regular",
+                    glass_host_piece_id: 1,
+                },
+                {
+                    id: 4,
+                    label: "4.1",
+                    source_piece_no: 4,
+                    x: 6,
+                    y: 17,
+                    w: 7,
+                    h: 7,
+                    piece_type: "Regular",
+                    glass_host_piece_id: 1,
+                },
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-THREE-NESTED", "approved");
+    // Finished GEOMETRY and CUT_PATH keep every owned ring independently.
+    // Glass outer + opening + three guest rectangles = 20 GEOMETRY LINE entities.
+    assert.equal((downloadedDxf.match(/8\r\nGEOMETRY\r\n/g) || []).length, 20);
+    assert.ok(cutPathEntityCount(downloadedDxf) >= 5);
+    assert.match(downloadedDxf, /10\r\n0\r\n20\r\n1000\r\n/);
+    assert.match(downloadedDxf, /10\r\n50\r\n20\r\n950\r\n/);
+    assert.match(downloadedDxf, /10\r\n60\r\n20\r\n840\r\n/);
+    assert.match(downloadedDxf, /10\r\n170\r\n20\r\n860\r\n/);
+    assert.match(downloadedDxf, /10\r\n60\r\n20\r\n760\r\n/);
+
+    nextPlan = {
+        full_board_width_cm: 100,
+        full_board_length_cm: 100,
+        trim_cm: 0,
+        kerf_cm: 0,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 100,
+            full_length_cm: 100,
+            pieces: [
+                {
+                    id: 1,
+                    label: "1.1",
+                    source_piece_no: 1,
+                    x: 0,
+                    y: 0,
+                    w: 50,
+                    h: 50,
+                    piece_type: "Glass",
+                    glass_margin_mm: 50,
+                    glass_hole_local_mm: [[50, 50], [450, 50], [450, 450], [50, 450]],
+                },
+                {
+                    id: 2,
+                    label: "2.1",
+                    source_piece_no: 2,
+                    x: 6,
+                    y: 6,
+                    w: 30,
+                    h: 30,
+                    piece_type: "Glass",
+                    glass_margin_mm: 50,
+                    glass_hole_local_mm: [[50, 50], [250, 50], [250, 250], [50, 250]],
+                    glass_host_piece_id: 1,
+                },
+                {
+                    id: 3,
+                    label: "3.1",
+                    source_piece_no: 3,
+                    x: 12,
+                    y: 12,
+                    w: 10,
+                    h: 10,
+                    piece_type: "Regular",
+                    glass_host_piece_id: 2,
+                },
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-IN-GLASS", "approved");
+    // Outer glass + hole + inner glass + hole + regular = 20 GEOMETRY LINE entities.
+    assert.equal((downloadedDxf.match(/8\r\nGEOMETRY\r\n/g) || []).length, 20);
+    assert.ok(cutPathEntityCount(downloadedDxf) >= 5);
+    // Board Y is flipped: piece (x,y,h) → DXF (x*10, board_h - (y+h)*10).
+    assert.match(downloadedDxf, /10\r\n0\r\n20\r\n1000\r\n/);
+    assert.match(downloadedDxf, /10\r\n50\r\n20\r\n950\r\n/);
+    assert.match(downloadedDxf, /10\r\n60\r\n20\r\n640\r\n/);
+    assert.match(downloadedDxf, /10\r\n110\r\n20\r\n690\r\n/);
+    assert.match(downloadedDxf, /10\r\n120\r\n20\r\n780\r\n/);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -367,8 +514,8 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-HISTORICAL", "system");
-    assert.equal(cutPathLineCount(downloadedDxf), 4);
+    await fakeFrappe.almdina.export_order_dxf("DCO-GLASS-HISTORICAL", "approved");
+    assert.equal(cutPathEntityCount(downloadedDxf), 1);
 
     nextPlan = {
         full_board_width_cm: 100,
@@ -408,7 +555,7 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-OFFCUT", "system");
+    await fakeFrappe.almdina.export_order_dxf("DCO-OFFCUT", "approved");
     assert.match(downloadedDxf, /8\r\nOFFCUT\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nOFFCUT\r\n/g) || []).length, 4);
 
@@ -448,6 +595,7 @@ async function run() {
     assert.equal(downloadedDxf, "");
 
     const originalDxf = "0\nSECTION\n8\nalong\n8\nCUT_PATH\n0\nEOF\n";
+    preferOriginalUpload = true;
     originalUpload = {
         filename: "cutting_plan_DCO-2026-00018_corrected.dxf",
         content_b64: Buffer.from(originalDxf, "utf8").toString("base64"),
@@ -469,6 +617,7 @@ async function run() {
     assert.match(lastCallMethod, /download_uploaded_dxf/);
     assert.equal(downloadedDxf, originalDxf);
 
+    preferOriginalUpload = false;
     downloadedDxf = "";
     lastCallMethod = "";
     nextPlan = {
@@ -538,14 +687,14 @@ async function run() {
     };
     downloadedDxf = "";
     lastCallMethod = "";
-    await fakeFrappe.almdina.export_order_dxf("DCO-EXTRA-OVERLAY", "system");
+    await fakeFrappe.almdina.export_order_dxf("DCO-EXTRA-OVERLAY", "approved");
     assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
     assert.match(downloadedDxf, /2\r\nLiner\r\n/);
     assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
     assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
     // The door is flush to the board on the left and the top, so those edges are not cuts.
-    assert.equal(cutPathLineCount(downloadedDxf), 2);
+    assert.equal(cutPathEntityCount(downloadedDxf), 2);
     assert.match(downloadedDxf, /2\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /2\r\nGEOMETRY\r\n/);
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
@@ -559,7 +708,7 @@ async function run() {
         downloadedDxf,
         /1\r\n\\U\+062F\\U\+0628\\U\+0644 \\U\+0643\\U\+0627\\U\+0645\\U\+0644\r\n/
     );
-    assert.doesNotMatch(downloadedDxf, /Double Edge Banding/);
+    assert.doesNotMatch(downloadedDxf, /Double Edge/);
     assert.doesNotMatch(downloadedDxf, /Full Door Double/);
     assert.doesNotMatch(downloadedDxf, /1\r\nDouble\r\n/);
 
@@ -743,6 +892,11 @@ async function run() {
     assert.match(downloadedDxf, /8\r\nLiner\r\n/);
     assert.match(downloadedDxf, /10\r\n402\.5\r\n20\r\n507\.5\r\n/);
     assert.match(downloadedDxf, /10\r\n389\.5\r\n20\r\n2\.5\r\n/);
+    assert.equal(cutPathEntityCount(downloadedDxf), 0);
+    // The normalization fixture represents the approved manufacturing export.
+    // Keep the pre-approval no-saw-centers contract checked above.
+    await fakeFrappe.almdina.export_order_dxf("26-00105", "approved");
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
 
     function cutPathLengths(dxf) {
         const lines = dxf.split("\r\n");
@@ -868,13 +1022,14 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-SAW-CENTER", "system");
-    const sawLines = layerLines(downloadedDxf, "CUT_PATH");
+    await fakeFrappe.almdina.export_order_dxf("26-SAW-CENTER", "approved");
+    const sawLines = layerEdges(downloadedDxf, "CUT_PATH");
     const finishedLines = layerLines(downloadedDxf, "GEOMETRY");
     assert.ok(finishedLines.some(edge => edge.x1 === 10 && edge.x2 === 210));
     assert.ok(finishedLines.some(edge => edge.x1 === 215 && edge.x2 === 515));
     const shared = sawLines.filter(edge => Math.abs(edge.x1 - 212.5) < 0.02 && Math.abs(edge.x2 - 212.5) < 0.02);
-    assert.equal(shared.length, 1);
+    // Multi Offset keeps the coincident side in each door's closed contour.
+    assert.equal(shared.length, 2);
     assert.ok(Math.abs(Math.min(shared[0].y1, shared[0].y2) - 1927.5) < 0.02);
     assert.ok(Math.abs(Math.max(shared[0].y1, shared[0].y2) - 2432.5) < 0.02);
     const trimCenters = sawLines.filter(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02);
@@ -929,12 +1084,12 @@ async function run() {
     }
     nextPlan = linerEndPlan([linerDoor({ w: 122, width_cm: 122 })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const boardEdgeXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
     assert.equal(Math.round(Math.min(...boardEdgeXs) * 10) / 10, -2.5);
     assert.equal(Math.round(Math.max(...boardEdgeXs) * 10) / 10, 1222.5);
     assert.equal(constantAxisRuns(polylinePoints(downloadedDxf, "Liner"), 0, 10), 2);
-    const shortDoorCuts = layerLines(downloadedDxf, "CUT_PATH");
+    const shortDoorCuts = layerEdges(downloadedDxf, "CUT_PATH");
     assert.equal(shortDoorCuts.length, 1);
     assert.ok(shortDoorCuts.every(edge => Math.abs(edge.y1 - 1937.5) < 0.02 && Math.abs(edge.y2 - 1937.5) < 0.02));
 
@@ -945,8 +1100,8 @@ async function run() {
         length_cm: 244,
     })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-FULL-BOARD", "system");
-    assert.equal(layerLines(downloadedDxf, "CUT_PATH").length, 0);
+    await fakeFrappe.almdina.export_order_dxf("26-FULL-BOARD", "approved");
+    assert.equal(layerEdges(downloadedDxf, "CUT_PATH").length, 0);
     assert.ok(layerLines(downloadedDxf, "GEOMETRY").some(edge => (
         Math.abs(edge.x1) < 0.02 && Math.abs(edge.x2 - 1220) < 0.02
         && Math.abs(edge.y1) < 0.02 && Math.abs(edge.y2) < 0.02
@@ -1001,8 +1156,8 @@ async function run() {
         }),
     ], 0.5);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-TRIM-GAPS", "system");
-    const trimGapCuts = layerLines(downloadedDxf, "CUT_PATH");
+    await fakeFrappe.almdina.export_order_dxf("26-TRIM-GAPS", "approved");
+    const trimGapCuts = layerEdges(downloadedDxf, "CUT_PATH");
     const onVertical = (value) => trimGapCuts.filter(edge => (
         Math.abs(edge.x1 - value) < 0.02 && Math.abs(edge.x2 - value) < 0.02
     ));
@@ -1010,10 +1165,10 @@ async function run() {
         Math.abs(edge.y1 - value) < 0.02 && Math.abs(edge.y2 - value) < 0.02
     ));
     assert.equal(onVertical(2.5).length, 1);
-    assert.equal(onVertical(407.5).length, 1);
-    assert.equal(onVertical(812.5).length, 1);
+    assert.equal(onVertical(407.5).length, 2);
+    assert.equal(onVertical(812.5).length, 2);
     assert.equal(onVertical(1217.5).length, 1);
-    assert.equal(onHorizontal(2.5).length, 1);
+    assert.equal(onHorizontal(2.5).length, 3);
     assert.equal(onVertical(0).length, 0);
     assert.equal(onVertical(1220).length, 0);
     assert.equal(onHorizontal(0).length, 0);
@@ -1042,8 +1197,8 @@ async function run() {
         }],
     };
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-KERF3-TRIM", "system");
-    const kerf3Cuts = layerLines(downloadedDxf, "CUT_PATH");
+    await fakeFrappe.almdina.export_order_dxf("26-KERF3-TRIM", "approved");
+    const kerf3Cuts = layerEdges(downloadedDxf, "CUT_PATH");
     const kerf3Vertical = (value) => kerf3Cuts.filter(edge => (
         Math.abs(edge.x1 - value) < 0.02 && Math.abs(edge.x2 - value) < 0.02
     ));
@@ -1051,10 +1206,10 @@ async function run() {
         Math.abs(edge.y1 - value) < 0.02 && Math.abs(edge.y2 - value) < 0.02
     ));
     assert.equal(kerf3Vertical(3.5).length, 1);
-    assert.equal(kerf3Vertical(406.5).length, 1);
-    assert.equal(kerf3Vertical(809.5).length, 1);
+    assert.equal(kerf3Vertical(406.5).length, 2);
+    assert.equal(kerf3Vertical(809.5).length, 2);
     assert.equal(kerf3Vertical(1212.5).length, 1);
-    assert.equal(kerf3Horizontal(3.5).length, 1);
+    assert.equal(kerf3Horizontal(3.5).length, 3);
     assert.equal(kerf3Vertical(0).length, 0);
     assert.equal(kerf3Vertical(1220).length, 0);
     const kerf3Geometry = layerLines(downloadedDxf, "GEOMETRY");
@@ -1064,19 +1219,19 @@ async function run() {
 
     nextPlan = linerEndPlan([linerDoor({ x: 5, w: 40, width_cm: 40 })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const insetXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
     assert.equal(Math.round(Math.min(...insetXs) * 10) / 10, 47.5);
     assert.equal(Math.round(Math.max(...insetXs) * 10) / 10, 452.5);
-    assert.ok(layerLines(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 47.5) < 0.02 && Math.abs(edge.x2 - 47.5) < 0.02));
+    assert.ok(layerEdges(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 47.5) < 0.02 && Math.abs(edge.x2 - 47.5) < 0.02));
 
     nextPlan = linerEndPlan([linerDoor({ w: 40, width_cm: 40 })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const flushXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
     assert.equal(Math.round(Math.min(...flushXs) * 10) / 10, -2.5);
     assert.equal(Math.round(Math.max(...flushXs) * 10) / 10, 402.5);
-    assert.equal(layerLines(downloadedDxf, "CUT_PATH").some(edge => (
+    assert.equal(layerEdges(downloadedDxf, "CUT_PATH").some(edge => (
         Math.abs(edge.x1 + 2.5) < 0.02 && Math.abs(edge.x2 + 2.5) < 0.02
     )), false);
 
@@ -1085,8 +1240,8 @@ async function run() {
         linerDoor({ id: 2, label: "2.1", x: 40.5, w: 40, width_cm: 40, extra_liner: 0, liner_reference_side: "" }),
     ]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
-    const kerfCuts = layerLines(downloadedDxf, "CUT_PATH").filter(edge => (
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
+    const kerfCuts = layerEdges(downloadedDxf, "CUT_PATH").filter(edge => (
         Math.abs(edge.x1 - 402.5) < 0.02 && Math.abs(edge.x2 - 402.5) < 0.02
     ));
     assert.equal(kerfCuts.length, 1);
@@ -1101,11 +1256,11 @@ async function run() {
         length_cm: 242,
     })], 1);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const trimXs = polylinePoints(downloadedDxf, "Liner").map(point => point[0]);
     assert.equal(Math.round(Math.min(...trimXs) * 10) / 10, 7.5);
     assert.equal(Math.round(Math.max(...trimXs) * 10) / 10, 1212.5);
-    assert.ok(layerLines(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02));
+    assert.ok(layerEdges(downloadedDxf, "CUT_PATH").some(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02));
 
     nextPlan = linerEndPlan([
         linerDoor({ id: 1, label: "1.1", x: 20, w: 40, width_cm: 40 }),
@@ -1113,7 +1268,7 @@ async function run() {
         linerDoor({ id: 3, label: "3.1", x: 60.5, w: 30, width_cm: 30, extra_liner: 0, liner_reference_side: "" }),
     ]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 1);
 
     nextPlan = linerEndPlan([
@@ -1122,9 +1277,64 @@ async function run() {
     ]);
     downloadedDxf = "";
     await assert.rejects(
-        fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system"),
+        fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved"),
         /overlaps an adjacent piece/
     );
+
+    // Kerf-clear door 5 with a neighbour whose order width_cm is larger than
+    // placed w (missing rotation) must still export — obstacle uses w/h.
+    nextPlan = linerEndPlan([
+        linerDoor({
+            id: 5,
+            label: "5",
+            x: 40.5,
+            y: 0,
+            w: 30,
+            h: 50,
+            width_cm: 30,
+            length_cm: 50,
+            liner_reference_side: "edge_long_left",
+        }),
+        linerDoor({
+            id: 4,
+            label: "4",
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 50,
+            width_cm: 50,
+            length_cm: 40,
+            rotated: 0,
+            extra_liner: 0,
+            liner_reference_side: "",
+        }),
+    ]);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "system");
+    assert.equal(cutPathEntityCount(downloadedDxf), 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-DOOR5", "approved");
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+
+    // Real persisted regression CP-2026-00092 / DCO 26-00112: door 5.1 is
+    // nested inside the opening of Glass door 1.1. The 3 mm Kerf leaves its
+    // liner extension exactly one cutter radius (1.5 mm) from the Glass
+    // material, so the opening must remain void rather than a solid obstacle.
+    nextPlan = JSON.parse(JSON.stringify(nestedGlassRegressionSnapshot));
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-00112", "system");
+    assert.equal(cutPathEntityCount(downloadedDxf), 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-00112", "approved");
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
+    const nestedLinerDxfPoints = polylinePoints(downloadedDxf, "Liner");
+    assert.ok(nestedLinerDxfPoints.length >= 2);
+    assert.ok(nestedLinerDxfPoints.some(point => (
+        Math.abs(point[0] - 85.5) < 0.001 && Math.abs(point[1] - 1942.5) < 0.001
+    )));
 
     nextPlan = linerEndPlan([linerDoor({
         w: 122,
@@ -1133,7 +1343,7 @@ async function run() {
         liner_length_cm: 20,
     })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const partialPoints = polylinePoints(downloadedDxf, "Liner");
     const partialXs = partialPoints.map(point => point[0]);
     assert.ok(Math.min(...partialXs) > 100);
@@ -1189,7 +1399,7 @@ async function run() {
         recessed_handle_length_cm: 20,
     })]);
     downloadedDxf = "";
-    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+    await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
     const regionRings = polylineRings(downloadedDxf, "GEOMETRY");
     assert.equal(regionRings.length, 3);
     const regionLengths = regionRings.map(ring => ring.reduce((longest, point, index) => {
@@ -1219,9 +1429,146 @@ async function run() {
             liner_width_cm: 0.8,
         })]);
         downloadedDxf = "";
-        await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "system");
+        await fakeFrappe.almdina.export_order_dxf("26-LINER-ENDS", "approved");
         assert.ok(polylinePoints(downloadedDxf, "Liner").length > 2);
     }
+
+    // Design export (system tab) must keep door geometry and overlays but omit
+    // separation/trim CUT_PATH until Production Cutting Plan approval.
+    nextPlan = {
+        full_board_width_cm: 122,
+        full_board_length_cm: 244,
+        kerf_mm: 5,
+        trim_cm: 1,
+        sheets: [{
+            sheet_no: 1,
+            full_width_cm: 122,
+            full_length_cm: 244,
+            pieces: [
+                {
+                    id: 1,
+                    label: "1.1",
+                    piece_type: "Regular",
+                    x: 0,
+                    y: 0,
+                    w: 20,
+                    h: 50,
+                    width_cm: 20,
+                    length_cm: 50,
+                    extra_liner: 1,
+                    liner_reference_side: "edge_long_left",
+                    liner_offset_cm: 2,
+                    liner_width_cm: 1.8,
+                },
+                {
+                    id: 2,
+                    label: "2.1",
+                    piece_type: "Regular",
+                    x: 20.5,
+                    y: 0,
+                    w: 30,
+                    h: 40,
+                    width_cm: 30,
+                    length_cm: 40,
+                },
+            ],
+        }],
+    };
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-DESIGN-NO-SAW", "system");
+    assert.equal(cutPathEntityCount(downloadedDxf), 0);
+    assert.ok(layerLines(downloadedDxf, "GEOMETRY").length > 0);
+    assert.ok(polylinePoints(downloadedDxf, "Liner").length >= 2);
+    // Layer table still declares CUT_PATH; no entity uses group-code 8 yet.
+    assert.match(downloadedDxf, /2\r\nCUT_PATH\r\n/);
+
+    nextPlan.include_saw_centers = true;
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-DESIGN-NO-SAW", "system");
+    const forcedSaw = cutPathEntityCount(downloadedDxf);
+    assert.ok(forcedSaw > 0);
+
+    delete nextPlan.include_saw_centers;
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-MFG-AFTER-APPROVAL", "approved");
+    const approvedSaw = cutPathEntityCount(downloadedDxf);
+    assert.equal(approvedSaw, forcedSaw);
+
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("26-MFG-AFTER-APPROVAL", "approved");
+    assert.equal(cutPathEntityCount(downloadedDxf), approvedSaw);
+
+    // Approved upload without saw centers must regenerate manufacturing DXF.
+    originalUpload = {
+        filename: "design-only.dxf",
+        content_b64: Buffer.from("0\nSECTION\n8\nGEOMETRY\n0\nEOF\n", "utf8").toString("base64"),
+    };
+    downloadedDxf = "";
+    downloadedName = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-APPROVED-ABSENT", "approved", {
+        hasOriginalFile: true,
+        preferOriginalUpload: false,
+    });
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
+
+    // Custom tab before approval: keep the original designer file.
+    preferOriginalUpload = true;
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-DRAFT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nGEOMETRY\n0\nEOF\n");
+
+    // Custom tab after the same upload was approved without saw centers:
+    // regenerate manufacturing DXF instead of shipping the design file.
+    preferOriginalUpload = false;
+    nextPlan.include_saw_centers = true;
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-ABSENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: false,
+    });
+    assert.match(lastCallMethod, /normalize_dxf_for_autocad/);
+    assert.ok(cutPathEntityCount(downloadedDxf) > 0);
+    const customApprovedSaw = cutPathEntityCount(downloadedDxf);
+    downloadedDxf = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-ABSENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: false,
+    });
+    assert.equal(cutPathEntityCount(downloadedDxf), customApprovedSaw);
+
+    // Custom tab when a different plan is approved: still the uploaded original.
+    preferOriginalUpload = true;
+    delete nextPlan.include_saw_centers;
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-OTHER-APPROVED", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nGEOMETRY\n0\nEOF\n");
+
+    // Approved upload that already has saw centers keeps the original bytes.
+    originalUpload = {
+        filename: "ready-cut-paths.dxf",
+        content_b64: Buffer.from("0\nSECTION\n8\nCUT_PATH\n0\nEOF\n", "utf8").toString("base64"),
+    };
+    downloadedDxf = "";
+    lastCallMethod = "";
+    await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-APPROVED-PRESENT", "custom", {
+        hasOriginalFile: true,
+        preferOriginalUpload: true,
+    });
+    assert.match(lastCallMethod, /download_uploaded_dxf/);
+    assert.equal(downloadedDxf, "0\nSECTION\n8\nCUT_PATH\n0\nEOF\n");
 
     console.log("Secure DXF topology export simulation passed");
 }
@@ -1238,6 +1585,17 @@ function layerLines(dxf, layerName) {
             y2: Number(lines[index + 12]),
         });
     }
+    return edges;
+}
+
+function layerEdges(dxf, layerName) {
+    const edges = layerLines(dxf, layerName);
+    polylineRings(dxf, layerName).forEach(ring => {
+        ring.forEach((point, index) => {
+            const next = ring[(index + 1) % ring.length];
+            edges.push({ x1: point[0], y1: point[1], x2: next[0], y2: next[1] });
+        });
+    });
     return edges;
 }
 

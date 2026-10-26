@@ -7,20 +7,29 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "../../public/js/door_cutting_order");
-const geometry = () => ({full_board_width_cm: 122, full_board_length_cm: 244,
+const geometry = (label = "OWNED-CUT", pieceExtra = {}) => ({full_board_width_cm: 122, full_board_length_cm: 244,
     usable_board_width_cm: 122, usable_board_length_cm: 244,
-    sheets: [{sheet_no: 1, pieces: [{id: 1, label: "OWNED-CUT", x: 0, y: 0,
-        w: 42, h: 81, original_w: 42, original_h: 81, piece_type: "Regular"}]}]});
+    sheets: [{sheet_no: 1, pieces: [{id: 1, label, x: 0, y: 0,
+        w: 42, h: 81, original_w: 42, original_h: 81, piece_type: "Regular", ...pieceExtra}]}]});
 const row = (name, plan = geometry(), revision = 1) => ({name, revision,
     board: {description: "White"}, snapshot_json: JSON.stringify(plan)});
 
 function element(html) {
-    return {innerHTML: html, dataset: {}, style: {setProperty() {}},
+    const node = {innerHTML: html, dataset: {}, style: {setProperty() {}},
         get outerHTML() { return this.innerHTML; },
         querySelector(selector) { return this.innerHTML.includes(String(selector).replace(".", ""))
             ? element(this.innerHTML) : null; },
         querySelectorAll(selector) { const found = this.querySelector(selector); return found ? [found] : []; },
-        cloneNode() { return element(this.innerHTML); }};
+        cloneNode() { return element(this.innerHTML); },
+        remove() {
+            const marker = "dco-offcut-business-context";
+            if (!this.innerHTML.includes(marker)) return;
+            this.innerHTML = this.innerHTML.replace(
+                /<div class="dco-offcut-business-context\b[^>]*>[\s\S]*?<\/div>/g,
+                ""
+            );
+        }};
+    return node;
 }
 
 function harness({ sourceFirst = false, arabic = false } = {}) {
@@ -33,8 +42,10 @@ function harness({ sourceFirst = false, arabic = false } = {}) {
     let generation = 1, allowed = true, pendingIdentity = null;
     const state = {status: "ready", identity: "Door Cutting Order::A",
         data: {order_name: "A", capabilities: {print: true}, plans: {
-            system_draft: row("SYSTEM-A"), uploaded_draft: row("CUSTOM-A"),
-            approved: row("APPROVED-A")}, approved_plan: "APPROVED-A"}};
+            system_draft: row("SYSTEM-A", geometry("SYSTEM-CUT")),
+            uploaded_draft: row("CUSTOM-A", geometry("CUSTOM-CUT")),
+            approved: row("APPROVED-A", geometry("APPROVED-CUT"))},
+            approved_plan: "APPROVED-A"}};
     const window = {
         cur_frm: frm,
         addEventListener() {},
@@ -119,7 +130,8 @@ test("ready, loading, stale and forced reload gate the actual handler", async ()
     const h = harness();
     h.frm.__almdina_active_plan_tab = "System";
     assert.equal(await h.print(), true);
-    assert.match(h.writes.at(-1), /SYSTEM-A/);
+    assert.match(h.writes.at(-1), /SYSTEM-CUT/);
+    assert.doesNotMatch(h.writes.at(-1), /Plan name|Plan revision|اسم الخطة|إصدار الخطة/);
     assert.ok(h.reads.displayedRow >= 3 && h.reads.snapshot >= 3,
         "one command consults the displayed row and workspace more than once");
     h.state.status = "loading";
@@ -142,7 +154,7 @@ test("a visible owned plan must print through the real Form identity", async () 
     h.window.visibleRoot = true;
     assert.equal(await h.print(), true,
         "a mounted plan must not turn the real Form into a synthetic, non-current Form");
-    assert.match(h.writes.at(-1), /SYSTEM-A/);
+    assert.match(h.writes.at(-1), /SYSTEM-CUT/);
     const aPlan = JSON.parse(h.state.data.plans.system_draft.snapshot_json);
     const before = h.writes.length;
     assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, aPlan,
@@ -153,11 +165,10 @@ test("a visible owned plan must print through the real Form identity", async () 
     h.generation();
     h.state.identity = "Door Cutting Order::B";
     h.state.data.order_name = "B";
-    h.state.data.plans.system_draft = row("SYSTEM-B", {
-        ...geometry(), sheets: [{sheet_no: 1, pieces: [{...geometry().sheets[0].pieces[0], w: 57}]}],
-    });
+    h.state.data.plans.system_draft = row("SYSTEM-B", geometry("SYSTEM-B-CUT", {w: 57}));
     assert.equal(await h.print(), true);
-    assert.match(h.writes.at(-1), /SYSTEM-B/);
+    assert.match(h.writes.at(-1), /SYSTEM-B-CUT/);
+    assert.doesNotMatch(h.writes.at(-1), /SYSTEM-A|SYSTEM-CUT<\/span>/);
     assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, aPlan), false,
         "a visible B plan cannot authorize A geometry");
 });
@@ -182,16 +193,16 @@ test("both lazy-asset evaluation orders install one safe print contract", async 
 
 test("tabs, preview and independent representation keep or reject the selected source", async () => {
     const h = harness();
-    for (const [tab, name] of [["System", "SYSTEM-A"], ["Custom", "CUSTOM-A"],
-        ["Approved", "APPROVED-A"]]) {
+    for (const [tab, marker] of [["System", "SYSTEM-CUT"], ["Custom", "CUSTOM-CUT"],
+        ["Approved", "APPROVED-CUT"]]) {
         h.frm.__almdina_active_plan_tab = tab;
         assert.equal(await h.print(), true);
-        assert.match(h.writes.at(-1), new RegExp(name));
+        assert.match(h.writes.at(-1), new RegExp(marker));
     }
     h.frm.__almdina_active_plan_tab = "System";
-    h.window.previewRow = row("preview:owned");
+    h.window.previewRow = row("preview:owned", geometry("PREVIEW-CUT"));
     assert.equal(await h.print(), true);
-    assert.match(h.writes.at(-1), /preview:owned/);
+    assert.match(h.writes.at(-1), /PREVIEW-CUT/);
     h.window.previewRow = null;
     const canonical = h.state.data.plans.system_draft;
     const samePlan = JSON.parse(canonical.snapshot_json);
@@ -207,21 +218,51 @@ test("tabs, preview and independent representation keep or reject the selected s
     assert.equal(h.writes.length, before);
 });
 
-test("final OFFCUT HTML retains assigned business context from the verified row", async () => {
+test("historical plans keep printable geometry with a printed lifecycle label", async () => {
+    const h = harness();
+    h.state.data.plans.system_draft = {
+        ...row("SYSTEM-CANCELLED", geometry("ARCHIVE-CUT")),
+        status: "Cancelled",
+        display_context: "historical",
+    };
+    h.frm.__almdina_active_plan_tab = "System";
+    assert.equal(await h.print(), true);
+    assert.match(h.writes.at(-1), /ARCHIVE-CUT/);
+    assert.match(h.writes.at(-1), /Historical plan: Cancelled/);
+    assert.match(h.writes.at(-1), /Plan status/);
+});
+
+test("final OFFCUT print hides business context and uses solid gray fill", async () => {
     const h = harness();
     h.frm.__almdina_active_plan_tab = "System";
-    const plan = geometry();
+    const plan = geometry("SYSTEM-OFFCUT-CUT");
     plan.sheets.push({sheet_no: 2, resource_kind: "OFFCUT", pieces: [{
-        ...plan.sheets[0].pieces[0], piece_instance_id: "OFFCUT-PIECE-1",
+        ...plan.sheets[0].pieces[0], label: "OFFCUT-CUT", piece_instance_id: "OFFCUT-PIECE-1",
     }]});
     h.state.data.plans.system_draft = {...row("SYSTEM-OFFCUT", plan), offcut: {
         assignments: [{piece_instance_id: "OFFCUT-PIECE-1",
             business_state: "FACTORY_FACTORY", business_state_label: "FACTORY-OWNED"}],
     }};
+    const previewHtml = h.window.AlmdinaCuttingPlanRender.build(h.frm, (() => {
+        const previewPlan = JSON.parse(JSON.stringify(plan));
+        Object.defineProperty(previewPlan, "__offcut_assignments", {
+            value: h.state.data.plans.system_draft.offcut.assignments,
+            enumerable: false,
+        });
+        return previewPlan;
+    })());
+    assert.match(previewHtml, /dco-offcut-business-context/);
+    assert.match(previewHtml, /FACTORY-OWNED/);
     assert.equal(await h.print(), true);
-    assert.match(h.writes.at(-1), /data-resource-kind="OFFCUT"/);
-    assert.match(h.writes.at(-1), /dco-offcut-business-context/);
-    assert.match(h.writes.at(-1), /FACTORY-OWNED/);
+    const finalHtml = h.writes.at(-1);
+    assert.match(finalHtml, /data-resource-kind="OFFCUT"/);
+    assert.match(finalHtml, /background: #E5E7EB !important/);
+    assert.match(finalHtml, /print-color-adjust: exact/);
+    // CSS may still name the preview-only class; the markup/label must not appear.
+    assert.doesNotMatch(finalHtml, /class="dco-offcut-business-context"/);
+    assert.doesNotMatch(finalHtml, /FACTORY-OWNED/);
+    assert.doesNotMatch(finalHtml, /Unassigned|غير محدد/);
+    assert.doesNotMatch(finalHtml, /Plan name|Plan revision|اسم الخطة|إصدار الخطة/);
 });
 
 test("final HTML preserves the live nonzero kerf in owned liner geometry", async () => {
@@ -247,14 +288,14 @@ test("final HTML preserves the live nonzero kerf in owned liner geometry", async
         "the final frozen print document must retain the live liner toolpath");
 });
 
-test("frozen A print keeps its revision and localized machining error in final HTML", async () => {
+test("frozen A print keeps localized machining error without plan name or revision", async () => {
     const h = harness({arabic: true});
     h.frm.__almdina_active_plan_tab = "System";
     h.frm.doc.kerf_mm = 25;
     h.frm.doc.pieces = [{piece_type: "Regular", width_cm: 40, length_cm: 60,
         extra_liner: 1, liner_reference_side: "edge_width_top",
         liner_offset_cm: 0, liner_width_cm: 1.8}];
-    const plan = geometry();
+    const plan = geometry("OWNED-A-CUT");
     plan.kerf_mm = 25;
     plan.sheets[0].pieces[0] = {...plan.sheets[0].pieces[0], x: 5, y: 5,
         w: 40, h: 60, source_piece_no: 1, extra_liner: 1,
@@ -262,8 +303,9 @@ test("frozen A print keeps its revision and localized machining error in final H
     h.state.data.plans.system_draft = row("SYSTEM-OWNED-A", plan, 7);
     assert.equal(await h.print(), true);
     const finalHtml = h.writes.at(-1);
-    assert.match(finalHtml, /SYSTEM-OWNED-A/);
-    assert.match(finalHtml, /إصدار الخطة<\/b><span>7<\/span>/);
+    assert.match(finalHtml, /OWNED-A-CUT/);
+    assert.doesNotMatch(finalHtml, /SYSTEM-OWNED-A/);
+    assert.doesNotMatch(finalHtml, /إصدار الخطة|Plan revision/);
     assert.ok(finalHtml.includes('data-liner-toolpath-error="liner_narrower_than_cutter"'),
         `machining error markers: ${JSON.stringify(finalHtml.match(/data-liner-toolpath-error[^>]*|data-overlay-kind="liner"[^>]*/g))}`);
     assert.match(finalHtml, /عرض اللاينر أصغر من سماكة الشفرة/);
@@ -318,9 +360,9 @@ test("unowned OFFCUT metadata cannot enter another order's final HTML", async ()
     h.state.identity = "Door Cutting Order::B";
     h.state.data.order_name = "B";
     h.frm.__almdina_active_plan_tab = "System";
-    const plan = geometry();
+    const plan = geometry("B-CUT");
     plan.sheets.push({sheet_no: 2, resource_kind: "OFFCUT", pieces: [{
-        ...plan.sheets[0].pieces[0], piece_instance_id: "OFFCUT-PIECE-1",
+        ...plan.sheets[0].pieces[0], label: "B-OFFCUT-CUT", piece_instance_id: "OFFCUT-PIECE-1",
     }]});
     const owned = {piece_instance_id: "OFFCUT-PIECE-1",
         business_state: "FACTORY_FACTORY", business_state_label: "B-OWNED-LABEL"};
@@ -330,8 +372,9 @@ test("unowned OFFCUT metadata cannot enter another order's final HTML", async ()
         business_state_label: "A-PRIVATE-LABEL"}], enumerable: false});
     assert.equal(await h.window.AlmdinaCuttingPlanRender.print(h.frm, untrustedOverride,
         {tab: "System", row: h.state.data.plans.system_draft}), true);
-    assert.match(h.writes.at(-1), /B-OWNED-LABEL/);
-    assert.doesNotMatch(h.writes.at(-1), /A-PRIVATE-LABEL/);
+    // Print omits OFFCUT business labels entirely; neither owned nor leaked text may appear.
+    assert.match(h.writes.at(-1), /B-OFFCUT-CUT|B-CUT/);
+    assert.doesNotMatch(h.writes.at(-1), /B-OWNED-LABEL|A-PRIVATE-LABEL|class="dco-offcut-business-context"/);
 
     const beforePending = h.writes.length;
     const release = h.deferIdentity();

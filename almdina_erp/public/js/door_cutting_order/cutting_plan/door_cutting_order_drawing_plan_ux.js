@@ -167,8 +167,10 @@
 			detail &&
 			meta &&
 			can("recalculate_plan") &&
-			detail.actor_holds_operational_role &&
-			isAssignedToCurrentUser(detail.current_assignee) &&
+			(detail.actor_can_operate_current_stage === true
+				|| (detail.actor_can_operate_current_stage === undefined
+					&& detail.actor_holds_operational_role
+					&& isAssignedToCurrentUser(detail.current_assignee))) &&
 			!detail.approved_plan
 		);
 	}

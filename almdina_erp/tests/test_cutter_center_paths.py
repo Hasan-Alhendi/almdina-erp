@@ -15,7 +15,11 @@ import ezdxf
 import pytest
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
-from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import cutter_center_segments
+from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+    classify_saw_center_segments,
+    cutter_center_paths,
+    cutter_center_segments,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import LinerPiece, liner_toolpath_mm, piece_polygon_mm
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
@@ -86,6 +90,31 @@ def _on_line(segment, *, axis, value):
     return abs(start[1] - value) < 0.02 and abs(end[1] - value) < 0.02
 
 
+def _layer_segments(document, layer):
+    segments = []
+    for entity in document.modelspace():
+        if entity.dxf.layer != layer:
+            continue
+        if entity.dxftype() == "LINE":
+            segments.append(
+                (
+                    (entity.dxf.start.x, entity.dxf.start.y),
+                    (entity.dxf.end.x, entity.dxf.end.y),
+                )
+            )
+            continue
+        if entity.dxftype() == "LWPOLYLINE":
+            points = [tuple(point[:2]) for point in entity.get_points("xy")]
+        elif entity.dxftype() == "POLYLINE":
+            points = [(vertex.dxf.location.x, vertex.dxf.location.y) for vertex in entity.vertices]
+        else:
+            continue
+        segments.extend(zip(points, points[1:]))
+        if entity.is_closed and len(points) >= 3:
+            segments.append((points[-1], points[0]))
+    return segments
+
+
 def test_one_door_center_is_radius_outside_not_on_the_finished_edge():
     door = _rect(10, 10, 200, 538)
     centers = _assert_centers_follow_radius([(door, ())], 2.5)
@@ -105,6 +134,46 @@ def test_two_adjacent_doors_share_one_center_and_keep_a_real_gap():
     apart = cutter_center_segments(separated, radius)
     assert len([segment for segment in apart if _on_line(segment, axis="x", value=202.5)]) == 1
     assert len([segment for segment in apart if _on_line(segment, axis="x", value=203.5)]) == 1
+
+
+def test_multi_offset_paths_keep_one_closed_contour_per_adjacent_door():
+    radius = 2.5
+    shapes = [(_rect(10, 10, 200, 500), ()), (_rect(215, 10, 200, 500), ())]
+
+    paths = cutter_center_paths(shapes, radius, board=(0, 0, 1220, 2440))
+
+    assert len(paths) == 2
+    assert all(path.closed for path in paths)
+    assert all(len(path.points) == 4 for path in paths)
+    boxes = []
+    observed = []
+    for path in paths:
+        xs = [point[0] for point in path.points]
+        ys = [point[1] for point in path.points]
+        boxes.append((min(xs), min(ys), max(xs), max(ys)))
+        observed.extend(
+            (path.points[index], path.points[(index + 1) % len(path.points)])
+            for index in range(len(path.points))
+        )
+    assert boxes == [(7.5, 7.5, 212.5, 512.5), (212.5, 7.5, 417.5, 512.5)]
+    assert classify_saw_center_segments(
+        observed,
+        cutter_center_segments(shapes, radius, board=(0, 0, 1220, 2440)),
+    ) == "match"
+
+
+def test_multi_offset_uses_open_fallback_only_for_physical_board_edges():
+    board = (0.0, 0.0, 1220.0, 2440.0)
+
+    paths = cutter_center_paths([(_rect(0, 0, 400, 500), ())], 2.5, board=board)
+
+    assert paths
+    assert all(not path.closed for path in paths)
+    segments = [tuple(path.points) for path in paths]
+    assert not any(_on_line(segment, axis="x", value=-2.5) for segment in segments)
+    assert not any(_on_line(segment, axis="y", value=-2.5) for segment in segments)
+    assert any(_on_line(segment, axis="x", value=402.5) for segment in segments)
+    assert any(_on_line(segment, axis="y", value=502.5) for segment in segments)
 
 
 def test_partial_overlap_keeps_the_union_and_a_gap_stays_open():
@@ -173,13 +242,23 @@ def test_hole_clipped_and_l_contours_offset_from_the_real_ring():
     outer = _rect(0, 0, 100, 100)
     hole = _rect(20, 20, 60, 60)
     nested = _rect(30, 30, 20, 20)
-    _assert_centers_follow_radius([(outer, (hole,)), (nested, ())], 2.5)
+    nested_shapes = [(outer, (hole,)), (nested, ())]
+    _assert_centers_follow_radius(nested_shapes, 2.5)
+    nested_paths = cutter_center_paths(nested_shapes, 2.5)
+    assert len(nested_paths) == 3
+    assert all(path.closed for path in nested_paths)
 
     for position in ("Top Right", "Top Left", "Bottom Right", "Bottom Left"):
         clipped = piece_polygon_mm(LinerPiece("Clipped Corner", 84, 63, position, 54, 23))
         shaped = piece_polygon_mm(LinerPiece("L-Shaped Corner", 40, 40, position, 20.1, 30.1))
         _assert_centers_follow_radius([(clipped, ())], 1.5)
         _assert_centers_follow_radius([(shaped, ())], 1.5)
+        clipped_path = cutter_center_paths([(clipped, ())], 1.5)
+        shaped_path = cutter_center_paths([(shaped, ())], 1.5)
+        assert len(clipped_path) == 1 and clipped_path[0].closed
+        assert len(clipped_path[0].points) == 5
+        assert len(shaped_path) == 1 and shaped_path[0].closed
+        assert len(shaped_path[0].points) == 6
 
     raw_notch = ((0, 0), (199, 0), (199, 301), (400, 301), (400, 400), (0, 400))
     _assert_centers_follow_radius([(raw_notch, ())], 1.5)
@@ -314,9 +393,9 @@ def test_exported_dxf_round_trip_matches_the_reference_offset(tmp_path):
         entity for entity in source.modelspace()
         if entity.dxftype() == "LINE" and entity.dxf.layer == "GEOMETRY"
     ]
-    center_lines = [
+    center_paths = [
         entity for entity in source.modelspace()
-        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
+        if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "CUT_PATH"
     ]
     region_polylines = [
         entity for entity in source.modelspace()
@@ -327,14 +406,19 @@ def test_exported_dxf_round_trip_matches_the_reference_offset(tmp_path):
         if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
     )
     assert geometry_lines
-    assert center_lines
+    assert len(center_paths) == 2
+    assert all(entity.closed for entity in center_paths)
+    assert not [
+        entity for entity in source.modelspace()
+        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
+    ]
     assert region_polylines and all(entity.closed for entity in region_polylines)
     assert liner.closed is False
     shared = [
-        entity for entity in center_lines
-        if abs(entity.dxf.start.x - 212.5) < 0.02 and abs(entity.dxf.end.x - 212.5) < 0.02
+        segment for segment in _layer_segments(source, "CUT_PATH")
+        if _on_line(segment, axis="x", value=212.5)
     ]
-    assert len(shared) == 1
+    assert len(shared) == 2
 
     normalized = rebuild_autocad_dxf(client_path.read_bytes())
     audited = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
@@ -394,10 +478,7 @@ def test_full_board_door_has_no_perimeter_cut_and_the_liner_closes_itself(tmp_pa
     )
     source = ezdxf.readfile(str(client_path))
     modelspace = source.modelspace()
-    assert not [
-        entity for entity in modelspace
-        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
-    ]
+    assert not [entity for entity in modelspace if entity.dxf.layer == "CUT_PATH"]
     geometry = [
         entity for entity in modelspace
         if entity.dxftype() == "LINE" and entity.dxf.layer == "GEOMETRY"
@@ -454,28 +535,25 @@ def test_split_trim_exports_saw_centers_and_reimports(tmp_path):
         env=env,
     )
     source = ezdxf.readfile(str(client_path))
-    cuts = [
-        entity for entity in source.modelspace()
-        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
-    ]
+    cuts = _layer_segments(source, "CUT_PATH")
 
     def vertical(value):
         return [
-            entity for entity in cuts
-            if abs(entity.dxf.start.x - value) < 0.05 and abs(entity.dxf.end.x - value) < 0.05
+            segment for segment in cuts
+            if _on_line(segment, axis="x", value=value)
         ]
 
     def horizontal(value):
         return [
-            entity for entity in cuts
-            if abs(entity.dxf.start.y - value) < 0.05 and abs(entity.dxf.end.y - value) < 0.05
+            segment for segment in cuts
+            if _on_line(segment, axis="y", value=value)
         ]
 
     assert len(vertical(2.5)) == 1
-    assert len(vertical(407.5)) == 1
-    assert len(vertical(812.5)) == 1
+    assert len(vertical(407.5)) == 2
+    assert len(vertical(812.5)) == 2
     assert len(vertical(1217.5)) == 1
-    assert len(horizontal(2.5)) == 1
+    assert len(horizontal(2.5)) == 3
     assert vertical(0) == []
     assert vertical(1220) == []
     geometry = [
@@ -517,28 +595,25 @@ def test_three_millimetre_kerf_trim_exports_and_reimports(tmp_path):
         env=env,
     )
     source = ezdxf.readfile(str(client_path))
-    cuts = [
-        entity for entity in source.modelspace()
-        if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
-    ]
+    cuts = _layer_segments(source, "CUT_PATH")
 
     def vertical(value):
         return [
-            entity for entity in cuts
-            if abs(entity.dxf.start.x - value) < 0.05 and abs(entity.dxf.end.x - value) < 0.05
+            segment for segment in cuts
+            if _on_line(segment, axis="x", value=value)
         ]
 
     def horizontal(value):
         return [
-            entity for entity in cuts
-            if abs(entity.dxf.start.y - value) < 0.05 and abs(entity.dxf.end.y - value) < 0.05
+            segment for segment in cuts
+            if _on_line(segment, axis="y", value=value)
         ]
 
     assert len(vertical(3.5)) == 1
-    assert len(vertical(406.5)) == 1
-    assert len(vertical(809.5)) == 1
+    assert len(vertical(406.5)) == 2
+    assert len(vertical(809.5)) == 2
     assert len(vertical(1212.5)) == 1
-    assert len(horizontal(3.5)) == 1
+    assert len(horizontal(3.5)) == 3
     assert vertical(0) == []
     assert vertical(1220) == []
     geometry = [

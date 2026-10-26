@@ -61,7 +61,7 @@ def _extra_addon_labels(piece: Mapping[str, Any]) -> list[str]:
     return [
         label
         for fieldname, label in (
-            ("extra_double", "دبل قشاط"),
+            ("extra_double", "دبل ضلع"),
             ("extra_full_door_double", "دبل كامل الدرفة"),
             ("extra_liner", "Liner"),
             ("extra_back_groove", "فرزة ظهر"),
@@ -359,7 +359,7 @@ def _customer_invoice_lines(
                 "extra_double",
                 "extra_double_unit_price_usd",
                 "extra_double_total_usd",
-                "دبل قشاط",
+                "دبل ضلع",
             ),
             (
                 "extra_full_door_double",

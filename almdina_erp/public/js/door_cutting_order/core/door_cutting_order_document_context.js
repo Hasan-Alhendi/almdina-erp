@@ -342,6 +342,7 @@
         frm.__almdina_approved_plan_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_actor_is_current_assignee = false;
+        frm.__almdina_actor_can_operate_current_stage = false;
         // Compatibility only: old modules may still read this name, but its
         // value mirrors assignment ownership, never role membership.
         frm.__almdina_actor_holds_stage_role = false;
@@ -395,6 +396,9 @@
         frm.__almdina_stage_context = stage;
         frm.__almdina_stage_type = stage.active_stage_type || null;
         frm.__almdina_actor_is_current_assignee = assigned;
+        frm.__almdina_actor_can_operate_current_stage = stage.actor_can_operate_current_stage !== undefined
+            ? Boolean(stage.actor_can_operate_current_stage)
+            : assigned;
         frm.__almdina_actor_holds_stage_role = assigned;
         frm.__almdina_stage_operational_role = stage.active_stage_operational_role || null;
         frm.__almdina_stage_context_ready = true;
@@ -407,6 +411,7 @@
         frm.__almdina_stage_context = null;
         frm.__almdina_stage_type = null;
         frm.__almdina_actor_is_current_assignee = false;
+        frm.__almdina_actor_can_operate_current_stage = false;
         frm.__almdina_actor_holds_stage_role = false;
         frm.__almdina_stage_operational_role = null;
         frm.__almdina_stage_context_ready = true;
@@ -445,7 +450,8 @@
     function canMutateCurrentStage(frm) {
         if (!frm || !frm.doc) return false;
         if (isStageContextPending(frm)) return false;
-        return isCurrentStageAssignee(frm);
+        if (!frm.doc.current_production_stage) return isCurrentStageAssignee(frm);
+        return Boolean(frm.__almdina_actor_can_operate_current_stage);
     }
 
     // Tuning the cutting algorithm is a Plan capability. During an active route
@@ -502,7 +508,7 @@
         if (isStageContextPending(frm)) {
             return translate("Checking the current stage assignment...");
         }
-        if (isCurrentStageAssignee(frm)) return "";
+        if (canMutateCurrentStage(frm)) return "";
         const stage = frm.__almdina_stage_context || {};
         if (stage.active_stage_assigned_to) {
             return translate("You can view this order only. The current stage is assigned to another user.");
@@ -703,6 +709,7 @@
                 ) {
                     frm.__almdina_stage_context = null;
                     frm.__almdina_actor_is_current_assignee = false;
+                    frm.__almdina_actor_can_operate_current_stage = false;
                     frm.__almdina_actor_holds_stage_role = false;
                     frm.__almdina_stage_context_ready = true;
                     notifyStageContextReady(frm);

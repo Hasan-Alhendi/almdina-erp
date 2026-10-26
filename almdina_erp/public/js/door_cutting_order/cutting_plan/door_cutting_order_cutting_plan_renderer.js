@@ -97,6 +97,27 @@
         return key;
     }
 
+    // Domain nesting depth is capped at 2. Paint nested guests above their Glass
+    // hosts so adversarial snapshot order cannot hide doors inside openings.
+    const MAX_GLASS_NEST_PAINT_DEPTH = 2;
+
+    function glassNestPaintDepth(piece, piecesById) {
+        let depth = 0;
+        let hostId = piece && piece.glass_host_piece_id;
+        const seen = new Set();
+        while (hostId !== undefined && hostId !== null && hostId !== "") {
+            const key = String(hostId);
+            if (seen.has(key) || depth >= MAX_GLASS_NEST_PAINT_DEPTH) {
+                break;
+            }
+            seen.add(key);
+            depth += 1;
+            const host = piecesById.get(Number(hostId));
+            hostId = host && host.glass_host_piece_id;
+        }
+        return depth;
+    }
+
     function physicalCutQuantity(row) {
         const extra = window.AlmdinaExtraDoorAddonsUX;
         if (extra && typeof extra.physicalCutQuantity === "function") {
@@ -269,6 +290,306 @@
         return html;
     }
 
+    function double_edge_sides(piece) {
+        if (!piece || !Number(piece.extra_double)) return [];
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.normalizeSideSelection === "function") {
+            return liner.normalizeSideSelection(
+                piece.extra_double_reference_sides,
+                piece.piece_type || "Regular",
+                true,
+            );
+        }
+        const available = ["edge_width_top", "edge_width_bottom", "edge_long_left", "edge_long_right"];
+        if (piece.piece_type === "Clipped Corner") available.push("edge_break", "edge_break_only");
+        if (piece.piece_type === "L-Shaped Corner") available.push("edge_break");
+        if (piece.extra_double_reference_sides) {
+            try {
+                const selected = JSON.parse(piece.extra_double_reference_sides);
+                if (Array.isArray(selected)) return available.filter(side => selected.includes(side));
+            } catch (error) {
+                return [];
+            }
+        }
+        return available;
+    }
+
+    function selectionEdgeState(sides) {
+        const selected = new Set(sides || []);
+        return {
+            edge_width_top: selected.has("edge_width_top") ? 1 : 0,
+            edge_width_bottom: selected.has("edge_width_bottom") ? 1 : 0,
+            edge_long_left: selected.has("edge_long_left") ? 1 : 0,
+            edge_long_right: selected.has("edge_long_right") ? 1 : 0,
+            edge_break: selected.has("edge_break") ? 1 : 0,
+            edge_break_only: selected.has("edge_break_only") ? 1 : 0,
+        };
+    }
+
+    function visualFlagsFromState(state) {
+        const source = state || {};
+        return {
+            left: Boolean(source.edge_long_left),
+            right: Boolean(source.edge_long_right),
+            top: Boolean(source.edge_width_top),
+            bottom: Boolean(source.edge_width_bottom),
+            edgeBreak: Boolean(source.edge_break),
+            edgeBreakOnly: Boolean(source.edge_break_only),
+        };
+    }
+
+    function rotateVisualFlags(flags, turns) {
+        let current = flags;
+        const count = ((Number(turns) % 4) + 4) % 4;
+        for (let turn = 0; turn < count; turn += 1) {
+            current = {
+                left: current.bottom,
+                top: current.left,
+                right: current.top,
+                bottom: current.right,
+                edgeBreak: current.edgeBreak,
+                edgeBreakOnly: current.edgeBreakOnly,
+            };
+        }
+        return current;
+    }
+
+    function double_edge_flags(piece, geometryModel) {
+        const sides = double_edge_sides(piece);
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.sideFlagsForSelection === "function") {
+            const rotated = geometryModel && geometryModel.source === "dxf"
+                ? false
+                : Boolean(piece && piece.rotated);
+            const raw = liner.sideFlagsForSelection({
+                pieceType: piece && piece.piece_type,
+            }, sides, rotated);
+            let flags = visualFlagsFromState(raw);
+            if (geometryModel && geometryModel.source === "dxf"
+                && Number.isInteger(piece.rotation_quarter_turns)) {
+                flags = rotateVisualFlags(flags, piece.rotation_quarter_turns);
+            }
+            return flags;
+        }
+        return piece_edge_flags({
+            ...piece,
+            ...selectionEdgeState(sides),
+        }, geometryModel);
+    }
+
+    const DOUBLE_EDGE_CORNER_SIDES = Object.freeze([
+        Object.freeze({ flag: "left", fieldname: "edge_long_left" }),
+        Object.freeze({ flag: "right", fieldname: "edge_long_right" }),
+        Object.freeze({ flag: "top", fieldname: "edge_width_top" }),
+        Object.freeze({ flag: "bottom", fieldname: "edge_width_bottom" }),
+        Object.freeze({ flag: "edgeBreak", fieldname: "edge_break" }),
+        Object.freeze({ flag: "edgeBreakOnly", fieldname: "edge_break_only" }),
+    ]);
+
+    const DOUBLE_EDGE_WITH_BAND_INSETS = Object.freeze([8, 11]);
+    const DOUBLE_EDGE_WITHOUT_BAND_INSETS = Object.freeze([4.5, 7.5]);
+    // Preview draws the red band at 4px and these purple offsets in the same
+    // pixel frame. Corner plan bands use the 100×100 default inset
+    // (min(width, height) * 0.035). Straight vector bands sit on viewBox unit 1.
+    const PREVIEW_BAND_INSET_PX = 4;
+    const CORNER_BAND_VIEWBOX_INSET = 3.5;
+    const REGULAR_BAND_VIEWBOX_INSET = 1;
+
+    function planPiecePixels(piece, geometryModel, renderContext) {
+        const scalePxPerCm = Number(renderContext && renderContext.scalePxPerCm);
+        const placement = geometryModel && geometryModel.placement;
+        const widthCm = Number(placement && placement.widthCm)
+            || Number(piece && piece.w)
+            || Number(piece && piece.width_cm);
+        const heightCm = Number(placement && placement.heightCm)
+            || Number(piece && piece.h)
+            || Number(piece && piece.length_cm);
+        if (!(scalePxPerCm > 0) || !(widthCm > 0) || !(heightCm > 0)) return null;
+        return {
+            widthPx: widthCm * scalePxPerCm,
+            heightPx: heightCm * scalePxPerCm,
+        };
+    }
+
+    function doubleEdgePreviewInsets(hasNormalBand) {
+        return hasNormalBand ? DOUBLE_EDGE_WITH_BAND_INSETS : DOUBLE_EDGE_WITHOUT_BAND_INSETS;
+    }
+
+    function doubleEdgeViewBoxInsets(hasNormalBand, axis, geometryModel, renderContext) {
+        const previewInsets = doubleEdgePreviewInsets(hasNormalBand);
+        const pixels = planPiecePixels(null, geometryModel, renderContext);
+        const axisPx = !pixels ? 0 : (axis === "horizontal" ? pixels.heightPx : pixels.widthPx);
+        if (!(axisPx > 0)) {
+            return previewInsets.map(offsetPx => offsetPx * (REGULAR_BAND_VIEWBOX_INSET / PREVIEW_BAND_INSET_PX));
+        }
+        return previewInsets.map(offsetPx => {
+            const bandPx = (REGULAR_BAND_VIEWBOX_INSET / 100) * axisPx;
+            const targetPx = hasNormalBand
+                ? bandPx + (offsetPx - PREVIEW_BAND_INSET_PX)
+                : offsetPx;
+            return (targetPx / axisPx) * 100;
+        });
+    }
+
+    function cornerViewBoxInsets(hasNormalBand, pixels) {
+        const previewInsets = doubleEdgePreviewInsets(hasNormalBand);
+        const shortPx = pixels
+            ? Math.min(Number(pixels.widthPx) || 0, Number(pixels.heightPx) || 0)
+            : 0;
+        return previewInsets.map(offsetPx => {
+            // Same ratio as the preview (8px and 11px against a 4px band),
+            // expressed in the corner band's own 100×100 viewBox.
+            const proportional = offsetPx * (CORNER_BAND_VIEWBOX_INSET / PREVIEW_BAND_INSET_PX);
+            if (!(shortPx > 0)) return proportional;
+            // On a short side the percentage gap can fall under the stroke.
+            // Keep at least the preview's pixel gap, measured on that side.
+            const extraPx = offsetPx - PREVIEW_BAND_INSET_PX;
+            const clearance = CORNER_BAND_VIEWBOX_INSET + (extraPx * (100 / shortPx));
+            return Math.max(proportional, clearance);
+        });
+    }
+
+    function doubleEdgeCornerMarkup(geometry, sidePiece, insetPx) {
+        return geometry.edgeBandSvgMarkup(sidePiece, 100, 100, {
+            inheritStroke: false,
+            color: EXTRA_DOUBLE_MARK_COLOR,
+            strokeWidth: DOUBLE_EDGE_STROKE_WIDTH,
+            insetPx,
+            endTrimPx: DOUBLE_EDGE_END_TRIM,
+        });
+    }
+
+    function orientedCornerPiece(piece, state, geometryModel) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (geometryModel && geometryModel.source === "dxf") {
+            if (!geometry || typeof geometry.pieceForQuarterTurns !== "function") return null;
+            return geometry.pieceForQuarterTurns(
+                { ...piece, ...state },
+                piece.corner_rotation_quarter_turns,
+                piece.corner_mirrored,
+            );
+        }
+        if (piece && piece.rotated) {
+            return {
+                ...piece,
+                ...state,
+                edge_width_top: state.edge_long_left,
+                edge_width_bottom: state.edge_long_right,
+                edge_long_right: state.edge_width_top,
+                edge_long_left: state.edge_width_bottom,
+            };
+        }
+        return { ...piece, ...state };
+    }
+
+    function cornerEdgePieceForSide(edgePiece, fieldname) {
+        const result = { ...edgePiece };
+        DOUBLE_EDGE_CORNER_SIDES.forEach(side => {
+            result[side.fieldname] = 0;
+        });
+        result[fieldname] = 1;
+        if (fieldname === "edge_break") result.edge_break_only = 0;
+        if (fieldname === "edge_break_only") result.edge_break = 0;
+        return result;
+    }
+
+    function render_piece_double_edge_lines(piece, geometryModel = null, clipId = "", renderContext = null) {
+        const sides = double_edge_sides(piece);
+        if (!sides.length) return "";
+        const flags = double_edge_flags(piece, geometryModel);
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const isCornerPiece = Boolean(
+            geometry
+            && ((typeof geometry.isCornerCut === "function" && geometry.isCornerCut(piece))
+                || (typeof geometry.isClipped === "function" && geometry.isClipped(piece)))
+        );
+        if (isCornerPiece && geometry && typeof geometry.edgeBandSvgMarkup === "function") {
+            const orientedDouble = orientedCornerPiece(piece, selectionEdgeState(sides), geometryModel);
+            const orientedNormal = orientedCornerPiece(piece, {
+                edge_width_top: piece.edge_width_top,
+                edge_width_bottom: piece.edge_width_bottom,
+                edge_long_left: piece.edge_long_left,
+                edge_long_right: piece.edge_long_right,
+                edge_break: piece.edge_break,
+                edge_break_only: piece.edge_break_only,
+            }, geometryModel);
+            if (!orientedDouble || !orientedNormal) return "";
+            const piecePixels = planPiecePixels(piece, geometryModel, renderContext);
+            const markup = DOUBLE_EDGE_CORNER_SIDES
+                .filter(({ fieldname }) => Boolean(orientedDouble[fieldname]))
+                .map(({ fieldname }) => {
+                    const sidePiece = cornerEdgePieceForSide(orientedDouble, fieldname);
+                    const insets = cornerViewBoxInsets(Boolean(orientedNormal[fieldname]), piecePixels);
+                    return insets
+                        .map(inset => {
+                            const lines = doubleEdgeCornerMarkup(geometry, sidePiece, inset);
+                            return lines
+                                ? `<g data-double-edge-side="${fieldname}">${lines}</g>`
+                                : "";
+                        })
+                        .filter(Boolean)
+                        .join("");
+                })
+                .join("");
+            if (!markup) return "";
+            const pathData = geometryModel && geometryModel.geometry && geometryModel.geometry.pathData;
+            const clipDef = pathData
+                ? `<defs><clipPath id="${clipId}-double"><path d="${pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs>`
+                : "";
+            const clipAttr = pathData ? ` clip-path="url(#${clipId}-double)"` : "";
+            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;">${clipDef}<g${clipAttr}>${markup}</g></svg>`;
+        }
+
+        const color = EXTRA_DOUBLE_MARK_COLOR;
+        const thickness = `${DOUBLE_EDGE_STROKE_WIDTH}px`;
+        const start = 16.667;
+        const length = 66.666;
+        if (geometryModel && geometryModel.vector) {
+            const lines = [];
+            const addPair = (side, active, axis) => {
+                if (!active) return;
+                const normal = piece_edge_flags(piece, geometryModel);
+                const hasNormal = Boolean(normal[axis]);
+                const insets = doubleEdgeViewBoxInsets(
+                    hasNormal,
+                    axis === "top" || axis === "bottom" ? "horizontal" : "vertical",
+                    geometryModel,
+                    renderContext,
+                );
+                insets.forEach((inset, index) => {
+                    const line = axis === "left"
+                        ? `x1="${inset}" y1="${start}" x2="${inset}" y2="${start + length}"`
+                        : axis === "right"
+                            ? `x1="${100 - inset}" y1="${start}" x2="${100 - inset}" y2="${start + length}"`
+                            : axis === "top"
+                                ? `x1="${start}" y1="${inset}" x2="${start + length}" y2="${inset}"`
+                                : `x1="${start}" y1="${100 - inset}" x2="${start + length}" y2="${100 - inset}"`;
+                    lines.push(`<line data-double-edge-side="${side}" data-double-edge-line-index="${index}" ${line}/>`);
+                });
+            };
+            addPair("edge_long_left", flags.left, "left");
+            addPair("edge_long_right", flags.right, "right");
+            addPair("edge_width_top", flags.top, "top");
+            addPair("edge_width_bottom", flags.bottom, "bottom");
+            if (!lines.length) return "";
+            return `<svg class="dco-piece-double-edge-svg" data-double-edge-lines="1" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:4;overflow:hidden;pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;"><defs><clipPath id="${clipId}-double"><path d="${geometryModel.geometry.pathData}" fill-rule="evenodd" clip-rule="evenodd"/></clipPath></defs><g clip-path="url(#${clipId}-double)" fill="none" stroke="${color}" stroke-width="${DOUBLE_EDGE_STROKE_WIDTH}" vector-effect="non-scaling-stroke">${lines.join("")}</g></svg>`;
+        }
+        let html = `<span data-double-edge-lines="1" style="position:absolute;inset:0;z-index:4;pointer-events:none;">`;
+        const addHtmlPair = (side, active, cssSide, border, normal) => {
+            if (!active) return;
+            const insets = normal ? DOUBLE_EDGE_WITH_BAND_INSETS : DOUBLE_EDGE_WITHOUT_BAND_INSETS;
+            insets.forEach((inset, index) => {
+                html += `<span data-double-edge-side="${side}" data-double-edge-line-index="${index}" style="position:absolute;${cssSide}:${inset}px;${cssSide === "left" || cssSide === "right" ? `top:${start}%;height:${length}%;` : `left:${start}%;width:${length}%;`}border-${border}:${thickness} solid ${color};"></span>`;
+            });
+        };
+        const normalFlags = piece_edge_flags(piece, geometryModel);
+        addHtmlPair("edge_long_left", flags.left, "left", "left", normalFlags.left);
+        addHtmlPair("edge_long_right", flags.right, "right", "right", normalFlags.right);
+        addHtmlPair("edge_width_top", flags.top, "top", "top", normalFlags.top);
+        addHtmlPair("edge_width_bottom", flags.bottom, "bottom", "bottom", normalFlags.bottom);
+        return `${html}</span>`;
+    }
+
     function print_piece_number(value) {
         const label = String(value || "—").trim();
         const primary = label.split(".")[0].trim();
@@ -281,6 +602,8 @@
         recessed_handle_cutout: "#c45c12",
     });
     const EXTRA_DOUBLE_MARK_COLOR = "#5a2d82";
+    const DOUBLE_EDGE_STROKE_WIDTH = 1.4;
+    const DOUBLE_EDGE_END_TRIM = 6;
     const EXTRA_FULL_DOOR_DOUBLE_MARK_COLOR = "#1a5f4a";
     const EXTRA_ADDON_LEGEND_ITEMS = Object.freeze([
         Object.freeze({ fieldname: "extra_liner", label: "Liner", overlayKind: "liner" }),
@@ -290,7 +613,7 @@
             label: "Recessed handle",
             overlayKind: "recessed_handle_cutout",
         }),
-        Object.freeze({ fieldname: "extra_double", label: "Edge banding double", addonKind: "double" }),
+        Object.freeze({ fieldname: "extra_double", label: "Double Edge", addonKind: "double" }),
         Object.freeze({
             fieldname: "extra_full_door_double",
             label: "Full door double",
@@ -336,6 +659,10 @@
         return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 5 H26" fill="none" stroke="${escape_html(color)}" stroke-width="1" stroke-dasharray="3 2.2" stroke-linecap="round"/></svg>`;
     }
 
+    function extraDoubleLegendSwatch() {
+        return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><path d="M2 3.5 H26 M2 6.5 H26" fill="none" stroke="${EXTRA_DOUBLE_MARK_COLOR}" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+    }
+
     function extraHandleLegendSwatch() {
         const color = EXTRA_OVERLAY_STROKE_BY_KIND.recessed_handle_cutout;
         return `<svg class="dco-extra-addon-legend-swatch" viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><rect x="6" y="2.2" width="16" height="5.6" fill="none" stroke="${color}" stroke-width="0.9"/></svg>`;
@@ -350,6 +677,7 @@
     }
 
     function extraAddonLegendSwatch(item) {
+        if (item.addonKind === "double") return extraDoubleLegendSwatch();
         if (item.overlayKind === "recessed_handle_cutout") return extraHandleLegendSwatch();
         if (item.overlayKind) {
             return extraOverlayStrokeSample(EXTRA_OVERLAY_STROKE_BY_KIND[item.overlayKind]);
@@ -363,6 +691,7 @@
             if (item.addonKind) {
                 return `
             <span class="dco-extra-addon-legend-item">
+                ${item.addonKind === "double" ? extraAddonLegendSwatch(item) : ""}
                 ${extraAddonTextMark(item.addonKind, label)}
             </span>`;
             }
@@ -405,16 +734,6 @@
                 )
             ));
         }
-        if (flags.double) {
-            marks.push(extraAddonMarkPlate(
-                "top-end",
-                "double",
-                extraAddonTextMark(
-                    "double",
-                    extraAddonLegendLabel("extra_double")
-                )
-            ));
-        }
         if (!marks.length) return "";
         return `<div class="dco-extra-addon-marks" aria-hidden="true" style="position:absolute;inset:0;z-index:5;pointer-events:none;">${marks.join("")}</div>`;
     }
@@ -445,25 +764,30 @@
     function overlayHandleRect(local) {
         const xs = local.map(point => point[0]);
         const ys = local.map(point => point[1]);
-        let minX = Math.min(...xs);
-        let maxX = Math.max(...xs);
-        let minY = Math.min(...ys);
-        let maxY = Math.max(...ys);
-        const minSize = 1.1;
-        if (maxX - minX < minSize) {
-            const mid = (minX + maxX) / 2;
-            minX = mid - (minSize / 2);
-            maxX = mid + (minSize / 2);
-        }
-        if (maxY - minY < minSize) {
-            const mid = (minY + maxY) / 2;
-            minY = mid - (minSize / 2);
-            maxY = mid + (minSize / 2);
-        }
-        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        return {
+            x: minX,
+            y: minY,
+            w: Math.max(0, maxX - minX),
+            h: Math.max(0, maxY - minY),
+        };
     }
 
     function pieceWithLinerSpec(frm, piece) {
+        // A plan snapshot is frozen manufacturing evidence. Do not let later
+        // edits in the live order rewrite its machining path in Preview while
+        // DXF continues to consume the persisted piece. Old snapshots without
+        // add-on fields retain the order-row compatibility fallback below.
+        if (piece && [
+            "extra_liner",
+            "extra_back_groove",
+            "extra_recessed_handle_cutout",
+        ].some(field => Object.prototype.hasOwnProperty.call(piece, field))) {
+            return piece;
+        }
         const row = extraOrderRowForPiece(frm, piece);
         if (!row) return piece;
         const engine = window.AlmdinaMachiningOverlay;
@@ -496,6 +820,26 @@
             copy.clipped_corner_length_cm = notch.cutLengthCm;
         }
         return copy;
+    }
+
+    function pieceWithDoubleSpec(frm, piece) {
+        if (piece && ["extra_double", "extra_double_reference_sides"].some(field => (
+            Object.prototype.hasOwnProperty.call(piece, field)
+        ))) return piece;
+        const row = extraOrderRowForPiece(frm, piece);
+        if (!row) return piece;
+        return Object.assign({}, piece, {
+            extra_double: row.extra_double,
+            extra_double_reference_sides: row.extra_double_reference_sides,
+        });
+    }
+
+    function planCutterDiameterMm(plan, frm) {
+        const millimetres = num(plan && plan.kerf_mm);
+        if (millimetres > 0) return millimetres;
+        const centimetres = num(plan && plan.kerf_cm);
+        if (centimetres > 0) return centimetres * 10;
+        return num(frm && frm.doc && frm.doc.kerf_mm);
     }
 
     function drawingOverlays(piece) {
@@ -533,6 +877,10 @@
     });
 
     function samePlacedPiece(left, right) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.samePlacedPiece === "function") {
+            return liner.samePlacedPiece(left, right);
+        }
         if (!left || !right) return false;
         if (left === right) return true;
         if (left.id != null && right.id != null && String(left.id) !== "" && String(left.id) === String(right.id)) {
@@ -544,8 +892,55 @@
             && Number(left.y) === Number(right.y);
     }
 
+    function overlayObstacles(sheet, piece) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.sheetObstaclesMm === "function") {
+            return liner.sheetObstaclesMm(sheet, piece);
+        }
+        return (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
+            const geometry = liner && typeof liner.obstacleGeometryMm === "function"
+                ? liner.obstacleGeometryMm(other)
+                : null;
+            const polygon = geometry && Array.isArray(geometry.outer)
+                ? geometry.outer
+                : (liner && typeof liner.obstaclePolygonMm === "function"
+                    ? liner.obstaclePolygonMm(other)
+                    : (liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : []));
+            if (polygon.length >= 3) return { polygon, holes: (geometry && geometry.holes) || [] };
+            return {
+                minX: num(other.x) * 10,
+                minY: num(other.y) * 10,
+                maxX: (num(other.x) + num(other.w)) * 10,
+                maxY: (num(other.y) + num(other.h)) * 10,
+            };
+        });
+    }
+
+    function logLinerConflict(piece, path, details) {
+        console.error("[liner-extension-conflict]", {
+            host: {
+                pieceId: piece && piece.id,
+                label: String((piece && piece.label) || ""),
+                positionCm: {
+                    x: num(piece && piece.x),
+                    y: num(piece && piece.y),
+                    w: num(piece && piece.w),
+                    h: num(piece && piece.h),
+                },
+            },
+            neighbour: details && details.obstacle,
+            linerPathMm: path.map(point => point.slice()),
+            minimumDistanceMm: details && details.minimumDistanceMm,
+            cutterRadiusMm: details && details.cutterRadiusMm,
+            rejectionThresholdMm: details && details.rejectionThresholdMm,
+            rejectCondition: details && details.rejectCondition,
+            segmentIndex: details && details.segmentIndex,
+        });
+    }
+
     function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
         const liner = window.AlmdinaLinerGeometry;
+        const cutterMm = num(frame && frame.cutterMm) || num(piece && piece.kerf_mm);
         const kept = overlays.filter(overlay => !(overlay && overlay.geometry && overlay.geometry.toolpath));
         const engine = window.AlmdinaMachiningOverlay;
         if (engine && typeof engine.syntheticOverlays === "function" && sheet && frame) {
@@ -558,18 +953,9 @@
             };
             const tools = engine.syntheticOverlays(Object.assign({}, piece, {
                 board,
-                kerf_mm: num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                kerf_mm: cutterMm,
             }));
-            const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
-                const polygon = liner && typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
-                if (polygon.length >= 3) return { polygon };
-                return {
-                    minX: num(other.x) * 10,
-                    minY: num(other.y) * 10,
-                    maxX: (num(other.x) + num(other.w)) * 10,
-                    maxY: (num(other.y) + num(other.h)) * 10,
-                };
-            });
+            const obstacles = overlayObstacles(sheet, piece);
             const result = kept.slice();
             tools.forEach(tool => {
                 if (!tool) return;
@@ -578,13 +964,16 @@
                     return;
                 }
                 if (liner && typeof liner.extensionConflict === "function" && tool.geometry) {
+                    let conflictDetails = null;
                     const conflict = liner.extensionConflict(
                         tool.geometry.path,
-                        num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+                        cutterMm,
                         board,
-                        obstacles
+                        obstacles,
+                        details => { conflictDetails = details; }
                     );
                     if (conflict) {
+                        logLinerConflict(piece, tool.geometry.path, conflictDetails);
                         result.push({ kind: tool.kind, layer: tool.layer, synthetic: true, error: conflict });
                         return;
                     }
@@ -606,25 +995,23 @@
         if (tool.error) {
             return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
         }
-        if (typeof liner.extensionConflict !== "function" || !tool.geometry) return kept;
-        const obstacles = (sheet.pieces || []).filter(other => !samePlacedPiece(other, piece)).map(other => {
-            const polygon = typeof liner.placedPolygonMm === "function" ? liner.placedPolygonMm(other) : [];
-            if (polygon.length >= 3) return { polygon };
-            return {
-                minX: num(other.x) * 10,
-                minY: num(other.y) * 10,
-                maxX: (num(other.x) + num(other.w)) * 10,
-                maxY: (num(other.y) + num(other.h)) * 10,
-            };
-        });
+        if (typeof liner.extensionConflict !== "function" || !tool.geometry) {
+            return kept.concat(tool);
+        }
+        const obstacles = overlayObstacles(sheet, piece);
+        let conflictDetails = null;
         const conflict = liner.extensionConflict(
             tool.geometry.path,
-            num(frm && frm.doc && frm.doc.kerf_mm) || num(piece && piece.kerf_mm),
+            cutterMm,
             board,
-            obstacles
+            obstacles,
+            details => { conflictDetails = details; }
         );
-        if (!conflict) return kept;
-        return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
+        if (conflict) {
+            logLinerConflict(piece, tool.geometry.path, conflictDetails);
+            return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: conflict });
+        }
+        return kept.concat(tool);
     }
 
     function render_piece_overlays(frm, piece, geometryModel, sheet, frame) {
@@ -671,14 +1058,15 @@
             const isToolpath = Boolean(geometry && geometry.toolpath);
             if (isToolpath) return "";
             if (kind === "recessed_handle_cutout") {
+                const handleAttrs = `data-overlay-kind="${escape_html(kind)}" data-overlay-layer="${escape_html(layer)}" data-overlay-index="${index}" fill="rgba(196,92,18,0.16)" stroke="${stroke}" vector-effect="non-scaling-stroke"`;
                 if (axisAlignedPolygon(local)) {
                     const box = overlayHandleRect(local);
-                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                    return `<rect class="dco-extra-overlay-path dco-extra-overlay-handle" ${handleAttrs} x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" stroke-width="0.65" stroke-linejoin="miter"/>`;
                 }
                 const outline = local
                     .map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point[0]} ${point[1]}`)
                     .join(" ") + (closed ? " Z" : "");
-                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${attrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
+                return `<path class="dco-extra-overlay-path dco-extra-overlay-handle" ${handleAttrs} d="${outline}" stroke-width="0.65" stroke-linejoin="miter"/>`;
             }
             const machiningKind = kind === "liner" || kind === "back_groove";
             const strokePoints = machiningKind ? overlaySingleLine(local, closed) : local;
@@ -868,7 +1256,7 @@
         return ["right", "left", "top", "bottom"].filter(edge => Math.abs(margins[edge]) <= 0.001);
     }
 
-    function sheetBoardFrame(plan, sheet) {
+    function sheetBoardFrame(plan, sheet, frm) {
         const fullW = num(sheet && sheet.full_width_cm) || num(plan.full_board_width_cm);
         const fullH = num(sheet && sheet.full_length_cm) || num(plan.full_board_length_cm);
         const usableW = num(sheet && sheet.usable_width_cm) || num(sheet && sheet.w) || num(plan.usable_board_width_cm) || fullW;
@@ -890,6 +1278,7 @@
             insetY,
             innerW: innerW > 0 ? innerW : usableW,
             innerH: innerH > 0 ? innerH : usableH,
+            cutterMm: planCutterDiameterMm(plan, frm),
         };
     }
 
@@ -935,8 +1324,9 @@
             const sheet_used_area_m2 = round((sheet.pieces || []).reduce((sum, p) => sum + num(p.area_m2), 0), 3);
             const sheet_waste_area_m2 = round(Math.max(0, board_area_m2 - sheet_used_area_m2), 3);
             const sheet_waste_percent = board_area_m2 ? round((sheet_waste_area_m2 / board_area_m2) * 100, 2) : 0;
-            const frame = sheetBoardFrame(plan, sheet);
+            const frame = sheetBoardFrame(plan, sheet, frm);
             const board_height_px = Math.max(260, Math.round(board_width_px * (frame.drawH / frame.drawW)));
+            const planScalePxPerCm = board_width_px / Math.max(frame.drawW, 0.001);
             const usableLeft = frame.drawW ? (frame.insetX / frame.drawW) * 100 : 0;
             const usableTop = frame.drawH ? (frame.insetY / frame.drawH) * 100 : 0;
             const usableWidth = frame.drawW ? (frame.innerW / frame.drawW) * 100 : 100;
@@ -962,12 +1352,19 @@
                         <div class="dco-usable-sheet" style="position:absolute;z-index:1;left:${usableLeft}%;top:${usableTop}%;width:${usableWidth}%;height:${usableHeight}%;box-sizing:border-box;overflow:visible;">
             `;
 
-            (sheet.pieces || []).forEach(piece => {
+            const sheetPieces = sheet.pieces || [];
+            const piecesById = new Map();
+            sheetPieces.forEach(piece => {
+                if (piece && piece.id != null && piece.id !== "") {
+                    piecesById.set(Number(piece.id), piece);
+                }
+            });
+            sheetPieces.forEach(piece => {
                 const geometry = window.AlmdinaCuttingPlanPieceGeometry;
                 if (!geometry || typeof geometry.resolve !== "function") {
                     throw new Error("Canonical cutting-plan piece geometry is unavailable");
                 }
-                const manufacturingPiece = pieceWithLinerSpec(frm, piece);
+                const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));
                 const geometryModel = geometry.resolve(manufacturingPiece);
                 const placement = geometryModel.placement;
                 const left = (num(placement.xCm) / frame.usableW) * 100;
@@ -982,6 +1379,7 @@
                 const exactSpecial = piece.piece_type === "Special"
                     && geometryModel.exact;
                 const shaped = geometryModel.vector;
+                const nestDepth = glassNestPaintDepth(piece, piecesById);
                 const shapeOutline = shaped
                     ? `<svg class="dco-shaped-piece-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible"><path d="${geometryModel.geometry.pathData}" fill="${exactSpecial ? "#ffe5ad" : "#fff0c7"}" fill-rule="evenodd" clip-rule="evenodd" stroke="${exactSpecial ? "#7a4c13" : "#8a5700"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`
                     : "";
@@ -991,13 +1389,23 @@
                 const clipId = `dco-clip-${sheet.sheet_no || 0}-${piece.id || piece.label || 0}-${geometryModel.geometryIdentity}`
                     .replace(/[^a-zA-Z0-9_-]/g, "-");
                 const edgeLines = render_piece_edge_lines(manufacturingPiece, geometryModel, clipId);
+                const doubleEdgeLines = render_piece_double_edge_lines(
+                    manufacturingPiece,
+                    geometryModel,
+                    clipId,
+                    { scalePxPerCm: planScalePxPerCm },
+                );
+                const hostAttr = piece.glass_host_piece_id != null && piece.glass_host_piece_id !== ""
+                    ? ` data-glass-host="${escape_html(piece.glass_host_piece_id)}"`
+                    : "";
 
                 html += `
-                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
+                    <div class="dco-piece ${piece.piece_type === "Special" ? "dco-special-raw-piece" : ""} ${exactSpecial ? "dco-special-exact-piece" : ""} ${clipped ? "dco-clipped-corner-piece" : ""} ${shaped ? "dco-vector-piece" : ""}" data-piece-type="${escape_html(piece.piece_type || "Regular")}" data-geometry-source="${escape_html(geometryModel.source)}" data-geometry-id="${escape_html(geometryModel.geometryIdentity)}" data-nest-depth="${nestDepth}"${hostAttr} style="position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;z-index:${2 + nestDepth};${pieceStyle}color:#111;overflow:visible;padding:2px;font-size:10px;line-height:1.2;text-align:center;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
                         ${shapeOutline}
                         ${render_piece_overlays(frm, manufacturingPiece, geometryModel, sheet, frame)}
                         ${edgeLines}
-                        ${render_piece_addon_marks(frm, piece)}
+                        ${doubleEdgeLines}
+                        ${render_piece_addon_marks(frm, manufacturingPiece)}
                         ${render_piece_label(piece, geometryModel)}
                     </div>
                 `;
@@ -1089,19 +1497,51 @@
     }
 
     function printOrderMetaHtml(frm, plan, totalSheets, source) {
+        // Plan name / revision stay in the verified print source for freshness
+        // checks, but are intentionally omitted from the printed header.
         const items = [
             [translate("Order number"), frm.doc.name || "—"],
-            [translate("Plan name"), source.planName],
-            [translate("Plan revision"), source.revision == null ? "—" : source.revision],
             [translate("Customer name"), frm.doc.customer || "—"],
             [translate("Board color"), frm.doc.board_description || "—"],
             [translate("Board count"), totalSheets],
             [translate("Piece count"), requestedPieceCount(frm)],
             [translate("Board size"), printBoardSize(frm, plan)],
         ];
+        if (source && source.displayContext === "historical") {
+            const statusLabel = source.planStatus === "Cancelled"
+                ? translate("Historical plan: Cancelled")
+                : source.planStatus === "Superseded"
+                    ? translate("Historical plan: Superseded")
+                    : source.planStatus === "Approved"
+                        ? translate("Historical plan: Approval is no longer current")
+                        : translate("Historical plan");
+            items.splice(2, 0, [translate("Plan status"), statusLabel]);
+        }
         return `<div class="dco-print-order-meta">${items.map(([label, value]) => `
             <div><b>${escape_html(label)}</b><span>${escape_html(value)}</span></div>
         `).join("")}</div>`;
+    }
+
+    function stripPrintOnlyBoardChrome(card) {
+        // OFFCUT source/execution labels remain in the in-app preview; print
+        // drops them entirely so they cannot occupy space or leak into PDF text.
+        card.querySelectorAll(".dco-offcut-business-context").forEach(node => {
+            if (typeof node.remove === "function") {
+                node.remove();
+                return;
+            }
+            if (node.parentNode && typeof node.parentNode.removeChild === "function") {
+                node.parentNode.removeChild(node);
+            }
+        });
+        return card;
+    }
+
+    function printCardHtml(card) {
+        return String(card.outerHTML || "").replace(
+            /<div class="dco-offcut-business-context\b[^>]*>[\s\S]*?<\/div>/g,
+            ""
+        );
     }
 
     function boardAspectFromCards(cards, frm, plan) {
@@ -1148,6 +1588,7 @@
 
         let boardIndex = 0;
         cards.forEach(card => {
+            stripPrintOnlyBoardChrome(card);
             const board = card.querySelector(".dco-sheet-board");
             const title = card.querySelector(".dco-sheet-title");
             const isOffcut = card.dataset.resourceKind === "OFFCUT";
@@ -1190,11 +1631,12 @@
                 const rowCards = cards.slice(cardOffset, cardOffset + rowSize);
                 cardOffset += rowSize;
                 const rowHtml = rowCards.map(card => {
+                    stripPrintOnlyBoardChrome(card);
                     const title = card.querySelector(".dco-sheet-title");
                     const isOffcut = card.dataset.resourceKind === "OFFCUT";
                     if (!isOffcut) globalBoardIndex += 1;
                     if (title) title.innerHTML = `<div class="dco-print-sheet-number">${isOffcut ? htmlText("Offcut") : htmlText("Board {0}", [globalBoardIndex])}</div>`;
-                    return card.outerHTML;
+                    return printCardHtml(card);
                 }).join("");
                 return `<div class="dco-print-sheets-row">${rowHtml}</div>`;
             }).join("");
@@ -1388,6 +1830,24 @@ ${printHeaderCss()}
     background: #fff !important;
     overflow: hidden !important;
     box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+}
+.dco-sheet-card[data-resource-kind="OFFCUT"] .dco-sheet-board {
+    background: #E5E7EB !important;
+}
+.dco-sheet-card[data-resource-kind="OFFCUT"] .dco-board-waste-hatch {
+    display: none !important;
+    background: none !important;
+    background-image: none !important;
+}
+.dco-offcut-business-context {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
 }
 .dco-usable-sheet {
     position: absolute !important;
@@ -1434,6 +1894,15 @@ ${printHeaderCss()}
 .dco-edge-line-svg {
     stroke: #e00000 !important;
     stroke-width: .45pt !important;
+}
+.dco-piece-double-edge-svg,
+.dco-piece-double-edge-svg .dco-edge-line-svg,
+.dco-piece-double-edge-svg line,
+.dco-piece-double-edge-svg polyline {
+    stroke: #5a2d82 !important;
+    stroke-width: .4pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
 }
 @media print {
     a { color: inherit !important; text-decoration: none !important; }
@@ -1515,8 +1984,16 @@ ${printHeaderCss()}
         });
         const frozenDoc = JSON.parse(JSON.stringify(printableDoc(frm.doc)));
         const edgeProfilesJson = JSON.stringify(printableEdgeProfiles(frm));
+        const planStatus = String(row.status || "");
+        const displayContext = String(row.display_context || (
+            planStatus === "Cancelled" || planStatus === "Superseded"
+            || (planStatus === "Approved"
+                && String(row.name || "") !== String(state.data?.approved_plan || ""))
+                ? "historical" : "current"
+        ));
         return { token, tab, orderName: frm.doc.name, planName: row.name,
-            revision: row.revision, geometryJson: JSON.stringify(geometry), assignmentJson,
+            revision: row.revision, planStatus, displayContext,
+            geometryJson: JSON.stringify(geometry), assignmentJson,
             documentJson: JSON.stringify(frozenDoc), edgeProfilesJson, plan,
             frm: { doc: frozenDoc, _dco_side_edge_profiles: new Map(JSON.parse(edgeProfilesJson)
                 .map(([name, thickness_mm]) => [name, { thickness_mm }])) } };
@@ -1534,6 +2011,13 @@ ${printHeaderCss()}
             && state.data?.order_name === source.orderName
             && state.data?.capabilities?.print !== false
             && row?.name === source.planName && row.revision === source.revision
+            && String(row.status || "") === source.planStatus
+            && String(row.display_context || (
+                source.planStatus === "Cancelled" || source.planStatus === "Superseded"
+                || (source.planStatus === "Approved"
+                    && String(row.name || "") !== String(state.data?.approved_plan || ""))
+                    ? "historical" : "current"
+            )) === source.displayContext
             && (!row.board?.description || row.board.description === frm.doc.board_description)
             && JSON.stringify(rowGeometry(row)) === source.geometryJson
             && rowAssignmentJson(row) === source.assignmentJson);

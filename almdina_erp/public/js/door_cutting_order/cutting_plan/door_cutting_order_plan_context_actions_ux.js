@@ -92,6 +92,17 @@
         return Boolean(plan && Array.isArray(plan.sheets) && plan.sheets.length);
     }
 
+    function isHistoricalRow(frm, row) {
+        if (!row) return false;
+        if (row.display_context) return row.display_context === "historical";
+        const status = String(row.status || "");
+        if (status === "Cancelled" || status === "Superseded") return true;
+        if (status === "Approved") {
+            return String(row.name || "") !== String((workspaceData(frm) || {}).approved_plan || "");
+        }
+        return status !== "Draft";
+    }
+
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }
@@ -151,6 +162,8 @@
 
     function hasOperationalAccess(frm) {
         const routed = Boolean(String((frm.doc && frm.doc.production_path) || "").trim());
+        // A delivered order is immutable even if stale stage context still exists.
+        if (String((frm.doc && frm.doc.status) || "").trim() === "Delivered") return false;
         return !routed || canMutateCurrentStage(frm);
     }
 
@@ -195,12 +208,16 @@
 
     function canExport(frm, row) {
         const caps = workspaceCapabilities(frm);
+        const archiveOnly = isHistoricalRow(frm, row)
+            && String((row && row.source_type) || "") === "Uploaded DXF"
+            && hasOriginalDxfFile(row)
+            && preferOriginalUpload(frm, row);
         return Boolean(
             !isEditing(frm)
-            && rowHasPlan(row)
+            && (!isHistoricalRow(frm, row) || archiveOnly)
+            && (archiveOnly || rowHasPlan(row))
             && caps.export_dxf
             && can(frm, "export_dxf")
-            && hasOperationalAccess(frm)
         );
     }
 
@@ -426,8 +443,12 @@
             frappe.msgprint(translate("Could not load the secure DXF export service."));
             return false;
         }
+        const row = rowForTab(frm);
         return frappe.almdina.export_order_dxf(frm.doc.name, activeTab(frm), {
-            hasOriginalFile: hasOriginalDxfFile(rowForTab(frm)),
+            archiveOnly: isHistoricalRow(frm, row),
+            hasOriginalFile: hasOriginalDxfFile(row),
+            originalIsManufacturingReady: originalIsManufacturingReady(row),
+            preferOriginalUpload: preferOriginalUpload(frm, row),
             frm,
         });
     }
@@ -467,6 +488,30 @@
 
     function hasOriginalDxfFile(row) {
         return Boolean(row && row.dxf && String(row.dxf.file || "").trim());
+    }
+
+    function originalIsManufacturingReady(row) {
+        if (!hasOriginalDxfFile(row)) return false;
+        const status = String((row.dxf && row.dxf.saw_center_status) || "Unknown").trim();
+        if (status === "Absent") return false;
+        return status === "Present" || status === "Legacy" || status === "Unknown";
+    }
+
+    function preferOriginalUpload(frm, row) {
+        if (!row || !row.dxf) return true;
+        if (Object.prototype.hasOwnProperty.call(row.dxf, "prefer_original_upload")) {
+            return row.dxf.prefer_original_upload !== false;
+        }
+        // Fallback before workspace payload carries the server contract: only
+        // the current approved upload with Absent saw centers regenerates.
+        const approvedName = String((workspaceData(frm) || {}).approved_plan || "").trim();
+        const isCurrentApproval = (
+            String(row.status || "") === "Approved"
+            && approvedName
+            && String(row.name || "") === approvedName
+        );
+        if (isCurrentApproval && !originalIsManufacturingReady(row)) return false;
+        return true;
     }
 
     function exportLabel(tab, row) {

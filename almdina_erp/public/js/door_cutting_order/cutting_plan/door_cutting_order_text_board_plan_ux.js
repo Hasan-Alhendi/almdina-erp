@@ -38,6 +38,14 @@
             await boardUX.syncInputs(frm);
         }
         if (!validatePlanInputs(frm)) return false;
+        const measurements = window.AlmdinaDoorCuttingFastEntry;
+        if (measurements && typeof measurements.validateDimensionsBeforeSave === "function") {
+            try {
+                await measurements.validateDimensionsBeforeSave(frm);
+            } catch (_error) {
+                return false;
+            }
+        }
         return true;
     }
 

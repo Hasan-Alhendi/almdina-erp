@@ -282,6 +282,11 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
         plan,
         str(plan.input_fingerprint or ""),
     )
+    if not expected_fingerprint:
+        frappe.throw(
+            _("Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing."),
+            frappe.ValidationError,
+        )
     if not str(plan.input_fingerprint or "").strip() or plan.input_fingerprint != expected_fingerprint:
         frappe.throw(
             _("خطة القص لم تعد مطابقة لبيانات الطلب الحالية. حدّث الخطة ثم اعتمدها."),
@@ -301,6 +306,14 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
         if not str(plan.dxf_file or "").strip() or str(plan.dxf_status or "") != "Validated":
             frappe.throw(
                 _("ارفع ملف DXF صالحًا وتحقق منه قبل اعتماد الخطة."),
+                frappe.ValidationError,
+            )
+        # Invalid saw centers fail at upload. Absent paths are generated only
+        # after this approval when the manufacturing DXF is exported.
+        saw_status = str(getattr(plan, "saw_center_status", None) or "").strip()
+        if saw_status not in {"", "Unknown", "Absent", "Present", "Legacy"}:
+            frappe.throw(
+                _("مسارات القص في ملف DXF غير صالحة ولا يمكن اعتماد خطة تصنيع غير مضمونة."),
                 frappe.ValidationError,
             )
 

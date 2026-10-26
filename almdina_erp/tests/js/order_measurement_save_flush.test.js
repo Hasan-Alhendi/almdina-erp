@@ -102,6 +102,7 @@ function element(tag, attrs = {}, children = []) {
 function createSandbox() {
     const formHandlers = {};
     const window = {
+        __formHandlers: formHandlers,
         AlmdinaDcoEditSessionCoordinator: {
             snapshot() { return { phase: "editing", activeKind: "order" }; },
         },
@@ -190,6 +191,9 @@ function makeFrm(root, pieces) {
 
 async function run() {
     const sandbox = createSandbox();
+    let shownMessage = null;
+    sandbox.frappe.msgprint = (message) => { shownMessage = message; };
+    load("public/js/door_cutting_order/order_entry/extra_addons/door_cutting_order_extra_addons_ux.js", sandbox);
     load("public/js/door_cutting_order/order_entry/door_cutting_order_operator_ux.js", sandbox);
     const api = sandbox.window.AlmdinaDoorCuttingFastEntry;
     assert.ok(api && typeof api.flush === "function", "flush API must be exported");
@@ -206,6 +210,24 @@ async function run() {
     assert.equal(row.width_cm, 91.5);
     assert.equal(row.length_cm, 210);
     assert.equal(frm.is_dirty(), true);
+
+    let observedWidth = null;
+    sandbox.window.AlmdinaDoorAddonsDialog = {
+        validateOrder(currentFrm) {
+            observedWidth = currentFrm.doc.pieces[0].width_cm;
+            return null;
+        },
+    };
+    const beforeSave = sandbox.window.__formHandlers["Door Cutting Order"].before_save;
+    assert.equal(typeof beforeSave, "function");
+    await beforeSave(frm);
+    assert.equal(observedWidth, 91.5, "machining validation must run after the existing measurement flush");
+
+    sandbox.window.AlmdinaDoorAddonsDialog.validateOrder = () => ({
+        message: "Row 1: Liner: length exceeds the current reference side.",
+    });
+    await assert.rejects(beforeSave(frm), /length exceeds the current reference side/);
+    assert.match(shownMessage.message, /Row 1: Liner/);
 
     const emptyWidth = element("input", { class: "dco-fast-input", "data-field": "width_cm", value: "" });
     const emptyLength = element("input", { class: "dco-fast-input", "data-field": "length_cm", value: "" });
@@ -234,7 +256,23 @@ async function run() {
         doc[fieldname].push(created);
         return created;
     };
+    // Regression: the virtual row's Add-ons button starts disabled. Materializing
+    // a Regular piece must synchronously reconcile the same cell (no table repaint,
+    // save, refresh, or piece-type change is needed).
+    const addonsUx = sandbox.window.AlmdinaExtraDoorAddonsUX;
+    const virtualButtonHtml = addonsUx.renderAddonSummary({}, { editable: true, virtual: true });
+    assert.match(virtualButtonHtml, /disabled/, "A virtual Add-ons button cannot open a nonexistent piece");
+    const addonsCell = { innerHTML: virtualButtonHtml };
+    const virtualAddonsButton = { closest(selector) { return selector === "td" ? addonsCell : null; } };
+    const originalRowQuery = virtualTyped.querySelector.bind(virtualTyped);
+    virtualTyped.querySelector = (selector) => (
+        selector === "[data-open-addons]" ? virtualAddonsButton : originalRowQuery(selector)
+    );
+
     api.flush(frmC);
+    assert.equal(virtualTyped.classList.contains("dco-virtual-row"), false);
+    assert.doesNotMatch(addonsCell.innerHTML, /disabled/, "Materialized Regular Add-ons must be clickable immediately");
+    assert.match(addonsCell.innerHTML, /data-open-addons="1"/);
     assert.equal(frmC.doc.pieces.length, 1);
     assert.equal(frmC.doc.pieces[0].width_cm, 60);
     assert.equal(frmC.doc.pieces[0].length_cm, 90);

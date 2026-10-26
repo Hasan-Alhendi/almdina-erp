@@ -318,6 +318,40 @@ body[dir="ltr"] .dco-addons-preview-pane {
     min-width: 0;
 }
 
+.dco-liner-set {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-3, 12px);
+    min-width: 0;
+}
+
+.dco-liner-shared,
+.dco-liner-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+}
+
+.dco-liner-item {
+    padding: var(--alm-space-2, 8px);
+    border: 1px solid var(--alm-border-subtle, #eaecf0);
+    border-radius: var(--alm-radius-sm, 10px);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-liner-item-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--alm-space-2, 8px);
+}
+
+.dco-liner-add,
+.dco-liner-remove-item {
+    align-self: flex-start;
+}
+
 .dco-addons-modal .dco-corner-section-label {
     margin: 0;
     color: var(--alm-text-subtle, #667085);
@@ -371,6 +405,81 @@ body[dir="ltr"] .dco-addons-preview-pane {
     box-shadow: none;
 }
 
+.dco-addons-modal .dco-handle-size-grid,
+.dco-corner-editor .dco-handle-size-grid {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--alm-space-2, 8px);
+    min-width: 0;
+}
+
+.dco-addons-modal .dco-handle-size,
+.dco-corner-editor .dco-handle-size,
+.dco-addons-modal .dco-handle-center,
+.dco-corner-editor .dco-handle-center {
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--alm-border, #dfe3e8);
+    border-radius: 999px;
+    background: var(--alm-card, #fff);
+    box-shadow: none;
+    color: var(--alm-text-secondary, #344054);
+    font-size: var(--alm-font-size-sm, 12px);
+    font-weight: var(--alm-font-weight-bold, 700);
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    appearance: none;
+}
+
+.dco-addons-modal .dco-handle-size:hover,
+.dco-corner-editor .dco-handle-size:hover,
+.dco-addons-modal .dco-handle-center:hover,
+.dco-corner-editor .dco-handle-center:hover {
+    border-color: var(--alm-border-hover, #d0d5dd);
+    background: var(--alm-surface-muted, #f4f6f8);
+}
+
+.dco-addons-modal .dco-handle-size.is-active,
+.dco-corner-editor .dco-handle-size.is-active,
+.dco-addons-modal .dco-handle-center.is-active,
+.dco-corner-editor .dco-handle-center.is-active,
+.dco-addons-modal .dco-handle-size.is-active:hover,
+.dco-corner-editor .dco-handle-size.is-active:hover,
+.dco-addons-modal .dco-handle-center.is-active:hover,
+.dco-corner-editor .dco-handle-center.is-active:hover {
+    border-color: var(--alm-primary, #172033);
+    background: var(--alm-primary, #172033);
+    color: var(--alm-on-primary, #fff);
+}
+
+.dco-addons-modal .dco-handle-center-row,
+.dco-corner-editor .dco-handle-center-row {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    margin-top: var(--alm-space-2, 8px);
+    direction: ltr;
+}
+
+.dco-addons-modal .dco-handle-center,
+.dco-corner-editor .dco-handle-center {
+    flex: 0 0 auto;
+    direction: rtl;
+}
+
+:root[dir="ltr"] .dco-addons-modal .dco-handle-center,
+:root[dir="ltr"] .dco-corner-editor .dco-handle-center,
+body[dir="ltr"] .dco-addons-modal .dco-handle-center,
+body[dir="ltr"] .dco-corner-editor .dco-handle-center {
+    direction: ltr;
+}
+
 .dco-addons-modal .dco-corner-input-wrap {
     min-width: 0;
 }
@@ -406,6 +515,19 @@ body[dir="ltr"] .dco-addons-preview-pane {
     font-size: var(--alm-font-size-md, 14px);
     font-weight: var(--alm-font-weight-semibold, 600);
     text-align: center;
+}
+
+.dco-addons-modal .dco-corner-input-wrap.is-error .dco-corner-input-shell {
+    border-color: var(--alm-danger, #b91c1c);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--alm-danger, #b91c1c) 14%, transparent);
+}
+
+.dco-addons-modal .dco-corner-input-shell input[aria-invalid="true"] {
+    color: var(--alm-danger, #b91c1c);
+}
+
+.dco-addons-modal [data-liner-sides][aria-invalid="true"] .dco-corner-position {
+    border-color: var(--alm-danger, #b91c1c);
 }
 
 .dco-addons-modal .dco-corner-input-shell span {

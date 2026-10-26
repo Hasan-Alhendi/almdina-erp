@@ -78,6 +78,8 @@ def _route_active(order: Any) -> bool:
 
 
 def _edit_state(order: Any) -> dict[str, Any]:
+    if str(getattr(order, "status", "") or "").strip() == "Delivered":
+        return {"can_edit": False, "reason": _("Special door documentation cannot be edited after the order is delivered."), "stage": None}
     if not document_has_capability(order, Capability.EDIT_SPECIAL_DRAWING):
         return {"can_edit": False, "reason": _("You do not have permission to edit special door documentation."), "stage": None}
     if _route_active(order):
@@ -92,6 +94,8 @@ def _edit_state(order: Any) -> dict[str, Any]:
 
 
 def _assert_editable(order: Any) -> None:
+    if str(getattr(order, "status", "") or "").strip() == "Delivered":
+        frappe.throw(_("Special door documentation cannot be edited after the order is delivered."), frappe.PermissionError)
     require_document_capability(
         order,
         Capability.EDIT_SPECIAL_DRAWING,

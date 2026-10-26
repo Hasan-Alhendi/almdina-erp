@@ -16,9 +16,11 @@
         if ((local || dirty) && !readOnly) { const idx = Number(row.idx || row.piece_no || 0); await frm.save(); return (frm.doc.pieces || []).find(candidate => Number(candidate.idx || candidate.piece_no || 0) === idx) || row; }
         if (local) { frappe.msgprint(__("Save the order before opening the documentation.")); return null; } return row;
     }
-    function documentationUrl(orderName, pieceName) {
-        if (frappe.router && typeof frappe.router.make_url === "function") return frappe.router.make_url(["door-drawing", orderName, pieceName]);
-        return `/desk/door-drawing/${encodeURIComponent(orderName)}/${encodeURIComponent(pieceName)}`;
+    function documentationUrl(orderName, pieceName, readOnly = false) {
+        const parts = ["door-drawing", orderName, pieceName];
+        if (readOnly) parts.push("view");
+        if (frappe.router && typeof frappe.router.make_url === "function") return frappe.router.make_url(parts);
+        return `/desk/door-drawing/${encodeURIComponent(orderName)}/${encodeURIComponent(pieceName)}${readOnly ? "/view" : ""}`;
     }
     function closePopup(popup) { if (popup && typeof popup.close === "function") popup.close(); }
     async function open(frm, row, options = {}) {
@@ -31,7 +33,8 @@
         try {
             const saved = await persistedRow(frm, row, readOnly);
             if (!saved) { closePopup(popup); return null; }
-            if (popup) popup.location.replace(documentationUrl(frm.doc.name, saved.name));
+            if (popup) popup.location.replace(documentationUrl(frm.doc.name, saved.name, readOnly));
+            else if (readOnly) frappe.set_route("door-drawing", frm.doc.name, saved.name, "view");
             else frappe.set_route("door-drawing", frm.doc.name, saved.name);
             return Object.freeze({ orderName: frm.doc.name, pieceName: saved.name, readOnly });
         }

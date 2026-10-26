@@ -61,6 +61,8 @@ stateDiagram-v2
 - المرحلة مسندة لنفس المستخدم.
 - Stage status يسمح بـStart، عادة `Pending`.
 
+`Administrator` يتجاوز شرط مطابقة الإسناد للمرحلة الحالية فقط. يسجله النظام كمنفذ (`started_by` / سجل الحدث)، مع إبقاء العامل المسند كما هو؛ وإذا كانت المرحلة غير مسندة فلا ينشئ بدءها إسنادًا إلى Administrator. تبقى حالة المرحلة والانتقال الصحيح شرطًا على الجميع.
+
 ### Handoff / Finish
 
 العامل يحتاج `HANDOFF_ASSIGNED_STAGE` ونفس شروط ownership. المسار الطبيعي للإنهاء يبقى من `In Progress` أو `Paused` إلى `Completed`.
@@ -127,3 +129,24 @@ Revision تحافظ على تاريخ الطلب بدل تعديل حقيقة إ
 - Queries/Inbox/Archive: `application/shop_floor/queries.py`.
 
 هذه الملفات هي أول مكان يقرأه المطور عند تعديل Workflow.
+
+## 11. Plan review safety at manufacturing entry
+
+The central production-action policy rechecks plan readiness on **Pending**
+non-planning stages, including work dispatched before a plan became unverifiable.
+Both Start and handoff-only direct completion require an existing, current plan.
+Planning is identified from the dynamic route's `is_planning_stage`, never a role,
+department label or stage code. Planning may start without a plan so the operator
+can resolve it; its existing approved-plan exit gate remains mandatory.
+
+An **In Progress** or **Paused** manufacturing stage may finish its existing work.
+This does not approve a plan or start the next stage: the next Pending stage is
+checked again. No job auto-pauses/cancels running production. Resolving an unknown
+historical flag or plan requires administrative review; Administrator cannot bypass
+manufacturing readiness through Start/direct Handoff. Delivery rules are unchanged.
+
+Native Frappe CRUD cannot activate a new/Pending/closed stage by writing its status,
+even as Administrator. A short-lived server-owned marker admits persistence only
+through the authorized command adapter; client flags cannot forge it. Trusted
+historical bootstrap auto-completion retains its behavior through the same marker.
+Existing running/paused continuation and ordinary metadata edits remain unchanged.

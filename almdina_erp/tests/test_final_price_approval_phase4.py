@@ -70,10 +70,8 @@ class TestFinalPriceApprovalPhase4(unittest.TestCase):
             "Cost settings are locked because the final price is approved.",
             edit,
         )
-        self.assertIn(
-            "price approval must never imply edit_cost_settings",
-            edit,
-        )
+        self.assertIn('can(frm, "edit_cost_settings")', edit)
+        self.assertNotIn("can_approve_final_price", edit)
 
     def test_approval_ux_wires_dialogs_note_and_cancel(self) -> None:
         ux = _read(COSTING / "door_cutting_order_final_price_approval_ux.js")

@@ -437,7 +437,7 @@
         });
     }
 
-    function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100) {
+    function clippedEdgePaths(piece, viewportWidth = 100, viewportHeight = 100, options = {}) {
         const width = Math.max(0, num(viewportWidth));
         const height = Math.max(0, num(viewportHeight));
         const empty = {
@@ -454,7 +454,10 @@
         if (!config.width || !config.length) return empty;
         const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
         const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
-        const amount = Math.min(width, height) * 0.035;
+        const requestedInset = Number(options.insetPx);
+        const amount = Number.isFinite(requestedInset)
+            ? Math.max(0, requestedInset)
+            : Math.min(width, height) * 0.035;
         const diagonalByPosition = {
             "Top Right": {
                 top: [[0, 0], [width - cutX, 0]],
@@ -533,9 +536,46 @@
         };
     }
 
+    function trimPathEnds(path, trimPx) {
+        if (!Array.isArray(path) || path.length < 2 || !(trimPx > 0)) return path;
+        const distances = [0];
+        for (let index = 1; index < path.length; index += 1) {
+            distances.push(distances[index - 1] + Math.hypot(
+                path[index][0] - path[index - 1][0],
+                path[index][1] - path[index - 1][1],
+            ));
+        }
+        const total = distances[distances.length - 1];
+        const trim = Math.min(trimPx, total * 0.45);
+        if (!(total > 0) || !(trim > 0)) return path;
+        const pointAt = target => {
+            for (let index = 1; index < distances.length; index += 1) {
+                if (target > distances[index]) continue;
+                const segment = distances[index] - distances[index - 1];
+                const ratio = segment ? (target - distances[index - 1]) / segment : 0;
+                return [
+                    path[index - 1][0] + (path[index][0] - path[index - 1][0]) * ratio,
+                    path[index - 1][1] + (path[index][1] - path[index - 1][1]) * ratio,
+                ];
+            }
+            return [...path[path.length - 1]];
+        };
+        const result = [pointAt(trim)];
+        for (let index = 1; index < path.length - 1; index += 1) {
+            if (distances[index] > trim && distances[index] < total - trim) result.push([...path[index]]);
+        }
+        result.push(pointAt(total - trim));
+        return result;
+    }
+
     function edgeBandSvgMarkup(piece, viewportWidth = 100, viewportHeight = 100, options = {}) {
-        const paths = clippedEdgePaths(piece, viewportWidth, viewportHeight);
-        if (!paths.top && !paths.break) return "";
+        const paths = clippedEdgePaths(piece, viewportWidth, viewportHeight, options);
+        if (!paths.top && !paths.bottom && !paths.left && !paths.right && !paths.break && !paths.breakOnly) return "";
+        if (Number(options.endTrimPx) > 0) {
+            Object.keys(paths).forEach(key => {
+                if (paths[key]) paths[key] = trimPathEnds(paths[key], Number(options.endTrimPx));
+            });
+        }
         // Match regular-door plan edges: inherit stroke from the parent <g> and keep
         // screen-space thickness via non-scaling-stroke (avoids fat diagonals under
         // preserveAspectRatio="none").
@@ -1104,8 +1144,9 @@
             return;
         }
         installStyles();
-        prepareRow(liveRow);
         const readOnly = Boolean(options.readOnly);
+        // A viewer must not normalize or mutate saved row values.
+        if (!readOnly) prepareRow(liveRow);
 
         // Prevent stacked corner dialogs from duplicate click handlers.
         if (activeDialog) {

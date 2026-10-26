@@ -40,6 +40,25 @@ def ensure_draft_editable(status: str | None) -> None:
         raise CuttingPlanLifecycleError(f"plan_not_editable:{normalized}")
 
 
+def is_current_manufacturing_candidate(
+    *,
+    status: str | None,
+    belongs_to_order: bool,
+    is_linked_approval: bool,
+) -> bool:
+    """Whether a revision can supply geometry for new manufacturing work.
+
+    A Draft is the current working candidate; an Approved revision is current
+    only while its owning order still points to that exact approval. Terminal,
+    detached, and unrelated revisions remain readable as history only.
+    """
+
+    normalized = str(status or "").strip()
+    if not belongs_to_order:
+        return False
+    return normalized == DRAFT or (normalized == APPROVED and is_linked_approval)
+
+
 def next_revision(existing_revisions: list[int] | tuple[int, ...]) -> int:
     normalized = [int(value) for value in existing_revisions if int(value) > 0]
     return (max(normalized) if normalized else 0) + 1
@@ -103,6 +122,7 @@ __all__ = [
     "approval_transition",
     "cancel_approval_transition",
     "ensure_draft_editable",
+    "is_current_manufacturing_candidate",
     "next_revision",
     "normalize_source_type",
     "revision_from_approved",

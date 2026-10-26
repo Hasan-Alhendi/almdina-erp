@@ -21,6 +21,7 @@ const pageActionSource = fs.readFileSync(
 );
 
 const grants = new Set(["view_costs", "approve_special_price"]);
+let serverCostDecision = true;
 const fakeFrappe = {
     ui: { form: { on() {} } },
     msgprint() {},
@@ -39,6 +40,13 @@ const fakeWindow = {
         },
         can(capability) {
             return grants.has(capability);
+        },
+    },
+    AlmdinaCostWorkspaceState: {
+        storeFor() {
+            return { snapshot: () => ({ status: "ready", data: {
+                can_edit_cost_settings: serverCostDecision,
+            } }) };
         },
     },
 };
@@ -79,11 +87,11 @@ const frm = {
 };
 
 assert.equal(api.canEditCostSettings(frm), false);
-assert.equal(api.canEditPiecePrices(frm), true);
+assert.equal(api.canEditPiecePrices(frm), false);
 assert.equal(
     api.canEditCostWorkspace(frm),
-    true,
-    "approve_special_price must open the Cost edit session without edit_cost_settings"
+    false,
+    "legacy Special pricing capability must not open the Cost edit session"
 );
 assert.match(
     pageActionSource,
@@ -95,16 +103,30 @@ frm.doc.status = "Pending Review";
 assert.equal(api.canEditPiecePrices(frm), false);
 assert.equal(api.canEditCostWorkspace(frm), false);
 
-// Preserve the existing independent cost-settings permission behavior.
+// Special pricing must use the server's effective Cost Settings decision.
 grants.add("edit_cost_settings");
 assert.equal(api.canEditCostSettings(frm), true);
 assert.equal(api.canEditCostWorkspace(frm), true);
-assert.equal(api.canEditPiecePrices(frm), false);
+assert.equal(api.canEditPiecePrices(frm), true);
+
+serverCostDecision = false;
+assert.equal(api.canEditCostSettings(frm), false,
+    "a negative server Cost Settings decision must deny the Cost session");
+assert.equal(api.canEditCostWorkspace(frm), false);
+serverCostDecision = true;
 
 frm.doc.status = "At CNC";
 assert.equal(api.canEditCostSettings(frm), true);
 assert.equal(api.canEditCostWorkspace(frm), true);
-assert.equal(api.canEditPiecePrices(frm), false);
+assert.equal(api.canEditPiecePrices(frm), true);
+
+frm.doc.status = "Delivered";
+assert.equal(api.canEditCostWorkspace(frm), true,
+    "stage/status labels must not independently restrict Special pricing");
+serverCostDecision = false;
+assert.equal(api.canEditCostWorkspace(frm), false,
+    "document-level Cost Settings denial must apply in every status");
+serverCostDecision = true;
 
 grants.delete("edit_cost_settings");
 frm.doc.status = "Draft";
@@ -112,7 +134,10 @@ grants.delete("approve_special_price");
 assert.equal(api.canEditCostWorkspace(frm), false);
 
 grants.add("edit_special_price");
-assert.equal(api.canEditPiecePrices(frm), true);
+assert.equal(api.canEditPiecePrices(frm), false);
+assert.equal(api.canEditCostWorkspace(frm), false,
+    "legacy Special pricing capability must not bypass edit_cost_settings");
+grants.add("edit_cost_settings");
 assert.equal(api.canEditCostWorkspace(frm), true);
 
 frm.doc.revision_state = "Superseded";

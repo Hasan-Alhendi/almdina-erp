@@ -842,8 +842,15 @@ Right long edge,قشاط الطول الأيمن
 Left long edge,قشاط الطول الأيسر
 Long right,طول يمين
 Long left,طول يسار
-Double Edge Banding,دبل قشاط
-Double Banding,دبل قشاط
+Double Edge,دبل ضلع
+Double Edge Sides,أضلاع دبل ضلع
+Row {0}: Double Edge sides are invalid.,الصف {0}: أضلاع دبل الضلع غير صالحة.
+Row {0}: A selected Double Edge side is unavailable for this piece type.,الصف {0}: ضلع دبل الضلع المحدد غير متاح لهذا النوع من الدرفات.
+Double Edge sides,أضلاع دبل ضلع
+selected sides,الأضلاع المحددة
+Select at least one side for Double Edge.,اختر ضلعًا واحدًا على الأقل لدبل الضلع.
+Choose one or more sides.,اختر ضلعًا واحدًا أو أكثر.
+Double Edge is shown as two purple lines on each selected side.,يظهر دبل الضلع بخطين بنفسجيين على كل ضلع محدد.
 Full Door Double,دبل كامل الدرفة
 Full Double,دبل كامل
 Liner,لاينر
@@ -853,16 +860,54 @@ Choose a reference side.,اختر الجهة المرجعية.
 Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
+Add liner,إضافة لاينر
+Liner {0},لاينر {0}
+Remove liner {0},إزالة اللاينر {0}
+Remove liner,إزالة اللاينر
+Remove,إزالة
+Distance and width,المسافة والعرض
+Distance and length,المسافة والطول
 Liner Start Position,بداية اللاينر
 Machining Width,عرض التفريز
 Machining Start,بداية التفريز
 Machining Length,طول التفريز
+Standard sizes,القياسات المعيارية
+Center Handle,توسيط المسكة
+"Cannot center the handle because its length exceeds the door width.",لا يمكن توسيط المسكة لأن طولها أكبر من عرض الدرفة.
+"Cannot center the handle because its length exceeds the door height.",لا يمكن توسيط المسكة لأن طولها أكبر من ارتفاع الدرفة.
+"Cannot center the handle because its width exceeds the door height.",لا يمكن توسيط المسكة لأن عرضها أكبر من ارتفاع الدرفة.
+"Cannot center the handle because its width exceeds the door width.",لا يمكن توسيط المسكة لأن عرضها أكبر من عرض الدرفة.
+"Cannot center the handle because the door width is missing or invalid.",لا يمكن توسيط المسكة لأن عرض الدرفة غير معروف أو غير صالح.
+"Cannot center the handle because the door height is missing or invalid.",لا يمكن توسيط المسكة لأن ارتفاع الدرفة غير معروف أو غير صالح.
+"Cannot center the handle because its length is missing or invalid.",لا يمكن توسيط المسكة لأن طولها غير صالح.
+"Cannot center the handle because its width is missing or invalid.",لا يمكن توسيط المسكة لأن عرضها غير صالح.
+"Cannot center the handle on this door type.",لا يمكن توسيط المسكة لهذا النوع من الدرفات.
+"Cannot center the handle because the reference side is unavailable.",لا يمكن توسيط المسكة لأن الضلع المرجعي غير متاح.
+Cannot center the handle.,لا يمكن توسيط المسكة.
 Remove add-on,إزالة الإضافة
 Check add-on,تحقق من الإضافة
 Could not save the add-on.,تعذر حفظ الإضافة.
 This piece type does not support this add-on.,نوع الدرفة لا يدعم هذه الإضافة.
 Row {0}: Machining add-on needs a reference side and a width greater than zero.,الصف {0}: الإضافة تحتاج جهة مرجعية وعرضاً أكبر من صفر.
 Row {0}: Machining add-on settings are invalid ({1}).,الصف {0}: إعدادات الإضافة غير صالحة ({1}).
+Row {0}: {1} needs a reference side and a width greater than zero.,الصف {0}: {1} تحتاج جهة مرجعية وعرضاً أكبر من صفر.
+Row {0}: {1} settings are invalid ({2}).,الصف {0}: إعدادات {1} غير صالحة ({2}).
+Current cutting dimensions are not valid.,أبعاد القص الحالية غير صالحة.
+Corner dimensions must be set before machining.,يجب إدخال أبعاد الزاوية قبل التفريز.
+Corner position is invalid.,موضع الزاوية غير صالح.
+The reference side is unavailable for this piece type.,الجهة المرجعية غير متاحة لنوع الدرفة هذا.
+Offset must be finite and zero or greater.,يجب أن تكون المسافة قيمة صالحة تساوي صفراً أو أكبر.
+Width must be finite and greater than zero.,يجب أن يكون العرض قيمة صالحة أكبر من صفر.
+Start position must be finite and zero or greater.,يجب أن تكون بداية التفريز قيمة صالحة تساوي صفراً أو أكبر.
+Length must be finite and greater than zero.,يجب أن يكون الطول قيمة صالحة أكبر من صفر.
+Machining geometry does not fit inside the piece.,هندسة التفريز لا تتسع داخل الدرفة.
+The machining limit falls on a corner bend.,حد التفريز يقع على انعطاف الزاوية.
+"Row {0}: {1} length exceeds the reference side (available {2} cm, start {3} cm, entered {4} cm, maximum {5} cm).","الصف {0}: طول {1} يتجاوز الجهة المرجعية (طول الجهة {2} سم، البداية {3} سم، الطول المدخل {4} سم، والحد الأقصى {5} سم)."
+"{0}: reference side length is {1} cm, start is {2} cm, entered length is {3} cm; maximum allowed length is {4} cm.","{0}: طول الجهة المرجعية {1} سم، البداية {2} سم، الطول المدخل {3} سم؛ الحد الأقصى المسموح {4} سم."
+Row {0}: {1}: {2},الصف {0}: {1}: {2}
+Check machining add-ons,تحقق من إضافات التفريز
+Order changed while validating machining add-ons. Try saving again.,تغير الطلب أثناء التحقق من إضافات التفريز. أعد محاولة الحفظ.
+Check the machining add-on settings before saving.,تحقق من إعدادات إضافات التفريز قبل الحفظ.
 Liner Length,طول اللاينر
 Available Length,الطول المتاح
 Measurement Direction,اتجاه القياس
@@ -1033,7 +1078,7 @@ Order number:,رقم الطلب:
 Printed on:,تاريخ الطباعة:
 Special door,خاصة
 Regular door,عادية
-Double edge banding,دبل قشاط
+Double edge,دبل ضلع
 Full door double,دبل كامل الدرفة
 Back groove,فرزة ظهر
 Recessed handle cutout,حفر مسكة غطس
@@ -1299,6 +1344,7 @@ The documentation workspace is available for special doors only.,مساحة ال
 The selected door does not belong to this order.,الدرفة المحددة لا تنتمي إلى هذا الطلب.
 You do not have permission to edit special door documentation.,ليس لديك صلاحية تعديل توثيق الدرف الخاصة.
 You are not allowed to edit special door documentation.,لا تملك صلاحية تعديل توثيق الدرف الخاصة.
+Special door documentation cannot be edited after the order is delivered.,لا يمكن تعديل توثيق الدرفة بعد تسليم الطلب.
 Documentation can be edited when the order state allows it.,يمكن تعديل التوثيق عندما يسمح وضع الطلب بذلك.
 The documentation workspace accepts only the current contract.,مساحة التوثيق تقبل العقد الحالي فقط.
 The documentation width does not match the door width.,عرض التوثيق لا يطابق عرض الدرفة.
@@ -1602,7 +1648,6 @@ Download uploaded DXF,تنزيل DXF المرفوع
 Drawing / DXF,الرسم / DXF
 Drawing plan engine,محرك خطة الرسم
 Ease of cutting,سهولة التنفيذ
-Edge banding double,دبل قشاط
 "Edit the plan settings from “Edit cutting plan”, save them, then recalculate.",عدّل إعدادات الخطة من «تعديل خطة القص»، احفظها، ثم أعد الحساب.
 Enlarge board,تكبير اللوح
 Enter a board length and width greater than zero before calculating the cutting plan.,أدخل طول اللوح وعرضه بقيم أكبر من الصفر قبل حساب خطة القص.
@@ -2900,6 +2945,18 @@ Could not cancel the final price approval,تعذر إلغاء اعتماد ال�
 Could not cancel the final price approval.,تعذر إلغاء اعتماد السعر النهائي.
 Do you want to cancel the final price approval for this order? Order details and prices will stay the same.,هل تريد إلغاء اعتماد السعر النهائي لهذا الطلب؟ ستبقى تفاصيل الطلب والأسعار كما هي.
 Save or cancel unsaved changes before cancelling the final price approval.,احفظ التغييرات غير المحفوظة أو ألغها قبل إلغاء اعتماد السعر النهائي.
+Possible doors: {0}. Additional contour information: {1},الدرف المحتملة: {0}. معلومة إضافية عن المحيط: {1}
+The L-corner dimensions in the DXF do not match the order.,قياسات زاوية L في DXF لا تطابق الطلب.
+"Correct the L-corner dimensions in the DXF file, then upload it again.",صحح أبعاد زاوية L في ملف DXF ثم أعد رفعه.
+{0} — L corner.,{0} — زاوية L.
+The clipped-corner dimensions in the DXF do not match the order.,قياسات زاوية الكسر في DXF لا تطابق الطلب.
+"Correct the clipped-corner dimensions in the DXF file, then upload it again.",صحح أبعاد زاوية الكسر في ملف DXF ثم أعد رفعه.
+{0} — clipped corner.,{0} — زاوية كسر.
+Order finished dimensions: {0}. Required raw dimensions after edge banding: {1}. DXF dimensions: {2}.,القياسات النهائية في الطلب: {0}. قياسات القص الخام المطلوبة بعد القشاط: {1}. القياسات في DXF: {2}.
+Order dimensions: {0}. DXF dimensions: {1}.,القياسات في الطلب: {0}. القياسات في DXF: {1}.
+Door {0} — copies {1} through {2}.,الدرفة {0} — النسخ {1} إلى {2}.
+Door {0} — copies {1}.,الدرفة {0} — النسخ {1}.
+Door {0} — copy {1}.,الدرفة {0} — النسخة {1}.
 {0} / {1},{0} / {1}
 Customer bot,بوت العملاء
 Loading customer bot settings...,جارٍ تحميل إعدادات بوت العملاء...
@@ -3019,3 +3076,61 @@ Manage customer bot settings,إدارة إعدادات بوت العملاء
 "Edit the customer bot texts, preview them with sample data, publish them, and turn the bot on or off. Does not connect WhatsApp, send messages, or open customers and orders.",تحرير نصوص بوت العملاء ومعاينتها ببيانات تجريبية ونشرها وتشغيله أو إيقافه. لا يربط واتساب ولا يرسل رسائل ولا يفتح العملاء أو الطلبات.
 Customer bot settings are service-managed.,إعدادات بوت العملاء تُدار من الخدمة فقط.
 You do not have permission for this action.,لا تملك صلاحية هذا الإجراء.
+The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
+Saving cost and special door prices...,جاري حفظ التكلفة وأسعار الدرف الخاصة...
+Save special door prices from the Cost edit session.,احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Row {0}: Special prices must be saved from the Cost edit session.,السطر {0}: احفظ أسعار الدرف الخاصة من جلسة تعديل التكلفة.
+Board length must be a positive number.,يجب أن يكون طول اللوح رقماً موجباً أكبر من الصفر.
+Board width must be a positive number.,يجب أن يكون عرض اللوح رقماً موجباً أكبر من الصفر.
+Piece width must be a positive number.,يجب أن يكون عرض الدرفة رقماً موجباً أكبر من الصفر.
+Piece length must be a positive number.,يجب أن يكون طول الدرفة رقماً موجباً أكبر من الصفر.
+Please enter board length and width first.,يرجى إدخال طول وعرض اللوح أولاً.
+Piece width cannot exceed board width.,لا يجوز أن يتجاوز عرض الدرفة عرض اللوح.
+Piece length cannot exceed board length.,لا يجوز أن يتجاوز طول الدرفة طول اللوح.
+"Piece dimensions exceed the board, even after allowed rotation.",تتجاوز قياسات الدرفة أبعاد اللوح حتى بعد السماح بالدوران.
+Exceeds board length,يتجاوز طول اللوح
+Exceeds board width,يتجاوز عرض اللوح
+Row {0}: {1},السطر {0}: {1}
+"Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
+A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.
+A special door could not be matched because the DXF contour is a rectangle.,تعذر مطابقة درفة خاصة لأن المحيط في DXF مستطيل.
+"The special-door group {0} × {1} cm has an extra {2} that the order does not require.",مجموعة الدرفات الخاصة {0} × {1} سم تحتوي على {2} إضافي غير مطلوب.
+"The special-door group {0} × {1} cm is missing a required {2}.",مجموعة الدرفات الخاصة {0} × {1} سم تفتقد {2} المطلوبة.
+That path is on a regular door and is not counted for the special door.,ذلك المسار على درفة عادية ولا يُحتسب للدرفة الخاصة.
+"{0} and {1} are on different special doors, but the order requires them on the same door ({2} × {3} cm).","{0} و{1} موجودان على درفتين مختلفتين، بينما الطلب يتطلبهما على الدرفة نفسها ({2} × {3} سم)."
+"The {0} path could not be tied to exactly one special door.",تعذر ربط مسار {0} بدرفة خاصة واحدة بشكل واضح.
+A special-door group has an extra add-on that the order does not require.,مجموعة الدرفات الخاصة تحتوي على إضافة زائدة غير مطلوبة.
+A special-door group is missing a required add-on.,مجموعة الدرفات الخاصة تفتقد إضافة مطلوبة.
+Add-ons that belong on the same special door are split across different doors.,إضافات مطلوبة على الدرفة الخاصة نفسها موزعة على درفتين مختلفتين.
+Replace the contour with an axis-aligned rectangle that matches the ordered cut size.,استبدل المحيط بمستطيل محاوره مطابقة لمقاس القص المطلوب.
+Use a non-rectangular contour whose outer dimensions match the ordered special door.,استخدم محيطًا غير مستطيل تطابق أبعاده الخارجية الدرفة الخاصة المطلوبة.
+"Remove the extra add-on path, or add that add-on to the order.",أزل مسار الإضافة الزائد، أو أضف الإضافة إلى الطلب.
+Draw the missing add-on on a special door in this size group.,ارسم الإضافة الناقصة على درفة خاصة ضمن هذه المجموعة.
+Put the required add-ons on the same special-door contour.,ضع الإضافات المطلوبة على محيط الدرفة الخاصة نفسه.
+Move the add-on path so it belongs to exactly one special door.,حرّك مسار الإضافة حتى يرتبط بدرفة خاصة واحدة فقط.
+Selection is enough for a special door. Complete the add-on paths in the DXF before approval.,الاختيار يكفي للدرفة الخاصة. أكمل مسارات الإضافات في ملف DXF قبل الاعتماد.
+liner,لاينر
+back groove,فرزة ظهر
+recessed handle,مسكة غطس
+add-on,إضافة
+Set {0} to the required cut size {1}.,اجعل {0} بمقاس القص المطلوب {1}.
+Match the saved order cut size on {0}.,طابق مقاس القص المحفوظ في الطلب على {0}.
+Plan matching requires review,مطابقة الخطة تحتاج إلى مراجعة
+Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing.,تعذر تأكيد مطابقة الخطة بعد تحديث النظام. راجع الخطة قبل استخدامها في عملية تصنيع جديدة.
+The plan is marked as out of date. Review it before starting new manufacturing.,الخطة تحمل علامة محفوظة بأنها قديمة. راجعها قبل استخدامها في عملية تصنيع جديدة.
+Review and verify the cutting plan before starting new manufacturing work.,راجع خطة القص وتأكد من مطابقتها قبل بدء عمل تصنيعي جديد.
+Use the Start or Handoff action to activate a production stage.,استخدم إجراء البدء أو التسليم لتفعيل مرحلة الإنتاج.
+Previous plan — cancelled,خطة سابقة — ملغاة
+Previous plan — superseded,خطة سابقة — مستبدلة
+Approved plan — no longer current,الخطة المعتمدة لم تعد الحالية
+Previous plan,خطة سابقة
+Current order inputs differ from this saved historical plan.,تختلف مدخلات الطلب الحالية عن هذه الخطة المحفوظة.
+This historical plan carries an older saved review flag whose cause is unknown.,تحمل هذه الخطة التاريخية علامة مراجعة قديمة محفوظة ولا يُعرف سببها.
+The historical plan fingerprint could not be confirmed.,تعذر تأكيد بصمة الخطة التاريخية.
+This plan is kept for reference and is not approved for manufacturing.,حُفظت هذه الخطة للرجوع إليها وهي غير معتمدة للتصنيع.
+Plan status,حالة الخطة
+Historical plan: Cancelled,خطة تاريخية: ملغاة
+Historical plan: Superseded,خطة تاريخية: مستبدلة
+Historical plan: Approval is no longer current,خطة تاريخية: لم يعد اعتمادها ساريًا
+Historical plan,خطة تاريخية
+Generating a manufacturing file from a historical or unrelated plan is not allowed. Choose a current draft or the plan approved for this order.,لا يجوز إنشاء ملف تصنيع من خطة تاريخية أو غير مرتبطة بالطلب الحالي. اختر مسودة حالية أو الخطة المعتمدة المرتبطة بالطلب.

@@ -20,6 +20,7 @@
     const PIECE_FIELDS = Object.freeze([
         "piece_type",
         "extra_double",
+        "extra_double_reference_sides",
         "extra_full_door_double",
         "extra_liner",
         "liner_reference_side",
@@ -27,6 +28,7 @@
         "liner_width_cm",
         "liner_start_cm",
         "liner_length_cm",
+        "liner_specs_json",
         "extra_back_groove",
         "back_groove_reference_side",
         "back_groove_offset_cm",

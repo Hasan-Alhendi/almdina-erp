@@ -82,6 +82,120 @@ vm.runInContext(source, context);
 const responsive = context.window.AlmdinaResponsiveDevice;
 const api = context.window.AlmdinaDoorCuttingOrderListUX;
 
+
+const desktopListCss = fs.readFileSync(
+    "almdina_erp/public/css/door_cutting_order_list.css",
+    "utf8"
+);
+
+// Price approval remains filterable, but must not be painted beside any ID,
+// in the header, or on mobile cards (regardless of approval status).
+assert(!source.includes("dco-list-price-approval"), "ListView must not inject price approval badges");
+assert(!desktopListCss.includes("dco-list-price-approval"), "desktop badge styles must be removed");
+assert(!cssSource.includes("dco-list-price-approval"), "mobile badge styles must be removed");
+const approvalFilterListSettings = context.frappe.listview_settings["Door Cutting Order"];
+assert(approvalFilterListSettings.add_fields.includes("price_approval_status"), "price approval data must remain queryable");
+assert(
+    approvalFilterListSettings.custom_filter_configs.some(config => config.fieldname === "price_approval_status"),
+    "price approval filtering must remain available"
+);
+for (const approvalStatus of ["Approved", "Unapproved", ""]) {
+    const card = context.window.AlmdinaDoorCuttingOrderListUX.buildCard({
+        name: "DCO-2026-00010",
+        customer: "عميل الاختبار",
+        price_approval_status: approvalStatus,
+    }, false);
+    assert(!card.includes("dco-list-price-approval"), "mobile cards must not show approval badges");
+}
+
+// The cost approval filter scopes active orders, not historical cancellations.
+// Explicitly selecting Cancelled from the native status filter must still work.
+const approvedPriceFilter = ["Door Cutting Order", "price_approval_status", "=", "Approved"];
+const unapprovedPriceFilter = ["price_approval_status", "=", "Unapproved"];
+const excludeCancelled = ["Door Cutting Order", "status", "!=", "Cancelled"];
+
+function scopedApprovalQuery(filters, orFilters = []) {
+    return JSON.parse(JSON.stringify(api.applyPriceApprovalScopeFilter(
+        { filters, or_filters: orFilters, page_length: 20 },
+        "Door Cutting Order"
+    )));
+}
+
+assert.deepStrictEqual(
+    scopedApprovalQuery([approvedPriceFilter]).filters,
+    [approvedPriceFilter, excludeCancelled],
+    "Approved excludes cancelled orders at query time"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([unapprovedPriceFilter]).filters,
+    [unapprovedPriceFilter, excludeCancelled],
+    "Unapproved also excludes cancelled orders at query time"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([]).filters, [],
+    "Without a price filter, the ordinary list keeps cancelled history visible"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([["price_approval_status", "=", ""]]).filters,
+    [["price_approval_status", "=", ""]],
+    "Clearing the price filter restores ordinary status visibility"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([
+        approvedPriceFilter, ["Door Cutting Order", "status", "=", "Cancelled"],
+    ]).filters,
+    [approvedPriceFilter, ["Door Cutting Order", "status", "=", "Cancelled"]],
+    "Explicit Cancelled status selection takes priority over implicit exclusion"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([
+        approvedPriceFilter, ["status", "in", ["Draft", "Cancelled"]],
+    ]).filters,
+    [approvedPriceFilter, ["status", "in", ["Draft", "Cancelled"]]],
+    "Multi-status filters that include Cancelled are explicit requests for history"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([
+        approvedPriceFilter, ["status", "=", "Delivered"],
+    ]).filters,
+    [approvedPriceFilter, ["status", "=", "Delivered"], excludeCancelled],
+    "Other explicit statuses remain compatible with the exclusion"
+);
+assert.deepStrictEqual(
+    scopedApprovalQuery([approvedPriceFilter, excludeCancelled]).filters,
+    [approvedPriceFilter, excludeCancelled],
+    "Repeated query preparation never duplicates the exclusion"
+);
+const combinedOr = [["Door Cutting Order", "name", "like", "%26-00012%"]];
+const scopedCombinedQuery = scopedApprovalQuery([approvedPriceFilter], combinedOr);
+assert.deepStrictEqual(scopedCombinedQuery.or_filters, combinedOr);
+assert.strictEqual(scopedCombinedQuery.page_length, 20);
+assert.deepStrictEqual(
+    scopedApprovalQuery([["Other Doctype", "price_approval_status", "=", "Approved"]]).filters,
+    [["Other Doctype", "price_approval_status", "=", "Approved"]],
+    "Another DocType's approval filter must not change DCO results"
+);
+
+// Exercise the existing Frappe get_args interception, not just the pure policy.
+const originalApprovalArgs = {
+    filters: [approvedPriceFilter],
+    or_filters: [],
+};
+const approvalQueryListview = {
+    doctype: "Door Cutting Order",
+    page: { fields_dict: { name: { get_value: () => "" } } },
+    get_args() { return originalApprovalArgs; },
+};
+api.installCombinedSearch(approvalQueryListview);
+api.installCombinedSearch(approvalQueryListview);
+assert.deepStrictEqual(
+    JSON.parse(JSON.stringify(approvalQueryListview.get_args().filters)),
+    [approvedPriceFilter, excludeCancelled],
+    "Actual list get_args must apply the exclusion once even without a search term"
+);
+assert.deepStrictEqual(originalApprovalArgs.filters, [approvedPriceFilter],
+    "Query decoration must not mutate the original Frappe filter array");
+
 const listFormatters = context.frappe.listview_settings["Door Cutting Order"].formatters;
 context.frappe.user = {
     full_name(user) {

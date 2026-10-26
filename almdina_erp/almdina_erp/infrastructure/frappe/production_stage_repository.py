@@ -5,6 +5,10 @@ from typing import Any
 import frappe
 from frappe.utils import cint, now_datetime, time_diff_in_seconds
 
+from almdina_erp.almdina_erp.infrastructure.frappe.production_stage_command_context import (
+    authorized_stage_activation,
+)
+
 
 def lock_stage(stage_name: str) -> None:
     frappe.db.sql(
@@ -130,12 +134,10 @@ def start_stage(
     stage.started_by = actor
     stage.start_time = now_datetime()
     stage.status = target_status
-    if not stage.assigned_to:
-        stage.assigned_to = actor
-        stage.assignment_time = now_datetime()
-    elif not getattr(stage, "assignment_time", None):
+    if stage.assigned_to and not getattr(stage, "assignment_time", None):
         stage.assignment_time = getattr(stage, "creation", None) or now_datetime()
-    stage.save(ignore_permissions=True)
+    with authorized_stage_activation(stage):
+        stage.save(ignore_permissions=True)
     return stage
 
 
@@ -161,7 +163,8 @@ def complete_stage(
             0,
             total_seconds - cint(stage.paused_seconds),
         )
-    stage.save(ignore_permissions=True)
+    with authorized_stage_activation(stage):
+        stage.save(ignore_permissions=True)
     return stage
 
 
