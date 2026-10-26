@@ -267,6 +267,8 @@ class TestShopFloorQueryApplication(unittest.TestCase):
                 "status": "At CNC",
                 "production_path": "Drawing",
                 "current_production_stage": "PST-CNC",
+                "has_cutting_plan": True,
+                "plan_needs_recalculation": False,
             }
         }
 

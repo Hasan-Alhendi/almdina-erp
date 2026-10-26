@@ -25,11 +25,20 @@ assert.equal(operational({doc: {status: "At Drawing", production_path: "Cutting"
 const exportAllowed = method(context, "function canExport(frm, row)", "function uploadedFile", {
     workspaceCapabilities: () => ({export_dxf: true}),
     isEditing: () => false,
+    isHistoricalRow: method(context, "function isHistoricalRow(frm, row)", "function esc", {
+        workspaceData: () => ({approved_plan: "CP-APPROVED"}),
+    }),
+    hasOriginalDxfFile: row => Boolean(row && row.dxf && row.dxf.file),
+    preferOriginalUpload: () => true,
     rowHasPlan: () => true,
     can: (_frm, cap) => cap === "export_dxf",
     hasOperationalAccess: () => { throw new Error("read-only download must not ask for stage mutation"); },
 });
-assert.equal(exportAllowed({doc: {status: "Delivered"}}, {}), true);
+assert.equal(exportAllowed({doc: {status: "Delivered"}}, {
+    name: "CP-APPROVED",
+    status: "Approved",
+    display_context: "current_approved",
+}), true);
 
 const original = method(exporter, "function shouldDownloadOriginalUpload(planSource, options)", "function decodeBase64Bytes", {
     ORIGINAL_UPLOAD_SOURCES: new Set(["custom", "uploaded"]),

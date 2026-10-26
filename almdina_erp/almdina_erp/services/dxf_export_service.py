@@ -36,6 +36,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
+    is_current_manufacturing_candidate,
 )
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -323,12 +324,7 @@ def _draft_manifest(order: Any, snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _canonical_saved_plan(order: Any) -> Any | None:
-    approved_name = str(getattr(order, "approved_plan", None) or "").strip()
-    if approved_name and frappe.db.exists("Cutting Plan", approved_name):
-        approved = frappe.get_doc("Cutting Plan", approved_name)
-        if str(approved.door_cutting_order or "") == str(order.name):
-            return approved
-    return current_working_plan(str(order.name))
+    return approved_plan_for_order(order) or current_working_plan(str(order.name))
 
 
 def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
@@ -360,6 +356,23 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
 
 def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     plan = _saved_plan_for_source(order, plan_source)
+    belongs_to_order = bool(
+        plan
+        and str(_plan_field(plan, "door_cutting_order") or "") == str(order.name)
+        and str(_plan_field(plan, "plan_kind", "Order") or "Order") == "Order"
+    )
+    if not plan or not is_current_manufacturing_candidate(
+        status=_plan_field(plan, "status"),
+        belongs_to_order=belongs_to_order,
+        is_linked_approval=_is_current_approved_plan(order, plan),
+    ):
+        frappe.throw(
+            _(
+                "Generating a manufacturing file from a historical or unrelated plan is not allowed. "
+                "Choose a current draft or the plan approved for this order."
+            ),
+            frappe.ValidationError,
+        )
     if not plan or not str(getattr(plan, "snapshot_json", None) or "").strip():
         source_labels = {
             "system": _("خطة النظام"),
@@ -388,6 +401,8 @@ def _is_current_approved_plan(order: Any, plan: Any) -> bool:
         bool(plan_name)
         and plan_name == approved_name
         and str(_plan_field(plan, "status") or "") == APPROVED
+        and str(_plan_field(plan, "door_cutting_order") or "") == str(order.name)
+        and str(_plan_field(plan, "plan_kind", "Order") or "Order") == "Order"
     )
 
 
@@ -688,7 +703,7 @@ def get_validated_dxf_plan(
 
     order = _require_export_access(order_name=order_name, payload=payload)
 
-    if order_name and order:
+    if order is not None:
         plan = _required_saved_plan(order, plan_source)
         _assert_saved_plan_fresh(order, plan)
         issues = legacy_export.validate_cutting_plan_issues(plan)

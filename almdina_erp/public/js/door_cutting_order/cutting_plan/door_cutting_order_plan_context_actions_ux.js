@@ -92,6 +92,17 @@
         return Boolean(plan && Array.isArray(plan.sheets) && plan.sheets.length);
     }
 
+    function isHistoricalRow(frm, row) {
+        if (!row) return false;
+        if (row.display_context) return row.display_context === "historical";
+        const status = String(row.status || "");
+        if (status === "Cancelled" || status === "Superseded") return true;
+        if (status === "Approved") {
+            return String(row.name || "") !== String((workspaceData(frm) || {}).approved_plan || "");
+        }
+        return status !== "Draft";
+    }
+
     function esc(value) {
         return frappe.utils.escape_html(String(value ?? ""));
     }
@@ -197,9 +208,14 @@
 
     function canExport(frm, row) {
         const caps = workspaceCapabilities(frm);
+        const archiveOnly = isHistoricalRow(frm, row)
+            && String((row && row.source_type) || "") === "Uploaded DXF"
+            && hasOriginalDxfFile(row)
+            && preferOriginalUpload(frm, row);
         return Boolean(
             !isEditing(frm)
-            && rowHasPlan(row)
+            && (!isHistoricalRow(frm, row) || archiveOnly)
+            && (archiveOnly || rowHasPlan(row))
             && caps.export_dxf
             && can(frm, "export_dxf")
         );

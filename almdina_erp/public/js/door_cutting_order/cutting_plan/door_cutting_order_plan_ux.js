@@ -610,10 +610,17 @@
         if (!workspaceReady(frm)) return;
 
         const mayMutate = canRecalculatePlan(frm);
+        const systemPlan = workspaceData(frm)?.plans?.system_draft;
+        const workspaceOwner = window.AlmdinaPlanWorkspaceState;
+        const hasCurrentSystemDraft = Boolean(systemPlan && (
+            workspaceOwner && typeof workspaceOwner.isCurrentDraftRow === "function"
+                ? workspaceOwner.isCurrentDraftRow(systemPlan)
+                : String(systemPlan.status || "") === "Draft"
+        ));
         // Read mode hides the Plan settings section, except for the first
         // authorized System-plan command. Its only entry point lives here.
         const firstSystemPlan = mayMutate
-            && !workspaceData(frm)?.plans?.system_draft;
+            && !hasCurrentSystemDraft;
         wrapper.attr("data-almdina-plan-bootstrap", firstSystemPlan ? "1" : "0");
         const settings = activeSettings(frm);
         const mode = String(settings.packing_mode || "Auto Pro");

@@ -2972,3 +2972,22 @@ recessed handle,مسكة غطس
 add-on,إضافة
 Set {0} to the required cut size {1}.,اجعل {0} بمقاس القص المطلوب {1}.
 Match the saved order cut size on {0}.,طابق مقاس القص المحفوظ في الطلب على {0}.
+Plan matching requires review,مطابقة الخطة تحتاج إلى مراجعة
+Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing.,تعذر تأكيد مطابقة الخطة بعد تحديث النظام. راجع الخطة قبل استخدامها في عملية تصنيع جديدة.
+The plan is marked as out of date. Review it before starting new manufacturing.,الخطة تحمل علامة محفوظة بأنها قديمة. راجعها قبل استخدامها في عملية تصنيع جديدة.
+Review and verify the cutting plan before starting new manufacturing work.,راجع خطة القص وتأكد من مطابقتها قبل بدء عمل تصنيعي جديد.
+Use the Start or Handoff action to activate a production stage.,استخدم إجراء البدء أو التسليم لتفعيل مرحلة الإنتاج.
+Previous plan — cancelled,خطة سابقة — ملغاة
+Previous plan — superseded,خطة سابقة — مستبدلة
+Approved plan — no longer current,الخطة المعتمدة لم تعد الحالية
+Previous plan,خطة سابقة
+Current order inputs differ from this saved historical plan.,تختلف مدخلات الطلب الحالية عن هذه الخطة المحفوظة.
+This historical plan carries an older saved review flag whose cause is unknown.,تحمل هذه الخطة التاريخية علامة مراجعة قديمة محفوظة ولا يُعرف سببها.
+The historical plan fingerprint could not be confirmed.,تعذر تأكيد بصمة الخطة التاريخية.
+This plan is kept for reference and is not approved for manufacturing.,حُفظت هذه الخطة للرجوع إليها وهي غير معتمدة للتصنيع.
+Plan status,حالة الخطة
+Historical plan: Cancelled,خطة تاريخية: ملغاة
+Historical plan: Superseded,خطة تاريخية: مستبدلة
+Historical plan: Approval is no longer current,خطة تاريخية: لم يعد اعتمادها ساريًا
+Historical plan,خطة تاريخية
+Generating a manufacturing file from a historical or unrelated plan is not allowed. Choose a current draft or the plan approved for this order.,لا يجوز إنشاء ملف تصنيع من خطة تاريخية أو غير مرتبطة بالطلب الحالي. اختر مسودة حالية أو الخطة المعتمدة المرتبطة بالطلب.

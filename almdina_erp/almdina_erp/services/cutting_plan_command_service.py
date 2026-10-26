@@ -282,6 +282,11 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
         plan,
         str(plan.input_fingerprint or ""),
     )
+    if not expected_fingerprint:
+        frappe.throw(
+            _("Plan compatibility could not be confirmed after the system update. Review the plan before starting new manufacturing."),
+            frappe.ValidationError,
+        )
     if not str(plan.input_fingerprint or "").strip() or plan.input_fingerprint != expected_fingerprint:
         frappe.throw(
             _("خطة القص لم تعد مطابقة لبيانات الطلب الحالية. حدّث الخطة ثم اعتمدها."),

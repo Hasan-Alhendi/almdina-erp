@@ -218,6 +218,20 @@ test("tabs, preview and independent representation keep or reject the selected s
     assert.equal(h.writes.length, before);
 });
 
+test("historical plans keep printable geometry with a printed lifecycle label", async () => {
+    const h = harness();
+    h.state.data.plans.system_draft = {
+        ...row("SYSTEM-CANCELLED", geometry("ARCHIVE-CUT")),
+        status: "Cancelled",
+        display_context: "historical",
+    };
+    h.frm.__almdina_active_plan_tab = "System";
+    assert.equal(await h.print(), true);
+    assert.match(h.writes.at(-1), /ARCHIVE-CUT/);
+    assert.match(h.writes.at(-1), /Historical plan: Cancelled/);
+    assert.match(h.writes.at(-1), /Plan status/);
+});
+
 test("final OFFCUT print hides business context and uses solid gray fill", async () => {
     const h = harness();
     h.frm.__almdina_active_plan_tab = "System";
