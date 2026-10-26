@@ -387,3 +387,12 @@ def test_uploaded_finished_material_at_edge_allows_safe_external_saw_centers(
     assert snapshot["saw_center_status"] == ("Present" if with_saw_paths else "Absent")
     assert snapshot["sheets"][0]["applied_trim_width_cm"] == pytest.approx(0.1)
     assert snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(0)
+
+
+
+def test_strict_dxf_rejects_finished_material_outside_physical_board(tmp_path):
+    path = tmp_path / "outside-material.dxf"
+    _write_adaptive_boundary_dxf(path, sheets_and_pieces=[(0, -1, 10)])
+    with pytest.raises(DxfImportError) as error:
+        _strict_boundary_import(path, count=1)
+    assert "PIECE_OUTSIDE_SHEET" in error.value.codes
