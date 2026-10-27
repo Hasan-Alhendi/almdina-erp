@@ -114,6 +114,27 @@ class TestDxfOriginalUploadDownload(unittest.TestCase):
         self.assertEqual(base64.b64decode(result["content_b64"]), ORIGINAL_DXF)
         self.assertEqual(self.response["filecontent"], ORIGINAL_DXF)
 
+    def test_historical_board_edge_policy_is_not_revalidated_or_rewritten(self) -> None:
+        # Previously accepted file: no cutter centers on the two board edges.
+        import ezdxf
+
+        document = ezdxf.new("R2010")
+        modelspace = document.modelspace()
+        modelspace.add_lwpolyline(
+            [(0, 5), (1220, 5), (1220, 2005), (0, 2005)],
+            dxfattribs={"layer": "GEOMETRY"}, close=True,
+        )
+        for y in (2.5, 2007.5):
+            modelspace.add_line((-2.5, y), (1222.5, y), dxfattribs={"layer": "CUT_PATH"})
+        document.saveas(self.path)
+        original = Path(self.path).read_bytes()
+        self.plan.status = "Cancelled"
+        self.plan.saw_center_status = "Present"
+        result = self._run(plan_source="custom")
+        self.assertEqual(base64.b64decode(result["content_b64"]), original)
+        self.assertEqual(self.response["filecontent"], original)
+        self.assertEqual(Path(self.path).read_bytes(), original)
+
     def test_system_plan_does_not_enter_original_download(self) -> None:
         with self.assertRaises(_FakeThrow) as exc_info:
             self._run(plan_source="system")
