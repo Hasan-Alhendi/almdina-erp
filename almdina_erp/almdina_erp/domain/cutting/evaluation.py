@@ -94,28 +94,23 @@ def placement_permission_errors(
 ) -> list[str]:
     """Reject a recorded quarter-turn or mirror the piece is not allowed to use.
 
-    The clipped-void outline is the one non-quarter exception and is not a
-    quarter-turn. Pieces without an explicit turn record stay on the
-    historical ``rotated`` check inside ``validate_plan``.
+    Every placed piece is checked, not only search candidates. The clipped-void
+    outline is the one non-quarter exception and is not a quarter-turn unless a
+    mirror flag is also stored.
     """
 
     from .placement_orientation import (
-        PlacementOrientation,
         PlacementOrientationError,
         assert_orientation_allowed,
+        recorded_mirror,
+        resolve_placement_orientation,
     )
 
     expected = {int(piece["id"]): piece for piece in requested_pieces}
     errors: list[str] = []
     for sheet in plan.get("sheets") or []:
         for placed in sheet.get("pieces") or []:
-            if placed.get("placement_outline_cm"):
-                continue
-            turns = placed.get("corner_rotation_quarter_turns")
-            if not isinstance(turns, int):
-                recorded = placed.get("placement_quarter_turns")
-                turns = recorded if isinstance(recorded, int) else None
-            if not isinstance(turns, int):
+            if placed.get("placement_outline_cm") and not recorded_mirror(placed):
                 continue
             try:
                 piece_id = int(placed["id"])
@@ -124,14 +119,9 @@ def placement_permission_errors(
             source = expected.get(piece_id)
             if source is None:
                 continue
-            mirrored = bool(
-                placed.get("mirrored")
-                or placed.get("corner_mirrored")
-                or placed.get("placement_mirrored")
-            )
             try:
                 assert_orientation_allowed(
-                    PlacementOrientation(mirrored, int(turns) % 4),
+                    resolve_placement_orientation(placed),
                     mirroring_allowed=mirroring_allowed,
                     allow_rotation=source.get("allow_rotation"),
                 )

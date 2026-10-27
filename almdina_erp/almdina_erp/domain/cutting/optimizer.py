@@ -1051,7 +1051,9 @@ def optimize_plan(
         time_limit_sec=time_limit_sec,
         **metric_kwargs,
     )
-    return improve_plan_search(
+    from .evaluation import placement_permission_errors
+
+    improved = improve_plan_search(
         shaped,
         pieces,
         board_w_cm,
@@ -1062,6 +1064,14 @@ def optimize_plan(
         mirroring_allowed=mirroring_allowed,
         **metric_kwargs,
     )
+    for candidate in (improved, shaped, nested, baseline):
+        if not placement_permission_errors(
+            candidate,
+            pieces,
+            mirroring_allowed=mirroring_allowed,
+        ):
+            return candidate
+    return baseline
 
 
 __all__ = [

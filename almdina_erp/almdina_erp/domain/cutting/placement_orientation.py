@@ -52,13 +52,22 @@ def resolve_placement_orientation(piece: Mapping[str, object] | None) -> Placeme
 
     if not piece:
         return PlacementOrientation(False, 0)
-    if "mirrored" in piece:
-        mirrored = _flag(piece.get("mirrored"))
-    elif "corner_mirrored" in piece:
-        mirrored = _flag(piece.get("corner_mirrored"))
-    else:
-        mirrored = False
-    return PlacementOrientation(mirrored, piece_quarter_turns(piece))
+    return PlacementOrientation(recorded_mirror(piece), piece_quarter_turns(piece))
+
+
+def recorded_mirror(piece: Mapping[str, object] | None) -> bool:
+    """True when any stored mirror flag is on. Missing flags stay false.
+
+    The three names are one physical reflection. A lone historical ``rotated``
+    flag is not a mirror.
+    """
+
+    if not piece:
+        return False
+    return any(
+        key in piece and _flag(piece.get(key))
+        for key in ("mirrored", "corner_mirrored", "placement_mirrored")
+    )
 
 
 def assert_orientation_allowed(

@@ -37,6 +37,20 @@ def _lengths(points):
     ))
 
 
+def test_any_stored_mirror_flag_is_real_mirroring():
+    from almdina_erp.almdina_erp.domain.cutting.placement_orientation import recorded_mirror
+
+    assert recorded_mirror({"rotated": True}) is False
+    assert recorded_mirror({"mirrored": 0, "corner_mirrored": 1}) is True
+    assert recorded_mirror({"placement_mirrored": "false"}) is False
+    assert recorded_mirror({"mirrored": 0, "corner_mirrored": 0}) is False
+    assert resolve_placement_orientation({
+        "mirrored": 0,
+        "corner_mirrored": 1,
+        "rotated": True,
+    }).mirrored is True
+
+
 def test_historical_rotated_flag_is_not_a_mirror():
     turned = resolve_placement_orientation({"rotated": True})
     plain = resolve_placement_orientation({"rotated": False})

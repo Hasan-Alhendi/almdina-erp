@@ -1203,14 +1203,11 @@ def _outline_from_recorded_orientation(
     if not isinstance(turns, int):
         recorded = placed.get("placement_quarter_turns")
         turns = recorded if isinstance(recorded, int) else None
-    mirror_keys = ("mirrored", "corner_mirrored", "placement_mirrored")
-    if not isinstance(turns, int) and not any(key in placed for key in mirror_keys):
+    from .placement_orientation import recorded_mirror
+
+    if not isinstance(turns, int) and not recorded_mirror(placed):
         return None
-    mirrored = False
-    for key in mirror_keys:
-        if key in placed:
-            mirrored = bool(placed.get(key))
-            break
+    mirrored = recorded_mirror(placed)
     width = num(placed.get("original_w")) or num(placed.get("width_cm"))
     height = num(placed.get("original_h")) or num(placed.get("length_cm"))
     if width <= 0 or height <= 0:

@@ -21,7 +21,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 
 
 class CuttingPlanEngine(Protocol):
@@ -202,11 +204,20 @@ def optimize_order_plan(
         preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
     )
     plan["sheets"] = sheets
-    validation_errors = engine.validate(
-        plan,
-        expanded,
-        usable_width_cm,
-        usable_length_cm,
+    validation_errors = list(
+        engine.validate(
+            plan,
+            expanded,
+            usable_width_cm,
+            usable_length_cm,
+        )
+    )
+    validation_errors.extend(
+        placement_permission_errors(
+            plan,
+            expanded,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        )
     )
 
     trim_policy = _trim_policy_metadata(
@@ -245,7 +256,7 @@ def optimize_order_plan(
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
-        "allow_piece_mirroring": command.allow_piece_mirroring is True,
+        "allow_piece_mirroring": piece_mirroring_allowed(command.allow_piece_mirroring),
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
         "trim_policy": trim_policy,
@@ -332,7 +343,7 @@ def _run_engine(
         min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
-        mirroring_allowed=command.allow_piece_mirroring is True,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
     )
 
 

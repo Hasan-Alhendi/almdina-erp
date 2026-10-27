@@ -82,6 +82,453 @@ def test_four_l_pieces_share_a_void_without_mirroring():
         for piece in sheet["pieces"]
     )
     assert sum(len(sheet["pieces"]) for sheet in blocked["sheets"]) == 5
+    assert not placement_permission_errors(blocked, pieces, mirroring_allowed=False)
+    turns = {
+        int(piece.get("corner_rotation_quarter_turns") or 0)
+        for sheet in blocked["sheets"]
+        for piece in sheet["pieces"]
+        if piece.get("piece_type") == "L-Shaped Corner"
+    }
+    assert turns <= {0, 1, 2, 3}
+    assert 2 in turns or 3 in turns or 1 in turns
+
+
+def test_half_turn_without_a_mirror_flag_is_allowed():
+    piece = expand_piece_groups([_corner_row("L-Shaped Corner", qty=1)])[0]
+    placed = _placed_corner(piece, x_cm=0, y_cm=0, mirrored=False, turns=2)
+    plan = {"sheets": [{"sheet_no": 1, "pieces": [placed]}]}
+
+    assert placed["mirrored"] is False
+    assert placed["corner_rotation_quarter_turns"] == 2
+    assert not placement_permission_errors(plan, [piece], mirroring_allowed=False)
+
+
+def test_injected_mirror_is_rejected_even_from_another_search_path():
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner", qty=1)])
+    piece = pieces[0]
+    smuggled = _placed_corner(piece, x_cm=0, y_cm=0, mirrored=True, turns=0)
+    forbidden = {"sheets": [{"sheet_no": 1, "w": 40, "h": 40, "pieces": [smuggled]}]}
+
+    assert placement_permission_errors(forbidden, pieces, mirroring_allowed=False)
+    assert not placement_permission_errors(forbidden, pieces, mirroring_allowed=True)
+
+    plan = optimize_plan(
+        pieces,
+        40,
+        40,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=1,
+        mirroring_allowed=False,
+    )
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored") or piece.get("placement_mirrored")
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
+
+
+def test_two_l_pieces_nest_on_one_board_without_mirroring():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=2,
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            )
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80.3)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        80.3,
+        40.3,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert len(improved["sheets"]) == 1
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
+    assert not placement_permission_errors(improved, pieces, mirroring_allowed=False)
+    outlines = [material_outline_cm(piece) for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert all(outline and len(outline) >= 6 for outline in outlines)
+
+
+def test_opposite_hand_l_pieces_interlock_without_mirroring():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=1,
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            ),
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=1,
+                clipped_corner_position="Top Left",
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            ),
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=61)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        61,
+        61,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert len(improved["sheets"]) == 1
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not validate_plan(improved, pieces, 61, 61, kerf_cm=0.3)
+
+
+def test_same_hand_l_interlock_uses_mirroring_only_when_allowed():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=2,
+                allow_rotation=0,
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            )
+        ]
+    )
+    tight = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=61)
+    blocked = apply_shape_aware_nesting(
+        tight,
+        pieces,
+        61,
+        61,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    allowed = apply_shape_aware_nesting(
+        tight,
+        pieces,
+        61,
+        61,
+        0.3,
+        mirroring_allowed=True,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    assert len(blocked["sheets"]) == 2
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in blocked["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert len(allowed["sheets"]) == 1
+    assert any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in allowed["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(allowed, pieces, mirroring_allowed=True)
+    assert not validate_plan(allowed, pieces, 61, 61, kerf_cm=0.3)
+
+
+def test_three_l_pieces_keep_every_copy_without_mirroring():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=30,
+                length_cm=30,
+                qty=3,
+                clipped_corner_width_cm=12,
+                clipped_corner_length_cm=12,
+            )
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)], [(0, 0)]], board=80)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        62,
+        62,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert len(set(ids)) == 3
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(improved, pieces, mirroring_allowed=False)
+
+
+def test_three_clipped_corners_keep_every_copy_without_a_void_angle():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "Clipped Corner",
+                width_cm=30,
+                length_cm=30,
+                qty=3,
+                clipped_corner_width_cm=12,
+                clipped_corner_length_cm=12,
+            )
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)], [(0, 0)]], board=80)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        62,
+        62,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert len(set(ids)) == 3
+    assert not any(piece.get("placement_rotation_deg") for sheet in improved["sheets"] for piece in sheet["pieces"])
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(improved, pieces, mirroring_allowed=False)
+    assert not validate_plan(improved, pieces, 62, 62, kerf_cm=0.3)
+
+
+def test_disabling_mirroring_recalculates_without_a_mirror_flag():
+    from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
+
+    assert piece_mirroring_allowed(0) is False
+    assert piece_mirroring_allowed(False) is False
+    assert piece_mirroring_allowed(None) is False
+    assert piece_mirroring_allowed("") is False
+    assert piece_mirroring_allowed(1) is True
+
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=2,
+                allow_rotation=0,
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            )
+        ]
+    )
+    first = optimize_plan(
+        pieces,
+        61,
+        61,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=piece_mirroring_allowed(1),
+    )
+    second = optimize_plan(
+        pieces,
+        61,
+        61,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=piece_mirroring_allowed(0),
+    )
+    assert any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in first["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored") or piece.get("placement_mirrored")
+        for sheet in second["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(second, pieces, mirroring_allowed=False)
+    assert placement_permission_errors(first, pieces, mirroring_allowed=False)
+
+
+def test_two_clipped_corners_complement_without_a_void_angle():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "Clipped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=2,
+                clipped_corner_width_cm=20,
+                clipped_corner_length_cm=20,
+            )
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80.3)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        80.3,
+        40.3,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert len(improved["sheets"]) == 1
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert not any(piece.get("placement_rotation_deg") for sheet in improved["sheets"] for piece in sheet["pieces"])
+    assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
+
+
+def test_mixed_sizes_can_nest_when_outlines_clear():
+    pieces = expand_piece_groups(
+        [
+            _corner_row(
+                "L-Shaped Corner",
+                width_cm=40,
+                length_cm=40,
+                qty=1,
+                clipped_corner_width_cm=18,
+                clipped_corner_length_cm=18,
+            ),
+            _corner_row(
+                "Clipped Corner",
+                width_cm=20,
+                length_cm=16,
+                qty=1,
+                clipped_corner_width_cm=6,
+                clipped_corner_length_cm=5,
+            ),
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        61,
+        40,
+        0.3,
+        mirroring_allowed=True,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert not validate_plan(improved, pieces, 61, 40, kerf_cm=0.3)
+
+
+def test_disabled_rotation_does_not_invent_a_turn():
+    pieces = expand_piece_groups(
+        [_corner_row("L-Shaped Corner", qty=2, allow_rotation=0, width_cm=20, length_cm=20)]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=50)
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        50,
+        20.3,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+    for sheet in improved["sheets"]:
+        for piece in sheet["pieces"]:
+            assert int(piece.get("corner_rotation_quarter_turns") or 0) == 0
+            assert not piece.get("mirrored")
+    assert not placement_permission_errors(improved, pieces, mirroring_allowed=False)
+
+
+def test_optimize_plan_rejects_a_smuggled_mirror_when_the_order_forbids_it(monkeypatch):
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner", qty=2)])
+
+    def _smuggle(plan, requested, *args, **kwargs):
+        first = requested[0]
+        plan = {
+            "sheets": [{
+                "sheet_no": 1,
+                "w": 80,
+                "h": 80,
+                "pieces": [_placed_corner(first, x_cm=0, y_cm=0, mirrored=True, turns=0)],
+            }],
+            "unplaced": requested[1:],
+            "method_key": plan.get("method_key") or "",
+            "method_label": plan.get("method_label") or "",
+        }
+        return plan
+
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting.apply_shape_aware_nesting",
+        _smuggle,
+    )
+    plan = optimize_plan(
+        pieces,
+        80,
+        80,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=1,
+        mirroring_allowed=False,
+    )
+    assert not any(
+        piece.get("mirrored") or piece.get("corner_mirrored")
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+    )
+    assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
 
 
 def test_four_clipped_corners_store_the_void_edge_angle():

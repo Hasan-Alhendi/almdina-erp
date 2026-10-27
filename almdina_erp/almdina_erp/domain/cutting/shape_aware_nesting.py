@@ -232,7 +232,13 @@ def _cluster_sheet(
             },
             used,
         )
-    return None
+    return _complement_sheet(
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        mirroring_allowed=mirroring_allowed,
+    )
 
 
 def _assign_cluster(
@@ -271,6 +277,150 @@ def _assign_cluster(
         return None
 
     return _search(0, set(range(4)))
+
+
+def _complement_sheet(
+    pieces: Sequence[Mapping[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+    kerf_cm: float,
+    *,
+    mirroring_allowed: bool,
+) -> tuple[dict[str, Any], set[int]] | None:
+    """Place two or three corner pieces by real outlines, not a 2×2 cell.
+
+    Quarter-turns and an allowed mirror are the only transforms. The clipped
+    void angle is not produced here.
+    """
+
+    corners = [
+        piece
+        for piece in pieces
+        if str(piece.get("piece_type") or "") in _CORNER_TYPES
+        and num(piece.get("width_cm")) > 0
+        and num(piece.get("length_cm")) > 0
+        and num(piece.get("clipped_corner_width_cm")) > 0
+        and num(piece.get("clipped_corner_length_cm")) > 0
+    ]
+    if len(corners) < 2:
+        return None
+    corners = sorted(
+        corners,
+        key=lambda piece: num(piece.get("width_cm")) * num(piece.get("length_cm")),
+        reverse=True,
+    )
+    from itertools import combinations
+
+    pool = corners[:8]
+    for size in (3, 2):
+        if len(pool) < size:
+            continue
+        tried = 0
+        for group in combinations(pool, size):
+            tried += 1
+            if tried > 12:
+                break
+            placed = _pack_corners(
+                group,
+                kerf_cm,
+                board_w_cm,
+                board_h_cm,
+                mirroring_allowed=mirroring_allowed,
+            )
+            if placed is None:
+                continue
+            used = {int(piece["id"]) for piece in placed}
+            return (
+                {
+                    "sheet_no": 1,
+                    "w": board_w_cm,
+                    "h": board_h_cm,
+                    "pieces": placed,
+                },
+                used,
+            )
+    return None
+
+
+def _pack_corners(
+    pieces: Sequence[Mapping[str, Any]],
+    kerf_cm: float,
+    board_w_cm: float,
+    board_h_cm: float,
+    *,
+    mirroring_allowed: bool,
+) -> list[dict[str, Any]] | None:
+    options = [_orientations(piece, mirroring_allowed) for piece in pieces]
+
+    def _search(index: int, placed: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        if index == len(pieces):
+            return placed
+        piece = pieces[index]
+        for mirrored, turns, _facing, _cut_x, _cut_y in options[index]:
+            for x_cm, y_cm in _corner_anchors(placed, piece, turns, kerf_cm):
+                candidate = _placed_corner(
+                    piece,
+                    x_cm=x_cm,
+                    y_cm=y_cm,
+                    mirrored=mirrored,
+                    turns=turns,
+                )
+                outline = material_outline_cm(candidate)
+                if outline is None or not _inside_board(outline, board_w_cm, board_h_cm):
+                    continue
+                if placed and not _clears(outline, placed, kerf_cm):
+                    continue
+                found = _search(index + 1, [*placed, candidate])
+                if found is not None:
+                    return found
+        return None
+
+    return _search(0, [])
+
+
+def _corner_anchors(
+    placed: Sequence[Mapping[str, Any]],
+    piece: Mapping[str, Any],
+    turns: int,
+    kerf_cm: float,
+) -> list[tuple[float, float]]:
+    source_w = num(piece.get("width_cm"))
+    source_h = num(piece.get("length_cm"))
+    odd = bool(int(turns) % 2) and abs(source_w - source_h) > 1e-6
+    width = source_h if odd else source_w
+    height = source_w if odd else source_h
+    if not placed:
+        return [(0.0, 0.0)]
+    seen: set[tuple[float, float]] = set()
+    spots: list[tuple[float, float]] = []
+    for previous in placed:
+        px = num(previous.get("x"))
+        py = num(previous.get("y"))
+        pw = num(previous.get("w"))
+        ph = num(previous.get("h"))
+        cut_w = num(previous.get("clipped_corner_width_cm"))
+        cut_h = num(previous.get("clipped_corner_length_cm"))
+        if int(previous.get("corner_rotation_quarter_turns") or 0) % 2:
+            cut_w, cut_h = cut_h, cut_w
+        for x_cm, y_cm in (
+            (px + pw + kerf_cm, py),
+            (px, py + ph + kerf_cm),
+            (px - width - kerf_cm, py),
+            (px, py - height - kerf_cm),
+            (px + pw + kerf_cm, py + ph - height),
+            (px + pw - width, py + ph + kerf_cm),
+            (px + max(kerf_cm, pw - width), py + max(kerf_cm, ph - height)),
+            (px + cut_w + kerf_cm, py),
+            (px, py + cut_h + kerf_cm),
+            (px + cut_w + kerf_cm, py + cut_h + kerf_cm),
+            (px + pw - cut_w - width, py + cut_h + kerf_cm),
+        ):
+            key = (round(x_cm, 4), round(y_cm, 4))
+            if key in seen or x_cm < -1e-6 or y_cm < -1e-6:
+                continue
+            seen.add(key)
+            spots.append((x_cm, y_cm))
+    return spots
 
 
 def _orientations(
