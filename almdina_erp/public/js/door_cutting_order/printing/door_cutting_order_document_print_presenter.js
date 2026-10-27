@@ -19,6 +19,16 @@
         return number(value).toLocaleString("en-US", { maximumFractionDigits: 3 });
     }
 
+    function printMeasure(value) {
+        if (value === null || value === undefined || typeof value === "boolean") return "—";
+        const raw = typeof value === "string" ? value.trim().replace(",", ".") : value;
+        if (raw === "") return "—";
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) return "—";
+        const text = parsed.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+        return text || "0";
+    }
+
     function money(value) {
         return number(value).toLocaleString("en-US", {
             minimumFractionDigits: 2,
@@ -274,14 +284,17 @@
             0
         );
         const phone = String(customerPhone || "").trim();
+        const boardLength = printMeasure(frm.doc.board_length_cm);
+        const boardWidth = printMeasure(frm.doc.board_width_cm);
+        const defaultEdgeType = String(frm.doc.default_edge_type || "").trim();
         return `<div class="info shared-info">
             <div class="shared-info-customer">
                 <b>${esc(__("Customer"))}</b>
                 <span class="shared-info-primary">${esc(frm.doc.customer || "—")}</span>
                 <span class="shared-info-phone"><span class="shared-info-phone-label">${esc(__("Phone"))}</span><span class="shared-info-phone-value">${esc(phone || "—")}</span></span>
             </div>
-            <div><b>${esc(__("Board"))}</b>${esc(frm.doc.board_description || "—")}</div>
-            <div><b>${esc(__("Edge color"))}</b>${esc(frm.doc.edge_color || __("Not specified"))}</div>
+            <div><b>${esc(__("Board"))}</b>${esc(frm.doc.board_description || "—")}<span class="shared-info-detail"><span class="shared-info-detail-label">${esc(__("Length"))}:</span> <span class="shared-info-metric" dir="ltr">${esc(boardLength)}</span> <span class="shared-info-detail-sep">—</span> <span class="shared-info-detail-label">${esc(__("Width"))}:</span> <span class="shared-info-metric" dir="ltr">${esc(boardWidth)}</span> <span class="shared-info-detail-unit">${esc(__("cm"))}</span></span></div>
+            <div><b>${esc(__("Edge color"))}</b>${esc(frm.doc.edge_color || __("Not specified"))}<span class="shared-info-detail"><span class="shared-info-detail-label">${esc(__("Default type"))}:</span> <span class="shared-info-detail-value">${esc(defaultEdgeType || "—")}</span></span></div>
             <div><b>${esc(__("Cutting machine"))}</b>${esc(frm.doc.order_cutting_machine || "—")}</div>
             <div><b>${esc(__("Door count"))}</b>${quantity(doorCount)}</div>
         </div>`;

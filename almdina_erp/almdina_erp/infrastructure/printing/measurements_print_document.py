@@ -55,13 +55,17 @@ body{font-size:8.1pt;line-height:1.28;-webkit-print-color-adjust:exact;print-col
 .dco-unified-print-reference{margin-top:.7mm;font-size:15.6pt;font-weight:950;line-height:1.05;letter-spacing:.1pt;color:#172033;direction:ltr;unicode-bidi:plaintext;overflow-wrap:anywhere}
 .dco-unified-print-date{margin-top:.75mm;font-size:6.7pt;font-weight:750;line-height:1.35;color:#5d6874;direction:ltr;unicode-bidi:plaintext}
 .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
-.shared-info{grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)}
+.shared-info{grid-template-columns:minmax(0,1.45fr) minmax(0,1.42fr) minmax(0,1.38fr) minmax(0,.64fr) minmax(0,.5fr)}
 .info>div{min-width:0;min-height:10.5mm;padding:1.35mm 1.55mm;border:.7pt solid #c7cdd3;border-radius:2.1mm;background:#fbfcfd;line-height:1.25;overflow-wrap:anywhere}
 .info b{display:block;margin-bottom:.55mm;color:#5d6874;font-size:6.35pt;font-weight:800}
 .shared-info-primary{display:block;color:#172033;font-size:8pt;font-weight:850;line-height:1.2;overflow-wrap:anywhere}
 .shared-info-phone{display:flex;align-items:baseline;gap:1mm;margin-top:.65mm;color:#5d6874;font-size:6.35pt;font-weight:700;line-height:1.25}
 .shared-info-phone-label{flex:0 0 auto}
 .shared-info-phone-value{min-width:0;direction:ltr;unicode-bidi:plaintext;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.shared-info-detail{display:block;margin-top:.45mm;color:#303a44;font-size:6.55pt;font-weight:750;line-height:1.35;overflow-wrap:anywhere}
+.shared-info-detail-label,.shared-info-detail-sep,.shared-info-detail-unit{white-space:nowrap}
+.shared-info-metric{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums;white-space:nowrap}
+.shared-info-detail-value{overflow-wrap:anywhere}
 .title{margin:2.1mm 0 1.2mm;font-size:9.2pt;font-weight:900;color:#172033}
 .table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:.75pt solid #98a2ac;border-radius:2mm;overflow:hidden}
 .table thead{display:table-header-group}
@@ -129,6 +133,28 @@ def _number(value: object) -> float:
 def _quantity(value: object) -> str:
     number = _number(value)
     text = f"{number:.3f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _optional_quantity(value: object) -> str:
+    """Print a stored measure. A missing measure stays an em dash, not zero."""
+    if isinstance(value, bool) or value is None:
+        return "—"
+    if isinstance(value, str):
+        raw = value.strip().replace(",", ".")
+        if not raw:
+            return "—"
+    elif isinstance(value, (int, float)):
+        raw = str(value)
+    else:
+        return "—"
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return "—"
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return "—"
+    text = f"{parsed:.3f}".rstrip("0").rstrip(".")
     return text or "0"
 
 
@@ -225,6 +251,31 @@ def _header_html(identity: Mapping[str, Any], *, reference: str, date: str, tran
         </header>"""
 
 
+def _board_size_detail(order: Mapping[str, Any], translator: Any = None) -> str:
+    length = _optional_quantity(order.get("board_length_cm"))
+    width = _optional_quantity(order.get("board_width_cm"))
+    return (
+        '<span class="shared-info-detail">'
+        f'<span class="shared-info-detail-label">{_esc(_label("Length", translator))}:</span> '
+        f'<span class="shared-info-metric" dir="ltr">{_esc(length)}</span> '
+        '<span class="shared-info-detail-sep">—</span> '
+        f'<span class="shared-info-detail-label">{_esc(_label("Width", translator))}:</span> '
+        f'<span class="shared-info-metric" dir="ltr">{_esc(width)}</span> '
+        f'<span class="shared-info-detail-unit">{_esc(_label("cm", translator))}</span>'
+        "</span>"
+    )
+
+
+def _default_edge_detail(order: Mapping[str, Any], translator: Any = None) -> str:
+    edge_type = str(order.get("default_edge_type") or "").strip()
+    return (
+        '<span class="shared-info-detail">'
+        f'<span class="shared-info-detail-label">{_esc(_label("Default type", translator))}:</span> '
+        f'<span class="shared-info-detail-value">{_esc(edge_type or "—")}</span>'
+        "</span>"
+    )
+
+
 def _shared_info(order: Mapping[str, Any], phone: str, translator: Any = None) -> str:
     pieces = order.get("pieces") or []
     door_count = sum(_qty(row) for row in pieces if isinstance(row, Mapping))
@@ -234,8 +285,8 @@ def _shared_info(order: Mapping[str, Any], phone: str, translator: Any = None) -
                 <span class="shared-info-primary">{_esc(order.get("customer") or "—")}</span>
                 <span class="shared-info-phone"><span class="shared-info-phone-label">{_esc(_label("Phone", translator))}</span><span class="shared-info-phone-value">{_esc(phone or "—")}</span></span>
             </div>
-            <div><b>{_esc(_label("Board", translator))}</b>{_esc(order.get("board_description") or "—")}</div>
-            <div><b>{_esc(_label("Edge color", translator))}</b>{_esc(order.get("edge_color") or _label("Not specified", translator))}</div>
+            <div><b>{_esc(_label("Board", translator))}</b>{_esc(order.get("board_description") or "—")}{_board_size_detail(order, translator)}</div>
+            <div><b>{_esc(_label("Edge color", translator))}</b>{_esc(order.get("edge_color") or _label("Not specified", translator))}{_default_edge_detail(order, translator)}</div>
             <div><b>{_esc(_label("Cutting machine", translator))}</b>{_esc(order.get("order_cutting_machine") or "—")}</div>
             <div><b>{_esc(_label("Door count", translator))}</b>{_quantity(door_count)}</div>
         </div>"""
@@ -521,7 +572,10 @@ PRINT_ORDER_FIELDS = (
     "customer",
     "order_date",
     "board_description",
+    "board_length_cm",
+    "board_width_cm",
     "edge_color",
+    "default_edge_type",
     "order_cutting_machine",
     "order_notes",
 )
