@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,18 @@ MODULAR_PAGES = (
 
 
 class FrontendAssetLoadingContractTest(unittest.TestCase):
+    def test_lazy_scripts_are_compatible_with_pinned_frappe_extension_detection(self) -> None:
+        # Frappe v16.17.5 assets.js extn() inspects the portion *after* '?'.
+        # execute() adds a release cache token without changing the lookup path.
+        # Manually suffixed lazy paths therefore fail before any script loads.
+        registry = ROOT / "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
+        for entry in (*PAGE_ROOT.rglob("*.js"), registry):
+            with self.subTest(entry=str(entry.relative_to(ROOT))):
+                self.assertFalse(
+                    re.search(r'["\x27`]([^"\x27`\s]+\.js\?[^"\x27`\s]+)["\x27`]', entry.read_text()),
+                    "Lazy script declarations must use Frappe's native release cache version.",
+                )
+
     def test_foundation_owns_batched_asset_loading(self) -> None:
         source = FOUNDATION.read_text(encoding="utf-8")
         self.assertIn("function requireAssets(items)", source)

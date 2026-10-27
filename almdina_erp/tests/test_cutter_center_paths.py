@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import math
 import os
 import subprocess
@@ -123,6 +124,122 @@ def test_one_door_center_is_radius_outside_not_on_the_finished_edge():
     assert not any(_on_line(segment, axis="x", value=5) for segment in centers)
 
 
+@pytest.mark.parametrize("kerf", [3, 4, 5])
+@pytest.mark.parametrize("width", [1220, 1218, 1215])
+def test_full_perimeter_keeps_dynamic_offset_at_physical_sheet_edges(kerf, width):
+    radius = kerf / 2
+    x = (1220 - width) / 2
+    ring = _rect(x, 0, width, 2440)
+    paths = cutter_center_paths([(ring, ())], radius, board=(0, 0, 1220, 2440))
+    assert len(paths) == 1 and paths[0].closed
+    for actual, expected in zip(paths[0].points, _rect(x - radius, -radius, width + kerf, 2440 + kerf)):
+        assert actual == pytest.approx(expected, abs=1e-9)
+    assert ring == _rect(x, 0, width, 2440)
+
+
+def test_exported_shared_paths_are_not_repeated():
+    shapes = [(_rect(0, 0, 200, 500), ()), (_rect(205, 100, 200, 400), ())]
+    paths = cutter_center_paths(shapes, 2.5, board=(0, 0, 1220, 2440))
+    observed = []
+    for path in paths:
+        observed.extend(zip(path.points, path.points[1:]))
+        if path.closed:
+            observed.append((path.points[-1], path.points[0]))
+    expected = cutter_center_segments(shapes, 2.5)
+    assert sum(math.dist(*segment) for segment in observed) == pytest.approx(
+        sum(math.dist(*segment) for segment in expected), abs=0.05,
+    )
+
+
+def test_python_javascript_full_perimeter_parity_and_round_trip(tmp_path):
+    """Compare actual browser DXF with Python, including every finished edge."""
+    cases = []
+
+    def add_case(kerf, entries):
+        pieces, shapes, rows = [], [], []
+        for index, (outer, holes, fields) in enumerate(entries, start=1):
+            xs, ys = [p[0] for p in outer], [p[1] for p in outer]
+            width, height = (max(xs) - min(xs)) / 10, (max(ys) - min(ys)) / 10
+            row = _piece(
+                piece_instance_id=f"door-{index}", width_cm=width, length_cm=height,
+                cut_width_cm=width, cut_length_cm=height, **fields,
+            )
+            rows.append(row)
+            pieces.append(dict(
+                vars(row), id=index, label=f"{index}.1", x=min(xs) / 10, y=min(ys) / 10,
+                w=width, h=height, geometry=dict(
+                    schema_version=1, unit="mm", coordinate_space="usable_sheet",
+                    outer=outer, holes=holes,
+                ),
+            ))
+            shapes.append((
+                [(x, 2440 - y) for x, y in outer],
+                [[(x, 2440 - y) for x, y in hole] for hole in holes],
+            ))
+        plan = dict(
+            full_board_width_cm=122, full_board_length_cm=244,
+            usable_board_width_cm=122, usable_board_length_cm=244,
+            kerf_mm=kerf, trim_cm=0,
+            sheets=[dict(sheet_no=1, full_width_cm=122, full_length_cm=244, pieces=pieces)],
+        )
+        cases.append((plan, shapes, _order(rows)))
+
+    for kerf in (3, 4, 5):
+        for width in (1220, 1218, 1215):
+            add_case(kerf, [(_rect((1220 - width) / 2, 0, width, 2440), (), {})])
+        for x, y in ((0, 0), (820, 0), (0, 1940), (820, 1940)):
+            add_case(kerf, [(_rect(x, y, 400, 500), (), {})])
+        add_case(kerf, [
+            (_rect(0, 0, 200, 500), (), {}),
+            (_rect(200 + kerf, 100, 200, 400), (), {}),
+        ])
+        add_case(kerf, [
+            (_rect(column * (200 + kerf), row * (300 + kerf), 200, 300), (), {})
+            for row in range(2) for column in range(2)
+        ])
+        add_case(kerf, [
+            (_rect(0, 0, 1000, 1000), (_rect(200, 200, 600, 600),),
+             dict(piece_type="Glass", glass_margin_mm=200)),
+            (_rect(300, 300, 200, 200), (), {}),
+        ])
+        for piece_type in ("L-Shaped Corner", "Clipped Corner"):
+            for position in ("Top Right", "Top Left", "Bottom Right", "Bottom Left"):
+                ring = piece_polygon_mm(LinerPiece(piece_type, 40, 50, position, 10, 15))
+                add_case(kerf, [(ring, (), dict(
+                    piece_type=piece_type, clipped_corner_position=position,
+                    clipped_corner_width_cm=10, clipped_corner_length_cm=15,
+                ))])
+        add_case(kerf, [(tuple(reversed(_rect(0, 0, 400, 500))), (), {})])
+
+    source = tmp_path / "cases.json"
+    source.write_text(json.dumps([case[0] for case in cases]))
+    subprocess.run(
+        ["node", str(ROOT / "tests" / "js" / "secure_dxf_topology_export.test.js")],
+        check=True, capture_output=True, text=True,
+        env=dict(os.environ, PERIMETER_CASES=str(source), PERIMETER_OUTPUT_DIR=str(tmp_path)),
+    )
+    for index, (plan, shapes, order) in enumerate(cases):
+        path = tmp_path / f"{index}.dxf"
+        document = ezdxf.readfile(str(path))
+        observed = _layer_segments(document, "CUT_PATH")
+        expected = cutter_center_segments(shapes, plan["kerf_mm"] / 2, board=(0, 0, 1220, 2440))
+        assert classify_saw_center_segments(observed, expected) == "match", index
+        assert sum(math.dist(*edge) for edge in observed) == pytest.approx(
+            sum(math.dist(*edge) for edge in expected), abs=0.05,
+        ), index
+        # Finished material, including hole boundaries, must be unchanged.
+        finished = [
+            (ring[i], ring[(i + 1) % len(ring)])
+            for outer, holes in shapes for ring in [outer, *holes] for i in range(len(ring))
+        ]
+        assert classify_saw_center_segments(_layer_segments(document, "GEOMETRY"), finished) == "match", index
+        normalized = rebuild_autocad_dxf(path.read_bytes())
+        path.write_bytes(normalized)
+        snapshot = _import(str(path), order, kerf_mm=plan["kerf_mm"], trim_mm=0)
+        assert snapshot["saw_center_status"] == "Present", index
+        assert len(snapshot["sheets"][0]["pieces"]) == len(order.pieces), index
+
+
 def test_two_adjacent_doors_share_one_center_and_keep_a_real_gap():
     radius = 2.5
     shapes = [(_rect(0, 0, 200, 500), ()), (_rect(205, 0, 200, 500), ())]
@@ -136,44 +253,21 @@ def test_two_adjacent_doors_share_one_center_and_keep_a_real_gap():
     assert len([segment for segment in apart if _on_line(segment, axis="x", value=203.5)]) == 1
 
 
-def test_multi_offset_paths_keep_one_closed_contour_per_adjacent_door():
-    radius = 2.5
+def test_multi_offset_paths_merge_shared_centers_without_losing_edges():
     shapes = [(_rect(10, 10, 200, 500), ()), (_rect(215, 10, 200, 500), ())]
-
-    paths = cutter_center_paths(shapes, radius, board=(0, 0, 1220, 2440))
-
-    assert len(paths) == 2
-    assert all(path.closed for path in paths)
-    assert all(len(path.points) == 4 for path in paths)
-    boxes = []
-    observed = []
-    for path in paths:
-        xs = [point[0] for point in path.points]
-        ys = [point[1] for point in path.points]
-        boxes.append((min(xs), min(ys), max(xs), max(ys)))
-        observed.extend(
-            (path.points[index], path.points[(index + 1) % len(path.points)])
-            for index in range(len(path.points))
-        )
-    assert boxes == [(7.5, 7.5, 212.5, 512.5), (212.5, 7.5, 417.5, 512.5)]
-    assert classify_saw_center_segments(
-        observed,
-        cutter_center_segments(shapes, radius, board=(0, 0, 1220, 2440)),
-    ) == "match"
-
-
-def test_multi_offset_uses_open_fallback_only_for_physical_board_edges():
-    board = (0.0, 0.0, 1220.0, 2440.0)
-
-    paths = cutter_center_paths([(_rect(0, 0, 400, 500), ())], 2.5, board=board)
-
-    assert paths
+    paths = cutter_center_paths(shapes, 2.5, board=(0, 0, 1220, 2440))
+    assert len(paths) == 5
     assert all(not path.closed for path in paths)
-    segments = [tuple(path.points) for path in paths]
-    assert not any(_on_line(segment, axis="x", value=-2.5) for segment in segments)
-    assert not any(_on_line(segment, axis="y", value=-2.5) for segment in segments)
-    assert any(_on_line(segment, axis="x", value=402.5) for segment in segments)
-    assert any(_on_line(segment, axis="y", value=502.5) for segment in segments)
+    observed = [tuple(path.points) for path in paths]
+    assert len([segment for segment in observed if _on_line(segment, axis="x", value=212.5)]) == 1
+    assert classify_saw_center_segments(observed, cutter_center_segments(shapes, 2.5)) == "match"
+
+
+def test_physical_board_edges_keep_the_full_closed_offset():
+    shapes = [(_rect(0, 0, 400, 500), ())]
+    paths = cutter_center_paths(shapes, 2.5, board=(0, 0, 1220, 2440))
+    assert len(paths) == 1 and paths[0].closed
+    assert paths == cutter_center_paths(shapes, 2.5)
 
 
 def test_partial_overlap_keeps_the_union_and_a_gap_stays_open():
@@ -215,13 +309,13 @@ def test_trim_offset_follows_the_door_on_one_side_and_zero_trim_leaves_the_sheet
     assert any(_on_line(segment, axis="x", value=0) for segment in flush)
 
 
-def test_a_finished_edge_on_the_physical_board_is_not_a_cut():
+def test_a_finished_edge_on_the_physical_board_is_still_cut():
     board = (0.0, 0.0, 1220.0, 2440.0)
-    assert cutter_center_segments([(_rect(0, 0, 1220, 2440), ())], 2.5, board=board) == []
+    assert len(cutter_center_segments([(_rect(0, 0, 1220, 2440), ())], 2.5, board=board)) == 4
 
     one_side = cutter_center_segments([(_rect(0, 0, 400, 500), ())], 2.5, board=board)
-    assert not any(_on_line(segment, axis="x", value=-2.5) for segment in one_side)
-    assert not any(_on_line(segment, axis="y", value=-2.5) for segment in one_side)
+    assert any(_on_line(segment, axis="x", value=-2.5) for segment in one_side)
+    assert any(_on_line(segment, axis="y", value=-2.5) for segment in one_side)
     assert any(_on_line(segment, axis="x", value=402.5) for segment in one_side)
     assert any(_on_line(segment, axis="y", value=502.5) for segment in one_side)
 
@@ -235,7 +329,7 @@ def test_a_finished_edge_on_the_physical_board_is_not_a_cut():
         board=board,
     )
     assert len([segment for segment in shared if _on_line(segment, axis="x", value=402.5)]) == 1
-    assert not any(_on_line(segment, axis="x", value=-2.5) for segment in shared)
+    assert any(_on_line(segment, axis="x", value=-2.5) for segment in shared)
 
 
 def test_hole_clipped_and_l_contours_offset_from_the_real_ring():
@@ -406,9 +500,8 @@ def test_exported_dxf_round_trip_matches_the_reference_offset(tmp_path):
         if entity.dxftype() == "LWPOLYLINE" and entity.dxf.layer == "Liner"
     )
     assert geometry_lines
-    assert len(center_paths) == 2
-    assert all(entity.closed for entity in center_paths)
-    assert not [
+    assert center_paths == []
+    assert [
         entity for entity in source.modelspace()
         if entity.dxftype() == "LINE" and entity.dxf.layer == "CUT_PATH"
     ]
@@ -418,7 +511,7 @@ def test_exported_dxf_round_trip_matches_the_reference_offset(tmp_path):
         segment for segment in _layer_segments(source, "CUT_PATH")
         if _on_line(segment, axis="x", value=212.5)
     ]
-    assert len(shared) == 2
+    assert len(shared) == 1
 
     normalized = rebuild_autocad_dxf(client_path.read_bytes())
     audited = ezdxf.read(io.StringIO(normalized.decode("utf-8")))
@@ -467,7 +560,7 @@ def _vertical_spans(points):
     return spans
 
 
-def test_full_board_door_has_no_perimeter_cut_and_the_liner_closes_itself(tmp_path):
+def test_full_board_door_has_a_closed_perimeter_and_unchanged_liner(tmp_path):
     client_path = tmp_path / "full-board-liner.dxf"
     env = os.environ.copy()
     env["FULL_BOARD_DXF_OUT"] = str(client_path)
@@ -478,7 +571,9 @@ def test_full_board_door_has_no_perimeter_cut_and_the_liner_closes_itself(tmp_pa
     )
     source = ezdxf.readfile(str(client_path))
     modelspace = source.modelspace()
-    assert not [entity for entity in modelspace if entity.dxf.layer == "CUT_PATH"]
+    cuts = [entity for entity in modelspace if entity.dxf.layer == "CUT_PATH"]
+    assert len(cuts) == 1 and cuts[0].closed
+    assert len(_layer_segments(source, "CUT_PATH")) == 4
     geometry = [
         entity for entity in modelspace
         if entity.dxftype() == "LINE" and entity.dxf.layer == "GEOMETRY"
@@ -550,10 +645,10 @@ def test_split_trim_exports_saw_centers_and_reimports(tmp_path):
         ]
 
     assert len(vertical(2.5)) == 1
-    assert len(vertical(407.5)) == 2
-    assert len(vertical(812.5)) == 2
+    assert len(vertical(407.5)) == 1
+    assert len(vertical(812.5)) == 1
     assert len(vertical(1217.5)) == 1
-    assert len(horizontal(2.5)) == 3
+    assert len(horizontal(2.5)) == 1
     assert vertical(0) == []
     assert vertical(1220) == []
     geometry = [
@@ -610,10 +705,10 @@ def test_three_millimetre_kerf_trim_exports_and_reimports(tmp_path):
         ]
 
     assert len(vertical(3.5)) == 1
-    assert len(vertical(406.5)) == 2
-    assert len(vertical(809.5)) == 2
+    assert len(vertical(406.5)) == 1
+    assert len(vertical(809.5)) == 1
     assert len(vertical(1212.5)) == 1
-    assert len(horizontal(3.5)) == 3
+    assert len(horizontal(3.5)) == 1
     assert vertical(0) == []
     assert vertical(1220) == []
     geometry = [

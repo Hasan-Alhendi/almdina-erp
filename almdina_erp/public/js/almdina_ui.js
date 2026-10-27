@@ -420,6 +420,66 @@
         return new runtime.ui.FileUploader(merged);
     }
 
+    function errorPreview(preview, label) {
+        if (!preview) return "";
+        // Only normalized numeric geometry reaches this renderer.
+        const [left, bottom, right, top] = preview.bounds;
+        const padding = Math.max(5, (right - left) * 0.04, (top - bottom) * 0.04);
+        const viewBox = [left - padding, bottom - padding, right - left + padding * 2, top - bottom + padding * 2].join(" ");
+        const paths = preview.paths.map((rings, index) => {
+            const d = rings.map(ring => "M " + ring.map(point => point.join(" ")).join(" L ") + " Z").join(" ");
+            const color = index === 0 ? "#b42318" : "#175cd3";
+            return `<path d="${d}" fill="${color}" fill-opacity="0.16" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" fill-rule="evenodd"/>`;
+        }).join("");
+        return `<details class="alm-error-preview"><summary>${escapeHtml(label)}</summary><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeHtml(label)}" viewBox="${viewBox}" width="100%" height="280"><title>${escapeHtml(label)}</title><g transform="translate(0 ${bottom + top}) scale(1 -1)">${paths}</g></svg></details>`;
+    }
+
+    function errorDialog(error, options = {}) {
+        if (typeof options.isCurrent === "function" && !options.isCurrent()) return null;
+        const frontend = window.AlmdinaFrontend;
+        const runtime = window.frappe;
+        if (!frontend || !runtime || typeof runtime.msgprint !== "function") return null;
+        const t = message => typeof __ === "function" ? __(message) : message;
+        const problem = frontend.normalizeError(error, options);
+        const cards = problem.issues.map(item => {
+            const target = item.target ? `<p><strong>${escapeHtml(t("Location"))}:</strong> ${escapeHtml(item.target)}</p>` : "";
+            const action = item.action ? `<p><strong>${escapeHtml(t("Next step"))}:</strong> ${escapeHtml(item.action)}</p>` : "";
+            const details = item.details.length ? `<details><summary>${escapeHtml(t("Details"))}</summary><ul>${item.details.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul></details>` : "";
+            const table = item.table.length ? `<table class="table table-bordered"><tbody>${item.table.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>` : "";
+            const highlight = item.highlight ? `<p>${escapeHtml(item.highlight)}</p>` : "";
+            return `<section class="alm-error-card"><p><strong>${escapeHtml(item.problem)}</strong></p>${highlight}${target}${action}${details}${table}${errorPreview(item.preview, t("Affected cut paths (read-only detail)"))}<small>${escapeHtml(item.code)}</small></section>`;
+        }).join("");
+        let footer = "";
+        if (problem.outcome === "unknown") footer = t("The result could not be confirmed. Check the current status before repeating the operation.");
+        else if (options.outcomeMessages) footer = options.outcomeMessages[problem.outcome] || "";
+        const reference = problem.requestReference
+            ? `<p>${escapeHtml(t("Support reference"))}: <code dir="ltr">${escapeHtml(problem.requestReference)}</code></p>` : "";
+        const overflow = problem.hasMore ? `<p>${escapeHtml(t("Some diagnostic details were omitted. Correct the listed issues and validate again."))}</p>` : "";
+        const coverage = problem.partialValidation ? `<p>${escapeHtml(t("Validation stopped at these issues. Further checks may remain."))}</p>` : "";
+        const message = `<div class="almdina-ui"><div class="alm-error-summary" role="alert">${cards || `<p>${escapeHtml(problem.message)}</p>`}${overflow}${coverage}${footer ? `<p>${escapeHtml(footer)}</p>` : ""}${reference}</div></div>`;
+        // msgprint reuses a Desk-global singleton. A document-owned cleanup
+        // must never hide a later, unrelated message in that same singleton.
+        let closed = false;
+        const close = () => {
+            if (closed) return;
+            closed = true;
+            dialog.hide();
+        };
+        const dialog = new runtime.ui.Dialog({
+            title: escapeHtml(problem.title || options.title || t("The operation could not be completed")),
+            size: "large",
+            secondary_action_label: t("Close"),
+            secondary_action: close,
+            onhide() {
+                closed = true;
+                dialog.$wrapper.remove();
+            },
+        });
+        dialog.$body.html(message);
+        dialog.show();
+        return Object.freeze({ hide: close });
+    }
+
     window.AlmdinaUi = Object.freeze({
         button,
         control,
@@ -431,5 +491,6 @@
         status,
         state,
         escapeHtml,
+        errorDialog,
     });
 })();

@@ -164,11 +164,60 @@ def test_modern_upload_with_matching_saw_centers_keeps_present_status():
     assert snapshot["saw_center_status"] == "Present"
 
 
+@pytest.mark.parametrize("kerf_mm", [3, 4, 5])
+@pytest.mark.parametrize("width_mm", [1220, 1218, 1215])
+def test_full_perimeter_upload_outside_sheet_matches_dynamic_radius(kerf_mm, width_mm):
+    """Independent fixture: cutter centers may leave the sheet, material may not."""
+    x = (1220 - width_mm) / 2
+    radius = kerf_mm / 2
+    finished = _rect(x, 0, width_mm, 2440)
+    center = _rect(x - radius, -radius, width_mm + kerf_mm, 2440 + kerf_mm)
+    document = ezdxf.new("R2010")
+    modelspace = _sheet(document)
+    modelspace.add_lwpolyline(finished, dxfattribs={"layer": "GEOMETRY"}, close=True)
+    modelspace.add_lwpolyline(center, dxfattribs={"layer": "CUT_PATH"}, close=True)
+    order = _order([_piece(
+        width_cm=width_mm / 10, length_cm=244,
+        cut_width_cm=width_mm / 10, cut_length_cm=244,
+    )])
+    snapshot = _import(_write(document), order, kerf_mm=kerf_mm, trim_mm=0)
+    assert snapshot["saw_center_status"] == "Present"
+    pieces = snapshot["sheets"][0]["pieces"]
+    assert len(pieces) == 1
+    assert (pieces[0]["w"], pieces[0]["h"]) == pytest.approx((width_mm / 10, 244), abs=1e-9)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "board_edges_missing", "extra", "wrong_radius"])
+def test_full_board_rejects_incomplete_or_unrelated_centers(mutation):
+    finished = _rect(0, 0, 1220, 2440)
+    center = _rect(-2.5, -2.5, 1225, 2445)
+    segments = list(zip(center, (*center[1:], center[0])))
+    if mutation == "missing":
+        segments.pop()
+    elif mutation == "board_edges_missing":
+        segments = [segments[0], segments[2]]
+    elif mutation == "extra":
+        segments.append(((100, 100), (200, 100)))
+    else:
+        wrong = _rect(-2, -2, 1224, 2444)
+        segments = list(zip(wrong, (*wrong[1:], wrong[0])))
+    document = ezdxf.new("R2010")
+    modelspace = _sheet(document)
+    modelspace.add_lwpolyline(finished, dxfattribs={"layer": "GEOMETRY"}, close=True)
+    for start, end in segments:
+        modelspace.add_line(start, end, dxfattribs={"layer": "CUT_PATH"})
+    order = _order([_piece(width_cm=122, length_cm=244, cut_width_cm=122, cut_length_cm=244)])
+    with pytest.raises(dxf_import_service.DxfImportError) as raised:
+        _import(_write(document), order, kerf_mm=5, trim_mm=0)
+    assert raised.value.issues[0].code == SAW_CENTER_ISSUE
+
+
 @pytest.mark.parametrize("entity_type", ["LWPOLYLINE", "POLYLINE"])
 def test_modern_upload_accepts_independent_closed_multi_offset_contours(entity_type):
     finished = [_rect(10, 10, 200, 500), _rect(215, 10, 200, 500)]
     shapes = [(ring, ()) for ring in finished]
-    paths = cutter_center_paths(shapes, 2.5, board=(0.0, 0.0, 1220.0, 2440.0))
+    # Independent designer contours remain valid even when their centers coincide.
+    paths = [path for shape in shapes for path in cutter_center_paths([shape], 2.5)]
     assert len(paths) == 2
     assert all(path.closed for path in paths)
 

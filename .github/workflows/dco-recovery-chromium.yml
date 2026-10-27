@@ -36,6 +36,9 @@ jobs:
       - name: Install Chromium
         run: python -m playwright install --with-deps chromium
 
+      - name: Certify error diagnostics and upload ownership in Chromium
+        run: python -m pytest -q tests/browser/test_error_diagnostics_chromium.py
+
       - name: Certify DCO recovery in Chromium
         if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'native_quota' && inputs.suite != 'without_native_quota')
         run: python -m pytest -q -s tests/browser/test_dco_local_recovery_chromium.py

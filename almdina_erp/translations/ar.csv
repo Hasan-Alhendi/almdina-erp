@@ -2991,3 +2991,28 @@ Historical plan: Superseded,خطة تاريخية: مستبدلة
 Historical plan: Approval is no longer current,خطة تاريخية: لم يعد اعتمادها ساريًا
 Historical plan,خطة تاريخية
 Generating a manufacturing file from a historical or unrelated plan is not allowed. Choose a current draft or the plan approved for this order.,لا يجوز إنشاء ملف تصنيع من خطة تاريخية أو غير مرتبطة بالطلب الحالي. اختر مسودة حالية أو الخطة المعتمدة المرتبطة بالطلب.
+"Door {0}, copy {1}; door {2}, copy {3}.",الدرفة {0}، النسخة {1}؛ الدرفة {2}، النسخة {3}.
+Board {0}: {1},اللوح {0}: {1}
+Board {0}: doors {1} and {2}.,اللوح {0}: الدرفتان {1} و{2}.
+Board {0}: cut paths {1} and {2}. Door identity has not been established.,اللوح {0}: مسارا القص {1} و{2}. لم تُثبت مطابقتهما لدرف الطلب.
+The clearance is {0} mm; at least {1} mm is required.,المسافة الفعلية {0} مم؛ والمطلوب {1} مم على الأقل.
+"Move the affected pieces apart, then validate the DXF again.",باعد بين القطعتين في الرسم، ثم أعد التحقق من ملف DXF.
+The DXF file could not be accepted,تعذر قبول ملف DXF
+The operation could not be completed. Please try again or contact support.,تعذر إكمال العملية. أعد المحاولة أو تواصل مع الدعم.
+The operation could not be completed,تعذر إكمال العملية
+Next step,الخطوة التالية
+Affected cut paths (read-only detail),عرض موضع التعارض — للقراءة فقط
+The result could not be confirmed. Check the current status before repeating the operation.,تعذر التأكد من نتيجة العملية. تحقّق من الحالة الحالية قبل تكرار الإجراء.
+Support reference,مرجع الدعم
+Some diagnostic details were omitted. Correct the listed issues and validate again.,لم تُعرض بعض تفاصيل التشخيص. صحّح المشكلات المذكورة ثم أعد التحقق.
+The current DXF cutting plan was not replaced.,لم تُستبدل خطة DXF الحالية.
+Validation stopped at these issues. Further checks may remain.,توقف التحقق عند هذه المشكلات؛ وقد توجد فحوص لم تكتمل.
+Your session has expired. Sign in again.,انتهت جلستك. سجّل الدخول مجددًا.
+You do not have permission to perform this action.,لا تملك صلاحية تنفيذ هذا الإجراء.
+The requested resource is unavailable.,المورد المطلوب غير متاح.
+The uploaded file exceeds the server's size limit.,حجم الملف المرفوع يتجاوز الحد المسموح على الخادم.
+Too many requests. Wait a moment before trying again.,عدد المحاولات كبير. انتظر قليلًا قبل المحاولة مجددًا.
+The server is temporarily unavailable. Check the current status before repeating the operation.,الخادم غير متاح مؤقتًا. تحقّق من الحالة الحالية قبل تكرار الإجراء.
+The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
+An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
+"The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.

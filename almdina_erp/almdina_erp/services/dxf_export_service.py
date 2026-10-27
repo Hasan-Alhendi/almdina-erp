@@ -113,12 +113,20 @@ def _require_export_access(
     return None
 
 
-def _topology_pair_source_numbers(
+def _topology_pair_context(
     snapshot: dict[str, Any],
     exc: DxfTopologyError,
-) -> tuple[int, int] | None:
-    by_key: dict[str, int] = {}
-    for sheet in snapshot.get("sheets") or []:
+) -> tuple[int | None, dict[str, Any], dict[str, Any]] | None:
+    candidates = []
+    for index, sheet in enumerate(snapshot.get("sheets") or [], start=1):
+        try:
+            sheet_no = int(sheet.get("sheet_no") or index)
+        except (TypeError, ValueError):
+            continue
+        if exc.sheet_no is not None and sheet_no != exc.sheet_no:
+            continue
+        by_key: dict[str, dict] = {}
+        ambiguous = set()
         for piece in sheet.get("pieces") or []:
             try:
                 source_piece_no = int(piece.get("source_piece_no"))
@@ -128,12 +136,17 @@ def _topology_pair_source_numbers(
                 continue
             for key in (piece.get("label"), piece.get("id")):
                 if key is not None:
-                    by_key[str(key)] = source_piece_no
-    first = by_key.get(str(exc.first_key)) if exc.first_key is not None else None
-    second = by_key.get(str(exc.second_key)) if exc.second_key is not None else None
-    if first is None or second is None or first == second:
-        return None
-    return first, second
+                    if str(key) in by_key and by_key[str(key)] is not piece:
+                        ambiguous.add(str(key))
+                    by_key[str(key)] = piece
+        if str(exc.first_key) in ambiguous or str(exc.second_key) in ambiguous:
+            continue
+        first = by_key.get(str(exc.first_key)) if exc.first_key is not None else None
+        second = by_key.get(str(exc.second_key)) if exc.second_key is not None else None
+        if first is not None and second is not None:
+            candidates.append((sheet_no, first, second))
+    # Never resolve a label collision by taking a different board's last row.
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def _topology_export_issue(
@@ -142,12 +155,20 @@ def _topology_export_issue(
     *,
     kerf_mm: float,
 ) -> DxfValidationIssue:
-    pair = _topology_pair_source_numbers(snapshot, exc)
+    context = _topology_pair_context(snapshot, exc)
+    sheet_no, first, second = context if context else (exc.sheet_no, None, None)
+    pair = (int(first["source_piece_no"]), int(second["source_piece_no"])) if context else None
+    copies = (first.get("copy_no"), second.get("copy_no")) if context else None
+    if copies == (None, None):
+        copies = None
     return topology_error_to_issue(
         exc,
         kerf_mm=kerf_mm,
         pair_identity_proven=pair is not None,
         pair_source_piece_nos=pair,
+        pair_copy_nos=copies,
+        sheet_no=sheet_no,
+        geometry_unit_mm=1.0,
     )
 
 

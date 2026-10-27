@@ -265,6 +265,8 @@ jobs:
 
       - name: Run active frontend browser simulations
         run: |
+          node almdina_erp/tests/js/error_diagnostics.test.js
+          python -m pytest -q almdina_erp/tests/test_error_diagnostics.py
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/almdina_locale.test.js
           node almdina_erp/tests/js/factory_workforce_languages.test.js

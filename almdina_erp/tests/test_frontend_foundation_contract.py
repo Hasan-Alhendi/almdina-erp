@@ -40,8 +40,8 @@ class TestFrontendFoundationContract(unittest.TestCase):
 
     def test_foundation_is_loaded_once_before_legacy_shared_shell(self) -> None:
         source = ASSETS.read_text(encoding="utf-8")
-        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
-        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
+        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js?v=2"'
+        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js?v=2"'
         shell_asset = '"/assets/almdina_erp/js/shared_shell.js"'
 
         self.assertEqual(source.count(foundation_asset), 1)
