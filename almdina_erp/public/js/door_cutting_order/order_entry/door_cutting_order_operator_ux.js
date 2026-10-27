@@ -59,6 +59,45 @@
         return frappe.utils.escape_html(String(value ?? ""));
     }
 
+    // Chrome with an Arabic UI locale paints input[type=number] using
+    // Arabic-Indic digits and ignores lang on that control. The DOM value
+    // stays Latin. Width and length therefore use a text control whose value
+    // is the same unformatted number string, with a Latin display language.
+    function normalizeDimensionInsert(text) {
+        return String(text ?? "")
+            .replace(/[٠-٩]/g, ch => String(ch.charCodeAt(0) - 0x0660))
+            .replace(/[۰-۹]/g, ch => String(ch.charCodeAt(0) - 0x06F0))
+            .replace(/[٫،,]/g, ".");
+    }
+
+    function planDimensionInsert(current, insert, start, end) {
+        const raw = String(insert ?? "");
+        const normalized = normalizeDimensionInsert(raw);
+        const next = `${String(current ?? "").slice(0, start)}${normalized}${String(current ?? "").slice(end)}`;
+        if (!/^-?\d*\.?\d*$/.test(next)) return null;
+        if (normalized === raw) return { replace: false, next };
+        return { replace: true, text: normalized, next };
+    }
+
+    function stepDimensionValue(raw, delta) {
+        const step = delta < 0 ? -1 : 1;
+        const text = String(raw ?? "").trim().replace(/,/g, ".");
+        if (!text || text === "-" || text === "." || text === "-.") {
+            return step > 0 ? "1" : "0";
+        }
+        if (!/^-?\d*\.?\d+$/.test(text) && !/^-?\d+\.$/.test(text)) return null;
+        const numericText = text.endsWith(".") ? text.slice(0, -1) : text;
+        const numeric = Number(numericText);
+        if (!Number.isFinite(numeric)) return null;
+        const unsigned = numericText.replace(/^-/, "");
+        const places = unsigned.includes(".") ? unsigned.split(".")[1].length : 0;
+        let next = numeric + step;
+        if (next < 0) next = 0;
+        if (!places || next === 0) return String(Math.round(next));
+        const factor = 10 ** Math.min(places, 6);
+        return (Math.round(next * factor) / factor).toFixed(places);
+    }
+
     function num(value) {
         if (value === null || value === undefined || value === "") return 0;
         return Number(String(value).replace(",", ".")) || 0;
@@ -250,6 +289,28 @@
                     background:var(--control-bg,#fff); padding:6px 9px; font-size:15px; outline:none;
                 }
                 .dco-fast-input[type="number"] { direction:ltr; text-align:center; font-variant-numeric:tabular-nums; }
+                .dco-col-width .dco-fast-input,
+                .dco-col-length .dco-fast-input {
+                    direction:ltr; text-align:center;
+                    font-variant-numeric:lining-nums tabular-nums;
+                    font-feature-settings:"locl" 0;
+                }
+                .dco-dimension-control { position:relative; display:block; direction:ltr; }
+                .dco-dimension-control .dco-fast-input { padding-inline-end:18px; }
+                .dco-dimension-stepper {
+                    position:absolute; top:1px; bottom:1px; inset-inline-end:2px; width:16px;
+                    display:flex; flex-direction:column;
+                }
+                .dco-dimension-step {
+                    flex:1 1 50%; margin:0; padding:0; border:0; background:transparent; cursor:pointer; position:relative;
+                }
+                .dco-dimension-step::before {
+                    content:""; position:absolute; left:4px; width:0; height:0;
+                    border-left:4px solid transparent; border-right:4px solid transparent;
+                }
+                .dco-dimension-step[data-dimension-step="1"]::before { top:3px; border-bottom:5px solid var(--text-muted,#6c7680); }
+                .dco-dimension-step[data-dimension-step="-1"]::before { bottom:3px; border-top:5px solid var(--text-muted,#6c7680); }
+                .dco-dimension-step:disabled { cursor:default; opacity:.35; }
                 .dco-fast-input:focus,.dco-fast-select:focus {
                     border-color:var(--alm-primary,#172033); box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 13%, transparent);
                 }
@@ -637,7 +698,9 @@
         const dimensionInput = (fieldname, value) => {
             const issue = virtual ? "" : visibleDimensionMessage(frm, name, fieldname, dimensionIssues);
             const invalid = issue ? " aria-invalid=\"true\"" : "";
-            return `<input class="dco-fast-input${issue ? " is-invalid" : ""}" type="number" inputmode="decimal" step="any" min="0" data-field="${fieldname}" value="${virtual ? "" : escapeHtml(value || "")}"${invalid} ${disabled}><div class="dco-piece-dimension-error" data-field-error="${fieldname}">${escapeHtml(issue)}</div>`;
+            const input = `<input class="dco-fast-input${issue ? " is-invalid" : ""}" type="text" inputmode="decimal" lang="en" dir="ltr" autocomplete="off" spellcheck="false" data-field="${fieldname}" value="${virtual ? "" : escapeHtml(value || "")}"${invalid} ${disabled}>`;
+            const stepper = `<span class="dco-dimension-stepper"><button type="button" class="dco-dimension-step" data-dimension-step="1" tabindex="-1" aria-label="${escapeHtml(__("Increase the measurement"))}" ${disabled}></button><button type="button" class="dco-dimension-step" data-dimension-step="-1" tabindex="-1" aria-label="${escapeHtml(__("Decrease the measurement"))}" ${disabled}></button></span>`;
+            return `<span class="dco-dimension-control" lang="en" dir="ltr">${input}${stepper}</span><div class="dco-piece-dimension-error" data-field-error="${fieldname}">${escapeHtml(issue)}</div>`;
         };
         const pieceType = data.piece_type || "Regular";
         const isSpecial = pieceType === "Special";
@@ -1284,6 +1347,30 @@
 
         // Capture the native input event before table extensions can consume its
         // bubbling phase. The handler mutates only model values and error nodes.
+        root.addEventListener("beforeinput", event => {
+            const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
+            if (!input || !root.contains(input)) return;
+            const inputType = event.inputType || "";
+            if (inputType.startsWith("delete") || inputType === "historyUndo" || inputType === "historyRedo") return;
+            if (event.data == null) {
+                if (inputType === "insertLineBreak" || inputType === "insertParagraph") event.preventDefault();
+                return;
+            }
+            const start = Number.isInteger(input.selectionStart) ? input.selectionStart : String(input.value || "").length;
+            const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+            const plan = planDimensionInsert(input.value, event.data, start, end);
+            if (!plan) {
+                event.preventDefault();
+                return;
+            }
+            if (!plan.replace) return;
+            event.preventDefault();
+            if (typeof input.setRangeText === "function") {
+                input.setRangeText(plan.text, start, end, "end");
+                input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+        }, true);
+
         root.addEventListener("input", event => {
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
@@ -1389,9 +1476,35 @@
             event.stopPropagation();
         }, true);
 
+        root.addEventListener("pointerdown", event => {
+            const button = event.target.closest(".dco-dimension-step");
+            if (!button || !root.contains(button) || button.disabled) return;
+            event.preventDefault();
+        }, true);
+
         root.addEventListener("click", event => {
             const currentFrm = root._dcoFastEntryForm;
             if (!currentFrm) return;
+            const stepper = event.target.closest(".dco-dimension-step");
+            if (stepper && root.contains(stepper) && !stepper.disabled) {
+                event.preventDefault();
+                const control = stepper.closest(".dco-dimension-control");
+                const input = control
+                    ? control.querySelector("input[data-field='width_cm'],input[data-field='length_cm']")
+                    : null;
+                if (input && !input.disabled) {
+                    const next = stepDimensionValue(input.value, stepper.dataset.dimensionStep === "-1" ? -1 : 1);
+                    if (next != null && next !== input.value) {
+                        input.value = next;
+                        if (typeof input.setSelectionRange === "function") {
+                            input.setSelectionRange(next.length, next.length);
+                        }
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                        input.focus({ preventScroll: true });
+                    }
+                }
+                return;
+            }
             const addonsButton = event.target.closest("[data-open-addons]");
             if (addonsButton && root.contains(addonsButton)) {
                 event.preventDefault();
@@ -1573,6 +1686,8 @@
             edgeOptions,
             isEditable,
             pieceDimensionIssues,
+            planDimensionInsert,
+            stepDimensionValue,
             refreshValidation: refreshDimensionValidation,
             validateDimensionsBeforeSave,
         }

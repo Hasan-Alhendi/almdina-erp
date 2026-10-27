@@ -188,7 +188,9 @@
                 font-size:13px !important;
             }
 
-            .dco-fast-input[type="number"]{font-size:14.5px !important;font-weight:650;}
+            .dco-fast-input[type="number"],
+            .dco-col-width .dco-fast-input,
+            .dco-col-length .dco-fast-input{font-size:14.5px !important;font-weight:650;}
             .dco-col-notes .dco-fast-input{
                 text-align:right;
                 font-size:13px !important;

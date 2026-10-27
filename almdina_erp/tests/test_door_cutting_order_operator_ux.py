@@ -101,6 +101,19 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
     assert ".click(" not in tab_block
 
 
+def test_piece_dimensions_display_latin_digits_without_changing_stored_numbers():
+    source = UX_JS.read_text(encoding="utf-8")
+    dimension = source.split("const dimensionInput = ", 1)[1].split("const pieceType", 1)[0]
+    assert 'type="text"' in dimension
+    assert 'lang="en"' in dimension
+    assert 'dir="ltr"' in dimension
+    assert 'inputmode="decimal"' in dimension
+    assert 'type="number"' not in dimension
+    assert "planDimensionInsert" in source
+    qty = source.split('data-field="qty"', 1)[0]
+    assert 'type="number"' in qty[-220:]
+
+
 def test_arrow_keys_navigate_cells_without_changing_number_input_values():
     source = KEYBOARD_COLUMNS_JS.read_text(encoding="utf-8")
     for key in ("ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"):

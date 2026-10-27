@@ -2953,6 +2953,8 @@ Exceeds board width,يتجاوز عرض اللوح
 Exceeds width,يتجاوز العرض
 Exceeds length,يتجاوز الطول
 Invalid dimension,قياس غير صالح
+Increase the measurement,زيادة القياس
+Decrease the measurement,إنقاص القياس
 Row {0}: {1},السطر {0}: {1}
 "Row {0}: Piece dimensions {1} × {2} cm do not fit the board {3} × {4} cm, even after allowed rotation.",السطر {0}: قياسات الدرفة {1} × {2} سم لا تتسع ضمن اللوح {3} × {4} سم حتى بعد السماح بالدوران.
 A regular door could not be matched because the DXF contour is not a rectangle.,تعذر مطابقة درفة عادية لأن المحيط في DXF غير مستطيل.

@@ -374,6 +374,12 @@ function createElement(tag) {
         node.selectionStart = start;
         node.selectionEnd = end;
     };
+    node.setRangeText = (text, start, end) => {
+        const value = String(node.value ?? "");
+        node.value = `${value.slice(0, start)}${text}${value.slice(end)}`;
+        node.selectionStart = start + String(text).length;
+        node.selectionEnd = node.selectionStart;
+    };
     node.scrollIntoView = () => {};
     node.insertAdjacentHTML = (position, html) => {
         if (position !== "beforeend") throw new Error(`Unsupported position ${position}`);
@@ -859,6 +865,129 @@ function key(control, name, extras = {}) {
     key(input(second, "qty"), "Enter");
     assert.equal(sandbox.document.activeElement, input(virtualRows(host)[0], "width_cm"));
     assert.equal(frm.doc.pieces.length, 2);
+}
+
+// Width and length stay Latin on screen. Chrome's Arabic UI locale redraws
+// type=number with Arabic-Indic digits and ignores lang, so these cells are
+// text controls. Quantity stays a number input.
+{
+    const { frm, host } = mount([{ width_cm: 68.4, length_cm: 21, qty: 2 }]);
+    const row = realRows(host)[0];
+    const width = input(row, "width_cm");
+    const length = input(row, "length_cm");
+    const qty = input(row, "qty");
+    assert.equal(width.getAttribute("type"), "text");
+    assert.equal(length.getAttribute("type"), "text");
+    assert.equal(width.getAttribute("lang"), "en");
+    assert.equal(length.getAttribute("lang"), "en");
+    assert.equal(width.getAttribute("dir"), "ltr");
+    assert.equal(length.getAttribute("dir"), "ltr");
+    assert.equal(width.getAttribute("inputmode"), "decimal");
+    assert.equal(width.value, "68.4");
+    assert.equal(length.value, "21");
+    const step = (field, direction) => field.parentElement.querySelector(
+        `.dco-dimension-step[data-dimension-step="${direction}"]`
+    );
+    const widthUp = step(width, "1");
+    const widthDown = step(width, "-1");
+    assert.equal(widthUp.getAttribute("tabindex"), "-1");
+    assert.equal(widthUp.getAttribute("aria-label"), "Increase the measurement");
+    assert.equal(widthDown.getAttribute("aria-label"), "Decrease the measurement");
+    widthUp.dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+    assert.equal(width.value, "69.4");
+    assert.equal(frm.doc.pieces[0].width_cm, 69.4);
+    widthDown.dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+    assert.equal(width.value, "68.4");
+    assert.equal(frm.doc.pieces[0].width_cm, 68.4);
+    const lengthUp = step(length, "1");
+    lengthUp.dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+    assert.equal(length.value, "22");
+    assert.equal(frm.doc.pieces[0].length_cm, 22);
+    const stepValue = window.AlmdinaDoorCuttingFastEntry.stepDimensionValue;
+    assert.equal(stepValue("", 1), "1");
+    assert.equal(stepValue("", -1), "0");
+    assert.equal(stepValue("0", -1), "0");
+    assert.equal(stepValue("0.4", -1), "0");
+    assert.equal(stepValue("21", 1), "22");
+    const spareWidth = input(virtualRows(host)[0], "width_cm");
+    assert.equal(spareWidth.value, "");
+    spareWidth.parentElement.querySelector(".dco-dimension-step[data-dimension-step='1']")
+        .dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+    assert.equal(spareWidth.value, "1");
+    assert.equal(qty.getAttribute("type"), "number");
+    assert.equal(qty.getAttribute("lang"), null);
+    assert.equal(input(virtualRows(host)[0], "width_cm").value, "");
+    assert.equal(input(virtualRows(host)[0], "length_cm").value, "");
+
+    const plan = window.AlmdinaDoorCuttingFastEntry.planDimensionInsert;
+    const typed = plan("12", "3", 2, 2);
+    assert.equal(typed.replace, false);
+    assert.equal(typed.next, "123");
+    const decimal = plan("68", ".", 2, 2);
+    assert.equal(decimal.replace, false);
+    assert.equal(decimal.next, "68.");
+    assert.equal(plan("68.4", ".", 4, 4), null);
+    assert.equal(plan("68.4", "a", 4, 4), null);
+    const arabic = plan("", "١٢٣٫٥", 0, 0);
+    assert.equal(arabic.replace, true);
+    assert.equal(arabic.text, "123.5");
+    assert.equal(arabic.next, "123.5");
+    const empty = plan("", "", 0, 0);
+    assert.equal(empty.replace, false);
+    assert.equal(empty.next, "");
+
+    width.value = "21";
+    width.selectionStart = 2;
+    width.selectionEnd = 2;
+    const latin = { type: "beforeinput", inputType: "insertText", data: "3", bubbles: true, cancelable: true };
+    width.dispatchEvent(latin);
+    assert.equal(latin.defaultPrevented, false);
+    assert.equal(width.value, "21");
+
+    width.value = "";
+    width.selectionStart = 0;
+    width.selectionEnd = 0;
+    const pasted = { type: "beforeinput", inputType: "insertFromPaste", data: "٦٨٫٤", bubbles: true, cancelable: true };
+    width.dispatchEvent(pasted);
+    assert.equal(pasted.defaultPrevented, true);
+    assert.equal(width.value, "68.4");
+    assert.equal(width.selectionStart, 4);
+
+    width.selectionStart = 4;
+    width.selectionEnd = 4;
+    const letter = { type: "beforeinput", inputType: "insertText", data: "a", bubbles: true, cancelable: true };
+    width.dispatchEvent(letter);
+    assert.equal(letter.defaultPrevented, true);
+    assert.equal(width.value, "68.4");
+    assert.equal(frm.doc.pieces[0].width_cm, 68.4);
+}
+
+{
+    const host = createElement("div");
+    const frm = {
+        doc: {
+            name: "DCO-READ",
+            doctype: "Door Cutting Order",
+            docstatus: 1,
+            status: "Approved",
+            default_edge_type: "",
+            pieces: [piece(0, { width_cm: 23, length_cm: 21 })],
+        },
+        fields_dict: { pieces_fast_entry: { $wrapper: jquery(host) } },
+        dirty() {},
+        script_manager: { trigger() { return Promise.resolve(); } },
+        _dco_edge_types_loaded: true,
+    };
+    window.AlmdinaDoorCuttingFastEntry.render(frm);
+    const width = input(realRows(host)[0], "width_cm");
+    assert.equal(width.getAttribute("type"), "text");
+    assert.equal(width.getAttribute("lang"), "en");
+    assert.equal(width.disabled, true);
+    assert.equal(width.value, "23");
+    const up = width.parentElement.querySelector(".dco-dimension-step[data-dimension-step='1']");
+    assert.equal(up.disabled, true);
+    up.dispatchEvent({ type: "click", bubbles: true, cancelable: true });
+    assert.equal(width.value, "23");
 }
 
 Promise.all(pending).then(() => {
