@@ -35,6 +35,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_order_reader imp
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_directory import (
     FrappeCustomerPhoneDirectory,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index import (
+    assign_customer_primary_mobile,
+)
 
 
 class TestCustomerBotOrderFollowupIntegration(FrappeTestCase):
@@ -228,7 +231,7 @@ class TestCustomerBotOrderFollowupIntegration(FrappeTestCase):
         self.assertEqual(refused.outcome, CurrentOrderListOutcome.IDENTITY_UNAVAILABLE)
 
         moved = self._unused_phone()
-        frappe.db.set_value("Customer", customer, "mobile_no", moved)
+        assign_customer_primary_mobile(customer, moved)
         stale = list_current_orders_for_phone(phone)
         current = list_current_orders_for_phone(moved)
         self.assertEqual(stale.outcome, CurrentOrderListOutcome.IDENTITY_UNAVAILABLE)
@@ -246,11 +249,15 @@ class TestCustomerBotOrderFollowupIntegration(FrappeTestCase):
         self.fail("no unused synthetic phone was available")
 
     def _customer(self, mobile: str) -> str:
-        group = frappe.db.get_single_value("Selling Settings", "customer_group") or "Individual"
-        if frappe.db.get_value("Customer Group", group, "is_group"):
+        group = frappe.db.get_single_value("Selling Settings", "customer_group")
+        if not group or not frappe.db.exists("Customer Group", group) or frappe.db.get_value(
+            "Customer Group", group, "is_group"
+        ):
             group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
-        territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-        if frappe.db.get_value("Territory", territory, "is_group"):
+        territory = frappe.db.get_single_value("Selling Settings", "territory")
+        if not territory or not frappe.db.exists("Territory", territory) or frappe.db.get_value(
+            "Territory", territory, "is_group"
+        ):
             territory = frappe.db.get_value("Territory", {"is_group": 0}, "name")
         document = frappe.get_doc(
             {

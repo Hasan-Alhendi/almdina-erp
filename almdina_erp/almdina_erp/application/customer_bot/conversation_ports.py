@@ -74,6 +74,9 @@ class UnavailableCustomerBotServices:
     def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
         return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
 
+    def materialize(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+
 
 class CustomerBotServiceRouter:
     """Route service requests to the injected internal use cases only."""
@@ -84,6 +87,18 @@ class CustomerBotServiceRouter:
     def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
         for service in self._services:
             result = service.execute(request)
+            if result.code != ServiceResultCode.UNAVAILABLE:
+                return result
+        return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+
+    def materialize(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        """Render through the service that owns the request. Description is not reused."""
+
+        for service in self._services:
+            materialize = getattr(service, "materialize", None)
+            if materialize is None:
+                continue
+            result = materialize(request)
             if result.code != ServiceResultCode.UNAVAILABLE:
                 return result
         return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)

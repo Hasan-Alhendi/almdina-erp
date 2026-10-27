@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     PENDING,
     PROCESSING,
     UNKNOWN,
+    ReplyIntent,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.session_admission import DUPLICATE, FAILED, PROCESSED, SUPPRESSED
 from almdina_erp.almdina_erp.domain.customer_bot.text_reply import SendDisposition, TextSendResult
@@ -106,15 +107,29 @@ class ReplyOutboxTests(unittest.TestCase):
         first = self.accept(_message("hello", "e1"))
         self.assertEqual(first.disposition, PROCESSED)
         lines = render_customer_lines(self.settings.published, first.messages)
-        stored = [self.sessions.replies[("conn-a", "e1", index)] for index in range(len(lines))]
-        self.assertEqual([row.intent.body for row in stored], list(lines))
-        self.assertEqual([row.intent.sequence for row in stored], [0, 1])
-        self.assertEqual(stored[0].intent.destination_id, "chat-a")
-        self.assertTrue(all(row.status == PENDING for row in stored))
-        self.assertNotIn("+963988100101", stored[0].reply_id)
+        stored = self.sessions.replies[("conn-a", "e1", 0)]
+        self.assertEqual(stored.intent.body, "\n".join(lines))
+        self.assertEqual(stored.intent.sequence, 0)
+        self.assertEqual(stored.intent.destination_id, "chat-a")
+        self.assertEqual(stored.status, PENDING)
+        self.assertNotIn("+963988100101", stored.reply_id)
+        self.assertIn("1-", stored.intent.body)
+        self.assertIn("4-", stored.intent.body)
         again = self.accept(_message("hello", "e1"))
         self.assertEqual(again.disposition, DUPLICATE)
-        self.assertEqual(len(self.sessions.replies), 2)
+        self.assertEqual(len(self.sessions.replies), 1)
+
+    def test_an_accepted_message_renews_the_session_and_a_duplicate_does_not(self) -> None:
+        self.accept(_message("hello", "e1"))
+        key = ("conn-a", "chat-a", "sender-a")
+        first_expiry = self.sessions.conversations[key].expires_on
+        self.clock.now = self.clock.now + timedelta(minutes=10)
+        duplicate = self.accept(_message("hello", "e1"))
+        self.assertEqual(duplicate.disposition, DUPLICATE)
+        self.assertEqual(self.sessions.conversations[key].expires_on, first_expiry)
+        continued = self.accept(_message("0", "e2"))
+        self.assertEqual(continued.disposition, PROCESSED)
+        self.assertGreater(self.sessions.conversations[key].expires_on, first_expiry)
 
     def test_failed_render_keeps_the_previous_state_and_stores_no_reply(self) -> None:
         self.accept(_message("hello", "e1"))
@@ -167,13 +182,13 @@ class ReplyOutboxTests(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             self.accept(_message("hello", "e1"), on_replies_committed=fail)
-        self.assertEqual(len(self.sessions.replies), 2)
+        self.assertEqual(len(self.sessions.replies), 1)
         replay = self.accept(_message("hello", "e1"))
         self.assertEqual(replay.disposition, DUPLICATE)
         gateway = _Gateway(SendDisposition.ACCEPTED)
         delivered = deliver_pending_replies(self.sessions, gateway, now=NOW)
-        self.assertEqual([step.status for step in delivered], ["accepted", "accepted"])
-        self.assertEqual(len(gateway.calls), 2)
+        self.assertEqual([step.status for step in delivered], ["accepted"])
+        self.assertEqual(len(gateway.calls), 1)
 
     def test_gateway_results_and_unknown_is_not_retried(self) -> None:
         self.directory.matches = {}
@@ -247,8 +262,7 @@ class ReplyOutboxTests(unittest.TestCase):
         self.assertIsNone(row.provider_message_id)
 
     def test_rejected_or_unknown_blocks_later_sequences(self) -> None:
-        first = self.accept(_message("hello", "e1"))
-        self.assertGreaterEqual(len(first.messages), 2)
+        self._store_two_parts("conn-a", "e1")
         rejected = _Gateway(SendDisposition.REJECTED)
         self.assertEqual(deliver_one_reply(self.sessions, rejected, now=NOW).status, "rejected")
         self.assertIsNone(deliver_one_reply(self.sessions, rejected, now=NOW))
@@ -256,25 +270,27 @@ class ReplyOutboxTests(unittest.TestCase):
         self.assertEqual(len(rejected.calls), 1)
 
         other = MemoryCustomerBotSessionStore()
-        settings = _Settings()
-        directory = _Directory()
-        accepted = accept_inbound_customer_message(
-            _message("hello", "e2", connection_ref="conn-b"),
-            sessions=other,
-            settings=settings,
-            directory=directory,
-            headers=_Orders((_header("DCO-A"), _header("DCO-B"))),
-            stages=_Stages(),
-            routes=_Routes(),
-            services=_Services(),
-            now=self.clock.now,
-        )
-        self.assertGreaterEqual(len(accepted.messages), 2)
+        self._store_two_parts("conn-b", "e2", store=other)
         unknown = _Gateway(SendDisposition.UNKNOWN)
         self.assertEqual(deliver_one_reply(other, unknown, now=NOW).status, "unknown")
         self.assertIsNone(deliver_one_reply(other, unknown, now=NOW))
         self.assertEqual(other.replies[("conn-b", "e2", 1)].status, PENDING)
         self.assertEqual(len(unknown.calls), 1)
+
+    def _store_two_parts(self, connection: str, event: str, store=None) -> None:
+        target = self.sessions if store is None else store
+        intents = tuple(
+            ReplyIntent(
+                connection_ref=connection,
+                provider_event_id=event,
+                conversation_id="chat-a",
+                destination_id="chat-a",
+                sequence=sequence,
+                body=body,
+            )
+            for sequence, body in ((0, "first part"), (1, "second part"))
+        )
+        target._store_replies(intents, now=NOW)
 
     def test_two_workers_claim_one_row(self) -> None:
         self.directory.matches = {}
@@ -319,7 +335,7 @@ class ReplyOutboxTests(unittest.TestCase):
         gateway = _Gateway(SendDisposition.ACCEPTED)
         deliver_pending_replies(self.sessions, gateway, now=NOW)
         lines = render_customer_lines(self.settings.published, first.messages)
-        self.assertEqual(gateway.calls, list(lines))
+        self.assertEqual(gateway.calls, ["\n".join(lines)])
 
     def test_live_delivery_stays_off(self) -> None:
         gateway = _Gateway(SendDisposition.ACCEPTED)
@@ -369,7 +385,7 @@ class ReplyOutboxTests(unittest.TestCase):
 
         accepted = self.accept(_message("hello", "e-enq"), on_replies_committed=fail_enqueue)
         self.assertEqual(accepted.disposition, PROCESSED)
-        self.assertEqual(len(self.sessions.replies), 2)
+        self.assertEqual(len(self.sessions.replies), 1)
         self.assertTrue(
             all(row.status == PENDING for row in self.sessions.replies.values())
         )

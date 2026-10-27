@@ -455,6 +455,35 @@
             return dialog;
         }
 
+        let customerBotTestDialog = null;
+
+        function openCustomerBotTest(config = {}) {
+            const steps = Array.isArray(config.steps) ? config.steps : [];
+            const html = `<ol class="aps-bot-test-steps">${steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>`;
+            if (customerBotTestDialog && typeof customerBotTestDialog.show === "function") {
+                const field = customerBotTestDialog.fields_dict && customerBotTestDialog.fields_dict.steps;
+                const wrapper = field && field.$wrapper;
+                if (wrapper && typeof wrapper.html === "function") wrapper.html(html);
+                if (typeof customerBotTestDialog.set_title === "function" && config.title) {
+                    customerBotTestDialog.set_title(config.title);
+                }
+                own(customerBotTestDialog);
+                customerBotTestDialog.show();
+                return customerBotTestDialog;
+            }
+            const dialog = own(new frappe.ui.Dialog({
+                title: config.title || t("Test the bot"),
+                fields: [{ fieldname: "steps", fieldtype: "HTML", options: html }],
+                primary_action_label: config.closeLabel || t("Close"),
+                primary_action() {
+                    dialog.hide();
+                },
+            }));
+            customerBotTestDialog = dialog;
+            dialog.show();
+            return dialog;
+        }
+
         return Object.freeze({
             sectionFields,
             sectionTitle,
@@ -462,6 +491,7 @@
             openAudit,
             openQr,
             openRestore,
+            openCustomerBotTest,
             showSaved,
             deactivate,
             dispose,

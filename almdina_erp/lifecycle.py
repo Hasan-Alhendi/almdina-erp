@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_schema import (
+    ensure_customer_bot_operation_defaults,
+    ensure_customer_bot_reply_unique_indexes,
+    ensure_customer_bot_session_unique_indexes,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index import (
+    sync_customer_normalized_mobile_index,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_surface_metadata import (
     sync_cutting_plan_surface_metadata,
 )
@@ -61,11 +69,30 @@ def _sync_native_navigation_metadata() -> None:
     sync_native_app_navigation()
 
 
+def _sync_customer_bot_schema() -> None:
+    """Ensure lookup field, unique keys, and catalog texts from the live schema.
+
+    Install marks patches complete without running them, and a later migrate
+    will not repeat a logged patch. Both hooks therefore inspect the database.
+    Missing catalog keys are filled from the defaults. A saved customization
+    of an existing key is left as stored.
+    """
+
+    from almdina_erp.patches.v1_0.install_customer_bot_settings import execute as repair_customer_bot_texts
+
+    sync_customer_normalized_mobile_index()
+    ensure_customer_bot_reply_unique_indexes()
+    ensure_customer_bot_session_unique_indexes()
+    repair_customer_bot_texts()
+    ensure_customer_bot_operation_defaults()
+
+
 def after_install() -> None:
     run_existing_after_install()
     _sync_form_metadata_invariants()
     _sync_security_foundation()
     _sync_native_navigation_metadata()
+    _sync_customer_bot_schema()
 
 
 def after_migrate() -> None:
@@ -73,6 +100,7 @@ def after_migrate() -> None:
     _sync_form_metadata_invariants()
     _sync_security_foundation()
     _sync_native_navigation_metadata()
+    _sync_customer_bot_schema()
 
 
 __all__ = ["after_install", "after_migrate"]

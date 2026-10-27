@@ -46,6 +46,16 @@ doc_events = {
     "Cutting Plan": {
         "on_update": "almdina_erp.almdina_erp.services.cost_service.on_order_plan_update",
     },
+    "Customer": {
+        "before_save": (
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index."
+            "sync_customer_normalized_mobile"
+        ),
+        "on_change": (
+            "almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index."
+            "sync_customer_normalized_mobile_after_value_change"
+        ),
+    },
 }
 
 permission_query_conditions = {

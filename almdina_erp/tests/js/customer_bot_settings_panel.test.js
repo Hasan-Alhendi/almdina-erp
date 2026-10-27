@@ -345,15 +345,17 @@ async function ready(env) {
     const env = harness();
     await ready(env);
     assert.equal(env.calls.filter(call => call === "get").length, 1);
-    assert.match(env.article.markup, /data-bot-panel="operation"/);
-    assert.match(env.article.markup, /data-bot-panel="texts"[^>]*hidden/);
+    assert.doesNotMatch(env.article.markup, /data-bot-tab="operation"/);
+    assert.doesNotMatch(env.article.markup, /data-bot-start/);
+    assert.match(env.article.markup, /data-bot-panel="texts"/);
+    assert.doesNotMatch(env.article.markup, /data-bot-panel="texts"[^>]*hidden/);
     assert.match(env.article.markup, /data-bot-panel="preview"[^>]*hidden/);
     assert.match(env.article.markup, /Last published 2026-10-21 12:30/);
     assert.doesNotMatch(env.article.markup, /12:30:46/);
     assert.equal(env.groupWrap("order_status").hidden, true);
     assert.equal(env.groupWrap("welcome").hidden, false);
 
-    ["texts", "preview", "operation", "texts"].forEach(tabId => {
+    ["preview", "texts"].forEach(tabId => {
         env.fire("click", "[data-bot-tab]", element("button", { "data-bot-tab": tabId }));
         assertMarked(env.article.children, "data-bot-tab", tabId);
         assertVisible(env, tabId, tabId === "texts" ? "welcome_menu" : "");
@@ -419,9 +421,10 @@ async function ready(env) {
     await ignored;
     assert.equal(env.field("welcome").value, "أثناء التحميل");
 
-    env.fire("click", "[data-bot-toggle]");
-    await Promise.resolve();
-    assert.equal(env.calls.some(call => Array.isArray(call) && call[0] === "enabled"), true);
+    assert.doesNotMatch(env.article.markup, /data-bot-toggle/);
+    assert.doesNotMatch(env.article.markup, /The bot connection to WhatsApp is not active yet/);
+    assert.equal(env.calls.some(call => Array.isArray(call) && call[0] === "enabled"), false);
+    assert.equal(env.calls.some(call => call === "status" || call === "start" || call === "check"), false);
     assert.equal(env.field("welcome").value, "أثناء التحميل");
 
     const saveDraft = env.api.saveCustomerBotDraft;

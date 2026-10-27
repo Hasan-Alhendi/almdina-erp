@@ -6,8 +6,8 @@ from ``sender_id``, and does not send a reply.
 
 The acceptance epoch is checked inside the commit transaction. That same
 transaction stores the new session state, marks the event complete, and
-inserts one pending reply intent per rendered text line and each durable
-document descriptor. A failure rolls all of them back. If the process dies
+inserts one pending text reply, or one document reply whose caption is that
+text. A failure rolls all of them back. If the process dies
 after that commit, a later call with the same event returns ``duplicate`` and
 does not insert the replies again. Sending those rows is a separate worker.
 """
@@ -30,8 +30,14 @@ from almdina_erp.almdina_erp.domain.customer_bot.message_age import (
     DEFAULT_MAX_MESSAGE_AGE,
     classify_message_age,
 )
-from almdina_erp.almdina_erp.domain.customer_bot.message_templates import render_customer_lines
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+    DOCUMENT_CAPTION_MAX,
+    CustomerTextRenderError,
+    customer_outbound_text,
+    document_failure_message,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
+    CAPTION_TOO_LONG,
     PART_DOCUMENT,
     PART_TEXT,
     ReplyIntent,
@@ -117,6 +123,7 @@ def accept_inbound_customer_message(
     lease_ttl: timedelta = DEFAULT_LEASE_TTL,
     max_message_age: timedelta = DEFAULT_MAX_MESSAGE_AGE,
     max_future_skew: timedelta = DEFAULT_MAX_FUTURE_SKEW,
+    operation_generation: int = 0,
     on_replies_committed: Callable[[int], None] | None = None,
 ) -> InboundAcceptance:
     """Run the current engine once, or refuse without calling it."""
@@ -183,7 +190,12 @@ def accept_inbound_customer_message(
         turn = handle_customer_conversation(
             message,
             begun.state,
-            ConversationContext(enabled=True, now=now, session_ttl=session_ttl),
+            ConversationContext(
+                enabled=True,
+                now=now,
+                session_ttl=session_ttl,
+                operation_generation=operation_generation,
+            ),
             directory,
             headers,
             stages,
@@ -249,8 +261,9 @@ def accept_inbound_customer_message(
         return _quiet(FAILED if released else LOST_LEASE)
     if outcome != PROCESSED:
         return _quiet(outcome)
-    if on_replies_committed is not None and (turn.messages or turn.documents):
-        on_replies_committed(len(turn.messages) + len(turn.documents))
+    outbound_count = (1 if turn.documents else 0) or (1 if turn.messages else 0)
+    if on_replies_committed is not None and outbound_count:
+        on_replies_committed(outbound_count)
     return InboundAcceptance(
         PROCESSED,
         messages=turn.messages,
@@ -268,11 +281,15 @@ def _build_reply_intents(
     acceptance_epoch: int,
     customer_id: str | None,
 ) -> tuple[ReplyIntent, ...]:
-    lines = render_customer_lines(published, messages)
+    outbound = customer_outbound_text(published, messages) if messages else ""
     phone = message.normalized_phone
     parts: list[ReplyIntent] = []
     sequence = 0
-    for line in lines:
+    if documents and len(outbound) > DOCUMENT_CAPTION_MAX:
+        return ordered_reply_intents(
+            _caption_refusal(message, documents[0].service_id, published, customer_id, acceptance_epoch)
+        )
+    if not documents and outbound:
         parts.append(
             ReplyIntent(
                 connection_ref=message.connection_ref,
@@ -280,11 +297,12 @@ def _build_reply_intents(
                 conversation_id=message.conversation_id,
                 destination_id=message.conversation_id,
                 sequence=sequence,
-                body=line,
+                body=outbound,
                 part_kind=PART_TEXT,
                 customer_id=customer_id,
                 normalized_phone=phone,
                 acceptance_epoch=acceptance_epoch,
+                message_key=messages[0].key if len(messages) == 1 else None,
             )
         )
         sequence += 1
@@ -308,6 +326,7 @@ def _build_reply_intents(
             plan_name=document.plan_name,
             plan_revision=document.plan_revision,
             source_type=document.source_type,
+            caption=outbound,
         )
         parts.append(
             ReplyIntent(
@@ -326,6 +345,40 @@ def _build_reply_intents(
         )
         sequence += 1
     return ordered_reply_intents(tuple(parts))
+
+
+def _caption_refusal(
+    message: InboundCustomerMessage,
+    service_id: str,
+    published: dict[str, str],
+    customer_id: str | None,
+    acceptance_epoch: int,
+) -> tuple[ReplyIntent, ...]:
+    """One general failure text. The document and its amount are not stored."""
+
+    try:
+        failure = document_failure_message(service_id)
+        body = customer_outbound_text(published, (failure,))
+    except (CustomerTextRenderError, ValueError):
+        return ()
+    if not body.strip():
+        return ()
+    return (
+        ReplyIntent(
+            connection_ref=message.connection_ref,
+            provider_event_id=message.provider_event_id,
+            conversation_id=message.conversation_id,
+            destination_id=message.conversation_id,
+            sequence=0,
+            body=body,
+            part_kind=PART_TEXT,
+            customer_id=customer_id,
+            normalized_phone=message.normalized_phone,
+            acceptance_epoch=acceptance_epoch,
+            message_key=failure.key,
+            reason_code=CAPTION_TOO_LONG,
+        ),
+    )
 
 
 def _quiet(disposition: str) -> InboundAcceptance:

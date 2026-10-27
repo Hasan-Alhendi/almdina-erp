@@ -35,6 +35,7 @@ class ClaimedReply:
     acceptance_epoch: int | None = None
     group_document_specs: tuple[DocumentReplySpec, ...] = ()
     created_on: datetime | None = None
+    message_key: str | None = None
 
 
 class CustomerBotReplyOutbox(Protocol):

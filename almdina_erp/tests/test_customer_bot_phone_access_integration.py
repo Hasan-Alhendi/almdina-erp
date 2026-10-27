@@ -37,6 +37,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_records import (
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_directory import (
     FrappeCustomerPhoneDirectory,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index import (
+    assign_customer_primary_mobile,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.permission_matrix_repository import (
     FrappePermissionMatrixRepository,
 )
@@ -219,7 +222,7 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
         self.assertEqual(primary_identity.code, "allowed")
         self.assertEqual(primary_identity.customer_id, customer)
         self.assertEqual(primary_identity.access_basis, "primary")
-        frappe.db.set_value("Customer", customer, "mobile_no", self._unused_phone(), update_modified=False)
+        assign_customer_primary_mobile(customer, self._unused_phone(), update_modified=False)
         moved = resolve_customer_phone(primary)
         self.assertEqual(moved.code, "unknown")
         self.assertIsNone(moved.customer_id)
@@ -239,8 +242,8 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
         self.assertIsNone(conflict.customer_id)
         self.assertNotEqual(customer, other)
 
-        frappe.db.set_value("Customer", customer, "mobile_no", self._unused_phone(), update_modified=False)
-        frappe.db.set_value("Customer", other, "mobile_no", self._unused_phone(), update_modified=False)
+        assign_customer_primary_mobile(customer, self._unused_phone(), update_modified=False)
+        assign_customer_primary_mobile(other, self._unused_phone(), update_modified=False)
         unknown = resolve_customer_phone(normalized)
         self.assertEqual(unknown.code, "unknown")
         self.assertIsNone(unknown.customer_id)
@@ -300,11 +303,15 @@ class TestCustomerBotPhoneAccessIntegration(FrappeTestCase):
 
     def _customer(self, mobile: str) -> str:
         suffix = uuid4().hex[:10]
-        group = frappe.db.get_single_value("Selling Settings", "customer_group") or "Individual"
-        if frappe.db.get_value("Customer Group", group, "is_group"):
+        group = frappe.db.get_single_value("Selling Settings", "customer_group")
+        if not group or not frappe.db.exists("Customer Group", group) or frappe.db.get_value(
+            "Customer Group", group, "is_group"
+        ):
             group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name")
-        territory = frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-        if frappe.db.get_value("Territory", territory, "is_group"):
+        territory = frappe.db.get_single_value("Selling Settings", "territory")
+        if not territory or not frappe.db.exists("Territory", territory) or frappe.db.get_value(
+            "Territory", territory, "is_group"
+        ):
             territory = frappe.db.get_value("Territory", {"is_group": 0}, "name")
         document = frappe.get_doc(
             {

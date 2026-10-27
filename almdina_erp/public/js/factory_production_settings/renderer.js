@@ -418,6 +418,12 @@
             $root.html(customerBotHtml(model));
         }
 
+        function renderCustomerBotOperation(model) {
+            const host = $body.find("[data-bot-operation]");
+            if (!host.length || !model) return;
+            host.html(customerBotOperationHtml(model.operation || {}));
+        }
+
         function customerBotTab(tab) {
             return uiButton({
                 label: tab.label || "",
@@ -459,41 +465,114 @@
             `;
         }
 
+        function customerBotFact(row) {
+            const ltr = Boolean(row && row.ltr);
+            return `
+                <div>
+                    <dt>${esc((row && row.label) || "")}</dt>
+                    <dd class="${ltr ? "aps-ltr-value" : ""}"${ltr ? ' dir="ltr"' : ""}>${esc((row && row.value) || "")}</dd>
+                </div>
+            `;
+        }
+
+        function customerBotOperationHtml(operation) {
+            if (!operation || !operation.visible) {
+                return `<p class="aps-bot-notice">${esc((operation && operation.unavailable) || "")}</p>`;
+            }
+            const facts = Array.isArray(operation.facts) ? operation.facts : [];
+            const events = Array.isArray(operation.events) ? operation.events : [];
+            return `
+                <div class="aps-bot-card">
+                    <div class="aps-bot-head">
+                        <h3>${t("Customer bot")}</h3>
+                        ${operation.stateLabel ? uiBadge({
+                            label: operation.stateLabel,
+                            tone: operation.tone || "neutral",
+                            className: "aps-bot-badge",
+                        }) : ""}
+                    </div>
+                    ${operation.reason ? `<p class="aps-bot-reason" data-bot-reason data-tone="${esc(operation.reasonTone || "neutral")}">${esc(operation.reason)}</p>` : ""}
+                    ${operation.pending ? "" : `
+                    <div class="aps-bot-toolbar">
+                        ${operation.showStart ? uiButton({
+                            label: t("Start the bot"),
+                            variant: "primary",
+                            disabled: Boolean(operation.startDisabled),
+                            attrs: { "data-bot-start": "1" },
+                        }) : ""}
+                        ${operation.showStop ? uiButton({
+                            label: t("Stop the bot"),
+                            variant: "primary",
+                            disabled: Boolean(operation.stopDisabled),
+                            attrs: { "data-bot-stop": "1" },
+                        }) : ""}
+                        ${uiButton({
+                            label: t("Check connection"),
+                            variant: "secondary",
+                            disabled: Boolean(operation.checkDisabled),
+                            attrs: { "data-bot-check": "1" },
+                        })}
+                        ${uiButton({
+                            label: t("Test the bot"),
+                            variant: "secondary",
+                            attrs: { "data-bot-test": "1" },
+                        })}
+                        ${uiButton({
+                            label: t("Details"),
+                            variant: "secondary",
+                            className: "aps-bot-btn-quiet",
+                            attrs: {
+                                "data-bot-details-toggle": "1",
+                                "aria-expanded": operation.detailsOpen ? "true" : "false",
+                            },
+                        })}
+                    </div>
+                    `}
+                    <div class="aps-bot-details" data-bot-details ${operation.detailsOpen ? "" : "hidden"}>
+                        <dl class="aps-bot-facts">${facts.map(customerBotFact).join("")}</dl>
+                        <dl class="aps-bot-events">${events.map(customerBotFact).join("")}</dl>
+                        <p class="aps-bot-help">${t("Gateway acceptance is not proof the customer received the message.")}</p>
+                        ${operation.technical ? `
+                            ${uiButton({
+                                label: t("Technical details"),
+                                variant: "secondary",
+                                className: "aps-bot-btn-quiet",
+                                attrs: {
+                                    "data-bot-technical": "1",
+                                    "aria-expanded": operation.technicalOpen ? "true" : "false",
+                                },
+                            })}
+                            <p data-bot-technical-panel ${operation.technicalOpen ? "" : "hidden"}>${esc(operation.technical)}</p>
+                        ` : ""}
+                    </div>
+                </div>
+            `;
+        }
+
         function customerBotHtml(model) {
             const groups = Array.isArray(model.groups) ? model.groups : [];
             const scenarios = Array.isArray(model.scenarios) ? model.scenarios : [];
             const tabs = Array.isArray(model.tabs) ? model.tabs : [];
             const fields = Array.isArray(model.fields) ? model.fields : [];
-            const active = model.activeTab || "operation";
+            const active = model.activeTab || "texts";
+            const operationVisible = Boolean(model.operation && model.operation.visible);
             return `
-                <header class="aps-bot-bar">
-                    <strong class="alm-section-header__title">${t("Customer bot")}</strong>
-                    <div class="aps-bot-statusline">
-                        ${uiBadge({
-                            label: model.statusLabel || "",
-                            tone: model.enabled ? "warning" : "neutral",
-                        })}
-                        ${uiButton({
-                            label: model.toggleLabel || "",
-                            variant: "secondary",
-                            attrs: { "data-bot-toggle": "1" },
-                        })}
-                    </div>
-                </header>
-                <p class="aps-bot-notice" role="note">${esc(model.notice || "")}</p>
+                ${operationVisible ? `<div data-bot-operation>${customerBotOperationHtml(model.operation || {})}</div>` : `
+                    <header class="aps-bot-head"><h3>${t("Customer bot")}</h3></header>
+                    ${customerBotOperationHtml(model.operation || {})}
+                `}
+                ${model.canEditTexts === false ? "" : `
+                <div class="aps-bot-copy">
                 <div class="aps-bot-statusline">
                     <p class="aps-bot-flag" data-bot-unsaved ${model.unsaved ? "" : "hidden"}>${t("Customer bot unsaved changes")}</p>
                     <p class="aps-bot-flag" data-bot-unpublished ${model.unpublished ? "" : "hidden"}>${t("Unpublished changes")}</p>
                     <p class="aps-bot-meta">${model.publishedAt ? `<time class="aps-ltr-value" dir="ltr" datetime="${esc(model.publishedAt)}">${esc(model.publishedLabel || "")}</time>` : esc(model.publishedLabel || "")}</p>
                     <p class="aps-bot-meta aps-ltr-value" dir="ltr">${esc(model.revisionLabel || "")}</p>
                 </div>
-                <div data-bot-alert role="alert"></div>
+                <div data-bot-alert role="status"></div>
                 <div class="aps-bot-tabs" role="tablist" aria-label="${esc(model.tabsLabel || "")}">
                     ${tabs.map(customerBotTab).join("")}
                 </div>
-                <section class="aps-bot-panel" id="aps-bot-panel-operation" role="tabpanel" aria-labelledby="aps-bot-tab-operation" data-bot-panel="operation" ${active === "operation" ? "" : "hidden"}>
-                    <p>${esc(model.operationNote || "")}</p>
-                </section>
                 <section class="aps-bot-panel" id="aps-bot-panel-texts" role="tabpanel" aria-labelledby="aps-bot-tab-texts" data-bot-panel="texts" ${active === "texts" ? "" : "hidden"}>
                     <label class="aps-bot-field">
                         <span>${t("Search")}</span>
@@ -565,6 +644,8 @@
                         })}
                     </div>
                 </section>
+                </div>
+                `}
             `;
         }
 
@@ -580,6 +661,7 @@
             render,
             renderWhatsApp,
             renderCustomerBot,
+            renderCustomerBotOperation,
             whatsappHtml,
             auditHtml,
             auditLoadingHtml,

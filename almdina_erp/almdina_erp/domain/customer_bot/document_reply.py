@@ -19,6 +19,7 @@ class DocumentReplyRequest:
     filename: str
     mime_type: str
     content: bytes
+    caption: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "reply_id", required_token(self.reply_id, "reply_id"))
@@ -35,6 +36,9 @@ class DocumentReplyRequest:
             raise ValueError("document mime_type must be application/pdf")
         if not isinstance(self.content, bytes) or not self.content:
             raise ValueError("document content is required")
+        if not isinstance(self.caption, str):
+            raise ValueError("document caption must be text")
+        object.__setattr__(self, "caption", self.caption.strip())
 
 
 __all__ = ["DocumentReplyRequest"]

@@ -67,6 +67,20 @@ def handle_customer_conversation(
         return ConversationTurn(None, (_message(BotMessageKey.UNREGISTERED_PHONE),))
     active = _usable_state(state, message, identity.customer_id, context)
     if active is None:
+        service_id = service_for_menu_digit(menu_command(message.text) or "")
+        if service_id:
+            return _open_service(
+                message,
+                context,
+                identity.customer_id,
+                service_id,
+                directory,
+                headers,
+                stages,
+                routes,
+                services,
+                phone,
+            )
         return _begin(message, identity.customer_id, context)
     if active.phase == ConversationPhase.MAIN_MENU:
         return _from_menu(
@@ -97,6 +111,8 @@ def _usable_state(
         message.connection_ref, message.conversation_id, message.sender_id
     )
     if state.isolation_key != key or state.customer_id != customer_id:
+        return None
+    if state.operation_generation != context.operation_generation:
         return None
     if state.expires_at <= context.now:
         return None
@@ -392,6 +408,7 @@ def _fresh(
         expires_at=context.now + context.session_ttl,
         service_id=service_id,
         selected_order_name=selected_order_name,
+        operation_generation=context.operation_generation,
     )
 
 

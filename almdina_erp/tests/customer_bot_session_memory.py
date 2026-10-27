@@ -21,6 +21,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     CANCELLED,
     DEFAULT_REPLY_CLAIM_TTL,
     PART_DOCUMENT,
+    CAPTION_TOO_LONG,
     PENDING,
     PROCESSING,
     REJECTED,
@@ -263,6 +264,7 @@ class MemoryCustomerBotSessionStore:
                 acceptance_epoch=intent.acceptance_epoch,
                 group_document_specs=group_specs,
                 created_on=chosen.created_on,
+                message_key=intent.message_key,
             )
 
     def record_result(self, *, reply_id, claim_token, result, now) -> bool:
@@ -279,7 +281,8 @@ class MemoryCustomerBotSessionStore:
             ):
                 return False
             row.status = status
-            row.reason_code = result.reason_code
+            if row.reason_code != CAPTION_TOO_LONG:
+                row.reason_code = result.reason_code
             row.provider_message_id = result.provider_message_id if status == ACCEPTED else None
             return True
 
@@ -415,7 +418,7 @@ class MemoryCustomerBotSessionStore:
                 None,
                 None,
                 None,
-                None,
+                intent.reason_code,
                 created_on=created,
             )
 

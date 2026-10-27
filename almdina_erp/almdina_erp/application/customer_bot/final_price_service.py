@@ -1,8 +1,9 @@
 """Customer-bot use case for an approved customer price and its invoice PDF.
 
-The use case owns the two-read consistency check. It never sends a document and
-never stores one in conversation state; a provider-neutral document is returned
-to the caller for a later delivery step.
+``execute`` reads eligibility, amount, and fingerprint once and returns a
+descriptor with no PDF bytes. ``materialize`` renders one PDF for a send
+attempt, then reads the same facts again and discards the bytes when they no
+longer match. Neither method sends a document or stores one.
 """
 
 from __future__ import annotations
@@ -59,46 +60,87 @@ class CustomerBotFinalPriceService(CustomerBotServicePort):
         self._pdf = pdf
 
     def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        """Describe the current approved invoice without rendering a PDF."""
+
+        rejected = self._other_service(request)
+        if rejected is not None:
+            return rejected
+        first = self._ready_snapshot(request)
+        if isinstance(first, CustomerServiceResult):
+            return first
+        return self._ready(request, first, content=None)
+
+    def materialize(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        """Render one invoice PDF, then keep it only if the approval still matches."""
+
+        rejected = self._other_service(request)
+        if rejected is not None:
+            return rejected
+        first = self._ready_snapshot(request)
+        if isinstance(first, CustomerServiceResult):
+            return first
+        try:
+            content = self._pdf.render(request.order_name, first.invoice_payload or {})
+        except Exception:
+            return CustomerServiceResult(ServiceResultCode.INVOICE_FAILED)
+        if not isinstance(content, bytes) or not content:
+            return CustomerServiceResult(ServiceResultCode.INVOICE_FAILED)
+        second = self._reader.read(request.phone, request.order_name)
+        if not _same_price(first, second):
+            return CustomerServiceResult(ServiceResultCode.PRICE_DATA_CHANGED)
+        return self._ready(request, first, content=content)
+
+    def _other_service(self, request: CustomerServiceRequest) -> CustomerServiceResult | None:
         if request.service_id != BotService.FINAL_COST:
             return CustomerServiceResult(ServiceResultCode.UNAVAILABLE)
+        return None
 
+    def _ready_snapshot(
+        self, request: CustomerServiceRequest
+    ) -> CustomerBotFinalPriceSnapshot | CustomerServiceResult:
         first = self._reader.read(request.phone, request.order_name)
         if first is None or not first.available or first.cancelled:
             return CustomerServiceResult(ServiceResultCode.PRICE_UNAVAILABLE)
+        return first
 
-        try:
-            content = self._pdf.render(request.order_name, first.invoice_payload or {})
-            document = CustomerBotDocument(
-                document_type="customer_invoice",
-                filename=_invoice_filename(request.order_name),
-                mime_type="application/pdf",
-                content=content,
-                order_name=request.order_name,
-                consistency_key=first.consistency_key,
-                service_id=BotService.FINAL_COST,
-                amount=str(first.amount),
-                currency=str(first.currency or ""),
-            )
-        except Exception:
-            return CustomerServiceResult(ServiceResultCode.INVOICE_FAILED)
-
-        second = self._reader.read(request.phone, request.order_name)
-        if (
-            second is None
-            or not second.available
-            or second.cancelled
-            or second.consistency_key != first.consistency_key
-            or second.amount != first.amount
-            or second.currency != first.currency
-        ):
-            return CustomerServiceResult(ServiceResultCode.PRICE_DATA_CHANGED)
-
+    def _ready(
+        self,
+        request: CustomerServiceRequest,
+        snapshot: CustomerBotFinalPriceSnapshot,
+        *,
+        content: bytes | None,
+    ) -> CustomerServiceResult:
+        document = CustomerBotDocument(
+            document_type="customer_invoice",
+            filename=_invoice_filename(request.order_name),
+            mime_type="application/pdf",
+            content=content,
+            order_name=request.order_name,
+            consistency_key=snapshot.consistency_key,
+            service_id=BotService.FINAL_COST,
+            amount=str(snapshot.amount),
+            currency=str(snapshot.currency or ""),
+        )
         return CustomerServiceResult(
             ServiceResultCode.READY,
-            amount=first.amount,
-            currency=first.currency,
+            amount=snapshot.amount,
+            currency=snapshot.currency,
             documents=(document,),
         )
+
+
+def _same_price(
+    first: CustomerBotFinalPriceSnapshot,
+    second: CustomerBotFinalPriceSnapshot | None,
+) -> bool:
+    return not (
+        second is None
+        or not second.available
+        or second.cancelled
+        or second.consistency_key != first.consistency_key
+        or second.amount != first.amount
+        or second.currency != first.currency
+    )
 
 
 def _invoice_filename(order_name: str) -> str:

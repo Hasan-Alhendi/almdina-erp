@@ -20,6 +20,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_cutting_plan_pdf
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_directory import (
     FrappeCustomerPhoneDirectory,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index import (
+    assign_customer_primary_mobile,
+)
 from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
     approve_order_plan,
     recalculate_system_plan,
@@ -89,13 +92,9 @@ class TestCustomerBotApprovedPlanIntegration(FrappeTestCase):
         self.assertIsNone(reader.read("098811111111", self.order.name))
 
         moved_phone = self._unused_phone()
-        frappe.db.set_value(
-            "Customer", self.customer.name, "mobile_no", moved_phone, update_modified=False
-        )
+        assign_customer_primary_mobile(self.customer.name, moved_phone, update_modified=False)
         self.assertIsNone(reader.read(self.phone, self.order.name))
-        frappe.db.set_value(
-            "Customer", self.customer.name, "mobile_no", self.phone, update_modified=False
-        )
+        assign_customer_primary_mobile(self.customer.name, self.phone, update_modified=False)
 
         if not _local_pdf_renderer_available():
             self.skipTest("development site has no local PDF renderer")

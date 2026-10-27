@@ -17,7 +17,7 @@ use site ``customer_bot_transport_live`` or the transport arm flag instead.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 
 from almdina_erp.almdina_erp.application.customer_bot.ports import BotTextReplyPort
 from almdina_erp.almdina_erp.application.customer_bot.reply_outbox import ClaimedReply
@@ -54,6 +54,12 @@ def deliver_customer_bot_replies(
     )
 
     if not ops_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
+        return 0
+    from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_operation_runtime import (
+        operation_decision_is_running,
+    )
+
+    if not operation_decision_is_running():
         return 0
     ops = load_customer_bot_ops()
     if not ops.is_ready or ops.started_at is None:
@@ -100,11 +106,19 @@ def deliver_customer_bot_replies(
         if not ops_transport_may_run(live_module_enabled=LIVE_REPLY_DELIVERY_ENABLED):
             return REASON_OPS_INACTIVE
         current = load_customer_bot_ops()
-        return intent_ops_cancel_reason(
+        reason = intent_ops_cancel_reason(
             current,
             normalized_phone=claimed.normalized_phone,
             created_on=claimed.created_on,
         )
+        if reason:
+            return reason
+        from almdina_erp.almdina_erp.domain.customer_bot.operation import (
+            reply_validity_cancel_reason,
+        )
+
+        checked_at = now or datetime.now(timezone.utc)
+        return reply_validity_cancel_reason(claimed.created_on, checked_at)
 
     steps = deliver_pending_replies(
         FrappeCustomerBotReplyRepository(),
@@ -183,8 +197,18 @@ def scheduled_customer_bot_reply_tick() -> dict[str, int]:
     ``enqueue_customer_bot_reply_delivery``). Keeps backlog moving when enqueue
     fails or the worker was down. When transport is off this recovers abandoned
     ``processing`` rows to ``unknown`` without building an OpenWA client.
+    A saved running decision is rechecked here; a stopped decision does not
+    touch site configuration or the gateway.
     """
 
+    from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_operation_runtime import (
+        reconcile_if_running,
+    )
+
+    try:
+        reconcile_if_running()
+    except Exception:
+        pass
     return run_customer_bot_reply_delivery_job()
 
 

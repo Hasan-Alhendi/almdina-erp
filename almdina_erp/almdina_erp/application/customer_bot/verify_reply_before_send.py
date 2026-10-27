@@ -15,8 +15,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
+    BotMessage,
+    BotMessageKey,
     BotService,
     ServiceResultCode,
+)
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+    DOCUMENT_CAPTION_MAX,
+    CustomerTextRenderError,
+    customer_outbound_text,
+    document_description_messages,
+    document_failure_message,
+    render_customer_lines,
+)
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import CAPTION_TOO_LONG
+from almdina_erp.almdina_erp.domain.customer_bot.phone_number import (
+    CustomerPhoneError,
+    normalize_customer_phone,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.document_reply_spec import DocumentReplySpec
 from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
@@ -40,8 +55,13 @@ REASON_ORDER_INELIGIBLE = "order_ineligible"
 REASON_APPROVAL_STALE = "approval_stale"
 REASON_AMOUNT_MISMATCH = "amount_mismatch"
 REASON_DOCUMENT_UNAVAILABLE = "document_unavailable"
+REASON_DOCUMENT_RENDER_FAILED = "document_render_failed"
+REASON_CAPTION_MISMATCH = "caption_mismatch"
 REASON_MISSING_SPEC = "missing_document_spec"
 REASON_UNSUPPORTED_PART = "unsupported_part_kind"
+REASON_DESTINATION_MISMATCH = "destination_mismatch"
+REASON_PUBLIC_GUIDANCE_REJECTED = "public_guidance_rejected"
+PUBLIC_GUIDANCE_MESSAGE_KEY = BotMessageKey.UNREGISTERED_PHONE
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +69,7 @@ class ReplyPreflightResult:
     action: str
     reason_code: str
     document: CustomerBotDocument | None = None
+    customer_error_key: str | None = None
 
     @property
     def should_send(self) -> bool:
@@ -64,26 +85,29 @@ def verify_reply_before_send(
 ) -> ReplyPreflightResult:
     """Decide whether the claimed body/spec may leave the outbox.
 
-    General replies without a pinned customer only need a live accepting bot
-    and a matching acceptance epoch when the intent recorded one. Replies that
-    pin a customer must still resolve to that customer. Document parts and
-    financial siblings re-run the current service use case and cancel when the
-    pinned consistency key or amount no longer matches.
+    The unregistered-phone guidance is the only reply that may leave without a
+    customer id, and only when its stored key and published text still match.
+    Every other reply needs one current customer. Document checks read
+    eligibility and fingerprints. They do not render a PDF.
     """
 
     runtime = read_customer_bot_runtime(settings)
-    if not runtime.accepting_messages:
-        return ReplyPreflightResult(CANCEL, REASON_BOT_DISABLED)
-    if claimed.acceptance_epoch is not None and runtime.acceptance_epoch != claimed.acceptance_epoch:
-        return ReplyPreflightResult(CANCEL, REASON_EPOCH_CHANGED)
+    runtime_block = runtime_still_accepts(claimed, settings, runtime=runtime)
+    if runtime_block is not None:
+        return runtime_block
+    if not claimed.destination_id or claimed.destination_id != claimed.conversation_id:
+        return ReplyPreflightResult(CANCEL, REASON_DESTINATION_MISMATCH)
+    if claimed.message_key == PUBLIC_GUIDANCE_MESSAGE_KEY:
+        return _verify_public_guidance(claimed, runtime.published or {})
 
-    if claimed.customer_id or claimed.normalized_phone:
-        identity_check = _verify_identity(claimed, directory)
-        if identity_check is not None:
-            return identity_check
+    if not claimed.customer_id or not claimed.normalized_phone:
+        return ReplyPreflightResult(CANCEL, REASON_IDENTITY_CHANGED)
+    identity_check = _verify_identity(claimed, directory)
+    if identity_check is not None:
+        return identity_check
 
     for spec in claimed.group_document_specs:
-        group_check = _verify_document_spec(spec, services, require_bytes=False)
+        group_check = _verify_document_spec(spec, services)
         if group_check.action == CANCEL:
             return group_check
 
@@ -94,7 +118,46 @@ def verify_reply_before_send(
         return ReplyPreflightResult(CANCEL, REASON_UNSUPPORTED_PART)
     if claimed.document_spec is None:
         return ReplyPreflightResult(CANCEL, REASON_MISSING_SPEC)
-    return _verify_document_spec(claimed.document_spec, services, require_bytes=True)
+    caption_check = _verify_document_caption(claimed.document_spec, runtime.published or {})
+    if caption_check is not None:
+        return caption_check
+    return _verify_document_spec(claimed.document_spec, services)
+
+
+def runtime_still_accepts(claimed: ClaimedReply, settings: CustomerBotSettingsStore, *, runtime=None):
+    """Return a cancel result when the bot or its acceptance cycle changed."""
+
+    current = runtime if runtime is not None else read_customer_bot_runtime(settings)
+    if not current.accepting_messages:
+        return ReplyPreflightResult(CANCEL, REASON_BOT_DISABLED)
+    if claimed.acceptance_epoch is not None and current.acceptance_epoch != claimed.acceptance_epoch:
+        return ReplyPreflightResult(CANCEL, REASON_EPOCH_CHANGED)
+    return None
+
+
+def prepare_document_for_send(
+    claimed: ClaimedReply,
+    services: CustomerBotServicePort,
+) -> ReplyPreflightResult:
+    """Render the claimed document once and keep the bytes only when they still match."""
+
+    spec = claimed.document_spec
+    if spec is None:
+        return ReplyPreflightResult(CANCEL, REASON_MISSING_SPEC)
+    materialize = getattr(services, "materialize", None)
+    if materialize is None:
+        return ReplyPreflightResult(CANCEL, REASON_DOCUMENT_UNAVAILABLE)
+    try:
+        result = materialize(
+            CustomerServiceRequest(
+                phone=spec.normalized_phone,
+                service_id=spec.service_id,
+                order_name=spec.order_name,
+            )
+        )
+    except Exception:
+        return ReplyPreflightResult(CANCEL, REASON_DOCUMENT_UNAVAILABLE)
+    return _assess_service_result(spec, result, require_bytes=True)
 
 
 def _verify_identity(
@@ -111,11 +174,70 @@ def _verify_identity(
     return None
 
 
+def _verify_public_guidance(claimed: ClaimedReply, published: dict[str, str]) -> ReplyPreflightResult:
+    """Allow only the published unregistered-phone sentence, with no customer facts."""
+
+    if (
+        claimed.part_kind != PART_TEXT
+        or claimed.customer_id
+        or claimed.document_spec is not None
+        or claimed.group_document_specs
+        or not claimed.normalized_phone
+    ):
+        return ReplyPreflightResult(CANCEL, REASON_PUBLIC_GUIDANCE_REJECTED)
+    try:
+        normalized = normalize_customer_phone(claimed.normalized_phone)
+    except CustomerPhoneError:
+        return ReplyPreflightResult(CANCEL, REASON_PUBLIC_GUIDANCE_REJECTED)
+    if normalized != claimed.normalized_phone:
+        return ReplyPreflightResult(CANCEL, REASON_PUBLIC_GUIDANCE_REJECTED)
+    try:
+        lines = render_customer_lines(
+            published,
+            (BotMessage(BotMessageKey.UNREGISTERED_PHONE),),
+        )
+    except CustomerTextRenderError:
+        return ReplyPreflightResult(CANCEL, REASON_PUBLIC_GUIDANCE_REJECTED)
+    if lines != (claimed.body,):
+        return ReplyPreflightResult(CANCEL, REASON_PUBLIC_GUIDANCE_REJECTED)
+    return ReplyPreflightResult(SEND, "preflight_ok")
+
+
+def _verify_document_caption(spec: DocumentReplySpec, published: dict[str, str]) -> ReplyPreflightResult | None:
+    """The stored caption must still be the current description of this document."""
+
+    if len(spec.caption) > DOCUMENT_CAPTION_MAX:
+        try:
+            failure = document_failure_message(spec.service_id)
+        except ValueError:
+            return ReplyPreflightResult(CANCEL, CAPTION_TOO_LONG)
+        return ReplyPreflightResult(
+            CANCEL,
+            CAPTION_TOO_LONG,
+            customer_error_key=failure.key,
+        )
+    if not spec.caption:
+        return ReplyPreflightResult(CANCEL, REASON_CAPTION_MISMATCH)
+    try:
+        expected = customer_outbound_text(
+            published,
+            document_description_messages(
+                spec.service_id,
+                spec.order_name,
+                spec.amount,
+                spec.currency,
+            ),
+        )
+    except (CustomerTextRenderError, ValueError):
+        return ReplyPreflightResult(CANCEL, REASON_CAPTION_MISMATCH)
+    if expected != spec.caption:
+        return ReplyPreflightResult(CANCEL, REASON_CAPTION_MISMATCH)
+    return None
+
+
 def _verify_document_spec(
     spec: DocumentReplySpec,
     services: CustomerBotServicePort,
-    *,
-    require_bytes: bool,
 ) -> ReplyPreflightResult:
     result = services.execute(
         CustomerServiceRequest(
@@ -124,6 +246,15 @@ def _verify_document_spec(
             order_name=spec.order_name,
         )
     )
+    return _assess_service_result(spec, result, require_bytes=False)
+
+
+def _assess_service_result(
+    spec: DocumentReplySpec,
+    result,
+    *,
+    require_bytes: bool,
+) -> ReplyPreflightResult:
     ready_codes = {
         BotService.FINAL_COST: ServiceResultCode.READY,
         BotService.APPROVED_CUTTING_PLAN: ServiceResultCode.PLAN_READY,
@@ -144,6 +275,17 @@ def _verify_document_spec(
             ServiceResultCode.MEASUREMENTS_DATA_CHANGED,
         }:
             return ReplyPreflightResult(CANCEL, REASON_APPROVAL_STALE)
+        failed = {
+            ServiceResultCode.INVOICE_FAILED: BotMessageKey.INVOICE_FAILED,
+            ServiceResultCode.PLAN_PDF_FAILED: BotMessageKey.PLAN_PDF_FAILED,
+            ServiceResultCode.MEASUREMENTS_PDF_FAILED: BotMessageKey.MEASUREMENTS_PDF_FAILED,
+        }.get(result.code)
+        if failed:
+            return ReplyPreflightResult(
+                CANCEL,
+                REASON_DOCUMENT_RENDER_FAILED,
+                customer_error_key=failed,
+            )
         return ReplyPreflightResult(CANCEL, REASON_DOCUMENT_UNAVAILABLE)
 
     document = result.documents[0]
@@ -163,6 +305,8 @@ def _verify_document_spec(
     if spec.plan_revision is not None and document.plan_revision != spec.plan_revision:
         return ReplyPreflightResult(CANCEL, REASON_APPROVAL_STALE)
     if require_bytes:
+        if not document.content:
+            return ReplyPreflightResult(CANCEL, REASON_DOCUMENT_UNAVAILABLE)
         return ReplyPreflightResult(SEND, "preflight_ok", document=document)
     return ReplyPreflightResult(SEND, "preflight_ok")
 
@@ -172,13 +316,19 @@ __all__ = [
     "REASON_AMOUNT_MISMATCH",
     "REASON_APPROVAL_STALE",
     "REASON_BOT_DISABLED",
+    "REASON_CAPTION_MISMATCH",
+    "REASON_DOCUMENT_RENDER_FAILED",
     "REASON_DOCUMENT_UNAVAILABLE",
     "REASON_EPOCH_CHANGED",
     "REASON_IDENTITY_CHANGED",
+    "REASON_DESTINATION_MISMATCH",
     "REASON_MISSING_SPEC",
     "REASON_ORDER_INELIGIBLE",
+    "REASON_PUBLIC_GUIDANCE_REJECTED",
     "REASON_UNSUPPORTED_PART",
     "ReplyPreflightResult",
     "SEND",
+    "prepare_document_for_send",
+    "runtime_still_accepts",
     "verify_reply_before_send",
 ]

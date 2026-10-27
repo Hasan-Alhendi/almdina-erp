@@ -159,6 +159,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "Accept authenticated OpenWA webhook deliveries for the configured customer-bot connection. Does not edit bot texts, manage the factory WhatsApp session, or send replies.",
         "critical",
     ),
+    Capability.MANAGE_CUSTOMER_BOT_OPERATION: _presentation(
+        "Manage customer bot operation",
+        "Run or stop the customer bot, register its webhook, and read its operational status. Does not edit bot texts, link a WhatsApp session, create employees, or open customers and orders.",
+        "critical",
+    ),
     Capability.MANAGE_BACKUPS: _presentation("Manage backups", "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.", "critical"),
     Capability.RESTORE_BACKUPS: _presentation("Restore backups", "Start a destructive restore after explicit confirmation and an automatic safety backup. Does not grant editing backup settings.", "critical"),
     Capability.VIEW_PRODUCTION_ROUTINGS: _presentation("View production routings", "View production routings and their stage sequence."),

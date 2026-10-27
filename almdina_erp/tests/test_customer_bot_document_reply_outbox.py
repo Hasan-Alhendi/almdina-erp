@@ -18,12 +18,18 @@ from almdina_erp.almdina_erp.application.customer_bot.deliver_reply_intents impo
     deliver_one_reply,
     deliver_pending_replies,
 )
-from almdina_erp.almdina_erp.domain.customer_bot.conversation import BotService, ServiceResultCode
+from almdina_erp.almdina_erp.domain.customer_bot.conversation import (
+    BotMessageKey,
+    BotService,
+    ServiceResultCode,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.document_reply_spec import DocumentReplySpec
 from almdina_erp.almdina_erp.domain.customer_bot.documents import CustomerBotDocument
 from almdina_erp.almdina_erp.domain.customer_bot.gateway_capabilities import BotGatewayCapabilities
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import DOCUMENT_CAPTION_MAX
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     CANCELLED,
+    CAPTION_TOO_LONG,
     PART_DOCUMENT,
     PART_TEXT,
     PENDING,
@@ -50,15 +56,25 @@ class _DocServices:
         self.consistency_key = "price-key-1"
         self.amount = Decimal("10.00")
         self.available = True
+        self.render_calls = 0
 
     def execute(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        return self._result(request, content=None)
+
+    def materialize(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        self.render_calls += 1
+        return self._result(request, content=b"%PDF-live")
+
+    def _result(self, request: CustomerServiceRequest, *, content: bytes | None) -> CustomerServiceResult:
         if not self.available:
             return CustomerServiceResult(ServiceResultCode.PRICE_UNAVAILABLE)
+        if self.consistency_key != "price-key-1":
+            return CustomerServiceResult(ServiceResultCode.PRICE_DATA_CHANGED)
         document = CustomerBotDocument(
             document_type="customer_invoice",
             filename="invoice.pdf",
             mime_type="application/pdf",
-            content=b"%PDF-live",
+            content=content,
             order_name=request.order_name,
             consistency_key=self.consistency_key,
             service_id=BotService.FINAL_COST,
@@ -156,8 +172,7 @@ class DocumentReplyOutboxTests(unittest.TestCase):
         self.assertEqual(outcome.disposition, PROCESSED)
         rows = sorted(self._price_replies("doc-1"), key=lambda row: row.intent.sequence)
         kinds = [row.intent.part_kind for row in rows]
-        self.assertIn(PART_TEXT, kinds)
-        self.assertIn(PART_DOCUMENT, kinds)
+        self.assertEqual(kinds, [PART_DOCUMENT])
         document_rows = [row for row in rows if row.intent.part_kind == PART_DOCUMENT]
         self.assertEqual(len(document_rows), 1)
         spec = document_rows[0].intent.document_spec
@@ -166,7 +181,12 @@ class DocumentReplyOutboxTests(unittest.TestCase):
         self.assertEqual(spec.consistency_key, "price-key-1")
         self.assertEqual(spec.order_name, "DCO-A")
         self.assertEqual(spec.customer_id, "CUST-A")
+        self.assertIn("DCO-A", spec.caption)
+        self.assertIn("10.00", spec.caption)
+        self.assertIn("USD", spec.caption)
+        self.assertIn("0", spec.caption)
         self.assertNotIn("%PDF", document_rows[0].intent.body)
+        self.assertNotIn("%PDF", spec.dumps())
 
     def test_document_insert_failure_rolls_back_event_and_state(self) -> None:
         self.accept(_message("hello", "doc-fail-hello"))
@@ -198,11 +218,12 @@ class DocumentReplyOutboxTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.accept(_message("2", "doc-crash"), on_replies_committed=mark)
         self.assertEqual(len(committed), 1)
-        self.assertGreaterEqual(len(self._price_replies("doc-crash")), 2)
+        self.assertEqual(committed, [1])
+        self.assertEqual(len(self._price_replies("doc-crash")), 1)
         again = self.accept(_message("2", "doc-crash"))
         self.assertEqual(again.disposition, DUPLICATE)
         pending = [row for row in self._price_replies("doc-crash") if row.status == PENDING]
-        self.assertGreaterEqual(len(pending), 2)
+        self.assertEqual(len(pending), 1)
         delivered = deliver_pending_replies(
             self.sessions, self.text_port, deps=self.deps(), now=self.clock.now, limit=20
         )
@@ -212,44 +233,30 @@ class DocumentReplyOutboxTests(unittest.TestCase):
 
     def test_preflight_cancels_when_price_version_changes(self) -> None:
         self.open_price_turn("doc-stale")
-        # Drain welcome replies first so the price group is next.
-        while True:
-            claimed_preview = [
-                row
-                for row in self.sessions.replies.values()
-                if row.status == PENDING and row.intent.provider_event_id != "doc-stale"
-            ]
-            if not claimed_preview:
-                break
-            deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.text_port.calls.clear()
         self.services.consistency_key = "price-key-2"
-        step = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.assertIsNotNone(step)
-        assert step is not None
-        self.assertEqual(step.status, CANCELLED)
-        self.assertEqual(self.text_port.calls, [])
+        self._deliver_all()
+        document = next(row for row in self._price_replies("doc-stale") if row.intent.part_kind == PART_DOCUMENT)
+        self.assertEqual(document.status, CANCELLED)
         self.assertEqual(self.doc_port.calls, [])
+        self.assertFalse(any("10.00" in call for call in self.text_port.calls))
 
     def test_preflight_cancels_on_identity_change(self) -> None:
         self.open_price_turn("doc-id")
-        self._drain_non_event("doc-id")
-        self.text_port.calls.clear()
-        self.doc_port.calls.clear()
         self.directory.matches[PHONE] = ("OTHER-CUST",)
-        step = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.assertEqual(step.status, CANCELLED)
+        self._deliver_all()
+        document = next(row for row in self._price_replies("doc-id") if row.intent.part_kind == PART_DOCUMENT)
+        self.assertEqual(document.status, CANCELLED)
+        self.assertEqual(self.doc_port.calls, [])
         self.assertEqual(self.text_port.calls, [])
 
     def test_preflight_cancels_on_epoch_change(self) -> None:
         self.open_price_turn("doc-epoch")
-        self._drain_non_event("doc-epoch")
-        self.text_port.calls.clear()
-        self.doc_port.calls.clear()
         self.settings.enabled = False
         self.settings.enabled = True
-        step = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.assertEqual(step.status, CANCELLED)
+        self._deliver_all()
+        document = next(row for row in self._price_replies("doc-epoch") if row.intent.part_kind == PART_DOCUMENT)
+        self.assertEqual(document.status, CANCELLED)
+        self.assertEqual(self.doc_port.calls, [])
         self.assertEqual(self.text_port.calls, [])
 
     def test_lost_claim_rejects_stale_worker_write(self) -> None:
@@ -285,15 +292,90 @@ class DocumentReplyOutboxTests(unittest.TestCase):
 
     def test_text_success_does_not_imply_document_success(self) -> None:
         self.open_price_turn("doc-seq")
-        self._drain_non_event("doc-seq")
-        self.text_port.calls.clear()
-        self.doc_port.calls.clear()
-        first = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.assertEqual(first.status, "accepted")
         self.services.available = False
-        second = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
-        self.assertEqual(second.status, CANCELLED)
-        self.assertEqual(len(self.doc_port.calls), 0)
+        self._deliver_all()
+        hello = next(
+            row for row in self.sessions.replies.values() if row.intent.provider_event_id == "doc-seq-hello"
+        )
+        document = next(row for row in self._price_replies("doc-seq") if row.intent.part_kind == PART_DOCUMENT)
+        self.assertEqual(hello.status, "accepted")
+        self.assertEqual(document.status, CANCELLED)
+        self.assertEqual(self.doc_port.calls, [])
+
+    def _deliver_all(self) -> None:
+        for _index in range(6):
+            step = deliver_one_reply(self.sessions, self.text_port, deps=self.deps(), now=self.clock.now)
+            if step is None:
+                return
+
+    def test_caption_limit_keeps_the_custom_failure_and_does_not_retry(self) -> None:
+        custom_failure = "تعذر إرسال الوصف المخصص"
+        ask = 400
+        exact_name = "ط" * (DOCUMENT_CAPTION_MAX - 1 - ask)
+        under_name = "ط" * (DOCUMENT_CAPTION_MAX - 2 - ask)
+        over_name = "ط" * (DOCUMENT_CAPTION_MAX - ask)
+        self.assertEqual(len(exact_name) + 1 + ask, DOCUMENT_CAPTION_MAX)
+        self.assertEqual(len(under_name) + 1 + ask, DOCUMENT_CAPTION_MAX - 1)
+        self.assertEqual(len(over_name) + 1 + ask, DOCUMENT_CAPTION_MAX + 1)
+
+        def prepare() -> None:
+            self.setUp()
+            self.settings.published[BotMessageKey.FINAL_PRICE] = "{order_name}"
+            self.settings.published[BotMessageKey.ASK_ORDER_NUMBER] = "ب" * ask
+            self.settings.published[BotMessageKey.INVOICE_FAILED] = custom_failure
+
+        prepare()
+        under = self._priced(under_name, "cap-under")
+        self.assertEqual(under.disposition, PROCESSED)
+        under_row = self._price_replies("cap-under")[0]
+        self.assertEqual(under_row.intent.part_kind, PART_DOCUMENT)
+        self.assertEqual(len(under_row.intent.document_spec.caption), DOCUMENT_CAPTION_MAX - 1)
+        self.assertIn(under_name, under_row.intent.document_spec.caption)
+
+        prepare()
+        exact = self._priced(exact_name, "cap-exact")
+        exact_row = self._price_replies("cap-exact")[0]
+        self.assertEqual(exact_row.intent.part_kind, PART_DOCUMENT)
+        self.assertEqual(len(exact_row.intent.document_spec.caption), DOCUMENT_CAPTION_MAX)
+
+        prepare()
+        over = self._priced(over_name, "cap-over")
+        self.assertEqual(over.disposition, PROCESSED)
+        rows = self._price_replies("cap-over")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].intent.part_kind, PART_TEXT)
+        self.assertEqual(rows[0].intent.body, custom_failure)
+        self.assertEqual(rows[0].intent.message_key, BotMessageKey.INVOICE_FAILED)
+        self.assertEqual(rows[0].reason_code, CAPTION_TOO_LONG)
+        self.assertNotIn("10.00", rows[0].intent.body)
+        self.assertNotIn(over_name, rows[0].intent.body)
+        self.assertIsNone(rows[0].intent.document_spec)
+        again = self._priced(over_name, "cap-over")
+        self.assertEqual(again.disposition, DUPLICATE)
+        self.assertEqual(len(self._price_replies("cap-over")), 1)
+        self._deliver_all()
+        self.assertEqual(rows[0].status, "accepted")
+        self.assertEqual(rows[0].reason_code, CAPTION_TOO_LONG)
+        self.assertEqual(self.text_port.calls.count(custom_failure), 1)
+        self.assertEqual(self.doc_port.calls, [])
+        self.assertFalse(any("10.00" in call for call in self.text_port.calls))
+        self._deliver_all()
+        self.assertEqual(self.text_port.calls.count(custom_failure), 1)
+        self.assertEqual(self.doc_port.calls, [])
+
+    def _priced(self, order_name: str, event: str):
+        self.accept(_message("hello", f"{event}-hello"))
+        return accept_inbound_customer_message(
+            _message("2", event),
+            sessions=self.sessions,
+            settings=self.settings,
+            directory=self.directory,
+            headers=_Orders((_header(order_name),)),
+            stages=_Stages(),
+            routes=_Routes(),
+            services=self.services,
+            now=self.clock.now,
+        )
 
     def _drain_non_event(self, event: str) -> None:
         while True:

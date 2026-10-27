@@ -69,7 +69,13 @@ class CustomerBotMeasurementsServiceTests(unittest.TestCase):
     def test_saved_measurements_return_one_document_without_price(self) -> None:
         reader = _Reader([_ready(), _ready()])
         pdf = _Pdf()
-        result = CustomerBotMeasurementsService(reader, pdf).execute(REQUEST)
+        described = CustomerBotMeasurementsService(reader, pdf).execute(REQUEST)
+        self.assertEqual(described.code, ServiceResultCode.MEASUREMENTS_READY)
+        self.assertIsNone(described.documents[0].content)
+        self.assertEqual(pdf.calls, [])
+
+        renderer = _Reader([_ready(), _ready()])
+        result = CustomerBotMeasurementsService(renderer, pdf).materialize(REQUEST)
 
         self.assertEqual(result.code, ServiceResultCode.MEASUREMENTS_READY)
         self.assertIsNone(result.amount)
@@ -81,7 +87,7 @@ class CustomerBotMeasurementsServiceTests(unittest.TestCase):
         self.assertEqual(document.filename, "قياسات-DCO-2026-00021.pdf")
         self.assertEqual(document.content, b"%PDF-1.4\n")
         self.assertEqual(pdf.calls, [(REQUEST.phone, REQUEST.order_name)])
-        self.assertEqual(reader.calls, [pdf.calls[0], pdf.calls[0]])
+        self.assertEqual(renderer.calls, [pdf.calls[0], pdf.calls[0]])
 
     def test_other_services_stay_unavailable_on_this_port(self) -> None:
         pdf = _Pdf()
@@ -115,14 +121,14 @@ class CustomerBotMeasurementsServiceTests(unittest.TestCase):
         )
         for snapshots in cases:
             pdf = _Pdf(b"%PDF-stale")
-            result = CustomerBotMeasurementsService(_Reader(snapshots), pdf).execute(REQUEST)
+            result = CustomerBotMeasurementsService(_Reader(snapshots), pdf).materialize(REQUEST)
             self.assertEqual(result.code, ServiceResultCode.MEASUREMENTS_DATA_CHANGED)
             self.assertEqual(result.documents, ())
             self.assertEqual(pdf.calls, [(REQUEST.phone, REQUEST.order_name)])
 
     def test_renderer_failure_and_invalid_bytes_are_not_success(self) -> None:
         for content in (RuntimeError("pdf"), b"", b"not-a-pdf"):
-            result = CustomerBotMeasurementsService(_Reader([_ready()]), _Pdf(content)).execute(
+            result = CustomerBotMeasurementsService(_Reader([_ready()]), _Pdf(content)).materialize(
                 REQUEST
             )
             self.assertEqual(result.code, ServiceResultCode.MEASUREMENTS_PDF_FAILED)

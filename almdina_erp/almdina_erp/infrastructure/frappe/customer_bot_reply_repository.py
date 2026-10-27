@@ -17,6 +17,7 @@ from almdina_erp.almdina_erp.domain.customer_bot.document_reply_spec import (
     document_reply_spec_from_payload,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
+    CAPTION_TOO_LONG,
     ABANDONED_CLAIM_REASON,
     ACCEPTED,
     CANCELLED,
@@ -104,7 +105,7 @@ class FrappeCustomerBotReplyRepository:
         rows = frappe.db.sql(
             f"""select name, reply_id, connection_ref, provider_event_id, conversation_id,
                        destination_id, sequence, body, attempt_count, part_kind, document_spec,
-                       customer_id, normalized_phone, acceptance_epoch, creation
+                       customer_id, normalized_phone, acceptance_epoch, message_key, creation
                 from `{_REPLY}`
                 where {where_sql}
                 order by creation asc, sequence asc
@@ -156,6 +157,7 @@ class FrappeCustomerBotReplyRepository:
                     row.connection_ref, row.provider_event_id
                 ),
                 created_on=_parse_creation(row.creation),
+                message_key=row.message_key or None,
             )
         return None
 
@@ -188,7 +190,7 @@ class FrappeCustomerBotReplyRepository:
         if status not in _TERMINAL or result.reply_id != reply_id:
             return False
         rows = frappe.db.sql(
-            f"""select connection_ref, destination_id from `{_REPLY}`
+            f"""select connection_ref, destination_id, reason_code from `{_REPLY}`
                 where reply_id=%s and claim_token=%s and status=%s
                 for update""",
             (reply_id, claim_token, PROCESSING),
@@ -201,6 +203,8 @@ class FrappeCustomerBotReplyRepository:
         ):
             return False
         provider_message_id = result.provider_message_id if status == ACCEPTED else None
+        stored_reason = str(rows[0].reason_code or "")
+        reason_code = stored_reason if stored_reason == CAPTION_TOO_LONG else result.reason_code
         frappe.db.sql(
             f"""update `{_REPLY}`
                 set status=%s, provider_message_id=%s, reason_code=%s, finished_on=%s, modified=%s
@@ -208,7 +212,7 @@ class FrappeCustomerBotReplyRepository:
             (
                 status,
                 provider_message_id,
-                result.reason_code,
+                reason_code,
                 utc_iso(now),
                 _modified(),
                 reply_id,
@@ -308,23 +312,26 @@ def _parse_creation(value: object) -> datetime | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
-    text = str(value).strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        # Frappe often stores naive UTC timestamps.
-        if "T" not in text and " " in text:
-            text = text.replace(" ", "T", 1)
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        try:
+            if "T" not in text and " " in text:
+                text = text.replace(" ", "T", 1)
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
+        # Reply rows are stamped with frappe.utils.now(), which is the system
+        # zone with the zone removed. Labeling that value as UTC keeps a reply
+        # inside the five-minute window for the whole zone offset.
+        from zoneinfo import ZoneInfo
+
+        parsed = parsed.replace(tzinfo=ZoneInfo(frappe.utils.get_system_timezone()))
     return parsed.astimezone(timezone.utc)
 
 

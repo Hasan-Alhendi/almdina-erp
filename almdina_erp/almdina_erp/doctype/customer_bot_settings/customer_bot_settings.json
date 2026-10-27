@@ -12,7 +12,16 @@
     "published_by",
     "openwa_connection_ref",
     "openwa_session_id",
-    "openwa_webhook_secret"
+    "openwa_webhook_secret",
+    "operation_decision",
+    "operation_state",
+    "operation_generation",
+    "operation_reason",
+    "operation_webhook_id",
+    "operation_ingest_user",
+    "operation_queue_ok",
+    "operation_queue_checked_on",
+    "operation_last_error"
   ],
   "fields": [
     {"default": "0", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "read_only": 1},
@@ -24,7 +33,16 @@
     {"fieldname": "published_by", "fieldtype": "Data", "label": "Published By", "read_only": 1},
     {"description": "Server-side connection identity for inbound OpenWA events. The webhook body cannot choose this value.", "fieldname": "openwa_connection_ref", "fieldtype": "Data", "hidden": 1, "label": "OpenWA Connection Ref", "read_only": 1},
     {"description": "Expected OpenWA sessionId for the customer-bot inbound connection. Must match the signed webhook envelope.", "fieldname": "openwa_session_id", "fieldtype": "Data", "hidden": 1, "label": "OpenWA Session ID", "read_only": 1},
-    {"description": "HMAC secret for X-OpenWA-Signature verification. Stored encrypted. Absence blocks inbound reception.", "fieldname": "openwa_webhook_secret", "fieldtype": "Password", "hidden": 1, "label": "OpenWA Webhook Secret", "read_only": 1}
+    {"description": "HMAC secret for X-OpenWA-Signature verification. Stored encrypted. Absence blocks inbound reception.", "fieldname": "openwa_webhook_secret", "fieldtype": "Password", "hidden": 1, "label": "OpenWA Webhook Secret", "read_only": 1},
+    {"default": "stopped", "description": "Manager decision for this site. Migrate does not set this to running.", "fieldname": "operation_decision", "fieldtype": "Select", "hidden": 1, "label": "Operation Decision", "options": "stopped\nrunning", "read_only": 1},
+    {"default": "stopped", "fieldname": "operation_state", "fieldtype": "Select", "hidden": 1, "label": "Operation State", "options": "stopped\nneeds_setup\nactivating\nready\ndegraded", "read_only": 1},
+    {"default": "0", "fieldname": "operation_generation", "fieldtype": "Int", "hidden": 1, "label": "Operation Generation", "non_negative": 1, "read_only": 1},
+    {"fieldname": "operation_reason", "fieldtype": "Data", "hidden": 1, "label": "Operation Reason", "read_only": 1},
+    {"fieldname": "operation_webhook_id", "fieldtype": "Data", "hidden": 1, "label": "Operation Webhook ID", "read_only": 1},
+    {"fieldname": "operation_ingest_user", "fieldtype": "Data", "hidden": 1, "label": "Operation Ingest User", "read_only": 1},
+    {"default": "0", "fieldname": "operation_queue_ok", "fieldtype": "Check", "hidden": 1, "label": "Operation Queue OK", "read_only": 1},
+    {"fieldname": "operation_queue_checked_on", "fieldtype": "Datetime", "hidden": 1, "label": "Operation Queue Checked On", "read_only": 1},
+    {"fieldname": "operation_last_error", "fieldtype": "Data", "hidden": 1, "label": "Operation Last Error", "read_only": 1}
   ],
   "issingle": 1,
   "links": [],

@@ -224,7 +224,7 @@ def _run(
 class CustomerBotConversationTests(unittest.TestCase):
     def test_first_message_is_welcome_and_menu_without_reading_orders(self) -> None:
         orders = _Orders((_header("DCO-2026-00021"),))
-        turn, _directory, services = _run("1", None, orders)
+        turn, _directory, services = _run("مرحبا", None, orders)
         self.assertEqual(
             tuple(item.key for item in turn.messages),
             (BotMessageKey.WELCOME, BotMessageKey.MAIN_MENU),
@@ -233,6 +233,53 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertIsNone(turn.state.service_id)
         self.assertEqual(orders.list_calls, 0)
         self.assertEqual(services.requests, [])
+
+    def test_a_first_service_digit_runs_without_a_welcome(self) -> None:
+        orders = _Orders((_header("DCO-2026-00021"),))
+        turn, _directory, services = _run("1", None, orders)
+        self.assertEqual(turn.messages[0].key, BotMessageKey.ORDER_STATUS)
+        self.assertNotIn(BotMessageKey.WELCOME, [item.key for item in turn.messages])
+        self.assertEqual(orders.list_calls, 1)
+        self.assertEqual(services.requests, [])
+
+    def test_a_new_operation_cycle_does_not_resume_the_old_service(self) -> None:
+        orders = _Orders((_header("DCO-A"), _header("DCO-B")))
+        opened, _directory, _services = _run("hi", None, orders)
+        waiting, _directory, _services = _run("1", opened.state, orders)
+        self.assertEqual(waiting.state.phase, ConversationPhase.AWAITING_ORDER_NUMBER)
+        restarted = handle_customer_conversation(
+            _inbound("DCO-A"),
+            waiting.state,
+            ConversationContext(
+                enabled=True,
+                now=NOW,
+                session_ttl=TTL,
+                operation_generation=waiting.state.operation_generation + 1,
+            ),
+            _Directory(),
+            orders,
+            _Stages(),
+            _Routes(),
+            _Services(),
+        )
+        self.assertEqual(restarted.messages[0].key, BotMessageKey.WELCOME)
+        self.assertIsNone(restarted.state.service_id)
+        self.assertEqual(orders.exact_names, [])
+        payload = waiting.state.to_payload()
+        del payload["operation_generation"]
+        self.assertIsNone(conversation_state_from_payload(payload))
+
+    def test_an_order_prompt_keeps_the_service_for_arabic_and_indic_digits(self) -> None:
+        orders = _Orders((_header("DCO-A"), _header("DCO-B")))
+        opened, _directory, _services = _run("hi", None, orders)
+        waiting, _directory, _services = _run("4", opened.state, orders)
+        self.assertEqual(waiting.state.service_id, BotService.MEASUREMENTS)
+        indic, _directory, _services = _run("\u0662", waiting.state, orders)
+        eastern, _directory, _services = _run("\u06f3", indic.state, orders)
+        self.assertEqual(indic.state.service_id, BotService.MEASUREMENTS)
+        self.assertEqual(eastern.state.service_id, BotService.MEASUREMENTS)
+        self.assertEqual(indic.messages[0].key, BotMessageKey.INVALID_ORDER_NUMBER)
+        self.assertEqual(eastern.messages[0].key, BotMessageKey.INVALID_ORDER_NUMBER)
 
     def test_unknown_and_conflict_share_one_public_result(self) -> None:
         unknown, _directory, _services = _run(
@@ -433,16 +480,18 @@ class CustomerBotConversationTests(unittest.TestCase):
         ready, _directory, _services = _run("DCO-OLD", listed.state, orders, services=plan)
         self.assertEqual(ready.messages[0].key, BotMessageKey.APPROVED_PLAN)
         self.assertEqual(dict(ready.messages[0].parameters)["order_name"], "DCO-OLD")
-        self.assertEqual(reader.orders, ["DCO-OLD", "DCO-OLD"])
-        self.assertEqual(pdf.calls, [("DCO-OLD", "CP-OLD")])
-        self.assertEqual(ready.documents[0].content, b"%PDF-old")
+        self.assertEqual(reader.orders, ["DCO-OLD"])
+        self.assertEqual(pdf.calls, [])
+        self.assertIsNone(ready.documents[0].content)
+        self.assertEqual(ready.documents[0].plan_name, "CP-OLD")
+        self.assertEqual(ready.documents[0].consistency_key, "same")
         self.assertNotIn("DCO-NEW", ready.documents[0].filename)
         blocked, _directory, _services = _run("DCO-STALE", ready.state, orders, services=plan)
         self.assertEqual(blocked.messages[0].key, BotMessageKey.ORDER_NOT_CURRENT)
         self.assertEqual(dict(blocked.messages[0].parameters)["order_name"], "DCO-STALE")
         self.assertEqual(blocked.documents, ())
-        self.assertEqual(reader.orders, ["DCO-OLD", "DCO-OLD"])
-        self.assertEqual(pdf.calls, [("DCO-OLD", "CP-OLD")])
+        self.assertEqual(reader.orders, ["DCO-OLD"])
+        self.assertEqual(pdf.calls, [])
 
         missing = _PlanReader(False)
         missing_pdf = _PlanPdf()
@@ -733,9 +782,11 @@ class CustomerBotConversationTests(unittest.TestCase):
             )
         )
         pdf_orders: list[str] = []
+        read_orders: list[str] = []
 
         class _Reader:
             def read(self, phone: str, order_name: str):
+                read_orders.append(order_name)
                 self.last = (phone, order_name)
                 if order_name == "DCO-B":
                     return CustomerBotMeasurementsSnapshot(
@@ -805,9 +856,10 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertEqual(selected.messages[0].key, BotMessageKey.MEASUREMENTS)
         self.assertEqual(dict(selected.messages[0].parameters), {"order_name": "DCO-B"})
         self.assertEqual(selected.documents[0].document_type, "order_measurements")
-        self.assertEqual(selected.documents[0].content, b"%PDF-DCO-B")
+        self.assertIsNone(selected.documents[0].content)
+        self.assertEqual(selected.documents[0].consistency_key, "b")
         self.assertNotIn("documents", selected.state.to_payload())
-        self.assertEqual(pdf_orders, ["DCO-B"])
+        self.assertEqual(pdf_orders, [])
 
         menu, _directory, _services = _run("0", selected.state, orders, services=services)
         self.assertEqual(menu.messages[0].key, BotMessageKey.MAIN_MENU)
@@ -820,8 +872,9 @@ class CustomerBotConversationTests(unittest.TestCase):
         waiting, _directory, _services = _run("4", again.state, orders, services=services)
         delivered, _directory, _services = _run("DCO-OLD", waiting.state, orders, services=services)
         self.assertEqual(dict(delivered.messages[0].parameters)["order_name"], "DCO-OLD")
-        self.assertEqual(delivered.documents[0].content, b"%PDF-DCO-OLD")
-        self.assertNotIn(b"DCO-A", delivered.documents[0].content)
+        self.assertIsNone(delivered.documents[0].content)
+        self.assertEqual(delivered.documents[0].order_name, "DCO-OLD")
+        self.assertEqual(delivered.documents[0].consistency_key, "old")
         stale, _directory, _services = _run("DCO-STALE", delivered.state, orders, services=services)
         self.assertEqual(stale.messages[0].key, BotMessageKey.ORDER_NOT_CURRENT)
         self.assertEqual(stale.documents, ())
@@ -834,7 +887,8 @@ class CustomerBotConversationTests(unittest.TestCase):
         self.assertEqual(missing.messages[0].key, BotMessageKey.ORDER_NOT_FOUND)
         self.assertEqual(foreign.documents, ())
         self.assertEqual(missing.documents, ())
-        self.assertEqual(pdf_orders, ["DCO-B", "DCO-OLD"])
+        self.assertEqual(pdf_orders, [])
+        self.assertEqual(read_orders, ["DCO-B", "DCO-OLD"])
 
         menu, _directory, _services = _run("0", missing.state, orders, services=services)
         price_list, _directory, _services = _run("2", menu.state, orders, services=services)
@@ -899,7 +953,9 @@ class CustomerBotConversationTests(unittest.TestCase):
                 _inbound("4"), menu.state, _context(), _Directory(), orders, stages, routes, service
             )
             self.assertEqual(measured.messages[0].key, BotMessageKey.MEASUREMENTS)
-            self.assertEqual(measured.documents[0].content, b"%PDF-" + header.name.encode())
+            self.assertIsNone(measured.documents[0].content)
+            self.assertEqual(measured.documents[0].order_name, header.name)
+            self.assertEqual(measured.documents[0].consistency_key, header.name)
             self.assertNotIn("amount", dict(measured.messages[0].parameters))
 
     def test_invalid_menu_choice_does_not_list_orders(self) -> None:

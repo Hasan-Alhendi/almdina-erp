@@ -67,21 +67,28 @@ class _Pdf:
 
 class CustomerBotFinalPriceServiceTests(unittest.TestCase):
     def test_approved_price_and_pdf_are_one_customer_invoice_result(self) -> None:
-        reader = _Reader(_snapshot(), _snapshot())
+        reader = _Reader(_snapshot())
         pdf = _Pdf()
-        result = CustomerBotFinalPriceService(reader, pdf).execute(REQUEST)
+        described = CustomerBotFinalPriceService(reader, pdf).execute(REQUEST)
 
-        self.assertEqual(result.code, ServiceResultCode.READY)
-        self.assertEqual(result.amount, Decimal("125.00"))
-        self.assertEqual(result.currency, "USD")
-        self.assertEqual(len(result.documents), 1)
-        document = result.documents[0]
+        self.assertEqual(described.code, ServiceResultCode.READY)
+        self.assertEqual(described.amount, Decimal("125.00"))
+        self.assertEqual(described.currency, "USD")
+        self.assertIsNone(described.documents[0].content)
+        self.assertEqual(pdf.calls, [])
+        self.assertEqual(reader.calls, [(REQUEST.phone, REQUEST.order_name)])
+
+        renderer = _Reader(_snapshot(), _snapshot())
+        rendered = CustomerBotFinalPriceService(renderer, pdf).materialize(REQUEST)
+        self.assertEqual(rendered.code, ServiceResultCode.READY)
+        document = rendered.documents[0]
         self.assertEqual(document.document_type, "customer_invoice")
         self.assertEqual(document.filename, "فاتورة-DCO-2026-00021.pdf")
         self.assertEqual(document.mime_type, "application/pdf")
         self.assertTrue(document.content.startswith(b"%PDF"))
-        self.assertEqual(pdf.calls[0][1]["totals"][0]["value_usd"], result.amount)
-        self.assertEqual(reader.calls, [
+        self.assertEqual(pdf.calls[0][1]["totals"][0]["value_usd"], rendered.amount)
+        self.assertEqual(len(pdf.calls), 1)
+        self.assertEqual(renderer.calls, [
             (REQUEST.phone, REQUEST.order_name),
             (REQUEST.phone, REQUEST.order_name),
         ])
@@ -115,13 +122,14 @@ class CustomerBotFinalPriceServiceTests(unittest.TestCase):
     def test_phone_or_approval_change_discards_the_generated_pdf(self) -> None:
         reader = _Reader(_snapshot(), _snapshot(key="approval-2:fingerprint-2"))
         pdf = _Pdf()
-        result = CustomerBotFinalPriceService(reader, pdf).execute(REQUEST)
+        result = CustomerBotFinalPriceService(reader, pdf).materialize(REQUEST)
         self.assertEqual(result.code, ServiceResultCode.PRICE_DATA_CHANGED)
+        self.assertEqual(len(pdf.calls), 1)
         self.assertEqual(result.documents, ())
 
     def test_pdf_failure_does_not_return_a_price_only_success(self) -> None:
         reader = _Reader(_snapshot())
-        result = CustomerBotFinalPriceService(reader, _Pdf(b"")).execute(REQUEST)
+        result = CustomerBotFinalPriceService(reader, _Pdf(b"")).materialize(REQUEST)
         self.assertEqual(result.code, ServiceResultCode.INVOICE_FAILED)
         self.assertIsNone(result.amount)
         self.assertEqual(result.documents, ())

@@ -268,6 +268,10 @@ class CustomerBotTemplateTests(unittest.TestCase):
 
     def test_no_current_orders_instruction_is_rendered_once(self) -> None:
         opened = preview_customer_bot_turn(default_texts(), "no_orders", "مرحبا", None, NOW)
+        self.assertEqual(len(opened.lines), 1)
+        self.assertIn("مرحباً بك", opened.lines[0])
+        self.assertIn("1-", opened.lines[0])
+        self.assertIn("4-", opened.lines[0])
         waiting = preview_customer_bot_turn(
             default_texts(),
             "no_orders",
@@ -459,10 +463,11 @@ class CustomerBotSettingsAccessTests(unittest.TestCase):
         self.assertNotIn("allow_guest", service)
         self.assertNotIn("webhook", service)
         self.assertNotIn("System Manager", service)
-        self.assertIn(
+        self.assertNotIn(
             "The bot connection to WhatsApp is not active yet. These settings prepare its behavior when the link is complete.",
             panel,
         )
+        self.assertIn("data-bot-operation", panel)
         for scenario in PREVIEW_SCENARIOS:
             self.assertIn(scenario, panel)
         self.assertNotIn("frappe.call(", panel)

@@ -119,6 +119,7 @@ _STATE_FIELDS = frozenset(
         "selected_order_name",
         "customer_id",
         "expires_at",
+        "operation_generation",
     }
 )
 
@@ -152,6 +153,7 @@ class ConversationContext:
     enabled: bool
     now: datetime
     session_ttl: timedelta
+    operation_generation: int = 0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "enabled", required_bool(self.enabled, "enabled"))
@@ -159,6 +161,8 @@ class ConversationContext:
             raise ValueError("now must be a timezone-aware datetime")
         if not isinstance(self.session_ttl, timedelta) or self.session_ttl <= timedelta(0):
             raise ValueError("session_ttl must be a positive duration")
+        if type(self.operation_generation) is not int or self.operation_generation < 0:
+            raise ValueError("operation_generation must be a non-negative integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +188,7 @@ class ConversationState:
     expires_at: datetime
     service_id: str | None = None
     selected_order_name: str | None = None
+    operation_generation: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.isolation_key, str) or self.isolation_key.count("\n") != 2:
@@ -206,6 +211,8 @@ class ConversationState:
             raise ValueError("the main menu does not keep a service or an order")
         if self.phase == ConversationPhase.AWAITING_ORDER_NUMBER and self.service_id is None:
             raise ValueError("waiting for an order number requires a service")
+        if type(self.operation_generation) is not int or self.operation_generation < 0:
+            raise ValueError("operation_generation must be a non-negative integer")
 
     def to_payload(self) -> dict[str, str | None]:
         return {
@@ -215,6 +222,7 @@ class ConversationState:
             "selected_order_name": self.selected_order_name,
             "customer_id": self.customer_id,
             "expires_at": self.expires_at.isoformat(),
+            "operation_generation": str(self.operation_generation),
         }
 
 
@@ -237,7 +245,8 @@ def conversation_state_from_payload(payload: object) -> ConversationState | None
     expires_at = payload.get("expires_at")
     service_id = payload.get("service_id")
     selected_order_name = payload.get("selected_order_name")
-    if not isinstance(expires_at, str):
+    generation = payload.get("operation_generation")
+    if not isinstance(expires_at, str) or not isinstance(generation, str) or not generation.isdigit():
         return None
     if service_id is not None and not isinstance(service_id, str):
         return None
@@ -251,6 +260,7 @@ def conversation_state_from_payload(payload: object) -> ConversationState | None
             expires_at=datetime.fromisoformat(expires_at),
             service_id=service_id,
             selected_order_name=selected_order_name,
+            operation_generation=int(generation),
         )
     except (TypeError, ValueError):
         return None

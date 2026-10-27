@@ -3074,6 +3074,8 @@ The bot is now marked on for a later connection.,تم تعليم البوت لل
 The bot is stopped.,البوت متوقف.
 Manage customer bot settings,إدارة إعدادات بوت العملاء
 "Edit the customer bot texts, preview them with sample data, publish them, and turn the bot on or off. Does not connect WhatsApp, send messages, or open customers and orders.",تحرير نصوص بوت العملاء ومعاينتها ببيانات تجريبية ونشرها وتشغيله أو إيقافه. لا يربط واتساب ولا يرسل رسائل ولا يفتح العملاء أو الطلبات.
+Manage customer bot operation,إدارة تشغيل بوت العملاء
+"Run or stop the customer bot, register its webhook, and read its operational status. Does not edit bot texts, link a WhatsApp session, create employees, or open customers and orders.",تشغيل بوت العملاء أو إيقافه وتسجيل webhook الخاص به وقراءة حالته التشغيلية. لا يحرر نصوص البوت ولا يربط جلسة واتساب ولا ينشئ موظفين ولا يفتح العملاء أو الطلبات.
 Customer bot settings are service-managed.,إعدادات بوت العملاء تُدار من الخدمة فقط.
 You do not have permission for this action.,لا تملك صلاحية هذا الإجراء.
 The cost and special door price edits were saved and the section returned to read-only.,تم حفظ تعديلات التكلفة وأسعار الدرف الخاصة وإعادة القسم إلى وضع القراءة.
@@ -3134,3 +3136,73 @@ Historical plan: Superseded,خطة تاريخية: مستبدلة
 Historical plan: Approval is no longer current,خطة تاريخية: لم يعد اعتمادها ساريًا
 Historical plan,خطة تاريخية
 Generating a manufacturing file from a historical or unrelated plan is not allowed. Choose a current draft or the plan approved for this order.,لا يجوز إنشاء ملف تصنيع من خطة تاريخية أو غير مرتبطة بالطلب الحالي. اختر مسودة حالية أو الخطة المعتمدة المرتبطة بالطلب.
+Bot is stopped,البوت متوقف
+Bot needs setup,البوت يحتاج إعداداً
+Bot is activating,جارٍ تفعيل البوت
+Bot is ready to receive messages,البوت جاهز لاستقبال الرسائل
+Bot has a fault,يوجد عطل في البوت
+Start the bot,تشغيل البوت
+Stop the bot,إيقاف البوت
+Check connection,فحص الاتصال
+Test the bot,اختبار البوت
+Operation details,تفاصيل التشغيل
+Gateway,البوابة
+Webhook,ويب هوك
+Work queue,طابور العمل
+Last accepted inbound,آخر استقبال
+Last send accepted by the gateway,آخر إرسال قبلته البوابة
+Last error,آخر خطأ
+Connected,متصل
+Needs linking,يحتاج ربطاً
+No session,لا توجد جلسة
+Connection interrupted,انقطع الاتصال
+Armed,مسلّح
+Not armed,غير مسلّح
+Registered,مسجّل
+Not registered,غير مسجّل
+Proven,مثبت
+Not proven,غير مثبت
+Not checked yet,لم يُفحص بعد
+None yet,لا يوجد بعد
+Sending,الإرسال
+The published texts are not valid.,النصوص المنشورة غير صالحة.
+No WhatsApp session is linked to this factory.,لا توجد جلسة واتساب مربوطة بهذا المعمل.
+WhatsApp needs to be linked again from the current WhatsApp section. This panel does not create a session or a QR code.,يلزم إعادة ربط واتساب من قسم واتساب الحالي. هذه اللوحة لا تنشئ جلسة ولا رمزاً.
+The WhatsApp connection is interrupted. The run decision and session data stay in place.,انقطع اتصال واتساب مؤقتاً. قرار التشغيل وبيانات الجلسة باقيان.
+The WhatsApp session does not match this factory.,جلسة واتساب لا تطابق هذا المعمل.
+The public site address is not configured.,عنوان الموقع العام غير مُعد.
+The message intake account is not ready.,حساب استقبال الرسائل غير جاهز.
+The connection secret could not be prepared.,تعذر تجهيز سر الاتصال.
+The gateway could not register the callback.,تعذر تسجيل الاستدعاء عند البوابة.
+The gateway key cannot register the callback.,مفتاح البوابة لا يستطيع تسجيل الاستدعاء.
+The work queue did not confirm a job.,طابور العمل لم يؤكد تنفيذ مهمة.
+Document preparation is not available.,تجهيز المستندات غير متاح.
+Scheduled jobs are turned off.,المهام المجدولة متوقفة.
+Another activation is still running.,تفعيل آخر ما يزال قيد التنفيذ.
+A newer run decision replaced this attempt.,قرار تشغيل أحدث استبدل هذه المحاولة.
+The operation could not be completed.,تعذر إكمال التشغيل.
+Technical details,تفاصيل تقنية
+"A hosting administrator configures the public address, the gateway operator key, and the allowed callback hosts once. This screen does not ask you to run server commands.",مسؤول الاستضافة يضبط عنوان الموقع العام ومفتاح مشغّل البوابة والمضيفين المسموح لهم مرة واحدة. هذه الشاشة لا تطلب تنفيذ أوامر على الخادم.
+Activation did not finish.,لم يكتمل التفعيل.
+Connection check finished.,اكتمل فحص الاتصال.
+Connection check finished. Sending is armed.,اكتمل فحص الاتصال. الإرسال مسلّح.
+Could not read the bot operation status.,تعذرت قراءة حالة تشغيل البوت.
+Could not start the bot.,تعذر تشغيل البوت.
+Could not stop the bot.,تعذر إيقاف البوت.
+Could not check the connection.,تعذر فحص الاتصال.
+Send a message from a customer phone that is already registered. This button does not send a message and does not start the bot.,أرسل رسالة من هاتف عميل مسجّل مسبقاً. هذا الزر لا يرسل رسالة ولا يشغّل البوت.
+This check is separate from the sample text preview.,هذا الفحص منفصل عن معاينة النصوص التجريبية.
+Gateway acceptance is not proof the customer received the message.,قبول البوابة للإرسال لا يعني أن الزبون استلم الرسالة.
+These indicators are not tied to this test.,هذه المؤشرات غير مربوطة بهذا الاختبار.
+Operation controls are available to the account allowed to run the bot.,أدوات التشغيل متاحة للحساب المسموح له بتشغيل البوت.
+Activating,جارٍ التفعيل
+Needs setup,يحتاج إعداداً
+Fault,عطل
+Not checked,لم يُتحقق
+Reply processing,معالجة الردود
+Ready to reply,جاهز للرد
+"The check is complete, and the bot is ready to reply.",اكتمل الفحص، والبوت جاهز للرد
+Confirm the bot is running before you send a message.,تأكد أن البوت يعمل قبل إرسال الرسالة.
+"Send one short message from the customer's saved WhatsApp number, such as a greeting or the digit 1.",أرسل رسالة قصيرة واحدة من رقم واتساب المحفوظ للزبون، مثل ترحيب أو الرقم 1.
+"The bot replies only while it is running, the number is registered to one customer, and the message is a supported service.",يرد البوت فقط وهو يعمل، والرقم مسجّل لزبون واحد، والرسالة خدمة مدعومة.
+This window does not send a message and does not start the bot.,هذه النافذة لا ترسل رسالة ولا تشغّل البوت.

@@ -594,13 +594,13 @@ def _insert_replies(replies: tuple[ReplyIntent, ...], stamp: str) -> None:
                 (name, creation, modified, modified_by, owner, docstatus,
                  reply_id, connection_ref, provider_event_id, conversation_id,
                  destination_id, sequence, part_kind, body, document_spec,
-                 customer_id, normalized_phone, acceptance_epoch,
+                 customer_id, normalized_phone, acceptance_epoch, message_key,
                  status, attempt_count,
                  provider_message_id, reason_code, claim_token, claimed_on, finished_on)
                 values (%s, %s, %s, 'Administrator', 'Administrator', 0,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         'pending', 0,
-                        null, null, null, null, null)""",
+                        null, %s, null, null, null)""",
             (
                 frappe.generate_hash(length=12),
                 stamp,
@@ -617,6 +617,8 @@ def _insert_replies(replies: tuple[ReplyIntent, ...], stamp: str) -> None:
                 intent.customer_id,
                 intent.normalized_phone,
                 intent.acceptance_epoch,
+                intent.message_key,
+                intent.reason_code,
             ),
         )
 

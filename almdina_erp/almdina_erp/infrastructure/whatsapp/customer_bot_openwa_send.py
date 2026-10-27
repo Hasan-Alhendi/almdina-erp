@@ -84,6 +84,8 @@ def build_send_document_request(
         "base64": base64.b64encode(content).decode("ascii"),
     }
     caption_text = str(caption or "").strip()
+    if len(caption_text) > 1024:
+        raise ValueError("caption exceeds the gateway limit")
     if caption_text:
         body["caption"] = caption_text
     return OpenWASendHttpRequest(

@@ -109,6 +109,16 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("receive_openwa_customer_bot_event",),
     ),
     (
+        "almdina_erp.almdina_erp.services.customer_bot_operation_service",
+        C,
+        (
+            "start_customer_bot_operation",
+            "stop_customer_bot_operation",
+            "get_customer_bot_operation_status",
+            "check_customer_bot_operation",
+        ),
+    ),
+    (
         "almdina_erp.almdina_erp.services.whatsapp_service",
         C,
         (

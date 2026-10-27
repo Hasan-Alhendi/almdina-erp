@@ -33,6 +33,9 @@ from almdina_erp.almdina_erp.domain.customer_bot.session_admission import (
     event_fingerprint,
     with_fitted_session_keys,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_operation_runtime import (
+    current_operation_generation,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_ops import (
     load_customer_bot_ops,
 )
@@ -109,6 +112,7 @@ def accept_verified_customer_bot_inbound(message: InboundCustomerMessage) -> Inb
         stages=orders,
         routes=orders,
         services=build_customer_bot_services(),
+        operation_generation=current_operation_generation(),
         on_replies_committed=_after_replies_committed,
     )
 

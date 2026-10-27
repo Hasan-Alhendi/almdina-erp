@@ -134,6 +134,45 @@ class OpenWAClientTests(unittest.TestCase):
         )
         self.assertEqual(SESSION_SETUP_TIMEOUT_SEC, 180.0)
 
+    def test_webhook_registration_uses_the_operator_routes_and_hides_secrets(self) -> None:
+        captured: dict[str, object] = {}
+
+        def opener(request: Request, timeout: float | None = None) -> FakeResponse:
+            captured["url"] = request.full_url
+            captured["method"] = request.get_method()
+            captured["timeout"] = timeout
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse(
+                {
+                    "id": "wh-1",
+                    "sessionId": "sid",
+                    "url": captured["body"]["url"],  # type: ignore[index]
+                    "events": ["message.received"],
+                    "active": True,
+                    "retryCount": 3,
+                    "secret": "must-not-leak",
+                    "headers": {"Authorization": "token hidden"},
+                }
+            )
+
+        client = OpenWAClient(OpenWAConfig("http://localhost:2785", "secret"), opener=opener, timeout=45)
+        created = client.create_webhook(
+            "sid",
+            url="https://erp.example/api/method/hook",
+            secret="a-fully-entropic-secret",
+            authorization="token key:secret",
+        )
+        self.assertEqual(captured["method"], "POST")
+        self.assertEqual(captured["url"], "http://localhost:2785/api/sessions/sid/webhooks")
+        self.assertEqual(captured["timeout"], 3)
+        body = captured["body"]
+        self.assertEqual(body["events"], ["message.received"])
+        self.assertEqual(body["retryCount"], 3)
+        self.assertEqual(body["headers"]["Authorization"], "token key:secret")
+        self.assertNotIn("secret", created)
+        self.assertNotIn("headers", created)
+        self.assertEqual(created["id"], "wh-1")
+
 
 if __name__ == "__main__":
     unittest.main()

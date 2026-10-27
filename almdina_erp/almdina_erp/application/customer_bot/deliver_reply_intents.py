@@ -13,9 +13,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from almdina_erp.almdina_erp.domain.customer_bot.conversation import BotMessage
 from almdina_erp.almdina_erp.domain.customer_bot.document_reply import DocumentReplyRequest
+from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+    CustomerTextRenderError,
+    render_customer_lines,
+)
 from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import (
     CANCELLED,
+    CAPTION_TOO_LONG,
     DEFAULT_REPLY_CLAIM_TTL,
     PART_DOCUMENT,
     PART_TEXT,
@@ -33,7 +39,12 @@ from .phone_access_ports import CustomerPhoneDirectory
 from .ports import BotDocumentReplyPort, BotTextReplyPort
 from .reply_outbox import ClaimedReply, CustomerBotReplyOutbox
 from .settings_commands import CustomerBotSettingsStore
-from .verify_reply_before_send import verify_reply_before_send
+from .verify_reply_before_send import (
+    REASON_DOCUMENT_RENDER_FAILED,
+    prepare_document_for_send,
+    runtime_still_accepts,
+    verify_reply_before_send,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,8 +142,54 @@ def deliver_one_reply(
             if not saved:
                 return ReplyDelivery(claimed.reply_id, PROCESSING)
             return ReplyDelivery(claimed.reply_id, CANCELLED)
+        document = None
+        if claimed.part_kind == PART_DOCUMENT:
+            prepared = prepare_document_for_send(claimed, deps.services)
+            if not prepared.should_send:
+                still_open = runtime_still_accepts(claimed, deps.settings)
+                error_text = None
+                if (
+                    still_open is None
+                    and prepared.reason_code in {REASON_DOCUMENT_RENDER_FAILED, CAPTION_TOO_LONG}
+                    and prepared.customer_error_key
+                ):
+                    error_text = _customer_error_text(deps, prepared.customer_error_key)
+                if error_text:
+                    try:
+                        result = dispatch_text_reply(port, _text_request(claimed, error_text))
+                    except Exception:
+                        return ReplyDelivery(claimed.reply_id, PROCESSING)
+                    return _store_result(outbox, claimed, result, now)
+                try:
+                    saved = outbox.record_cancelled(
+                        reply_id=claimed.reply_id,
+                        claim_token=claimed.claim_token,
+                        reason_code=still_open.reason_code if still_open is not None else prepared.reason_code,
+                        now=now,
+                    )
+                except Exception:
+                    return ReplyDelivery(claimed.reply_id, PROCESSING)
+                if not saved:
+                    return ReplyDelivery(claimed.reply_id, PROCESSING)
+                return ReplyDelivery(claimed.reply_id, CANCELLED)
+            document = prepared.document
+        # Generation can outlive the switch that was checked before it started.
+        still_accepting = runtime_still_accepts(claimed, deps.settings)
+        if still_accepting is not None:
+            try:
+                saved = outbox.record_cancelled(
+                    reply_id=claimed.reply_id,
+                    claim_token=claimed.claim_token,
+                    reason_code=still_accepting.reason_code,
+                    now=now,
+                )
+            except Exception:
+                return ReplyDelivery(claimed.reply_id, PROCESSING)
+            if not saved:
+                return ReplyDelivery(claimed.reply_id, PROCESSING)
+            return ReplyDelivery(claimed.reply_id, CANCELLED)
         try:
-            result = _dispatch(claimed, port, deps=deps, document=preflight.document)
+            result = _dispatch(claimed, port, deps=deps, document=document)
         except Exception:
             return ReplyDelivery(claimed.reply_id, PROCESSING)
     else:
@@ -214,6 +271,7 @@ def _dispatch(claimed, port, *, deps: ReplyDeliveryDeps, document):
                 filename=document.filename,
                 mime_type=document.mime_type,
                 content=document.content,
+                caption=claimed.document_spec.caption if claimed.document_spec is not None else "",
             ),
         )
     if claimed.part_kind != PART_TEXT:
@@ -221,13 +279,41 @@ def _dispatch(claimed, port, *, deps: ReplyDeliveryDeps, document):
     return dispatch_text_reply(port, _text_request(claimed))
 
 
-def _text_request(claimed: ClaimedReply) -> TextReplyRequest:
+def _text_request(claimed: ClaimedReply, text: str | None = None) -> TextReplyRequest:
     return TextReplyRequest(
         reply_id=claimed.reply_id,
         connection_ref=claimed.connection_ref,
         destination_id=claimed.destination_id,
-        text=claimed.body,
+        text=claimed.body if text is None else text,
     )
+
+
+def _customer_error_text(deps: ReplyDeliveryDeps, message_key: str) -> str | None:
+    try:
+        published = deps.settings.load().published
+        lines = render_customer_lines(published, (BotMessage(message_key),))
+    except (CustomerTextRenderError, ValueError, AttributeError):
+        return None
+    if len(lines) != 1 or not lines[0].strip():
+        return None
+    return lines[0]
+
+
+def _store_result(outbox, claimed, result, now):
+    if not isinstance(result, TextSendResult):
+        return ReplyDelivery(claimed.reply_id, PROCESSING)
+    try:
+        saved = outbox.record_result(
+            reply_id=claimed.reply_id,
+            claim_token=claimed.claim_token,
+            result=result,
+            now=now,
+        )
+    except Exception:
+        return ReplyDelivery(claimed.reply_id, PROCESSING)
+    if not saved:
+        return ReplyDelivery(claimed.reply_id, PROCESSING)
+    return ReplyDelivery(claimed.reply_id, result.disposition.value)
 
 
 class BotDocumentUnavailable(RuntimeError):

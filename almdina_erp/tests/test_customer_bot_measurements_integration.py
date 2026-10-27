@@ -34,6 +34,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_services import 
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_directory import (
     FrappeCustomerPhoneDirectory,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.customer_phone_index import (
+    assign_customer_primary_mobile,
+)
 
 
 class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
@@ -149,13 +152,9 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
         self.assertIsNone(reader.read(grant_phone, self.simple.name))
 
         moved = self._unused_phone()
-        frappe.db.set_value(
-            "Customer", self.customer.name, "mobile_no", moved, update_modified=False
-        )
+        assign_customer_primary_mobile(self.customer.name, moved, update_modified=False)
         self.assertIsNone(reader.read(self.phone, self.simple.name))
-        frappe.db.set_value(
-            "Customer", self.customer.name, "mobile_no", self.phone, update_modified=False
-        )
+        assign_customer_primary_mobile(self.customer.name, self.phone, update_modified=False)
 
         frappe.db.set_value(
             "Door Cutting Order",
@@ -217,7 +216,7 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
                 )
                 return b"%PDF-stale"
 
-        changed = CustomerBotMeasurementsService(reader, _MutatingPdf()).execute(
+        changed = CustomerBotMeasurementsService(reader, _MutatingPdf()).materialize(
             CustomerServiceRequest(
                 phone=self.phone,
                 service_id=BotService.MEASUREMENTS,
@@ -240,7 +239,7 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
 
         if not _local_pdf_renderer_available():
             self.fail("development site Chromium is not available for measurements PDF")
-        result = build_customer_bot_services().execute(
+        result = build_customer_bot_services().materialize(
             CustomerServiceRequest(
                 phone=self.phone,
                 service_id=BotService.MEASUREMENTS,
@@ -271,7 +270,7 @@ class TestCustomerBotMeasurementsIntegration(FrappeTestCase):
             modified,
         )
 
-        many = build_customer_bot_services().execute(
+        many = build_customer_bot_services().materialize(
             CustomerServiceRequest(
                 phone=self.phone,
                 service_id=BotService.MEASUREMENTS,
@@ -601,7 +600,7 @@ class TestCustomerBotMeasurementsLongText(FrappeTestCase):
     def test_long_customer_text_stays_in_words(self) -> None:
         if not _local_pdf_renderer_available():
             self.fail("development site Chromium is not available for measurements PDF")
-        result = build_customer_bot_services().execute(
+        result = build_customer_bot_services().materialize(
             CustomerServiceRequest(
                 phone=self.phone,
                 service_id=BotService.MEASUREMENTS,

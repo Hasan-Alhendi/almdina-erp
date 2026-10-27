@@ -30,8 +30,9 @@ from almdina_erp.almdina_erp.domain.customer_bot.inbound_message import (
     build_inbound_customer_message,
 )
 from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+    CustomerTextRenderError,
     TemplateIssue,
-    explain_messages,
+    customer_outbound_text,
     validate_texts,
 )
 from almdina_erp.almdina_erp.domain.orders.revisions import RevisionState
@@ -111,9 +112,11 @@ def preview_customer_bot_turn(
         _Routes(),
         UnavailableCustomerBotServices(),
     )
-    rendered = explain_messages(texts, turn.messages)
-    if isinstance(rendered, TemplateIssue):
-        return PreviewResult(False, "render_failed", (), None, (rendered,))
+    try:
+        rendered = (customer_outbound_text(texts, turn.messages),) if turn.messages else ()
+    except CustomerTextRenderError as error:
+        issue = TemplateIssue("", "invalid_syntax", str(error))
+        return PreviewResult(False, "render_failed", (), None, (issue,))
     payload = turn.state.to_payload() if turn.state is not None else None
     return PreviewResult(True, "ok", rendered, payload, ())
 

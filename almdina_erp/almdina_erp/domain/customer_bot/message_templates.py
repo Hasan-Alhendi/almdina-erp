@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from .conversation import (
     BotMessage,
@@ -145,6 +146,56 @@ def validate_texts(texts: object) -> tuple[TemplateIssue, ...]:
     for key in catalog_keys():
         issues.extend(_validate_one(expected[key], texts[key]))
     return tuple(issues)
+
+
+DOCUMENT_CAPTION_MAX = 1024
+
+
+def customer_outbound_text(texts: Mapping[str, str], messages: tuple[BotMessage, ...]) -> str:
+    """Join one turn's templates into the single text the customer sees."""
+
+    lines = render_customer_lines(texts, messages)
+    return "\n".join(lines)
+
+
+def document_description_messages(
+    service_id: str,
+    order_name: str,
+    amount: str | None,
+    currency: str | None,
+) -> tuple[BotMessage, ...]:
+    """The caption for one document: its description plus the follow-up."""
+
+    follow = BotMessage(BotMessageKey.ASK_ORDER_NUMBER, (("service_id", service_id),))
+    if service_id == BotService.FINAL_COST:
+        head = BotMessage(
+            BotMessageKey.FINAL_PRICE,
+            (
+                ("order_name", order_name),
+                ("amount", _caption_amount(amount)),
+                ("currency", str(currency or "")),
+            ),
+        )
+    elif service_id == BotService.APPROVED_CUTTING_PLAN:
+        head = BotMessage(BotMessageKey.APPROVED_PLAN, (("order_name", order_name),))
+    elif service_id == BotService.MEASUREMENTS:
+        head = BotMessage(BotMessageKey.MEASUREMENTS, (("order_name", order_name),))
+    else:
+        raise ValueError("document caption requires a document service")
+    return (head, follow)
+
+
+def document_failure_message(service_id: str) -> BotMessage:
+    """The general failure sentence for one document service. It carries no amount."""
+
+    key = {
+        BotService.FINAL_COST: BotMessageKey.INVOICE_FAILED,
+        BotService.APPROVED_CUTTING_PLAN: BotMessageKey.PLAN_PDF_FAILED,
+        BotService.MEASUREMENTS: BotMessageKey.MEASUREMENTS_PDF_FAILED,
+    }.get(service_id)
+    if key is None:
+        raise ValueError("document failure requires a document service")
+    return BotMessage(key)
 
 
 def render_customer_lines(texts: Mapping[str, str], messages: tuple[BotMessage, ...]) -> tuple[str, ...]:
@@ -320,6 +371,13 @@ def _placeholder_value(
     return raw
 
 
+def _caption_amount(value: str | None) -> str:
+    try:
+        return f"{Decimal(str(value)):.2f}"
+    except (InvalidOperation, ValueError, TypeError):
+        return ""
+
+
 def _public_statuses() -> tuple[str, ...]:
     return tuple(
         value
@@ -338,7 +396,11 @@ __all__ = [
     "TemplateField",
     "TemplateIssue",
     "catalog_keys",
+    "DOCUMENT_CAPTION_MAX",
+    "document_failure_message",
     "composed_main_menu",
+    "customer_outbound_text",
+    "document_description_messages",
     "dump_texts",
     "explain_messages",
     "field_by_key",

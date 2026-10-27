@@ -30,6 +30,7 @@ class DocumentReplySpec:
     plan_name: str | None = None
     plan_revision: int | None = None
     source_type: str | None = None
+    caption: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "service_id", required_token(self.service_id, "service_id"))
@@ -49,6 +50,9 @@ class DocumentReplySpec:
             raise ValueError("acceptance_epoch must be a non-negative integer")
         if "/" in self.filename or "\\" in self.filename:
             raise ValueError("document filename must be a safe basename")
+        if not isinstance(self.caption, str):
+            raise ValueError("document caption must be text")
+        object.__setattr__(self, "caption", self.caption.strip())
 
     def to_payload(self) -> dict[str, Any]:
         return {
@@ -66,6 +70,7 @@ class DocumentReplySpec:
             "plan_name": self.plan_name,
             "plan_revision": self.plan_revision,
             "source_type": self.source_type,
+            "caption": self.caption,
         }
 
     def dumps(self) -> str:
@@ -93,6 +98,7 @@ def document_reply_spec_from_payload(raw: Mapping[str, Any] | str | None) -> Doc
         plan_name=None if payload.get("plan_name") is None else str(payload.get("plan_name")),
         plan_revision=None if revision is None else int(revision),
         source_type=None if payload.get("source_type") is None else str(payload.get("source_type")),
+        caption=str(payload.get("caption") or ""),
     )
 
 

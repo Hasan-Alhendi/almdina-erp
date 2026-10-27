@@ -10,14 +10,15 @@ class CustomerBotDocument:
     """An in-memory document; conversation state never stores its bytes.
 
     Provenance fields travel with the object so the outbox can persist a
-    descriptor without the PDF. Empty provenance means the caller must not
-    create a durable document intent from this value.
+    descriptor without the PDF. ``content`` is absent until a send attempt
+    renders the file. Empty provenance means the caller must not create a
+    durable document intent from this value.
     """
 
     document_type: str
     filename: str
     mime_type: str
-    content: bytes
+    content: bytes | None = None
     order_name: str = ""
     consistency_key: str = ""
     service_id: str = ""
@@ -39,8 +40,8 @@ class CustomerBotDocument:
             raise ValueError("document filename must be a safe basename")
         if self.mime_type != "application/pdf":
             raise ValueError("customer bot documents must be PDF files")
-        if not isinstance(self.content, bytes) or not self.content:
-            raise ValueError("document content is required")
+        if self.content is not None and (not isinstance(self.content, bytes) or not self.content):
+            raise ValueError("rendered document content must be non-empty bytes")
 
     @property
     def has_durable_provenance(self) -> bool:

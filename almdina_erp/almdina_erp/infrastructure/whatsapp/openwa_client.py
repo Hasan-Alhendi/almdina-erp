@@ -53,8 +53,8 @@ class OpenWAClient:
             )
         )
 
-    def get_session(self, session_id: str) -> WhatsAppSession:
-        return _session(self._request("GET", f"/api/sessions/{session_id}"))
+    def get_session(self, session_id: str, *, timeout: float | None = None) -> WhatsAppSession:
+        return _session(self._request("GET", f"/api/sessions/{session_id}", timeout=timeout))
 
     def start(self, session_id: str) -> WhatsAppSession:
         return _session(
@@ -109,6 +109,73 @@ class OpenWAClient:
             body,
         )
         return _receipt(payload)
+
+    def list_webhooks(self, session_id: str, *, timeout: float = 3) -> list[dict[str, Any]]:
+        """GET /api/sessions/{id}/webhooks. Secret and headers are never returned."""
+
+        payload = self._request(
+            "GET",
+            f"/api/sessions/{session_id}/webhooks",
+            timeout=timeout,
+        )
+        rows = payload if isinstance(payload, list) else []
+        return [_public_webhook(row) for row in rows if isinstance(row, dict)]
+
+    def create_webhook(
+        self,
+        session_id: str,
+        *,
+        url: str,
+        secret: str,
+        authorization: str,
+        events: tuple[str, ...] = ("message.received",),
+        retry_count: int = 3,
+        timeout: float = 3,
+    ) -> dict[str, Any]:
+        """POST /api/sessions/{id}/webhooks. Requires an OPERATOR key. 403 is not bypassed."""
+
+        payload = self._request(
+            "POST",
+            f"/api/sessions/{session_id}/webhooks",
+            {
+                "url": url,
+                "events": list(events),
+                "secret": secret,
+                "headers": {"Authorization": authorization},
+                "retryCount": retry_count,
+            },
+            timeout=timeout,
+        )
+        return _public_webhook(payload if isinstance(payload, dict) else {})
+
+    def update_webhook(
+        self,
+        session_id: str,
+        webhook_id: str,
+        *,
+        url: str,
+        secret: str,
+        authorization: str,
+        events: tuple[str, ...] = ("message.received",),
+        retry_count: int = 3,
+        timeout: float = 3,
+    ) -> dict[str, Any]:
+        """PUT /api/sessions/{id}/webhooks/{webhookId}. Replaces headers. Does not delete others."""
+
+        payload = self._request(
+            "PUT",
+            f"/api/sessions/{session_id}/webhooks/{webhook_id}",
+            {
+                "url": url,
+                "events": list(events),
+                "secret": secret,
+                "headers": {"Authorization": authorization},
+                "active": True,
+                "retryCount": retry_count,
+            },
+            timeout=timeout,
+        )
+        return _public_webhook(payload if isinstance(payload, dict) else {})
 
     def _request(
         self,
@@ -183,6 +250,19 @@ def _session(payload: Any) -> WhatsAppSession:
         last_error=None if last_error in (None, "") else str(last_error),
         engine_loaded=bool(data.get("engineLoaded")),
     )
+
+
+def _public_webhook(payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop write-only webhook fields. The gateway already omits them; this is a second gate."""
+
+    return {
+        "id": str(payload.get("id") or ""),
+        "sessionId": str(payload.get("sessionId") or ""),
+        "url": str(payload.get("url") or ""),
+        "events": [str(item) for item in payload.get("events") or []],
+        "active": bool(payload.get("active", True)),
+        "retryCount": int(payload.get("retryCount") or 0),
+    }
 
 
 def _receipt(payload: Any) -> MessageReceipt:

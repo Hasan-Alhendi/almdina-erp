@@ -152,6 +152,12 @@ class _Services:
             self.gate()
         if self.fail:
             raise RuntimeError("renderer failed")
+        return self._result(request)
+
+    def materialize(self, request: CustomerServiceRequest) -> CustomerServiceResult:
+        return self._result(request)
+
+    def _result(self, request: CustomerServiceRequest) -> CustomerServiceResult:
         return CustomerServiceResult(
             ServiceResultCode.READY,
             amount=1,
@@ -254,12 +260,20 @@ class InboundSessionTests(unittest.TestCase):
         self.clock.now += timedelta(minutes=31)
         # Provider timestamp stays fresh; only the conversation TTL expires.
         again = self.accept(
-            _message("2", "e3", occurred_at=self.clock.now),
+            _message("مرحبا", "e3", occurred_at=self.clock.now),
             session_ttl=timedelta(minutes=30),
         )
         self.assertEqual(again.messages[0].key, BotMessageKey.WELCOME)
         self.assertEqual(self.services.calls, 0)
         self.assertEqual(self.orders.list_calls, 1)
+        chosen = self.accept(
+            _message("2", "e4", occurred_at=self.clock.now),
+            session_ttl=timedelta(minutes=30),
+        )
+        self.assertEqual(chosen.messages[0].key, BotMessageKey.CURRENT_ORDER_LINE)
+        self.assertNotIn(BotMessageKey.WELCOME, [item.key for item in chosen.messages])
+        self.assertEqual(self.services.calls, 0)
+        self.assertEqual(self.orders.list_calls, 2)
 
     def test_completed_event_does_not_run_again_or_return_a_sendable_reply(self) -> None:
         self.accept(_message("hello", "e1"))
@@ -427,9 +441,12 @@ class InboundSessionTests(unittest.TestCase):
     def test_phone_identity_change_restarts_the_menu(self) -> None:
         self.accept(_message("hello", "e1"))
         self.directory.matches[PHONE] = (OTHER,)
-        restarted = self.accept(_message("2", "e2"))
+        restarted = self.accept(_message("مرحبا", "e2"))
         self.assertEqual(restarted.messages[0].key, BotMessageKey.WELCOME)
         self.assertEqual(self.sessions.conversations[("conn-a", "chat-a", "sender-a")].customer_id, OTHER)
+        self.assertEqual(self.services.calls, 0)
+        chosen = self.accept(_message("2", "e3"))
+        self.assertEqual(chosen.messages[0].key, BotMessageKey.NO_CURRENT_ORDERS)
         self.assertEqual(self.services.calls, 0)
 
     def test_group_and_own_messages_are_ignored_without_identity_reads(self) -> None:

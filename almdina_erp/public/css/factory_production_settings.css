@@ -993,6 +993,120 @@
     min-width: 0;
 }
 
+.aps-bot-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.aps-bot-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.aps-bot-head h3 {
+    margin: 0;
+}
+
+.aps-bot .aps-bot-badge {
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 3px 10px;
+}
+
+.aps-bot-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.aps-bot-toolbar .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+}
+
+.aps-bot .aps-bot-btn-quiet {
+    background: transparent;
+    box-shadow: none;
+}
+
+.aps-bot-reason {
+    margin: 0;
+    color: var(--alm-text-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.aps-bot-reason[data-tone="danger"] {
+    color: var(--alm-status-danger-fg, var(--alm-danger));
+}
+
+.aps-bot-details {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding-top: 2px;
+}
+
+.aps-bot-facts,
+.aps-bot-events {
+    margin: 0;
+}
+
+.aps-bot-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+}
+
+.aps-bot-facts div,
+.aps-bot-events div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+}
+
+.aps-bot-facts dt,
+.aps-bot-events dt {
+    color: var(--alm-text-subtle);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.aps-bot-facts dd,
+.aps-bot-events dd {
+    margin: 0;
+    color: var(--alm-text-strong);
+    font-weight: 750;
+    overflow-wrap: anywhere;
+}
+
+.aps-bot-copy {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--alm-border-subtle);
+}
+
+.aps-bot-test-steps {
+    margin: 0;
+    padding-inline-start: 1.25rem;
+    display: grid;
+    gap: 8px;
+    line-height: 1.6;
+}
+
 .aps-bot-flag {
     color: var(--alm-warning);
 }
@@ -1013,7 +1127,8 @@
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .aps-bot-editor {
+    .aps-bot-editor,
+    .aps-bot-facts {
         grid-template-columns: minmax(0, 1fr);
     }
 

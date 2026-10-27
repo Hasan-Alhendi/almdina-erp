@@ -4,7 +4,16 @@
     if (window.AlmdinaFactoryProductionSettingsCustomerBot) return;
 
     const EVENT_NAMESPACE = ".almdinaCustomerBotSettings";
-    const TABS = ["operation", "texts", "preview"];
+    const ACTIVATING_POLL_MS = 4000;
+    const STEADY_POLL_MS = 20000;
+    const HOSTING_REASONS = {
+        public_base_url_missing: true,
+        ingest_user_failed: true,
+        webhook_secret_failed: true,
+        webhook_failed: true,
+        gateway_key_role_insufficient: true,
+    };
+    const TEXT_TABS = ["texts", "preview"];
     const GROUP_ORDER = [
         ["welcome_menu", [
             "welcome",
@@ -164,6 +173,7 @@
         const frontend = options.frontend;
         const lifecycle = options.lifecycle;
         const translate = options.translate;
+        const dialogs = options.dialogs;
         const $body = options.$body;
         if (
             !api
@@ -174,6 +184,7 @@
             || typeof translate !== "function"
             || typeof frontend.createLatestRequestGate !== "function"
             || typeof renderer.renderCustomerBot !== "function"
+            || typeof renderer.renderCustomerBotOperation !== "function"
         ) {
             throw new Error("Customer bot settings panel dependencies are unavailable");
         }
@@ -192,7 +203,7 @@
         let previewLines = [];
         let previewSource = "draft";
         let scenarioId = "unknown_number";
-        let activeTab = "operation";
+        let activeTab = "texts";
         let activeGroup = "welcome_menu";
         let searchQuery = "";
         let fieldIssues = [];
@@ -200,6 +211,16 @@
         let focusStart = null;
         let focusEnd = null;
         let busy = false;
+        let operation = null;
+        let operationFault = "";
+        let actionMessage = "";
+        let detailsOpen = false;
+        let technicalOpen = false;
+        let testDialog = null;
+        let pollTimer = null;
+        const inflight = { start: false, stop: false, check: false };
+        const operationReads = frontend.createLatestRequestGate();
+        const operationActions = frontend.createLatestRequestGate();
 
         function isActive() {
             return typeof options.isActive !== "function" || options.isActive();
@@ -267,6 +288,317 @@
                 || String(label || "").toLowerCase().includes(query);
         }
 
+        function readPermissions() {
+            if (typeof options.permissions !== "function") {
+                return { canOperate: false, canEditTexts: true };
+            }
+            const value = options.permissions() || {};
+            return {
+                canOperate: Boolean(value.canOperate),
+                canEditTexts: Boolean(value.canEditTexts),
+            };
+        }
+
+        function reasonText(code) {
+            const reasons = {
+                texts_invalid: t("The published texts are not valid."),
+                session_missing: t("No WhatsApp session is linked to this factory."),
+                session_login_required: t("WhatsApp needs to be linked again from the current WhatsApp section. This panel does not create a session or a QR code."),
+                session_unreachable: t("The WhatsApp connection is interrupted. The run decision and session data stay in place."),
+                session_mismatch: t("The WhatsApp session does not match this factory."),
+                public_base_url_missing: t("The public site address is not configured."),
+                ingest_user_failed: t("The message intake account is not ready."),
+                webhook_secret_failed: t("The connection secret could not be prepared."),
+                webhook_failed: t("The gateway could not register the callback."),
+                gateway_key_role_insufficient: t("The gateway key cannot register the callback."),
+                queue_unproven: t("The work queue did not confirm a job."),
+                pdf_unavailable: t("Document preparation is not available."),
+                scheduler_disabled: t("Scheduled jobs are turned off."),
+                operation_busy: t("Another activation is still running."),
+                superseded: t("A newer run decision replaced this attempt."),
+                operation_failed: t("The operation could not be completed."),
+            };
+            return reasons[code] || "";
+        }
+
+        function stateLabel(state) {
+            const labels = {
+                stopped: t("Stopped"),
+                needs_setup: t("Needs setup"),
+                activating: t("Activating"),
+                ready: t("Ready"),
+                degraded: t("Fault"),
+            };
+            return labels[state] || t("Needs setup");
+        }
+
+        function stateTone(state) {
+            if (state === "ready") return "success";
+            if (state === "activating") return "info";
+            if (state === "needs_setup") return "warning";
+            if (state === "degraded") return "danger";
+            return "neutral";
+        }
+
+        function sessionStatus(data) {
+            return String((data && data.session && data.session.status) || "");
+        }
+
+        function gatewayAnswered(data) {
+            const status = sessionStatus(data);
+            return status === "ready" || status === "login_required";
+        }
+
+        function connectionFailed(data) {
+            if (sessionStatus(data) !== "unreachable") return false;
+            return Boolean(
+                data
+                && (
+                    data.state === "degraded"
+                    || data.reason === "session_unreachable"
+                    || data.last_error
+                )
+            );
+        }
+
+        function whatsAppValue(data) {
+            const session = (data && data.session) || {};
+            const status = String(session.status || "");
+            if (status === "ready" && session.matches_factory === true) return t("Connected");
+            if (status === "ready" && session.matches_factory === false) {
+                return t("The WhatsApp session does not match this factory.");
+            }
+            if (status === "login_required") return t("Needs linking");
+            if (status === "missing") return t("No session");
+            if (connectionFailed(data)) return t("Connection interrupted");
+            return t("Not checked");
+        }
+
+        function gatewayValue(data) {
+            if (gatewayAnswered(data)) return t("Connected");
+            if (connectionFailed(data)) return t("Connection interrupted");
+            return t("Not checked");
+        }
+
+        function webhookValue(data) {
+            if (data && data.webhook_registered) return t("Registered");
+            if (gatewayAnswered(data)) return t("Not registered");
+            return t("Not checked");
+        }
+
+        function provesReady(data) {
+            return Boolean(
+                data
+                && data.state === "ready"
+                && data.decision === "running"
+                && data.transport_armed
+                && data.connection_ready
+            );
+        }
+
+        function replyValue(data) {
+            if (provesReady(data)) return t("Ready to reply");
+            const queue = (data && data.queue) || {};
+            if (queue.checked_at) return queue.ok ? t("Proven") : t("Not proven");
+            return t("Not checked");
+        }
+
+        function stampOrNone(value) {
+            return shortStamp(value) || t("None yet");
+        }
+
+        function operationModel() {
+            const perms = readPermissions();
+            if (!perms.canOperate) {
+                return {
+                    visible: false,
+                    unavailable: t("Operation controls are available to the account allowed to run the bot."),
+                };
+            }
+            if (!operation && !operationFault) {
+                return {
+                    visible: true,
+                    pending: true,
+                    stateLabel: "",
+                    tone: "neutral",
+                    reason: t("Loading customer bot settings..."),
+                    reasonTone: "neutral",
+                    showStart: false,
+                    showStop: false,
+                    startDisabled: true,
+                    stopDisabled: true,
+                    checkDisabled: true,
+                    detailsOpen: false,
+                    technicalOpen: false,
+                    technical: "",
+                    facts: [],
+                    events: [],
+                };
+            }
+            const data = operation || {};
+            const state = String(data.state || "needs_setup");
+            const decision = String(data.decision || "stopped");
+            const running = decision === "running" || state === "activating" || inflight.start;
+            const reasonCode = String(data.reason || "");
+            const specific = operationFault || (state === "ready" || (state === "stopped" && !reasonCode) ? "" : reasonText(reasonCode));
+            let reason = "";
+            let reasonTone = "neutral";
+            if (specific) {
+                reason = specific;
+                reasonTone = "danger";
+            } else if (actionMessage) {
+                reason = actionMessage;
+                reasonTone = (
+                    actionMessage === t("Activation did not finish.")
+                    || actionMessage === t("Could not start the bot.")
+                    || actionMessage === t("Could not stop the bot.")
+                    || actionMessage === t("Could not check the connection.")
+                ) ? "danger" : "neutral";
+            }
+            return {
+                visible: true,
+                pending: false,
+                stateLabel: stateLabel(state),
+                tone: stateTone(state),
+                reason,
+                reasonTone,
+                showStart: !running,
+                showStop: running,
+                startDisabled: Boolean(inflight.start || inflight.check),
+                stopDisabled: Boolean(inflight.stop),
+                checkDisabled: Boolean(inflight.start || inflight.stop || inflight.check),
+                detailsOpen,
+                technicalOpen,
+                technical: HOSTING_REASONS[reasonCode]
+                    ? t("A hosting administrator configures the public address, the gateway operator key, and the allowed callback hosts once. This screen does not ask you to run server commands.")
+                    : "",
+                facts: [
+                    { label: t("WhatsApp"), value: whatsAppValue(data) },
+                    { label: t("Gateway"), value: gatewayValue(data) },
+                    { label: t("Webhook"), value: webhookValue(data) },
+                    { label: t("Reply processing"), value: replyValue(data) },
+                ],
+                events: [
+                    { label: t("Last accepted inbound"), value: stampOrNone(data.last_accepted_inbound_at), ltr: true },
+                    { label: t("Last send accepted by the gateway"), value: stampOrNone(data.last_gateway_accept_at), ltr: true },
+                    { label: t("Last error"), value: data.last_error ? String(data.last_error) : t("None yet"), ltr: Boolean(data.last_error) },
+                ],
+            };
+        }
+
+        function clearPoll() {
+            if (pollTimer != null && typeof clearTimeout === "function") clearTimeout(pollTimer);
+            pollTimer = null;
+        }
+
+        function schedulePoll() {
+            clearPoll();
+            if (!isActive() || !readPermissions().canOperate || typeof setTimeout !== "function") return;
+            const delay = operation && operation.state === "activating" ? ACTIVATING_POLL_MS : STEADY_POLL_MS;
+            pollTimer = setTimeout(() => {
+                pollTimer = null;
+                if (!isActive()) return;
+                readOperation();
+            }, delay);
+        }
+
+        function renderOperation() {
+            if (!root().length || !readPermissions().canOperate) return;
+            if (readPermissions().canEditTexts && !snapshot) return;
+            if (!root().find("[data-bot-operation]").length) {
+                paint();
+                return;
+            }
+            renderer.renderCustomerBotOperation({ operation: operationModel() });
+        }
+
+        function readOperation() {
+            if (!isActive() || !readPermissions().canOperate) return Promise.resolve(null);
+            if (typeof api.getCustomerBotOperationStatus !== "function") return Promise.resolve(null);
+            const token = operationReads.begin();
+            return api.getCustomerBotOperationStatus({ freeze: false }).then(data => {
+                if (!isActive() || !operationReads.isCurrent(token)) return null;
+                operation = data || {};
+                operationFault = "";
+                renderOperation();
+                schedulePoll();
+                return data;
+            }).catch(error => {
+                if (!isActive() || !operationReads.isCurrent(token)) return null;
+                operationFault = errorMessage(error, t("Could not read the bot operation status."));
+                renderOperation();
+                schedulePoll();
+                return null;
+            });
+        }
+
+        function actionResult(kind, data) {
+            const state = data && data.state;
+            if (kind === "stop") return "";
+            if (kind === "check") {
+                if (provesReady(data)) return t("The check is complete, and the bot is ready to reply.");
+                return t("Connection check finished.");
+            }
+            if (state === "ready") return "";
+            if (data && reasonText(data.reason)) return "";
+            return t("Activation did not finish.");
+        }
+
+        function actionFailure(kind) {
+            if (kind === "stop") return t("Could not stop the bot.");
+            if (kind === "check") return t("Could not check the connection.");
+            return t("Could not start the bot.");
+        }
+
+        function runOperation(kind) {
+            if (!isActive() || !readPermissions().canOperate) return;
+            const decision = operation && operation.decision;
+            const state = operation && operation.state;
+            const running = decision === "running" || state === "activating" || inflight.start;
+            if (kind === "start" && running) return;
+            if (kind === "stop" && !running) return;
+            if (kind === "stop") {
+                if (inflight.stop) return;
+            } else if (inflight.start || inflight.stop || inflight.check) {
+                return;
+            }
+            const method = kind === "start"
+                ? api.startCustomerBotOperation
+                : kind === "stop"
+                    ? api.stopCustomerBotOperation
+                    : api.checkCustomerBotOperation;
+            if (typeof method !== "function") return;
+            inflight[kind] = true;
+            const token = operationActions.begin();
+            operationReads.begin();
+            actionMessage = "";
+            renderOperation();
+            method({ freeze: false }).then(data => {
+                inflight[kind] = false;
+                if (!isActive() || !operationActions.isCurrent(token)) return;
+                operation = data || {};
+                operationFault = "";
+                actionMessage = actionResult(kind, data);
+                renderOperation();
+                schedulePoll();
+            }).catch(error => {
+                inflight[kind] = false;
+                if (!isActive() || !operationActions.isCurrent(token)) return;
+                actionMessage = errorMessage(error, actionFailure(kind));
+                renderOperation();
+                schedulePoll();
+            });
+        }
+
+        function releaseOperation() {
+            clearPoll();
+            inflight.start = false;
+            inflight.stop = false;
+            inflight.check = false;
+            operationReads.begin();
+            operationActions.begin();
+        }
+
         function modelFrom() {
             const data = snapshot || {};
             const fields = [];
@@ -306,12 +638,11 @@
             if (visibleGroups.indexOf(activeGroup) < 0 && visibleGroups.length) activeGroup = visibleGroups[0];
             const publishedAt = shortStamp(data.published_on);
             const scenario = text.scenarios.find(item => item[0] === scenarioId) || text.scenarios[0];
+            const perms = readPermissions();
+            const tabs = perms.canEditTexts ? TEXT_TABS.slice() : [];
+            if (tabs.length && tabs.indexOf(activeTab) < 0) activeTab = tabs[0];
             return {
-                enabled: Boolean(data.enabled),
-                statusLabel: data.enabled ? t("Marked on for a later connection") : t("Stopped"),
-                toggleLabel: data.enabled ? t("Turn the bot off") : t("Mark the bot on"),
-                notice: t("The bot connection to WhatsApp is not active yet. These settings prepare its behavior when the link is complete."),
-                operationNote: t("Turning the bot off does not require saving the message texts."),
+                canEditTexts: perms.canEditTexts,
                 publishedLabel: publishedAt ? t("Last published {0}", [publishedAt]) : t("Not published yet"),
                 publishedAt,
                 revisionLabel: t("Revision {0}", [data.revision == null ? "" : data.revision]),
@@ -324,11 +655,15 @@
                 query: searchQuery,
                 searchEmpty: Boolean(searchQuery.trim()) && !fields.some(field => field.groupId === activeGroup && !field.hidden),
                 activeTab,
+                operation: operationModel(),
                 tabs: [
-                    ["operation", t("Operation")],
                     ["texts", t("Message texts")],
                     ["preview", t("Preview")],
-                ].map(([id, label]) => ({ id, label, selected: id === activeTab })),
+                ].filter(([id]) => perms.canEditTexts).map(([id, label]) => ({
+                    id,
+                    label,
+                    selected: id === activeTab,
+                })),
                 groups: visibleGroups.map(id => ({
                     id,
                     label: text.groups[id] || id,
@@ -351,10 +686,12 @@
         }
 
         function paint() {
-            if (!root().length || !snapshot) return;
+            if (!root().length) return;
+            if (!snapshot && readPermissions().canEditTexts) return;
             renderer.renderCustomerBot(modelFrom());
             paintTranscript();
             restoreFocus();
+            applyAlert();
         }
 
         function paintTranscript() {
@@ -431,13 +768,18 @@
         }
 
         function showAlert(message) {
+            actionMessage = message || "";
+            applyAlert();
+        }
+
+        function applyAlert() {
             const host = root().find("[data-bot-alert]").get(0);
             if (!host || typeof host.replaceChildren !== "function") return;
             host.replaceChildren();
-            if (!message) return;
+            if (!actionMessage) return;
             const node = document.createElement("p");
             node.className = "aps-bot-alert";
-            node.textContent = message;
+            node.textContent = actionMessage;
             host.appendChild(node);
         }
 
@@ -476,6 +818,17 @@
 
         function load() {
             if (!isActive() || !root().length) return Promise.resolve(null);
+            const perms = readPermissions();
+            const jobs = [];
+            if (perms.canEditTexts) jobs.push(loadSettings());
+            else jobs.push(Promise.resolve(paint()));
+            if (perms.canOperate) jobs.push(readOperation());
+            if (!jobs.length) return Promise.resolve(null);
+            return Promise.all(jobs).then(() => null);
+        }
+
+        function loadSettings() {
+            if (!isActive() || !root().length || !readPermissions().canEditTexts) return Promise.resolve(null);
             const epoch = localEpoch;
             const token = loads.begin();
             return api.getCustomerBotSettings({ freeze: false }).then(data => {
@@ -510,7 +863,7 @@
         }
 
         function mutate(request, successMessage, replaceTexts) {
-            if (busy || !snapshot || !working) return;
+            if (!readPermissions().canEditTexts || busy || !snapshot || !working) return;
             syncWorkingFromDom();
             const token = mutations.begin();
             setBusy(true);
@@ -546,7 +899,7 @@
         }
 
         function sendPreview() {
-            if (busy || !snapshot || !working) return;
+            if (!readPermissions().canEditTexts || busy || !snapshot || !working) return;
             const input = root().find("[data-bot-preview-input]");
             const message = String(input.val() || "");
             if (!message.trim()) return;
@@ -592,6 +945,33 @@
             paintTranscript();
         }
 
+        function testSteps() {
+            return [
+                t("Confirm the bot is running before you send a message."),
+                t("Send one short message from the customer's saved WhatsApp number, such as a greeting or the digit 1."),
+                t("The bot replies only while it is running, the number is registered to one customer, and the message is a supported service."),
+                t("This window does not send a message and does not start the bot."),
+            ];
+        }
+
+        function openTestDialog() {
+            if (!dialogs || typeof dialogs.openCustomerBotTest !== "function") return;
+            if (testDialog && typeof testDialog.show === "function") {
+                testDialog.show();
+                return;
+            }
+            testDialog = dialogs.openCustomerBotTest({
+                title: t("Test the bot"),
+                steps: testSteps(),
+                closeLabel: t("Close"),
+            }) || null;
+        }
+
+        function releaseTestDialog() {
+            if (testDialog && typeof testDialog.hide === "function") testDialog.hide();
+            testDialog = null;
+        }
+
         function focusTab(id) {
             const button = root().find("[data-bot-tab]").filter(function matchTab() {
                 return this.getAttribute("data-bot-tab") === id;
@@ -613,24 +993,28 @@
                 true
             );
         });
-        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-toggle]", () => {
-            if (!snapshot) return;
-            const next = !snapshot.enabled;
-            mutate(
-                revision => api.setCustomerBotEnabled(revision, next, { freeze: false }),
-                data => (data.enabled
-                    ? t("The bot is now marked on for a later connection.")
-                    : t("The bot is stopped.")),
-                false
-            );
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-start]", () => runOperation("start"));
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-stop]", () => runOperation("stop"));
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-check]", () => runOperation("check"));
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-test]", () => {
+            openTestDialog();
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-details-toggle]", () => {
+            detailsOpen = !detailsOpen;
+            renderOperation();
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-technical]", () => {
+            technicalOpen = !technicalOpen;
+            renderOperation();
         });
         $body.on(`click${EVENT_NAMESPACE}`, "[data-bot-tab]", function onTab() {
             const next = this.getAttribute("data-bot-tab");
-            if (TABS.indexOf(next) < 0) return;
+            if (TEXT_TABS.indexOf(next) < 0 || !readPermissions().canEditTexts) return;
             activeTab = next;
             applyChrome();
         });
         $body.on(`keydown${EVENT_NAMESPACE}`, "[data-bot-tab]", function onTabKey(event) {
+            if (!readPermissions().canEditTexts) return;
             if (["ArrowRight", "ArrowLeft", "Home", "End"].indexOf(event.key) < 0) return;
             const host = root().get(0);
             const rtl = Boolean(
@@ -639,13 +1023,13 @@
                 && getComputedStyle(host).direction === "rtl"
             );
             const forward = rtl ? "ArrowLeft" : "ArrowRight";
-            let index = TABS.indexOf(activeTab);
+            let index = TEXT_TABS.indexOf(activeTab);
             if (event.key === "Home") index = 0;
-            else if (event.key === "End") index = TABS.length - 1;
-            else if (event.key === forward) index = (index + 1) % TABS.length;
-            else index = (index - 1 + TABS.length) % TABS.length;
+            else if (event.key === "End") index = TEXT_TABS.length - 1;
+            else if (event.key === forward) index = (index + 1) % TEXT_TABS.length;
+            else index = (index - 1 + TEXT_TABS.length) % TEXT_TABS.length;
             event.preventDefault();
-            activeTab = TABS[index];
+            activeTab = TEXT_TABS[index];
             applyChrome();
             focusTab(activeTab);
         });
@@ -689,12 +1073,20 @@
                 sendPreview();
             }
         });
-        lifecycle.track(() => $body.off(EVENT_NAMESPACE), "customer-bot-settings-panel");
+        lifecycle.track(() => {
+            releaseOperation();
+            $body.off(EVENT_NAMESPACE);
+        }, "customer-bot-settings-panel");
 
         return Object.freeze({
             refresh: load,
-            deactivate() {},
+            deactivate() {
+                releaseOperation();
+                releaseTestDialog();
+            },
             dispose() {
+                releaseOperation();
+                releaseTestDialog();
                 $body.off(EVENT_NAMESPACE);
             },
         });
@@ -708,5 +1100,7 @@
         fieldKeys() {
             return Object.keys(catalog(message => message).fields);
         },
+        ACTIVATING_POLL_MS,
+        STEADY_POLL_MS,
     });
 })();

@@ -131,6 +131,55 @@ class OpenWACustomerBotReplyTests(unittest.TestCase):
             base64.b64decode(call.body["base64"]),
             b"%PDF-1.4 bot",
         )
+        self.assertNotIn("caption", call.body)
+        described = self.port.send_document_reply(
+            DocumentReplyRequest(
+                reply_id="reply-doc-2",
+                connection_ref="conn-bot",
+                destination_id="963988100101@c.us",
+                filename="فاتورة.pdf",
+                mime_type="application/pdf",
+                content=b"%PDF-1.4 bot",
+                caption="السعر النهائي المعتمد للطلب DCO-A: 10.00 USD.",
+            )
+        )
+        self.assertEqual(described.disposition, SendDisposition.ACCEPTED)
+        self.assertEqual(
+            self.transport.calls[1].body["caption"],
+            "السعر النهائي المعتمد للطلب DCO-A: 10.00 USD.",
+        )
+
+    def test_caption_over_the_gateway_limit_is_rejected_before_http(self) -> None:
+        arabic = "أ" * 1024
+        accepted = self.port.send_document_reply(
+            DocumentReplyRequest(
+                reply_id="reply-doc-limit",
+                connection_ref="conn-bot",
+                destination_id="963988100101@c.us",
+                filename="فاتورة.pdf",
+                mime_type="application/pdf",
+                content=b"%PDF-1.4 bot",
+                caption=arabic,
+            )
+        )
+        self.assertEqual(accepted.disposition, SendDisposition.ACCEPTED)
+        self.assertEqual(self.transport.calls[-1].body["caption"], arabic)
+        before = len(self.transport.calls)
+        refused = self.port.send_document_reply(
+            DocumentReplyRequest(
+                reply_id="reply-doc-over",
+                connection_ref="conn-bot",
+                destination_id="963988100101@c.us",
+                filename="فاتورة.pdf",
+                mime_type="application/pdf",
+                content=b"%PDF-1.4 bot",
+                caption=arabic + "ب",
+            )
+        )
+        self.assertEqual(refused.disposition, SendDisposition.REJECTED)
+        self.assertEqual(refused.reason_code, "caption_too_long")
+        self.assertIsNone(refused.provider_message_id)
+        self.assertEqual(len(self.transport.calls), before)
 
     def test_confirmed_refusals_are_rejected(self) -> None:
         for status in (400, 404, 413, 422, 501):
@@ -315,10 +364,19 @@ class OutboxOpenWAWiringTests(unittest.TestCase):
             _Settings,
         )
 
+        from almdina_erp.almdina_erp.domain.customer_bot.message_templates import (
+            customer_outbound_text,
+            document_description_messages,
+        )
+
         sessions = MemoryCustomerBotSessionStore()
         settings = _Settings()
         directory = _Directory()
         services = _Services()
+        caption = customer_outbound_text(
+            settings.published,
+            document_description_messages("final_cost", "DCO-A", "1", "USD"),
+        )
         spec = DocumentReplySpec(
             service_id="final_cost",
             document_type="customer_invoice",
@@ -331,6 +389,7 @@ class OutboxOpenWAWiringTests(unittest.TestCase):
             acceptance_epoch=settings.acceptance_epoch,
             amount="1",
             currency="USD",
+            caption=caption,
         )
         sessions._store_replies(
             (
@@ -377,6 +436,7 @@ class OutboxOpenWAWiringTests(unittest.TestCase):
         second = deliver_one_reply(sessions, port, deps=deps, now=NOW)
         self.assertEqual(second.status, "accepted")
         self.assertEqual(transport.calls[1].path.endswith("send-document"), True)
+        self.assertEqual(transport.calls[1].body["caption"], caption)
         self.assertEqual(len(transport.calls), 2)
 
         # Unknown does not return to pending and is not resent.

@@ -94,18 +94,25 @@ class TestCustomerBotInboundSessionIntegration(FrappeTestCase):
         other = self._accept(_message("hello", "e3", connection_ref=PREFIX + "b", conversation_id="chat-b"))
         self.assertEqual(other.disposition, PROCESSED)
         self.clock.now += timedelta(minutes=31)
-        restarted = self._accept(_message("2", "e4", connection_ref=PREFIX + "a"))
+        restarted = self._accept(
+            _message("مرحبا", "e4", connection_ref=PREFIX + "a", occurred_at=self.clock.now)
+        )
         self.assertEqual(restarted.messages[0].key, "welcome")
+        self.assertIn("main_menu", [item.key for item in restarted.messages])
         self.settings.enabled = False
-        paused = self._accept(_message("hello", "e5", connection_ref=PREFIX + "a"))
+        fresh = self.clock.now
+        paused = self._accept(_message("hello", "e5", connection_ref=PREFIX + "a", occurred_at=fresh))
         self.assertEqual(paused.disposition, NOT_ACCEPTING)
         self.settings.enabled = True
-        self.assertEqual(self._accept(_message("hello", "e5", connection_ref=PREFIX + "a")).disposition, DUPLICATE)
+        self.assertEqual(
+            self._accept(_message("hello", "e5", connection_ref=PREFIX + "a", occurred_at=fresh)).disposition,
+            DUPLICATE,
+        )
         self.directory.matches["+963988100101"] = ("CUST-B",)
-        changed = self._accept(_message("hello", "e6", connection_ref=PREFIX + "a"))
+        changed = self._accept(_message("hello", "e6", connection_ref=PREFIX + "a", occurred_at=fresh))
         self.assertEqual(changed.disposition, PROCESSED)
         self.assertEqual(_customer_id(PREFIX + "a"), "CUST-B")
-        ignored = self._accept(_message("hello", "g1", connection_ref=PREFIX + "a", is_group=True))
+        ignored = self._accept(_message("hello", "g1", connection_ref=PREFIX + "a", is_group=True, occurred_at=fresh))
         self.assertEqual(ignored.disposition, IGNORED)
         self.assertNotIn("%PDF", _stored_text())
         self.assertNotIn("USD", _stored_text())

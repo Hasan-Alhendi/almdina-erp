@@ -67,7 +67,13 @@ class CustomerBotApprovedPlanServiceTests(unittest.TestCase):
         reader = _Reader(_snapshot(), _snapshot())
         pdf = _Pdf()
 
-        result = CustomerBotApprovedPlanService(reader, pdf).execute(REQUEST)
+        described = CustomerBotApprovedPlanService(reader, pdf).execute(REQUEST)
+        self.assertEqual(described.code, ServiceResultCode.PLAN_READY)
+        self.assertEqual(pdf.calls, [])
+        self.assertIsNone(described.documents[0].content)
+
+        renderer = _Reader(_snapshot(), _snapshot())
+        result = CustomerBotApprovedPlanService(renderer, pdf).materialize(REQUEST)
 
         self.assertEqual(result.code, ServiceResultCode.PLAN_READY)
         self.assertEqual(pdf.calls, [("DCO-2026-00021", "CP-2026-00021-1")])
@@ -85,7 +91,7 @@ class CustomerBotApprovedPlanServiceTests(unittest.TestCase):
         )
         pdf = _Pdf()
 
-        result = CustomerBotApprovedPlanService(reader, pdf).execute(REQUEST)
+        result = CustomerBotApprovedPlanService(reader, pdf).materialize(REQUEST)
 
         self.assertEqual(result.code, ServiceResultCode.PLAN_READY)
         self.assertEqual(pdf.calls, [("DCO-2026-00021", "CP-UPLOAD-1")])
@@ -117,16 +123,17 @@ class CustomerBotApprovedPlanServiceTests(unittest.TestCase):
         )
         pdf = _Pdf()
 
-        result = CustomerBotApprovedPlanService(reader, pdf).execute(REQUEST)
+        result = CustomerBotApprovedPlanService(reader, pdf).materialize(REQUEST)
 
         self.assertEqual(result.code, ServiceResultCode.PLAN_DATA_CHANGED)
+        self.assertEqual(len(pdf.calls), 1)
         self.assertEqual(result.documents, ())
 
     def test_pdf_failure_does_not_return_success(self) -> None:
         reader = _Reader(_snapshot())
         pdf = _Pdf(content=b"")
 
-        result = CustomerBotApprovedPlanService(reader, pdf).execute(REQUEST)
+        result = CustomerBotApprovedPlanService(reader, pdf).materialize(REQUEST)
 
         self.assertEqual(result.code, ServiceResultCode.PLAN_PDF_FAILED)
         self.assertEqual(result.documents, ())

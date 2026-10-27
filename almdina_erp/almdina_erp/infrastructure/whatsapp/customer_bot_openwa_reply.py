@@ -14,7 +14,9 @@ from almdina_erp.almdina_erp.domain.customer_bot.document_reply import DocumentR
 from almdina_erp.almdina_erp.domain.customer_bot.gateway_capabilities import (
     BotGatewayCapabilities,
 )
+from almdina_erp.almdina_erp.domain.customer_bot.reply_intent import CAPTION_TOO_LONG
 from almdina_erp.almdina_erp.domain.customer_bot.text_reply import (
+    SendDisposition,
     TextReplyRequest,
     TextSendResult,
 )
@@ -95,7 +97,18 @@ class OpenWACustomerBotReply:
                 filename=request.filename,
                 mimetype=request.mime_type,
                 content=request.content,
+                caption=request.caption,
             )
+        except ValueError:
+            return TextSendResult(
+                reply_id=request.reply_id,
+                connection_ref=request.connection_ref,
+                destination_id=request.destination_id,
+                disposition=SendDisposition.REJECTED,
+                provider_message_id=None,
+                reason_code=CAPTION_TOO_LONG,
+            )
+        try:
             payload = self._transport.post_json(http)
         except WhatsAppTransportError as error:
             return classify_openwa_send_outcome(

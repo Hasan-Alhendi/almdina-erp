@@ -147,8 +147,12 @@
         const customerBotModule = window.AlmdinaFactoryProductionSettingsCustomerBot;
         if (customerBotModule && typeof customerBotModule.attach === "function") {
             customerBot = customerBotModule.attach({
-                api, renderer, frontend, lifecycle: store.lifecycle, translate, $body,
+                api, renderer, frontend, dialogs, lifecycle: store.lifecycle, translate, $body,
                 isActive: () => Boolean(activation && activation.isActive()),
+                permissions: () => ({
+                    canOperate: viewModel.canManageCustomerBotOperation(state.current),
+                    canEditTexts: viewModel.canManageCustomerBotSettings(state.current),
+                }),
             });
         }
         store.lifecycle.track(() => activation.dispose(), "production-settings-page-activation");
@@ -179,7 +183,7 @@
             // panel loads its own snapshot again.
             if (viewModel.canManageWhatsAppSession(state.current) && whatsapp) whatsapp.refresh();
             if (viewModel.page(state.current).showBackupPanel && backups) backups.refresh();
-            if (viewModel.canManageCustomerBotSettings(state.current) && customerBot) customerBot.refresh();
+            if (viewModel.showCustomerBot(state.current) && customerBot) customerBot.refresh();
         }
 
         function load() {

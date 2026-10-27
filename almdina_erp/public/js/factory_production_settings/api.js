@@ -108,6 +108,24 @@
         }, options).then(data => data || {});
     }
 
+    const CUSTOMER_BOT_OPERATION = "almdina_erp.almdina_erp.services.customer_bot_operation_service";
+
+    function getCustomerBotOperationStatus(options = {}) {
+        return request(`${CUSTOMER_BOT_OPERATION}.get_customer_bot_operation_status`, {}, options).then(data => data || {});
+    }
+
+    function startCustomerBotOperation(options = {}) {
+        return request(`${CUSTOMER_BOT_OPERATION}.start_customer_bot_operation`, {}, options).then(data => data || {});
+    }
+
+    function stopCustomerBotOperation(options = {}) {
+        return request(`${CUSTOMER_BOT_OPERATION}.stop_customer_bot_operation`, {}, options).then(data => data || {});
+    }
+
+    function checkCustomerBotOperation(options = {}) {
+        return request(`${CUSTOMER_BOT_OPERATION}.check_customer_bot_operation`, {}, options).then(data => data || {});
+    }
+
     function requestRestore(operationId, confirmation, options = {}) {
         return request(`${BACKUPS}.request_restore`, {
             operation_id: operationId,
@@ -132,5 +150,9 @@
         publishCustomerBotTexts,
         setCustomerBotEnabled,
         previewCustomerBot,
+        getCustomerBotOperationStatus,
+        startCustomerBotOperation,
+        stopCustomerBotOperation,
+        checkCustomerBotOperation,
     });
 })();

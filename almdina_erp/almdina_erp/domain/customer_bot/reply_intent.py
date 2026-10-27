@@ -34,6 +34,7 @@ MAX_REPLIES_PER_EVENT = 20
 # becomes unknown without another send.
 DEFAULT_REPLY_CLAIM_TTL = timedelta(minutes=2)
 ABANDONED_CLAIM_REASON = "claim_abandoned"
+CAPTION_TOO_LONG = "caption_too_long"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,8 @@ class ReplyIntent:
     customer_id: str | None = None
     normalized_phone: str | None = None
     acceptance_epoch: int | None = None
+    message_key: str | None = None
+    reason_code: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "connection_ref", required_token(self.connection_ref, "connection_ref"))
@@ -94,6 +97,10 @@ class ReplyIntent:
             object.__setattr__(
                 self, "normalized_phone", required_token(self.normalized_phone, "normalized_phone")
             )
+        if self.message_key is not None:
+            object.__setattr__(self, "message_key", required_token(self.message_key, "message_key"))
+        if self.reason_code is not None:
+            object.__setattr__(self, "reason_code", required_token(self.reason_code, "reason_code"))
 
     def reply_id(self) -> str:
         return stable_reply_id(self.connection_ref, self.provider_event_id, self.sequence)
@@ -148,6 +155,7 @@ def claim_is_abandoned(claimed_on: str | None, now: datetime, claim_ttl: timedel
 __all__ = [
     "ABANDONED_CLAIM_REASON",
     "ACCEPTED",
+    "CAPTION_TOO_LONG",
     "CANCELLED",
     "DEFAULT_REPLY_CLAIM_TTL",
     "MAX_REPLIES_PER_EVENT",
