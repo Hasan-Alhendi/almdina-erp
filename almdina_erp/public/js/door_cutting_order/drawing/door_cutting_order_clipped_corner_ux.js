@@ -613,17 +613,8 @@
         return lines.join("");
     }
 
-    function points(piece, viewportWidth = 100, viewportHeight = 100) {
-        const config = effectiveConfig(piece || {});
-        const width = Math.max(0, num(viewportWidth));
-        const height = Math.max(0, num(viewportHeight));
-        if (!width || !height || !config.width || !config.length) {
-            return [[0, 0], [width, 0], [width, height], [0, height]];
-        }
-
-        const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
-        const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
-        const byPosition = cutStyle(piece) === "L"
+    function cornerPolygonPoints(style, position, width, height, cutX, cutY) {
+        const byPosition = style === "L"
             ? {
                 "Top Right": [[0, 0], [width - cutX, 0], [width - cutX, cutY], [width, cutY], [width, height], [0, height]],
                 "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY], [cutX, cutY]],
@@ -636,7 +627,45 @@
                 "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
                 "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [0, height - cutY]],
             };
-        return byPosition[config.position] || byPosition[DEFAULT_POSITION];
+        return byPosition[position] || null;
+    }
+
+    function points(piece, viewportWidth = 100, viewportHeight = 100) {
+        const config = effectiveConfig(piece || {});
+        const width = Math.max(0, num(viewportWidth));
+        const height = Math.max(0, num(viewportHeight));
+        if (!width || !height || !config.width || !config.length) {
+            return [[0, 0], [width, 0], [width, height], [0, height]];
+        }
+
+        const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
+        const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
+        return cornerPolygonPoints(cutStyle(piece), config.position, width, height, cutX, cutY)
+            || cornerPolygonPoints(cutStyle(piece), DEFAULT_POSITION, width, height, cutX, cutY);
+    }
+
+    // Print outline of the piece as entered. Stored cuts are distances from the
+    // saved corner, not the remaining lengths shown in the editor. Missing or
+    // impossible cuts produce no outline so print does not invent a corner.
+    function orderOutlinePoints(piece) {
+        if (!isCornerCut(piece)) return [];
+        const width = num(piece.width_cm);
+        const length = num(piece.length_cm);
+        const cutWidth = num(piece.clipped_corner_width_cm);
+        const cutLength = num(piece.clipped_corner_length_cm);
+        const position = String(piece.clipped_corner_position || "").trim();
+        if (!(width > 0) || !(length > 0)) return [];
+        if (!(cutWidth > 0) || !(cutLength > 0)) return [];
+        if (cutWidth >= width || cutLength >= length) return [];
+        if (!POSITIONS.some(item => item.value === position)) return [];
+        return cornerPolygonPoints(
+            cutStyle(piece),
+            position,
+            width,
+            length,
+            cutWidth,
+            cutLength
+        ) || [];
     }
 
     const PREVIEW_CANVAS_WIDTH = 360;
@@ -1334,6 +1363,7 @@
         preserveRemainingOnResize,
         resizeSnapshot,
         points,
+        orderOutlinePoints,
         pointsAttribute,
         previewFrame,
         dxfPoints,

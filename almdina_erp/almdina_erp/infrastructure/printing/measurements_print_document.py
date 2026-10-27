@@ -5,6 +5,10 @@ from html import escape
 import json
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    printable_corner_outline_cm,
+)
+
 
 DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation"
 DRAWING_VERSION = 1
@@ -496,6 +500,25 @@ def _drawing_caption(index: int, translator: Any = None) -> str:
     return _label("Door piece drawing {0}", translator).replace("{0}", str(index))
 
 
+def _corner_outline_svg(row: Mapping[str, Any], label: str) -> str:
+    outline = printable_corner_outline_cm(row)
+    if not outline:
+        return ""
+    width = max(0.0, _number(row.get("width_cm")))
+    height = max(0.0, _number(row.get("length_cm")))
+    if not width or not height:
+        return ""
+    padding = max(width, height) * 0.06
+    pairs = " ".join(f"{_number(point[0])},{_number(point[1])}" for point in outline)
+    return (
+        f'<svg direction="ltr" style="direction:ltr" viewBox="{-padding} {-padding} '
+        f'{width + padding * 2} {height + padding * 2}" preserveAspectRatio="xMidYMid meet" '
+        f'role="img" aria-label="{_esc(label)}">'
+        f'<polygon points="{pairs}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8"/>'
+        "</svg>"
+    )
+
+
 def _drawing_svg(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
     label = _drawing_caption(index, translator)
     drawing = _parse_json(row.get("special_shape_drawing_json") or row.get("drawing_json"))
@@ -508,7 +531,7 @@ def _drawing_svg(row: Mapping[str, Any], index: int, translator: Any = None) -> 
     geometry = _parse_json(row.get("special_shape_geometry_json") or row.get("geometry_json"))
     if geometry:
         return _geometry_svg(geometry, label)
-    return ""
+    return _corner_outline_svg(row, label)
 
 
 def _notes_cell(
@@ -603,6 +626,9 @@ PRINT_PIECE_FIELDS = (
     "drawing_json",
     "special_shape_geometry_json",
     "geometry_json",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
 )
 
 

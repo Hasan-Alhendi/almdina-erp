@@ -125,6 +125,63 @@ def _corner_polygon(piece: LinerPiece, width: float, height: float, cut_x: float
     return polygons.get(position)
 
 
+_PRINT_CORNER_POSITIONS = frozenset({
+    "Top Right",
+    "Top Left",
+    "Bottom Right",
+    "Bottom Left",
+})
+
+
+def _finite(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number or number in {float("inf"), float("-inf")}:
+        return 0.0
+    return number
+
+
+def printable_corner_outline_cm(piece: Mapping[str, Any]) -> list[Point] | None:
+    """Order-entry outline in centimetres, without a default corner or rotation.
+
+    Stored cut fields are distances from the saved corner. Incomplete data
+    returns None so a print cannot invent a notch.
+    """
+    piece_type = str(piece.get("piece_type") or "")
+    if piece_type not in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        return None
+    width = _finite(piece.get("width_cm"))
+    length = _finite(piece.get("length_cm"))
+    cut_width = _finite(piece.get("clipped_corner_width_cm"))
+    cut_length = _finite(piece.get("clipped_corner_length_cm"))
+    position = str(piece.get("clipped_corner_position") or "").strip()
+    if width <= 0 or length <= 0:
+        return None
+    if cut_width <= 0 or cut_length <= 0:
+        return None
+    if cut_width >= width or cut_length >= length:
+        return None
+    if position not in _PRINT_CORNER_POSITIONS:
+        return None
+    outline = _corner_polygon(
+        LinerPiece(
+            piece_type=piece_type,
+            width_cm=width,
+            length_cm=length,
+            clipped_corner_position=position,
+            clipped_corner_width_cm=cut_width,
+            clipped_corner_length_cm=cut_length,
+        ),
+        width,
+        length,
+        cut_width,
+        cut_length,
+    )
+    return outline
+
+
 def piece_polygon_mm(piece: LinerPiece) -> list[Point]:
     width = _mm(piece.width_cm)
     height = _mm(piece.length_cm)

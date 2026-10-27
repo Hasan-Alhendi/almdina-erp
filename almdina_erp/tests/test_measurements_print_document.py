@@ -333,6 +333,72 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
 
+    def test_corner_outlines_print_from_stored_cuts_and_travel_in_the_payload(self) -> None:
+        order = _sample_order()
+        pieces = order["pieces"]
+        assert isinstance(pieces, list)
+        pieces.extend([
+            {
+                "name": "ROW-L",
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 100,
+                "length_cm": 200,
+                "qty": 1,
+                "notes": "ملاحظة L",
+                "extra_liner": 1,
+                "rotated": 1,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 30,
+                "clipped_corner_length_cm": 40,
+            },
+            {
+                "name": "ROW-CLIP",
+                "piece_type": "Clipped Corner",
+                "width_cm": 50,
+                "length_cm": 80,
+                "qty": 1,
+                "notes": "",
+                "clipped_corner_position": "Bottom Left",
+                "clipped_corner_width_cm": 10,
+                "clipped_corner_length_cm": 15,
+            },
+            {
+                "name": "ROW-MISSING",
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 90,
+                "length_cm": 140,
+                "qty": 1,
+                "notes": "بدون قص",
+                "clipped_corner_position": "Top Left",
+            },
+        ])
+        payload = order_print_payload(order)
+        corner = payload["pieces"][1]
+        self.assertEqual(corner["clipped_corner_position"], "Top Right")
+        self.assertEqual(corner["clipped_corner_width_cm"], 30)
+        self.assertEqual(corner["clipped_corner_length_cm"], 40)
+        html = measurements_print_html(
+            payload,
+            language="ar",
+            translator=_arabic_translator,
+        )
+        self.assertIn("70.0,40.0", html)
+        self.assertIn("100.0,40.0", html)
+        self.assertIn("10.0,80.0", html)
+        self.assertIn("0.0,65.0", html)
+        self.assertIn('direction="ltr"', html)
+        self.assertIn('dir="rtl"', html)
+        self.assertIn("notes-with-drawing", html)
+        self.assertIn("row-with-drawing", html)
+        self.assertIn("ملاحظة L", html)
+        self.assertIn("بدون قص", html)
+        self.assertIn("Door piece drawing 2", html)
+        self.assertIn("Door piece drawing 3", html)
+        self.assertEqual(html.count("<polygon "), 2)
+        self.assertNotIn("90.0,140.0", html)
+        self.assertIn("<path ", html)
+        self.assertLess(html.index("<path "), html.index("70.0,40.0"))
+
     def test_whatsapp_adapter_uses_unified_html_not_print_format(self) -> None:
         adapter = ADAPTER.read_text(encoding="utf-8")
         presenter = PRESENTER.read_text(encoding="utf-8")

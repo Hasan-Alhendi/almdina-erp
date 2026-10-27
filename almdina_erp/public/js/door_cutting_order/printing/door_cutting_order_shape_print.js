@@ -120,16 +120,33 @@
         const width = Math.max(0, finite(payload.blank_width_cm)), height = Math.max(0, finite(payload.blank_length_cm)); const points = (payload.points || []).filter(item => Array.isArray(item) && item.length >= 2).map(item => `${finite(item[0])},${finite(item[1])}`).join(" "); if (!width || !height || !points) return ""; const padding = Math.max(width, height) * .06;
         return `<svg viewBox="${-padding} ${-padding} ${width + padding * 2} ${height + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><polygon points="${points}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
     }
+    function cornerOutline(piece) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.orderOutlinePoints !== "function") return [];
+        const points = geometry.orderOutlinePoints(piece);
+        return Array.isArray(points) && points.length >= 3 ? points : [];
+    }
+    function cornerSvg(piece, label) {
+        const outline = cornerOutline(piece);
+        if (!outline.length) return "";
+        const width = Math.max(0, finite(piece.width_cm));
+        const height = Math.max(0, finite(piece.length_cm));
+        if (!width || !height) return "";
+        const pairs = outline.map(point => `${finite(point[0])},${finite(point[1])}`).join(" ");
+        const padding = Math.max(width, height) * 0.06;
+        return `<svg direction="ltr" style="direction:ltr" viewBox="${-padding} ${-padding} ${width + padding * 2} ${height + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><polygon points="${pairs}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
+    }
     function translate(message, replacements) {
         if (typeof __ !== "function") return String(message);
         return replacements === undefined ? __(message) : __(message, replacements);
     }
-    function svg(piece, options = {}) { const selected = shapeOutput.visual(piece); if (!selected) return ""; const fallback = translate("Door piece drawing {0}", ["—"]); return selected.kind === "documentation" ? documentationSvg(selected.payload, options.label || fallback) : geometrySvg(selected.payload, options.label || fallback); }
+    function svg(piece, options = {}) { const selected = shapeOutput.visual(piece); const fallback = translate("Door piece drawing {0}", ["—"]); if (selected) return selected.kind === "documentation" ? documentationSvg(selected.payload, options.label || fallback) : geometrySvg(selected.payload, options.label || fallback); return cornerSvg(piece, options.label || fallback); }
     function notesCell(piece, notes, options = {}) {
         const selected = shapeOutput.visual(piece), visual = svg(piece, options), text = String(notes || "").trim(), documentationNotes = selected && selected.kind === "documentation" ? String(selected.payload.notes || "").trim() : ""; if (!visual) return esc(text || "—");
         const caption = options.caption || translate("Door piece drawing {0}", ["—"]);
         return `<div class="dco-piece-notes">${text ? `<div class="dco-piece-notes-text">${esc(text)}</div>` : ""}<figure class="dco-piece-sketch">${visual}<figcaption>${esc(caption)}</figcaption>${documentationNotes ? `<p>${esc(documentationNotes)}</p>` : ""}<em>${esc(translate("This documents the customer request and is not a manufacturing file."))}</em></figure></div>`;
     }
     const css = `.dco-piece-notes{display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:right}.dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.dco-piece-sketch{display:block;margin:0;padding:4px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}.dco-piece-sketch>svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}.dco-piece-sketch .dco-reference-crop{overflow:hidden}.dco-piece-sketch figcaption{margin-top:2px;color:#344054;font-size:7px;font-weight:700;text-align:center}.dco-piece-sketch p{margin:3px 0 0;font-size:7px;line-height:1.35;white-space:pre-wrap}.dco-piece-sketch em{display:block;margin-top:3px;color:#92400e;font-size:6px;font-style:normal;text-align:center}tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}td.dco-notes-has-sketch{min-width:38mm}`;
-    window.AlmdinaShapePrint = Object.freeze({ parse: shapeOutput.parseDrawing, drawingPayload: shapeOutput.drawingFromPiece, geometryPayload: shapeOutput.geometryFromPiece, hasVisual: shapeOutput.hasVisual, svg, notesCell, css });
+    function hasVisual(piece) { return Boolean(shapeOutput.hasVisual(piece) || cornerOutline(piece).length); }
+    window.AlmdinaShapePrint = Object.freeze({ parse: shapeOutput.parseDrawing, drawingPayload: shapeOutput.drawingFromPiece, geometryPayload: shapeOutput.geometryFromPiece, hasVisual, svg, notesCell, css });
 })();
