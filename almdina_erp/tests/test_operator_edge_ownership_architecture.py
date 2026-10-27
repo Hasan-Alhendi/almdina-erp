@@ -28,6 +28,8 @@ def test_fast_entry_keyboard_is_a_focused_qty_enter_owner():
     assert 'new Event("input", { bubbles: true })' in source
     assert 'frm.script_manager.trigger("qty"' in source
     assert "focusNextWidth(tr)" in source
+    assert "revealInMeasurementTable" in source
+    assert "scrollIntoView" not in source
     assert "MutationObserver" not in source
     assert "dco-special-edge-visual-guard-css" not in source
 

@@ -367,6 +367,30 @@ body[dir="ltr"] .dco-addons-preview-pane {
     min-width: 0;
 }
 
+/* Keep Top and Bottom on the automatic row. Pin Left and Right to the
+   physical sides in both directions without reversing the whole grid. */
+.dco-addons-modal .dco-corner-position-grid > [data-liner-side="edge_long_left"],
+.dco-addons-modal .dco-corner-position-grid > [data-double-side="edge_long_left"] {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.dco-addons-modal .dco-corner-position-grid > [data-liner-side="edge_long_right"],
+.dco-addons-modal .dco-corner-position-grid > [data-double-side="edge_long_right"] {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.dco-addons-modal .dco-corner-position-grid > [data-liner-side="edge_long_left"]:dir(rtl),
+.dco-addons-modal .dco-corner-position-grid > [data-double-side="edge_long_left"]:dir(rtl) {
+    grid-column: 2;
+}
+
+.dco-addons-modal .dco-corner-position-grid > [data-liner-side="edge_long_right"]:dir(rtl),
+.dco-addons-modal .dco-corner-position-grid > [data-double-side="edge_long_right"]:dir(rtl) {
+    grid-column: 1;
+}
+
 .dco-addons-modal .dco-corner-position {
     display: flex;
     align-items: center;

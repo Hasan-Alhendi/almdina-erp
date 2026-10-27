@@ -19,10 +19,17 @@
             .dco-fast-entry-scroll {
                 overflow-x:auto !important;
                 overflow-y:auto !important;
-                overscroll-behavior:contain;
+                /* Vertical chaining continues into the page at the table edges.
+                   Horizontal overscroll stays contained so sideways pans do not
+                   bounce the Desk shell. The enlarged entry window re-locks both. */
+                overscroll-behavior-x:contain;
+                overscroll-behavior-y:auto;
                 overflow-anchor:none;
                 scrollbar-width:thin;
                 scrollbar-color:rgba(91,105,120,.48) transparent;
+            }
+            .dco-entry-window-host .dco-fast-entry-scroll {
+                overscroll-behavior:contain;
             }
             .dco-fast-entry-scroll::-webkit-scrollbar { width:10px; height:10px; }
             .dco-fast-entry-scroll::-webkit-scrollbar-track { background:rgba(0,0,0,.025); }
@@ -36,11 +43,12 @@
 
             .dco-notes-editor {
                 display:grid;
-                grid-template-columns:minmax(220px,1fr) 31px;
+                grid-template-columns:minmax(0,1fr) 31px;
                 align-items:center;
                 gap:4px;
                 width:100%;
-                min-width:260px;
+                max-width:100%;
+                min-width:0;
             }
             .dco-notes-editor .dco-notes-input {
                 min-width:0 !important;
@@ -120,9 +128,22 @@
             }
             .dco-note-context b { color:var(--text-color,#172033); }
 
-            .dco-fast-table .dco-col-notes {
+            .dco-fast-table .dco-col-notes,
+            .dco-fast-table th.dco-col-notes,
+            .dco-fast-table td.dco-col-notes {
                 width:auto !important;
                 min-width:300px !important;
+                overflow:hidden;
+            }
+            .dco-fast-table .dco-col-delete,
+            .dco-fast-table th.dco-col-delete,
+            .dco-fast-table td.dco-col-delete {
+                width:44px !important;
+                min-width:44px !important;
+                max-width:44px !important;
+                padding:4px 6px !important;
+                text-align:center;
+                overflow:hidden;
             }
 
             @media (max-width:980px) {
@@ -131,7 +152,8 @@
                     min-width:1180px !important;
                     max-width:none !important;
                 }
-                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
+                .dco-fast-table .dco-col-notes,
+                .dco-fast-table td.dco-col-notes { width:auto !important; min-width:300px !important; overflow:hidden; }
                 .dco-fast-table .dco-select-col,
                 .dco-fast-table .dco-col-no {
                     position:sticky;
@@ -148,7 +170,8 @@
                 .dco-fast-table .dco-col-sketch,
                 .dco-fast-table .dco-col-delete { display:table-cell !important; }
                 .dco-fast-table { width:1180px !important; min-width:1180px !important; }
-                .dco-fast-table .dco-col-notes { width:auto !important; min-width:300px !important; }
+                .dco-fast-table .dco-col-notes,
+                .dco-fast-table td.dco-col-notes { width:auto !important; min-width:300px !important; overflow:hidden; }
                 .dco-fast-entry-toolbar { align-items:flex-start; }
             }
         `;

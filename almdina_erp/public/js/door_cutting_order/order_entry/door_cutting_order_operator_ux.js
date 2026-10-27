@@ -283,7 +283,7 @@
                 .dco-fast-table .dco-col-edge-bulk { width:92px; min-width:92px; max-width:92px; text-align:center; }
                 .dco-fast-table .dco-col-calc { width:70px; text-align:center; font-variant-numeric:tabular-nums; }
                 .dco-fast-table .dco-col-notes { width:150px; min-width:150px; }
-                .dco-fast-table .dco-col-delete { width:40px; text-align:center; }
+                .dco-fast-table .dco-col-delete { width:44px; min-width:44px; max-width:44px; text-align:center; }
                 .dco-fast-input,.dco-fast-select {
                     width:100%; min-height:38px; border:1px solid var(--border-color,#ccd3da); border-radius:8px;
                     background:var(--control-bg,#fff); padding:6px 9px; font-size:15px; outline:none;
@@ -330,9 +330,17 @@
                 .dco-check-toggle:disabled { opacity:.55; cursor:not-allowed; transform:none; }
                 .dco-rotate-toggle { width:40px; height:34px; padding:0; font-size:17px; }
                 .dco-delete-row {
-                    width:32px; height:32px; border:0; border-radius:8px; background:transparent; cursor:pointer; font-size:18px; opacity:.6;
+                    box-sizing:border-box; width:32px; height:35px; min-width:32px; min-height:35px;
+                    border:1px solid var(--border-color,#ccd3da); border-radius:7px;
+                    background:var(--alm-card,#fff); color:var(--text-muted,#607080);
+                    cursor:pointer; padding:0; font-size:16px; line-height:1; opacity:1;
+                    display:inline-grid; place-items:center; vertical-align:middle;
                 }
-                .dco-delete-row:hover { background:rgba(210,40,40,.09); opacity:1; }
+                .dco-delete-row:hover,
+                .dco-delete-row:focus-visible {
+                    border-color:var(--alm-danger,#b91c1c); color:var(--alm-danger,#b91c1c);
+                    background:var(--alm-danger-soft,#fff1f2); opacity:1; outline:none;
+                }
                 .dco-special-sketch-button {
                     width:100%; min-height:36px; border:1px dashed rgba(111,78,55,.45); border-radius:9px;
                     background:linear-gradient(135deg,rgba(255,250,239,.95),rgba(248,239,219,.95)); color:#5d402d;
@@ -454,7 +462,12 @@
         const error = tr.querySelector(`[data-field-error='${fieldname}']`);
         const text = message || "";
         syncDimensionInputState(input, text);
-        if (error && error.textContent !== text) error.textContent = text;
+        if (error && error.textContent !== text) {
+            error.textContent = text;
+            if (input && document.activeElement === input) {
+                revealInMeasurementTable(input);
+            }
+        }
     }
 
     function syncRowDimensionValidation(frm, tr, row, values = {}) {
@@ -783,7 +796,7 @@
                     ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable, virtual })}</td>`
                     : ""}
                 <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
-                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${__("Delete row")}">×</button>` : ""}</td>
+                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${escapeHtml(__("Delete row"))}" aria-label="${escapeHtml(__("Delete row"))}">×</button>` : ""}</td>
             </tr>`;
     }
 
@@ -1137,6 +1150,39 @@
         return document.activeElement === input;
     }
 
+    // Keep the target row visible inside .dco-fast-entry-scroll only. Adjust
+    // vertical scroll when needed, preserve horizontal scroll, and leave the
+    // page alone so restore helpers and intentional page scroll stay intact.
+    function revealInMeasurementTable(target) {
+        if (!target || typeof target.getBoundingClientRect !== "function") return false;
+        const row = typeof target.closest === "function"
+            ? target.closest("tr[data-row-name]")
+            : null;
+        const element = row || target;
+        if (!element || typeof element.closest !== "function") return false;
+        const scroller = element.closest(".dco-fast-entry-scroll");
+        if (!scroller) return false;
+
+        const scrollerRect = scroller.getBoundingClientRect();
+        const targetRect = element.getBoundingClientRect();
+        const thead = scroller.querySelector(".dco-fast-table thead");
+        const stickyTop = thead ? thead.getBoundingClientRect().height : 0;
+        const visibleTop = scrollerRect.top + stickyTop;
+        const visibleBottom = scrollerRect.bottom;
+        let delta = 0;
+        if (targetRect.bottom > visibleBottom) {
+            delta = targetRect.bottom - visibleBottom;
+        } else if (targetRect.top < visibleTop) {
+            delta = targetRect.top - visibleTop;
+        }
+        if (!delta) return false;
+
+        const left = scroller.scrollLeft;
+        scroller.scrollTop += delta;
+        scroller.scrollLeft = left;
+        return true;
+    }
+
     function requirePieceDimensions(frm, row, tr) {
         const issues = pieceDimensionIssues(frm, row);
         if (!Object.keys(issues).length) return true;
@@ -1156,7 +1202,7 @@
         // DOM insertion and focus are both synchronous: no timer, no grid refresh,
         // no server round-trip, and no simulated click.
         focusWidth(next);
-        next.scrollIntoView({ block:"nearest", inline:"nearest" });
+        revealInMeasurementTable(next);
     }
 
     function applyCornerEdgeCheck(row, fieldname, cornerGeometry = window.AlmdinaClippedCornerGeometry) {
@@ -1688,6 +1734,7 @@
             pieceDimensionIssues,
             planDimensionInsert,
             stepDimensionValue,
+            revealInMeasurementTable,
             refreshValidation: refreshDimensionValidation,
             validateDimensionsBeforeSave,
         }
