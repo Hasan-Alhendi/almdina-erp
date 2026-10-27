@@ -4,7 +4,7 @@ The base MaxRects, Shelf, Guillotine, Skyline, and CP-SAT searches stay
 unchanged. This pass runs once on the winning plan. A nest is accepted when
 the guest outlines sit inside the real openings with kerf and without overlap.
 Board count, remnant area, and ``industrial_rank`` do not reject that nest.
-Rank is used only to choose between two nests that are already valid.
+Between two valid nests, more guests win, then a larger guest area, then rank.
 
 Guests are moved into the openings of the current layout first. Repacking the
 other pieces is optional: it can replace the direct nest when it is also valid
@@ -82,28 +82,51 @@ def nested_piece_count(plan: Mapping[str, Any]) -> int:
     return len(seen)
 
 
+def nested_guest_area(plan: Mapping[str, Any]) -> float:
+    """Cut area of unique pieces sitting in a Glass opening."""
+
+    seen: set[int] = set()
+    area = 0.0
+    for sheet in plan.get("sheets") or []:
+        for piece in sheet.get("pieces") or []:
+            if piece.get(GLASS_HOST_PIECE_ID) in (None, ""):
+                continue
+            piece_id = _piece_id(piece)
+            if piece_id is None or piece_id in seen:
+                continue
+            seen.add(piece_id)
+            width = num(piece.get("w"))
+            height = num(piece.get("h"))
+            area += width * height if width > 0 and height > 0 else num(piece.get("area_m2")) * 10000
+    return area
+
+
 def nested_plan_is_better(
     candidate: Mapping[str, Any],
     baseline: Mapping[str, Any],
 ) -> bool:
     """Choose between two already valid nests.
 
-    A better industrial rank wins, then the nest that places more pieces in
-    openings. This comparison does not decide whether a geometrically valid
-    nest may replace the unpacked baseline.
+    More guests win, then a larger guest area. Industrial rank is only the
+    tie-break. It never decides whether a valid nest may replace a plan that
+    has not used the opening.
     """
 
+    candidate_count = nested_piece_count(candidate)
+    baseline_count = nested_piece_count(baseline)
+    if candidate_count != baseline_count:
+        return candidate_count > baseline_count
+    candidate_area = nested_guest_area(candidate)
+    baseline_area = nested_guest_area(baseline)
+    if abs(candidate_area - baseline_area) > 1e-6:
+        return candidate_area > baseline_area
     candidate_rank = tuple(candidate.get("industrial_rank") or ())
     baseline_rank = tuple(baseline.get("industrial_rank") or ())
     if not candidate_rank or not baseline_rank:
         return False
     if len(candidate_rank) != len(baseline_rank):
         return False
-    if candidate_rank < baseline_rank:
-        return True
-    if candidate_rank > baseline_rank:
-        return False
-    return nested_piece_count(candidate) > nested_piece_count(baseline)
+    return candidate_rank < baseline_rank
 
 
 def opening_board_rect(placed: Mapping[str, Any]) -> dict[str, float] | None:

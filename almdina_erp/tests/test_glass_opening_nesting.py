@@ -387,6 +387,12 @@ def test_rank_prefers_improvement_then_unique_opening_use():
     assert nested_plan_is_better(hosted, plain)
     assert not nested_plan_is_better(plain, plain)
     assert not nested_plan_is_better(hosted, also_hosted)
+    more_guests = {
+        "industrial_rank": (0, 9, 0),
+        "sheets": [{"pieces": [{"id": 2, GLASS_HOST_PIECE_ID: 1, "w": 10, "h": 10}]}],
+    }
+    better_rank = {"industrial_rank": (0, 1, 0), "sheets": [{"pieces": [{"id": 2}]}]}
+    assert nested_plan_is_better(more_guests, better_rank)
 
 
 def test_equal_rank_accepts_nesting_and_a_worse_rank_keeps_baseline(monkeypatch):

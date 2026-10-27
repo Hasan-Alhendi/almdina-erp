@@ -398,7 +398,7 @@ def test_disabling_mirroring_recalculates_without_a_mirror_flag():
     assert placement_permission_errors(first, pieces, mirroring_allowed=False)
 
 
-def test_two_clipped_corners_complement_without_a_void_angle():
+def test_two_clipped_corners_do_not_treat_adjacency_as_a_nest():
     pieces = expand_piece_groups(
         [
             _corner_row(
@@ -424,7 +424,8 @@ def test_two_clipped_corners_complement_without_a_void_angle():
         **_REMNANT,
     )
     ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
-    assert len(improved["sheets"]) == 1
+    assert improved is plan
+    assert len(improved["sheets"]) == 2
     assert sorted(ids) == sorted(piece["id"] for piece in pieces)
     assert not any(piece.get("placement_rotation_deg") for sheet in improved["sheets"] for piece in sheet["pieces"])
     assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
@@ -1069,7 +1070,7 @@ def test_same_board_count_accepts_a_larger_separable_remnant():
     assert sorted(ids) == sorted(piece["id"] for piece in ordered)
 
 
-def test_shape_nesting_refuses_an_extra_board():
+def test_shape_nesting_keeps_a_valid_quad_on_an_extra_board():
     pieces = expand_piece_groups(
         [
             _corner_row("L-Shaped Corner"),
@@ -1081,9 +1082,20 @@ def test_shape_nesting_refuses_an_extra_board():
         [[(70.4, 0), (70.4, 20.4), (70.4, 40.8), (70.4, 61.2), (0, 0)]],
     )
     improved = _apply(plan, pieces)
+    corners = [
+        piece
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+        if piece["piece_type"] == "L-Shaped Corner"
+    ]
+    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
 
     assert len(plan["sheets"]) == 1
-    assert improved is plan
+    assert len(improved["sheets"]) == 2
+    assert sorted(ids) == sorted(piece["id"] for piece in pieces)
+    assert len(ids) == len(set(ids))
+    assert {int(piece.get("corner_rotation_quarter_turns") or 0) for piece in corners} == {0, 1, 2, 3}
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
 
 
 def test_invalid_geometry_keeps_the_original_plan(monkeypatch):
@@ -1378,3 +1390,331 @@ def test_search_passes_stay_within_a_measured_time_budget():
     assert measured["large"] < 20
     assert measured["corners"] < 12
     assert measured["glass"] < 15
+
+
+def test_one_rotatable_l_turns_its_notch_inward():
+    from almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting import _inward_score
+
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner", qty=1)])
+    plan = _sheet_plan(pieces, [[(0, 0)]], board=80)
+    improved = _apply(plan, pieces, board=80)
+    placed = improved["sheets"][0]["pieces"][0]
+
+    assert improved is not plan
+    assert _inward_score(placed, 80, 80) > 0
+    assert int(placed.get("corner_rotation_quarter_turns") or 0) in {0, 1, 2, 3}
+    assert not placed.get("mirrored")
+    assert not validate_plan(improved, pieces, 80, 80, kerf_cm=0.3)
+
+
+def test_locked_single_l_stays_on_the_ordinary_plan():
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner", qty=1, allow_rotation=0)])
+    plan = _sheet_plan(pieces, [[(0, 0)]], board=80)
+    improved = _apply(plan, pieces, board=80, mirroring_allowed=False)
+
+    assert improved is plan
+    assert "corner_rotation_quarter_turns" not in improved["sheets"][0]["pieces"][0]
+
+
+def test_two_identical_l_pieces_use_a_half_turn_without_a_mirror():
+    pieces = expand_piece_groups(
+        [_corner_row("L-Shaped Corner", width_cm=40, length_cm=40, qty=2, clipped_corner_width_cm=20, clipped_corner_length_cm=20)]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80.3)
+    improved = apply_shape_aware_nesting(
+        plan, pieces, 80.3, 40.3, 0.3, mirroring_allowed=False, machine_type="CNC Router", time_limit_sec=2, **_REMNANT
+    )
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+
+    assert len(improved["sheets"]) == 1
+    assert 2 in {int(piece.get("corner_rotation_quarter_turns") or 0) for piece in placed}
+    assert not any(piece.get("mirrored") for piece in placed)
+    assert _boxes_interlock(placed[0], placed[1])
+    assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
+
+
+def test_two_l_pieces_without_rotation_or_mirroring_are_not_paired():
+    pieces = expand_piece_groups(
+        [_corner_row("L-Shaped Corner", qty=2, allow_rotation=0, width_cm=40, length_cm=40, clipped_corner_width_cm=20, clipped_corner_length_cm=20)]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80)
+    improved = _apply(plan, pieces, board=80, mirroring_allowed=False)
+
+    assert improved is plan
+    assert len(improved["sheets"]) == 2
+    assert not _same_sheet_interlock(improved)
+
+
+def test_different_l_sizes_are_not_a_matching_pair():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner", qty=1, width_cm=40, length_cm=40, clipped_corner_width_cm=16, clipped_corner_length_cm=16),
+            _corner_row("L-Shaped Corner", qty=1, width_cm=24, length_cm=24, clipped_corner_width_cm=8, clipped_corner_length_cm=8),
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=100)
+    improved = _apply(plan, pieces, board=100)
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+
+    assert sorted(piece["id"] for piece in placed) == [1, 2]
+    assert not _same_sheet_interlock(improved)
+
+
+def test_l_and_clipped_corners_are_not_a_matching_pair():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner", qty=1),
+            _corner_row("Clipped Corner", qty=1),
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=80)
+    improved = _apply(plan, pieces, board=80)
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+
+    assert {piece["piece_type"] for piece in placed} == {"L-Shaped Corner", "Clipped Corner"}
+    assert not _same_sheet_interlock(improved)
+
+
+def test_three_identical_l_pieces_become_a_pair_and_a_single():
+    pieces = expand_piece_groups(
+        [_corner_row("L-Shaped Corner", qty=3, width_cm=30, length_cm=30, clipped_corner_width_cm=12, clipped_corner_length_cm=12)]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)], [(0, 0)]], board=80)
+    improved = _apply(plan, pieces, board=80)
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    pairs = [
+        (left, right)
+        for index, left in enumerate(placed)
+        for right in placed[index + 1 :]
+        if _boxes_interlock(left, right)
+    ]
+
+    assert sorted(piece["id"] for piece in placed) == [1, 2, 3]
+    assert len(pairs) == 1
+    assert not any(piece.get("mirrored") for piece in placed)
+    assert not validate_plan(improved, pieces, 80, 80, kerf_cm=0.3)
+
+
+def test_identical_l_counts_split_into_quads_pairs_and_singles():
+    for qty, quad_groups in ((6, 1), (7, 1), (8, 2)):
+        pieces = expand_piece_groups([_corner_row("L-Shaped Corner", qty=qty)])
+        plan = _sheet_plan(pieces, [[(0, 0)] for _piece in pieces], board=120)
+        improved = _apply(plan, pieces, board=120)
+        placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+        turns = sorted(int(piece.get("corner_rotation_quarter_turns") or 0) for piece in placed if "corner_rotation_quarter_turns" in piece)
+
+        assert sorted(piece["id"] for piece in placed) == list(range(1, qty + 1))
+        assert len(placed) == len({piece["id"] for piece in placed})
+        assert turns.count(0) >= quad_groups
+        assert turns.count(1) >= quad_groups
+        assert turns.count(2) >= quad_groups
+        assert turns.count(3) >= quad_groups
+        assert not validate_plan(improved, pieces, 120, 120, kerf_cm=0.3)
+
+
+def test_a_different_piece_can_sit_in_an_l_void():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            {"piece_type": "Regular", "width_cm": 8, "length_cm": 6, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0), (0, 20.4), (0, 40.8), (0, 61.2), (70, 70)]], board=100)
+    improved = _apply(plan, pieces, board=100)
+    guest = next(piece for sheet in improved["sheets"] for piece in sheet["pieces"] if piece["id"] == 5)
+
+    assert 12 < guest["x"] < 28
+    assert 12 < guest["y"] < 28
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_two_guests_are_tried_in_the_same_l_void():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            {"piece_type": "Regular", "width_cm": 6, "length_cm": 6, "qty": 2, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [[(0, 0), (0, 20.4), (0, 40.8), (0, 61.2), (70, 70), (80, 80)]],
+        board=100,
+    )
+    improved = _apply(plan, pieces, board=100)
+    guests = [piece for sheet in improved["sheets"] for piece in sheet["pieces"] if piece["id"] in {5, 6}]
+
+    assert len(guests) == 2
+    assert all(12 < piece["x"] < 28 and 12 < piece["y"] < 28 for piece in guests)
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_a_guest_larger_than_the_kerf_inset_void_stays_outside():
+    pieces = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            {"piece_type": "Regular", "width_cm": 16, "length_cm": 6, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = _sheet_plan(pieces, [[(0, 0), (0, 20.4), (0, 40.8), (0, 61.2), (70, 70)]], board=100)
+    improved = _apply(plan, pieces, board=100)
+    guest = next(piece for sheet in improved["sheets"] for piece in sheet["pieces"] if piece["id"] == 5)
+
+    assert not (12 < guest["x"] < 28 and 12 < guest["y"] < 28)
+    assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_valid_nest_is_kept_when_the_rank_gets_worse(monkeypatch):
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    plan = _sheet_plan(pieces, [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2)]])
+
+    def _worse(candidate, *_args, **_kwargs):
+        candidate["industrial_rank"] = (9, 9, 9)
+        return candidate
+
+    monkeypatch.setattr(
+        "almdina_erp.almdina_erp.domain.cutting.optimizer.enrich_plan_metrics",
+        _worse,
+    )
+    improved = _apply(plan, pieces)
+
+    assert improved is not plan
+    assert improved["industrial_rank"] == (9, 9, 9)
+    assert {int(piece.get("corner_rotation_quarter_turns") or 0) for piece in improved["sheets"][0]["pieces"]} == {0, 1, 2, 3}
+
+
+def test_adding_a_different_l_keeps_the_original_quad():
+    four = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    first = optimize_plan(
+        four,
+        80,
+        80,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+    five = expand_piece_groups(
+        [
+            _corner_row("L-Shaped Corner"),
+            _corner_row(
+                "L-Shaped Corner",
+                qty=1,
+                width_cm=28,
+                length_cm=16,
+                clipped_corner_width_cm=6,
+                clipped_corner_length_cm=5,
+            ),
+        ]
+    )
+    second = optimize_plan(
+        five,
+        80,
+        80,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+
+    assert _shifted_rings(first, {1, 2, 3, 4}) == _shifted_rings(second, {1, 2, 3, 4})
+    assert _turn_multiset(first, {1, 2, 3, 4}) == _turn_multiset(second, {1, 2, 3, 4})
+    assert _turn_multiset(first, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    ids = [piece["id"] for sheet in second["sheets"] for piece in sheet["pieces"]]
+    assert sorted(ids) == [1, 2, 3, 4, 5]
+    assert len(ids) == len(set(ids))
+    assert not validate_plan(second, five, 80, 80, kerf_cm=0.3)
+
+
+def test_l_quad_dxf_roundtrip_keeps_outlines_and_turns(tmp_path):
+    import ezdxf
+
+    from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import read_dxf_geometry
+
+    pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
+    plan = optimize_plan(
+        pieces,
+        50,
+        50,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+    placed = [piece for sheet in plan["sheets"] for piece in sheet["pieces"]]
+    outlines = [material_outline_cm(piece) for piece in placed]
+    assert _turn_multiset(plan, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    assert all(outline and len(outline) >= 6 for outline in outlines)
+
+    document = ezdxf.new("R2010")
+    for name in ("GEOMETRY", "CUT_PATH", "TEXT"):
+        document.layers.add(name)
+    modelspace = document.modelspace()
+    for outline in outlines:
+        ring = [(point[0] * 10, point[1] * 10) for point in outline]
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "GEOMETRY"}, close=True)
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "CUT_PATH"}, close=True)
+    path = tmp_path / "l-quad.dxf"
+    document.saveas(path)
+    loaded = read_dxf_geometry(str(path), relevant_layers={"GEOMETRY", "CUT_PATH"})
+    assert {"GEOMETRY", "CUT_PATH"} <= {segment["layer"] for segment in loaded["segments"]}
+    rings = []
+    geometry = [segment for segment in loaded["segments"] if segment["layer"] == "GEOMETRY"]
+    for entity_id in sorted({segment["entity_id"] for segment in geometry}):
+        segments = [segment for segment in geometry if segment["entity_id"] == entity_id]
+        points = [segments[0]["start"]]
+        points.extend(segment["end"] for segment in segments)
+        if points[0] == points[-1]:
+            points = points[:-1]
+        rings.append(points)
+    assert len(rings) == 4
+    for outline, ring in zip(outlines, rings, strict=True):
+        _same_points([(point[0] * 10, point[1] * 10) for point in outline], ring, tolerance=0.05)
+
+
+def _same_sheet_interlock(plan):
+    for sheet in plan["sheets"]:
+        pieces = list(sheet["pieces"])
+        for index, left in enumerate(pieces):
+            for right in pieces[index + 1 :]:
+                if _boxes_interlock(left, right):
+                    return True
+    return False
+
+
+def _boxes_interlock(first, second):
+    overlap_x = min(first["x"] + first["w"], second["x"] + second["w"]) - max(first["x"], second["x"])
+    overlap_y = min(first["y"] + first["h"], second["y"] + second["h"]) - max(first["y"], second["y"])
+    notch = min(
+        first.get("clipped_corner_width_cm") or 0,
+        first.get("clipped_corner_length_cm") or 0,
+        second.get("clipped_corner_width_cm") or 0,
+        second.get("clipped_corner_length_cm") or 0,
+    )
+    return min(overlap_x, overlap_y) + 1e-6 >= notch * 0.5 > 0
+
+
+def _shifted_rings(plan, ids):
+    rings = []
+    for sheet in plan["sheets"]:
+        for piece in sheet["pieces"]:
+            if piece["id"] not in ids:
+                continue
+            rings.append(material_outline_cm(piece))
+    min_x = min(point[0] for ring in rings for point in ring)
+    min_y = min(point[1] for ring in rings for point in ring)
+    shifted = []
+    for ring in rings:
+        shifted.append(tuple(sorted((round(point[0] - min_x, 1), round(point[1] - min_y, 1)) for point in ring)))
+    return tuple(sorted(shifted))
+
+
+def _turn_multiset(plan, ids):
+    turns = []
+    for sheet in plan["sheets"]:
+        for piece in sheet["pieces"]:
+            if piece["id"] in ids:
+                turns.append(int(piece.get("corner_rotation_quarter_turns") or 0))
+    return tuple(sorted(turns))

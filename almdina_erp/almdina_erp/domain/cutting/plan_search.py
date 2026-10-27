@@ -124,8 +124,9 @@ def _move_sheet_onto_others(
     victim: dict[str, Any],
     kerf_cm: float,
 ) -> dict[str, Any] | None:
+    preserved = _shape_nest_ids(plan)
     moving = [dict(piece) for piece in victim.get("pieces") or []]
-    if not moving:
+    if not moving or any(int(piece["id"]) in preserved for piece in moving):
         return None
     copied = deepcopy(plan)
     kept = [
@@ -475,7 +476,49 @@ def _locked_piece_ids(plan: dict[str, Any]) -> set[int]:
                 locked.add(piece_id)
             if str(piece.get("piece_type") or "") in _LOCKED_PIECE_TYPES:
                 locked.add(piece_id)
+    locked.update(_shape_nest_ids(plan))
     return locked
+
+
+def _shape_nest_ids(plan: dict[str, Any]) -> set[int]:
+    """Pieces placed by a corner or glass nest, including guests in that void."""
+
+    locked: set[int] = set()
+    for sheet in plan.get("sheets") or []:
+        pieces = list(sheet.get("pieces") or [])
+        nested = [piece for piece in pieces if _records_shape_nest(piece)]
+        for piece in nested:
+            try:
+                locked.add(int(piece["id"]))
+            except (TypeError, ValueError):
+                continue
+        if not nested:
+            continue
+        min_x = min(num(piece.get("x")) for piece in nested)
+        min_y = min(num(piece.get("y")) for piece in nested)
+        max_x = max(num(piece.get("x")) + num(piece.get("w")) for piece in nested)
+        max_y = max(num(piece.get("y")) + num(piece.get("h")) for piece in nested)
+        for piece in pieces:
+            if piece in nested:
+                continue
+            center_x = num(piece.get("x")) + num(piece.get("w")) / 2
+            center_y = num(piece.get("y")) + num(piece.get("h")) / 2
+            if min_x - 1e-6 <= center_x <= max_x + 1e-6 and min_y - 1e-6 <= center_y <= max_y + 1e-6:
+                try:
+                    locked.add(int(piece["id"]))
+                except (TypeError, ValueError):
+                    continue
+    return locked
+
+
+def _records_shape_nest(piece: dict[str, Any]) -> bool:
+    if piece.get("glass_host_piece_id") not in (None, ""):
+        return True
+    if piece.get("placement_outline_cm") or piece.get("placement_rotation_deg"):
+        return True
+    if piece.get("mirrored") or piece.get("corner_mirrored") or piece.get("placement_mirrored"):
+        return True
+    return "corner_rotation_quarter_turns" in piece or "placement_quarter_turns" in piece
 
 
 def _smallest_movable(
