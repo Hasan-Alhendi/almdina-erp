@@ -100,6 +100,15 @@ def test_cost_measurements_table_shows_print_style_edge_dimension_marks():
     assert "dimensionMark(row.width, widthCount)" in cost
     assert "dimensionMark(row.length, longCount)" in cost
     assert "dco-cost-dimension-edge-line" in cost
+    assert "Math.max(0, Math.min(2, Number(count || 0)))" in cost
+    assert "{ length: safeCount }" in cost
+    assert 'class="dco-cost-dimension-lines dco-cost-dimension-lines-${safeCount}"' in cost
+    assert ".dco-cost-dimension-lines-0{visibility:hidden}" in cost
+    assert "dco-cost-dimension-rail" not in cost
+    assert "is-spacer" not in cost
+    assert "safeCount === 2" not in cost
+    mark = cost.split("function dimensionMark(value, count)", 1)[1].split("function installStyles", 1)[0]
+    assert mark.index("<b>${quantity(value)}</b>") < mark.index("dco-cost-dimension-lines")
     assert "dco-capability-cost-presenter-css-v8" in cost
 
 
