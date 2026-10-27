@@ -98,14 +98,72 @@
             issues.board = __("Please enter board length and width first.");
             return issues;
         }
-        if (width === null) issues.width_cm = __("Piece width must be a positive number.");
-        if (length === null) issues.length_cm = __("Piece length must be a positive number.");
+        if (width === null) issues.width_cm = __("Invalid dimension");
+        if (length === null) issues.length_cm = __("Invalid dimension");
 
         // The inline editor validates the entered axes independently. Rotation
         // remains an optimizer concern and must not swap these field messages.
-        if (length !== null && length > board.length) issues.length_cm = __("Exceeds board length");
-        if (width !== null && width > board.width) issues.width_cm = __("Exceeds board width");
+        if (length !== null && length > board.length) issues.length_cm = __("Exceeds length");
+        if (width !== null && width > board.width) issues.width_cm = __("Exceeds width");
         return issues;
+    }
+
+    function dimensionDisplayState(frm) {
+        const docKey = String(frm && frm.doc && frm.doc.name || "");
+        if (!frm._dcoDimensionDisplay || frm._dcoDimensionDisplay.docKey !== docKey) {
+            frm._dcoDimensionDisplay = {
+                docKey,
+                revealed: new Map(),
+                suppress: new Map(),
+                activeRowName: "",
+            };
+        }
+        return frm._dcoDimensionDisplay;
+    }
+
+    function isInvalidDimensionMessage(message) {
+        return Boolean(message) && message === __("Invalid dimension");
+    }
+
+    function visibleDimensionMessage(frm, rowName, fieldname, issues) {
+        const message = issues[fieldname] || "";
+        if (!message || !isInvalidDimensionMessage(message)) return message;
+        const state = dimensionDisplayState(frm);
+        const suppressed = state.suppress.get(rowName);
+        if (suppressed && suppressed.has(fieldname)) return "";
+        const revealed = state.revealed.get(rowName);
+        if (!revealed || !revealed[fieldname]) return "";
+        return message;
+    }
+
+    function forgetDimensionDisplay(frm, rowName) {
+        if (!frm || !frm._dcoDimensionDisplay || !rowName) return;
+        const state = frm._dcoDimensionDisplay;
+        if (state.docKey !== String(frm.doc && frm.doc.name || "")) return;
+        state.revealed.delete(rowName);
+        state.suppress.delete(rowName);
+        if (state.activeRowName === rowName) state.activeRowName = "";
+    }
+
+    function adoptDimensionDisplayRow(frm, previousName, nextName) {
+        if (!frm || !previousName || !nextName || previousName === nextName) return;
+        const state = dimensionDisplayState(frm);
+        if (state.activeRowName === previousName) state.activeRowName = nextName;
+        if (state.revealed.has(previousName)) {
+            state.revealed.set(nextName, state.revealed.get(previousName));
+            state.revealed.delete(previousName);
+        }
+        if (state.suppress.has(previousName)) {
+            state.suppress.set(nextName, state.suppress.get(previousName));
+            state.suppress.delete(previousName);
+        }
+    }
+
+    function rowElement(root, name) {
+        if (!root || !name || typeof root.querySelectorAll !== "function") return null;
+        return Array.from(root.querySelectorAll("tr[data-row-name]")).find(tr => (
+            tr.dataset && tr.dataset.rowName === name
+        )) || null;
     }
 
     function showDimensionIssue(message) {
@@ -330,16 +388,80 @@
         input._dcoLastAcceptedValue = message ? input._dcoLastAcceptedValue : input.value;
     }
 
+    function paintDimensionField(tr, fieldname, message) {
+        const input = tr.querySelector(`input[data-field='${fieldname}']`);
+        const error = tr.querySelector(`[data-field-error='${fieldname}']`);
+        const text = message || "";
+        syncDimensionInputState(input, text);
+        if (error && error.textContent !== text) error.textContent = text;
+    }
+
     function syncRowDimensionValidation(frm, tr, row, values = {}) {
         if (!tr || tr.classList.contains("dco-virtual-row")) return;
         const issues = pieceDimensionIssues(frm, row, values);
+        const rowName = tr.dataset.rowName || "";
         ["width_cm", "length_cm"].forEach(fieldname => {
-            const input = tr.querySelector(`input[data-field='${fieldname}']`);
-            const error = tr.querySelector(`[data-field-error='${fieldname}']`);
-            const message = issues[fieldname] || "";
-            syncDimensionInputState(input, message);
-            if (error) error.textContent = message;
+            paintDimensionField(
+                tr,
+                fieldname,
+                visibleDimensionMessage(frm, rowName, fieldname, issues)
+            );
         });
+    }
+
+    function paintEditedDimensionField(frm, tr, row, fieldname, values) {
+        if (!tr || tr.classList.contains("dco-virtual-row")) return;
+        if (!["width_cm", "length_cm"].includes(fieldname)) return;
+        const issues = pieceDimensionIssues(frm, row, values);
+        const message = issues[fieldname] || "";
+        const rowName = tr.dataset.rowName || "";
+        if (isInvalidDimensionMessage(message)) {
+            const state = dimensionDisplayState(frm);
+            if (!state.suppress.has(rowName)) state.suppress.set(rowName, new Set());
+            state.suppress.get(rowName).add(fieldname);
+            paintDimensionField(tr, fieldname, "");
+            return;
+        }
+        const suppressed = dimensionDisplayState(frm).suppress.get(rowName);
+        if (suppressed) suppressed.delete(fieldname);
+        paintDimensionField(tr, fieldname, message);
+    }
+
+    function revealLeftPieceDimensions(frm, tr) {
+        if (!tr || tr.isConnected === false || tr.classList.contains("dco-virtual-row")) return;
+        const rowName = tr.dataset.rowName || "";
+        if (!rowName || rowName.startsWith("__virtual__")) return;
+        const row = rowByName(frm, rowName);
+        if (!row) return;
+        const state = dimensionDisplayState(frm);
+        state.revealed.set(rowName, { width_cm: true, length_cm: true });
+        const suppressed = state.suppress.get(rowName);
+        if (suppressed) suppressed.clear();
+        syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
+    }
+
+    function noteDimensionRowFocus(frm, root, nextRow) {
+        if (!frm || !nextRow) return;
+        const state = dimensionDisplayState(frm);
+        const nextName = nextRow.dataset.rowName || "";
+        const previousName = state.activeRowName || "";
+        if (previousName && previousName !== nextName) {
+            revealLeftPieceDimensions(frm, rowElement(root, previousName));
+        }
+        state.activeRowName = nextName;
+    }
+
+    function revealDimensionIssuesForSave(frm, row) {
+        if (!frm || !row || !row.name) return;
+        const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
+        const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
+        const tr = rowElement(root, row.name);
+        if (!tr || tr.classList.contains("dco-virtual-row")) return;
+        const state = dimensionDisplayState(frm);
+        state.revealed.set(row.name, { width_cm: true, length_cm: true });
+        const suppressed = state.suppress.get(row.name);
+        if (suppressed) suppressed.clear();
+        syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
     }
 
     function refreshDimensionValidation(frm) {
@@ -352,7 +474,7 @@
         if (!root) return true;
         root.querySelectorAll("tr[data-row-name]:not(.dco-virtual-row)").forEach(tr => {
             const row = rowByName(frm, tr.dataset.rowName || "");
-            if (row) syncRowDimensionValidation(frm, tr, row);
+            if (row) syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
         });
         return boardDimensions(frm).valid;
     }
@@ -393,6 +515,7 @@
         const row = createChildRow(frm);
         tr.dataset.rowName = row.name;
         tr.classList.remove("dco-virtual-row");
+        adoptDimensionDisplayRow(frm, currentName, row.name);
         const no = tr.querySelector(".dco-row-number");
         if (no) no.textContent = row.idx;
         // The row was rendered as virtual (its Add-ons button is disabled).
@@ -512,7 +635,7 @@
         const data = row || { qty:1 };
         const dimensionIssues = virtual ? {} : pieceDimensionIssues(frm, data);
         const dimensionInput = (fieldname, value) => {
-            const issue = dimensionIssues[fieldname] || "";
+            const issue = virtual ? "" : visibleDimensionMessage(frm, name, fieldname, dimensionIssues);
             const invalid = issue ? " aria-invalid=\"true\"" : "";
             return `<input class="dco-fast-input${issue ? " is-invalid" : ""}" type="number" inputmode="decimal" step="any" min="0" data-field="${fieldname}" value="${virtual ? "" : escapeHtml(value || "")}"${invalid} ${disabled}><div class="dco-piece-dimension-error" data-field-error="${fieldname}">${escapeHtml(issue)}</div>`;
         };
@@ -885,6 +1008,9 @@
         const tr = input.closest("tr[data-row-name]");
         const fieldname = input.dataset.field;
         if (!tr || !fieldname) return null;
+        // An untouched spare row is not a piece. Do not create one merely
+        // because a field blurred or a validation pass read it.
+        if (tr.classList.contains("dco-virtual-row") && !virtualRowHasEnteredValue(tr)) return null;
         const row = getOrMaterializeRow(frm, tr);
         if (!row) return null;
         let value = input.value;
@@ -896,9 +1022,6 @@
         }
         if (["width_cm", "length_cm"].includes(fieldname)) {
             input._dcoLastAcceptedValue = input.value;
-            // Validate the live controls, including temporary empty/incomplete
-            // input, without replacing the row or moving the active caret.
-            syncRowDimensionValidation(frm, tr, row, liveRowDimensionValues(tr, row));
         }
         updateCalculatedCells(tr, row);
         if (trigger) triggerChildField(frm, row, fieldname, 0);
@@ -1077,6 +1200,7 @@
 
     function deleteRow(frm, tr) {
         const name = tr.dataset.rowName || "";
+        forgetDimensionDisplay(frm, name);
         const row = rowByName(frm, name);
         if (!row) return;
         const index = (frm.doc.pieces || []).indexOf(row);
@@ -1147,12 +1271,15 @@
 
         root.addEventListener("focusin", event => {
             const currentFrm = root._dcoFastEntryForm;
+            if (!currentFrm || !event.target || !root.contains(event.target)) return;
+            const nextRow = event.target.closest("tr[data-row-name]");
+            if (nextRow) noteDimensionRowFocus(currentFrm, root, nextRow);
             const input = event.target.closest("input[data-field='width_cm'],input[data-field='length_cm']");
-            if (!input || !root.contains(input) || !currentFrm) return;
+            if (!input || !root.contains(input)) return;
             const tr = input.closest("tr[data-row-name]");
             const row = rowByName(currentFrm, tr && tr.dataset.rowName);
             if (row) captureCornerResizeSnapshot(tr, row);
-            if (input) input._dcoLastAcceptedValue = input.value;
+            input._dcoLastAcceptedValue = input.value;
         });
 
         // Capture the native input event before table extensions can consume its
@@ -1161,7 +1288,17 @@
             const currentFrm = root._dcoFastEntryForm;
             const input = event.target.closest(".dco-fast-input[data-field]");
             if (!input || !root.contains(input) || !currentFrm) return;
-            syncInputToModel(currentFrm, input, false);
+            const row = syncInputToModel(currentFrm, input, false);
+            if (row && ["width_cm", "length_cm"].includes(input.dataset.field)) {
+                const tr = input.closest("tr[data-row-name]");
+                paintEditedDimensionField(
+                    currentFrm,
+                    tr,
+                    row,
+                    input.dataset.field,
+                    liveRowDimensionValues(tr, row)
+                );
+            }
         }, true);
 
         root.addEventListener("change", event => {
@@ -1386,6 +1523,7 @@
         })).find(item => Object.keys(item.issues).length);
         if (!invalid) return Promise.resolve();
         const message = invalid.issues.width_cm || invalid.issues.length_cm || invalid.issues.board;
+        revealDimensionIssuesForSave(frm, invalid.row);
         showDimensionIssue(__("Row {0}: {1}", [invalid.index, message]));
         const field = frm.fields_dict && frm.fields_dict.pieces_fast_entry;
         const root = field && field.$wrapper && field.$wrapper.get ? field.$wrapper.get(0) : null;
