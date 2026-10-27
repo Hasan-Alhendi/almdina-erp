@@ -425,12 +425,16 @@ def validate_snapshot_material_layout(
                     geometry=parse_geometry_mm(indexed[(sheet_no, piece_id)]),
                 )
             )
-        validate_material_layout(
-            placed,
-            required_clearance=max(0.0, float(required_clearance_mm or 0.0)),
-            geometry_tolerance=GEOMETRY_TOLERANCE_MM,
-            numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
-        )
+        try:
+            validate_material_layout(
+                placed,
+                required_clearance=max(0.0, float(required_clearance_mm or 0.0)),
+                geometry_tolerance=GEOMETRY_TOLERANCE_MM,
+                numeric_tolerance=KERF_NUMERIC_TOLERANCE_MM,
+            )
+        except DxfTopologyError as error:
+            error.sheet_no = sheet_no
+            raise
     return True
 
 

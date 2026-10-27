@@ -622,14 +622,14 @@ class TestDesignSystemContract(unittest.TestCase):
 
     def test_assets_load_design_system_before_feature_css_and_after_foundation(self) -> None:
         tokens_asset = '"/assets/almdina_erp/css/almdina_design_tokens.css?v=3"'
-        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=2"'
+        components_asset = '"/assets/almdina_erp/css/almdina_components.css?v=3"'
         patterns_asset = '"/assets/almdina_erp/css/almdina_patterns.css"'
         templates_asset = '"/assets/almdina_erp/css/almdina_page_templates.css?v=1"'
         desk_theme_asset = '"/assets/almdina_erp/css/almdina_desk_theme.css?v=2"'
         desk_sidebar_asset = '"/assets/almdina_erp/css/almdina_desk_sidebar.css?v=2"'
         workspace_home_asset = '"/assets/almdina_erp/css/almdina_workspace_home.css?v=12"'
-        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js"'
-        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js"'
+        ui_asset = '"/assets/almdina_erp/js/almdina_ui.js?v=2"'
+        foundation_asset = '"/assets/almdina_erp/js/frontend_foundation.js?v=2"'
         notes_asset = '"/assets/almdina_erp/css/notes.css?v=1"'
 
         self.assertLess(self.assets.index(tokens_asset), self.assets.index(components_asset))

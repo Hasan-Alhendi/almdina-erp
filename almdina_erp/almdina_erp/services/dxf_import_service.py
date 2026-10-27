@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from copy import deepcopy
+from dataclasses import replace
 from collections import Counter
 from typing import Any, Sequence
 
@@ -2410,7 +2412,7 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
     by_sheet: dict[int, list[dict[str, Any]]] = {}
     for piece in pieces:
         by_sheet.setdefault(int(piece["_sheet_no"]), []).append(piece)
-    for sheet_pieces in by_sheet.values():
+    for sheet_no, sheet_pieces in by_sheet.items():
         placed = tuple(
             PlacedPartGeometry(
                 key=int(piece["id"]),
@@ -2432,6 +2434,8 @@ def _validate_piece_spacing(pieces: list[dict[str, Any]], *, kerf_mm: float) -> 
                         exc,
                         kerf_mm=kerf_mm,
                         pair_identity_proven=False,
+                        sheet_no=sheet_no,
+                        geometry_unit_mm=1.0,
                     )
                 ]
             ) from exc
@@ -3059,6 +3063,90 @@ def validate_imported_plan(
     return {"is_valid": not issues, "errors": present_issues_as_strings(issues)}
 
 
+def _diagnose_layout_failure(
+    failure, pieces, order, overlays, sheets, trim_mm, *, validate_regular_machining
+):
+    from almdina_erp.almdina_erp.domain.cutting.layout_diagnostics import (
+        MAX_IDENTITY_DIAGNOSTIC_PIECES, MAX_IDENTITY_DIAGNOSTIC_VERTICES, layout_preview,
+    )
+
+    identities = {}
+    vertex_count = sum(
+        len(piece.get("_outline_mm") or ())
+        + sum(len(hole) for hole in piece.get("_holes_mm") or ())
+        for piece in pieces
+    )
+    if (len(pieces) <= MAX_IDENTITY_DIAGNOSTIC_PIECES
+            and vertex_count <= MAX_IDENTITY_DIAGNOSTIC_VERTICES):
+        try:
+            detached_pieces, detached_sheets = deepcopy((pieces, sheets))
+            labeled = _identify_imported_pieces(
+                detached_pieces, order, overlays, detached_sheets, trim_mm,
+                validate_regular_machining=validate_regular_machining,
+            )
+            identities = {piece["id"]: piece for piece in labeled}
+        except DxfImportError:
+            # A separate identity/add-on failure cannot replace the original
+            # layout rejection or justify using discovery indexes as door IDs.
+            pass
+        except Exception:
+            # Optional diagnostics must never mask the manufacturing failure.
+            # No exception text or request data crosses the public boundary.
+            identities = {}
+    diagnosed = []
+    for item in failure.issues:
+        keys = item.target.pair_contour_nos
+        if not keys:
+            diagnosed.append(item)
+            continue
+        target = item.target
+        first, second = (identities.get(key) for key in keys)
+        if first is not None and second is not None:
+            target = pair_target(
+                first["source_piece_no"], second["source_piece_no"],
+                sheet_no=target.sheet_no,
+                copy_nos=(first.get("copy_no"), second.get("copy_no")),
+            )
+        preview = layout_preview(pieces, keys)
+        params = {**item.params}
+        if preview:
+            params["layout_preview"] = preview
+        diagnosed.append(replace(item, target=target, params=params))
+    return DxfImportError(issues=diagnosed)
+
+
+def _identify_imported_pieces(
+    pieces, order, overlays, sheets, trim_mm, *, validate_regular_machining
+):
+    """Canonical identity/add-on pipeline, shared by import and read-only diagnosis."""
+    labeled = _match_pieces_to_order(pieces, order)
+    cutter_diameter_mm = flt(order.kerf_mm)
+    _reconcile_addon_groups(
+        labeled,
+        order,
+        overlays,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+    )
+    _reconcile_addon_groups(
+        labeled,
+        order,
+        overlays,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        piece_type="Regular",
+        sheets=sheets,
+        trim_mm=trim_mm,
+    )
+    _attach_extra_overlays(
+        labeled,
+        overlays=overlays,
+        sheets=sheets,
+        trim_mm=trim_mm,
+        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        validate_regular_machining=validate_regular_machining,
+    )
+    return labeled
+
+
 def parse_production_dxf(
     file_url: str, order: Any, *, validate_regular_machining: bool = True
 ) -> dict[str, Any]:
@@ -3195,32 +3283,26 @@ def parse_production_dxf(
             ]
         )
 
-    _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
-    labeled = _match_pieces_to_order(pieces, order)
-    cutter_diameter_mm = flt(order.kerf_mm)
-    _reconcile_addon_groups(
-        labeled,
-        order,
-        overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
-    )
-    _reconcile_addon_groups(
-        labeled,
-        order,
-        overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
-        piece_type="Regular",
-        sheets=sheets,
-        trim_mm=trim_mm,
-    )
-    _attach_extra_overlays(
-        labeled,
-        overlays=overlays,
-        sheets=sheets,
-        trim_mm=trim_mm,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+    try:
+        _validate_piece_spacing(pieces, kerf_mm=max(0.0, flt(order.kerf_mm)))
+    except DxfImportError as failure:
+        # The layout remains rejected. Identity enrichment uses the exact same
+        # pipeline on detached memory and can never permit persistence.
+        try:
+            diagnosed = _diagnose_layout_failure(
+                failure, pieces, order, overlays, sheets, trim_mm,
+                validate_regular_machining=validate_regular_machining,
+            )
+        except Exception:
+            # The optional presenter/enrichment path must not replace a known
+            # manufacturing rejection, even on malformed diagnostic metadata.
+            raise failure
+        raise diagnosed from failure
+    labeled = _identify_imported_pieces(
+        pieces, order, overlays, sheets, trim_mm,
         validate_regular_machining=validate_regular_machining,
     )
+    cutter_diameter_mm = flt(order.kerf_mm)
     _attach_text_labels(
         sheets,
         annotations=annotations,

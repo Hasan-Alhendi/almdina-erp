@@ -28,6 +28,7 @@ const context = {
     Promise,
     __(value) { return value; },
     frappe: {
+        utils: { escape_html: value => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;") },
         confirm(message, yes, no) {
             const surface = child();
             confirms.push({ message, yes, no, surface });
@@ -75,7 +76,8 @@ assert.equal(workerDialogs.length, 1, "handoff worker selection must use the sha
 assert.equal(workerDialogs[0].config.title, "Send to the next department");
 assert.equal(workerDialogs[0].config.workers[0].full_name, "Worker");
 owner.noWorkers({ operational_role: "CNC" }, 7);
-owner.error("failed", 7);
+owner.error("<img src=x>", 7);
+assert.equal(messages[1].payload, "&lt;img src=x&gt;", "server text is escaped at the native HTML sink");
 owner.success("saved", 7);
 assert.equal(alerts.length, 1);
 assert.equal(workerDialogs.length, 1, "handoff worker selection must use the shared dropdown dialog");

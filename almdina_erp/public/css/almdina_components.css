@@ -3,6 +3,29 @@
  * All selectors stay scoped under .almdina-ui (FE-ARCH-009).
  */
 
+.almdina-ui .alm-error-card {
+    padding: var(--alm-space-3, 12px);
+    margin-block-end: var(--alm-space-3, 12px);
+    border: 1px solid var(--border-color);
+    border-radius: var(--alm-radius-card, 8px);
+}
+
+.almdina-ui .alm-error-card p {
+    margin-block-end: var(--alm-space-2, 8px);
+}
+
+.almdina-ui .alm-error-preview summary {
+    cursor: pointer;
+    padding-block: var(--alm-space-2, 8px);
+}
+
+.almdina-ui .alm-error-preview svg {
+    display: block;
+    background: var(--card-bg, var(--bg-color));
+    border: 1px solid var(--border-color);
+    border-radius: var(--alm-radius-card, 8px);
+}
+
 .almdina-ui :where(.btn, button).alm-btn-primary,
 .almdina-ui .btn.alm-btn-primary {
     min-height: var(--alm-height-button);

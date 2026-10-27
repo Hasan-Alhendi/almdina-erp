@@ -490,6 +490,8 @@ def prepare_custom_dxf_plan() -> dict[str, object]:
     with NamedTemporaryFile(suffix=".dxf") as staged:
         drawing.saveas(staged.name)
         raw = Path(staged.name).read_bytes()
+    # Model the actual uploader: the staging File belongs to the actor.
+    frappe.set_user(fixture["user"])
     file_doc = save_file(f"p0-{order_name}.dxf", raw, None, None, is_private=1)
     frappe.db.commit()
     frappe.set_user(fixture["user"])
@@ -589,6 +591,7 @@ def prepare_saved_offcut_plan() -> dict[str, object]:
         raw = Path(staged.name).read_bytes()
     # The real upload command requires a private *unattached* staging File;
     # successful import reattaches it to the Cutting Plan for cleanup.
+    frappe.set_user(fixture["user"])
     file_doc = save_file(f"p0-offcut-{order.name}.dxf", raw,
                          None, None, is_private=1)
     fixture["offcut_staged_file"] = file_doc.name

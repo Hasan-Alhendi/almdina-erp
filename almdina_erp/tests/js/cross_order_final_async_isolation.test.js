@@ -46,6 +46,7 @@ function makeHarness(file) {
         },
         AlmdinaUi: {
             fileUploader(options) { win.uploader = options; return options; },
+            errorDialog() { return null; },
         },
         AlmdinaLocale: { translate: x => x },
     };
@@ -63,6 +64,14 @@ function makeHarness(file) {
         msgprint() {}, throw(message) { throw Error(message); },
     };
     const downloads = [];
+    win.AlmdinaFrontend = {
+        // Transport is certified in error_diagnostics.test.js. This harness
+        // isolates the document-generation ownership of delayed completions.
+        ownedRpc(method, args, options) {
+            return frappe.call({ method, args, freeze: options.freeze })
+                .then(response => response.message);
+        },
+    };
     const document = {
         body: { appendChild() {}, removeChild() {} },
         createElement() { return { click() { downloads.push(this.download); } }; },
