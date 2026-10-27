@@ -21,8 +21,11 @@ from almdina_erp.almdina_erp.domain.cutting.placement_orientation import (
 from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
 from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
 from almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting import (
+    _inward_score,
     _orientations,
+    _pair_inward_score,
     _placed_corner,
+    _recorded_facing,
     apply_shape_aware_nesting,
     non_quarter_rotation_is_admitted,
     void_edge_angle_deg,
@@ -192,12 +195,12 @@ def test_opposite_hand_l_pieces_interlock_without_mirroring():
             ),
         ]
     )
-    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=61)
+    plan = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=90)
     improved = apply_shape_aware_nesting(
         plan,
         pieces,
-        61,
-        61,
+        90,
+        90,
         0.3,
         mirroring_allowed=False,
         machine_type="CNC Router",
@@ -212,7 +215,11 @@ def test_opposite_hand_l_pieces_interlock_without_mirroring():
         for sheet in improved["sheets"]
         for piece in sheet["pieces"]
     )
-    assert not validate_plan(improved, pieces, 61, 61, kerf_cm=0.3)
+    assert _symmetric_slot_pair(
+        *[piece for sheet in improved["sheets"] for piece in sheet["pieces"]],
+        board=(90, 90),
+    )
+    assert not validate_plan(improved, pieces, 90, 90, kerf_cm=0.3)
 
 
 def test_same_hand_l_interlock_uses_mirroring_only_when_allowed():
@@ -229,12 +236,12 @@ def test_same_hand_l_interlock_uses_mirroring_only_when_allowed():
             )
         ]
     )
-    tight = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=61)
+    tight = _sheet_plan(pieces, [[(0, 0)], [(0, 0)]], board=90)
     blocked = apply_shape_aware_nesting(
         tight,
         pieces,
-        61,
-        61,
+        90,
+        90,
         0.3,
         mirroring_allowed=False,
         machine_type="CNC Router",
@@ -244,8 +251,8 @@ def test_same_hand_l_interlock_uses_mirroring_only_when_allowed():
     allowed = apply_shape_aware_nesting(
         tight,
         pieces,
-        61,
-        61,
+        90,
+        90,
         0.3,
         mirroring_allowed=True,
         machine_type="CNC Router",
@@ -259,13 +266,15 @@ def test_same_hand_l_interlock_uses_mirroring_only_when_allowed():
         for piece in sheet["pieces"]
     )
     assert len(allowed["sheets"]) == 1
+    allowed_pieces = [piece for sheet in allowed["sheets"] for piece in sheet["pieces"]]
+    assert _symmetric_slot_pair(allowed_pieces[0], allowed_pieces[1], board=(90, 90))
     assert any(
         piece.get("mirrored") or piece.get("corner_mirrored")
-        for sheet in allowed["sheets"]
-        for piece in sheet["pieces"]
+        for piece in allowed_pieces
     )
+    assert not any(int(piece.get("corner_rotation_quarter_turns") or 0) for piece in allowed_pieces)
     assert not placement_permission_errors(allowed, pieces, mirroring_allowed=True)
-    assert not validate_plan(allowed, pieces, 61, 61, kerf_cm=0.3)
+    assert not validate_plan(allowed, pieces, 90, 90, kerf_cm=0.3)
 
 
 def test_three_l_pieces_keep_every_copy_without_mirroring():
@@ -366,8 +375,8 @@ def test_disabling_mirroring_recalculates_without_a_mirror_flag():
     )
     first = optimize_plan(
         pieces,
-        61,
-        61,
+        90,
+        90,
         0.3,
         selected_mode="MaxRects Best Short Side",
         machine_type="CNC Router",
@@ -376,8 +385,8 @@ def test_disabling_mirroring_recalculates_without_a_mirror_flag():
     )
     second = optimize_plan(
         pieces,
-        61,
-        61,
+        90,
+        90,
         0.3,
         selected_mode="MaxRects Best Short Side",
         machine_type="CNC Router",
@@ -398,7 +407,7 @@ def test_disabling_mirroring_recalculates_without_a_mirror_flag():
     assert placement_permission_errors(first, pieces, mirroring_allowed=False)
 
 
-def test_two_clipped_corners_do_not_treat_adjacency_as_a_nest():
+def test_two_clipped_corners_use_the_symmetric_slot_pair():
     pieces = expand_piece_groups(
         [
             _corner_row(
@@ -423,11 +432,12 @@ def test_two_clipped_corners_do_not_treat_adjacency_as_a_nest():
         time_limit_sec=2,
         **_REMNANT,
     )
-    ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
-    assert improved is plan
-    assert len(improved["sheets"]) == 2
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    ids = [piece["id"] for piece in placed]
+    assert len(improved["sheets"]) == 1
     assert sorted(ids) == sorted(piece["id"] for piece in pieces)
-    assert not any(piece.get("placement_rotation_deg") for sheet in improved["sheets"] for piece in sheet["pieces"])
+    assert _symmetric_slot_pair(placed[0], placed[1], board=(80.3, 40.3))
+    assert not any(piece.get("placement_rotation_deg") for piece in placed)
     assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
 
 
@@ -1427,9 +1437,8 @@ def test_two_identical_l_pieces_use_a_half_turn_without_a_mirror():
     placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
 
     assert len(improved["sheets"]) == 1
-    assert 2 in {int(piece.get("corner_rotation_quarter_turns") or 0) for piece in placed}
+    assert _symmetric_slot_pair(placed[0], placed[1])
     assert not any(piece.get("mirrored") for piece in placed)
-    assert _boxes_interlock(placed[0], placed[1])
     assert not validate_plan(improved, pieces, 80.3, 40.3, kerf_cm=0.3)
 
 
@@ -1486,11 +1495,15 @@ def test_three_identical_l_pieces_become_a_pair_and_a_single():
         (left, right)
         for index, left in enumerate(placed)
         for right in placed[index + 1 :]
-        if _boxes_interlock(left, right)
+        if _symmetric_slot_pair(left, right, board=(80, 80))
     ]
-
     assert sorted(piece["id"] for piece in placed) == [1, 2, 3]
     assert len(pairs) == 1
+    paired_ids = {pairs[0][0]["id"], pairs[0][1]["id"]}
+    single = [piece for piece in placed if piece["id"] not in paired_ids]
+    assert len(single) == 1
+    assert len({_recorded_facing(piece) for piece in placed}) >= 2
+    assert _inward_score(single[0], 80, 80) > 0.05
     assert not any(piece.get("mirrored") for piece in placed)
     assert not validate_plan(improved, pieces, 80, 80, kerf_cm=0.3)
 
@@ -1672,6 +1685,138 @@ def test_l_quad_dxf_roundtrip_keeps_outlines_and_turns(tmp_path):
     assert len(rings) == 4
     for outline, ring in zip(outlines, rings, strict=True):
         _same_points([(point[0] * 10, point[1] * 10) for point in outline], ring, tolerance=0.05)
+
+
+def test_optimize_plan_pairs_two_rotatable_l_pieces_without_a_mirror():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=50, length_cm=50, qty=2, cut=20, allow_rotation=1),
+            {"piece_type": "Regular", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = optimize_plan(
+        pieces,
+        122,
+        244,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+    corners = _corners(plan)
+
+    assert sorted(piece["id"] for sheet in plan["sheets"] for piece in sheet["pieces"]) == [1, 2, 3]
+    assert len({piece["id"] for sheet in plan["sheets"] for piece in sheet["pieces"]}) == 3
+    assert _symmetric_slot_pair(corners[0], corners[1], board=(122, 244))
+    assert _recorded_facing(corners[0]) != _recorded_facing(corners[1])
+    assert not any(piece.get("mirrored") or piece.get("corner_mirrored") for piece in corners)
+    assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
+    assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)
+
+
+def test_optimize_plan_pairs_two_l_pieces_by_reflection_without_rotation():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=50, length_cm=50, qty=2, cut=20, allow_rotation=0),
+            {"piece_type": "Regular", "width_cm": 12, "length_cm": 12, "qty": 1, "allow_rotation": 0},
+        ]
+    )
+    plan = optimize_plan(
+        pieces,
+        122,
+        244,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=True,
+    )
+    corners = _corners(plan)
+
+    assert _symmetric_slot_pair(corners[0], corners[1], board=(122, 244))
+    assert any(piece.get("mirrored") or piece.get("corner_mirrored") for piece in corners)
+    assert not any(int(piece.get("corner_rotation_quarter_turns") or 0) for piece in corners)
+    assert not placement_permission_errors(plan, pieces, mirroring_allowed=True)
+    assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)
+
+
+def test_optimize_plan_splits_three_l_pieces_into_a_symmetric_pair_and_a_single():
+    pieces = expand_piece_groups(
+        [_plain_corner(width_cm=45, length_cm=45, qty=3, cut=15, allow_rotation=1)]
+    )
+    plan = optimize_plan(
+        pieces,
+        122,
+        244,
+        0.3,
+        selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        mirroring_allowed=False,
+    )
+    corners = _corners(plan)
+    pairs = [
+        (left, right)
+        for index, left in enumerate(corners)
+        for right in corners[index + 1 :]
+        if _symmetric_slot_pair(left, right, board=(122, 244))
+    ]
+
+    assert sorted(piece["id"] for piece in corners) == [1, 2, 3]
+    assert len(corners) == len({piece["id"] for piece in corners})
+    assert len(pairs) == 1
+    paired = {pairs[0][0]["id"], pairs[0][1]["id"]}
+    single = next(piece for piece in corners if piece["id"] not in paired)
+    assert _inward_score(single, 122, 244) > 0.05
+    assert len({_recorded_facing(piece) for piece in corners}) >= 2
+    assert not any(piece.get("mirrored") for piece in corners)
+    assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
+    assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)
+
+
+def _plain_corner(*, width_cm, length_cm, qty, cut, allow_rotation):
+    return {
+        "piece_type": "L-Shaped Corner",
+        "width_cm": width_cm,
+        "length_cm": length_cm,
+        "qty": qty,
+        "clipped_corner_position": "Top Right",
+        "clipped_corner_width_cm": cut,
+        "clipped_corner_length_cm": cut,
+        "allow_rotation": allow_rotation,
+    }
+
+
+def _corners(plan):
+    return [
+        piece
+        for sheet in plan["sheets"]
+        for piece in sheet["pieces"]
+        if piece.get("piece_type") == "L-Shaped Corner"
+    ]
+
+
+def _symmetric_slot_pair(first, second, kerf=0.3, board=None):
+    facings = frozenset((_recorded_facing(first), _recorded_facing(second)))
+    edges = {
+        frozenset({"Top Right", "Top Left"}),
+        frozenset({"Bottom Right", "Bottom Left"}),
+        frozenset({"Top Right", "Bottom Right"}),
+        frozenset({"Top Left", "Bottom Left"}),
+    }
+    if facings not in edges:
+        return False
+    gap_x = max(first["x"], second["x"]) - min(first["x"] + first["w"], second["x"] + second["w"])
+    gap_y = max(first["y"], second["y"]) - min(first["y"] + first["h"], second["y"] + second["h"])
+    horizontal = abs(gap_x - kerf) <= 0.05 and -gap_y > min(first["h"], second["h"]) * 0.5
+    vertical = abs(gap_y - kerf) <= 0.05 and -gap_x > min(first["w"], second["w"]) * 0.5
+    if not horizontal and not vertical:
+        return False
+    if board is None:
+        return True
+    score = _pair_inward_score((first, second), board[0], board[1])
+    return score is not None and score > 0
 
 
 def _same_sheet_interlock(plan):

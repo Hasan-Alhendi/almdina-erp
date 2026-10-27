@@ -7,9 +7,12 @@ rotation, and mirroring. Fewer boards, a larger remnant, and a better
 nests that already place the same pieces in voids.
 
 Identical corners are grouped by type and cut size, then split into fours,
-one pair, and a single. A different piece may sit in the void as a guest. It
-is not paired with the host. One non-quarter angle is stored, and only for a
-rectangle sitting in the void of four clipped corners.
+one pair, and a single. A pair is two adjacent cells of the current quad:
+opposite notch facings, one kerf between the boxes, and the shared opening
+toward the board interior. Same-facing adjacency is not a pair. A different
+piece may sit in the void as a guest. It is not paired with the host. One
+non-quarter angle is stored, and only for a rectangle sitting in the void of
+four clipped corners.
 """
 
 from __future__ import annotations
@@ -489,59 +492,93 @@ def _complement_sheet(
     *,
     mirroring_allowed: bool,
 ) -> list[dict[str, Any]] | None:
-    """Place two identical corners only when their outlines interlock.
+    """Place two identical corners on one edge of the current quad.
 
-    A reflected copy is tried when the order allows mirroring. Otherwise the
-    second piece is turned 180° when that piece may rotate. Adjacent boxes
-    that do not share the notch are refused. Neither transform is invented
-    when the piece forbids it.
+    The boxes stay apart by the kerf. Their notches face one another and the
+    shared opening faces the board interior. A mirror is used when the order
+    allows it. Otherwise only an allowed rotation may reach the same facing.
+    Same-facing adjacency and a 180° turn that does not land on that edge are
+    refused. A forbidden transform is never recorded.
     """
 
     if len(pieces) != 2:
         return None
     first, second = pieces
-    if not mirroring_allowed and not _rotation_allowed(first) and not _rotation_allowed(second):
-        return None
     options = (
         _orientations(first, mirroring_allowed),
         _orientations(second, mirroring_allowed),
     )
-    ranked: list[tuple[tuple[Any, ...], tuple[Any, ...]]] = []
-    for left in options[0]:
-        for right in options[1]:
-            if left[0] != right[0]:
-                if not mirroring_allowed:
-                    continue
-                rank = (0, abs((right[1] - left[1]) % 4), left[1], right[1])
-            else:
-                if left[0]:
-                    continue
-                half = (right[1] - left[1]) % 4 == 2
-                if not half and not (_rotation_allowed(first) or _rotation_allowed(second)):
-                    continue
-                rank = (0 if half else 1, left[1], right[1], 0)
-            ranked.append((rank, (left, right)))
-    ranked.sort(key=lambda item: item[0])
-    seen: set[tuple[bool, int, bool, int]] = set()
-    for _rank, (left, right) in ranked:
-        key = (left[0], left[1], right[0], right[1])
-        if key in seen:
-            continue
-        seen.add(key)
-        if len(seen) > 16:
-            break
-        placed = _interlock_pair(
-            first,
-            second,
-            left,
-            right,
-            kerf_cm,
-            board_w_cm,
-            board_h_cm,
-        )
-        if placed is not None:
-            return placed
-    return None
+    if not options[0] or not options[1]:
+        return None
+    best: list[dict[str, Any]] | None = None
+    best_key: tuple[int, float] | None = None
+    for edge in _quad_edges():
+        for placed in _edge_assignments(pieces, options, edge, kerf_cm, board_w_cm, board_h_cm):
+            inward = _pair_inward_score(placed, board_w_cm, board_h_cm)
+            if inward is None or inward <= 0:
+                continue
+            mirrors = sum(1 for piece in placed if piece.get("mirrored"))
+            preference = 1 if mirroring_allowed and mirrors == 1 else 0
+            key = (preference, inward)
+            if best_key is None or key > best_key:
+                best = placed
+                best_key = key
+    return best
+
+
+def _quad_edges() -> list[tuple[tuple[str, int, int], tuple[str, int, int], int, int]]:
+    """Adjacent ``_SLOTS`` cells and the direction their notches open."""
+
+    edges = []
+    slots = list(_SLOTS)
+    for index, left in enumerate(slots):
+        for right in slots[index + 1 :]:
+            same_row = left[2] == right[2] and abs(left[1] - right[1]) == 1
+            same_col = left[1] == right[1] and abs(left[2] - right[2]) == 1
+            if same_row:
+                edges.append((left, right, 0, 1 if left[2] == 0 else -1))
+            elif same_col:
+                edges.append((left, right, 1 if left[1] == 0 else -1, 0))
+    return edges
+
+
+def _edge_assignments(
+    pieces: Sequence[Mapping[str, Any]],
+    options: tuple[list[tuple[Any, ...]], list[tuple[Any, ...]]],
+    edge: tuple[tuple[str, int, int], tuple[str, int, int], int, int],
+    kerf_cm: float,
+    board_w_cm: float,
+    board_h_cm: float,
+) -> list[list[dict[str, Any]]]:
+    left_slot, right_slot, open_x, open_y = edge
+    found = []
+    for first_index in (0, 1):
+        second_index = 1 - first_index
+        for left in _facings(options[first_index], left_slot[0]):
+            for right in _facings(options[second_index], right_slot[0]):
+                placed = _interlock_pair(
+                    pieces[first_index],
+                    pieces[second_index],
+                    left,
+                    right,
+                    left_slot,
+                    right_slot,
+                    open_x,
+                    open_y,
+                    kerf_cm,
+                    board_w_cm,
+                    board_h_cm,
+                )
+                if placed is not None:
+                    found.append(placed)
+    return found
+
+
+def _facings(
+    options: Sequence[tuple[Any, ...]],
+    facing: str,
+) -> list[tuple[Any, ...]]:
+    return [item for item in options if item[2] == facing]
 
 
 def _interlock_pair(
@@ -549,87 +586,186 @@ def _interlock_pair(
     second: Mapping[str, Any],
     left: tuple[Any, ...],
     right: tuple[Any, ...],
+    left_slot: tuple[str, int, int],
+    right_slot: tuple[str, int, int],
+    open_x: int,
+    open_y: int,
     kerf_cm: float,
     board_w_cm: float,
     board_h_cm: float,
 ) -> list[dict[str, Any]] | None:
-    anchor = _placed_corner(first, x_cm=0.0, y_cm=0.0, mirrored=left[0], turns=left[1])
-    for x_cm, y_cm in _pair_offsets(anchor, second, right, kerf_cm):
-        other = _placed_corner(
-            second,
-            x_cm=x_cm,
-            y_cm=y_cm,
-            mirrored=right[0],
-            turns=right[1],
-        )
-        moved = _normalize_pieces([anchor, other])
-        outlines = [material_outline_cm(piece) for piece in moved]
-        if any(outline is None for outline in outlines):
-            continue
-        proven = [outline for outline in outlines if outline is not None]
-        if not all(_inside_board(outline, board_w_cm, board_h_cm) for outline in proven):
-            continue
-        if not _clears(proven[1], [proven[0]], kerf_cm):
-            continue
-        if not _deep_complement(moved[0], moved[1]):
-            continue
-        return moved
-    return None
+    """Seat one quad edge. Bounding-box overlap is not acceptance."""
+
+    if left[2] == right[2]:
+        return None
+    cell = _pair_cell(first, left)
+    other_cell = _pair_cell(second, right)
+    if cell is None or other_cell is None or cell != other_cell:
+        return None
+    width, height = cell
+    anchor = _translate_pieces(
+        [_placed_corner(first, x_cm=0.0, y_cm=0.0, mirrored=left[0], turns=left[1])],
+        *_pair_offsets(left_slot, right_slot, width, height, kerf_cm)[0],
+    )[0]
+    other = _translate_pieces(
+        [_placed_corner(second, x_cm=0.0, y_cm=0.0, mirrored=right[0], turns=right[1])],
+        *_pair_offsets(left_slot, right_slot, width, height, kerf_cm)[1],
+    )[0]
+    span_w, span_h = _block_size((anchor, other))
+    origin = _opening_origin(span_w, span_h, open_x, open_y, board_w_cm, board_h_cm)
+    if origin is None:
+        return None
+    moved = _translate_pieces((anchor, other), origin[0], origin[1])
+    if not _slot_pair_geometry(moved[0], moved[1], kerf_cm):
+        return None
+    outlines = [material_outline_cm(piece) for piece in moved]
+    if any(outline is None for outline in outlines):
+        return None
+    proven = [outline for outline in outlines if outline is not None]
+    if not all(_inside_board(outline, board_w_cm, board_h_cm) for outline in proven):
+        return None
+    if not _clears(proven[1], [proven[0]], kerf_cm):
+        return None
+    return moved
+
+
+def _pair_cell(
+    piece: Mapping[str, Any],
+    orientation: tuple[Any, ...],
+) -> tuple[float, float] | None:
+    """Quad cell size. An odd turn that changes the box is not a cell."""
+
+    _mirrored, turns, _facing, _cut_x, _cut_y = orientation
+    width = num(piece.get("width_cm"))
+    height = num(piece.get("length_cm"))
+    if int(turns) % 2 and abs(width - height) > 1e-6:
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
 
 
 def _pair_offsets(
-    anchor: Mapping[str, Any],
-    piece: Mapping[str, Any],
-    orientation: tuple[Any, ...],
+    left_slot: tuple[str, int, int],
+    right_slot: tuple[str, int, int],
+    width: float,
+    height: float,
     kerf_cm: float,
-) -> list[tuple[float, float]]:
-    mirrored, turns, _facing, cut_x, cut_y = orientation
-    spots = list(_corner_anchors(anchor and [anchor] or [], piece, turns, kerf_cm))
-    width = num(anchor.get("w"))
-    height = num(anchor.get("h"))
-    bases = (
-        (width - cut_x + kerf_cm, -(cut_y / 2 + kerf_cm)),
-        (cut_x + kerf_cm, -kerf_cm),
-        (kerf_cm, -(cut_y + kerf_cm)),
-        (cut_x + kerf_cm, -(cut_y + kerf_cm)),
-        (cut_x + kerf_cm, cut_y + kerf_cm),
-        (width - cut_x + kerf_cm, -(cut_y - kerf_cm)),
+) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Kerf-spaced coordinates of two adjacent quad cells, origin at the edge."""
+
+    column = min(left_slot[1], right_slot[1])
+    row = min(left_slot[2], right_slot[2])
+    return (
+        ((left_slot[1] - column) * (width + kerf_cm), (left_slot[2] - row) * (height + kerf_cm)),
+        ((right_slot[1] - column) * (width + kerf_cm), (right_slot[2] - row) * (height + kerf_cm)),
     )
-    extra: list[tuple[float, float]] = []
-    for base_x, base_y in bases:
-        for step_x in range(-1, 2):
-            for step_y in range(-1, 2):
-                extra.append((base_x + step_x * kerf_cm, base_y + step_y * kerf_cm))
-    seen = {(round(x_cm, 4), round(y_cm, 4)) for x_cm, y_cm in spots}
-    for x_cm, y_cm in extra:
-        key = (round(x_cm, 4), round(y_cm, 4))
-        if key in seen:
-            continue
-        seen.add(key)
-        spots.append((x_cm, y_cm))
-    return spots
 
 
-def _deep_complement(first: Mapping[str, Any], second: Mapping[str, Any]) -> bool:
-    """True when the boxes share the notch, not merely a kerf gap."""
+def _opening_origin(
+    width: float,
+    height: float,
+    open_x: int,
+    open_y: int,
+    board_w_cm: float,
+    board_h_cm: float,
+) -> tuple[float, float] | None:
+    """Put the shared opening toward the interior when the block keeps this anchor."""
 
-    overlap_x = min(
+    if width > board_w_cm + 1e-6 or height > board_h_cm + 1e-6:
+        return None
+    if open_y > 0:
+        return 0.0, 0.0
+    if open_y < 0:
+        return 0.0, board_h_cm - height
+    if open_x > 0:
+        return 0.0, 0.0
+    return board_w_cm - width, 0.0
+
+
+def _slot_pair_geometry(
+    first: Mapping[str, Any],
+    second: Mapping[str, Any],
+    kerf_cm: float,
+) -> bool:
+    """True only for a quad edge: opposite facings and a kerf gap, no box overlap."""
+
+    if _recorded_facing(first) == _recorded_facing(second):
+        return False
+    gap_x = max(num(first.get("x")), num(second.get("x"))) - min(
         num(first.get("x")) + num(first.get("w")),
         num(second.get("x")) + num(second.get("w")),
-    ) - max(num(first.get("x")), num(second.get("x")))
-    overlap_y = min(
+    )
+    gap_y = max(num(first.get("y")), num(second.get("y"))) - min(
         num(first.get("y")) + num(first.get("h")),
         num(second.get("y")) + num(second.get("h")),
-    ) - max(num(first.get("y")), num(second.get("y")))
-    notch = min(
-        num(first.get("clipped_corner_width_cm")),
-        num(first.get("clipped_corner_length_cm")),
-        num(second.get("clipped_corner_width_cm")),
-        num(second.get("clipped_corner_length_cm")),
     )
-    if notch <= 0:
-        return False
-    return min(overlap_x, overlap_y) + 1e-6 >= notch * 0.5
+    overlap_x = -gap_x
+    overlap_y = -gap_y
+    horizontal = (
+        abs(gap_x - kerf_cm) <= 0.05
+        and overlap_y + 1e-6 >= min(num(first.get("h")), num(second.get("h"))) * 0.5
+    )
+    vertical = (
+        abs(gap_y - kerf_cm) <= 0.05
+        and overlap_x + 1e-6 >= min(num(first.get("w")), num(second.get("w"))) * 0.5
+    )
+    return horizontal or vertical
+
+
+def _recorded_facing(piece: Mapping[str, Any]) -> str:
+    position = str(piece.get("clipped_corner_position") or "")
+    if position not in _TURN:
+        return ""
+    if piece.get("mirrored") or piece.get("corner_mirrored") or piece.get("placement_mirrored"):
+        position = _MIRROR[position]
+    for _step in range(int(piece.get("corner_rotation_quarter_turns") or 0) % 4):
+        position = _TURN[position]
+    return position
+
+
+def _pair_inward_score(
+    pieces: Sequence[Mapping[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+) -> float | None:
+    """Free board beyond the opening, minus the free board behind the pair.
+
+    A positive value means the shared notches point into the board. Pointing
+    off an outer edge, or toward the nearer edge, is refused.
+    """
+
+    notches = [_notch_bounds(material_outline_cm(piece)) for piece in pieces]
+    if any(notch is None for notch in notches) or len(pieces) != 2:
+        return None
+    proven = [notch for notch in notches if notch is not None]
+    void_x = sum(notch["x"] + notch["w"] / 2 for notch in proven) / len(proven)
+    void_y = sum(notch["y"] + notch["h"] / 2 for notch in proven) / len(proven)
+    if (
+        void_x < -1e-6
+        or void_y < -1e-6
+        or void_x > board_w_cm + 1e-6
+        or void_y > board_h_cm + 1e-6
+    ):
+        return None
+    pair_x = sum(num(piece.get("x")) + num(piece.get("w")) / 2 for piece in pieces) / len(pieces)
+    pair_y = sum(num(piece.get("y")) + num(piece.get("h")) / 2 for piece in pieces) / len(pieces)
+    min_x = min(num(piece.get("x")) for piece in pieces)
+    min_y = min(num(piece.get("y")) for piece in pieces)
+    max_x = max(num(piece.get("x")) + num(piece.get("w")) for piece in pieces)
+    max_y = max(num(piece.get("y")) + num(piece.get("h")) for piece in pieces)
+    if abs(void_y - pair_y) >= abs(void_x - pair_x):
+        if void_y >= pair_y:
+            ahead, behind = board_h_cm - max_y, min_y
+        else:
+            ahead, behind = min_y, board_h_cm - max_y
+    elif void_x >= pair_x:
+        ahead, behind = board_w_cm - max_x, min_x
+    else:
+        ahead, behind = min_x, board_w_cm - max_x
+    if ahead < -1e-6 or ahead + 1e-6 < behind:
+        return None
+    return ahead - behind
 
 
 def _inward_single(
@@ -697,7 +833,7 @@ def _make_block(
     kerf_cm: float,
 ) -> dict[str, Any]:
     pieces = [dict(piece) for piece in placed]
-    if kind != "single":
+    if kind == "quad":
         pieces = _normalize_pieces(pieces)
     return {
         "kind": kind,
@@ -725,6 +861,24 @@ def _voids_for_block(
             "y": origin_y + height - cut_y + kerf_cm,
             "w": cut_x * 2 - kerf_cm,
             "h": cut_y * 2 - kerf_cm,
+        }
+        if usable["w"] > 1e-6 and usable["h"] > 1e-6:
+            return [usable]
+        return []
+    if kind == "pair" and len(pieces) == 2:
+        notches = [_notch_bounds(material_outline_cm(piece)) for piece in pieces]
+        if any(notch is None for notch in notches):
+            return []
+        proven = [notch for notch in notches if notch is not None]
+        x0 = min(notch["x"] for notch in proven)
+        y0 = min(notch["y"] for notch in proven)
+        x1 = max(notch["x"] + notch["w"] for notch in proven)
+        y1 = max(notch["y"] + notch["h"] for notch in proven)
+        usable = {
+            "x": x0 + kerf_cm,
+            "y": y0 + kerf_cm,
+            "w": (x1 - x0) - (2 * kerf_cm),
+            "h": (y1 - y0) - (2 * kerf_cm),
         }
         if usable["w"] > 1e-6 and usable["h"] > 1e-6:
             return [usable]
@@ -1177,7 +1331,7 @@ def _compose_plan(
     )
     for block in ordered:
         body = [dict(piece) for piece in block["pieces"]]
-        if block["kind"] != "single":
+        if block["kind"] == "quad":
             body = _normalize_pieces(body)
         optional = block["kind"] == "single"
         if not _block_fits_board(body, board_w_cm, board_h_cm) or not _pieces_inside(
@@ -1188,6 +1342,9 @@ def _compose_plan(
             return None
         removed = {int(piece["id"]) for piece in body}
         _remove_ids(sheets, removed)
+        if block["kind"] == "pair":
+            _seat_authored_pair(sheets, body, kerf_cm, board_w_cm, board_h_cm)
+            continue
         translation = None
         target = None
         for sheet in sheets:
@@ -1240,7 +1397,11 @@ def _fallback_plan(
     removed: set[int] = set()
     fresh: list[dict[str, Any]] = []
     for block in required:
-        body = _normalize_pieces(block["pieces"])
+        body = (
+            [dict(piece) for piece in block["pieces"]]
+            if block["kind"] == "pair"
+            else _normalize_pieces(block["pieces"])
+        )
         if not _pieces_inside(body, board_w_cm, board_h_cm):
             continue
         removed.update(int(piece["id"]) for piece in body)
@@ -1263,6 +1424,29 @@ def _fallback_plan(
     if _placed_ids(candidate) != {int(piece["id"]) for piece in pieces}:
         return None
     return candidate
+
+
+def _seat_authored_pair(
+    sheets: list[dict[str, Any]],
+    body: Sequence[Mapping[str, Any]],
+    kerf_cm: float,
+    board_w_cm: float,
+    board_h_cm: float,
+) -> None:
+    """Keep the pair on the anchor that points its opening inward."""
+
+    for sheet in sheets:
+        if _pieces_clear(body, sheet.get("pieces") or [], kerf_cm):
+            sheet["pieces"].extend(dict(piece) for piece in body)
+            return
+    sheets.append(
+        {
+            "sheet_no": len(sheets) + 1,
+            "w": board_w_cm,
+            "h": board_h_cm,
+            "pieces": [dict(piece) for piece in body],
+        }
+    )
 
 
 def _copy_sheets(plan: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -1448,51 +1632,6 @@ def _glass_hosted_ids(plan: Mapping[str, Any]) -> set[int]:
             except (TypeError, ValueError):
                 continue
     return hosted
-
-
-def _corner_anchors(
-    placed: Sequence[Mapping[str, Any]],
-    piece: Mapping[str, Any],
-    turns: int,
-    kerf_cm: float,
-) -> list[tuple[float, float]]:
-    source_w = num(piece.get("width_cm"))
-    source_h = num(piece.get("length_cm"))
-    odd = bool(int(turns) % 2) and abs(source_w - source_h) > 1e-6
-    width = source_h if odd else source_w
-    height = source_w if odd else source_h
-    if not placed:
-        return [(0.0, 0.0)]
-    seen: set[tuple[float, float]] = set()
-    spots: list[tuple[float, float]] = []
-    for previous in placed:
-        px = num(previous.get("x"))
-        py = num(previous.get("y"))
-        pw = num(previous.get("w"))
-        ph = num(previous.get("h"))
-        cut_w = num(previous.get("clipped_corner_width_cm"))
-        cut_h = num(previous.get("clipped_corner_length_cm"))
-        if int(previous.get("corner_rotation_quarter_turns") or 0) % 2:
-            cut_w, cut_h = cut_h, cut_w
-        for x_cm, y_cm in (
-            (px + pw + kerf_cm, py),
-            (px, py + ph + kerf_cm),
-            (px - width - kerf_cm, py),
-            (px, py - height - kerf_cm),
-            (px + pw + kerf_cm, py + ph - height),
-            (px + pw - width, py + ph + kerf_cm),
-            (px + max(kerf_cm, pw - width), py + max(kerf_cm, ph - height)),
-            (px + cut_w + kerf_cm, py),
-            (px, py + cut_h + kerf_cm),
-            (px + cut_w + kerf_cm, py + cut_h + kerf_cm),
-            (px + pw - cut_w - width, py + cut_h + kerf_cm),
-        ):
-            key = (round(x_cm, 4), round(y_cm, 4))
-            if key in seen or x_cm < -1e-6 or y_cm < -1e-6:
-                continue
-            seen.add(key)
-            spots.append((x_cm, y_cm))
-    return spots
 
 
 def _orientations(
