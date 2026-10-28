@@ -26,7 +26,7 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     calculate_extra_addon_pricing,
 )
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
-    break_adjacent_sides,
+    corner_outer_side_dimension_overrides,
     is_corner_cut,
 )
 
@@ -35,33 +35,16 @@ from .edge_profile_repository import FrappeEdgeProfileRepository
 
 
 def _corner_side_dimension_overrides(row: Any) -> dict[str, float]:
-    """Use the actual remaining length for selected corner-adjacent outer sides.
+    """Use the actual remaining length for selected corner-adjacent outer sides."""
 
-    For both corner geometries, the two outer sides touching the removed corner
-    use their physical remnants whenever selected. This is independent of the
-    corner-band mode; full-path normalization may simply clear those side flags.
-    """
-
-    piece_type = str(row.piece_type or "")
-    if not is_corner_cut(piece_type):
-        return {}
-
-    adjacent_sides = break_adjacent_sides(row.clipped_corner_position)
-    width_cm = flt(row.width_cm)
-    length_cm = flt(row.length_cm)
-    corner_width_cm = flt(row.clipped_corner_width_cm)
-    corner_length_cm = flt(row.clipped_corner_length_cm)
-
-    overrides: dict[str, float] = {}
-    if "edge_width_top" in adjacent_sides:
-        overrides["edge_width_top_dimension_cm"] = max(0.0, width_cm - corner_width_cm)
-    if "edge_width_bottom" in adjacent_sides:
-        overrides["edge_width_bottom_dimension_cm"] = max(0.0, width_cm - corner_width_cm)
-    if "edge_long_right" in adjacent_sides:
-        overrides["edge_long_right_dimension_cm"] = max(0.0, length_cm - corner_length_cm)
-    if "edge_long_left" in adjacent_sides:
-        overrides["edge_long_left_dimension_cm"] = max(0.0, length_cm - corner_length_cm)
-    return overrides
+    return corner_outer_side_dimension_overrides(
+        piece_type=str(row.piece_type or ""),
+        clipped_corner_position=str(getattr(row, "clipped_corner_position", "") or ""),
+        width_cm=flt(row.width_cm),
+        length_cm=flt(row.length_cm),
+        clipped_corner_width_cm=flt(row.clipped_corner_width_cm),
+        clipped_corner_length_cm=flt(row.clipped_corner_length_cm),
+    )
 
 
 class FrappeOrderCostingAdapter:

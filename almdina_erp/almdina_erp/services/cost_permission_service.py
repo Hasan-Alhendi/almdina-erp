@@ -43,6 +43,7 @@ from almdina_erp.almdina_erp.services.order_edit_policy import assert_order_edit
 
 ORDER_COST_FIELDS = (
     "board_description",
+    "default_edge_type",
     "total_edge_meters",
     "board_rate_usd",
     "cutting_cost_per_board_usd",
@@ -63,9 +64,19 @@ PIECE_COST_FIELDS = (
     "piece_no",
     "piece_type",
     "qty",
+    "width_cm",
+    "length_cm",
     "edge_type",
     "edge_meters",
     "notes",
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+    "edge_long_right_type_override",
+    "edge_long_left_type_override",
+    "edge_width_top_type_override",
+    "edge_width_bottom_type_override",
     "edge_long_rate_usd",
     "edge_width_rate_usd",
     "edge_long_cost_usd",
@@ -85,6 +96,9 @@ PIECE_COST_FIELDS = (
     "edge_break_meters",
     "edge_break_rate_usd",
     "edge_break_cost_usd",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
     "clipped_corner_edge_price_usd",
     "clipped_corner_edge_price_status",
     "clipped_corner_edge_price_note",
@@ -315,6 +329,23 @@ def _piece_snapshot(piece: Any) -> dict[str, Any]:
     }
 
 
+def _order_edge_profile_rates(order: Any) -> dict[str, float]:
+    """Authoritative Edge Banding Type rates for per-type quotation lines.
+
+    Returns an empty map when the order document cannot host the repository
+    cache (e.g. lightweight unit-test doubles without ``flags``). Live Frappe
+    documents always provide rates via ``FrappeEdgeProfileRepository``.
+    """
+
+    if getattr(order, "flags", None) is None:
+        return {}
+    from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+        FrappeEdgeProfileRepository,
+    )
+
+    return FrappeEdgeProfileRepository(order).rate_map()
+
+
 def _document_version(order: Any) -> str:
     return str(getattr(order, "modified", None) or "")
 
@@ -450,6 +481,7 @@ def _cost_snapshot(order: Any, *, plan: Any | None = None) -> dict[str, Any]:
         order_snapshot,
         plan=resolved_plan,
     )
+    resolved_order["edge_profile_rates"] = _order_edge_profile_rates(order)
     projection = physical_execution_for_plan(resolved_plan) if resolved_plan else None
     offcut_applicable = bool(projection and projection.has_factory_source_offcut)
     resolved_order["offcut_price_applicable"] = offcut_applicable

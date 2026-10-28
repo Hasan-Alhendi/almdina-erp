@@ -344,16 +344,11 @@
         if (!sideSelected(row, side)) {
             return __("{0}: no edge banding on this side", [label]);
         }
+        // Selected sides: hover shows the effective type name only (no direction).
         const type = effectiveType(frm, row, side);
+        if (!type) return __("Not selected");
         const profile = profileFor(frm, row, side);
-        const mode = overrideType(row, side) ? (__("Custom")) : (__("Default"));
-        let meta = __("Unavailable profile");
-        if (profile) {
-            meta = financialProfilesAvailable(frm)
-                ? __("{0} mm · $ {1}/m", [format(profile.thickness_mm), money(profile.rate_usd_per_meter)])
-                : __("{0} mm", [format(profile.thickness_mm)]);
-        }
-        return __("{0} — {1} — {2} — {3}", [label, type || "—", mode, meta]);
+        return String((profile && profile.label) || type);
     }
 
     function decorateToggle(frm, row, toggle) {

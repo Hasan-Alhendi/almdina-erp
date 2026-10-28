@@ -210,9 +210,8 @@
             const key = `${edgeName}::${rate}`;
             const group = edgeGroups.get(key) || {
                 type: "edge",
-                description: edgeName
-                    ? translate("Edge banding — {0}", [edgeName])
-                    : translate("Edge banding — unspecified"),
+                // Quotation row shows the edge-type name only (no "Edge banding —" prefix).
+                description: edgeName || translate("Edge banding — unspecified"),
                 quantity: 0,
                 unit: translate("Meter"),
                 rate,

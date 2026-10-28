@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.orders.costing import (
+    EdgeBandingTypeLine,
+    PieceCostInput,
+    calculate_piece_costs,
+    merge_edge_banding_type_lines,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     corner_cut_arabic_label,
+    corner_outer_side_dimension_overrides,
     is_corner_cut,
 )
 
@@ -141,6 +147,178 @@ def _allocate_addon_cents(entries: list[tuple[dict[str, Any], float]]) -> None:
         line["amount_usd"] = cents / 100
 
 
+def _piece_has_side_edge_detail(piece: Mapping[str, Any]) -> bool:
+    return any(
+        key in piece
+        for key in (
+            "edge_long_right",
+            "edge_long_left",
+            "edge_width_top",
+            "edge_width_bottom",
+            "edge_long_right_type_override",
+            "edge_long_left_type_override",
+            "edge_width_top_type_override",
+            "edge_width_bottom_type_override",
+        )
+    )
+
+
+def _edge_rates(order: Mapping[str, Any]) -> dict[str, float]:
+    raw = _value(order, "edge_profile_rates") or {}
+    if not isinstance(raw, Mapping):
+        return {}
+    rates: dict[str, float] = {}
+    for name, rate in raw.items():
+        key = str(name or "").strip()
+        if key:
+            rates[key] = _number(rate)
+    return rates
+
+
+def _piece_cost_input_from_mapping(piece: Mapping[str, Any]) -> PieceCostInput | None:
+    factory_quantity = _factory_quantity(piece)
+    if factory_quantity <= 0:
+        return None
+    overrides = corner_outer_side_dimension_overrides(
+        piece_type=_text(_value(piece, "piece_type"), "Regular"),
+        clipped_corner_position=_text(_value(piece, "clipped_corner_position")),
+        width_cm=_number(_value(piece, "width_cm")),
+        length_cm=_number(_value(piece, "length_cm")),
+        clipped_corner_width_cm=_number(_value(piece, "clipped_corner_width_cm")),
+        clipped_corner_length_cm=_number(_value(piece, "clipped_corner_length_cm")),
+    )
+    return PieceCostInput(
+        width_cm=_number(_value(piece, "width_cm")),
+        length_cm=_number(_value(piece, "length_cm")),
+        qty=factory_quantity,
+        edge_long_right=1 if _number(_value(piece, "edge_long_right")) else 0,
+        edge_long_left=1 if _number(_value(piece, "edge_long_left")) else 0,
+        edge_width_top=1 if _number(_value(piece, "edge_width_top")) else 0,
+        edge_width_bottom=1 if _number(_value(piece, "edge_width_bottom")) else 0,
+        edge_long_right_type=_text(_value(piece, "edge_long_right_type_override")),
+        edge_long_left_type=_text(_value(piece, "edge_long_left_type_override")),
+        edge_width_top_type=_text(_value(piece, "edge_width_top_type_override")),
+        edge_width_bottom_type=_text(_value(piece, "edge_width_bottom_type_override")),
+        **overrides,
+    )
+
+
+def _legacy_edge_banding_type_lines(
+    edge_source: Sequence[Mapping[str, Any]],
+) -> tuple[EdgeBandingTypeLine, ...]:
+    """Piece-total fallback when side-level banding fields are unavailable."""
+
+    totals: dict[str, list[float]] = {}
+    for piece in edge_source:
+        factory_quantity = _factory_quantity(piece)
+        if factory_quantity <= 0:
+            continue
+        edge_type = _text(_value(piece, "edge_type"), "قشاط")
+        rate = _number(_value(piece, "edge_rate_usd"))
+        meters = _number(_value(piece, "edge_meters"))
+        amount = _number(_value(piece, "edge_cost_usd"))
+        if _number(_value(piece, "edge_break_only")):
+            break_rate = _number(_value(piece, "edge_break_rate_usd"))
+            break_meters = (
+                _number(_value(piece, "edge_break_length_cm"))
+                * factory_quantity
+                / 100
+            )
+            break_amount = break_meters * break_rate
+            side_meters = max(0.0, meters - break_meters)
+            side_amount = max(0.0, amount - break_amount)
+            if side_meters > 0:
+                bucket = totals.setdefault(edge_type, [0.0, 0.0, rate])
+                bucket[0] += side_meters
+                bucket[1] += side_amount
+                bucket[2] = rate
+            if break_meters > 0:
+                bucket = totals.setdefault(edge_type, [0.0, 0.0, break_rate])
+                bucket[0] += break_meters
+                bucket[1] += break_amount
+                bucket[2] = break_rate
+            continue
+        if meters <= 0:
+            continue
+        bucket = totals.setdefault(edge_type, [0.0, 0.0, rate])
+        bucket[0] += meters
+        bucket[1] += amount if amount or not rate else meters * rate
+        bucket[2] = rate
+    return tuple(
+        EdgeBandingTypeLine(
+            edge_type=edge_type,
+            meters=_metric(meters),
+            rate_usd=rate,
+            cost_usd=_money(cost),
+        )
+        for edge_type, (meters, cost, rate) in sorted(totals.items())
+        if meters > 0
+    )
+
+
+def _break_only_type_lines(
+    edge_source: Sequence[Mapping[str, Any]],
+    *,
+    default_edge_type: str,
+) -> tuple[EdgeBandingTypeLine, ...]:
+    lines: list[EdgeBandingTypeLine] = []
+    for piece in edge_source:
+        if not _number(_value(piece, "edge_break_only")):
+            continue
+        factory_quantity = _factory_quantity(piece)
+        if factory_quantity <= 0:
+            continue
+        edge_type = _text(
+            _value(piece, "edge_type") or default_edge_type,
+            "قشاط",
+        )
+        break_rate = _number(_value(piece, "edge_break_rate_usd"))
+        break_meters = (
+            _number(_value(piece, "edge_break_length_cm")) * factory_quantity / 100
+        )
+        if break_meters <= 0:
+            continue
+        lines.append(
+            EdgeBandingTypeLine(
+                edge_type=edge_type,
+                meters=_metric(break_meters),
+                rate_usd=break_rate,
+                cost_usd=_money(break_meters * break_rate),
+            )
+        )
+    return tuple(lines)
+
+
+def _edge_banding_type_lines(
+    order: Mapping[str, Any],
+    edge_source: Sequence[Mapping[str, Any]],
+) -> tuple[EdgeBandingTypeLine, ...]:
+    """One quotation row per edge-type identity across all doors/sides.
+
+    Prefers authoritative side selection + override identity with server rates.
+    Falls back to persisted piece totals when side detail is absent.
+    """
+
+    default_edge_type = _text(_value(order, "default_edge_type"))
+    rates = _edge_rates(order)
+    if rates and any(_piece_has_side_edge_detail(piece) for piece in edge_source):
+        inputs = [
+            piece_input
+            for piece in edge_source
+            if (piece_input := _piece_cost_input_from_mapping(piece)) is not None
+        ]
+        summary = calculate_piece_costs(
+            inputs,
+            default_edge_type=default_edge_type,
+            edge_rates=rates,
+        )
+        return merge_edge_banding_type_lines(
+            summary.edge_type_lines,
+            _break_only_type_lines(edge_source, default_edge_type=default_edge_type),
+        )
+    return _legacy_edge_banding_type_lines(edge_source)
+
+
 def _customer_invoice_lines(
     order: Mapping[str, Any],
     pieces: Sequence[Mapping[str, Any]],
@@ -223,72 +401,22 @@ def _customer_invoice_lines(
         if special_pieces
         else list(pieces)
     )
-    edge_groups: dict[tuple[str, float], dict[str, Any]] = defaultdict(
-        lambda: {"meters": 0.0, "amount": 0.0}
-    )
-
-    def add_edge_group(
-        edge_type: str,
-        rate: float,
-        meters: float,
-        amount: float,
-    ) -> None:
-        if meters <= 0:
-            return
-        group = edge_groups[(edge_type, rate)]
-        group["meters"] += meters
-        group["amount"] += amount
-
-    for piece in edge_source:
-        factory_quantity = _factory_quantity(piece)
-        if factory_quantity <= 0:
-            continue
-        # Includes Clipped/L-Shaped corner pieces. Sides adjacent to the break
-        # are already cleared to zero (Clipped) or shrunk to the dimension
-        # remaining after the notch cut (L-Shaped) by the costing adapter, so
-        # edge_meters/edge_cost_usd here are already correct as-is.
-        edge_type = _text(_value(piece, "edge_type"), "قشاط")
-        rate = _number(_value(piece, "edge_rate_usd"))
-        meters = _number(_value(piece, "edge_meters"))
-        amount = _number(_value(piece, "edge_cost_usd"))
-
-        if _number(_value(piece, "edge_break_only")):
-            break_rate = _number(_value(piece, "edge_break_rate_usd"))
-            break_meters = (
-                _number(_value(piece, "edge_break_length_cm"))
-                * factory_quantity
-                / 100
-            )
-            break_amount = break_meters * break_rate
-            add_edge_group(
-                edge_type,
-                rate,
-                max(0.0, meters - break_meters),
-                max(0.0, amount - break_amount),
-            )
-            add_edge_group(edge_type, break_rate, break_meters, break_amount)
-        else:
-            add_edge_group(
-                edge_type,
-                rate,
-                meters,
-                amount if amount or not rate else meters * rate,
-            )
-
-    for (edge_type, rate), group in sorted(edge_groups.items()):
+    edge_type_lines = _edge_banding_type_lines(order, edge_source)
+    for line in edge_type_lines:
         lines.append(
             {
                 "type": "edge",
-                "description": f"قشاط — {edge_type}",
-                "quantity": _metric(group["meters"]),
+                # Quotation row shows the edge-type name only (no "قشاط — " prefix).
+                "description": line.edge_type,
+                "quantity": _metric(line.meters),
                 "unit": "متر",
-                "rate_usd": _money(rate),
-                "amount_usd": _money(group["amount"]),
+                "rate_usd": _money(line.rate_usd),
+                "amount_usd": _money(line.cost_usd),
                 "note": "",
             }
         )
 
-    if not special_pieces and not edge_groups:
+    if not special_pieces and not edge_type_lines:
         edge_amount = _number(_value(order, "edge_cost_usd"))
         if edge_amount:
             lines.append(

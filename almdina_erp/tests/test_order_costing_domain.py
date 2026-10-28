@@ -4,6 +4,7 @@ import unittest
 
 from almdina_erp.almdina_erp.domain.orders.costing import (
     CostingError,
+    EdgeBandingTypeLine,
     PieceCostInput,
     SpecialPricingPieceInput,
     SpecialPricingSettings,
@@ -11,6 +12,7 @@ from almdina_erp.almdina_erp.domain.orders.costing import (
     calculate_piece_costs,
     calculate_special_pricing,
     calculate_waste,
+    merge_edge_banding_type_lines,
     round_value,
 )
 
@@ -61,6 +63,130 @@ class TestOrderCostingDomain(unittest.TestCase):
         self.assertEqual(result.edge_cost_usd, 6.3)
         self.assertEqual(summary.total_edge_meters, 5.6)
         self.assertEqual(summary.total_edge_cost_usd, 6.3)
+        by_type = {line.edge_type: line for line in summary.edge_type_lines}
+        self.assertEqual(set(by_type), {
+            "2cm Regular", "2cm Glossy", "2cm Gold", "4cm Glossy",
+        })
+        self.assertEqual(by_type["2cm Regular"].meters, 1.6)
+        self.assertEqual(by_type["2cm Regular"].rate_usd, 0.5)
+        self.assertEqual(by_type["2cm Regular"].cost_usd, 0.8)
+        self.assertEqual(
+            round_value(sum(line.cost_usd for line in summary.edge_type_lines), 3),
+            summary.total_edge_cost_usd,
+        )
+
+    def test_edge_type_lines_aggregate_across_doors_by_type_identity(self) -> None:
+        """Four doors: default / mixed glossy / mixed glossy / gold + unbanded.
+
+        Acceptance: three quotation rows keyed by type identity, meters from
+        side lengths (not side counts), default+override of same type merged.
+        """
+
+        default = "قشاط 2سم عادي"
+        glossy = "قشاط 4 سم لميع"
+        gold = "قشاط 4 سم ذهبي"
+        rates = {default: 0.5, glossy: 2.0, gold: 2.5}
+        # 50×100 cm doors, qty 1 each → long side 1.0m, width side 0.5m.
+        summary = calculate_piece_costs(
+            [
+                # Door 1: all four sides default
+                PieceCostInput(
+                    width_cm=50, length_cm=100, qty=1,
+                    edge_long_right=1, edge_long_left=1,
+                    edge_width_top=1, edge_width_bottom=1,
+                ),
+                # Door 2: two default + two glossy
+                PieceCostInput(
+                    width_cm=50, length_cm=100, qty=1,
+                    edge_long_right=1, edge_long_left=1,
+                    edge_width_top=1, edge_width_bottom=1,
+                    edge_width_top_type=glossy,
+                    edge_width_bottom_type=glossy,
+                ),
+                # Door 3: one glossy + three default
+                PieceCostInput(
+                    width_cm=50, length_cm=100, qty=1,
+                    edge_long_right=1, edge_long_left=1,
+                    edge_width_top=1, edge_width_bottom=1,
+                    edge_long_right_type=glossy,
+                ),
+                # Door 4: two gold + two unbanded
+                PieceCostInput(
+                    width_cm=50, length_cm=100, qty=1,
+                    edge_long_right=1, edge_long_left=1,
+                    edge_width_top=0, edge_width_bottom=0,
+                    edge_long_right_type=gold,
+                    edge_long_left_type=gold,
+                ),
+            ],
+            default_edge_type=default,
+            edge_rates=rates,
+        )
+
+        by_type = {line.edge_type: line for line in summary.edge_type_lines}
+        self.assertEqual(set(by_type), {default, glossy, gold})
+        # default: door1 3.0 + door2 2.0 + door3 2.0 = 7.0m
+        self.assertEqual(by_type[default].meters, 7.0)
+        self.assertEqual(by_type[default].rate_usd, 0.5)
+        self.assertEqual(by_type[default].cost_usd, 3.5)
+        # glossy: door2 1.0 + door3 1.0 = 2.0m
+        self.assertEqual(by_type[glossy].meters, 2.0)
+        self.assertEqual(by_type[glossy].rate_usd, 2.0)
+        self.assertEqual(by_type[glossy].cost_usd, 4.0)
+        # gold: door4 2.0m
+        self.assertEqual(by_type[gold].meters, 2.0)
+        self.assertEqual(by_type[gold].rate_usd, 2.5)
+        self.assertEqual(by_type[gold].cost_usd, 5.0)
+        self.assertEqual(summary.total_edge_meters, 11.0)
+        self.assertEqual(summary.total_edge_cost_usd, 12.5)
+        self.assertEqual(
+            round_value(sum(line.cost_usd for line in summary.edge_type_lines), 3),
+            summary.total_edge_cost_usd,
+        )
+
+    def test_same_type_default_and_override_merge_and_distinct_same_rate_stay_split(
+        self,
+    ) -> None:
+        summary = calculate_piece_costs(
+            [
+                PieceCostInput(
+                    width_cm=100, length_cm=100, qty=2,
+                    edge_long_right=1, edge_long_left=0,
+                    edge_width_top=1, edge_width_bottom=0,
+                    # override equals default identity → still one bucket
+                    edge_long_right_type="Type A",
+                ),
+                PieceCostInput(
+                    width_cm=100, length_cm=100, qty=1,
+                    edge_long_right=1, edge_long_left=0,
+                    edge_width_top=0, edge_width_bottom=0,
+                    edge_long_right_type="Type B",
+                ),
+            ],
+            default_edge_type="Type A",
+            edge_rates={"Type A": 1.0, "Type B": 1.0},
+        )
+        by_type = {line.edge_type: line for line in summary.edge_type_lines}
+        self.assertEqual(set(by_type), {"Type A", "Type B"})
+        # qty=2 → long 2.0m + width 2.0m = 4.0m Type A; Type B 1.0m
+        self.assertEqual(by_type["Type A"].meters, 4.0)
+        self.assertEqual(by_type["Type A"].rate_usd, 1.0)
+        self.assertEqual(by_type["Type B"].meters, 1.0)
+        self.assertEqual(by_type["Type B"].rate_usd, 1.0)
+
+    def test_merge_edge_banding_type_lines_keeps_type_rate(self) -> None:
+        merged = merge_edge_banding_type_lines(
+            (
+                EdgeBandingTypeLine("A", 1.0, 2.0, 2.0),
+                EdgeBandingTypeLine("B", 0.5, 3.0, 1.5),
+            ),
+            (EdgeBandingTypeLine("A", 0.5, 2.0, 1.0),),
+        )
+        by_type = {line.edge_type: line for line in merged}
+        self.assertEqual(by_type["A"].meters, 1.5)
+        self.assertEqual(by_type["A"].cost_usd, 3.0)
+        self.assertEqual(by_type["A"].rate_usd, 2.0)
+        self.assertEqual(by_type["B"].meters, 0.5)
 
     def test_default_profile_is_applied_to_every_side_without_override(self) -> None:
         summary = calculate_piece_costs(

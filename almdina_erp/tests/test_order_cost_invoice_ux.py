@@ -139,7 +139,9 @@ def test_customer_invoice_breaks_down_boards_cutting_and_edge_banding():
     src = _source(COST_PRESENTER)
     assert "MDF boards" in src
     assert "Board cutting and preparation" in src
-    assert "Edge banding —" in src
+    # Edge quotation rows use the type name directly (no "Edge banding — {0}" prefix).
+    assert 'translate("Edge banding — {0}"' not in src
+    assert "description: edgeName || translate(\"Edge banding — unspecified\")" in src
     assert "function invoiceLines(frm)" in src
     assert "function invoiceTotal(frm)" in src
     assert "boardCount * boardRate" in src

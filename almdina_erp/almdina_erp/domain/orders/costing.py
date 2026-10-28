@@ -61,11 +61,22 @@ class PieceCostResult:
 
 
 @dataclass(frozen=True, slots=True)
+class EdgeBandingTypeLine:
+    """One quotation edge-banding row keyed by edge-type identity."""
+
+    edge_type: str
+    meters: float
+    rate_usd: float
+    cost_usd: float
+
+
+@dataclass(frozen=True, slots=True)
 class PieceCostSummary:
     pieces: tuple[PieceCostResult, ...]
     total_area_m2: float
     total_edge_meters: float
     total_edge_cost_usd: float
+    edge_type_lines: tuple[EdgeBandingTypeLine, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +185,8 @@ def calculate_piece_costs(
     total_area = 0.0
     total_edge_meters = 0.0
     total_edge_cost = 0.0
+    # Aggregate quotation rows by type identity (not by door or default/custom).
+    type_totals: dict[str, list[float]] = {}
 
     for piece in pieces:
         width_cm = _finite(piece.width_cm)
@@ -219,7 +232,13 @@ def calculate_piece_costs(
             edge_type = str(requested_type or default_edge_type or "").strip()
             meters = dimension_cm * qty / 100
             rate = _finite(edge_rates.get(edge_type, 0.0)) if edge_type else 0.0
-            side_values[side] = (meters, rate, meters * rate)
+            cost = meters * rate
+            side_values[side] = (meters, rate, cost)
+            if edge_type and meters > 0:
+                bucket = type_totals.setdefault(edge_type, [0.0, 0.0, rate])
+                bucket[0] += meters
+                bucket[1] += cost
+                bucket[2] = rate
 
         right_meters, right_rate, right_cost = side_values["long_right"]
         left_meters, left_rate, left_cost = side_values["long_left"]
@@ -267,11 +286,53 @@ def calculate_piece_costs(
         total_edge_meters += edge_meters
         total_edge_cost += edge_cost
 
+    edge_type_lines = tuple(
+        EdgeBandingTypeLine(
+            edge_type=edge_type,
+            meters=round_value(meters, 3),
+            rate_usd=rate,
+            cost_usd=round_value(cost, 3),
+        )
+        for edge_type, (meters, cost, rate) in sorted(type_totals.items())
+        if meters > 0
+    )
+
     return PieceCostSummary(
         pieces=tuple(results),
         total_area_m2=round_value(total_area, 3),
         total_edge_meters=round_value(total_edge_meters, 3),
         total_edge_cost_usd=round_value(total_edge_cost, 3),
+        edge_type_lines=edge_type_lines,
+    )
+
+
+def merge_edge_banding_type_lines(
+    *groups: Iterable[EdgeBandingTypeLine],
+) -> tuple[EdgeBandingTypeLine, ...]:
+    """Combine already-priced type lines without changing rates or double-counting qty."""
+
+    totals: dict[str, list[float]] = {}
+    for group in groups:
+        for line in group:
+            edge_type = str(line.edge_type or "").strip()
+            meters = _finite(line.meters)
+            if not edge_type or meters <= 0:
+                continue
+            rate = _finite(line.rate_usd)
+            cost = _finite(line.cost_usd)
+            bucket = totals.setdefault(edge_type, [0.0, 0.0, rate])
+            bucket[0] += meters
+            bucket[1] += cost
+            bucket[2] = rate
+    return tuple(
+        EdgeBandingTypeLine(
+            edge_type=edge_type,
+            meters=round_value(meters, 3),
+            rate_usd=rate,
+            cost_usd=round_value(cost, 3),
+        )
+        for edge_type, (meters, cost, rate) in sorted(totals.items())
+        if meters > 0
     )
 
 
@@ -529,6 +590,7 @@ __all__ = [
     "BreakEdgeCostInput",
     "BreakEdgeCostResult",
     "CostingError",
+    "EdgeBandingTypeLine",
     "OrderCostSummary",
     "PieceCostInput",
     "PieceCostResult",
@@ -543,5 +605,6 @@ __all__ = [
     "calculate_piece_costs",
     "calculate_special_pricing",
     "calculate_waste",
+    "merge_edge_banding_type_lines",
     "round_value",
 ]
