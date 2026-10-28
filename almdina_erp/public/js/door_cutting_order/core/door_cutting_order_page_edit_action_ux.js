@@ -313,6 +313,10 @@
     }
 
     function flushOrderSurfaces(frm) {
+        const guard = window.AlmdinaEdgeProfileDoubleClickGuard;
+        if (guard && typeof guard.flushPendingClick === "function") {
+            guard.flushPendingClick(frm);
+        }
         const owner = window.AlmdinaDoorCuttingFastEntry;
         if (owner && typeof owner.flush === "function") owner.flush(frm);
     }

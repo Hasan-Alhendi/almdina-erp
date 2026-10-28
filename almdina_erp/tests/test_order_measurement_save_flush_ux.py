@@ -26,7 +26,10 @@ def test_explicit_save_flushes_open_measurement_cells_before_dirty_check() -> No
     assert "function flushMeasurementInputs(frm)" in operator
     assert "flush: flushMeasurementInputs" in operator
     assert "function flushPendingMeasurements(frm)" in revision
+    assert "function flushPendingEdgeClicks(frm)" in revision
+    assert "flushPendingEdgeClicks(frm)" in revision
     assert "owner.flush(frm)" in revision
+    assert "AlmdinaEdgeProfileDoubleClickGuard" in revision
 
     explicit = revision.split("async function commitEditSession", 1)[1].split(
         "async function persistOrderEditCheckpoint", 1

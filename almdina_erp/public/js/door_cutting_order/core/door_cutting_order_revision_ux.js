@@ -705,7 +705,16 @@
         return Boolean(await costUx.flushPendingPriceEdits(frm));
     }
 
+    function flushPendingEdgeClicks(frm) {
+        const guard = window.AlmdinaEdgeProfileDoubleClickGuard;
+        if (!guard || typeof guard.flushPendingClick !== "function") return false;
+        return Boolean(guard.flushPendingClick(frm));
+    }
+
     function flushPendingMeasurements(frm) {
+        // Apply a delayed edge-toggle before reading dirty/save state so a
+        // rapid last click is not lost when the user hits Save immediately.
+        flushPendingEdgeClicks(frm);
         const owner = window.AlmdinaDoorCuttingFastEntry;
         if (!owner || typeof owner.flush !== "function") return false;
         return Boolean(owner.flush(frm));
