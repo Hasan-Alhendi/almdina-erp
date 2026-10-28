@@ -129,7 +129,10 @@
         if (control.matches("input.dco-fast-input") && typeof control.select === "function") {
             control.select();
         }
-        control.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (owner && typeof owner.revealInMeasurementTable === "function") {
+            owner.revealInMeasurementTable(control);
+        }
         return document.activeElement === control;
     }
 

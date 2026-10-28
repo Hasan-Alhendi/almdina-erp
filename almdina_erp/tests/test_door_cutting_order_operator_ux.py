@@ -87,9 +87,14 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
         'event.key === "Enter" && fieldname === "length_cm"',
         "moveToNextWidth(currentFrm, tr)",
         "focusWidth(next)",
+        "revealInMeasurementTable(next)",
         'input.focus({ preventScroll:true })',
         "DOM insertion and focus are both synchronous",
     ]
+    move = source.split("function moveToNextWidth", 1)[1].split("function applyCornerEdgeCheck", 1)[0]
+    assert "scrollIntoView" not in move
+    assert "function revealInMeasurementTable(target)" in source
+    assert "scroller.scrollLeft = left" in source
     missing = [fragment for fragment in required_fragments if fragment not in source]
     assert not missing, f"Missing fast keyboard UX fragments: {missing}"
 
@@ -99,6 +104,19 @@ def test_measurement_keyboard_flow_is_plain_dom_width_tab_length_enter_next_widt
     assert "setTimeout" not in tab_block
     assert "toggle_editable_row" not in tab_block
     assert ".click(" not in tab_block
+
+
+def test_piece_dimensions_display_latin_digits_without_changing_stored_numbers():
+    source = UX_JS.read_text(encoding="utf-8")
+    dimension = source.split("const dimensionInput = ", 1)[1].split("const pieceType", 1)[0]
+    assert 'type="text"' in dimension
+    assert 'lang="en"' in dimension
+    assert 'dir="ltr"' in dimension
+    assert 'inputmode="decimal"' in dimension
+    assert 'type="number"' not in dimension
+    assert "planDimensionInsert" in source
+    qty = source.split('data-field="qty"', 1)[0]
+    assert 'type="number"' in qty[-220:]
 
 
 def test_arrow_keys_navigate_cells_without_changing_number_input_values():
@@ -201,6 +219,57 @@ def test_measurement_table_keeps_notes_readable_with_horizontal_scroll():
     missing = [fragment for fragment in required if fragment not in source]
     assert not missing, f"Missing readable notes / horizontal-scroll fragments: {missing}"
     assert "overflow-x:hidden !important" not in source
+
+
+def test_row_delete_stays_in_its_own_cell_after_the_notes_editor():
+    compact = COMPACT_MEASUREMENTS_JS.read_text(encoding="utf-8")
+    operator = UX_JS.read_text(encoding="utf-8")
+    resilience = (
+        Path(__file__).resolve().parents[1]
+        / "public"
+        / "js"
+        / "door_cutting_order"
+        / "order_entry"
+        / "measurements"
+        / "door_cutting_order_measurement_resilience_ux.js"
+    ).read_text(encoding="utf-8")
+
+    row = operator.split("function rowHtml", 1)[1].split("function shellDirection", 1)[0]
+    assert row.index('class="dco-col-notes"') < row.index('class="dco-col-delete"')
+    assert "deleteRowButtonHtml()" in row
+    assert 'aria-label="${label}"' in operator
+    assert '__("Delete row")' in operator
+    assert "editable && !virtual" in row
+
+    assert "td.dco-col-delete" in compact
+    assert "min-width:44px !important" in compact
+    assert "width:32px !important" in compact
+    assert "height:35px !important" in compact
+    assert ".dco-col-delete{display:none" not in compact.replace(" ", "")
+    assert "minmax(0,1fr) 31px" in resilience
+    assert "min-width:260px" not in resilience
+
+
+def test_materialized_piece_gets_delete_button_without_waiting_for_save():
+    operator = UX_JS.read_text(encoding="utf-8")
+    materialize = operator.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
+        "function deleteRowButtonHtml", 1
+    )[0]
+    sync = operator.split("function syncDeleteCell(frm, tr)", 1)[1].split(
+        "function localArea", 1
+    )[0]
+
+    assert "syncDeleteCell(frm, tr)" in materialize
+    assert 'class="dco-delete-row"' in operator.split("function deleteRowButtonHtml", 1)[1].split(
+        "function syncDeleteCell", 1
+    )[0]
+    assert 'rowName.startsWith("__virtual__")' in sync
+    assert 'tr.classList.contains("dco-virtual-row")' in sync
+    assert "isEditable(frm)" in sync
+    assert 'cell.querySelector(".dco-delete-row")' in sync
+    assert "deleteRowButtonHtml()" in sync
+    assert "syncDeleteCell," in operator
+    assert "__islocal" not in sync
 
 
 def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels():

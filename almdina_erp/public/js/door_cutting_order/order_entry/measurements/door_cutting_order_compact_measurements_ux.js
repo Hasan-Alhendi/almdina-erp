@@ -171,12 +171,23 @@
             .dco-fast-table .dco-col-edges{width:188px !important;}
             .dco-fast-table .dco-col-edge-type{width:128px !important;}
             .dco-fast-table .dco-col-sketch{width:50px !important;}
-            .dco-fast-table .dco-col-notes{
+            .dco-fast-table .dco-col-notes,
+            .dco-fast-table th.dco-col-notes,
+            .dco-fast-table td.dco-col-notes{
                 width:auto !important;
                 min-width:300px !important;
-                overflow:visible;
+                overflow:hidden;
             }
-            .dco-fast-table .dco-col-delete{width:34px !important;}
+            .dco-fast-table .dco-col-delete,
+            .dco-fast-table th.dco-col-delete,
+            .dco-fast-table td.dco-col-delete{
+                width:44px !important;
+                min-width:44px !important;
+                max-width:44px !important;
+                padding:4px 6px !important;
+                text-align:center;
+                overflow:hidden;
+            }
 
             .dco-fast-input,
             .dco-fast-select{
@@ -188,7 +199,9 @@
                 font-size:13px !important;
             }
 
-            .dco-fast-input[type="number"]{font-size:14.5px !important;font-weight:650;}
+            .dco-fast-input[type="number"],
+            .dco-col-width .dco-fast-input,
+            .dco-col-length .dco-fast-input{font-size:14.5px !important;font-weight:650;}
             .dco-col-notes .dco-fast-input{
                 text-align:right;
                 font-size:13px !important;
@@ -291,7 +304,28 @@
 
             .dco-special-sketch-button>span:last-child{display:none !important;}
             .dco-special-sketch-button>span:first-child{font-size:16px;}
-            .dco-delete-row{width:28px !important;height:30px !important;border-radius:7px !important;}
+            .dco-delete-row{
+                box-sizing:border-box;
+                width:32px !important;
+                height:35px !important;
+                min-width:32px;
+                border:1px solid var(--border-color,#ccd3da);
+                border-radius:7px !important;
+                background:var(--alm-card,#ffffff);
+                color:var(--text-muted,#607080);
+                opacity:1;
+                padding:0;
+                line-height:1;
+                vertical-align:middle;
+            }
+            .dco-delete-row:hover,
+            .dco-delete-row:focus-visible{
+                border-color:var(--alm-danger,#b91c1c);
+                background:var(--alm-danger-soft,#fff1f2);
+                color:var(--alm-danger,#b91c1c);
+                opacity:1;
+                outline:none;
+            }
             .dco-fast-table tbody tr:hover td{background:color-mix(in srgb, var(--alm-primary, #172033) 2%, transparent);}
             .dco-fast-table tbody tr:focus-within td{background:color-mix(in srgb, var(--alm-primary, #172033) 4%, transparent);}
 
@@ -303,7 +337,6 @@
                 .dco-fast-table .dco-col-edges{width:164px !important;}
                 .dco-fast-table .dco-col-edge-type{width:112px !important;}
                 .dco-fast-table .dco-col-sketch{width:44px !important;}
-                .dco-fast-table .dco-col-delete{width:31px !important;}
                 .dco-fast-input,.dco-fast-select{padding-inline:4px !important;}
             }
 
@@ -313,8 +346,7 @@
             }
 
             @media (max-width:720px){
-                .dco-fast-table .dco-col-sketch,
-                .dco-fast-table .dco-col-delete{display:none !important;}
+                .dco-fast-table .dco-col-sketch{display:none !important;}
                 .dco-fast-table .dco-col-type{width:92px !important;}
                 .dco-fast-table .dco-col-number{width:61px !important;}
                 .dco-fast-table .dco-col-qty{width:45px !important;}

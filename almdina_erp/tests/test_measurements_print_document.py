@@ -51,6 +51,18 @@ _ARABIC_LABELS = {
     "Order measurements table": "جدول قياسات الطلب",
     "Measurements table": "جدول القياسات",
     "Exceptional customization": "تخصيص استثنائي",
+    "Length": "الطول",
+    "Width": "العرض",
+    "cm": "سم",
+    "Default type": "النوع الافتراضي",
+    "Corner": "الزاوية",
+    "Remaining on width side": "المتبقي على ضلع العرض",
+    "Remaining on length side": "المتبقي على ضلع الطول",
+    "Top right": "أعلى اليمين",
+    "Top left": "أعلى اليسار",
+    "Bottom right": "أسفل اليمين",
+    "Bottom left": "أسفل اليسار",
+    "Glass Margin": "هامش البلور",
 }
 
 
@@ -67,7 +79,10 @@ def _sample_order() -> dict[str, object]:
         "customer": "زبون <تجريبي>",
         "order_date": "2026-09-23",
         "board_description": "لوح أبيض",
+        "board_length_cm": 244,
+        "board_width_cm": 122.5,
         "edge_color": "أسود",
+        "default_edge_type": "PVC 0.8",
         "order_cutting_machine": "CNC",
         "order_notes": "تسليم بعد الظهر",
         "pieces": [
@@ -132,11 +147,17 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertNotIn("سعر الوحدة", html)
         self.assertNotIn("default_edge_type", html)
         self.assertNotIn("نوع القشاط", html)
+        self.assertIn('class="shared-info-metric" dir="ltr">244</span>', html)
+        self.assertIn('class="shared-info-metric" dir="ltr">122.5</span>', html)
+        self.assertIn('class="shared-info-detail-value">PVC 0.8</span>', html)
+        self.assertNotIn("244.000", html)
+        self.assertNotIn("122.500", html)
 
     def test_selected_edge_without_override_is_not_custom(self) -> None:
         html = measurements_print_html(
             {
                 "name": "26-00090",
+                "default_edge_type": "Factory Band",
                 "pieces": [
                     {
                         "piece_type": "Regular",
@@ -144,6 +165,7 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
                         "length_cm": 80,
                         "qty": 1,
                         "edge_long_right": 1,
+                        "edge_long_right_type_override": "",
                     }
                 ],
             },
@@ -152,6 +174,135 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         )
         self.assertIn('class="custom-edge-empty"', html)
         self.assertNotIn('class="custom-edge-summary"', html)
+        self.assertIn('class="shared-info-detail-value">Factory Band</span>', html)
+        self.assertEqual(html.count("Factory Band"), 1)
+
+    def test_board_metrics_and_default_edge_follow_stored_order_values(self) -> None:
+        order = {
+            "name": "26-00091",
+            "board_description": "MDF أبيض عالي اللمعان سماكة 18 مم وجهين ميلامين مقاوم للرطوبة",
+            "board_length_cm": 244.0,
+            "board_width_cm": "122.500",
+            "edge_color": "بيج",
+            "default_edge_type": 'PVC <أبيض> & "مطبخ"',
+            "full_board_length_mm": 3000,
+            "full_board_width_mm": 1500,
+            "usable_board_length_cm": 243,
+            "usable_board_width_cm": 121,
+            "pieces": [
+                {
+                    "piece_type": "Regular",
+                    "width_cm": 33,
+                    "length_cm": 44,
+                    "qty": 1,
+                    "edge_width_top": 1,
+                    "edge_width_top_type_override": "ABS exception",
+                }
+            ],
+        }
+
+        def translating(message: str) -> str:
+            if message == 'PVC <أبيض> & "مطبخ"':
+                return "TRANSLATED EDGE"
+            return message
+
+        html = measurements_print_html(
+            order,
+            language="en",
+            translator=translating,
+        )
+        self.assertIn('class="shared-info-metric" dir="ltr">244</span>', html)
+        self.assertIn('class="shared-info-metric" dir="ltr">122.5</span>', html)
+        self.assertNotIn("244.000", html)
+        self.assertNotIn("122.500", html)
+        self.assertNotIn("3000", html)
+        self.assertNotIn("1500", html)
+        self.assertNotIn(">243<", html)
+        self.assertNotIn(">121<", html)
+        self.assertIn("MDF أبيض عالي اللمعان سماكة 18 مم وجهين ميلامين مقاوم للرطوبة", html)
+        self.assertIn('PVC &lt;أبيض&gt; &amp; &quot;مطبخ&quot;', html)
+        self.assertNotIn("TRANSLATED EDGE", html)
+        self.assertNotIn("<script>", html)
+        self.assertIn("<b>ABS exception</b>", html)
+        self.assertNotIn('class="shared-info-detail-value">ABS exception</span>', html)
+
+    def test_absent_board_metrics_print_dashes_instead_of_zero(self) -> None:
+        html = measurements_print_html(
+            {
+                "name": "OLD-1",
+                "board_description": "لوح قديم",
+                "edge_color": "بيج",
+                "board_length_cm": None,
+                "board_width_cm": " ",
+                "default_edge_type": None,
+                "full_board_length_mm": 2440,
+                "pieces": [],
+            },
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertEqual(html.count('class="shared-info-metric" dir="ltr">—</span>'), 2)
+        self.assertIn('class="shared-info-detail-value">—</span>', html)
+        self.assertNotIn('dir="ltr">0</span>', html)
+        self.assertNotIn("2440", html)
+        self.assertNotIn(">244<", html)
+        self.assertNotIn(">122<", html)
+
+        zero = measurements_print_html(
+            {
+                "name": "OLD-2",
+                "board_length_cm": 0,
+                "board_width_cm": 122,
+                "pieces": [],
+            },
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertIn('class="shared-info-metric" dir="ltr">0</span>', zero)
+        self.assertIn('class="shared-info-metric" dir="ltr">122</span>', zero)
+
+    def test_order_print_payload_carries_board_size_and_default_edge(self) -> None:
+        payload = order_print_payload(
+            {
+                "name": "26-00092",
+                "board_description": "لوح أبيض",
+                "board_length_cm": 244,
+                "board_width_cm": 122.5,
+                "default_edge_type": "PVC 0.8",
+                "full_board_length_mm": 2440,
+                "full_board_width_mm": 1220,
+                "usable_board_length_cm": 243,
+                "pieces": [],
+            }
+        )
+        self.assertEqual(payload["board_length_cm"], 244)
+        self.assertEqual(payload["board_width_cm"], 122.5)
+        self.assertEqual(payload["default_edge_type"], "PVC 0.8")
+        self.assertNotIn("full_board_length_mm", payload)
+        self.assertNotIn("full_board_width_mm", payload)
+        self.assertNotIn("usable_board_length_cm", payload)
+
+        printed = measurements_print_html(
+            payload,
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertIn('dir="ltr">244</span>', printed)
+        self.assertIn('dir="ltr">122.5</span>', printed)
+        self.assertIn('class="shared-info-detail-value">PVC 0.8</span>', printed)
+
+        missing = order_print_payload({"name": "26-00093", "pieces": []})
+        self.assertIsNone(missing["board_length_cm"])
+        self.assertIsNone(missing["board_width_cm"])
+        self.assertIsNone(missing["default_edge_type"])
+        blank = measurements_print_html(
+            missing,
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertEqual(blank.count('class="shared-info-metric" dir="ltr">—</span>'), 2)
+        self.assertIn('class="shared-info-detail-value">—</span>', blank)
+        self.assertNotIn('dir="ltr">0</span>', blank)
 
     def test_payload_accepts_frappe_dict_attribute_access(self) -> None:
         class SoftDict(dict):
@@ -190,6 +341,179 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertNotIn("import frappe", source)
         self.assertNotIn("from frappe", source)
 
+    def test_corner_outlines_print_from_stored_cuts_and_travel_in_the_payload(self) -> None:
+        order = _sample_order()
+        pieces = order["pieces"]
+        assert isinstance(pieces, list)
+        pieces.extend([
+            {
+                "name": "ROW-L",
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 100,
+                "length_cm": 200,
+                "qty": 1,
+                "notes": "ملاحظة L",
+                "extra_liner": 1,
+                "rotated": 1,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 30,
+                "clipped_corner_length_cm": 40,
+            },
+            {
+                "name": "ROW-CLIP",
+                "piece_type": "Clipped Corner",
+                "width_cm": 50,
+                "length_cm": 80,
+                "qty": 1,
+                "notes": "",
+                "clipped_corner_position": "Bottom Left",
+                "clipped_corner_width_cm": 10,
+                "clipped_corner_length_cm": 15,
+            },
+            {
+                "name": "ROW-MISSING",
+                "piece_type": "L-Shaped Corner",
+                "width_cm": 90,
+                "length_cm": 140,
+                "qty": 1,
+                "notes": "بدون قص",
+                "clipped_corner_position": "Top Left",
+            },
+        ])
+        payload = order_print_payload(order)
+        corner = payload["pieces"][1]
+        self.assertEqual(corner["clipped_corner_position"], "Top Right")
+        self.assertEqual(corner["clipped_corner_width_cm"], 30)
+        self.assertEqual(corner["clipped_corner_length_cm"], 40)
+        html = measurements_print_html(
+            payload,
+            language="ar",
+            translator=_arabic_translator,
+        )
+        self.assertIn("70.0,40.0", html)
+        self.assertIn("100.0,40.0", html)
+        self.assertIn("10.0,80.0", html)
+        self.assertIn("0.0,65.0", html)
+        self.assertIn('direction="ltr"', html)
+        self.assertIn('dir="rtl"', html)
+        self.assertIn("notes-with-drawing", html)
+        self.assertIn("row-with-drawing", html)
+        self.assertIn("ملاحظة L", html)
+        self.assertIn("بدون قص", html)
+        self.assertIn("Door piece drawing 2", html)
+        self.assertIn("Door piece drawing 3", html)
+        self.assertEqual(html.count("<polygon "), 2)
+        self.assertNotIn("90.0,140.0", html)
+        self.assertIn("<path ", html)
+        self.assertLess(html.index("<path "), html.index("70.0,40.0"))
+        self.assertIn("الزاوية:", html)
+        self.assertNotIn("المتبقي على ضلع العرض:", html)
+        self.assertIn('data-dco-remaining-axis="width"', html)
+        self.assertIn(">70 سم<", html)
+        self.assertIn(">160 سم<", html)
+        self.assertIn("أعلى اليمين", html)
+        self.assertIn("أسفل اليسار", html)
+        self.assertIn(">40 سم<", html)
+        self.assertIn(">65 سم<", html)
+        self.assertIn("بدون قص", html)
+        self.assertIn("أعلى اليسار", html)
+        missing_block = html.split("بدون قص", 1)[1]
+        self.assertNotIn("المتبقي على ضلع العرض", missing_block.split("</tr>", 1)[0])
+
+    def test_type_setup_measurements_print_remaining_glass_and_payload_fields(self) -> None:
+        order = _sample_order()
+        pieces = order["pieces"]
+        assert isinstance(pieces, list)
+        pieces.extend(
+            [
+                {
+                    "name": "ROW-55",
+                    "piece_type": "Clipped Corner",
+                    "width_cm": 55,
+                    "length_cm": 55,
+                    "qty": 1,
+                    "notes": "مثال 55",
+                    "clipped_corner_position": "Top Right",
+                    "clipped_corner_width_cm": 11,
+                    "clipped_corner_length_cm": 11,
+                    "edge_width_top": 1,
+                    "edge_long_right": 1,
+                    "edge_break_only": 1,
+                },
+                {
+                    "name": "ROW-AXES",
+                    "piece_type": "L-Shaped Corner",
+                    "width_cm": 80,
+                    "length_cm": 120,
+                    "qty": 1,
+                    "notes": "",
+                    "clipped_corner_position": "Bottom Left",
+                    "clipped_corner_width_cm": 15.5,
+                    "clipped_corner_length_cm": 40,
+                    "edge_break": 1,
+                },
+                {
+                    "name": "ROW-GLASS",
+                    "piece_type": "Glass",
+                    "width_cm": 60,
+                    "length_cm": 90,
+                    "qty": 1,
+                    "notes": "بلور",
+                    "glass_margin_mm": 20,
+                },
+                {
+                    "name": "ROW-GLASS-EMPTY",
+                    "piece_type": "Glass",
+                    "width_cm": 50,
+                    "length_cm": 70,
+                    "qty": 1,
+                    "notes": "بلا هامش",
+                },
+            ]
+        )
+        payload = order_print_payload(order)
+        glass = payload["pieces"][3]
+        self.assertEqual(glass["glass_margin_mm"], 20)
+        self.assertEqual(payload["pieces"][1]["clipped_corner_width_cm"], 11)
+        self.assertEqual(payload["pieces"][1]["edge_break_only"], 1)
+        self.assertEqual(payload["pieces"][2]["edge_break"], 1)
+        html = measurements_print_html(
+            payload,
+            language="ar",
+            translator=_arabic_translator,
+        )
+        self.assertEqual(html.count('data-dco-remaining-axis="width"'), 2)
+        self.assertIn(">44 سم<", html)
+        self.assertEqual(html.count(">44 سم<"), 2)
+        self.assertNotIn(">11 سم<", html)
+        self.assertNotIn("المتبقي على ضلع العرض:", html)
+        self.assertIn(">64.5 سم<", html)
+        self.assertIn(">80 سم<", html)
+        self.assertIn('stroke="#d00000"', html)
+        self.assertIn('data-dco-edge="breakOnly"', html)
+        self.assertIn('data-dco-edge="break"', html)
+        width_label = html.split('data-dco-remaining-axis="width"', 1)[1].split(">", 1)[0]
+        self.assertIn('y="', width_label)
+        first_width_y = float(width_label.split('y="', 1)[1].split('"', 1)[0])
+        self.assertLess(first_width_y, 5.0, "Top Right remaining width sits near the top edge")
+        self.assertIn("هامش البلور:", html)
+        self.assertIn('dir="ltr">2 سم</b>', html)
+        self.assertIn("بلور", html)
+        self.assertIn("بلا هامش", html)
+        empty_glass = html.split("بلا هامش", 1)[1].split("</tr>", 1)[0]
+        self.assertNotIn("هامش البلور", empty_glass)
+        english = measurements_print_html(
+            payload,
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertIn('data-dco-remaining-axis="width"', english)
+        self.assertIn(">44 cm<", english)
+        self.assertNotIn("Remaining on width side:", english)
+        self.assertIn("Glass Margin:", english)
+        self.assertIn('dir="ltr">2 cm</b>', english)
+        self.assertIn("Bottom left", english)
+
     def test_whatsapp_adapter_uses_unified_html_not_print_format(self) -> None:
         adapter = ADAPTER.read_text(encoding="utf-8")
         presenter = PRESENTER.read_text(encoding="utf-8")
@@ -227,6 +551,14 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertIn("مقبض", arabic)
         self.assertNotIn("<em>Custom</em>", arabic)
         self.assertIn('class="ltr"', arabic)
+        self.assertIn("الطول:", arabic)
+        self.assertIn("العرض:", arabic)
+        self.assertIn(">سم</span>", arabic)
+        self.assertIn("النوع الافتراضي:", arabic)
+        self.assertIn('dir="ltr">244</span>', arabic)
+        self.assertIn('dir="ltr">122.5</span>', arabic)
+        self.assertIn("PVC 0.8", arabic)
+        self.assertIn("لوح أبيض", arabic)
 
         def french(message: str) -> str:
             if message == "Order measurements table":
@@ -369,6 +701,10 @@ class CustomerInvoicePrintDocumentTests(unittest.TestCase):
         self.assertIn("Unit price $", html)
         self.assertIn("25.00", html)
         self.assertIn("0944123456", html)
+        self.assertIn('dir="ltr">244</span>', html)
+        self.assertIn('dir="ltr">122.5</span>', html)
+        self.assertIn('class="shared-info-detail-value">PVC 0.8</span>', html)
+        self.assertIn("quote-details", html)
         self.assertNotIn("cost_breakdown", html)
         self.assertNotIn("special_prices", html)
         self.assertNotIn("زبون <تجريبي>", html)

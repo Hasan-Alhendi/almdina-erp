@@ -24,7 +24,12 @@ def test_horizontal_scroll_is_available_on_small_screens_without_crushing_the_ta
     assert "@media (max-width:980px)" in source
     assert "min-width:1180px !important" in source
     assert "min-width:300px !important" in source
+    assert "minmax(0,1fr) 31px" in source
+    assert "min-width:44px !important" in source
     assert "scrollbar-width:thin" in source
+    assert "overscroll-behavior-x:contain" in source
+    assert "overscroll-behavior-y:auto" in source
+    assert ".dco-entry-window-host .dco-fast-entry-scroll" in source
     assert "overscroll-behavior:contain" in source
 
 

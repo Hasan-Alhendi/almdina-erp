@@ -250,8 +250,9 @@ def test_cutting_plan_visually_audits_every_special_raw_piece():
     assert "render_special_raw_coverage(frm, plan)" in order_js
     assert "dco-special-raw-piece" in order_js
     assert 'htmlText("Special door · CNC raw")' in order_js
-    assert "const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));" in order_js
+    assert "pieceWithEdgeTypeSpec(" in order_js
+    assert "pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece))" in order_js
     assert "geometry.resolve(manufacturingPiece)" in order_js
-    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId)" in order_js
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId, frm)" in order_js
     assert '"special_shape_raw_summary": summarize_special_shapes(expanded, plan)' in optimization
     assert '"piece_type": row.piece_type or "Regular"' in remnant_planning

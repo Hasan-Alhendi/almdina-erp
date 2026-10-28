@@ -124,8 +124,8 @@ def test_dimension_validation_is_live_localized_and_save_guarded():
         "function pieceDimensionIssues(frm, row, values = {})",
         "refreshValidation: refreshDimensionValidation",
         "validateDimensionsBeforeSave(frm)",
-        'if (length !== null && length > board.length) issues.length_cm = __("Exceeds board length");',
-        'if (width !== null && width > board.width) issues.width_cm = __("Exceeds board width");',
+        'if (length !== null && length > board.length) issues.length_cm = __("Exceeds length");',
+        'if (width !== null && width > board.width) issues.width_cm = __("Exceeds width");',
         "entered axes independently. Rotation",
     ):
         assert fragment in operator_source
@@ -134,6 +134,9 @@ def test_dimension_validation_is_live_localized_and_save_guarded():
     assert "يرجى إدخال طول وعرض اللوح أولاً." in translations
     assert "Exceeds board length,يتجاوز طول اللوح" in translations
     assert "Exceeds board width,يتجاوز عرض اللوح" in translations
+    assert "Exceeds width,يتجاوز العرض" in translations
+    assert "Exceeds length,يتجاوز الطول" in translations
+    assert "Invalid dimension,قياس غير صالح" in translations
 
 
 def test_plan_payload_uses_board_description_not_stock_item():

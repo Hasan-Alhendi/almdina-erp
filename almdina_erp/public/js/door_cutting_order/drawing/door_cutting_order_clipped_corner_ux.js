@@ -458,6 +458,25 @@
         const amount = Number.isFinite(requestedInset)
             ? Math.max(0, requestedInset)
             : Math.min(width, height) * 0.035;
+        const source = edgePathSource(cutStyle(piece), config.position, width, height, cutX, cutY)
+            || edgePathSource(cutStyle(piece), DEFAULT_POSITION, width, height, cutX, cutY);
+        if (!source) return empty;
+        const boundary = points(piece, width, height);
+        const inset = insetBoundary(boundary, amount);
+        const insetPath = path => insetBoundaryPath(path, boundary, inset);
+        return {
+            top: insetPath(source.top),
+            bottom: insetPath(source.bottom),
+            left: insetPath(source.left),
+            right: insetPath(source.right),
+            break: insetPath(source.break),
+            breakOnly: isClipped(piece) && source.breakOnly
+                ? insetPath(source.breakOnly)
+                : null,
+        };
+    }
+
+    function edgePathSource(style, position, width, height, cutX, cutY) {
         const diagonalByPosition = {
             "Top Right": {
                 top: [[0, 0], [width - cutX, 0]],
@@ -465,6 +484,7 @@
                 bottom: [[width, height], [0, height]],
                 left: [[0, height], [0, 0]],
                 break: [[0, 0], [width - cutX, 0], [width, cutY], [width, height]],
+                breakOnly: [[width - cutX, 0], [width, cutY]],
             },
             "Top Left": {
                 top: [[cutX, 0], [width, 0]],
@@ -472,6 +492,7 @@
                 bottom: [[width, height], [0, height]],
                 left: [[0, height], [0, cutY]],
                 break: [[width, 0], [cutX, 0], [0, cutY], [0, height]],
+                breakOnly: [[cutX, 0], [0, cutY]],
             },
             "Bottom Right": {
                 top: [[0, 0], [width, 0]],
@@ -479,6 +500,7 @@
                 bottom: [[width - cutX, height], [0, height]],
                 left: [[0, height], [0, 0]],
                 break: [[width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
+                breakOnly: [[width, height - cutY], [width - cutX, height]],
             },
             "Bottom Left": {
                 top: [[0, 0], [width, 0]],
@@ -486,6 +508,7 @@
                 bottom: [[width, height], [cutX, height]],
                 left: [[0, height - cutY], [0, 0]],
                 break: [[0, 0], [0, height - cutY], [cutX, height], [width, height]],
+                breakOnly: [[0, height - cutY], [cutX, height]],
             },
         };
         // L corner strap covers only the inner notch (two orthogonal cut edges).
@@ -496,6 +519,7 @@
                 bottom: [[width, height], [0, height]],
                 left: [[0, height], [0, 0]],
                 break: [[width - cutX, 0], [width - cutX, cutY], [width, cutY]],
+                breakOnly: null,
             },
             "Top Left": {
                 top: [[cutX, 0], [width, 0]],
@@ -503,6 +527,7 @@
                 bottom: [[width, height], [0, height]],
                 left: [[0, height], [0, cutY]],
                 break: [[cutX, 0], [cutX, cutY], [0, cutY]],
+                breakOnly: null,
             },
             "Bottom Right": {
                 top: [[0, 0], [width, 0]],
@@ -510,6 +535,7 @@
                 bottom: [[width - cutX, height], [0, height]],
                 left: [[0, height], [0, 0]],
                 break: [[width, height - cutY], [width - cutX, height - cutY], [width - cutX, height]],
+                breakOnly: null,
             },
             "Bottom Left": {
                 top: [[0, 0], [width, 0]],
@@ -517,23 +543,169 @@
                 bottom: [[width, height], [cutX, height]],
                 left: [[0, height - cutY], [0, 0]],
                 break: [[0, height - cutY], [cutX, height - cutY], [cutX, height]],
+                breakOnly: null,
             },
         };
-        const byPosition = cutStyle(piece) === "L" ? lByPosition : diagonalByPosition;
-        const source = byPosition[config.position] || byPosition[DEFAULT_POSITION];
-        const boundary = points(piece, width, height);
+        const byPosition = style === "L" ? lByPosition : diagonalByPosition;
+        return byPosition[position] || null;
+    }
+
+    function remainingSideSegments(position, width, height, cutX, cutY) {
+        // Remaining outer sides from the editor fields, not the short cut legs.
+        const byPosition = {
+            "Top Right": {
+                width: [[0, 0], [width - cutX, 0]],
+                length: [[width, cutY], [width, height]],
+            },
+            "Top Left": {
+                width: [[cutX, 0], [width, 0]],
+                length: [[0, height], [0, cutY]],
+            },
+            "Bottom Right": {
+                width: [[width - cutX, height], [0, height]],
+                length: [[width, 0], [width, height - cutY]],
+            },
+            "Bottom Left": {
+                width: [[width, height], [cutX, height]],
+                length: [[0, height - cutY], [0, 0]],
+            },
+        };
+        return byPosition[position] || null;
+    }
+
+    function orderCornerMetrics(piece) {
+        if (!isCornerCut(piece)) return null;
+        const width = num(piece.width_cm);
+        const length = num(piece.length_cm);
+        const cutWidth = num(piece.clipped_corner_width_cm);
+        const cutLength = num(piece.clipped_corner_length_cm);
+        const position = String(piece.clipped_corner_position || "").trim();
+        if (!(width > 0) || !(length > 0)) return null;
+        if (!(cutWidth > 0) || !(cutLength > 0)) return null;
+        if (cutWidth >= width || cutLength >= length) return null;
+        if (!POSITIONS.some(item => item.value === position)) return null;
+        return {
+            style: cutStyle(piece),
+            position,
+            width,
+            length,
+            cutWidth,
+            cutLength,
+            remainingWidth: remainingFromCut(width, cutWidth),
+            remainingLength: remainingFromCut(length, cutLength),
+        };
+    }
+
+    // Print-space edge paths in centimetres. inset is in the same units as the
+    // outline (cm), never editor pixel insets reinterpreted as centimetres.
+    function orderEdgePaths(piece, options = {}) {
+        const empty = {
+            top: null,
+            bottom: null,
+            left: null,
+            right: null,
+            break: null,
+            breakOnly: null,
+        };
+        const metrics = orderCornerMetrics(piece);
+        if (!metrics) return empty;
+        const { style, position, width, length, cutWidth, cutLength } = metrics;
+        const source = edgePathSource(style, position, width, length, cutWidth, cutLength);
+        if (!source) return empty;
+        const boundary = cornerPolygonPoints(style, position, width, length, cutWidth, cutLength) || [];
+        const requestedInset = Number(options.inset);
+        const amount = Number.isFinite(requestedInset)
+            ? Math.max(0, requestedInset)
+            : Math.min(width, length) * 0.035;
         const inset = insetBoundary(boundary, amount);
-        const insetPath = path => insetBoundaryPath(path, boundary, inset);
+        const insetPath = path => (path ? insetBoundaryPath(path, boundary, inset) : null);
         return {
             top: insetPath(source.top),
             bottom: insetPath(source.bottom),
             left: insetPath(source.left),
             right: insetPath(source.right),
             break: insetPath(source.break),
-            breakOnly: isClipped(piece)
-                ? insetPath(source.break.slice(1, 3))
-                : null,
+            breakOnly: isClipped(piece) ? insetPath(source.breakOnly) : null,
         };
+    }
+
+    function orderEdgeBandSvgMarkup(piece, options = {}) {
+        const paths = orderEdgePaths(piece, options);
+        if (!paths.top && !paths.bottom && !paths.left && !paths.right && !paths.break && !paths.breakOnly) {
+            return "";
+        }
+        const color = options.color || "#d00000";
+        const strokeWidth = options.strokeWidth || 2.2;
+        const toPoints = (path) => (path || [])
+            .map(([x, y]) => `${rounded(x)},${rounded(y)}`)
+            .join(" ");
+        const polyline = (path) => {
+            if (!path || path.length < 2) return "";
+            return `<polyline fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+        };
+        const lines = [];
+        if (piece && piece.edge_width_top && paths.top) lines.push(polyline(paths.top));
+        if (piece && piece.edge_width_bottom && paths.bottom) lines.push(polyline(paths.bottom));
+        if (piece && piece.edge_long_left && paths.left) lines.push(polyline(paths.left));
+        if (piece && piece.edge_long_right && paths.right) lines.push(polyline(paths.right));
+        if (piece && piece.edge_break && paths.break) lines.push(polyline(paths.break));
+        if (piece && piece.edge_break_only && paths.breakOnly) lines.push(polyline(paths.breakOnly));
+        return lines.join("");
+    }
+
+    function orderRemainingDimensionAnchors(piece, options = {}) {
+        const metrics = orderCornerMetrics(piece);
+        if (!metrics) return [];
+        const segments = remainingSideSegments(
+            metrics.position,
+            metrics.width,
+            metrics.length,
+            metrics.cutWidth,
+            metrics.cutLength
+        );
+        if (!segments) return [];
+        const offset = Number.isFinite(Number(options.offset))
+            ? Math.max(0, Number(options.offset))
+            : Math.min(metrics.width, metrics.length) * 0.08;
+        const center = [metrics.width / 2, metrics.length / 2];
+        const place = (axis, segment, value) => {
+            if (!segment || segment.length < 2 || !(value > 0)) return null;
+            const start = segment[0];
+            const end = segment[1];
+            const midX = (start[0] + end[0]) / 2;
+            const midY = (start[1] + end[1]) / 2;
+            let nx = start[1] - end[1];
+            let ny = end[0] - start[0];
+            const length = Math.hypot(nx, ny) || 1;
+            nx /= length;
+            ny /= length;
+            if ((midX - center[0]) * nx + (midY - center[1]) * ny < 0) {
+                nx = -nx;
+                ny = -ny;
+            }
+            const sideLength = Math.hypot(end[0] - start[0], end[1] - start[1]);
+            // Length labels sit beside a vertical edge with middle text-anchor, so they
+            // need more outward room than the width label above/below a horizontal edge.
+            let labelOffset = sideLength < Math.min(metrics.width, metrics.length) * 0.22
+                ? offset * 1.35
+                : offset;
+            if (axis === "length") labelOffset *= 2.9;
+            return {
+                axis,
+                value,
+                midX,
+                midY,
+                x: midX + nx * labelOffset,
+                y: midY + ny * labelOffset,
+                nx,
+                ny,
+                short: sideLength < Math.min(metrics.width, metrics.length) * 0.22,
+            };
+        };
+        return [
+            place("width", segments.width, metrics.remainingWidth),
+            place("length", segments.length, metrics.remainingLength),
+        ].filter(Boolean);
     }
 
     function trimPathEnds(path, trimPx) {
@@ -582,12 +754,21 @@
         const inheritStroke = options.inheritStroke !== false;
         const color = options.color || "#d00000";
         const strokeWidth = options.strokeWidth || 3;
+        const customColor = options.customColor || "#1d4ed8";
+        // Screen-space dash-dot (CSS px) so board zoom does not stretch the pattern.
+        const customDash = options.customDasharray || "5px 2.5px 1.5px 2.5px";
+        const sideCustom = options.sideCustom || {};
         const offsetX = num(options.offsetX);
         const offsetY = num(options.offsetY);
         const toPoints = (path) => (path || [])
             .map(([x, y]) => `${rounded(x + offsetX)},${rounded(y + offsetY)}`)
             .join(" ");
-        const polyline = (path, extraClass = "") => {
+        const polyline = (path, extraClass = "", custom = false) => {
+            if (!path || path.length < 2) return "";
+            const customClass = custom ? " dco-edge-line--custom" : "";
+            if (custom) {
+                return `<polyline class="dco-edge-line-svg ${extraClass}${customClass}" fill="none" stroke="${customColor}" stroke-width="${strokeWidth}" stroke-dasharray="${customDash}" stroke-linecap="butt" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+            }
             if (inheritStroke) {
                 return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
             }
@@ -600,30 +781,21 @@
             left: Boolean(piece && piece.edge_long_left),
             right: Boolean(piece && piece.edge_long_right),
         };
-        if (flags.top && paths.top) lines.push(polyline(paths.top));
-        if (flags.bottom && paths.bottom) lines.push(polyline(paths.bottom));
-        if (flags.left && paths.left) lines.push(polyline(paths.left));
-        if (flags.right && paths.right) lines.push(polyline(paths.right));
+        if (flags.top && paths.top) lines.push(polyline(paths.top, "", Boolean(sideCustom.top)));
+        if (flags.bottom && paths.bottom) lines.push(polyline(paths.bottom, "", Boolean(sideCustom.bottom)));
+        if (flags.left && paths.left) lines.push(polyline(paths.left, "", Boolean(sideCustom.left)));
+        if (flags.right && paths.right) lines.push(polyline(paths.right, "", Boolean(sideCustom.right)));
         if (piece && piece.edge_break && paths.break) {
-            lines.push(polyline(paths.break, "dco-edge-break-svg"));
+            lines.push(polyline(paths.break, "dco-edge-break-svg", Boolean(sideCustom.break)));
         }
         if (piece && piece.edge_break_only && paths.breakOnly) {
-            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg"));
+            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg", Boolean(sideCustom.breakOnly)));
         }
         return lines.join("");
     }
 
-    function points(piece, viewportWidth = 100, viewportHeight = 100) {
-        const config = effectiveConfig(piece || {});
-        const width = Math.max(0, num(viewportWidth));
-        const height = Math.max(0, num(viewportHeight));
-        if (!width || !height || !config.width || !config.length) {
-            return [[0, 0], [width, 0], [width, height], [0, height]];
-        }
-
-        const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
-        const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
-        const byPosition = cutStyle(piece) === "L"
+    function cornerPolygonPoints(style, position, width, height, cutX, cutY) {
+        const byPosition = style === "L"
             ? {
                 "Top Right": [[0, 0], [width - cutX, 0], [width - cutX, cutY], [width, cutY], [width, height], [0, height]],
                 "Top Left": [[cutX, 0], [width, 0], [width, height], [0, height], [0, cutY], [cutX, cutY]],
@@ -636,7 +808,45 @@
                 "Bottom Right": [[0, 0], [width, 0], [width, height - cutY], [width - cutX, height], [0, height]],
                 "Bottom Left": [[0, 0], [width, 0], [width, height], [cutX, height], [0, height - cutY]],
             };
-        return byPosition[config.position] || byPosition[DEFAULT_POSITION];
+        return byPosition[position] || null;
+    }
+
+    function points(piece, viewportWidth = 100, viewportHeight = 100) {
+        const config = effectiveConfig(piece || {});
+        const width = Math.max(0, num(viewportWidth));
+        const height = Math.max(0, num(viewportHeight));
+        if (!width || !height || !config.width || !config.length) {
+            return [[0, 0], [width, 0], [width, height], [0, height]];
+        }
+
+        const cutX = clamp(config.cutWidth / config.width * width, 0, width * 0.95);
+        const cutY = clamp(config.cutLength / config.length * height, 0, height * 0.95);
+        return cornerPolygonPoints(cutStyle(piece), config.position, width, height, cutX, cutY)
+            || cornerPolygonPoints(cutStyle(piece), DEFAULT_POSITION, width, height, cutX, cutY);
+    }
+
+    // Print outline of the piece as entered. Stored cuts are distances from the
+    // saved corner, not the remaining lengths shown in the editor. Missing or
+    // impossible cuts produce no outline so print does not invent a corner.
+    function orderOutlinePoints(piece) {
+        if (!isCornerCut(piece)) return [];
+        const width = num(piece.width_cm);
+        const length = num(piece.length_cm);
+        const cutWidth = num(piece.clipped_corner_width_cm);
+        const cutLength = num(piece.clipped_corner_length_cm);
+        const position = String(piece.clipped_corner_position || "").trim();
+        if (!(width > 0) || !(length > 0)) return [];
+        if (!(cutWidth > 0) || !(cutLength > 0)) return [];
+        if (cutWidth >= width || cutLength >= length) return [];
+        if (!POSITIONS.some(item => item.value === position)) return [];
+        return cornerPolygonPoints(
+            cutStyle(piece),
+            position,
+            width,
+            length,
+            cutWidth,
+            cutLength
+        ) || [];
     }
 
     const PREVIEW_CANVAS_WIDTH = 360;
@@ -1334,6 +1544,10 @@
         preserveRemainingOnResize,
         resizeSnapshot,
         points,
+        orderOutlinePoints,
+        orderEdgePaths,
+        orderEdgeBandSvgMarkup,
+        orderRemainingDimensionAnchors,
         pointsAttribute,
         previewFrame,
         dxfPoints,

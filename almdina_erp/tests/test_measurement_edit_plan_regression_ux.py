@@ -49,7 +49,7 @@ def test_preview_persists_pending_order_inputs_before_server_preview_call() -> N
     assert "editPolicy.persistOrderEditCheckpoint(frm)" in fast_save
     assert "frm.save" not in fast_save
     assert "async function persistOrderEditCheckpoint(frm)" in revision
-    assert "await frm.save();" in revision
+    assert "await saveDocument(frm);" in revision
     assert "frappe.almdina.persistOrderEditCheckpoint = persistOrderEditCheckpoint" in revision
     assert "__almdina_preserve_edit_session_after_save" in revision
     assert "frm.__almdina_pending_order_input_persistence = true" in fast_save

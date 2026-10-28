@@ -10,6 +10,7 @@ from .evaluation import evaluate_plan, validate_plan
 from .kerf_layout import pack_with_stable_kerf
 from .glass_opening_dxf import record_glass_opening
 from .primitives import (
+    _edge_metadata,
     double_edge_metadata,
     liner_metadata,
     num,
@@ -765,15 +766,7 @@ def _solve_cp_sat(
             "notes": piece.get("notes") or "",
             **liner_metadata(piece),
             **double_edge_metadata(piece),
-            "edge_long_right": 1 if piece.get("edge_long_right") else 0,
-            "edge_long_left": 1 if piece.get("edge_long_left") else 0,
-            "edge_width_top": 1 if piece.get("edge_width_top") else 0,
-            "edge_width_bottom": 1 if piece.get("edge_width_bottom") else 0,
-            "edge_break": 1 if piece.get("edge_break") else 0,
-            "edge_break_only": 1 if piece.get("edge_break_only") else 0,
-            "edge_type": piece.get("edge_type") or "",
-            "edge_rate_usd": num(piece.get("edge_rate_usd")),
-            "edge_cost_usd": num(piece.get("edge_cost_usd")),
+            **_edge_metadata(piece),
         }
         record_glass_opening(placed, piece, rotated=rotated)
         sheets_by_bin.setdefault(chosen, []).append(placed)

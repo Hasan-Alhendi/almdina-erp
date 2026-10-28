@@ -74,6 +74,21 @@ def test_measurement_toolbar_shows_only_measurement_table_title():
     assert "الأسهم للتنقل بين الحقول" not in compact
 
 
+def test_enlarged_toolbar_reuses_the_normal_print_icon_and_a_collapse_exit():
+    actions = _actions()
+    print_svg = actions.split("function printIconSvg()", 1)[1].split("function entryWindowIcon", 1)[0]
+    assert 'd="M7 8V4h10v4"' in print_svg
+    assert actions.count('d="M7 8V4h10v4"') == 1
+    assert 'print: printIconSvg()' in actions
+    assert 'if (kind === "print") return printIconSvg();' in actions
+    assert 'd="M7 9V4h10v5"' not in actions
+    assert 'd="M10 7h6v10H10z"' not in actions
+    assert 'd="M4 14h6v6"' in actions
+    assert 'd="M10 4v6H4"' in actions
+    assert ".dco-measurement-table-actions .dco-toolbar-icon-button svg{width:16px;height:16px;" in actions
+    assert ".dco-entry-window-icon-button svg{width:21px;height:21px;" in actions
+
+
 def test_compact_toolbar_polish_does_not_rewrite_action_icons():
     compact = _compact()
 

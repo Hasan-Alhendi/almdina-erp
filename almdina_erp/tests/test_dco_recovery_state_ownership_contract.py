@@ -175,7 +175,7 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
         self.assertIn("frm.is_new()", checkpoint)
         self.assertIn("markEditSessionSticky(frm);", checkpoint)
         self.assertIn("frm.__almdina_preserve_edit_session_after_save = true;", checkpoint)
-        self.assertIn("await frm.save();", checkpoint)
+        self.assertIn("await saveDocument(frm);", checkpoint)
 
     def test_checkpoint_remains_order_input_persistence_not_plan_autosave(self) -> None:
         fast_save = source(

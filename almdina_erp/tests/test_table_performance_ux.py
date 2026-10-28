@@ -66,6 +66,12 @@ def test_virtual_piece_type_change_materializes_one_row_without_rebuilding_table
     )[0]
     assert "!tr.isConnected" in materialize
     assert "!isEditable(frm)" in materialize
+    assert "fastEntry.syncDeleteCell(frm, tr)" in materialize
+    reset = source.split("function resetVirtualClone(frm, clone)", 1)[1].split(
+        "function materializeVirtualRow", 1
+    )[0]
+    assert 'clone.querySelector(".dco-col-delete")' in reset
+    assert "deleteCell.replaceChildren()" in reset
 
 
 def test_expensive_class_mutation_observer_is_replaced_by_direct_child_list_observer():

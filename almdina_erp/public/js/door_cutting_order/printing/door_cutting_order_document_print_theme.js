@@ -86,7 +86,7 @@
             body{font-size:${bodySize};line-height:1.28;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-variant-numeric:tabular-nums}
             ${headerCss()}
             .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
-            .shared-info{grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)}
+            .shared-info{grid-template-columns:minmax(0,1.45fr) minmax(0,1.42fr) minmax(0,1.38fr) minmax(0,.64fr) minmax(0,.5fr)}
             .financial-info{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:1.2mm}
             .info>div{min-width:0;min-height:${measurements ? "10.5mm" : "11.5mm"};padding:1.35mm 1.55mm;border:.7pt solid #c7cdd3;border-radius:2.1mm;background:#fbfcfd;line-height:1.25;overflow-wrap:anywhere}
             .info b{display:block;margin-bottom:.55mm;color:#5d6874;font-size:${measurements ? "6.35pt" : "6.65pt"};font-weight:800}
@@ -94,6 +94,10 @@
             .shared-info-phone{display:flex;align-items:baseline;gap:1mm;margin-top:.65mm;color:#5d6874;font-size:${measurements ? "6.35pt" : "6.65pt"};font-weight:700;line-height:1.25}
             .shared-info-phone-label{flex:0 0 auto}
             .shared-info-phone-value{min-width:0;direction:ltr;unicode-bidi:plaintext;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+            .shared-info-detail{display:block;margin-top:.45mm;color:#303a44;font-size:${measurements ? "6.55pt" : "6.8pt"};font-weight:750;line-height:1.35;overflow-wrap:anywhere}
+            .shared-info-detail-label,.shared-info-detail-sep,.shared-info-detail-unit{white-space:nowrap}
+            .shared-info-metric{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums;white-space:nowrap}
+            .shared-info-detail-value{overflow-wrap:anywhere}
             .title{margin:${measurements ? "2.1mm" : "3mm"} 0 1.2mm;font-size:${measurements ? "9.2pt" : "9.8pt"};font-weight:900;color:#172033}
             .table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:.75pt solid #98a2ac;border-radius:2mm;overflow:hidden}
             .table thead{display:table-header-group}

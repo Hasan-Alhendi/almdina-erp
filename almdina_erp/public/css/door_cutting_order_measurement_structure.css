@@ -20,6 +20,43 @@
     font-variant-numeric: tabular-nums;
 }
 
+.dco-fast-entry-shell .dco-col-width .dco-fast-input,
+.dco-fast-entry-shell .dco-col-length .dco-fast-input {
+    direction: ltr;
+    text-align: center;
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "locl" 0;
+}
+
+.dco-fast-entry-shell .dco-dimension-control {
+    position: relative;
+    display: block;
+    direction: ltr;
+}
+
+.dco-fast-entry-shell .dco-dimension-control .dco-fast-input {
+    padding-inline-end: 18px;
+}
+
+.dco-fast-entry-shell .dco-dimension-stepper {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    inset-inline-end: 2px;
+    width: 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dco-fast-entry-shell .dco-dimension-step {
+    flex: 1 1 50%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
 .dco-fast-entry-shell .dco-fast-entry-toolbar {
     display: flex;
     align-items: center;
