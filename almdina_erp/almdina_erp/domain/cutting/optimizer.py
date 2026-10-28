@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import random
 import time
+from collections import deque
 from copy import deepcopy
 from typing import Any
 
@@ -433,6 +434,24 @@ def _local_sequences(
                 sequence[start : start + block]
             )
             sequences.append((f"reverse_block_{start}", sequence))
+    # Repeated rectangular sizes can consume the useful gaps in batches.
+    # Interleave those sizes with at most three starting groups, keeping the
+    # existing packers, per-piece permissions and industrial ranking intact.
+    if all((piece.get("piece_type") or "Regular") == "Regular" for piece in pieces):
+        sizes: dict[tuple[float, float], list[dict[str, Any]]] = {}
+        for piece in order_pieces(pieces, "area_desc"):
+            sizes.setdefault((num(piece.get("width_cm")), num(piece.get("length_cm"))), []).append(piece)
+        groups = list(sizes.values())
+        if 1 < len(groups) < len(pieces):
+            for start in range(min(3, len(groups))):
+                pending = deque(deque(group) for group in groups[start:] + groups[:start])
+                sequence = []
+                while pending:
+                    group = pending.popleft()
+                    sequence.append(group.popleft())
+                    if group:
+                        pending.append(group)
+                sequences.append((f"dimension_cycle_{start}", sequence))
     return sequences
 
 

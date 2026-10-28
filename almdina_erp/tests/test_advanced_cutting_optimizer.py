@@ -317,6 +317,38 @@ def _pieces():
     )
 
 
+def test_dimension_cycles_save_boards_in_final_plans():
+    for counts, maximum in (((4, 3, 1), 1), ((36, 36, 48), 11)):
+        pieces = expand_piece_groups([
+            {"width_cm": w, "length_cm": h, "qty": n, "allow_rotation": rotation}
+            for (w, h, rotation), n in zip(((50, 90, 0), (30, 70, 1), (22, 40, 1)), counts)
+        ])
+        plan = optimize_plan(
+            pieces, 122, 244, 0.3, selected_mode=AUTO_PRO,
+            machine_type="CNC Router", time_limit_sec=2,
+        )
+        assert len(plan["sheets"]) <= maximum
+        assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)
+        assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
+        assert sorted(p["id"] for s in plan["sheets"] for p in s["pieces"]) == [p["id"] for p in pieces]
+
+
+def test_dimension_cycles_are_bounded_and_preserve_input_and_permissions():
+    pieces = _pieces()
+    original = deepcopy(pieces)
+    cycles = [sequence for name, sequence in optimizer._local_sequences({"sheets": []}, pieces)
+              if name.startswith("dimension_cycle_")]
+    assert len(cycles) == 3
+    expected = {p["id"]: p for p in original}
+    for sequence in cycles:
+        assert len(sequence) == len(original)
+        assert {p["id"]: p for p in sequence} == expected
+    assert pieces == original
+    pieces[0]["piece_type"] = "L-Shaped Corner"
+    assert not any(name.startswith("dimension_cycle_")
+                   for name, _ in optimizer._local_sequences({"sheets": []}, pieces))
+
+
 def test_auto_pro_is_valid_and_tracks_industrial_metrics():
     pieces = _pieces()
     plan = optimize_plan(pieces, 121, 243, 0.3, selected_mode=AUTO_PRO)
