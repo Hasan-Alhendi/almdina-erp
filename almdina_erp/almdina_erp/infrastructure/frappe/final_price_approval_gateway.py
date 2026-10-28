@@ -45,6 +45,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_reposito
 
 _ORDER_COST_FIELDS = (
     "board_description",
+    "default_edge_type",
     "total_edge_meters",
     "board_rate_usd",
     "cutting_cost_per_board_usd",
@@ -298,6 +299,16 @@ class FrappeFinalPriceApprovalGateway:
             for fieldname in _ORDER_COST_FIELDS
         }
         resolved_order = overlay_authoritative_costs(order, order_snapshot, plan=plan)
+        if getattr(order, "flags", None) is not None:
+            from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+                FrappeEdgeProfileRepository,
+            )
+
+            resolved_order["edge_profile_rates"] = FrappeEdgeProfileRepository(
+                order
+            ).rate_map()
+        else:
+            resolved_order["edge_profile_rates"] = {}
         projection = physical_execution_for_plan(plan) if plan is not None else None
         offcut_applicable = bool(projection and projection.has_factory_source_offcut)
         resolved_order["offcut_price_applicable"] = offcut_applicable

@@ -390,7 +390,15 @@
         Object.entries(EDGE_LABELS).forEach(([fieldname, labels]) => {
             root.querySelectorAll(`button.dco-check-toggle[data-check-field="${fieldname}"]`).forEach(button => {
                 const label = __(labels);
-                button.title = label;
+                // Selected banding sides: hover title is owned by
+                // AlmdinaEdgeProfileControls (effective type name). Rewriting
+                // title here with the direction label is what made the browser
+                // keep showing "قشاط الطول الأيسر" after profile decoration.
+                // Unselected sides keep the compact direction title.
+                // aria-label stays directional for accessibility either way.
+                if (!button.classList.contains("is-checked")) {
+                    button.title = label;
+                }
                 button.setAttribute("aria-label", label);
             });
         });

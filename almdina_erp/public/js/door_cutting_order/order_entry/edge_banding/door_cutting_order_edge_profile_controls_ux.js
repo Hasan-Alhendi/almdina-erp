@@ -427,7 +427,12 @@
         toggle.classList.toggle("is-edge-custom", selected && Boolean(current));
         toggle.classList.toggle("is-edge-default", selected && !current);
         toggle.classList.toggle("is-edge-missing", missing);
-        toggle.title = `${label} — ${mode}: ${effectiveProfileLabel(frm, current)} — ${instruction}`;
+        // Selected sides: hover shows the effective type name only (override || default).
+        // Unselected sides keep the prior direction/mode/instruction tooltip.
+        const typeLabel = effectiveProfileLabel(frm, current);
+        toggle.title = selected
+            ? typeLabel
+            : `${label} — ${mode}: ${typeLabel} — ${instruction}`;
         toggle.setAttribute("aria-label", `${label}. ${instruction}`);
     }
 
