@@ -18,7 +18,11 @@ An actual JavaScript export → DXF parser → contour ownership roundtrip check
 five independent identities, contours, dimensions and CUT_PATH presence.
 The roundtrip exposed and fixes `list.index` assigning all identical clipped
 pieces to expected index zero. Existing Glass/liner/groove/handle export tests
-remain enabled. Symmetric contours whose semantic orientation cannot be resolved
+remain enabled. The full 45-case liner geometry module is now a Static Checks
+gate: seven pre-existing harness failures were reproduced on Develop and P2,
+then fixed by using the current constructor and strict per-point comparisons.
+Manufacturing dimensions and expected coordinate values are unchanged.
+Symmetric contours whose semantic orientation cannot be resolved
 still fail closed; no mirroring ambiguity rule was relaxed.
 
 ## Golden gap coverage
