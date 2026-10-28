@@ -300,6 +300,48 @@ def nest_glass_openings(
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
 ) -> dict[str, Any]:
+    """Compare a few complete, validated opening assignments in one budget."""
+    from copy import deepcopy
+    from .optimizer import _candidate_is_better
+
+    if machine_type == _PANEL_SAW_ID or time_limit_sec <= 0:
+        return _nest_glass_openings(baseline, pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, time_limit_sec=time_limit_sec,
+            min_remnant_width_cm=min_remnant_width_cm, min_remnant_length_cm=min_remnant_length_cm,
+            min_remnant_area_m2=min_remnant_area_m2)
+    deadline = time.monotonic() + nesting_time_budget_sec(time_limit_sec)
+    best = None
+    variants = ({}, {"small_openings_first": True},
+                {"small_openings_first": True, "guest_order": "width"})
+    for index, assignment_options in enumerate(variants):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        candidate = _nest_glass_openings(deepcopy(baseline), pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, time_limit_sec=time_limit_sec,
+            min_remnant_width_cm=min_remnant_width_cm, min_remnant_length_cm=min_remnant_length_cm,
+            min_remnant_area_m2=min_remnant_area_m2, assignment_options=assignment_options,
+            deadline=time.monotonic() + remaining / (len(variants) - index))
+        if best is None or _candidate_is_better(candidate, best):
+            best = candidate
+    return best if best is not None else baseline
+
+
+def _nest_glass_openings(
+    baseline: dict[str, Any],
+    pieces: list[dict[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+    kerf_cm: float,
+    *,
+    machine_type: str,
+    time_limit_sec: float,
+    min_remnant_width_cm: float,
+    min_remnant_length_cm: float,
+    min_remnant_area_m2: float,
+    assignment_options: dict[str, Any] | None = None,
+    deadline: float | None = None,
+) -> dict[str, Any]:
     """Return a better nested plan, or the original baseline."""
 
     def _finish(plan: dict[str, Any], **diagnostics: Any) -> dict[str, Any]:
@@ -318,13 +360,17 @@ def nest_glass_openings(
     if machine_type == _PANEL_SAW_ID:
         return _finish(baseline, outcome="panel_saw")
     budget = nesting_time_budget_sec(time_limit_sec)
+    assignment_options = assignment_options or {}
+    if deadline is not None:
+        budget = min(budget, max(0.0, deadline - time.monotonic()))
     if budget <= 0 or not baseline.get("industrial_rank"):
         return _finish(baseline, outcome="no_budget")
     started = time.monotonic()
+    assignment_options = {**assignment_options, "deadline": started + budget}
     openings = _openings(baseline, kerf_cm)
     if not openings:
         return _finish(baseline, outcome="no_openings", openings_found=0)
-    selected = _select_guests(pieces, openings, kerf_cm)
+    selected = _select_guests(pieces, openings, kerf_cm, **assignment_options)
     selected_ids = [int(piece["id"]) for piece in selected]
     if not selected:
         return _finish(
@@ -418,7 +464,7 @@ def nest_glass_openings(
 
     direct_source = _without_guests(baseline, selected_id_set)
     try:
-        direct_placed = _place_guests(direct_source, selected, kerf_cm)
+        direct_placed = _place_guests(direct_source, selected, kerf_cm, **assignment_options)
     except GlassOpeningError:
         direct_placed = None
     accepted, failure = _prepare(direct_placed)
@@ -446,7 +492,7 @@ def nest_glass_openings(
     repack_failure = failure if failure != "accepted" else "repack_unplaced"
     if not repacked.get("unplaced"):
         try:
-            repack_placed = _place_guests(repacked, selected, kerf_cm)
+            repack_placed = _place_guests(repacked, selected, kerf_cm, **assignment_options)
         except GlassOpeningError:
             repack_placed = None
         repack_plan, repack_failure = _prepare(repack_placed)
@@ -513,11 +559,12 @@ def _select_guests(
     pieces: list[dict[str, Any]],
     openings: list[dict[str, Any]],
     kerf_cm: float,
+    **assignment_options: Any,
 ) -> list[dict[str, Any]]:
     eligible = [piece for piece in pieces if guest_is_eligible(piece)]
     return [
         assignment["guest"]
-        for assignment in _assign_into_openings(eligible, openings, kerf_cm)
+        for assignment in _assign_into_openings(eligible, openings, kerf_cm, **assignment_options)
     ]
 
 
@@ -525,11 +572,12 @@ def _place_guests(
     plan: dict[str, Any],
     guests: list[dict[str, Any]],
     kerf_cm: float,
+    **assignment_options: Any,
 ) -> dict[str, Any] | None:
     openings = _openings(plan, kerf_cm)
     if not openings:
         return None
-    assignments = _assign_into_openings(guests, openings, kerf_cm)
+    assignments = _assign_into_openings(guests, openings, kerf_cm, **assignment_options)
     if len(assignments) != len(guests):
         return None
     sheets = {
@@ -559,22 +607,31 @@ def _assign_into_openings(
     guests: list[dict[str, Any]],
     openings: list[dict[str, Any]],
     kerf_cm: float,
+    *,
+    small_openings_first: bool = False,
+    guest_order: str = "area",
+    deadline: float | None = None,
 ) -> list[dict[str, Any]]:
     """Greedy largest-first placement. A nested Glass publishes its opening."""
 
     working = [dict(opening, depth=int(opening.get("depth") or 0)) for opening in openings]
+    if small_openings_first:
+        working.sort(key=lambda opening: (opening["usable"]["w"] * opening["usable"]["h"], opening["host_id"]))
     occupancy: dict[int, list[dict[str, float]]] = {
         opening["host_id"]: [] for opening in working
     }
     ordered = sorted(
         guests,
         key=lambda piece: (
-            -(num(piece.get("width_cm")) * num(piece.get("length_cm"))),
+            -max(num(piece.get("width_cm")), num(piece.get("length_cm"))) if guest_order == "width"
+            else -(num(piece.get("width_cm")) * num(piece.get("length_cm"))),
             int(piece["id"]),
         ),
     )
     assignments: list[dict[str, Any]] = []
     for guest in ordered:
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         placed_into = None
         for opening in working:
             if int(opening["depth"]) + 1 > MAX_NESTING_DEPTH:

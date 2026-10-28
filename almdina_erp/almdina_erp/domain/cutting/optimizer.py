@@ -1044,6 +1044,7 @@ def optimize_plan(
 
     # Post-passes may annotate their input even when they keep its geometry.
     # Preserve each candidate, including its diagnostics, for final selection.
+    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
     nested = nest_glass_openings(
         deepcopy(baseline),
         pieces,
@@ -1062,12 +1063,12 @@ def optimize_plan(
         kerf_cm,
         mirroring_allowed=mirroring_allowed,
         machine_type=machine_type,
-        time_limit_sec=time_limit_sec,
+        time_limit_sec=max(0.0, search_deadline - time.monotonic()),
+        formation_alternatives=True,
         **metric_kwargs,
     )
     from .evaluation import placement_permission_errors
 
-    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
     improved = improve_plan_search(
         deepcopy(shaped),
         pieces,
@@ -1075,7 +1076,8 @@ def optimize_plan(
         board_h_cm,
         kerf_cm,
         machine_type=machine_type,
-        time_limit_sec=time_limit_sec,
+        time_limit_sec=max(0.0, search_deadline - time.monotonic()),
+        deadline_monotonic=search_deadline,
         mirroring_allowed=mirroring_allowed,
         **metric_kwargs,
     )

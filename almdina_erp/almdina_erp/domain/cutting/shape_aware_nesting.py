@@ -99,11 +99,12 @@ def apply_shape_aware_nesting(
     min_remnant_width_cm: float,
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
+    formation_alternatives: bool = False,
 ) -> dict[str, Any]:
     """Return a valid nest, or the same plan object when none is proven.
 
-    Geometric clearance accepts the nest. ``industrial_rank`` only ranks two
-    nests that already keep the same complements and the same void guests.
+    The optimizer can request bounded formation alternatives, ranked as full
+    validated plans. The default keeps the historical formation-generator API.
     """
 
     if machine_type == "Panel Saw" or time_limit_sec <= 0 or plan.get("unplaced"):
@@ -126,6 +127,7 @@ def apply_shape_aware_nesting(
         kerf_cm,
         mirroring_allowed=mirroring_allowed,
         deadline=deadline,
+        formation_alternatives=formation_alternatives and len(plan.get("sheets") or []) > 1,
     )
     if not partitions:
         plan["shape_nesting_diagnostics"] = {
@@ -163,9 +165,10 @@ def apply_shape_aware_nesting(
             continue
         enriched = enrich_plan_metrics(candidate, method, machine_type, **metric_kwargs)
         key = _nest_choice_key(enriched, seated)
-        if best is None or key > best_key or (
-            key == best_key and _candidate_is_better(enriched, best)
-        ):
+        better = (best is None or _candidate_is_better(enriched, best)) if formation_alternatives and len(plan["sheets"]) > 1 else (
+            best is None or key > best_key or (key == best_key and _candidate_is_better(enriched, best))
+        )
+        if better:
             for preserved in (
                 "search_elapsed_sec",
                 "search_time_limit_sec",
@@ -237,6 +240,7 @@ def _candidate_rejection(
     spot_on_sheet: Any,
     validate_plan: Any,
     placement_permission_errors: Any,
+    deadline: float | None = None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str]:
     """Return a complete plan, or the reason this block set cannot be kept."""
 
@@ -264,7 +268,7 @@ def _candidate_rejection(
         return None, seated, "compose_incomplete"
     if _glass_nest_links(plan) != _glass_nest_links(candidate):
         return None, seated, "glass_links"
-    if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+    if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm, deadline_monotonic=deadline):
         return None, seated, "validation"
     if placement_permission_errors(
         candidate,
@@ -312,6 +316,7 @@ def _retain_shape_blocks(
             spot_on_sheet=spot_on_sheet,
             validate_plan=validate_plan,
             placement_permission_errors=placement_permission_errors,
+            deadline=deadline,
         )
         if candidate is not None:
             return candidate, seated, dropped
@@ -335,6 +340,7 @@ def _retain_shape_blocks(
                 spot_on_sheet=spot_on_sheet,
                 validate_plan=validate_plan,
                 placement_permission_errors=placement_permission_errors,
+                deadline=deadline,
             )
             if candidate is None:
                 continue
@@ -357,6 +363,7 @@ def _cluster_sheet(
     *,
     mirroring_allowed: bool,
     deadline: float | None = None,
+    formation_alternatives: bool = False,
 ) -> list[list[dict[str, Any]]]:
     """Return a few partitions of proven quad, pair, and single blocks."""
 
@@ -366,7 +373,11 @@ def _cluster_sheet(
     orders = _group_orders(groups)
     partitions: list[list[dict[str, Any]]] = []
     seen: set[tuple[Any, ...]] = set()
-    for order in orders:
+    # Keep existing orientation orders, then two bounded formation alternatives.
+    trials = [(order, None) for order in orders]
+    if formation_alternatives:
+        trials.extend([(orders[0], 0), (orders[0], 1)])
+    for order, quad_limit in trials:
         if deadline is not None and time.monotonic() > deadline:
             break
         blocks: list[dict[str, Any]] = []
@@ -378,6 +389,7 @@ def _cluster_sheet(
                     board_h_cm,
                     kerf_cm,
                     mirroring_allowed=mirroring_allowed,
+                    quad_limit=quad_limit,
                 )
             )
         if not blocks:
@@ -392,7 +404,7 @@ def _cluster_sheet(
             continue
         seen.add(signature)
         partitions.append(blocks)
-        if len(partitions) >= 3:
+        if len(partitions) >= 5:
             break
     return partitions
 
@@ -495,13 +507,14 @@ def _partition_group(
     kerf_cm: float,
     *,
     mirroring_allowed: bool,
+    quad_limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Split one identical group into fours, then a pair, then one single."""
 
     remaining = list(group)
     blocks: list[dict[str, Any]] = []
     quad_failed = False
-    while len(remaining) >= 4:
+    while len(remaining) >= 4 and (quad_limit is None or len(blocks) < quad_limit):
         quad = _take_quad(
             remaining,
             board_w_cm,
@@ -515,7 +528,7 @@ def _partition_group(
         blocks.append(quad["block"])
         chosen = quad["ids"]
         remaining = [piece for piece in remaining if int(piece["id"]) not in chosen]
-    if quad_failed and len(remaining) >= 4:
+    if len(remaining) >= 4 and (quad_failed or quad_limit is not None):
         while len(remaining) >= 2:
             pair = _take_pair(
                 remaining,

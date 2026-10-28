@@ -213,6 +213,7 @@ def best_rigid_translation(
     board_h_cm: float,
     *,
     constraint: str = "",
+    deadline: float | None = None,
 ) -> tuple[float, float, tuple[Any, ...]] | None:
     """Return the dx, dy of the best legal shift, plus its rank.
 
@@ -257,6 +258,8 @@ def best_rigid_translation(
     )
     ranked: list[tuple[tuple[Any, ...], float, float]] = []
     for anchor_x, anchor_y in anchors:
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         dx = anchor_x - origin_x
         dy = anchor_y - origin_y
         shifted = [
@@ -280,6 +283,8 @@ def best_rigid_translation(
         rank = _pack_rank(sheet, moved, anchor_x, anchor_y, width, height, kerf_cm, dx, dy)
         ranked.append((rank, dx, dy))
     if not ranked:
+        return None
+    if deadline is not None and time.monotonic() >= deadline:
         return None
     ranked.sort(key=lambda item: item[0])
     if not occupied:

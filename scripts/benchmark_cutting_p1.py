@@ -62,6 +62,16 @@ CASES = {
         regular(50, 90, 36), regular(30, 70, 36, 1), regular(22, 40, 48, 1),
     ]),
     "Adaptive-trim": (100, 100, 0.5, [regular(100, 40, 2)]),
+    "Glass-assignment-gap": (34.3, 12, 0, [
+        dict(regular(22, 12), piece_type="Glass", glass_margin_mm=10),
+        dict(regular(12, 12), piece_type="Glass", glass_margin_mm=10),
+        regular(9, 9), regular(18, 4),
+    ]),
+    "L-pair-offcut": (60, 50, 0, [
+        corner("L-Shaped Corner", 20, 20, 8, 4), regular(30, 20, 2, 1),
+    ]),
+    "Boundary-kerf": (10, 8.3, 0, [regular(10, 4, 2)]),
+    "Mandatory-gap": (10, 8.29, 0, [regular(10, 4, 2)]),
 }
 MODES = ("Auto", "Auto Pro", "Deep Search", "Optimal Search")
 BASE_FUNCTION = dict(zip(MODES, ("auto_fast", "auto_pro", "deep_search", "optimal_search")))
@@ -129,6 +139,7 @@ def main():
     parser.add_argument("--time-limit", type=float, default=2)
     parser.add_argument("--case", choices=CASES)
     parser.add_argument("--mode", choices=MODES)
+    parser.add_argument("--machine-type", choices=("CNC Router", "Panel Saw"), default="CNC Router")
     parser.add_argument("--exact-piece-limit", type=int, default=20)
     args = parser.parse_args()
     results = []
@@ -144,14 +155,14 @@ def main():
             command = OptimizeOrderPlanCommand(
                 engine_version="synthetic-p1-benchmark", input_fingerprint="synthetic-p1-benchmark",
                 board=BoardGeometry(width, length, trim, 0.3),
-                optimizer=OptimizerOptions(mode, "CNC Router", args.time_limit, args.exact_piece_limit, 30, 30, 0.09),
+                optimizer=OptimizerOptions(mode, args.machine_type, args.time_limit, args.exact_piece_limit, 30, 30, 0.09),
                 piece_rows=tuple(rows),
             )
             started = time.perf_counter()
             outcome = optimize_order_plan(command, engine=engine)
             result = dict(
                 label=args.label, head=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-                case=case, mode=mode, full_board_cm=[width, length], preferred_trim_cm=trim,
+                case=case, mode=mode, machine_type=args.machine_type, full_board_cm=[width, length], preferred_trim_cm=trim,
                 kerf_cm=0.3, mirroring=False, remnant=[30, 30, 0.09], time_limit_sec=args.time_limit,
                 exact_piece_limit=args.exact_piece_limit,
                 rows=rows, runtime_sec=time.perf_counter() - started,

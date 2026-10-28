@@ -101,6 +101,16 @@ def improve_plan_search(
         for key in _PRESERVED_PLAN_KEYS:
             if key in plan and key not in best:
                 best[key] = plan[key]
+    # Compact a bounded number of loose pieces/rigid nests even on one board.
+    # Every accepted shift must improve the existing industrial contract.
+    for candidate in _compaction_candidates(best, kerf_cm, board_w_cm, board_h_cm, deadline_monotonic):
+        accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metric_kwargs,
+            enrich_plan_metrics=enrich_plan_metrics, validate_plan=validate_plan,
+            permission_errors=placement_permission_errors, is_better=_candidate_is_better,
+            deadline=deadline_monotonic)
+        if accepted is not None:
+            best = accepted
     sheets = list(best.get("sheets") or [])
     if len(sheets) < 2:
         return best
@@ -165,6 +175,50 @@ def improve_plan_search(
     )
 
 
+def _compaction_candidates(plan, kerf_cm, board_w_cm, board_h_cm, deadline):
+    from .nesting_consolidation import (
+        STANDALONE, L_PAIR, CLIPPED_PAIR, SINGLE_CORNER,
+        best_rigid_translation, extract_placement_groups,
+    )
+    from .shape_aware_nesting import _translate_pieces
+
+    attempts = 0
+    # Three boards, four groups each: no layout-size-dependent candidate growth.
+    for sheet in list(plan.get("sheets") or [])[:3]:
+        if time.monotonic() >= deadline:
+            return
+        groups = extract_placement_groups({"sheets": [sheet]})
+        groups.sort(key=lambda group: group.origin_x + group.origin_y)
+        for group in groups[:4]:
+            if time.monotonic() >= deadline or attempts >= _MAX_REMNANT_ATTEMPTS:
+                return
+            attempts += 1
+            ids = set(group.piece_ids)
+            copied = deepcopy(plan)
+            target = next(item for item in copied["sheets"] if item["sheet_no"] == sheet["sheet_no"])
+            target["pieces"] = [p for p in target["pieces"] if int(p["id"]) not in ids]
+            if group.kind == STANDALONE:
+                piece = group.pieces[0]
+                if str(piece.get("piece_type") or "Regular") != "Regular":
+                    continue
+                source = _source_from_placed(piece)
+                spot = _spot_on_sheet(target, source, kerf_cm, deadline_monotonic=deadline)
+                if spot is None:
+                    continue
+                target["pieces"].append(make_placed_piece(source, spot["x"], spot["y"],
+                    spot["w"], spot["h"], bool(spot["rotated"])))
+            else:
+                constraint = "pair" if group.kind in (L_PAIR, CLIPPED_PAIR) else (
+                    "single" if group.kind == SINGLE_CORNER else "")
+                shift = best_rigid_translation(target, group.pieces, kerf_cm, board_w_cm, board_h_cm,
+                                              constraint=constraint, deadline=deadline)
+                if shift is None:
+                    continue
+                target["pieces"].extend(_translate_pieces(group.pieces, shift[0], shift[1]))
+            plan = copied
+            yield copied
+
+
 def _move_sheet_onto_others(
     plan: dict[str, Any],
     victim: dict[str, Any],
@@ -197,7 +251,7 @@ def _move_sheet_onto_others(
         for sheet in reversed(kept) if reverse_destinations else kept:
             if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
                 return None
-            spot = _spot_on_sheet(sheet, source, kerf_cm)
+            spot = _spot_on_sheet(sheet, source, kerf_cm, deadline_monotonic=deadline_monotonic)
             if spot is None:
                 continue
             placed = make_placed_piece(
@@ -233,7 +287,11 @@ def _spot_on_sheet(
     sheet: dict[str, Any],
     piece: dict[str, Any],
     kerf_cm: float,
+    *,
+    deadline_monotonic: float | None = None,
 ) -> dict[str, float] | None:
+    if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+        return None
     occupied = [
         {
             "x": num(item.get("x")),
@@ -243,26 +301,29 @@ def _spot_on_sheet(
         }
         for item in sheet.get("pieces") or []
     ]
+    gap = max(0.0, kerf_cm)
     for rect in _free_rectangles(sheet):
+        if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            return None
         inset = _inset(rect, kerf_cm)
-        if inset is None:
-            continue
         for orientation in orientations_for(piece):
-            if orientation["w"] > inset["w"] + 1e-6 or orientation["h"] > inset["h"] + 1e-6:
-                continue
-            trial = {
-                "x": inset["x"],
-                "y": inset["y"],
-                "w": orientation["w"],
-                "h": orientation["h"],
-                "rotated": bool(orientation["rotated"]),
-            }
-            if any(
-                not rects_have_clearance(trial, other, kerf_cm, 1e-6)
-                for other in occupied
-            ):
-                continue
-            return trial
+            width, height = orientation["w"], orientation["h"]
+            # A free-rectangle edge may be the board, not a cut obstacle.
+            # Try contact with its real boundaries; clearance decides which
+            # sides actually need Kerf. Keep the historical inset as fallback.
+            xs = (rect["x"], rect["x"] + gap, rect["x"] + rect["w"] - width)
+            ys = (rect["y"], rect["y"] + gap, rect["y"] + rect["h"] - height)
+            anchors = [(x, y) for y in ys for x in xs]
+            if inset is not None:
+                anchors.append((inset["x"], inset["y"]))
+            for x, y in dict.fromkeys(anchors):
+                if (x < rect["x"] - 1e-6 or y < rect["y"] - 1e-6
+                    or x + width > rect["x"] + rect["w"] + 1e-6
+                    or y + height > rect["y"] + rect["h"] + 1e-6):
+                    continue
+                trial = dict(x=x, y=y, w=width, h=height, rotated=bool(orientation["rotated"]))
+                if all(rects_have_clearance(trial, other, gap, 1e-6) for other in occupied):
+                    return trial
     return None
 
 
@@ -361,7 +422,7 @@ def _improve_remnants(
 
     best = plan
     attempts = 0
-    for move in _remnant_moves(best):
+    for move in _remnant_moves(best, deadline=deadline):
         if attempts >= _MAX_REMNANT_ATTEMPTS or time.monotonic() > deadline:
             break
         attempts += 1
@@ -389,13 +450,15 @@ def _improve_remnants(
     return best
 
 
-def _remnant_moves(plan: dict[str, Any]) -> list[tuple[tuple[int, int], ...]]:
+def _remnant_moves(plan: dict[str, Any], *, deadline: float | None = None) -> list[tuple[tuple[int, int], ...]]:
     """A bounded list of piece moves and swaps, largest newly freed area first."""
 
     locked = _locked_piece_ids(plan)
     sheets = list(plan.get("sheets") or [])
     ranked: list[tuple[float, tuple[tuple[int, int], ...]]] = []
     for source in sheets:
+        if deadline is not None and time.monotonic() >= deadline:
+            return []
         movable = [
             piece
             for piece in source.get("pieces") or []
@@ -408,6 +471,8 @@ def _remnant_moves(plan: dict[str, Any]) -> list[tuple[tuple[int, int], ...]]:
         chosen = movable[:2]
         for piece in chosen:
             for destination in sheets:
+                if deadline is not None and time.monotonic() >= deadline:
+                    return []
                 if destination.get("sheet_no") == source.get("sheet_no"):
                     continue
                 ranked.append(
@@ -418,6 +483,8 @@ def _remnant_moves(plan: dict[str, Any]) -> list[tuple[tuple[int, int], ...]]:
                 )
         if len(chosen) == 2:
             for destination in sheets:
+                if deadline is not None and time.monotonic() >= deadline:
+                    return []
                 if destination.get("sheet_no") == source.get("sheet_no"):
                     continue
                 ranked.append(
@@ -431,6 +498,8 @@ def _remnant_moves(plan: dict[str, Any]) -> list[tuple[tuple[int, int], ...]]:
                 )
     for left_index, left in enumerate(sheets):
         for right in sheets[left_index + 1 :]:
+            if deadline is not None and time.monotonic() >= deadline:
+                return []
             left_piece = _smallest_movable(left, locked)
             right_piece = _smallest_movable(right, locked)
             if left_piece is None or right_piece is None:

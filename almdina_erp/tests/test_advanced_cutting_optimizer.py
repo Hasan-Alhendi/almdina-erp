@@ -135,7 +135,7 @@ def test_alternative_search_respects_budget_and_rejects_invalid_results():
     invalid = _selection_plan(pieces, [3, 3, 2], label="invalid_alternative")
     invalid["sheets"][0]["pieces"][1]["x"] = 0
     prefix = "almdina_erp.almdina_erp.domain.cutting."
-    for clock, expected_calls in (([100, 111], 1), ([100, 101, 101], 2)):
+    for clock, expected_calls in (([100, 100, 100, 111], 1), ([100, 100, 100, 101, 101], 2)):
         with patch(prefix + "optimizer.auto_fast", return_value=baseline), patch(
             prefix + "glass_opening_nesting.nest_glass_openings", return_value=baseline,
         ), patch(prefix + "shape_aware_nesting.apply_shape_aware_nesting", return_value=shaped), patch(

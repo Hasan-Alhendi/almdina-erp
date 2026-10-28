@@ -909,3 +909,22 @@ assert.match(nestedPrintRoot, /data-nest-depth="2"/);
 assert.equal((nestedPrintRoot.match(/data-piece-type="/g) || []).length, 4);
 
 console.log("Cutting-plan renderer simulation passed");
+
+// Trim and cosmetic borders must not add manufacturing gaps to the coordinates.
+{
+    const physical = {
+        full_board_width_cm: 102, full_board_length_cm: 102,
+        usable_board_width_cm: 100, usable_board_length_cm: 100,
+        applied_trim_width_cm: 1, applied_trim_length_cm: 1, trim_cm: 1, kerf_cm: .3,
+        sheets: [{ sheet_no: 1, pieces: [
+            { id: 1, label: "1.1", x: 0, y: 0, w: 20, h: 100, piece_type: "Regular" },
+            { id: 2, label: "1.2", x: 20.3, y: 0, w: 20, h: 100, piece_type: "Regular" },
+        ] }],
+    };
+    const before = JSON.stringify(physical);
+    const html = renderer.build({ doc: { pieces: [] } }, physical);
+    assert.match(html, /left:20.3%;top:0%;width:20%;height:100%/);
+    assert.match(html, /left:0%;top:0%;width:20%;height:100%/);
+    assert.match(html, /box-sizing:border-box/);
+    assert.equal(JSON.stringify(physical), before);
+}
