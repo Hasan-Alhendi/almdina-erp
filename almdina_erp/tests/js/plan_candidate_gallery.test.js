@@ -17,6 +17,26 @@ const window={cur_frm:frm,addEventListener(){},dispatchEvent(){},AlmdinaDocument
 const context=vm.createContext({window,frappe:{msgprint(){},utils:{escape_html:String}},CustomEvent:class{},Date:{now:()=>now},__:m=>m,console});
 vm.runInContext(fs.readFileSync(path.join(root,'public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js'),'utf8'),context);
 const owner=window.AlmdinaPlanPreviewSession;
+async function firstPlanFlow(){
+ const state={status:'ready',data:{plans:{},calculation_settings:settings},editing:false};
+ const first={doctype:'Door Cutting Order',doc:{name:'FIRST',status:'Draft'},fields_dict:{},is_new:()=>false,trigger(){}};
+ let previewCalls=0;
+ const surface={cur_frm:first,addEventListener(){},requestAnimationFrame(){return 1;},
+  AlmdinaPermissions:{canDocument:(_frm,capability)=>capability==='recalculate_plan'},
+  AlmdinaPlanWorkspaceAPI:{}, // No bootstrap/save transport is needed.
+  AlmdinaPlanWorkspaceState:{snapshot:()=>state,activePlan:()=>null,storeFor:()=>({beginEdit(seed){state.editing=true;state.draft=seed;}})},
+  AlmdinaPlanWorkspacePresenterAdapter:{activeSettings:()=>settings},
+  AlmdinaPlanPreviewSession:{reset(){},isBusy:()=>false,async preview(){previewCalls++;return true;}},
+  AlmdinaPlanEditSessionUX:{syncPhaseLocks(){},canEditPlanSettings:()=>false,isEditing:()=>state.editing,startEditing(){assert.fail('settings-edit authority required for initial preview');}},
+  AlmdinaTextBoardPlanUX:{preparePlanInputs:async()=>true}
+ };
+ const ctx=vm.createContext({window:surface,frappe:{ui:{form:{on(){}}},msgprint(){assert.fail('unexpected dialog');}},console,__:m=>m});
+ for(const name of ['controls_ux','preview_edit_ux'])vm.runInContext(fs.readFileSync(path.join(root,`public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_${name}.js`),'utf8'),ctx);
+ assert.equal(surface.AlmdinaPlanControlsUX.canCalculate(first),true);
+ assert.equal(await surface.AlmdinaPlanControlsUX.runRecalculation(first),true);
+ assert.equal(previewCalls,1);assert.equal(state.editing,true);
+ assert.equal(surface.AlmdinaPlanEditSessionUX.canEditPlanSettings(first),false,'physical controls remain locked');
+}
 async function run(){
  assert.equal(await owner.preview(frm,settings),true);
  assert.equal(await owner.selectCandidate(frm,'b'),true);
@@ -39,6 +59,7 @@ async function run(){
  pendingSelect=Promise.resolve({preview_id:'p',order_name:'DCO',candidate_id:'b',plan:plan('a'),summary:candidates[1].summary});
  await assert.rejects(owner.selectCandidate(frm,'b'),/Invalid cutting-plan candidate response/);
  pendingSelect=null;assert.equal(owner.isCommittable(frm),false,'mismatched snapshot identity fails closed');
+ await firstPlanFlow();
  console.log('Candidate selection, exact receipt, continuation, expiry and stale response tests passed');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

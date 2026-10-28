@@ -179,7 +179,9 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
 
         self.assertIn("(firstPlan || workspaceEditing(frm))", controls)
-        self.assertIn('typeof transport.bootstrapPlan === "function"', controls)
+        self.assertIn('typeof previews.preview === "function"', controls)
+        self.assertNotIn('transport.bootstrapPlan', controls)
+        self.assertNotIn('Create and save the first cutting plan and update the cost automatically', controls)
         self.assertNotIn("await transport.bootstrapPlan(frm.doc.name, settings)", controls)
         self.assertIn("await editor.startEditing(frm)", controls)
         self.assertIn('typeof previews.preview === "function"', controls)

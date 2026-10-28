@@ -243,9 +243,7 @@
         const previews = previewOwner();
         const transport = api();
         const firstPlan = !hasSystemDraft(frm);
-        const canRun = firstPlan
-            ? Boolean(transport && typeof transport.bootstrapPlan === "function")
-            : Boolean(previews && typeof previews.preview === "function");
+        const canRun = Boolean(transport && previews && typeof previews.preview === "function");
         return Boolean(
             workspaceReady(frm)
             && (firstPlan || workspaceEditing(frm))
@@ -521,9 +519,7 @@
             "title",
             translate(
                 recalculationDisabledReason(frm)
-                || (firstPlan
-                    ? "Create and save the first cutting plan and update the cost automatically"
-                    : "Create a temporary preview with these settings before saving the change")
+                || "Create a temporary preview with these settings before saving the change"
             )
         );
         const element = button.get(0);

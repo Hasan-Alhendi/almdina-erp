@@ -191,6 +191,7 @@ body.dco-plan-results-tab-active .dco-order-tab-layout .layout-main-section-wrap
 .dco-candidate-card:focus-visible { outline: 2px solid var(--alm-accent, #2563eb); outline-offset: 2px; }
 .dco-candidate-card:disabled { opacity: .65; cursor: wait; }
 .dco-candidate-card__heading { display: flex; justify-content: space-between; gap: var(--alm-space-2, 8px); }
+.dco-candidate-card__heading > strong { white-space: nowrap; flex-shrink: 0; }
 .dco-candidate-card__heading > span { font-size: var(--alm-font-size-xs, 11px); color: var(--alm-text-muted, var(--text-muted)); }
 .dco-candidate-card__valid { color: var(--alm-success, #15803d); font-size: var(--alm-font-size-sm, 12px); }
 .dco-candidate-canvas { min-width: 0; overflow: auto; }
