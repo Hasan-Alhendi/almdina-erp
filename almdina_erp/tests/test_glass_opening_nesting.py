@@ -1124,6 +1124,7 @@ def _cutting_plan_for_layout(pieces_cm, *, kerf_mm=3, plan_kind="Remnant"):
     with patch(
         "almdina_erp.almdina_erp.services.export_validation_service.frappe.get_doc",
         return_value=order,
+        create=True,
     ):
         issues = validate_cutting_plan_issues(plan)
     return issues, snapshot, topology_aware
