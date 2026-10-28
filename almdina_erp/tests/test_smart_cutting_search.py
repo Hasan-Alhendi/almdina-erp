@@ -42,7 +42,8 @@ def test_smart_retains_valid_auto_seed_and_physics(machine, kerf):
     assert pieces == original
     assert tuple(plan["industrial_rank"]) <= tuple(plan["smart_search"]["auto_seed_rank"])
     assert plan["optimization_mode"] == "Smart Search"
-    assert plan["smart_search"]["completed_candidates"] <= 6
+    assert plan["smart_search"]["completed_candidates"] <= 17
+    assert 1 <= len(plan["smart_candidates"]) <= 5
 
 
 def test_smart_deadline_preserves_seed_without_optional_runs(monkeypatch):

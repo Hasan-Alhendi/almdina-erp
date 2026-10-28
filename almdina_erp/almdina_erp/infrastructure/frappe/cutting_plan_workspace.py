@@ -418,7 +418,7 @@ def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> s
     return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 
 
-def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
+def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=0) -> OptimizationOutcome:
     """Calculate one Draft System plan without mutating Door Cutting Order.
 
     Door Cutting Order is only the source of customer requirements. Optimizer
@@ -435,6 +435,7 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
             engine_version=ENGINE_VERSION,
             input_fingerprint=fingerprint,
             plan_settings=plan_settings,
+            seed_plans=tuple(seed_plans), search_round=int(search_round),
             board=BoardGeometry(
                 full_width_cm=width_mm / 10,
                 full_length_cm=length_mm / 10,

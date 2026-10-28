@@ -66,11 +66,12 @@ def test_smart_saved_snapshot_exports_and_strictly_imports(width, height, trim, 
     ), engine=domain_cutting_engine)
     assert outcome.snapshot["validation"]["is_valid"]
     saved = tmp_path / "saved-snapshot.json"
-    saved.write_text(json.dumps(outcome.snapshot))
-    reloaded = json.loads(saved.read_text())
-    assert reloaded == json.loads(json.dumps(outcome.snapshot))
-    assert not validate_plan(reloaded, list(outcome.expanded_pieces),
-        reloaded["usable_board_width_cm"], reloaded["usable_board_length_cm"], kerf_cm=.3)
-    assert not placement_permission_errors(reloaded, list(outcome.expanded_pieces), mirroring_allowed=True)
-    imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, tmp_path))
-    assert sum(len(s["pieces"]) for s in imported["sheets"]) == sum(row["qty"] for row in rows)
+    for candidate in outcome.candidate_snapshots or (outcome.snapshot,):
+        saved.write_text(json.dumps(candidate))
+        reloaded = json.loads(saved.read_text())
+        assert reloaded == json.loads(json.dumps(candidate))
+        assert not validate_plan(reloaded, list(outcome.expanded_pieces),
+            reloaded["usable_board_width_cm"], reloaded["usable_board_length_cm"], kerf_cm=.3)
+        assert not placement_permission_errors(reloaded, list(outcome.expanded_pieces), mirroring_allowed=True)
+        imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, tmp_path))
+        assert sum(len(s["pieces"]) for s in imported["sheets"]) == sum(row["qty"] for row in rows)

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from almdina_erp.almdina_erp.application.cutting.execution_trace import (
@@ -108,6 +109,8 @@ class OptimizeOrderPlanCommand:
     piece_rows: tuple[dict[str, Any], ...]
     plan_settings: PlanSettings | None = None
     allow_piece_mirroring: bool = False
+    seed_plans: tuple[dict[str, Any], ...] = ()
+    search_round: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +120,8 @@ class OptimizationOutcome:
     required_boards: int
     method_label: str
     expanded_pieces: tuple[dict[str, Any], ...]
+    candidate_snapshots: tuple[dict[str, Any], ...] = ()
+    search_seeds: tuple[dict[str, Any], ...] = ()
 
 
 def optimize_order_plan(
@@ -168,6 +173,27 @@ def optimize_order_plan(
     if plan is None:
         plan = run_for_trim(applied_trim)
 
+    raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    raw_seeds = []
+    outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings)
+    snapshots = []
+    for raw in raw_candidates:
+        result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings)
+        if result.snapshot['validation']['is_valid']:
+            snapshots.append(result.snapshot)
+            raw_seeds.append(deepcopy(raw))
+    if smart:
+        outcome.snapshot['smart_search'] = dict(plan.get('smart_search') or {})
+        outcome.snapshot['search_time_limit_sec'] = command.optimizer.time_limit_sec
+        outcome.snapshot['total_elapsed_sec'] = round(time.monotonic()-started,3)
+        outcome.snapshot['smart_search']['trim_evaluations'] = len(evaluated_plans)
+    return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
+
+
+def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings):
+    """One manufacturing snapshot projection for the default and every alternative."""
+    board = command.board
+    plan["kerf_cm"] = board.kerf_cm
     usable_width_cm = applied_trim.usable_width_cm(
         full_width_cm=board.full_width_cm
     )
@@ -283,12 +309,6 @@ def optimize_order_plan(
         },
     }
 
-    if smart:
-        snapshot["smart_search"] = dict(plan.get("smart_search") or {})
-        snapshot["search_time_limit_sec"] = command.optimizer.time_limit_sec
-        snapshot["total_elapsed_sec"] = round(time.monotonic() - started, 3)
-        snapshot["smart_search"]["trim_evaluations"] = len(evaluated_plans)
-
     packing_score = (
         f"ألواح: {required_boards} | هدر: {waste_percent}% | "
         f"قصات تقديرية: {_integer(metrics.get('estimated_cut_count'))} | "
@@ -349,6 +369,8 @@ def _run_engine(
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
         mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        **({'seed_plans':command.seed_plans,'search_round':command.search_round}
+           if command.seed_plans or command.search_round else {}),
     )
 
 
