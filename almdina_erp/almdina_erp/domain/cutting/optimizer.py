@@ -1030,8 +1030,10 @@ def optimize_plan(
     from .plan_search import improve_plan_search
     from .shape_aware_nesting import apply_shape_aware_nesting
 
+    # Post-passes may annotate their input even when they keep its geometry.
+    # Preserve each candidate, including its diagnostics, for final selection.
     nested = nest_glass_openings(
-        baseline,
+        deepcopy(baseline),
         pieces,
         board_w_cm,
         board_h_cm,
@@ -1041,7 +1043,7 @@ def optimize_plan(
         **metric_kwargs,
     )
     shaped = apply_shape_aware_nesting(
-        nested,
+        deepcopy(nested),
         pieces,
         board_w_cm,
         board_h_cm,
@@ -1054,7 +1056,7 @@ def optimize_plan(
     from .evaluation import placement_permission_errors
 
     improved = improve_plan_search(
-        shaped,
+        deepcopy(shaped),
         pieces,
         board_w_cm,
         board_h_cm,
@@ -1064,14 +1066,30 @@ def optimize_plan(
         mirroring_allowed=mirroring_allowed,
         **metric_kwargs,
     )
-    for candidate in (improved, shaped, nested, baseline):
-        if not placement_permission_errors(
+    best: dict[str, Any] | None = None
+    for candidate in (baseline, nested, shaped, improved):
+        candidate = enrich_plan_metrics(
+            candidate,
+            str(candidate.get("method_key") or ""),
+            machine_type,
+            **metric_kwargs,
+        )
+        # Keep post-pass behavior on an exact industrial tie, never at a cost
+        # in boards, reusable offcut, or manufacturing complexity.
+        if best is not None and _candidate_is_better(best, candidate):
+            continue
+        if validate_plan(
+            candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
+        ) or placement_permission_errors(
             candidate,
             pieces,
             mirroring_allowed=mirroring_allowed,
         ):
-            return candidate
-    return baseline
+            continue
+        best = candidate
+    # Keep the original failure payload when no complete valid plan exists;
+    # callers need it for Adaptive Trim probes and explicit validation errors.
+    return best if best is not None else baseline
 
 
 __all__ = [

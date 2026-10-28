@@ -1110,6 +1110,35 @@ def test_shape_nesting_keeps_a_valid_quad_on_an_extra_board():
     assert not validate_plan(improved, pieces, 100, 100, kerf_cm=0.3)
 
 
+def test_optimize_plan_rejects_the_valid_quad_on_an_extra_board(monkeypatch):
+    pieces = expand_piece_groups([
+        _corner_row("L-Shaped Corner"),
+        {"width_cm": 70, "length_cm": 70, "qty": 1, "allow_rotation": 0},
+    ])
+    baseline = _sheet_plan(
+        pieces, [[(70.4, 0), (70.4, 20.4), (70.4, 40.8), (70.4, 61.2), (0, 0)]],
+    )
+    candidates = []
+
+    def shape(*args, **kwargs):
+        candidate = apply_shape_aware_nesting(*args, **kwargs)
+        candidates.append(candidate)
+        return candidate
+
+    prefix = "almdina_erp.almdina_erp.domain.cutting."
+    monkeypatch.setattr(prefix + "optimizer.run_single_method", lambda *a, **k: baseline)
+    monkeypatch.setattr(prefix + "shape_aware_nesting.apply_shape_aware_nesting", shape)
+    result = optimize_plan(
+        pieces, 100, 100, 0.3, selected_mode="MaxRects Best Short Side",
+        machine_type="CNC Router", time_limit_sec=2,
+    )
+    assert len(candidates[0]["sheets"]) == 2
+    assert not validate_plan(candidates[0], pieces, 100, 100, kerf_cm=0.3)
+    assert len(result["sheets"]) == 1
+    assert not validate_plan(result, pieces, 100, 100, kerf_cm=0.3)
+    assert result.get("shape_nesting_diagnostics", {}).get("outcome") != "accepted"
+
+
 def test_invalid_geometry_keeps_the_original_plan(monkeypatch):
     pieces = expand_piece_groups([_corner_row("L-Shaped Corner")])
     plan = _sheet_plan(pieces, [[(40, 0), (40, 20.4), (40, 40.8), (40, 61.2)]])
@@ -1633,6 +1662,10 @@ def test_adding_a_different_l_keeps_the_original_quad():
         mirroring_allowed=False,
     )
 
+    # Formation stability belongs to candidate generation. Final selection may
+    # prefer a different layout with a larger separable offcut.
+    first = _apply(first, four, board=80)
+    second = _apply(second, five, board=80)
     assert _shifted_rings(first, {1, 2, 3, 4}) == _shifted_rings(second, {1, 2, 3, 4})
     assert _turn_multiset(first, {1, 2, 3, 4}) == _turn_multiset(second, {1, 2, 3, 4})
     assert _turn_multiset(first, {1, 2, 3, 4}) == (0, 1, 2, 3)
@@ -1689,7 +1722,7 @@ def test_l_quad_dxf_roundtrip_keeps_outlines_and_turns(tmp_path):
         _same_points([(point[0] * 10, point[1] * 10) for point in outline], ring, tolerance=0.05)
 
 
-def test_optimize_plan_pairs_two_rotatable_l_pieces_without_a_mirror():
+def test_shape_candidate_pairs_two_rotatable_l_pieces_without_a_mirror():
     pieces = expand_piece_groups(
         [
             _plain_corner(width_cm=50, length_cm=50, qty=2, cut=20, allow_rotation=1),
@@ -1706,6 +1739,10 @@ def test_optimize_plan_pairs_two_rotatable_l_pieces_without_a_mirror():
         time_limit_sec=2,
         mirroring_allowed=False,
     )
+    plan = apply_shape_aware_nesting(
+        plan, pieces, 122, 244, 0.3, mirroring_allowed=False,
+        machine_type="CNC Router", time_limit_sec=2, **_REMNANT,
+    )
     corners = _corners(plan)
 
     assert sorted(piece["id"] for sheet in plan["sheets"] for piece in sheet["pieces"]) == [1, 2, 3]
@@ -1717,7 +1754,7 @@ def test_optimize_plan_pairs_two_rotatable_l_pieces_without_a_mirror():
     assert not validate_plan(plan, pieces, 122, 244, kerf_cm=0.3)
 
 
-def test_optimize_plan_pairs_two_l_pieces_by_reflection_without_rotation():
+def test_shape_candidate_pairs_two_l_pieces_by_reflection_without_rotation():
     pieces = expand_piece_groups(
         [
             _plain_corner(width_cm=50, length_cm=50, qty=2, cut=20, allow_rotation=0),
@@ -1733,6 +1770,10 @@ def test_optimize_plan_pairs_two_l_pieces_by_reflection_without_rotation():
         machine_type="CNC Router",
         time_limit_sec=2,
         mirroring_allowed=True,
+    )
+    plan = apply_shape_aware_nesting(
+        plan, pieces, 122, 244, 0.3, mirroring_allowed=True,
+        machine_type="CNC Router", time_limit_sec=2, **_REMNANT,
     )
     corners = _corners(plan)
 
