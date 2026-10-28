@@ -82,6 +82,7 @@ BASE_FUNCTION = dict(zip(MODES, ("auto_fast", "auto_pro", "deep_search", "optima
 
 def summary(plan):
     return {
+        "unique_candidates": len(plan.get("smart_candidates") or []) or int((plan.get("smart_search") or {}).get("unique_candidates") or 1),
         "boards": len(plan.get("sheets") or []),
         "unplaced": len(plan.get("unplaced") or []),
         "offcut_m2": (plan.get("industrial_metrics") or {}).get("largest_reusable_free_area_m2"),
@@ -171,6 +172,7 @@ def main():
                 exact_piece_limit=args.exact_piece_limit,
                 rows=rows, runtime_sec=time.perf_counter() - started,
                 probes=engine.probes, snapshot=outcome.snapshot,
+                candidate_snapshots=list(getattr(outcome, "candidate_snapshots", ())),
             )
             results.append(result)
             Path(args.output).write_text(json.dumps(results, ensure_ascii=False, indent=2))
