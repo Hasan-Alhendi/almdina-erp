@@ -125,6 +125,290 @@ def _corner_polygon(piece: LinerPiece, width: float, height: float, cut_x: float
     return polygons.get(position)
 
 
+_PRINT_CORNER_POSITIONS = frozenset({
+    "Top Right",
+    "Top Left",
+    "Bottom Right",
+    "Bottom Left",
+})
+
+
+def _finite(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number or number in {float("inf"), float("-inf")}:
+        return 0.0
+    return number
+
+
+def printable_corner_outline_cm(piece: Mapping[str, Any]) -> list[Point] | None:
+    """Order-entry outline in centimetres, without a default corner or rotation.
+
+    Stored cut fields are distances from the saved corner. Incomplete data
+    returns None so a print cannot invent a notch.
+    """
+    piece_type = str(piece.get("piece_type") or "")
+    if piece_type not in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        return None
+    width = _finite(piece.get("width_cm"))
+    length = _finite(piece.get("length_cm"))
+    cut_width = _finite(piece.get("clipped_corner_width_cm"))
+    cut_length = _finite(piece.get("clipped_corner_length_cm"))
+    position = str(piece.get("clipped_corner_position") or "").strip()
+    if width <= 0 or length <= 0:
+        return None
+    if cut_width <= 0 or cut_length <= 0:
+        return None
+    if cut_width >= width or cut_length >= length:
+        return None
+    if position not in _PRINT_CORNER_POSITIONS:
+        return None
+    outline = _corner_polygon(
+        LinerPiece(
+            piece_type=piece_type,
+            width_cm=width,
+            length_cm=length,
+            clipped_corner_position=position,
+            clipped_corner_width_cm=cut_width,
+            clipped_corner_length_cm=cut_length,
+        ),
+        width,
+        length,
+        cut_width,
+        cut_length,
+    )
+    return outline
+
+
+def _print_corner_inputs(piece: Mapping[str, Any]) -> tuple[str, str, float, float, float, float] | None:
+    piece_type = str(piece.get("piece_type") or "")
+    if piece_type not in {CLIPPED_CORNER_TYPE, L_SHAPED_CORNER_TYPE}:
+        return None
+    width = _finite(piece.get("width_cm"))
+    length = _finite(piece.get("length_cm"))
+    cut_width = _finite(piece.get("clipped_corner_width_cm"))
+    cut_length = _finite(piece.get("clipped_corner_length_cm"))
+    position = str(piece.get("clipped_corner_position") or "").strip()
+    if width <= 0 or length <= 0:
+        return None
+    if cut_width <= 0 or cut_length <= 0:
+        return None
+    if cut_width >= width or cut_length >= length:
+        return None
+    if position not in _PRINT_CORNER_POSITIONS:
+        return None
+    return piece_type, position, width, length, cut_width, cut_length
+
+
+def _print_edge_path_source(
+    piece_type: str,
+    position: str,
+    width: float,
+    height: float,
+    cut_x: float,
+    cut_y: float,
+) -> dict[str, list[Point] | None]:
+    clipped = {
+        "Top Right": {
+            "top": [(0.0, 0.0), (width - cut_x, 0.0)],
+            "right": [(width, cut_y), (width, height)],
+            "bottom": [(width, height), (0.0, height)],
+            "left": [(0.0, height), (0.0, 0.0)],
+            "break": [(0.0, 0.0), (width - cut_x, 0.0), (width, cut_y), (width, height)],
+            "breakOnly": [(width - cut_x, 0.0), (width, cut_y)],
+        },
+        "Top Left": {
+            "top": [(cut_x, 0.0), (width, 0.0)],
+            "right": [(width, 0.0), (width, height)],
+            "bottom": [(width, height), (0.0, height)],
+            "left": [(0.0, height), (0.0, cut_y)],
+            "break": [(width, 0.0), (cut_x, 0.0), (0.0, cut_y), (0.0, height)],
+            "breakOnly": [(cut_x, 0.0), (0.0, cut_y)],
+        },
+        "Bottom Right": {
+            "top": [(0.0, 0.0), (width, 0.0)],
+            "right": [(width, 0.0), (width, height - cut_y)],
+            "bottom": [(width - cut_x, height), (0.0, height)],
+            "left": [(0.0, height), (0.0, 0.0)],
+            "break": [(width, 0.0), (width, height - cut_y), (width - cut_x, height), (0.0, height)],
+            "breakOnly": [(width, height - cut_y), (width - cut_x, height)],
+        },
+        "Bottom Left": {
+            "top": [(0.0, 0.0), (width, 0.0)],
+            "right": [(width, 0.0), (width, height)],
+            "bottom": [(width, height), (cut_x, height)],
+            "left": [(0.0, height - cut_y), (0.0, 0.0)],
+            "break": [(0.0, 0.0), (0.0, height - cut_y), (cut_x, height), (width, height)],
+            "breakOnly": [(0.0, height - cut_y), (cut_x, height)],
+        },
+    }
+    shaped_break = {
+        "Top Right": [(width - cut_x, 0.0), (width - cut_x, cut_y), (width, cut_y)],
+        "Top Left": [(cut_x, 0.0), (cut_x, cut_y), (0.0, cut_y)],
+        "Bottom Right": [(width, height - cut_y), (width - cut_x, height - cut_y), (width - cut_x, height)],
+        "Bottom Left": [(0.0, height - cut_y), (cut_x, height - cut_y), (cut_x, height)],
+    }
+    source = dict(clipped[position])
+    if piece_type == L_SHAPED_CORNER_TYPE:
+        source["break"] = shaped_break[position]
+        source["breakOnly"] = None
+    return source
+
+
+def _inset_path_toward_center(
+    path: Sequence[Point],
+    width: float,
+    height: float,
+    inset: float,
+) -> list[Point]:
+    if inset <= 0 or len(path) < 2:
+        return [(float(point[0]), float(point[1])) for point in path]
+    center = (width / 2.0, height / 2.0)
+    result: list[Point] = []
+    for point in path:
+        dx = center[0] - point[0]
+        dy = center[1] - point[1]
+        length = math.hypot(dx, dy) or 1.0
+        result.append((point[0] + dx / length * inset, point[1] + dy / length * inset))
+    return result
+
+
+def printable_corner_edge_paths_cm(
+    piece: Mapping[str, Any],
+    *,
+    inset: float | None = None,
+) -> dict[str, list[Point] | None]:
+    """Selected strap polylines in centimetres for print, matching editor routing."""
+    empty = {
+        "top": None,
+        "bottom": None,
+        "left": None,
+        "right": None,
+        "break": None,
+        "breakOnly": None,
+    }
+    parsed = _print_corner_inputs(piece)
+    if parsed is None:
+        return empty
+    piece_type, position, width, length, cut_width, cut_length = parsed
+    source = _print_edge_path_source(
+        piece_type, position, width, length, cut_width, cut_length
+    )
+    amount = (
+        max(0.0, float(inset))
+        if inset is not None
+        else min(width, length) * 0.035
+    )
+
+    def inset_path(path: list[Point] | None) -> list[Point] | None:
+        if not path:
+            return None
+        return _inset_path_toward_center(path, width, length, amount)
+
+    selected = {
+        "top": inset_path(source.get("top")) if piece.get("edge_width_top") else None,
+        "bottom": inset_path(source.get("bottom")) if piece.get("edge_width_bottom") else None,
+        "left": inset_path(source.get("left")) if piece.get("edge_long_left") else None,
+        "right": inset_path(source.get("right")) if piece.get("edge_long_right") else None,
+        "break": inset_path(source.get("break")) if piece.get("edge_break") else None,
+        "breakOnly": (
+            inset_path(source.get("breakOnly"))
+            if piece.get("edge_break_only") and piece_type == CLIPPED_CORNER_TYPE
+            else None
+        ),
+    }
+    return selected
+
+
+def _remaining_side_segments(
+    position: str,
+    width: float,
+    height: float,
+    cut_x: float,
+    cut_y: float,
+) -> dict[str, list[Point]]:
+    return {
+        "Top Right": {
+            "width": [(0.0, 0.0), (width - cut_x, 0.0)],
+            "length": [(width, cut_y), (width, height)],
+        },
+        "Top Left": {
+            "width": [(cut_x, 0.0), (width, 0.0)],
+            "length": [(0.0, height), (0.0, cut_y)],
+        },
+        "Bottom Right": {
+            "width": [(width - cut_x, height), (0.0, height)],
+            "length": [(width, 0.0), (width, height - cut_y)],
+        },
+        "Bottom Left": {
+            "width": [(width, height), (cut_x, height)],
+            "length": [(0.0, height - cut_y), (0.0, 0.0)],
+        },
+    }[position]
+
+
+def printable_remaining_dimension_anchors_cm(
+    piece: Mapping[str, Any],
+    *,
+    offset: float | None = None,
+) -> list[dict[str, Any]]:
+    """Label anchors for remaining width/length sides in centimetres."""
+    parsed = _print_corner_inputs(piece)
+    if parsed is None:
+        return []
+    _piece_type, position, width, length, cut_width, cut_length = parsed
+    segments = _remaining_side_segments(position, width, length, cut_width, cut_length)
+    label_offset = (
+        max(0.0, float(offset))
+        if offset is not None
+        else min(width, length) * 0.08
+    )
+    center = (width / 2.0, length / 2.0)
+    remaining_width = round(width - cut_width, 3)
+    remaining_length = round(length - cut_length, 3)
+    anchors: list[dict[str, Any]] = []
+    for axis, value, segment in (
+        ("width", remaining_width, segments["width"]),
+        ("length", remaining_length, segments["length"]),
+    ):
+        if value <= 0 or len(segment) < 2:
+            continue
+        start, end = segment[0], segment[1]
+        mid_x = (start[0] + end[0]) / 2.0
+        mid_y = (start[1] + end[1]) / 2.0
+        nx = start[1] - end[1]
+        ny = end[0] - start[0]
+        normal_length = math.hypot(nx, ny) or 1.0
+        nx /= normal_length
+        ny /= normal_length
+        if (mid_x - center[0]) * nx + (mid_y - center[1]) * ny < 0:
+            nx = -nx
+            ny = -ny
+        side_length = math.hypot(end[0] - start[0], end[1] - start[1])
+        short = side_length < min(width, length) * 0.22
+        # Length sits beside a vertical edge with middle anchoring; keep it clear
+        # of the outline more than the width label above/below a horizontal edge.
+        used_offset = label_offset * 1.35 if short else label_offset
+        if axis == "length":
+            used_offset *= 2.9
+        anchors.append(
+            {
+                "axis": axis,
+                "value": value,
+                "midX": mid_x,
+                "midY": mid_y,
+                "x": mid_x + nx * used_offset,
+                "y": mid_y + ny * used_offset,
+                "nx": nx,
+                "ny": ny,
+                "short": short,
+            }
+        )
+    return anchors
+
+
 def piece_polygon_mm(piece: LinerPiece) -> list[Point]:
     width = _mm(piece.width_cm)
     height = _mm(piece.length_cm)

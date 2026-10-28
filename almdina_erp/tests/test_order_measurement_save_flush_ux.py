@@ -26,7 +26,10 @@ def test_explicit_save_flushes_open_measurement_cells_before_dirty_check() -> No
     assert "function flushMeasurementInputs(frm)" in operator
     assert "flush: flushMeasurementInputs" in operator
     assert "function flushPendingMeasurements(frm)" in revision
+    assert "function flushPendingEdgeClicks(frm)" in revision
+    assert "flushPendingEdgeClicks(frm)" in revision
     assert "owner.flush(frm)" in revision
+    assert "AlmdinaEdgeProfileDoubleClickGuard" in revision
 
     explicit = revision.split("async function commitEditSession", 1)[1].split(
         "async function persistOrderEditCheckpoint", 1
@@ -89,7 +92,8 @@ def test_measurement_table_is_not_replaced_while_order_save_is_in_flight() -> No
 def test_virtual_row_materialize_ignores_detached_dom_after_edit_refresh() -> None:
     source = _text(OPERATOR)
     materialize = source.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
-        "function localArea", 1
+        "function deleteRowButtonHtml", 1
     )[0]
     assert "!tr.isConnected" in materialize
     assert "!isEditable(frm)" in materialize
+    assert "syncDeleteCell(frm, tr)" in materialize

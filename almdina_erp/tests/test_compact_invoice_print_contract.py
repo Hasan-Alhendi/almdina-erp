@@ -184,7 +184,15 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
         self.assertIn("order_cutting_machine", shared_info)
         self.assertNotIn("<b>رقم الطلب</b>", shared_info)
         self.assertNotIn("<b>نوع القشاط</b>", shared_info)
-        self.assertNotIn("default_edge_type", shared_info)
+        self.assertIn("frm.doc.board_length_cm", shared_info)
+        self.assertIn("frm.doc.board_width_cm", shared_info)
+        self.assertIn("frm.doc.default_edge_type", shared_info)
+        self.assertIn('__("Default type")', shared_info)
+        self.assertIn('__("Length")', shared_info)
+        self.assertIn('__("Width")', shared_info)
+        self.assertIn('__("cm")', shared_info)
+        self.assertNotIn("full_board_length_mm", shared_info)
+        self.assertNotIn("usable_board", shared_info)
         self.assertIn('class="dco-unified-print-reference"', theme)
         self.assertIn('class="dco-unified-print-date"', theme)
 
@@ -232,7 +240,7 @@ class TestCompactInvoicePrintContract(unittest.TestCase):
             'const rowPadding = measurements ? "1.05mm 1.1mm"', source
         )
         self.assertIn(
-            "grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)",
+            "grid-template-columns:minmax(0,1.45fr) minmax(0,1.42fr) minmax(0,1.38fr) minmax(0,.64fr) minmax(0,.5fr)",
             source,
         )
         self.assertIn("table-layout:fixed", source)

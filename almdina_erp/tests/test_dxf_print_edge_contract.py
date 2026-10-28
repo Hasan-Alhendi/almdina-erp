@@ -30,11 +30,12 @@ def test_edge_contract_keeps_order_orientation_and_renderer_owns_rotation():
     renderer = _source(RENDERER)
 
     assert '"rotation_owned_by_renderer": True' in strict
-    assert "if (!piece.rotated)" in renderer
-    assert "top = piece.edge_long_left ? 1 : 0;" in renderer
-    assert "bottom = piece.edge_long_right ? 1 : 0;" in renderer
-    assert "right = piece.edge_width_top ? 1 : 0;" in renderer
-    assert "left = piece.edge_width_bottom ? 1 : 0;" in renderer
+    # Display mapping stays renderer-owned: 90° clockwise remaps semantic sides.
+    assert "else if (piece.rotated)" in renderer
+    assert "top = semantic.long_left ? 1 : 0;" in renderer
+    assert "bottom = semantic.long_right ? 1 : 0;" in renderer
+    assert "right = semantic.width_top ? 1 : 0;" in renderer
+    assert "left = semantic.width_bottom ? 1 : 0;" in renderer
 
 
 def test_custom_dxf_and_system_plan_share_the_same_print_renderer():
@@ -44,16 +45,19 @@ def test_custom_dxf_and_system_plan_share_the_same_print_renderer():
     assert "frm.doc.custom_plan_json" in tabs
     assert 'getPlanForTab(frm, "Custom")' in tabs
     assert 'typeof renderer.print === "function"' in tabs
-    assert "renderer.print(frm, plan)" in tabs
+    assert "renderer.print(frm, plan, { tab, row })" in tabs
     assert "window.AlmdinaCuttingPlanRender" in renderer
 
 
 def test_shared_renderer_draws_edge_markers_on_screen_and_print():
     renderer = _source(RENDERER)
 
-    assert "render_piece_edge_lines(piece, geometryModel, clipId)" in renderer
+    assert "render_piece_edge_lines(manufacturingPiece, geometryModel, clipId, frm)" in renderer
     assert 'class="dco-edge-line"' in renderer
     assert 'class="dco-edge-line-svg"' in renderer
+    assert "dco-edge-line--custom" in renderer
     assert ".dco-edge-line {" in renderer
     assert ".dco-edge-line-svg {" in renderer
+    assert ".dco-edge-line-svg.dco-edge-line--custom" in renderer
     assert "border-color: #e00000 !important;" in renderer
+    assert "stroke: #1d4ed8 !important;" in renderer

@@ -183,3 +183,27 @@ def test_measurement_table_uses_one_addons_column_and_shared_dialog() -> None:
     assert "door_cutting_order_extra_addons_ux.js" in assets
     assert "door_cutting_order_addons_dialog.js" in assets
     assert "door_cutting_order_extra_addons.css" in assets
+
+
+def test_side_buttons_keep_their_values_and_pin_left_and_right_physically() -> None:
+    css = CSS.read_text(encoding="utf-8")
+    grid = css.split(".dco-addons-modal .dco-corner-position-grid,", 1)[1].split(
+        ".dco-addons-modal .dco-corner-position {", 1
+    )[0]
+    assert "row-reverse" not in grid
+    assert "direction:" not in grid
+    assert 'grid-column: 1' in grid
+    assert 'grid-column: 2' in grid
+    assert 'grid-row: 2' in grid
+    assert '[data-liner-side="edge_long_left"]:dir(rtl)' in grid
+    assert '[data-double-side="edge_long_left"]:dir(rtl)' in grid
+    assert '[data-liner-side="edge_long_right"]:dir(rtl)' in grid
+    assert '[data-double-side="edge_long_right"]:dir(rtl)' in grid
+    assert "edge_width_top" not in grid
+    assert "edge_width_bottom" not in grid
+    liner = (
+        ROOT / "public" / "js" / "door_cutting_order" / "drawing" / "door_cutting_order_liner_ux.js"
+    ).read_text(encoding="utf-8")
+    controls = liner.split("function controlsHtml", 1)[1].split("function linerSetHtml", 1)[0]
+    assert "api.availableSides" in controls
+    assert 'data-liner-side="${side}"' in controls

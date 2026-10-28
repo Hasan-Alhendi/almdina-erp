@@ -73,6 +73,14 @@ PIECE_DOCUMENT_FIELDS = (
     "edge_cost_usd",
     "edge_break",
     "edge_break_only",
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+    "edge_long_right_type_override",
+    "edge_long_left_type_override",
+    "edge_width_top_type_override",
+    "edge_width_bottom_type_override",
     "notes",
     "special_shape_drawing_json",
     "special_shape_estimated_unit_price_usd",
@@ -86,6 +94,9 @@ PIECE_DOCUMENT_FIELDS = (
     "edge_break_meters",
     "edge_break_rate_usd",
     "edge_break_cost_usd",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
     "clipped_corner_edge_price_usd",
     "clipped_corner_edge_price_status",
     "clipped_corner_edge_price_note",
@@ -136,6 +147,18 @@ def _authorized_order(
     return order
 
 
+def _order_edge_profile_rates(order: Any) -> dict[str, float]:
+    """Authoritative Edge Banding Type rates for per-type quotation lines."""
+
+    if getattr(order, "flags", None) is None:
+        return {}
+    from almdina_erp.almdina_erp.infrastructure.frappe.orders.edge_profile_repository import (
+        FrappeEdgeProfileRepository,
+    )
+
+    return FrappeEdgeProfileRepository(order).rate_map()
+
+
 def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Build all document projections from one canonical Cutting Plan revision."""
 
@@ -145,6 +168,7 @@ def _document_context(order: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]
         _snapshot(order, ORDER_DOCUMENT_FIELDS),
         plan=plan,
     )
+    order_snapshot["edge_profile_rates"] = _order_edge_profile_rates(order)
     execution = physical_execution_for_plan(plan) if plan is not None else None
     execution_qty_by_source = (
         dict(execution.factory_processing_qty_by_source_piece_no)

@@ -210,9 +210,8 @@
             const key = `${edgeName}::${rate}`;
             const group = edgeGroups.get(key) || {
                 type: "edge",
-                description: edgeName
-                    ? translate("Edge banding — {0}", [edgeName])
-                    : translate("Edge banding — unspecified"),
+                // Quotation row shows the edge-type name only (no "Edge banding —" prefix).
+                description: edgeName || translate("Edge banding — unspecified"),
                 quantity: 0,
                 unit: translate("Meter"),
                 rate,
@@ -343,18 +342,17 @@
     }
 
     function dimensionMark(value, count) {
-        // Same count contract as measurements print (one mark per edged side on that axis).
-        // Screen layout mirrors the printed look: 2 sides => line above + below; 1 side => below.
+        // Same count contract as measurements print: one mark per edged side on that axis.
+        // Every mark sits under the number. Count 2 is two parallel lines, never a line above.
         const safeCount = Math.max(0, Math.min(2, Number(count || 0)));
-        const line = '<span class="dco-cost-dimension-edge-line" aria-hidden="true"></span>';
-        const spacer = '<span class="dco-cost-dimension-edge-line is-spacer" aria-hidden="true"></span>';
-        const top = safeCount === 2 ? line : spacer;
-        const bottom = safeCount >= 1 ? line : spacer;
+        const lines = Array.from(
+            { length: safeCount },
+            () => '<span class="dco-cost-dimension-edge-line" aria-hidden="true"></span>'
+        ).join("");
         return (
             `<span class="dco-cost-dimension" data-edge-marks="${safeCount}">`
-            + `<span class="dco-cost-dimension-rail">${top}</span>`
             + `<b>${quantity(value)}</b>`
-            + `<span class="dco-cost-dimension-rail">${bottom}</span>`
+            + `<span class="dco-cost-dimension-lines dco-cost-dimension-lines-${safeCount}">${lines}</span>`
             + `</span>`
         );
     }
@@ -389,9 +387,10 @@
             .dco-cost-table .text-start{text-align:start}
             .dco-cost-dimension{display:inline-flex;min-width:2.75rem;flex-direction:column;align-items:center;gap:2px;line-height:1}
             .dco-cost-dimension b{font-size:12px;font-weight:900}
-            .dco-cost-dimension-rail{display:flex;min-height:4px;align-items:center;justify-content:center}
+            .dco-cost-dimension-lines{display:flex;box-sizing:content-box;min-height:5px;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px}
             .dco-cost-dimension-edge-line{display:block;width:1.65rem;height:1.5px;border-radius:999px;background:var(--alm-primary,#172033)}
-            .dco-cost-dimension-edge-line.is-spacer{visibility:hidden}
+            .dco-cost-dimension-lines-0{visibility:hidden}
+            [data-theme="dark"] .dco-cost-dimension-edge-line{background:var(--alm-text-strong,#f2f4f7)}
             .dco-invoice-pending-row td{background:rgba(190,125,25,.055)}
             .dco-invoice-pending-badge{display:inline-flex;margin-inline-start:7px;padding:2px 7px;border-radius:999px;background:#fff3d8;color:#875812;font-size:9px;font-weight:900}
             .dco-invoice-pending-value{font-weight:900;color:#9a6a1d}

@@ -550,6 +550,135 @@ class TestFinancialDocumentApplication(unittest.TestCase):
         self.assertEqual(edge_line["quantity"], 3.0)
         self.assertEqual(edge_line["amount_usd"], 1.5)
 
+    def test_quotation_edge_lines_aggregate_one_row_per_type_across_doors(self) -> None:
+        default = "قشاط 2سم عادي"
+        glossy = "قشاط 4 سم لميع"
+        gold = "قشاط 4 سم ذهبي"
+        order = {
+            **self.order,
+            "required_boards": 0,
+            "mdf_cost_usd": 0,
+            "cutting_cost_usd": 0,
+            "edge_cost_usd": 0,
+            "default_edge_type": default,
+            "edge_profile_rates": {
+                default: 0.5,
+                glossy: 2.0,
+                gold: 2.5,
+            },
+        }
+
+        def door(
+            *,
+            long_right=1,
+            long_left=1,
+            width_top=1,
+            width_bottom=1,
+            long_right_type="",
+            long_left_type="",
+            width_top_type="",
+            width_bottom_type="",
+            qty=1,
+        ):
+            return {
+                "piece_type": "Regular",
+                "width_cm": 50,
+                "length_cm": 100,
+                "qty": qty,
+                "edge_long_right": long_right,
+                "edge_long_left": long_left,
+                "edge_width_top": width_top,
+                "edge_width_bottom": width_bottom,
+                "edge_long_right_type_override": long_right_type,
+                "edge_long_left_type_override": long_left_type,
+                "edge_width_top_type_override": width_top_type,
+                "edge_width_bottom_type_override": width_bottom_type,
+            }
+
+        pieces = [
+            door(),  # all default
+            door(width_top_type=glossy, width_bottom_type=glossy),
+            door(long_right_type=glossy),
+            door(width_top=0, width_bottom=0, long_right_type=gold, long_left_type=gold),
+        ]
+        payload = build_customer_invoice_document(order, pieces)
+        edge_lines = [line for line in payload["lines"] if line["type"] == "edge"]
+        by_desc = {line["description"]: line for line in edge_lines}
+        self.assertEqual(set(by_desc), {default, glossy, gold})
+        self.assertTrue(all(not desc.startswith("قشاط — ") for desc in by_desc))
+        self.assertEqual(by_desc[default]["quantity"], 7.0)
+        self.assertEqual(by_desc[default]["rate_usd"], 0.5)
+        self.assertEqual(by_desc[default]["amount_usd"], 3.5)
+        self.assertEqual(by_desc[glossy]["quantity"], 2.0)
+        self.assertEqual(by_desc[glossy]["rate_usd"], 2.0)
+        self.assertEqual(by_desc[glossy]["amount_usd"], 4.0)
+        self.assertEqual(by_desc[gold]["quantity"], 2.0)
+        self.assertEqual(by_desc[gold]["rate_usd"], 2.5)
+        self.assertEqual(by_desc[gold]["amount_usd"], 5.0)
+        self.assertEqual(sum(line["amount_usd"] for line in edge_lines), 12.5)
+
+    def test_mixed_side_types_do_not_collapse_to_zero_unit_rate(self) -> None:
+        """Piece-level edge_rate_usd is 0 when sides differ; type rows keep rates."""
+
+        default = "Default Edge"
+        other = "Other Edge"
+        order = {
+            **self.order,
+            "required_boards": 0,
+            "mdf_cost_usd": 0,
+            "cutting_cost_usd": 0,
+            "default_edge_type": default,
+            "edge_profile_rates": {default: 1.0, other: 2.0},
+        }
+        piece = {
+            "piece_type": "Regular",
+            "width_cm": 100,
+            "length_cm": 100,
+            "qty": 1,
+            "edge_type": default,
+            "edge_rate_usd": 0.0,  # mixed-side legacy average
+            "edge_meters": 2.0,
+            "edge_cost_usd": 3.0,
+            "edge_long_right": 1,
+            "edge_long_left": 1,
+            "edge_width_top": 0,
+            "edge_width_bottom": 0,
+            "edge_long_right_type_override": other,
+        }
+        payload = build_customer_invoice_document(order, [piece])
+        edge_lines = [line for line in payload["lines"] if line["type"] == "edge"]
+        self.assertEqual(len(edge_lines), 2)
+        rates = {line["description"]: line["rate_usd"] for line in edge_lines}
+        self.assertEqual(rates[default], 1.0)
+        self.assertEqual(rates[other], 2.0)
+        self.assertEqual(sum(line["amount_usd"] for line in edge_lines), 3.0)
+
+    def test_qty_greater_than_one_scales_side_meters_once(self) -> None:
+        default = "Default Edge"
+        order = {
+            **self.order,
+            "required_boards": 0,
+            "mdf_cost_usd": 0,
+            "cutting_cost_usd": 0,
+            "default_edge_type": default,
+            "edge_profile_rates": {default: 1.0},
+        }
+        piece = {
+            "piece_type": "Regular",
+            "width_cm": 50,
+            "length_cm": 100,
+            "qty": 3,
+            "edge_long_right": 1,
+            "edge_long_left": 0,
+            "edge_width_top": 1,
+            "edge_width_bottom": 0,
+        }
+        payload = build_customer_invoice_document(order, [piece])
+        edge = next(line for line in payload["lines"] if line["type"] == "edge")
+        # (1.0m long + 0.5m width) * qty 3 = 4.5m, not double-counted.
+        self.assertEqual(edge["quantity"], 4.5)
+        self.assertEqual(edge["amount_usd"], 4.5)
+
 
 if __name__ == "__main__":
     unittest.main()

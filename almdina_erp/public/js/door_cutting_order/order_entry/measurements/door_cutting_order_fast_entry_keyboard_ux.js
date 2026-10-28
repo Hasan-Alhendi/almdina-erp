@@ -18,6 +18,14 @@
         }, 0);
     }
 
+    function revealRow(target) {
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (owner && typeof owner.revealInMeasurementTable === "function") {
+            return owner.revealInMeasurementTable(target);
+        }
+        return false;
+    }
+
     function focusNextWidth(currentTr) {
         if (!currentTr) return false;
         const next = currentTr.nextElementSibling;
@@ -25,7 +33,7 @@
         if (!width) return false;
         width.focus({ preventScroll: true });
         if (typeof width.select === "function") width.select();
-        next.scrollIntoView({ block: "nearest", inline: "nearest" });
+        revealRow(next);
         return document.activeElement === width;
     }
 

@@ -51,11 +51,15 @@
         return ui.button(options);
     }
 
+    function printIconSvg() {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 8V4h10v4"></path><path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><path d="M7 14h10v6H7z"></path><path d="M17.5 11.5h.01"></path></svg>';
+    }
+
     function entryWindowIcon(kind) {
         const icons = {
-            print: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"></path><rect x="6" y="9" width="12" height="10" rx="1.5"></rect><path d="M6 14h12"></path></svg>',
+            print: printIconSvg(),
             edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18.5V20h1.5L17 8.5 15.5 7 4 18.5z"></path><path d="M14 5l3 3"></path></svg>',
-            close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 7h6v10H10z"></path><path d="M14 12H6"></path><path d="M8 10l-2 2 2 2"></path></svg>',
+            close: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14h6v6"></path><path d="M20 10h-6V4"></path><path d="M14 20v-6h6"></path><path d="M10 4v6H4"></path></svg>',
             save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"></path></svg>',
             cancel: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l8 10M16 7L8 17"></path></svg>',
         };
@@ -142,6 +146,10 @@
     }
 
     function flushOrderMeasurements(frm) {
+        const guard = window.AlmdinaEdgeProfileDoubleClickGuard;
+        if (guard && typeof guard.flushPendingClick === "function") {
+            guard.flushPendingClick(frm);
+        }
         const owner = window.AlmdinaDoorCuttingFastEntry;
         if (owner && typeof owner.flush === "function") owner.flush(frm);
     }
@@ -349,15 +357,7 @@
     }
 
     function toolbarIconSvg(kind) {
-        if (kind === "print") {
-            return `
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M7 8V4h10v4"></path>
-                    <path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path>
-                    <path d="M7 14h10v6H7z"></path>
-                    <path d="M17.5 11.5h.01"></path>
-                </svg>`;
-        }
+        if (kind === "print") return printIconSvg();
         return `
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M8 3H3v5"></path>
@@ -403,10 +403,10 @@
             .dco-entry-window-status .dot{width:7px;height:7px;border-radius:50%;background:#209454}.dco-entry-window-status.is-dirty{border-color:rgba(218,146,21,.35);background:rgba(218,146,21,.08);color:#8a5a08}.dco-entry-window-status.is-dirty .dot{background:#d99215}
             .dco-entry-window-actions{display:inline-flex;align-items:center;justify-content:flex-start;gap:6px;flex:0 0 auto;flex-wrap:nowrap}
             .dco-entry-window-icon-button{width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border-radius:9px!important;font-weight:850!important}
-            .dco-entry-window-icon-button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+            .dco-entry-window-icon-button svg{width:21px;height:21px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
             .dco-entry-window-icon-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
             .dco-entry-window-actions .dco-entry-window-order-edit-action{display:inline-flex;align-items:center;gap:6px}
-            .dco-entry-window-body{flex:1;min-height:0;padding:10px}.dco-entry-window-host{height:100%;min-height:0}.dco-entry-window-host>[data-fieldname="pieces_fast_entry"],.dco-entry-window-host>.frappe-control{height:100%;margin:0!important}.dco-entry-window-host .dco-fast-entry-shell{height:100%;display:flex;flex-direction:column;border-radius:12px}.dco-entry-window-host .dco-fast-entry-toolbar{flex:0 0 auto}.dco-entry-window-host .dco-fast-entry-scroll{flex:1 1 auto;max-height:none!important;height:auto!important;min-height:0;overflow:auto!important}.dco-entry-window-host .dco-fast-table{min-width:1180px}.dco-entry-window-host .dco-measurement-table-actions{display:none!important}
+            .dco-entry-window-body{flex:1;min-height:0;padding:10px}.dco-entry-window-host{height:100%;min-height:0}.dco-entry-window-host>[data-fieldname="pieces_fast_entry"],.dco-entry-window-host>.frappe-control{height:100%;margin:0!important}.dco-entry-window-host .dco-fast-entry-shell{height:100%;display:flex;flex-direction:column;border-radius:12px}.dco-entry-window-host .dco-fast-entry-toolbar{flex:0 0 auto}.dco-entry-window-host .dco-fast-entry-scroll{flex:1 1 auto;max-height:none!important;height:auto!important;min-height:0;overflow:auto!important;overscroll-behavior:contain}.dco-entry-window-host .dco-fast-table{min-width:1180px}.dco-entry-window-host .dco-measurement-table-actions{display:none!important}
             @media(max-width:760px){.dco-measurement-table-actions{width:100%;margin-inline-start:0}.dco-entry-window-header{padding:9px 12px;gap:7px}.dco-entry-window-top{align-items:center;gap:8px}.dco-entry-window-icon-button{width:40px!important;min-width:40px!important;height:40px!important;min-height:40px!important}.dco-entry-window-body{padding:6px}}
         `;
         document.head.appendChild(style);

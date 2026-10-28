@@ -100,6 +100,15 @@ def test_cost_measurements_table_shows_print_style_edge_dimension_marks():
     assert "dimensionMark(row.width, widthCount)" in cost
     assert "dimensionMark(row.length, longCount)" in cost
     assert "dco-cost-dimension-edge-line" in cost
+    assert "Math.max(0, Math.min(2, Number(count || 0)))" in cost
+    assert "{ length: safeCount }" in cost
+    assert 'class="dco-cost-dimension-lines dco-cost-dimension-lines-${safeCount}"' in cost
+    assert ".dco-cost-dimension-lines-0{visibility:hidden}" in cost
+    assert "dco-cost-dimension-rail" not in cost
+    assert "is-spacer" not in cost
+    assert "safeCount === 2" not in cost
+    mark = cost.split("function dimensionMark(value, count)", 1)[1].split("function installStyles", 1)[0]
+    assert mark.index("<b>${quantity(value)}</b>") < mark.index("dco-cost-dimension-lines")
     assert "dco-capability-cost-presenter-css-v8" in cost
 
 
@@ -139,7 +148,9 @@ def test_customer_invoice_breaks_down_boards_cutting_and_edge_banding():
     src = _source(COST_PRESENTER)
     assert "MDF boards" in src
     assert "Board cutting and preparation" in src
-    assert "Edge banding —" in src
+    # Edge quotation rows use the type name directly (no "Edge banding — {0}" prefix).
+    assert 'translate("Edge banding — {0}"' not in src
+    assert "description: edgeName || translate(\"Edge banding — unspecified\")" in src
     assert "function invoiceLines(frm)" in src
     assert "function invoiceTotal(frm)" in src
     assert "boardCount * boardRate" in src

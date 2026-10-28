@@ -5,6 +5,12 @@ from html import escape
 import json
 from typing import Any
 
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    printable_corner_edge_paths_cm,
+    printable_corner_outline_cm,
+    printable_remaining_dimension_anchors_cm,
+)
+
 
 DOCUMENTATION_SCHEMA = "almdina.special-shape-documentation"
 DRAWING_VERSION = 1
@@ -55,13 +61,17 @@ body{font-size:8.1pt;line-height:1.28;-webkit-print-color-adjust:exact;print-col
 .dco-unified-print-reference{margin-top:.7mm;font-size:15.6pt;font-weight:950;line-height:1.05;letter-spacing:.1pt;color:#172033;direction:ltr;unicode-bidi:plaintext;overflow-wrap:anywhere}
 .dco-unified-print-date{margin-top:.75mm;font-size:6.7pt;font-weight:750;line-height:1.35;color:#5d6874;direction:ltr;unicode-bidi:plaintext}
 .info{display:grid;gap:1.2mm;margin:0 0 2.2mm}
-.shared-info{grid-template-columns:minmax(0,1.55fr) minmax(0,1.15fr) minmax(0,.95fr) minmax(0,.8fr) minmax(0,.7fr)}
+.shared-info{grid-template-columns:minmax(0,1.45fr) minmax(0,1.42fr) minmax(0,1.38fr) minmax(0,.64fr) minmax(0,.5fr)}
 .info>div{min-width:0;min-height:10.5mm;padding:1.35mm 1.55mm;border:.7pt solid #c7cdd3;border-radius:2.1mm;background:#fbfcfd;line-height:1.25;overflow-wrap:anywhere}
 .info b{display:block;margin-bottom:.55mm;color:#5d6874;font-size:6.35pt;font-weight:800}
 .shared-info-primary{display:block;color:#172033;font-size:8pt;font-weight:850;line-height:1.2;overflow-wrap:anywhere}
 .shared-info-phone{display:flex;align-items:baseline;gap:1mm;margin-top:.65mm;color:#5d6874;font-size:6.35pt;font-weight:700;line-height:1.25}
 .shared-info-phone-label{flex:0 0 auto}
 .shared-info-phone-value{min-width:0;direction:ltr;unicode-bidi:plaintext;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.shared-info-detail{display:block;margin-top:.45mm;color:#303a44;font-size:6.55pt;font-weight:750;line-height:1.35;overflow-wrap:anywhere}
+.shared-info-detail-label,.shared-info-detail-sep,.shared-info-detail-unit{white-space:nowrap}
+.shared-info-metric{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums;white-space:nowrap}
+.shared-info-detail-value{overflow-wrap:anywhere}
 .title{margin:2.1mm 0 1.2mm;font-size:9.2pt;font-weight:900;color:#172033}
 .table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:.75pt solid #98a2ac;border-radius:2mm;overflow:hidden}
 .table thead{display:table-header-group}
@@ -108,7 +118,10 @@ body{font-size:8.1pt;line-height:1.28;-webkit-print-color-adjust:exact;print-col
 .dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:7.6pt;font-weight:650;line-height:1.4}
 .dco-piece-sketch{display:block;margin:0;padding:1mm 1.2mm .7mm;border:.7pt solid #aeb7bf;border-radius:1.8mm;background:#fff;break-inside:avoid}
 .dco-piece-sketch>svg{display:block;width:100%;height:27mm;max-width:54mm;margin:0 auto;overflow:visible}
+.dco-piece-sketch>svg.dco-corner-print-svg{height:34mm;max-width:62mm}
 .dco-piece-sketch figcaption{margin-top:.5mm;color:#5e6974;font-size:6.7pt;font-weight:800;line-height:1.2;text-align:center}
+.dco-piece-type-metrics{display:grid;gap:.2mm;margin:.7mm 0 0;padding:0;font-size:6.7pt;line-height:1.35;font-weight:650;color:#344054;break-inside:avoid;text-align:start}
+.dco-piece-type-metrics b{font-weight:800;font-variant-numeric:tabular-nums}
 .dco-piece-sketch em{display:block;margin-top:3px;color:#92400e;font-size:6px;font-style:normal;text-align:center}
 @media print{a{color:inherit;text-decoration:none}}
 """
@@ -129,6 +142,28 @@ def _number(value: object) -> float:
 def _quantity(value: object) -> str:
     number = _number(value)
     text = f"{number:.3f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _optional_quantity(value: object) -> str:
+    """Print a stored measure. A missing measure stays an em dash, not zero."""
+    if isinstance(value, bool) or value is None:
+        return "—"
+    if isinstance(value, str):
+        raw = value.strip().replace(",", ".")
+        if not raw:
+            return "—"
+    elif isinstance(value, (int, float)):
+        raw = str(value)
+    else:
+        return "—"
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return "—"
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return "—"
+    text = f"{parsed:.3f}".rstrip("0").rstrip(".")
     return text or "0"
 
 
@@ -225,6 +260,31 @@ def _header_html(identity: Mapping[str, Any], *, reference: str, date: str, tran
         </header>"""
 
 
+def _board_size_detail(order: Mapping[str, Any], translator: Any = None) -> str:
+    length = _optional_quantity(order.get("board_length_cm"))
+    width = _optional_quantity(order.get("board_width_cm"))
+    return (
+        '<span class="shared-info-detail">'
+        f'<span class="shared-info-detail-label">{_esc(_label("Length", translator))}:</span> '
+        f'<span class="shared-info-metric" dir="ltr">{_esc(length)}</span> '
+        '<span class="shared-info-detail-sep">—</span> '
+        f'<span class="shared-info-detail-label">{_esc(_label("Width", translator))}:</span> '
+        f'<span class="shared-info-metric" dir="ltr">{_esc(width)}</span> '
+        f'<span class="shared-info-detail-unit">{_esc(_label("cm", translator))}</span>'
+        "</span>"
+    )
+
+
+def _default_edge_detail(order: Mapping[str, Any], translator: Any = None) -> str:
+    edge_type = str(order.get("default_edge_type") or "").strip()
+    return (
+        '<span class="shared-info-detail">'
+        f'<span class="shared-info-detail-label">{_esc(_label("Default type", translator))}:</span> '
+        f'<span class="shared-info-detail-value">{_esc(edge_type or "—")}</span>'
+        "</span>"
+    )
+
+
 def _shared_info(order: Mapping[str, Any], phone: str, translator: Any = None) -> str:
     pieces = order.get("pieces") or []
     door_count = sum(_qty(row) for row in pieces if isinstance(row, Mapping))
@@ -234,8 +294,8 @@ def _shared_info(order: Mapping[str, Any], phone: str, translator: Any = None) -
                 <span class="shared-info-primary">{_esc(order.get("customer") or "—")}</span>
                 <span class="shared-info-phone"><span class="shared-info-phone-label">{_esc(_label("Phone", translator))}</span><span class="shared-info-phone-value">{_esc(phone or "—")}</span></span>
             </div>
-            <div><b>{_esc(_label("Board", translator))}</b>{_esc(order.get("board_description") or "—")}</div>
-            <div><b>{_esc(_label("Edge color", translator))}</b>{_esc(order.get("edge_color") or _label("Not specified", translator))}</div>
+            <div><b>{_esc(_label("Board", translator))}</b>{_esc(order.get("board_description") or "—")}{_board_size_detail(order, translator)}</div>
+            <div><b>{_esc(_label("Edge color", translator))}</b>{_esc(order.get("edge_color") or _label("Not specified", translator))}{_default_edge_detail(order, translator)}</div>
             <div><b>{_esc(_label("Cutting machine", translator))}</b>{_esc(order.get("order_cutting_machine") or "—")}</div>
             <div><b>{_esc(_label("Door count", translator))}</b>{_quantity(door_count)}</div>
         </div>"""
@@ -445,6 +505,83 @@ def _drawing_caption(index: int, translator: Any = None) -> str:
     return _label("Door piece drawing {0}", translator).replace("{0}", str(index))
 
 
+def _corner_edge_band_svg(row: Mapping[str, Any]) -> str:
+    width = max(0.0, _number(row.get("width_cm")))
+    height = max(0.0, _number(row.get("length_cm")))
+    if not width or not height:
+        return ""
+    paths = printable_corner_edge_paths_cm(
+        row,
+        inset=min(width, height) * 0.035,
+    )
+    parts: list[str] = []
+    for key in ("top", "bottom", "left", "right", "break", "breakOnly"):
+        path = paths.get(key)
+        if not path or len(path) < 2:
+            continue
+        pairs = " ".join(f"{_number(point[0])},{_number(point[1])}" for point in path)
+        parts.append(
+            f'<polyline data-dco-edge="{_esc(key)}" fill="none" stroke="#d00000" '
+            f'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" '
+            f'vector-effect="non-scaling-stroke" points="{pairs}"/>'
+        )
+    return "".join(parts)
+
+
+def _corner_dimension_labels_svg(
+    row: Mapping[str, Any],
+    width: float,
+    height: float,
+    translator: Any = None,
+) -> str:
+    anchors = printable_remaining_dimension_anchors_cm(row)
+    if not anchors:
+        return ""
+    unit = _label("cm", translator)
+    font_size = max(min(width, height) * 0.085, max(width, height) * 0.045)
+    parts: list[str] = []
+    for anchor in anchors:
+        text = f"{_format_print_number(float(anchor['value']))} {unit}"
+        if anchor.get("short"):
+            parts.append(
+                f'<line x1="{_number(anchor["midX"])}" y1="{_number(anchor["midY"])}" '
+                f'x2="{_number(anchor["x"])}" y2="{_number(anchor["y"])}" '
+                'stroke="#344054" stroke-width="0.9" vector-effect="non-scaling-stroke"/>'
+            )
+        parts.append(
+            f'<text data-dco-remaining-axis="{_esc(anchor["axis"])}" '
+            f'x="{_number(anchor["x"])}" y="{_number(anchor["y"])}" text-anchor="middle" '
+            'dominant-baseline="middle" direction="ltr" font-family="Tahoma,Arial,sans-serif" '
+            f'font-size="{font_size}" font-weight="800" fill="#172033">{_esc(text)}</text>'
+        )
+    return "".join(parts)
+
+
+def _corner_outline_svg(
+    row: Mapping[str, Any],
+    label: str,
+    translator: Any = None,
+) -> str:
+    outline = printable_corner_outline_cm(row)
+    if not outline:
+        return ""
+    width = max(0.0, _number(row.get("width_cm")))
+    height = max(0.0, _number(row.get("length_cm")))
+    if not width or not height:
+        return ""
+    padding = max(width, height) * 0.32
+    pairs = " ".join(f"{_number(point[0])},{_number(point[1])}" for point in outline)
+    edges = _corner_edge_band_svg(row)
+    dimensions = _corner_dimension_labels_svg(row, width, height, translator)
+    return (
+        f'<svg class="dco-corner-print-svg" direction="ltr" style="direction:ltr" '
+        f'viewBox="{-padding} {-padding} {width + padding * 2} {height + padding * 2}" '
+        f'preserveAspectRatio="xMidYMid meet" role="img" aria-label="{_esc(label)}">'
+        f'<polygon points="{pairs}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8"/>'
+        f"{edges}{dimensions}</svg>"
+    )
+
+
 def _drawing_svg(row: Mapping[str, Any], index: int, translator: Any = None) -> str:
     label = _drawing_caption(index, translator)
     drawing = _parse_json(row.get("special_shape_drawing_json") or row.get("drawing_json"))
@@ -457,7 +594,98 @@ def _drawing_svg(row: Mapping[str, Any], index: int, translator: Any = None) -> 
     geometry = _parse_json(row.get("special_shape_geometry_json") or row.get("geometry_json"))
     if geometry:
         return _geometry_svg(geometry, label)
-    return ""
+    return _corner_outline_svg(row, label, translator)
+
+
+_CORNER_POSITION_LABELS = {
+    "Top Right": "Top right",
+    "Top Left": "Top left",
+    "Bottom Right": "Bottom right",
+    "Bottom Left": "Bottom left",
+}
+
+
+def _print_remaining_cm(total: object, cut: object) -> float | None:
+    """Outer side minus stored cut. Missing or impossible cuts stay blank."""
+    width = _number(total)
+    cut_value = _number(cut)
+    if width <= 0 or cut_value <= 0 or cut_value >= width:
+        return None
+    return round(width - cut_value, 3)
+
+
+def _format_print_number(value: float) -> str:
+    text = f"{value:.3f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _glass_margin_cm_text(value: object) -> str | None:
+    """Match the Glass editor: stored millimetres shown as centimetres."""
+    millimeters = _number(value)
+    if millimeters <= 0:
+        return None
+    centimeters = round(millimeters * 1000) / 10000
+    if centimeters <= 0:
+        return None
+    text = f"{centimeters:.10f}".rstrip("0").rstrip(".")
+    return text or None
+
+
+def _corner_position_label(value: object, translator: Any = None) -> str:
+    message = _CORNER_POSITION_LABELS.get(str(value or "").strip())
+    if not message:
+        return ""
+    return _label(message, translator)
+
+
+def _type_metric_lines(
+    row: Mapping[str, Any],
+    translator: Any = None,
+) -> list[tuple[str, str]]:
+    piece_type = str(row.get("piece_type") or "").strip()
+    lines: list[tuple[str, str]] = []
+    if piece_type in {"L-Shaped Corner", "Clipped Corner"}:
+        position = _corner_position_label(row.get("clipped_corner_position"), translator)
+        if position:
+            lines.append((_label("Corner", translator), position))
+        # Remaining lengths are drawn on the SVG when an outline exists.
+        if printable_corner_outline_cm(row) is None:
+            remaining_width = _print_remaining_cm(
+                row.get("width_cm"),
+                row.get("clipped_corner_width_cm"),
+            )
+            if remaining_width is not None:
+                amount = (
+                    f"{_format_print_number(remaining_width)} {_label('cm', translator)}"
+                )
+                lines.append((_label("Remaining on width side", translator), amount))
+            remaining_length = _print_remaining_cm(
+                row.get("length_cm"),
+                row.get("clipped_corner_length_cm"),
+            )
+            if remaining_length is not None:
+                amount = (
+                    f"{_format_print_number(remaining_length)} {_label('cm', translator)}"
+                )
+                lines.append((_label("Remaining on length side", translator), amount))
+        return lines
+    if piece_type == "Glass":
+        margin = _glass_margin_cm_text(row.get("glass_margin_mm"))
+        if margin:
+            amount = f"{margin} {_label('cm', translator)}"
+            lines.append((_label("Glass Margin", translator), amount))
+    return lines
+
+
+def _type_metrics_html(row: Mapping[str, Any], translator: Any = None) -> str:
+    lines = _type_metric_lines(row, translator)
+    if not lines:
+        return ""
+    body = "".join(
+        f"<div>{_esc(label)}: <b dir=\"ltr\">{_esc(value)}</b></div>"
+        for label, value in lines
+    )
+    return f'<div class="dco-piece-type-metrics">{body}</div>'
 
 
 def _notes_cell(
@@ -469,13 +697,17 @@ def _notes_cell(
 ) -> str:
     notes = _notes_text(row, translator, direction=direction)
     visual = _drawing_svg(row, index, translator)
-    if not visual:
+    metrics = _type_metrics_html(row, translator)
+    if not visual and not metrics:
         return _esc(notes or "—")
     text = f'<div class="dco-piece-notes-text">{_esc(notes)}</div>' if notes else ""
+    if not visual:
+        return f'<div class="dco-piece-notes">{text}{metrics}</div>'
     return (
         f'<div class="dco-piece-notes">{text}'
         f'<figure class="dco-piece-sketch">{visual}'
         f'<figcaption>{_esc(_drawing_caption(index, translator))}</figcaption>'
+        f"{metrics}"
         f"<em>{_esc(_label('This documents the customer request and is not a manufacturing file.', translator))}</em></figure></div>"
     )
 
@@ -521,7 +753,10 @@ PRINT_ORDER_FIELDS = (
     "customer",
     "order_date",
     "board_description",
+    "board_length_cm",
+    "board_width_cm",
     "edge_color",
+    "default_edge_type",
     "order_cutting_machine",
     "order_notes",
 )
@@ -549,6 +784,12 @@ PRINT_PIECE_FIELDS = (
     "drawing_json",
     "special_shape_geometry_json",
     "geometry_json",
+    "clipped_corner_position",
+    "clipped_corner_width_cm",
+    "clipped_corner_length_cm",
+    "edge_break",
+    "edge_break_only",
+    "glass_margin_mm",
 )
 
 
