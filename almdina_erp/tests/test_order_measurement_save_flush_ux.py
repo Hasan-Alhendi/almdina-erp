@@ -89,7 +89,8 @@ def test_measurement_table_is_not_replaced_while_order_save_is_in_flight() -> No
 def test_virtual_row_materialize_ignores_detached_dom_after_edit_refresh() -> None:
     source = _text(OPERATOR)
     materialize = source.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
-        "function localArea", 1
+        "function deleteRowButtonHtml", 1
     )[0]
     assert "!tr.isConnected" in materialize
     assert "!isEditable(frm)" in materialize
+    assert "syncDeleteCell(frm, tr)" in materialize

@@ -236,8 +236,9 @@ def test_row_delete_stays_in_its_own_cell_after_the_notes_editor():
 
     row = operator.split("function rowHtml", 1)[1].split("function shellDirection", 1)[0]
     assert row.index('class="dco-col-notes"') < row.index('class="dco-col-delete"')
-    assert row.count("dco-delete-row") == 1
-    assert 'aria-label="${escapeHtml(__("Delete row"))}"' in row
+    assert "deleteRowButtonHtml()" in row
+    assert 'aria-label="${label}"' in operator
+    assert '__("Delete row")' in operator
     assert "editable && !virtual" in row
 
     assert "td.dco-col-delete" in compact
@@ -247,6 +248,28 @@ def test_row_delete_stays_in_its_own_cell_after_the_notes_editor():
     assert ".dco-col-delete{display:none" not in compact.replace(" ", "")
     assert "minmax(0,1fr) 31px" in resilience
     assert "min-width:260px" not in resilience
+
+
+def test_materialized_piece_gets_delete_button_without_waiting_for_save():
+    operator = UX_JS.read_text(encoding="utf-8")
+    materialize = operator.split("function materializeVirtualRow(frm, tr)", 1)[1].split(
+        "function deleteRowButtonHtml", 1
+    )[0]
+    sync = operator.split("function syncDeleteCell(frm, tr)", 1)[1].split(
+        "function localArea", 1
+    )[0]
+
+    assert "syncDeleteCell(frm, tr)" in materialize
+    assert 'class="dco-delete-row"' in operator.split("function deleteRowButtonHtml", 1)[1].split(
+        "function syncDeleteCell", 1
+    )[0]
+    assert 'rowName.startsWith("__virtual__")' in sync
+    assert 'tr.classList.contains("dco-virtual-row")' in sync
+    assert "isEditable(frm)" in sync
+    assert 'cell.querySelector(".dco-delete-row")' in sync
+    assert "deleteRowButtonHtml()" in sync
+    assert "syncDeleteCell," in operator
+    assert "__islocal" not in sync
 
 
 def test_edge_cells_use_compact_visual_side_indicators_and_accessibility_labels():

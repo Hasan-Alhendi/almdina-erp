@@ -599,8 +599,30 @@
         if (extraAddons && typeof extraAddons.syncRowPresentation === "function") {
             extraAddons.syncRowPresentation(frm, tr, row, { editable: isEditable(frm) });
         }
+        syncDeleteCell(frm, tr);
         ensureSingleVirtualRow(frm);
         return row;
+    }
+
+    function deleteRowButtonHtml() {
+        const label = escapeHtml(__("Delete row"));
+        return `<button type="button" class="dco-delete-row" title="${label}" aria-label="${label}">×</button>`;
+    }
+
+    // Idempotent: real editable pieces get one ×; the blank virtual starter stays empty.
+    function syncDeleteCell(frm, tr) {
+        if (!tr) return;
+        const cell = tr.querySelector(":scope > td.dco-col-delete") || tr.querySelector("td.dco-col-delete");
+        if (!cell) return;
+        const rowName = String(tr.dataset.rowName || "");
+        const isVirtual = tr.classList.contains("dco-virtual-row") || rowName.startsWith("__virtual__");
+        if (!isEditable(frm) || isVirtual) {
+            if (cell.querySelector(".dco-delete-row")) cell.replaceChildren();
+            return;
+        }
+        if (!cell.querySelector(".dco-delete-row")) {
+            cell.innerHTML = deleteRowButtonHtml();
+        }
     }
 
     function localArea(row) {
@@ -796,7 +818,7 @@
                     ? `<td class="dco-col-addons" data-label="${escapeHtml(__("Add-ons"))}">${extraAddons.renderAddonSummary(data, { editable, virtual })}</td>`
                     : ""}
                 <td class="dco-col-notes" data-label="${labels.notes}"><input class="dco-fast-input" type="text" data-field="notes" value="${virtual ? "" : escapeHtml(data.notes || "")}" ${disabled}></td>
-                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? `<button type="button" class="dco-delete-row" title="${escapeHtml(__("Delete row"))}" aria-label="${escapeHtml(__("Delete row"))}">×</button>` : ""}</td>
+                <td class="dco-col-delete" data-label="${labels.remove}">${editable && !virtual ? deleteRowButtonHtml() : ""}</td>
             </tr>`;
     }
 
@@ -1737,6 +1759,8 @@
             revealInMeasurementTable,
             refreshValidation: refreshDimensionValidation,
             validateDimensionsBeforeSave,
+            syncDeleteCell,
+            deleteRowButtonHtml,
         }
     );
 })();
