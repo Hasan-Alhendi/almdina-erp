@@ -45,6 +45,8 @@ const french = {
     "Type": "Type",
     "Width": "Largeur",
     "Length": "Longueur",
+    "cm": "cm",
+    "Default type": "Type par défaut",
     "Qty": "Qté",
     "Notes": "Notes",
     "Quotation details": "Détails du devis",
@@ -76,6 +78,10 @@ const arabic = {
     "Custom": "مخصص",
     "Measurements table": "جدول القياسات",
     "Order measurements table": "جدول قياسات الطلب",
+    "Length": "الطول",
+    "Width": "العرض",
+    "cm": "سم",
+    "Default type": "النوع الافتراضي",
 };
 
 let active = french;
@@ -150,7 +156,10 @@ const form = {
         customer: "أحمد",
         order_date: "2026-09-23",
         board_description: "لوح أبيض",
+        board_length_cm: 244,
+        board_width_cm: 122.5,
         edge_color: "أسود",
+        default_edge_type: "PVC glossy 1mm",
         order_cutting_machine: "CNC",
         order_notes: "تسليم بعد الظهر",
         pieces: [{
@@ -232,6 +241,15 @@ assert.match(frenchHtml, /ألواح MDF/);
 assert.match(frenchHtml, /ملاحظة السعر/);
 assert.match(frenchHtml, /PVC 1mm/);
 assert.match(frenchHtml, /CNC/);
+assert.match(frenchHtml, /Longueur:/);
+assert.match(frenchHtml, /Largeur:/);
+assert.match(frenchHtml, /class="shared-info-metric" dir="ltr">244</);
+assert.match(frenchHtml, /class="shared-info-metric" dir="ltr">122\.5</);
+assert.doesNotMatch(frenchHtml, /244\.000|122\.500/);
+assert.match(frenchHtml, /Type par défaut:/);
+assert.match(frenchHtml, /PVC glossy 1mm/);
+assert.match(frenchHtml, /\$ 29\.00/);
+assert.match(frenchHtml, /Détails du devis/);
 assert.doesNotMatch(frenchHtml, /،/);
 assert.doesNotMatch(frenchHtml, /خاصة|إضافات|على الداير|لا يوجد تخصيص|جدول القياسات|الزبون|الهاتف|لون القشاط|عدد الدرف|ملاحظات الطلب|غير محدد|ضلع|مسودة|تفاصيل عرض السعر|من القشاط الافتراضي|يتضمن أطرافًا مخصصة|تخصيص استثنائي/);
 
@@ -256,5 +274,75 @@ assert.match(arabicHtml, /جدول القياسات/);
 assert.match(arabicHtml, /مقبض/);
 assert.match(arabicHtml, /PVC 1mm/);
 assert.doesNotMatch(arabicHtml, /<em>Custom<\/em>/);
+assert.match(arabicHtml, /<span class="shared-info-detail-label">الطول:<\/span>/);
+assert.match(arabicHtml, /<span class="shared-info-detail-label">العرض:<\/span>/);
+assert.match(arabicHtml, /<span class="shared-info-detail-unit">سم<\/span>/);
+assert.match(arabicHtml, /<span class="shared-info-detail-label">النوع الافتراضي:<\/span>/);
+assert.match(arabicHtml, /class="shared-info-metric" dir="ltr">244</);
+assert.match(arabicHtml, /class="shared-info-metric" dir="ltr">122\.5</);
+assert.match(arabicHtml, /unicode-bidi:isolate/);
+assert.doesNotMatch(arabicHtml, /text-overflow:\s*ellipsis/);
+
+const catalog = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+for (const row of ["Length,الطول", "Width,العرض", "cm,سم", "Default type,النوع الافتراضي"]) {
+    assert.ok(catalog.includes(row), row);
+}
+
+const longEdge = 'PVC <أبيض> & "مطبخ" بسماكة واحد مم للواجهات الطويلة جداً والمقاومة للرطوبة';
+const longBoard = "MDF أبيض عالي اللمعان سماكة 18 مم وجهين ميلامين مقاوم للرطوبة للمطابخ الواسعة";
+const longForm = {
+    doc: {
+        ...form.doc,
+        board_description: longBoard,
+        board_length_cm: "244.000",
+        board_width_cm: "122.500",
+        default_edge_type: longEdge,
+        pieces: [{
+            piece_type: "Regular",
+            width_cm: 40,
+            length_cm: 80,
+            qty: 1,
+            edge_long_right: 1,
+        }],
+    },
+};
+fakeWindow.AlmdinaMultiEdgeBanding.details = () => [];
+const longHtml = fakeWindow.AlmdinaOrderDocumentPrint.html(
+    longForm,
+    "measurements",
+    { print_factory_name: "Almadina" },
+    null,
+    ""
+);
+assert.match(longHtml, /class="shared-info-metric" dir="ltr">244</);
+assert.match(longHtml, /class="shared-info-metric" dir="ltr">122\.5</);
+assert.doesNotMatch(longHtml, /244\.000|122\.500/);
+assert.ok(longHtml.includes(longBoard));
+assert.ok(longHtml.includes('PVC &lt;أبيض&gt; &amp; &quot;مطبخ&quot; بسماكة واحد مم للواجهات الطويلة جداً والمقاومة للرطوبة'));
+assert.doesNotMatch(longHtml, /<b>PVC/);
+assert.match(longHtml, /class="custom-edge-empty"/);
+assert.doesNotMatch(longHtml, /class="custom-edge-summary"/);
+
+const blankForm = {
+    doc: {
+        ...form.doc,
+        board_length_cm: null,
+        board_width_cm: "  ",
+        default_edge_type: "",
+        full_board_length_mm: 9990,
+        full_board_width_mm: 1220,
+        pieces: [],
+    },
+};
+const blankHtml = fakeWindow.AlmdinaOrderDocumentPrint.html(
+    blankForm,
+    "measurements",
+    { print_factory_name: "Almadina" },
+    null,
+    ""
+);
+assert.equal(blankHtml.split('class="shared-info-metric" dir="ltr">—</span>').length - 1, 2);
+assert.match(blankHtml, /class="shared-info-detail-value">—</);
+assert.doesNotMatch(blankHtml, /9990|1220|shared-info-metric" dir="ltr">0</);
 
 console.log("Browser print locale simulation passed");

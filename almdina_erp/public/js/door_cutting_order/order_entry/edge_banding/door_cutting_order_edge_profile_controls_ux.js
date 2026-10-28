@@ -115,15 +115,18 @@
             .dco-edge-bulk-cell-content{display:flex;align-items:center;justify-content:center;min-height:38px;width:100%}
             .dco-all-sides-profile-button{
                 width:100%;max-width:100%;height:38px;min-height:38px;display:flex;align-items:center;
-                justify-content:center;gap:5px;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);border-radius:7px;
+                justify-content:center;gap:5px;overflow:hidden;border:1px solid color-mix(in srgb, var(--alm-primary, #172033) 38%, transparent);border-radius:7px;
                 background:color-mix(in srgb, var(--alm-primary, #172033) 7%, transparent);color:var(--alm-text-strong,#101828);padding:2px 6px;
                 font-size:9.5px;font-weight:850;line-height:1.1;cursor:pointer;outline:none
+            }
+            .dco-all-sides-profile-button .dco-bulk-label{
+                min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center
             }
             .dco-all-sides-profile-button:hover,.dco-all-sides-profile-button:focus{
                 border-color:var(--alm-primary,#172033);background:color-mix(in srgb, var(--alm-primary, #172033) 6%, var(--alm-card,#ffffff));box-shadow:0 0 0 2px color-mix(in srgb, var(--alm-primary, #172033) 10%, transparent)
             }
             .dco-all-sides-profile-button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
-            .dco-all-sides-profile-button .dco-bulk-chevron{font-size:11px;line-height:1;opacity:.72}
+            .dco-all-sides-profile-button .dco-bulk-chevron{flex:0 0 auto;font-size:11px;line-height:1;opacity:.72}
             .dco-edge-buttons{padding-top:0!important;overflow:visible!important;align-items:stretch!important;margin:0!important}
             .dco-col-edges .dco-check-toggle{
                 min-height:38px!important;height:38px!important;padding:4px!important;align-items:center!important;
@@ -292,6 +295,35 @@
         }
     }
 
+    function assignText(node, value) {
+        const next = String(value ?? "");
+        if (node.textContent !== next) node.textContent = next;
+    }
+
+    function relevantSideConfigs(row) {
+        const locked = lockedBreakSides(row);
+        return SIDE_CONFIG.filter(config => !locked.has(config.selectedField));
+    }
+
+    function storedOverride(row, config) {
+        return String((row && row[config.overrideField]) || "").trim();
+    }
+
+    function profileLabel(frm, value) {
+        const name = String(value || "").trim();
+        if (!name) return "";
+        const profile = profileMap(frm).get(name);
+        return String((profile && profile.label) || name);
+    }
+
+    function bulkButtonLabel(frm, row) {
+        const overrides = relevantSideConfigs(row).map(config => storedOverride(row, config));
+        const unique = [...new Set(overrides)];
+        if (unique.length === 1 && unique[0]) return profileLabel(frm, unique[0]);
+        if (unique.some(Boolean)) return __("Mixed edge banding");
+        return __("Default edge banding");
+    }
+
     function ensureBulkHeader(root) {
         const edgeTypeHeader = root.querySelector(".dco-fast-table thead th.dco-col-edge-type");
         if (!edgeTypeHeader) return;
@@ -301,8 +333,9 @@
             header.className = "dco-col-edge-bulk";
             edgeTypeHeader.insertAdjacentElement("afterend", header);
         }
-        header.textContent = __("Apply to all four");
-        header.title = __("Enable all four sides and apply one profile");
+        assignText(header, __("Apply to all four"));
+        const title = __("Enable all four sides and apply one profile");
+        if (header.title !== title) header.title = title;
     }
 
     function ensureBulkButton(frm, tr) {
@@ -344,9 +377,23 @@
             content.appendChild(button);
         }
 
-        button.innerHTML = `<span>${__("Apply to all four")}</span><span class="dco-bulk-chevron">⌄</span>`;
+        let label = button.querySelector(":scope > .dco-bulk-label");
+        let chevron = button.querySelector(":scope > .dco-bulk-chevron");
+        if (!label || !chevron) {
+            label = document.createElement("span");
+            label.className = "dco-bulk-label";
+            chevron = document.createElement("span");
+            chevron.className = "dco-bulk-chevron";
+            chevron.setAttribute("aria-hidden", "true");
+            chevron.textContent = "⌄";
+            button.replaceChildren(label, chevron);
+        }
+
+        const row = rowByName(frm, tr.dataset.rowName);
+        const caption = bulkButtonLabel(frm, row);
+        assignText(label, caption);
+        if (button.title !== caption) button.title = caption;
         button.disabled = !isEditable(frm);
-        button.title = __("Open a scrollable list and apply one profile to all four sides");
         button.setAttribute("aria-haspopup", "menu");
         button.setAttribute("aria-expanded", activePopover && activePopover.anchor === button ? "true" : "false");
     }
@@ -380,7 +427,12 @@
         toggle.classList.toggle("is-edge-custom", selected && Boolean(current));
         toggle.classList.toggle("is-edge-default", selected && !current);
         toggle.classList.toggle("is-edge-missing", missing);
-        toggle.title = `${label} — ${mode}: ${effectiveProfileLabel(frm, current)} — ${instruction}`;
+        // Selected sides: hover shows the effective type name only (override || default).
+        // Unselected sides keep the prior direction/mode/instruction tooltip.
+        const typeLabel = effectiveProfileLabel(frm, current);
+        toggle.title = selected
+            ? typeLabel
+            : `${label} — ${mode}: ${typeLabel} — ${instruction}`;
         toggle.setAttribute("aria-label", `${label}. ${instruction}`);
     }
 
@@ -411,7 +463,7 @@
             hint.className = "dco-side-edge-help";
             help.appendChild(hint);
         }
-        hint.textContent = __("Edge banding: click to toggle; double-click to choose a profile; lists are scrollable");
+        assignText(hint, __("Edge banding: click to toggle; double-click to choose a profile; lists are scrollable"));
     }
 
     function closePopover() {

@@ -78,6 +78,19 @@ def _edge_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "edge_type": row.get("edge_type") or "",
         "edge_rate_usd": num(row.get("edge_rate_usd")),
         "edge_cost_usd": num(row.get("edge_cost_usd")),
+        # Operational banding identity for plan display (not financial rates).
+        "edge_long_right_type_override": str(
+            row.get("edge_long_right_type_override") or ""
+        ).strip(),
+        "edge_long_left_type_override": str(
+            row.get("edge_long_left_type_override") or ""
+        ).strip(),
+        "edge_width_top_type_override": str(
+            row.get("edge_width_top_type_override") or ""
+        ).strip(),
+        "edge_width_bottom_type_override": str(
+            row.get("edge_width_bottom_type_override") or ""
+        ).strip(),
     }
 
 

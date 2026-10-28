@@ -79,6 +79,42 @@ def break_adjacent_sides(position: str | None) -> tuple[str, str]:
     return BREAK_ADJACENT_SIDES.get(position or "Top Right", BREAK_ADJACENT_SIDES["Top Right"])
 
 
+def corner_outer_side_dimension_overrides(
+    *,
+    piece_type: str | None,
+    clipped_corner_position: str | None,
+    width_cm: float,
+    length_cm: float,
+    clipped_corner_width_cm: float,
+    clipped_corner_length_cm: float,
+) -> dict[str, float]:
+    """Remaining outer-side lengths for corner-adjacent banding.
+
+    Selected sides that touch the removed corner use the remnant length, not the
+    full piece axis. Independent of full-path vs break-only mode.
+    """
+
+    if not is_corner_cut(piece_type):
+        return {}
+    adjacent_sides = break_adjacent_sides(clipped_corner_position)
+    overrides: dict[str, float] = {}
+    if "edge_width_top" in adjacent_sides:
+        overrides["edge_width_top_dimension_cm"] = max(0.0, float(width_cm) - float(clipped_corner_width_cm))
+    if "edge_width_bottom" in adjacent_sides:
+        overrides["edge_width_bottom_dimension_cm"] = max(
+            0.0, float(width_cm) - float(clipped_corner_width_cm)
+        )
+    if "edge_long_right" in adjacent_sides:
+        overrides["edge_long_right_dimension_cm"] = max(
+            0.0, float(length_cm) - float(clipped_corner_length_cm)
+        )
+    if "edge_long_left" in adjacent_sides:
+        overrides["edge_long_left_dimension_cm"] = max(
+            0.0, float(length_cm) - float(clipped_corner_length_cm)
+        )
+    return overrides
+
+
 def apply_edge_break_policy(
     *,
     piece_type: str | None,

@@ -28,6 +28,8 @@ def test_fast_entry_keyboard_is_a_focused_qty_enter_owner():
     assert 'new Event("input", { bubbles: true })' in source
     assert 'frm.script_manager.trigger("qty"' in source
     assert "focusNextWidth(tr)" in source
+    assert "revealInMeasurementTable" in source
+    assert "scrollIntoView" not in source
     assert "MutationObserver" not in source
     assert "dco-special-edge-visual-guard-css" not in source
 
@@ -45,7 +47,9 @@ def test_double_click_guard_still_replays_single_click_to_operator():
     assert "const CLICK_DELAY_MS = 260" in source
     assert "replayingSingleClick = true" in source
     assert "toggle.click()" in source
-    assert "scheduleSingleClick(target.toggle)" in source
+    assert "scheduleSingleClick(target)" in source
+    assert "flushPendingClick" in source
+    assert "pendingClick.key === target.key" in source
     assert "controls.openSidePopover" in source
 
 

@@ -37,6 +37,14 @@ COMPACT_PRICING_UX_PATH = (
     / "costing"
     / "door_cutting_order_compact_pricing_ux.js"
 )
+COST_PRESENTER_PATH = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "costing"
+    / "door_cutting_order_cost_presenter.js"
+)
 
 
 class CostTabPresentationContractTest(unittest.TestCase):
@@ -169,6 +177,27 @@ class CostTabPresentationContractTest(unittest.TestCase):
         self.assertIn("function parkHostedCostSettings(frm)", adapter)
         self.assertIn("paintCostHtml(frm, () => renderPending(frm))", adapter)
 
+
+    def test_measurement_edge_marks_stay_under_the_number(self) -> None:
+        source = COST_PRESENTER_PATH.read_text(encoding="utf-8")
+        mark = source.split("function dimensionMark(value, count)", 1)[1].split(
+            "function installStyles", 1
+        )[0]
+
+        self.assertIn("Math.max(0, Math.min(2, Number(count || 0)))", mark)
+        self.assertIn("{ length: safeCount }", mark)
+        self.assertIn('data-edge-marks="${safeCount}"', mark)
+        self.assertLess(
+            mark.index("<b>${quantity(value)}</b>"),
+            mark.index("dco-cost-dimension-lines"),
+        )
+        self.assertNotIn("dco-cost-dimension-rail", source)
+        self.assertNotIn("is-spacer", source)
+        self.assertNotIn("safeCount === 2", source)
+        self.assertIn(".dco-cost-dimension-lines{display:flex;", source)
+        self.assertIn("gap:2px", source)
+        self.assertIn(".dco-cost-dimension-lines-0{visibility:hidden}", source)
+        self.assertIn('[data-theme="dark"] .dco-cost-dimension-edge-line', source)
 
     def test_custom_door_pricing_is_compact_and_attention_first(self) -> None:
         source = COMPACT_PRICING_UX_PATH.read_text(encoding="utf-8")

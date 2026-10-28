@@ -705,7 +705,16 @@
         return Boolean(await costUx.flushPendingPriceEdits(frm));
     }
 
+    function flushPendingEdgeClicks(frm) {
+        const guard = window.AlmdinaEdgeProfileDoubleClickGuard;
+        if (!guard || typeof guard.flushPendingClick !== "function") return false;
+        return Boolean(guard.flushPendingClick(frm));
+    }
+
     function flushPendingMeasurements(frm) {
+        // Apply a delayed edge-toggle before reading dirty/save state so a
+        // rapid last click is not lost when the user hits Save immediately.
+        flushPendingEdgeClicks(frm);
         const owner = window.AlmdinaDoorCuttingFastEntry;
         if (!owner || typeof owner.flush !== "function") return false;
         return Boolean(owner.flush(frm));
@@ -715,16 +724,69 @@
         return Boolean(frm && frm.is_dirty && frm.is_dirty());
     }
 
+    // Frappe v16.33.1 form.save() only rejects when on_error is provided. A
+    // validate/before_save failure otherwise leaves the returned Promise
+    // pending forever while the outer .catch only logs. Callers that await
+    // bare frm.save() therefore never clear edit-session busy/phase state.
+    function saveDocument(frm, saveAction) {
+        if (!frm || typeof frm.save !== "function") {
+            return Promise.reject(new Error("Form save is unavailable."));
+        }
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const finish = (ok, reason) => {
+                if (settled) return;
+                settled = true;
+                if (ok) resolve(true);
+                else reject(reason || new Error("Save failed."));
+            };
+            const action = saveAction || "Save";
+            try {
+                const pending = frm.save(
+                    action,
+                    (response) => {
+                        if (response && response.exc) {
+                            finish(false, response.exc);
+                        }
+                    },
+                    null,
+                    () => finish(false, new Error("Save failed."))
+                );
+                Promise.resolve(pending).then(
+                    () => {
+                        if (settled) return;
+                        if (documentIsDirty(frm)) {
+                            finish(false, new Error("Save did not persist changes."));
+                            return;
+                        }
+                        finish(true);
+                    },
+                    (error) => finish(false, error)
+                );
+            } catch (error) {
+                finish(false, error);
+            }
+        });
+    }
+
     async function persistDirtyDocument(frm) {
         if (!frm || typeof frm.save !== "function" || !documentIsDirty(frm)) return true;
-        await frm.save();
+        try {
+            await saveDocument(frm);
+        } catch (error) {
+            return false;
+        }
         return !documentIsDirty(frm);
     }
 
     async function commitEditSession(frm) {
         if (!frm || frm.is_new()) {
             if (frm && typeof frm.save === "function") {
-                await frm.save();
+                try {
+                    await saveDocument(frm);
+                } catch (error) {
+                    return false;
+                }
                 return !documentIsDirty(frm);
             }
             return false;
@@ -795,11 +857,13 @@
         markEditSessionSticky(frm);
         frm.__almdina_preserve_edit_session_after_save = true;
         try {
-            await frm.save();
+            await saveDocument(frm);
+            return !documentIsDirty(frm);
+        } catch (error) {
+            return false;
         } finally {
             frm.__almdina_preserve_edit_session_after_save = false;
         }
-        return !documentIsDirty(frm);
     }
 
     function confirmEditSession(frm) {

@@ -133,6 +133,8 @@ def test_cutting_plan_print_is_workshop_monochrome_and_preserves_board_aspect():
         "const boardHmm = boardWmm * aspect",
         ".dco-edge-line {",
         "border-color: #e00000 !important;",
+        ".dco-edge-line-svg.dco-edge-line--custom",
+        "stroke: #1d4ed8 !important;",
         ".dco-shaped-piece-outline path { fill: #fff !important; stroke: #111 !important; }",
         "background: #fff !important",
     ]

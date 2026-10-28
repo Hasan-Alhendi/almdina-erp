@@ -207,6 +207,10 @@
         const number = tr.querySelector(".dco-row-number");
         if (number) number.textContent = row.idx;
         ensureRowSelector(frm, tr);
+        const fastEntry = window.AlmdinaDoorCuttingFastEntry;
+        if (fastEntry && typeof fastEntry.syncDeleteCell === "function") {
+            fastEntry.syncDeleteCell(frm, tr);
+        }
 
         const tbody = tr.parentElement;
         if (tbody) {

@@ -237,6 +237,9 @@ assert.match(html, /<rect class="dco-extra-overlay-path dco-extra-overlay-handle
 assert.match(html, /data-overlay-kind="recessed_handle_cutout"[^>]*stroke-width="0.65"/);
 assert.doesNotMatch(html, /stroke-width="1.75"/);
 assert.match(html, /dco-extra-addon-legend/);
+assert.match(html, /dco-edge-band-legend/);
+assert.match(html, /Default edge banding/);
+assert.match(html, /Non-default edge banding/);
 assert.match(html, /Door add-on symbols/);
 assert.match(html, /Double Edge/);
 assert.match(html, /Full door double/);

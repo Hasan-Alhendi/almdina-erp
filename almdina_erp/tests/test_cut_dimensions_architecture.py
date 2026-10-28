@@ -323,6 +323,30 @@ class TestCutDimensionsArchitecture(unittest.TestCase):
         )
         self.assertIn("is-edge-custom", controls_source)
         self.assertIn('__("Click to toggle · Double-click to choose profile")', controls_source)
+        # Selected-side hover shows effective type name only; unselected keeps direction text.
+        self.assertIn("toggle.title = selected", controls_source)
+        self.assertIn("? typeLabel", controls_source)
+        self.assertIn(
+            'return __("{0}: no edge banding on this side", [label]);',
+            side_source,
+        )
+        self.assertNotIn(
+            'return __("{0} — {1} — {2} — {3}", [label, type || "—", mode, meta]);',
+            side_source,
+        )
+        # Compact measurements must not overwrite selected-side hover with direction.
+        compact_source = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "order_entry"
+            / "measurements"
+            / "door_cutting_order_compact_measurements_ux.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('if (!button.classList.contains("is-checked"))', compact_source)
+        self.assertIn("button.title = label", compact_source)
+        self.assertIn('button.setAttribute("aria-label", label)', compact_source)
         self.assertIn(
             'document.addEventListener("pointerdown"', controls_source
         )

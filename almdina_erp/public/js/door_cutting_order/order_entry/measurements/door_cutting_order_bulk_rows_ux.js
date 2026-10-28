@@ -279,9 +279,12 @@
         const virtual = root.querySelector(".dco-fast-table tbody tr.dco-virtual-row");
         const width = virtual && virtual.querySelector("input[data-field='width_cm']");
         if (!width) return false;
-        virtual.scrollIntoView({ block: "nearest", inline: "nearest" });
         width.focus({ preventScroll: true });
         width.select();
+        const owner = window.AlmdinaDoorCuttingFastEntry;
+        if (owner && typeof owner.revealInMeasurementTable === "function") {
+            owner.revealInMeasurementTable(virtual);
+        }
         return true;
     }
 
