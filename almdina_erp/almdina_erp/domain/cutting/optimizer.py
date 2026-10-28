@@ -1055,6 +1055,7 @@ def optimize_plan(
     )
     from .evaluation import placement_permission_errors
 
+    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
     improved = improve_plan_search(
         deepcopy(shaped),
         pieces,
@@ -1067,7 +1068,36 @@ def optimize_plan(
         **metric_kwargs,
     )
     best: dict[str, Any] | None = None
-    for candidate in (baseline, nested, shaped, improved):
+
+    def search_candidates():
+        # The final gate below proves the seed; this iterator only generates
+        # candidates and never replaces its selection decision.
+        yield from (baseline, nested, shaped)
+        previous_best = best
+        yield improved
+        if (
+            previous_best is None
+            or _candidate_is_better(best, previous_best)
+            or previous_best.get("sheets") == shaped.get("sheets")
+        ):
+            return
+        ranked_shape = enrich_plan_metrics(
+            shaped, str(shaped.get("method_key") or ""), machine_type, **metric_kwargs,
+        )
+        if not _candidate_is_better(previous_best, ranked_shape):
+            return
+        remaining = min(1.0, search_deadline - time.monotonic())
+        if remaining <= 0 or machine_type == "Panel Saw":
+            return
+        yield improve_plan_search(
+            deepcopy(previous_best), pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, time_limit_sec=remaining,
+            mirroring_allowed=mirroring_allowed,
+            deadline_monotonic=min(search_deadline, time.monotonic() + remaining),
+            **metric_kwargs,
+        )
+
+    for candidate in search_candidates():
         candidate = enrich_plan_metrics(
             candidate,
             str(candidate.get("method_key") or ""),

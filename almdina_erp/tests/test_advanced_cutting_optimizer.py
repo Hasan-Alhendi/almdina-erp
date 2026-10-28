@@ -71,6 +71,100 @@ def test_final_selection_never_trades_four_boards_for_five():
     assert result["shape_nesting_diagnostics"] == {"outcome": "baseline"}
 
 
+def test_search_recovers_three_boards_from_the_best_previous_valid_plan():
+    pieces = _selection_pieces()
+    baseline = _selection_plan(pieces, [2, 2, 2, 2])
+    shaped = _selection_plan(pieces, [2, 2, 2, 1, 1], label="shaped")
+    recovered = _selection_plan(pieces, [3, 3, 2], label="recovered")
+    prefix = "almdina_erp.almdina_erp.domain.cutting."
+
+    def search(plan, *args, **kwargs):
+        return shaped if len(plan["sheets"]) == 5 else recovered
+
+    with patch(prefix + "optimizer.auto_fast", return_value=baseline), patch(
+        prefix + "glass_opening_nesting.nest_glass_openings", return_value=baseline,
+    ), patch(prefix + "shape_aware_nesting.apply_shape_aware_nesting", return_value=shaped), patch(
+        prefix + "plan_search.improve_plan_search", side_effect=search,
+    ) as searches:
+        result = optimize_plan(pieces, 100, 100, 0.3)
+    assert len(result["sheets"]) == 3
+    assert result["solver_status"] == "recovered"
+    assert not validate_plan(result, pieces, 100, 100, kerf_cm=0.3)
+    assert searches.call_count == 2
+    assert [len(call.args[0]["sheets"]) for call in searches.call_args_list] == [5, 4]
+    assert 0 < searches.call_args_list[1].kwargs["time_limit_sec"] <= 1
+
+
+def test_board_cancellation_tries_a_second_destination_order():
+    from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
+
+    pieces = expand_piece_groups([
+        {"width_cm": width, "length_cm": height, "qty": 1, "allow_rotation": 0}
+        for width, height in ((100, 38.5), (38.5, 61), (100, 38.5), (58.5, 61), (40, 60), (60, 30))
+    ])
+    sheets = []
+    for sheet_no, (sources, spots) in enumerate((
+        (pieces[:2], ((0, 0), (0, 38.8))),
+        (pieces[2:4], ((0, 0), (0, 38.8))),
+        (pieces[4:], ((0, 0), (0, 60.3))),
+    ), 1):
+        # The victim's two pieces need separate destination boards: putting
+        # the 40x60 piece in the 61.2x61.2 gap blocks the later 60x30 piece.
+        sheets.append({"sheet_no": sheet_no, "w": 100, "h": 100, "pieces": [
+            make_placed_piece(piece, x, y, piece["width_cm"], piece["length_cm"], False)
+            for piece, (x, y) in zip(sources, spots, strict=True)
+        ]})
+    plan = optimizer.enrich_plan_metrics(
+        {"sheets": sheets, "unplaced": [], "method_key": "MaxRects Best Short Side"},
+        "MaxRects Best Short Side", "CNC Router",
+    )
+    assert not validate_plan(plan, pieces, 100, 100, kerf_cm=0.3)
+    result = improve_plan_search(
+        plan, pieces, 100, 100, 0.3, machine_type="CNC Router", time_limit_sec=2,
+        min_remnant_width_cm=30, min_remnant_length_cm=30, min_remnant_area_m2=0.09,
+    )
+    assert len(result["sheets"]) == 2
+    assert not validate_plan(result, pieces, 100, 100, kerf_cm=0.3)
+    assert not placement_permission_errors(result, pieces, mirroring_allowed=False)
+
+
+def test_alternative_search_respects_budget_and_rejects_invalid_results():
+    pieces = _selection_pieces()
+    baseline = _selection_plan(pieces, [2, 2, 2, 2])
+    shaped = _selection_plan(pieces, [2, 2, 2, 1, 1], label="shaped")
+    invalid = _selection_plan(pieces, [3, 3, 2], label="invalid_alternative")
+    invalid["sheets"][0]["pieces"][1]["x"] = 0
+    prefix = "almdina_erp.almdina_erp.domain.cutting."
+    for clock, expected_calls in (([100, 111], 1), ([100, 101, 101], 2)):
+        with patch(prefix + "optimizer.auto_fast", return_value=baseline), patch(
+            prefix + "glass_opening_nesting.nest_glass_openings", return_value=baseline,
+        ), patch(prefix + "shape_aware_nesting.apply_shape_aware_nesting", return_value=shaped), patch(
+            prefix + "plan_search.improve_plan_search", side_effect=[shaped, invalid],
+        ) as searches, patch.object(optimizer.time, "monotonic", side_effect=clock):
+            result = optimize_plan(pieces, 100, 100, 0.3)
+        assert searches.call_count == expected_calls
+        assert len(result["sheets"]) == 4
+        assert result["solver_status"] == "baseline"
+        assert not validate_plan(result, pieces, 100, 100, kerf_cm=0.3)
+
+
+def test_expired_plan_search_deadline_does_not_start_work():
+    from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
+
+    pieces = _selection_pieces()
+    plan = _selection_plan(pieces, [2, 2, 2, 2])
+    with patch(
+        "almdina_erp.almdina_erp.domain.cutting.nesting_consolidation.consolidate_nested_boards",
+    ) as consolidate:
+        result = improve_plan_search(
+            plan, pieces, 100, 100, 0.3, machine_type="CNC Router", time_limit_sec=10,
+            min_remnant_width_cm=30, min_remnant_length_cm=30, min_remnant_area_m2=0.09,
+            deadline_monotonic=optimizer.time.monotonic() - 1,
+        )
+    assert result is plan
+    consolidate.assert_not_called()
+
+
 def test_final_selection_keeps_the_best_valid_result_from_every_stage():
     pieces = _selection_pieces()
     baseline = _selection_plan(pieces, [2, 2, 2, 2])

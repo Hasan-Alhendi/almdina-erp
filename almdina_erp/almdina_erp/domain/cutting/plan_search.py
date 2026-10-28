@@ -56,12 +56,17 @@ def improve_plan_search(
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
     mirroring_allowed: bool = False,
+    deadline_monotonic: float | None = None,
 ) -> dict[str, Any]:
-    """Drop cancellable boards, then try a few same-count remnant moves."""
+    """Drop cancellable boards, then try bounded same-count remnant moves."""
 
     if machine_type == "Panel Saw" or time_limit_sec <= 0:
         return plan
     if plan.get("unplaced") or not plan.get("sheets"):
+        return plan
+    if deadline_monotonic is None:
+        deadline_monotonic = time.monotonic() + float(time_limit_sec)
+    if time.monotonic() >= deadline_monotonic:
         return plan
     from .evaluation import placement_permission_errors, validate_plan
     from .nesting_consolidation import consolidate_nested_boards
@@ -80,7 +85,10 @@ def improve_plan_search(
         kerf_cm,
         machine_type=machine_type,
         mirroring_allowed=mirroring_allowed,
-        deadline=time.monotonic() + min(1.5, max(0.05, 0.2 * float(time_limit_sec))),
+        deadline=min(
+            time.monotonic() + min(1.5, max(0.05, 0.2 * float(time_limit_sec))),
+            deadline_monotonic,
+        ),
     )
     best = plan
     if consolidated is not plan:
@@ -104,29 +112,42 @@ def improve_plan_search(
         ),
     )
     for victim in ordered[:3]:
-        candidate = _move_sheet_onto_others(best, victim, kerf_cm)
-        if candidate is None:
-            continue
-        if len(candidate.get("sheets") or []) >= len(best.get("sheets") or []):
-            continue
-        accepted = _accept_candidate(
-            candidate,
-            best,
-            pieces,
-            board_w_cm,
-            board_h_cm,
-            kerf_cm,
-            machine_type=machine_type,
-            mirroring_allowed=mirroring_allowed,
-            metric_kwargs=metric_kwargs,
-            enrich_plan_metrics=enrich_plan_metrics,
-            validate_plan=validate_plan,
-            permission_errors=placement_permission_errors,
-            is_better=_candidate_is_better,
-        )
-        if accepted is not None:
-            best = accepted
-    deadline = time.monotonic() + min(time_limit_sec, max(0.05, 0.15 * time_limit_sec))
+        # First Fit can consume the only gap that fits a later piece. Retry
+        # that victim once, visiting the same destination boards in reverse.
+        for reverse_destinations in (False, True):
+            if time.monotonic() >= deadline_monotonic:
+                break
+            candidate = _move_sheet_onto_others(
+                best, victim, kerf_cm, deadline_monotonic=deadline_monotonic,
+                reverse_destinations=reverse_destinations,
+            )
+            if candidate is None:
+                continue
+            if len(candidate.get("sheets") or []) >= len(best.get("sheets") or []):
+                continue
+            accepted = _accept_candidate(
+                candidate,
+                best,
+                pieces,
+                board_w_cm,
+                board_h_cm,
+                kerf_cm,
+                machine_type=machine_type,
+                mirroring_allowed=mirroring_allowed,
+                metric_kwargs=metric_kwargs,
+                enrich_plan_metrics=enrich_plan_metrics,
+                validate_plan=validate_plan,
+                permission_errors=placement_permission_errors,
+                is_better=_candidate_is_better,
+                deadline=deadline_monotonic,
+            )
+            if accepted is not None:
+                best = accepted
+                break
+    deadline = min(
+        time.monotonic() + min(time_limit_sec, max(0.05, 0.15 * time_limit_sec)),
+        deadline_monotonic,
+    )
     return _improve_remnants(
         best,
         pieces,
@@ -148,6 +169,9 @@ def _move_sheet_onto_others(
     plan: dict[str, Any],
     victim: dict[str, Any],
     kerf_cm: float,
+    *,
+    deadline_monotonic: float | None = None,
+    reverse_destinations: bool = False,
 ) -> dict[str, Any] | None:
     preserved = _shape_nest_ids(plan)
     moving = [dict(piece) for piece in victim.get("pieces") or []]
@@ -166,9 +190,13 @@ def _move_sheet_onto_others(
         reverse=True,
     )
     for piece in moving:
+        if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            return None
         source = _source_from_placed(piece)
         destination = None
-        for sheet in kept:
+        for sheet in reversed(kept) if reverse_destinations else kept:
+            if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+                return None
             spot = _spot_on_sheet(sheet, source, kerf_cm)
             if spot is None:
                 continue
