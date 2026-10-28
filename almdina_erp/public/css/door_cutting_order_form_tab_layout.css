@@ -312,8 +312,8 @@
 
 .dco-piece-mirroring-option.is-selected {
     border-color: var(--alm-primary, #172033);
-    background: rgba(36, 144, 239, 0.08);
-    color: var(--primary, #1b74c4);
+    background: var(--alm-accent-soft);
+    color: var(--alm-accent);
 }
 
 .dco-piece-mirroring-option input {
