@@ -236,6 +236,76 @@ def test_fixed_dxf_trim_refinement_never_shifts_material_outside_usable_frame():
     assert s["applied_trim_width_cm"] <= 0.1995 + 1e-8
 
 
+@pytest.mark.parametrize("usable_mm,x_mm,expected_trim,invalid", [
+    (1220, -2, 0, True),
+    (1220, 0, 0, False),
+    (1210, -2, 0.5, False),
+])
+def test_saved_historical_frame_matches_export_without_mutating_plan(
+    usable_mm, x_mm, expected_trim, invalid, monkeypatch, tmp_path,
+):
+    import json
+    from copy import deepcopy
+    from almdina_erp.tests.test_dxf_special_export_validation import _saved_plan
+    from almdina_erp.almdina_erp.services import export_validation_service as export
+
+    plan, order, piece, _ = _saved_plan(piece_type="Regular", width_cm=30, length_cm=40)
+    plan.sources[0].full_width_mm = plan.full_board_width_mm = 1220
+    plan.sources[0].full_length_mm = plan.full_board_length_mm = 2440
+    plan.sources[0].usable_width_mm = plan.usable_board_width_mm = usable_mm
+    plan.sources[0].usable_length_mm = plan.usable_board_length_mm = 2440
+    plan.trim_margin_mm = 5
+    piece.x_mm = x_mm
+    stored = json.loads(plan.snapshot_json)
+    stored["trim_cm"] = 0.5
+    stored_piece = stored["sheets"][0]["pieces"][0]
+    stored_piece.update(x=x_mm / 10, y=0, w=30, h=40)
+    for point in stored_piece["geometry"]["outer"]:
+        point[0] += x_mm
+    plan.snapshot_json = json.dumps(stored)
+    before = deepcopy(vars(plan))
+    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: order, raising=False)
+    issues = export.validate_cutting_plan_issues(plan)
+    assert ("PIECE_OUTSIDE_SHEET" in [i.code for i in issues]) is invalid
+    rebuilt = export._plan_to_export_snapshot(plan)
+    assert rebuilt["sheets"][0]["applied_trim_width_cm"] == expected_trim
+    assert rebuilt["sheets"][0]["applied_trim_length_cm"] == 0
+    assert rebuilt["sheets"][0]["pieces"][0]["x"] * 10 + expected_trim * 10 == pytest.approx(
+        x_mm + expected_trim * 10,
+    )
+    assert vars(plan) == before
+    if not invalid:
+        import os
+        import subprocess
+        import ezdxf
+        from almdina_erp.tests.test_cutter_center_paths import _layer_segments
+
+        cases = tmp_path / "saved-frame.json"
+        cases.write_text(json.dumps([rebuilt]))
+        subprocess.run(
+            ["node", str(ROOT / "tests/js/secure_dxf_topology_export.test.js")],
+            check=True, capture_output=True, text=True,
+            env=dict(os.environ, PERIMETER_CASES=str(cases), PERIMETER_OUTPUT_DIR=str(tmp_path)),
+        )
+        geometry = _layer_segments(ezdxf.readfile(tmp_path / "0.dxf"), "GEOMETRY")
+        assert min(point[0] for segment in geometry for point in segment) == pytest.approx(
+            x_mm + expected_trim * 10,
+        )
+
+
+def test_contradictory_source_frame_is_rejected_by_validator_and_export(monkeypatch):
+    from almdina_erp.tests.test_dxf_special_export_validation import _saved_plan
+    from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import DxfGeometrySnapshotError
+    from almdina_erp.almdina_erp.services import export_validation_service as export
+
+    plan, order, _, _ = _saved_plan(piece_type="Regular", width_cm=30, length_cm=40)
+    plan.sources[0].usable_width_mm = plan.sources[0].full_width_mm + 1
+    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: order, raising=False)
+    assert "CUT_INVALID_GEOMETRY" in [i.code for i in export.validate_cutting_plan_issues(plan)]
+    with pytest.raises(DxfGeometrySnapshotError):
+        export._plan_to_export_snapshot(plan)
+
+
 def test_imported_plan_bounds_follow_each_sheet_usable_dimensions():
     from types import SimpleNamespace
     from almdina_erp.almdina_erp.services.dxf_import_service import validate_imported_plan_issues
@@ -370,6 +440,57 @@ def test_strict_uploaded_dxf_retains_trim_per_sheet_through_real_parser(tmp_path
     assert snapshot["saw_center_status"] == "Absent"
     assert [s["applied_trim_width_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
     assert [s["applied_trim_length_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
+
+
+def test_import_persistence_adapter_reload_and_export_preserve_physical_positions(tmp_path, monkeypatch):
+    """Exercise real adapters with JSON-backed child rows, without a site DB."""
+    import json
+    from types import SimpleNamespace
+    from almdina_erp.tests.test_dxf_manufacturing_identity import order_for
+    from almdina_erp.almdina_erp.infrastructure.frappe import cutting_plan_workspace as workspace
+    from almdina_erp.almdina_erp.domain.cutting.plan_settings import DEFAULT_MACHINE_TYPE
+    from almdina_erp.almdina_erp.services import export_validation_service as export
+
+    class MemoryPlan(SimpleNamespace):
+        def set(self, key, value):
+            setattr(self, key, value)
+
+        def append(self, key, value):
+            getattr(self, key).append(SimpleNamespace(
+                **({"remnant": None, "board_item": "", "material": "", "color": "", "thickness_mm": 0} | value)
+            ))
+
+    class DefaultFields(SimpleNamespace):
+        def __getattr__(self, key):
+            return None
+
+    path = tmp_path / "persisted-frames.dxf"
+    _write_adaptive_boundary_dxf(path, sheets_and_pieces=[(0, 0, 0), (1400, 10, 3)])
+    snapshot = _strict_boundary_import(path, count=2)
+    order = order_for([(20, 30, 2)])
+    order.pieces = [DefaultFields(**vars(row)) for row in order.pieces]
+    order.name = "FRAME-ROUND-TRIP"
+    order.board_description = ""
+    plan = MemoryPlan(
+        door_cutting_order=order.name, plan_kind="Custom DXF", board_item="",
+        source_type="Uploaded DXF", trim_margin_mm=5, kerf_mm=5, machine_type=DEFAULT_MACHINE_TYPE,
+    )
+    monkeypatch.setattr(workspace.frappe, "as_json", json.dumps, raising=False)
+    workspace.apply_validated_dxf_snapshot(order, plan, snapshot)
+    # Rehydrate exactly the scalar/child data produced by the persistence adapter.
+    saved_json = json.dumps(vars(plan), default=vars)
+    reloaded = json.loads(saved_json, object_hook=lambda row: SimpleNamespace(**row))
+    monkeypatch.setattr(export.frappe, "get_doc", lambda *args: order, raising=False)
+    assert export.validate_cutting_plan_issues(reloaded) == []
+    rebuilt = export._plan_to_export_snapshot(reloaded)
+    for original, result in zip(snapshot["sheets"], rebuilt["sheets"]):
+        for axis, trim_key in (("x", "applied_trim_width_cm"), ("y", "applied_trim_length_cm")):
+            assert result[trim_key] == pytest.approx(original[trim_key])
+            assert result["pieces"][0][axis] + result[trim_key] == pytest.approx(
+                original["pieces"][0][axis] + original[trim_key],
+            )
+    assert reloaded.snapshot_json == plan.snapshot_json
+    assert reloaded.input_fingerprint == plan.input_fingerprint
 
 
 @pytest.mark.parametrize("with_saw_paths", [False, True])

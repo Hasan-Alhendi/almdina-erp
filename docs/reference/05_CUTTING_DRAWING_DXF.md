@@ -106,6 +106,7 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 - كل probe/refinement/final evaluation يستخدم **نفس `optimization_mode` الذي اختاره المستخدم** ونفس machine/time-limit/options. Adaptive Trim لا يبدّل الخوارزمية سرًا إلى `Auto` أو غيرها.
 - `kerf_mm` لا يُخفّض ولا يُعدّل مطلقًا بواسطة Adaptive Trim؛ كل evaluations تستخدم Kerf نفسها.
 - أبعاد اللوح الفيزيائية `full_*` لا تتغير. الذي يتغير فقط هو `usable_*` الناتج عن Applied Trim.
+- عند غياب Applied Trim الصريح، فرق أبعاد اللوح المحفوظة `full − usable` يثبت الهامش لكل محور، بما فيه الصفر عند تساوي البعدين؛ لا يُستبدل هذا الصفر بالهامش المفضّل العام. أبعاد usable الأكبر من full متعارضة ولا تسمح بتصدير التصنيع. التحقق وإعادة بناء snapshot التصدير يستخدمان التفسير نفسه دون إعادة كتابة الخطة المحفوظة.
 - نتيجة القرار تُحفظ داخل Plan snapshot في `trim_policy` مع Preferred Trim، Applied width/length trim، المحاور المخفّضة، precision، وجودة الخطة قبل/بعد. وتبقى مفاتيح `applied_trim_*` و`margin_policy` القديمة للتوافق مع القراء الحاليين.
 - أي validation أو DXF path يعتمد حدود المساحة القابلة للاستخدام يجب أن يستهلك **Applied Trim / usable dimensions** من نتيجة الخطة، وألا يعيد فرض Preferred Trim بعد الحساب.
 - معاينة خطة القص والطباعة ترسمان اللوح الفيزيائي الكامل، وتُبعد الدرف بمقدار Applied Trim عن حواف اللوح دون تلوين أو خطوط إضافية للهامش. قرار Adaptive Trim لا يتغير: الإزاحة تتبع الهامش المطبق فعليًا، ويُخفَّض عند الحاجة حتى لا يُفتح لوح جديد.

@@ -3,6 +3,36 @@ from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
     realize_sheet_edge_trim,
     resolved_sheet_trim_cm,
 )
+import pytest
+
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import DxfGeometrySnapshotError
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+@pytest.mark.parametrize("scope", ["sheet", "plan"])
+def test_equal_full_and_usable_proves_zero_trim_when_applied_is_missing(axis, scope):
+    sheet = {"full_width_cm": 122, "usable_width_cm": 122,
+             "full_length_cm": 244, "usable_length_cm": 244}
+    plan = {"trim_cm": 0.5}
+    if scope == "plan":
+        plan.update(full_board_width_cm=122, usable_board_width_cm=122,
+                    full_board_length_cm=244, usable_board_length_cm=244)
+        sheet = {}
+    assert resolved_sheet_trim_cm(sheet, plan, axis=axis) == 0
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+@pytest.mark.parametrize("scope", ["sheet", "plan"])
+def test_usable_larger_than_full_cannot_fall_back_to_preferred_trim(axis, scope):
+    sheet = {"full_width_cm": 122, "usable_width_cm": 123,
+             "full_length_cm": 244, "usable_length_cm": 245}
+    plan = {"trim_cm": 0.5}
+    if scope == "plan":
+        plan.update(full_board_width_cm=122, usable_board_width_cm=123,
+                    full_board_length_cm=244, usable_board_length_cm=245)
+        sheet = {}
+    with pytest.raises(DxfGeometrySnapshotError):
+        resolved_sheet_trim_cm(sheet, plan, axis=axis)
 
 
 def _sheet(pieces, *, width_trim=0.0, length_trim=0.0, board_w=122.0, board_h=244.0):

@@ -281,8 +281,15 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 "usable_length_cm": usable_h / 10,
                 **{key: stored[key] for key in ("applied_trim_width_cm", "applied_trim_length_cm") if key in stored},
             }
-            physical_x = x + resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
-            physical_y = y + resolved_sheet_trim_cm(trim_source, snapshot, axis="y") * 10
+            try:
+                physical_x = x + resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
+                physical_y = y + resolved_sheet_trim_cm(trim_source, snapshot, axis="y") * 10
+            except DxfGeometrySnapshotError as exc:
+                issues.append(issue(
+                    CUT_INVALID_GEOMETRY, CATEGORY_LAYOUT, target=sheet_target(sheet_no),
+                    debug={"exception": str(exc)},
+                ))
+                continue
             out_of_sheet = (
                 physical_x < -1e-7 or physical_y < -1e-7
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
