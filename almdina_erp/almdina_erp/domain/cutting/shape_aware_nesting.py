@@ -117,8 +117,10 @@ def apply_shape_aware_nesting(
     from .optimizer import _candidate_is_better, enrich_plan_metrics
     from .plan_search import _spot_on_sheet
 
+    reserved = _glass_hosted_ids(plan)
+    eligible = [piece for piece in pieces if int(piece["id"]) not in reserved]
     partitions = _cluster_sheet(
-        pieces,
+        eligible,
         board_w_cm,
         board_h_cm,
         kerf_cm,
@@ -126,6 +128,11 @@ def apply_shape_aware_nesting(
         deadline=deadline,
     )
     if not partitions:
+        plan["shape_nesting_diagnostics"] = {
+            "outcome": "kept_baseline",
+            "reason": "no_corner_groups",
+            "reserved_ids": sorted(reserved),
+        }
         return plan
     metric_kwargs = {
         "min_remnant_width_cm": min_remnant_width_cm,
@@ -138,45 +145,22 @@ def apply_shape_aware_nesting(
     for blocks in partitions:
         if time.monotonic() > deadline:
             break
-        seated = _seat_void_guests(
-            blocks,
-            pieces,
-            kerf_cm,
-            board_w_cm,
-            board_h_cm,
-            mirroring_allowed=mirroring_allowed,
-            hosted=_glass_hosted_ids(plan),
-        )
-        candidate = _compose_plan(
+        candidate, seated, dropped = _retain_shape_blocks(
             plan,
             pieces,
-            seated,
+            blocks,
             board_w_cm,
             board_h_cm,
             kerf_cm,
-            _spot_on_sheet,
-        )
-        if candidate is None:
-            candidate = _fallback_plan(plan, pieces, seated, board_w_cm, board_h_cm, kerf_cm)
-            if candidate is not None:
-                candidate["shape_nesting_diagnostics"] = {
-                    "outcome": "fallback",
-                    "reason": "baseline_kept_for_pieces_outside_the_nest",
-                }
-        if candidate is None:
-            continue
-        if _glass_nest_links(plan) != _glass_nest_links(candidate):
-            continue
-        if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
-            continue
-        if placement_permission_errors(
-            candidate,
-            pieces,
             mirroring_allowed=mirroring_allowed,
-        ):
+            hosted=reserved,
+            spot_on_sheet=_spot_on_sheet,
+            validate_plan=validate_plan,
+            placement_permission_errors=placement_permission_errors,
+            deadline=deadline,
+        )
+        if candidate is None or _placement_signature(candidate) == _placement_signature(plan):
             continue
-        if _placement_signature(candidate) == _placement_signature(plan):
-            return plan
         enriched = enrich_plan_metrics(candidate, method, machine_type, **metric_kwargs)
         key = _nest_choice_key(enriched, seated)
         if best is None or key > best_key or (
@@ -196,27 +180,173 @@ def apply_shape_aware_nesting(
             ):
                 if preserved in plan and preserved not in enriched:
                     enriched[preserved] = plan[preserved]
-            enriched.setdefault(
-                "shape_nesting_diagnostics",
-                {
-                    "outcome": "accepted",
-                    "formations": [block["kind"] for block in seated],
-                    "void_guests": [
-                        int(piece["id"])
-                        for block in seated
-                        for piece in block.get("guests") or []
-                    ],
-                },
-            )
+            enriched["shape_nesting_diagnostics"] = {
+                "outcome": "accepted",
+                "formations": [block["kind"] for block in seated],
+                "formation_ids": [
+                    [int(piece["id"]) for piece in block["pieces"]]
+                    for block in seated
+                    if block["kind"] in {"quad", "pair"}
+                ],
+                "void_guests": [
+                    int(piece["id"])
+                    for block in seated
+                    for piece in block.get("guests") or []
+                ],
+                "reserved_ids": sorted(reserved),
+                "dropped": dropped,
+            }
             best = enriched
             best_key = key
     if best is None:
         plan["shape_nesting_diagnostics"] = {
             "outcome": "kept_baseline",
             "reason": "no_complete_valid_nest",
+            "reserved_ids": sorted(reserved),
         }
         return plan
     return best
+
+
+def _block_diagnostic(block: Mapping[str, Any], reason: str) -> dict[str, Any]:
+    return {
+        "kind": block["kind"],
+        "ids": [int(piece["id"]) for piece in block["pieces"]],
+        "reason": reason,
+    }
+
+
+def _shape_block_score(blocks: Sequence[Mapping[str, Any]]) -> int:
+    return sum(
+        len(block["pieces"])
+        for block in blocks
+        if block["kind"] in {"quad", "pair"}
+    )
+
+
+def _candidate_rejection(
+    plan: Mapping[str, Any],
+    pieces: list[dict[str, Any]],
+    blocks: Sequence[Mapping[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+    kerf_cm: float,
+    *,
+    mirroring_allowed: bool,
+    hosted: set[int],
+    spot_on_sheet: Any,
+    validate_plan: Any,
+    placement_permission_errors: Any,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str]:
+    """Return a complete plan, or the reason this block set cannot be kept."""
+
+    seated = _seat_void_guests(
+        blocks,
+        pieces,
+        kerf_cm,
+        board_w_cm,
+        board_h_cm,
+        mirroring_allowed=mirroring_allowed,
+        hosted=hosted,
+    )
+    candidate = _compose_plan(
+        plan,
+        pieces,
+        seated,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        spot_on_sheet,
+    )
+    if candidate is None:
+        candidate = _fallback_plan(plan, pieces, seated, board_w_cm, board_h_cm, kerf_cm)
+    if candidate is None:
+        return None, seated, "compose_incomplete"
+    if _glass_nest_links(plan) != _glass_nest_links(candidate):
+        return None, seated, "glass_links"
+    if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+        return None, seated, "validation"
+    if placement_permission_errors(
+        candidate,
+        pieces,
+        mirroring_allowed=mirroring_allowed,
+    ):
+        return None, seated, "permissions"
+    return candidate, seated, ""
+
+
+def _retain_shape_blocks(
+    plan: Mapping[str, Any],
+    pieces: list[dict[str, Any]],
+    blocks: Sequence[Mapping[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+    kerf_cm: float,
+    *,
+    mirroring_allowed: bool,
+    hosted: set[int],
+    spot_on_sheet: Any,
+    validate_plan: Any,
+    placement_permission_errors: Any,
+    deadline: float,
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Keep every block that still produces one complete valid plan.
+
+    A block that breaks glass links, geometry, or placement permission is
+    removed. Pieces from a removed block stay on the baseline. The returned
+    plan still contains every piece once.
+    """
+
+    pending = [block for block in blocks]
+    dropped: list[dict[str, Any]] = []
+    while pending and time.monotonic() <= deadline:
+        candidate, seated, reason = _candidate_rejection(
+            plan,
+            pieces,
+            pending,
+            board_w_cm,
+            board_h_cm,
+            kerf_cm,
+            mirroring_allowed=mirroring_allowed,
+            hosted=hosted,
+            spot_on_sheet=spot_on_sheet,
+            validate_plan=validate_plan,
+            placement_permission_errors=placement_permission_errors,
+        )
+        if candidate is not None:
+            return candidate, seated, dropped
+        if len(pending) == 1:
+            dropped.append(_block_diagnostic(pending[0], reason))
+            return None, [], dropped
+        rescued: tuple[int, dict[str, Any], list[dict[str, Any]], Mapping[str, Any]] | None = None
+        for index in range(len(pending)):
+            if time.monotonic() > deadline:
+                break
+            trial = pending[:index] + pending[index + 1 :]
+            candidate, seated, _ignored = _candidate_rejection(
+                plan,
+                pieces,
+                trial,
+                board_w_cm,
+                board_h_cm,
+                kerf_cm,
+                mirroring_allowed=mirroring_allowed,
+                hosted=hosted,
+                spot_on_sheet=spot_on_sheet,
+                validate_plan=validate_plan,
+                placement_permission_errors=placement_permission_errors,
+            )
+            if candidate is None:
+                continue
+            score = _shape_block_score(trial)
+            if rescued is None or score > rescued[0]:
+                rescued = (score, candidate, seated, pending[index])
+        if rescued is not None:
+            dropped.append(_block_diagnostic(rescued[3], reason))
+            return rescued[1], rescued[2], dropped
+        dropped.append(_block_diagnostic(pending[-1], reason))
+        pending = pending[:-1]
+    return None, [], dropped
 
 
 def _cluster_sheet(
@@ -1367,7 +1497,14 @@ def _compose_plan(
             )
         else:
             target["pieces"].extend(_translate_pieces(body, translation[0], translation[1]))
-    _pull_loose_pieces(sheets, kerf_cm, board_w_cm, board_h_cm, spot_on_sheet)
+    _pull_loose_pieces(
+        sheets,
+        kerf_cm,
+        board_w_cm,
+        board_h_cm,
+        spot_on_sheet,
+        _sources_by_id(pieces),
+    )
     sheets = [sheet for sheet in sheets if sheet.get("pieces")]
     for index, sheet in enumerate(sheets, start=1):
         sheet["sheet_no"] = index
@@ -1491,12 +1628,28 @@ def _block_translation(
     return None
 
 
+def _sources_by_id(pieces: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:
+    """Index expanded source rows. A placed record is not a source."""
+
+    sources: dict[int, dict[str, Any]] = {}
+    for piece in pieces:
+        try:
+            piece_id = int(piece["id"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        if num(piece.get("width_cm")) <= 0 or num(piece.get("length_cm")) <= 0:
+            continue
+        sources[piece_id] = dict(piece)
+    return sources
+
+
 def _pull_loose_pieces(
     sheets: list[dict[str, Any]],
     kerf_cm: float,
     board_w_cm: float,
     board_h_cm: float,
     spot_on_sheet: Any,
+    sources: Mapping[int, Mapping[str, Any]],
 ) -> None:
     nest_sheets = [sheet for sheet in sheets if _sheet_has_nest(sheet)]
     if not nest_sheets:
@@ -1511,11 +1664,11 @@ def _pull_loose_pieces(
                 hosts.add(int(host))
             except (TypeError, ValueError):
                 continue
-    for source in list(sheets):
-        if source in nest_sheets:
+    for source_sheet in list(sheets):
+        if source_sheet in nest_sheets:
             continue
         kept: list[dict[str, Any]] = []
-        for piece in list(source.get("pieces") or []):
+        for piece in list(source_sheet.get("pieces") or []):
             if (
                 _piece_is_nest_locked(piece)
                 or piece.get("glass_host_piece_id") not in (None, "")
@@ -1523,11 +1676,20 @@ def _pull_loose_pieces(
             ):
                 kept.append(piece)
                 continue
+            try:
+                piece_id = int(piece["id"])
+            except (TypeError, ValueError):
+                kept.append(piece)
+                continue
+            catalog = sources.get(piece_id)
+            if catalog is None:
+                kept.append(piece)
+                continue
             moved = False
             for target in nest_sheets:
                 pending = _fill_free_space(
                     target,
-                    [piece],
+                    [dict(catalog)],
                     kerf_cm,
                     spot_on_sheet,
                     board_w_cm=board_w_cm,
@@ -1538,7 +1700,7 @@ def _pull_loose_pieces(
                     break
             if not moved:
                 kept.append(piece)
-        source["pieces"] = kept
+        source_sheet["pieces"] = kept
 
 
 def _sheet_has_nest(sheet: Mapping[str, Any]) -> bool:
@@ -1769,6 +1931,13 @@ def _fill_free_space(
             spot["h"],
             bool(spot["rotated"]),
         )
+        if (
+            str(piece.get("piece_type") or "") == "Glass"
+            and num(piece.get("glass_margin_mm")) > 0
+            and not guest.get("glass_hole_local_mm")
+        ):
+            leftover.append(piece)
+            continue
         outline = material_outline_cm(guest)
         if (
             outline is None

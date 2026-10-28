@@ -18,14 +18,16 @@ from almdina_erp.almdina_erp.domain.cutting.placement_orientation import (
     physical_edge_bands,
     transform_ring,
 )
-from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
+from almdina_erp.almdina_erp.domain.cutting.plan_search import _spot_on_sheet, improve_plan_search
 from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
 from almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting import (
     _inward_score,
     _orientations,
     _pair_inward_score,
     _placed_corner,
+    _pull_loose_pieces,
     _recorded_facing,
+    _sources_by_id,
     apply_shape_aware_nesting,
     non_quarter_rotation_is_admitted,
     void_edge_angle_deg,
@@ -1863,3 +1865,614 @@ def _turn_multiset(plan, ids):
             if piece["id"] in ids:
                 turns.append(int(piece.get("corner_rotation_quarter_turns") or 0))
     return tuple(sorted(turns))
+
+
+def _quad_sheet(corners, board_w, board_h, kerf=0.3):
+    step = corners[0]["width_cm"] + kerf
+    seats = ((0, 0, 1), (step, 0, 2), (0, step, 0), (step, step, 3))
+    placed = [
+        _placed_corner(corner, x_cm=x_pos, y_cm=y_pos, mirrored=False, turns=turns)
+        for corner, (x_pos, y_pos, turns) in zip(corners, seats, strict=True)
+    ]
+    return {"sheet_no": 1, "w": board_w, "h": board_h, "pieces": placed}
+
+
+def _pull(sheets, pieces, board_w, board_h, kerf=0.3):
+    _pull_loose_pieces(
+        sheets,
+        kerf,
+        board_w,
+        board_h,
+        _spot_on_sheet,
+        _sources_by_id(pieces),
+    )
+
+
+def _ids(sheets):
+    return [int(piece["id"]) for sheet in sheets for piece in sheet["pieces"]]
+
+
+def test_pull_loose_pieces_relocates_placed_glass_from_the_source_piece():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=20, length_cm=20, qty=4, cut=8, allow_rotation=1),
+            {
+                "piece_type": "Glass",
+                "width_cm": 40,
+                "length_cm": 30,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 50,
+            },
+        ]
+    )
+    corners = [piece for piece in pieces if piece["piece_type"] == "L-Shaped Corner"]
+    glass = next(piece for piece in pieces if piece["piece_type"] == "Glass")
+    placed_glass = make_placed_piece(glass, 0, 0, 40, 30, False)
+    assert "width_cm" not in placed_glass
+    assert "length_cm" not in placed_glass
+    sheets = [
+        _quad_sheet(corners, 120, 80),
+        {"sheet_no": 2, "w": 120, "h": 80, "pieces": [placed_glass]},
+    ]
+
+    _pull(sheets, pieces, 120, 80)
+
+    moved = [
+        piece
+        for piece in sheets[0]["pieces"]
+        if piece["piece_type"] == "Glass"
+    ]
+    assert len(moved) == 1
+    assert sheets[1]["pieces"] == []
+    assert _ids(sheets).count(int(glass["id"])) == 1
+    assert sorted(_ids(sheets)) == sorted(piece["id"] for piece in pieces)
+    glass_piece = moved[0]
+    assert glass_piece["original_w"] == 40
+    assert glass_piece["original_h"] == 30
+    assert glass_piece["w"] == 40
+    assert glass_piece["h"] == 30
+    assert glass_piece["glass_margin_mm"] == 50
+    assert glass_piece["glass_hole_local_mm"] == [
+        [50.0, 50.0],
+        [350.0, 50.0],
+        [350.0, 250.0],
+        [50.0, 250.0],
+    ]
+    assert not validate_plan(
+        {"sheets": sheets, "unplaced": []},
+        pieces,
+        120,
+        80,
+        kerf_cm=0.3,
+    )
+
+
+def test_pull_loose_pieces_keeps_allow_rotation_from_the_source_piece():
+    def scenario(allow_rotation):
+        pieces = expand_piece_groups(
+            [
+                _plain_corner(width_cm=20, length_cm=20, qty=1, cut=8, allow_rotation=1),
+                {
+                    "piece_type": "Regular",
+                    "width_cm": 20,
+                    "length_cm": 50,
+                    "qty": 1,
+                    "allow_rotation": 0,
+                },
+                {
+                    "piece_type": "Regular",
+                    "width_cm": 36,
+                    "length_cm": 16,
+                    "qty": 1,
+                    "allow_rotation": allow_rotation,
+                },
+            ]
+        )
+        corner, filler, regular = pieces
+        placed = make_placed_piece(regular, 0, 0, 36, 16, False)
+        assert "allow_rotation" not in placed
+        sheets = [
+            {
+                "sheet_no": 1,
+                "w": 60,
+                "h": 50,
+                "pieces": [
+                    _placed_corner(corner, x_cm=0, y_cm=0, mirrored=False, turns=1),
+                    make_placed_piece(filler, 20.3, 0, 19.7, 50, False),
+                ],
+            },
+            {"sheet_no": 2, "w": 60, "h": 50, "pieces": [placed]},
+        ]
+        _pull(sheets, pieces, 60, 50)
+        found = [
+            (sheet["sheet_no"], piece)
+            for sheet in sheets
+            for piece in sheet["pieces"]
+            if int(piece["id"]) == int(regular["id"])
+        ]
+        assert len(found) == 1
+        assert regular["allow_rotation"] == allow_rotation
+        return found[0]
+
+    sheet_no, rotated = scenario(1)
+    assert sheet_no == 1
+    assert rotated["rotated"] is True
+    assert rotated["w"] == 16
+    assert rotated["h"] == 36
+
+    sheet_no, stayed = scenario(0)
+    assert sheet_no == 2
+    assert stayed["rotated"] is False
+    assert stayed["w"] == 36
+    assert stayed["h"] == 16
+
+
+def _hosted_links(plan):
+    links = []
+    for sheet in plan["sheets"]:
+        for piece in sheet["pieces"]:
+            host = piece.get(GLASS_HOST_PIECE_ID)
+            if host not in (None, ""):
+                links.append((int(piece["id"]), int(host)))
+    return tuple(sorted(links))
+
+
+def _quad_turn_ids(plan, piece_type):
+    grouped: dict[tuple, list] = {}
+    for sheet in plan["sheets"]:
+        for piece in sheet["pieces"]:
+            if piece.get("piece_type") != piece_type:
+                continue
+            if piece.get(GLASS_HOST_PIECE_ID) not in (None, ""):
+                continue
+            key = (
+                round(float(piece.get("original_w") or piece.get("w") or 0), 3),
+                round(float(piece.get("original_h") or piece.get("h") or 0), 3),
+            )
+            grouped.setdefault(key, []).append(piece)
+    return {
+        key: tuple(sorted(int(piece.get("corner_rotation_quarter_turns") or 0) for piece in pieces))
+        for key, pieces in grouped.items()
+        if len(pieces) >= 4
+    }
+
+
+def test_shape_nesting_keeps_glass_guests_and_nests_free_corners():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=30, length_cm=30, qty=6, cut=10, allow_rotation=1),
+            {
+                "piece_type": "Clipped Corner",
+                "width_cm": 24,
+                "length_cm": 24,
+                "qty": 4,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 8,
+                "clipped_corner_length_cm": 8,
+                "allow_rotation": 1,
+            },
+            {
+                "piece_type": "Glass",
+                "width_cm": 80,
+                "length_cm": 100,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 100,
+            },
+            {
+                "piece_type": "Glass",
+                "width_cm": 70,
+                "length_cm": 90,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 80,
+            },
+        ]
+    )
+    hosted = pieces[:2]
+    free_l = pieces[2:6]
+    clipped = pieces[6:10]
+    glass_a, glass_b = pieces[10], pieces[11]
+    guest_a = make_placed_piece(hosted[0], 12, 12, 30, 30, False)
+    guest_b = make_placed_piece(hosted[1], 91, 12, 30, 30, False)
+    guest_a[GLASS_HOST_PIECE_ID] = glass_a["id"]
+    guest_b[GLASS_HOST_PIECE_ID] = glass_b["id"]
+    free = [
+        make_placed_piece(piece, 0, index * 32, piece["width_cm"], piece["length_cm"], False)
+        for index, piece in enumerate([*free_l, *clipped])
+    ]
+    plan = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "w": 180,
+                "h": 300,
+                "pieces": [
+                    make_placed_piece(glass_a, 0, 0, 80, 100, False),
+                    guest_a,
+                    make_placed_piece(glass_b, 81, 0, 70, 90, False),
+                    guest_b,
+                ],
+            },
+            {"sheet_no": 2, "w": 180, "h": 300, "pieces": free},
+        ],
+        "unplaced": [],
+        "method_key": "MaxRects Best Short Side",
+    }
+    before = _hosted_links(plan)
+
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        180,
+        300,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+
+    assert _hosted_links(improved) == before == ((1, 11), (2, 12))
+    assert _quad_turn_ids(improved, "L-Shaped Corner")[(30.0, 30.0)] == (0, 1, 2, 3)
+    assert _quad_turn_ids(improved, "Clipped Corner")[(24.0, 24.0)] == (0, 1, 2, 3)
+    placed_ids = [piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(placed_ids) == list(range(1, 13))
+    assert len(placed_ids) == len(set(placed_ids))
+    assert not validate_plan(improved, pieces, 180, 300, kerf_cm=0.3)
+    assert not placement_permission_errors(improved, pieces, mirroring_allowed=False)
+
+
+def test_one_failing_corner_group_does_not_cancel_the_other(monkeypatch):
+    import almdina_erp.almdina_erp.domain.cutting.shape_aware_nesting as shape_nesting
+
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=30, length_cm=30, qty=4, cut=10, allow_rotation=1),
+            _plain_corner(width_cm=20, length_cm=20, qty=4, cut=6, allow_rotation=1),
+        ]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [[(0, 0), (31, 0), (0, 31), (31, 31)], [(0, 0), (21, 0), (0, 21), (21, 21)]],
+        board=120,
+    )
+    real_compose = shape_nesting._compose_plan
+    real_fallback = shape_nesting._fallback_plan
+
+    def _contains_second_group(blocks) -> bool:
+        return any(int(piece["id"]) >= 5 for block in blocks for piece in block["pieces"])
+
+    def compose(plan, pieces, blocks, *args, **kwargs):
+        if _contains_second_group(blocks):
+            return None
+        return real_compose(plan, pieces, blocks, *args, **kwargs)
+
+    def fallback(plan, pieces, blocks, *args, **kwargs):
+        if _contains_second_group(blocks):
+            return None
+        return real_fallback(plan, pieces, blocks, *args, **kwargs)
+
+    monkeypatch.setattr(shape_nesting, "_compose_plan", compose)
+    monkeypatch.setattr(shape_nesting, "_fallback_plan", fallback)
+
+    improved = _apply(plan, pieces, board=120, mirroring_allowed=True)
+
+    assert _turn_multiset(improved, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    assert "corner_rotation_quarter_turns" not in {
+        key
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+        if int(piece["id"]) >= 5
+        for key in piece
+    }
+    assert sorted(piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]) == list(range(1, 9))
+    assert not validate_plan(improved, pieces, 120, 120, kerf_cm=0.3)
+
+
+def test_forbidden_pair_does_not_cancel_the_other_quads():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=30, length_cm=30, qty=4, cut=10, allow_rotation=1),
+            {
+                "piece_type": "Clipped Corner",
+                "width_cm": 24,
+                "length_cm": 24,
+                "qty": 4,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 8,
+                "clipped_corner_length_cm": 8,
+                "allow_rotation": 1,
+            },
+            _plain_corner(width_cm=18, length_cm=18, qty=2, cut=6, allow_rotation=0),
+        ]
+    )
+    plan = _sheet_plan(
+        pieces,
+        [
+            [(0, 0), (31, 0), (0, 31), (31, 31)],
+            [(0, 0), (25, 0), (0, 25), (25, 25)],
+            [(0, 0), (19, 0)],
+        ],
+        board=140,
+    )
+
+    improved = _apply(plan, pieces, board=140, mirroring_allowed=False)
+
+    assert _turn_multiset(improved, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    assert _turn_multiset(improved, {5, 6, 7, 8}) == (0, 1, 2, 3)
+    assert _turn_multiset(improved, {9, 10}) == (0, 0)
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"] if int(piece["id"]) in {9, 10}]
+    assert not _symmetric_slot_pair(placed[0], placed[1], board=(140, 140))
+    assert sorted(piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]) == list(range(1, 11))
+    assert not validate_plan(improved, pieces, 140, 140, kerf_cm=0.3)
+
+
+def test_shape_nesting_preserves_single_many_and_nested_glass_links():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=20, length_cm=20, qty=4, cut=6, allow_rotation=1),
+            {
+                "piece_type": "Glass",
+                "width_cm": 80,
+                "length_cm": 80,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 60,
+            },
+            {
+                "piece_type": "Glass",
+                "width_cm": 40,
+                "length_cm": 40,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 40,
+            },
+            {"piece_type": "Regular", "width_cm": 10, "length_cm": 10, "qty": 2, "allow_rotation": 0},
+        ]
+    )
+    corners = pieces[:4]
+    outer, inner = pieces[4], pieces[5]
+    guests = pieces[6:]
+    placed_inner = make_placed_piece(inner, 12, 12, 40, 40, False)
+    placed_inner[GLASS_HOST_PIECE_ID] = outer["id"]
+    first = make_placed_piece(guests[0], 17, 17, 10, 10, False)
+    second = make_placed_piece(guests[1], 17, 29, 10, 10, False)
+    first[GLASS_HOST_PIECE_ID] = inner["id"]
+    second[GLASS_HOST_PIECE_ID] = inner["id"]
+    plan = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "w": 140,
+                "h": 140,
+                "pieces": [
+                    make_placed_piece(outer, 0, 0, 80, 80, False),
+                    placed_inner,
+                    first,
+                    second,
+                ],
+            },
+            {
+                "sheet_no": 2,
+                "w": 140,
+                "h": 140,
+                "pieces": [
+                    make_placed_piece(piece, 0, index * 22, 20, 20, False)
+                    for index, piece in enumerate(corners)
+                ],
+            },
+        ],
+        "unplaced": [],
+        "method_key": "MaxRects Best Short Side",
+    }
+    before = _hosted_links(plan)
+
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        140,
+        140,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+
+    assert _hosted_links(improved) == before == ((6, 5), (7, 6), (8, 6))
+    assert _turn_multiset(improved, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    holes = {
+        int(piece["id"]): piece.get("glass_hole_local_mm")
+        for sheet in improved["sheets"]
+        for piece in sheet["pieces"]
+        if piece.get("piece_type") == "Glass"
+    }
+    assert holes[5] and holes[6]
+    assert sorted(piece["id"] for sheet in improved["sheets"] for piece in sheet["pieces"]) == list(range(1, 9))
+    assert not validate_plan(improved, pieces, 140, 140, kerf_cm=0.3)
+
+
+def test_combined_glass_corner_and_special_dxf_roundtrip(tmp_path):
+    import json
+
+    import ezdxf
+
+    from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import read_dxf_geometry
+
+    special = {
+        "version": 1,
+        "kind": "polygon",
+        "units": "cm",
+        "exact": True,
+        "blank_width_cm": 20,
+        "blank_length_cm": 16,
+        "points": [[0, 5], [14, 0], [20, 11], [6, 16]],
+    }
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=20, length_cm=20, qty=4, cut=6, allow_rotation=1),
+            {
+                "piece_type": "Clipped Corner",
+                "width_cm": 18,
+                "length_cm": 18,
+                "qty": 4,
+                "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 6,
+                "clipped_corner_length_cm": 6,
+                "allow_rotation": 1,
+            },
+            {
+                "piece_type": "Glass",
+                "width_cm": 50,
+                "length_cm": 40,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 40,
+            },
+            {"piece_type": "Regular", "width_cm": 12, "length_cm": 10, "qty": 1, "allow_rotation": 0},
+            {
+                "piece_type": "Special",
+                "width_cm": 20,
+                "length_cm": 16,
+                "qty": 1,
+                "allow_rotation": 0,
+                "special_shape_geometry_json": json.dumps(special),
+            },
+        ]
+    )
+    corners = pieces[:4]
+    clipped = pieces[4:8]
+    glass, regular, shaped = pieces[8], pieces[9], pieces[10]
+    guest = make_placed_piece(regular, 6, 6, 12, 10, False)
+    guest[GLASS_HOST_PIECE_ID] = glass["id"]
+    plan = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "w": 160,
+                "h": 160,
+                "pieces": [make_placed_piece(glass, 0, 0, 50, 40, False), guest],
+            },
+            {
+                "sheet_no": 2,
+                "w": 160,
+                "h": 160,
+                "pieces": [
+                    make_placed_piece(piece, 0, index * 22, 20, 20, False)
+                    for index, piece in enumerate(corners)
+                ],
+            },
+            {
+                "sheet_no": 3,
+                "w": 160,
+                "h": 160,
+                "pieces": [
+                    make_placed_piece(piece, 0, index * 20, 18, 18, False)
+                    for index, piece in enumerate(clipped)
+                ]
+                + [make_placed_piece(shaped, 40, 0, 20, 16, False)],
+            },
+        ],
+        "unplaced": [],
+        "method_key": "MaxRects Best Short Side",
+    }
+
+    improved = apply_shape_aware_nesting(
+        plan,
+        pieces,
+        160,
+        160,
+        0.3,
+        mirroring_allowed=False,
+        machine_type="CNC Router",
+        time_limit_sec=2,
+        **_REMNANT,
+    )
+
+    assert _hosted_links(improved) == ((10, 9),)
+    assert _turn_multiset(improved, {1, 2, 3, 4}) == (0, 1, 2, 3)
+    assert _turn_multiset(improved, {5, 6, 7, 8}) == (0, 1, 2, 3)
+    placed = [piece for sheet in improved["sheets"] for piece in sheet["pieces"]]
+    assert sorted(piece["id"] for piece in placed) == list(range(1, 12))
+    outlines = [material_outline_cm(piece) for piece in placed]
+    assert all(outline and len(outline) >= 4 for outline in outlines)
+    special_outline = material_outline_cm(next(piece for piece in placed if piece["piece_type"] == "Special"))
+    assert special_outline is not None and len(special_outline) == 4
+    glass_piece = next(piece for piece in placed if piece["piece_type"] == "Glass")
+    hole = glass_piece.get("glass_hole_local_mm")
+    assert hole
+    hole_ring = [
+        (glass_piece["x"] + point[0] / 10, glass_piece["y"] + point[1] / 10) for point in hole
+    ]
+
+    document = ezdxf.new("R2010")
+    for name in ("GEOMETRY", "CUT_PATH", "TEXT"):
+        document.layers.add(name)
+    modelspace = document.modelspace()
+    exported = [*outlines, hole_ring]
+    for outline in exported:
+        ring = [(point[0] * 10, point[1] * 10) for point in outline]
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "GEOMETRY"}, close=True)
+        modelspace.add_lwpolyline(ring, dxfattribs={"layer": "CUT_PATH"}, close=True)
+    path = tmp_path / "combined-nest.dxf"
+    document.saveas(path)
+    loaded = read_dxf_geometry(str(path), relevant_layers={"GEOMETRY", "CUT_PATH"})
+    geometry = [segment for segment in loaded["segments"] if segment["layer"] == "GEOMETRY"]
+    cut_path = [segment for segment in loaded["segments"] if segment["layer"] == "CUT_PATH"]
+    assert len({segment["entity_id"] for segment in geometry}) == len(exported)
+    assert len({segment["entity_id"] for segment in cut_path}) == len(exported)
+    rings = []
+    for entity_id in sorted({segment["entity_id"] for segment in geometry}):
+        segments = [segment for segment in geometry if segment["entity_id"] == entity_id]
+        points = [segments[0]["start"]]
+        points.extend(segment["end"] for segment in segments)
+        if points[0] == points[-1]:
+            points = points[:-1]
+        rings.append(points)
+    for outline, ring in zip(exported, rings, strict=True):
+        _same_points([(point[0] * 10, point[1] * 10) for point in outline], ring, tolerance=0.05)
+    assert not validate_plan(improved, pieces, 160, 160, kerf_cm=0.3)
+
+
+def test_pull_loose_pieces_does_not_separate_a_glass_host_from_its_guests():
+    pieces = expand_piece_groups(
+        [
+            _plain_corner(width_cm=20, length_cm=20, qty=4, cut=8, allow_rotation=1),
+            {
+                "piece_type": "Glass",
+                "width_cm": 50,
+                "length_cm": 40,
+                "qty": 1,
+                "allow_rotation": 0,
+                "glass_margin_mm": 40,
+            },
+            {
+                "piece_type": "Regular",
+                "width_cm": 10,
+                "length_cm": 10,
+                "qty": 1,
+                "allow_rotation": 0,
+            },
+        ]
+    )
+    corners = [piece for piece in pieces if piece["piece_type"] == "L-Shaped Corner"]
+    glass = next(piece for piece in pieces if piece["piece_type"] == "Glass")
+    guest = next(piece for piece in pieces if piece["piece_type"] == "Regular")
+    placed_glass = make_placed_piece(glass, 0, 0, 50, 40, False)
+    placed_guest = make_placed_piece(guest, 5, 5, 10, 10, False)
+    placed_guest[GLASS_HOST_PIECE_ID] = glass["id"]
+    sheets = [
+        _quad_sheet(corners, 120, 90),
+        {"sheet_no": 2, "w": 120, "h": 90, "pieces": [placed_glass, placed_guest]},
+    ]
+
+    _pull(sheets, pieces, 120, 90)
+
+    second = sheets[1]["pieces"]
+    assert {int(piece["id"]) for piece in second} == {int(glass["id"]), int(guest["id"])}
+    hosted = next(piece for piece in second if int(piece["id"]) == int(guest["id"]))
+    assert int(hosted[GLASS_HOST_PIECE_ID]) == int(glass["id"])
+    assert all(piece["piece_type"] != "Glass" for piece in sheets[0]["pieces"])
+    assert sorted(_ids(sheets)) == sorted(piece["id"] for piece in pieces)

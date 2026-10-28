@@ -38,6 +38,7 @@ _PRESERVED_PLAN_KEYS = (
     "solver_status",
     "solver_wall_time_sec",
     "glass_nesting_diagnostics",
+    "shape_nesting_diagnostics",
 )
 
 
