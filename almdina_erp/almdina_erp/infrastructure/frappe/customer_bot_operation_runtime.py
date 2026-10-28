@@ -46,6 +46,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_callback import 
 from almdina_erp.almdina_erp.infrastructure.frappe.customer_bot_settings_records import (
     SERVICE_FLAG,
 )
+from almdina_erp.almdina_erp.infrastructure.whatsapp.config import (
+    load_customer_bot_public_base_url,
+)
 from almdina_erp.almdina_erp.infrastructure.whatsapp.openwa_client import OpenWAClient
 
 DOCTYPE = "Customer Bot Settings"
@@ -197,7 +200,11 @@ class FrappeCustomerBotOperation:
             return ""
 
     def public_base_url(self) -> str:
-        return str(frappe.conf.get(PUBLIC_BASE_KEY) or "").strip()
+        """Site setting first. The optional env value applies only when it is empty."""
+
+        return load_customer_bot_public_base_url(
+            site_value=str(frappe.conf.get(PUBLIC_BASE_KEY) or ""),
+        )
 
     def public_callback_url(self) -> str:
         return callback_url(self.public_base_url(), CUSTOMER_BOT_CALLBACK_PATH)

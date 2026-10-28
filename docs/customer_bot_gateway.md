@@ -219,7 +219,7 @@ Application لا تعيد المحاولة، ولا تحوّل استثناءً 
 
 التوافق مع الإعداد القديم: الترحيل يضيف الحقول بقيمة `stopped` ولا يكتب `production` ولا يسلّح النقل. أعلام التسليح القديمة وحدها لا تفتح الإرسال بعد هذا التغيير؛ الإرسال يحتاج القرار المحفوظ `running` مع البوابات السابقة. إيقاف المدير يبقى بعد إعادة تشغيل العمليات. انقطاع البوابة أو الطابور يضع الحالة `degraded` ويبقي القرار `running` حتى ينجح فحص لاحق فيعيد التسليح دون نافذة production جديدة.
 
-التشغيل الناجح يفتح `production` والنقل فقط بعد: صلاحية `manage_customer_bot_operation`، النصوص المنشورة، جلسة المصنع الحالية بحالة `ready`، مستخدم التكامل `customer-bot-ingest@almdina.invalid` بقدرة `ingest_customer_bot_inbound` فقط، سر HMAC مخزن مشفرًا، وتسجيل webhook. العنوان يُشتق من `customer_bot_public_base_url` في إعداد الموقع، ولا يُقبل من العميل.
+التشغيل الناجح يفتح `production` والنقل فقط بعد: صلاحية `manage_customer_bot_operation`، النصوص المنشورة، جلسة المصنع الحالية بحالة `ready`، مستخدم التكامل `customer-bot-ingest@almdina.invalid` بقدرة `ingest_customer_bot_inbound` فقط، سر HMAC مخزن مشفرًا، وتسجيل webhook. العنوان يُشتق من `customer_bot_public_base_url` في إعداد الموقع عندما يكون غير فارغ، ولا يُقبل من العميل. إذا خلا إعداد الموقع يُقرأ `CUSTOMER_BOT_PUBLIC_BASE_URL` من بيئة العملية ثم من ملف `.env` في جذر التطبيق. غياب المتغير يُبقي الرفض السابق (`public_base_url_missing`). لا يوجد عنوان مضمّن في الكود. القيمة أصل يصل إليه OpenWA، وقد تختلف عن عنوان المتصفح: `localhost` عندما تعمل البوابة على الجهاز نفسه، و`host.docker.internal` عندما تعمل داخل Docker. أضف اسم المضيف فقط إلى `SSRF_ALLOWED_HOSTS` في OpenWA. لا يُعطَّل `WEBHOOK_SSRF_PROTECT` ولا التحقق من توقيع `X-OpenWA-Signature`.
 
 عقد بوابة OpenWA المستخدم (من مصدر البوابة في هذا المستودع، وليس تخمينًا):
 
@@ -239,7 +239,7 @@ Application لا تعيد المحاولة، ولا تحوّل استثناءً 
 
 اللقطة تعيد القرار والحالة والسبب وحالة الجلسة وتسجيل webhook ونتيجة الطابور ووقت آخر قبول وآخر `accepted` من البوابة. `sending_accepted` في هذه اللقطة ليس إثبات إرسال حالي، و`customer_receipt_proven` يبقى false. `accepted` ما زال يعني قبول البوابة لا وصول الرسالة للزبون.
 
-متطلبات لا تُنجز تلقائيًا: ضبط `customer_bot_public_base_url`، وإدراج مضيف ERP في `SSRF_ALLOWED_HOSTS` لعملية البوابة، و`RESOLVE_LID_TO_PHONE=true` عند الحاجة، ومفتاح بوابة بدور `operator` على الأقل، وعامل RQ فعلي لأن تعريف cron وحده لا يثبت التنفيذ.
+متطلبات لا تُنجز تلقائيًا: ضبط `customer_bot_public_base_url` (أو `CUSTOMER_BOT_PUBLIC_BASE_URL` محليًا عندما يكون إعداد الموقع فارغًا)، وإدراج مضيف ERP في `SSRF_ALLOWED_HOSTS` لعملية البوابة، و`RESOLVE_LID_TO_PHONE=true` عند الحاجة، ومفتاح بوابة بدور `operator` على الأقل، وعامل RQ فعلي لأن تعريف cron وحده لا يثبت التنفيذ.
 
 مثال إعداد وهمي فقط (لا أسرار حقيقية):
 
