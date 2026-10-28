@@ -220,6 +220,7 @@
         [data-fieldname="cutting_plan_html"] .dco-plan-tab-content,
         [data-fieldname="cutting_plan_html"] .dco-cutting-plan,
         [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend,
+        [data-fieldname="cutting_plan_html"] .dco-edge-band-legend,
         [data-fieldname="cutting_plan_html"] .dco-margin-policy-alert,
         [data-fieldname="cutting_plan_html"] .dco-board-gallery {
             width:100% !important;
@@ -241,10 +242,34 @@
             display:flex !important;
             align-items:center !important;
         }
+        [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-edge-band-legend {
+            flex:0 1 auto !important;
+            margin:0 !important;
+            min-width:0 !important;
+        }
         [data-fieldname="cutting_plan_html"] .dco-plan-meta-strip .dco-extra-addon-legend {
             flex:1 1 220px !important;
             margin:0 !important;
             min-width:0 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-edge-band-legend {
+            display:flex !important;
+            flex-wrap:wrap !important;
+            align-items:center !important;
+            gap:8px 14px !important;
+            padding:7px 10px !important;
+            border:1px solid var(--alm-card-border,#e4e8ee) !important;
+            border-radius:8px !important;
+            background:var(--alm-surface-muted,#f4f6f8) !important;
+            color:var(--alm-text-strong,#101828) !important;
+            font-size:11px !important;
+            font-weight:700 !important;
+            line-height:1.2 !important;
+        }
+        [data-fieldname="cutting_plan_html"] .dco-edge-band-legend-item {
+            display:inline-flex !important;
+            align-items:center !important;
+            gap:6px !important;
         }
         [data-fieldname="cutting_plan_html"] .dco-extra-addon-legend {
             display:flex !important;

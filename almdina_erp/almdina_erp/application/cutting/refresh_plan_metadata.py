@@ -40,6 +40,10 @@ PLACED_PIECE_METADATA_FIELDS = (
     "edge_type",
     "edge_rate_usd",
     "edge_cost_usd",
+    "edge_long_right_type_override",
+    "edge_long_left_type_override",
+    "edge_width_top_type_override",
+    "edge_width_bottom_type_override",
 )
 
 

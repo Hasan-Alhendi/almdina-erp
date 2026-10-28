@@ -754,12 +754,21 @@
         const inheritStroke = options.inheritStroke !== false;
         const color = options.color || "#d00000";
         const strokeWidth = options.strokeWidth || 3;
+        const customColor = options.customColor || "#1d4ed8";
+        // Screen-space dash-dot (CSS px) so board zoom does not stretch the pattern.
+        const customDash = options.customDasharray || "5px 2.5px 1.5px 2.5px";
+        const sideCustom = options.sideCustom || {};
         const offsetX = num(options.offsetX);
         const offsetY = num(options.offsetY);
         const toPoints = (path) => (path || [])
             .map(([x, y]) => `${rounded(x + offsetX)},${rounded(y + offsetY)}`)
             .join(" ");
-        const polyline = (path, extraClass = "") => {
+        const polyline = (path, extraClass = "", custom = false) => {
+            if (!path || path.length < 2) return "";
+            const customClass = custom ? " dco-edge-line--custom" : "";
+            if (custom) {
+                return `<polyline class="dco-edge-line-svg ${extraClass}${customClass}" fill="none" stroke="${customColor}" stroke-width="${strokeWidth}" stroke-dasharray="${customDash}" stroke-linecap="butt" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
+            }
             if (inheritStroke) {
                 return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${toPoints(path)}"/>`;
             }
@@ -772,15 +781,15 @@
             left: Boolean(piece && piece.edge_long_left),
             right: Boolean(piece && piece.edge_long_right),
         };
-        if (flags.top && paths.top) lines.push(polyline(paths.top));
-        if (flags.bottom && paths.bottom) lines.push(polyline(paths.bottom));
-        if (flags.left && paths.left) lines.push(polyline(paths.left));
-        if (flags.right && paths.right) lines.push(polyline(paths.right));
+        if (flags.top && paths.top) lines.push(polyline(paths.top, "", Boolean(sideCustom.top)));
+        if (flags.bottom && paths.bottom) lines.push(polyline(paths.bottom, "", Boolean(sideCustom.bottom)));
+        if (flags.left && paths.left) lines.push(polyline(paths.left, "", Boolean(sideCustom.left)));
+        if (flags.right && paths.right) lines.push(polyline(paths.right, "", Boolean(sideCustom.right)));
         if (piece && piece.edge_break && paths.break) {
-            lines.push(polyline(paths.break, "dco-edge-break-svg"));
+            lines.push(polyline(paths.break, "dco-edge-break-svg", Boolean(sideCustom.break)));
         }
         if (piece && piece.edge_break_only && paths.breakOnly) {
-            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg"));
+            lines.push(polyline(paths.breakOnly, "dco-edge-break-only-svg", Boolean(sideCustom.breakOnly)));
         }
         return lines.join("");
     }
