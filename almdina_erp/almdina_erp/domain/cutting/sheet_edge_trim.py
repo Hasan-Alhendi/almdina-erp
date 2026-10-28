@@ -13,6 +13,7 @@ import math
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import TRIM_PRECISION_CM
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import DxfGeometrySnapshotError
 from almdina_erp.almdina_erp.domain.cutting.primitives import num
 
 
@@ -66,6 +67,8 @@ def resolved_sheet_trim_cm(
     plus this trim. An explicit sheet value, including zero, wins. A missing
     value is recovered from ``full - usable`` before the plan-level applied
     trim, so a plan-wide zero does not erase a sheet that recovered slack.
+    Equal full/usable dimensions prove zero trim; preferred trim must not
+    invent an inset. Contradictory dimensions cannot prove a physical frame.
     """
 
     source = sheet or {}
@@ -85,7 +88,9 @@ def resolved_sheet_trim_cm(
     size_key = "w" if axis == "x" else "h"
     sheet_full = num(source.get(full_key))
     sheet_usable = num(source.get(usable_key)) or num(source.get(size_key))
-    if sheet_full > sheet_usable > 0:
+    if sheet_full > 0 and sheet_usable > 0:
+        if sheet_usable > sheet_full:
+            raise DxfGeometrySnapshotError("sheet usable dimensions exceed physical dimensions.")
         return (sheet_full - sheet_usable) / 2.0
 
     if trim_key in owner and owner.get(trim_key) is not None:
@@ -95,7 +100,9 @@ def resolved_sheet_trim_cm(
     plan_usable_key = "usable_board_width_cm" if axis == "x" else "usable_board_length_cm"
     plan_full = num(owner.get(plan_full_key))
     plan_usable = num(owner.get(plan_usable_key))
-    if plan_full > plan_usable > 0:
+    if plan_full > 0 and plan_usable > 0:
+        if plan_usable > plan_full:
+            raise DxfGeometrySnapshotError("plan usable dimensions exceed physical dimensions.")
         return (plan_full - plan_usable) / 2.0
     return max(0.0, num(owner.get("trim_cm")))
 

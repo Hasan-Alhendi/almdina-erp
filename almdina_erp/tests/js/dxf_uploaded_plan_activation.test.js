@@ -16,6 +16,10 @@ function source(filename) {
     let printedPlan = null;
 
     const fakeWindow = {
+        AlmdinaDocumentContext: {
+            capture(frm) { return { doc: frm.doc }; },
+            isCurrent(frm, token) { return frm.doc === token.doc; },
+        },
         AlmdinaPermissions: {
             canDocument() {
                 return true;
@@ -39,6 +43,7 @@ function source(filename) {
 
     const fakeFrappe = {
         almdina: {},
+        csrf_token: "csrf",
         provide() {
             this.almdina = this.almdina || {};
         },
@@ -60,6 +65,10 @@ function source(filename) {
         },
     };
     fakeWindow.frappe = fakeFrappe;
+    fakeWindow.fetch = async (_url, options) => ({
+        ok: true, status: 200,
+        json: () => fakeFrappe.call({ args: Object.fromEntries(options.body) }),
+    });
 
     const context = vm.createContext({
         window: fakeWindow,
@@ -74,8 +83,10 @@ function source(filename) {
         Map,
         Set,
         __: value => value,
+        URLSearchParams,
     });
 
+    vm.runInContext(source("frontend_foundation.js"), context);
     vm.runInContext(source("almdina_ui.js"), context);
     vm.runInContext(
         source("door_cutting_order/cutting_plan/door_cutting_order_plan_tabs_ux.js"),

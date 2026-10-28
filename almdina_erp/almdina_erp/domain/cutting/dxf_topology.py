@@ -42,6 +42,9 @@ class DxfTopologyError(ValueError):
         expected_height: float | None = None,
         actual_width: float | None = None,
         actual_height: float | None = None,
+        actual_clearance: float | None = None,
+        required_clearance: float | None = None,
+        sheet_no: int | None = None,
         rotation_evidence: Sequence[ForbiddenRotationEvidence] = (),
     ) -> None:
         self.code = code
@@ -52,6 +55,10 @@ class DxfTopologyError(ValueError):
         self.expected_height = expected_height
         self.actual_width = actual_width
         self.actual_height = actual_height
+        # Evidence in the caller's geometry units; never used to decide validity.
+        self.actual_clearance = actual_clearance
+        self.required_clearance = required_clearance
+        self.sheet_no = sheet_no
         self.rotation_evidence = tuple(rotation_evidence)
         super().__init__(code)
 
@@ -279,6 +286,8 @@ def validate_material_layout(
                     violation_code,
                     first_key=first.key,
                     second_key=second.key,
+                    actual_clearance=distance,
+                    required_clearance=clearance,
                 )
 
 

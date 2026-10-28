@@ -638,56 +638,36 @@
         return [start[0] + direction[0] * step, start[1] + direction[1] * step];
     }
 
-    function finishedEdgeOnBoard(start, end, board) {
-        if (!board) return false;
-        const sides = [
-            [0, num(board.minX)],
-            [0, num(board.maxX)],
-            [1, num(board.minY)],
-            [1, num(board.maxY)],
-        ];
-        return sides.some(([axis, value]) => (
-            Math.abs(start[axis] - value) <= COLLINEAR_TOLERANCE_MM
-            && Math.abs(end[axis] - value) <= COLLINEAR_TOLERANCE_MM
-        ));
-    }
-
-    function cutterCenterPaths(shapes, radius, board) {
+    function cutterCenterPaths(shapes, radius) {
         const safeRadius = Math.max(0, num(radius));
         const prepared = shapes.map(shape => ({
             outer: openRing(shape.outer),
             holes: (shape.holes || []).map(openRing).filter(hole => hole.length >= 3),
         })).filter(shape => shape.outer.length >= 3);
         const closedPaths = [];
-        const openSegments = [];
+        const segments = [];
         prepared.forEach(shape => {
             [shape.outer].concat(shape.holes).forEach(ring => {
                 const offset = safeRadius <= COLLINEAR_TOLERANCE_MM
                     ? ring
                     : offsetClosed(ring, safeRadius, wasteSign(ring, prepared, safeRadius));
                 if (offset.length < 3) return;
-                const boardEdges = new Set();
-                ring.forEach((start, index) => {
-                    const finishedEnd = ring[(index + 1) % ring.length];
-                    if (finishedEdgeOnBoard(start, finishedEnd, board)) boardEdges.add(index);
-                });
-                if (!boardEdges.size) {
-                    closedPaths.push({ points: offset, closed: true });
-                    return;
-                }
+                // Physical board edges do not clip the waste-side offset.
+                closedPaths.push({ points: offset, closed: true });
                 offset.forEach((point, index) => {
-                    if (boardEdges.has(index)) return;
-                    const offsetStart = point;
-                    const offsetEnd = offset[(index + 1) % offset.length];
-                    if (Math.hypot(offsetEnd[0] - offsetStart[0], offsetEnd[1] - offsetStart[1]) > COLLINEAR_TOLERANCE_MM) {
-                        openSegments.push([offsetStart, offsetEnd]);
-                    }
+                    segments.push([point, offset[(index + 1) % offset.length]]);
                 });
             });
         });
-        return closedPaths.concat(
-            mergeCollinear(openSegments).map(segment => ({ points: segment, closed: false }))
-        );
+        const merged = mergeCollinear(segments);
+        const length = items => items.reduce((total, [start, end]) => (
+            total + Math.hypot(end[0] - start[0], end[1] - start[1])
+        ), 0);
+        // Match Python: preserve closed rings unless centers actually overlap.
+        if (length(segments) - length(merged) > COLLINEAR_TOLERANCE_MM) {
+            return merged.map(segment => ({ points: segment, closed: false }));
+        }
+        return closedPaths;
     }
 
     function mergeCollinear(segments) {
@@ -1040,15 +1020,9 @@
                     piece
                 );
             });
-            const physicalBoard = {
-                minX: offsetX,
-                minY: offsetY,
-                maxX: offsetX + fullWidth,
-                maxY: offsetY + fullHeight,
-            };
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
             if (includeSawCenters) {
-                cutterCenterPaths(shapes, num(cutterMm) / 2, physicalBoard).forEach(path => {
+                cutterCenterPaths(shapes, num(cutterMm) / 2).forEach(path => {
                     entities += path.closed
                         ? lwpolyline(SAW_CENTER_LAYER, path.points, true)
                         : line(
@@ -1115,33 +1089,14 @@
         }
     }
 
-    function preferOriginalUpload(options) {
-        // Server workspace contract is authoritative. Missing flag keeps the
-        // historical "download attached bytes" path for older payloads.
-        if (options && Object.prototype.hasOwnProperty.call(options, "preferOriginalUpload")) {
-            return options.preferOriginalUpload !== false;
-        }
-        if (options && options.originalIsManufacturingReady === false) {
-            return false;
-        }
-        return true;
-    }
-
     function shouldDownloadOriginalUpload(planSource, options) {
         const normalized = String(planSource || "").trim().toLowerCase();
-        if (ORIGINAL_UPLOAD_SOURCES.has(normalized)) {
-            // After delivery the Uploaded tab retrieves the original archive.
-            // During production the existing CNC-ready rule remains unchanged.
-            if (String((options && options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered") {
-                return true;
-            }
-            return preferOriginalUpload(options);
-        }
-        if (normalized === "approved") {
-            if (!(options && options.hasOriginalFile)) return false;
-            return preferOriginalUpload(options);
-        }
-        return false;
+        // Only explicit archive downloads bypass manufacturing validation.
+        // Current plans always use the fresh server response, never workspace flags.
+        return ORIGINAL_UPLOAD_SOURCES.has(normalized) && Boolean(
+            options && (options.archiveOnly === true
+                || String((options.frm && options.frm.doc && options.frm.doc.status) || "").trim() === "Delivered")
+        );
     }
 
     function decodeBase64Bytes(value) {
@@ -1359,19 +1314,19 @@
             ? manufacturingSourceForm(options.frm, JSON.stringify(sourceDoc))
             : null;
         if (planSource) args.plan_source = planSource;
-        if (shouldDownloadOriginalUpload(planSource, options)) {
-            return fetchOriginalUploadedDxf(args).then(r => {
-                try {
-                    downloadOriginalUpload(r && r.message);
-                } catch (error) {
-                    console.error("Uploaded DXF download failed", error);
-                    frappe.throw(__("Could not download the uploaded DXF file."));
-                }
-            });
-        }
-        return fetchValidatedPlan(args).then(r =>
-            downloadValidatedPlan(r.message, orderName, sourceForm)
-        );
+        const downloadOriginal = () => fetchOriginalUploadedDxf(args).then(r => {
+            try {
+                downloadOriginalUpload(r && r.message);
+            } catch (error) {
+                console.error("Uploaded DXF download failed", error);
+                frappe.throw(__("Could not download the uploaded DXF file."));
+            }
+        });
+        if (shouldDownloadOriginalUpload(planSource, options)) return downloadOriginal();
+        return fetchValidatedPlan(args).then(r => {
+            if (r.message && r.message.prefer_original_upload === true) return downloadOriginal();
+            return downloadValidatedPlan(r.message, orderName, sourceForm);
+        });
     }
 
     frappe.provide("frappe.almdina");

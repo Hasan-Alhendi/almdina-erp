@@ -41,10 +41,14 @@
         const orderName = frm.doc.name;
         const replacing = Boolean(frm.doc.production_dxf);
         const context = window.AlmdinaDocumentContext;
-        const owner = context && typeof context.capture === "function" ? context.capture(frm) : null;
-        const ownsUpload = () => context
-            ? Boolean(owner && typeof context.isCurrent === "function" && context.isCurrent(frm, owner))
-            : Boolean(frm.doc && frm.doc.name === orderName);
+        const frontend = window.AlmdinaFrontend;
+        if (!context || typeof context.capture !== "function" || typeof context.isCurrent !== "function"
+            || !frontend || typeof frontend.ownedRpc !== "function" || typeof ui.errorDialog !== "function") {
+            frappe.msgprint(translate("The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page."));
+            return null;
+        }
+        const owner = context.capture(frm);
+        const ownsUpload = () => Boolean(owner && context.isCurrent(frm, owner));
 
         // Security contract: create a brand-new private File without a document
         // attachment. The server owns authorization, geometry validation, and the
@@ -56,14 +60,15 @@
                 max_file_size: 10 * 1024 * 1024,
             },
             on_success(file) {
-                return frappe.call({
-                    method: UPLOAD_METHOD,
-                    args: {
+                if (!ownsUpload()) return null;
+                return frontend.ownedRpc(UPLOAD_METHOD, {
                         order_name: orderName,
                         file_url: file.file_url,
-                    },
+                        file_id: file.name,
+                    }, {
                     freeze: true,
-                    freeze_message: translate("Validating the DXF file and applying the plan..."),
+                    freezeMessage: translate("Validating the DXF file and applying the plan..."),
+                    fallback: translate("The DXF file could not be accepted"),
                 }).then(() => {
                     if (!ownsUpload()) return null;
                     frappe.show_alert({
@@ -74,6 +79,18 @@
                     }, 5);
                     activateUploadedPlan(frm);
                     return frm.reload_doc();
+                }, error => {
+                    if (!ownsUpload()) return null;
+                    const dialog = ui.errorDialog(error, {
+                        isCurrent: ownsUpload,
+                        outcomeMessages: {
+                            rejected: translate("The current DXF cutting plan was not replaced."),
+                        },
+                    });
+                    if (dialog && context && typeof context.registerCleanup === "function") {
+                        context.registerCleanup(frm, "dxf-upload-error", () => dialog.hide());
+                    }
+                    return null;
                 });
             },
         });

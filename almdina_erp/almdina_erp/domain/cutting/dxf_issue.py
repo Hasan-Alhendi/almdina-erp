@@ -171,6 +171,7 @@ class DxfIssueTarget:
     sheet_no: int | None = None
     pair_piece_nos: tuple[int | str, int | str] | None = None
     pair_contour_nos: tuple[int | str, int | str] | None = None
+    pair_copy_nos: tuple[int | None, int | None] | None = None
     layer: str | None = None
     label: str | None = None
     piece_index: int | None = None
@@ -242,10 +243,12 @@ def pair_target(
     second: int | str,
     *,
     sheet_no: int | None = None,
+    copy_nos: tuple[int | None, int | None] | None = None,
 ) -> DxfIssueTarget:
     return DxfIssueTarget(
         kind=TARGET_PIECE_PAIR,
         pair_piece_nos=(first, second),
+        pair_copy_nos=copy_nos,
         sheet_no=sheet_no,
     )
 
@@ -316,6 +319,9 @@ def topology_error_to_issue(
     copy_no: int | None = None,
     pair_identity_proven: bool = False,
     pair_source_piece_nos: tuple[int | str, int | str] | None = None,
+    pair_copy_nos: tuple[int | None, int | None] | None = None,
+    sheet_no: int | None = None,
+    geometry_unit_mm: float | None = None,
     debug: Mapping[str, Any] | None = None,
 ) -> DxfValidationIssue:
     """Map a domain ``DxfTopologyError`` to a structured issue."""
@@ -324,6 +330,14 @@ def topology_error_to_issue(
     second = getattr(error, "second_key", None)
     expected_index = getattr(error, "expected_piece_index", None)
     params: dict[str, Any] = {"kerf_mm": kerf_mm}
+    if geometry_unit_mm is not None and getattr(error, "actual_clearance", None) is not None:
+        params["actual_clearance_mm"] = error.actual_clearance * geometry_unit_mm
+    pair = (first if first is not None else "؟", second if second is not None else "؟")
+    pair_location = (
+        pair_target(*pair_source_piece_nos, sheet_no=sheet_no, copy_nos=pair_copy_nos)
+        if pair_identity_proven and pair_source_piece_nos
+        else contour_pair_target(*pair, sheet_no=sheet_no)
+    )
     if details:
         params["details"] = details
     if getattr(error, "actual_width", None) is not None:
@@ -397,7 +411,7 @@ def topology_error_to_issue(
         return issue(
             MATERIAL_OVERLAP,
             CATEGORY_LAYOUT,
-            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
+            target=pair_location,
             params=params,
             debug=debug,
         )
@@ -406,7 +420,7 @@ def topology_error_to_issue(
         return issue(
             HOLE_CLEARANCE_VIOLATION,
             CATEGORY_LAYOUT,
-            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
+            target=pair_location,
             params=params,
             debug=debug,
         )
@@ -415,7 +429,7 @@ def topology_error_to_issue(
         return issue(
             KERF_VIOLATION,
             CATEGORY_LAYOUT,
-            target=(pair_target(*pair_source_piece_nos) if pair_identity_proven and pair_source_piece_nos else DxfIssueTarget(kind=TARGET_ORDER) if pair_identity_proven else contour_pair_target(*pair)),
+            target=pair_location,
             params=params,
             debug=debug,
         )

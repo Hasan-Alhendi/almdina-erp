@@ -352,7 +352,7 @@
                 return applyPreview(data || {});
             }).catch(error => {
                 if (isActive() && store.requests.preview.isCurrent(token)) {
-                    frappe.show_alert({ message: errorMessage(error, translate("Could not calculate permission impact.")), indicator: "red" });
+                    frappe.show_alert({ message: frappe.utils.escape_html(errorMessage(error, translate("Could not calculate permission impact."))), indicator: "red" });
                 }
                 return null;
             });
@@ -492,7 +492,7 @@
                     return true;
                 } catch (error) {
                     if (isCurrentGeneration(generation)) {
-                        frappe.show_alert({ message: errorMessage(error, translate("Could not save permissions.")), indicator: "red" }, 7);
+                        frappe.show_alert({ message: frappe.utils.escape_html(errorMessage(error, translate("Could not save permissions."))), indicator: "red" }, 7);
                     }
                     return false;
                 } finally {
@@ -529,7 +529,7 @@
         function showError(error, fallback) {
             const message = errorMessage(error, fallback);
             showEmpty(message);
-            frappe.show_alert({ message, indicator: "red" }, 7);
+            frappe.show_alert({ message: frappe.utils.escape_html(message), indicator: "red" }, 7);
         }
     }
 

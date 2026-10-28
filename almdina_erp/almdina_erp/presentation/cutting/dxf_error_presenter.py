@@ -7,7 +7,7 @@ Does not re-run validation or invent manufacturing decisions.
 from __future__ import annotations
 
 import html
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping, Sequence
 
 from frappe import _
@@ -45,6 +45,7 @@ class PresentedDxfError:
     details: tuple[str, ...] = ()
     highlight: str = ""
     detail_table: tuple[tuple[str, ...], ...] = ()
+    preview: Mapping[str, Any] | None = None
 
 
 def format_cm(value: Any) -> str:
@@ -94,9 +95,22 @@ def present_target(target: DxfIssueTarget, *, params: dict[str, Any] | None = No
         return f"اللوح {target.sheet_no}."
     if kind == codes.TARGET_PIECE_PAIR and target.pair_piece_nos:
         first, second = target.pair_piece_nos
+        if target.pair_copy_nos:
+            first_copy, second_copy = target.pair_copy_nos
+            label = _("Door {0}, copy {1}; door {2}, copy {3}.").format(
+                first, first_copy if first_copy is not None else "؟",
+                second, second_copy if second_copy is not None else "؟",
+            )
+            if target.sheet_no is not None:
+                return _("Board {0}: {1}").format(target.sheet_no, label)
+            return label
+        if target.sheet_no is not None:
+            return _("Board {0}: doors {1} and {2}.").format(target.sheet_no, first, second)
         return f"الدرفتان {first} و{second}."
     if kind == codes.TARGET_CONTOUR_PAIR and target.pair_contour_nos:
         first, second = target.pair_contour_nos
+        if target.sheet_no is not None:
+            return _("Board {0}: cut paths {1} and {2}. Door identity has not been established.").format(target.sheet_no, first, second)
         return f"مسارا القص {first} و{second}."
     if kind == codes.TARGET_LAYER and target.layer:
         return f"الطبقة {target.layer}."
@@ -1115,6 +1129,16 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
     if code == codes.KERF_VIOLATION:
         kerf = format_mm(params.get("kerf_mm") or 0)
         pair_subject, pair_object = _pair_nouns(issue)
+        measurement = params.get("actual_clearance_mm")
+        if measurement is not None:
+            return PresentedDxfError(
+                _("The clearance is {0} mm; at least {1} mm is required.").format(
+                    format_mm(measurement), kerf,
+                ),
+                target_text,
+                _("Move the affected pieces apart, then validate the DXF again."),
+                code, issue.category,
+            )
         guest_label = str(params.get("glass_frame_guest_label") or "").strip()
         host_label = str(params.get("glass_frame_host_label") or "").strip()
         if guest_label and host_label:
@@ -1663,7 +1687,12 @@ def present_group(group: Sequence[DxfValidationIssue]) -> PresentedDxfError:
 
 
 def present_issues(issues: Iterable[DxfValidationIssue]) -> list[PresentedDxfError]:
-    return [present_group(group) for group in group_issues(list(issues))]
+    from almdina_erp.almdina_erp.domain.cutting.layout_diagnostics import public_layout_preview
+
+    return [
+        replace(present_group(group), preview=public_layout_preview(group[0].param("layout_preview")))
+        for group in group_issues(list(issues))
+    ]
 
 
 def present_issues_as_strings(issues: Iterable[DxfValidationIssue]) -> list[str]:
@@ -1674,6 +1703,22 @@ def present_issues_as_strings(issues: Iterable[DxfValidationIssue]) -> list[str]
             f"ما المشكلة؟ {item.problem} أين المشكلة؟ {item.target} ماذا أفعل؟ {item.action}"
         )
     return lines
+
+
+def public_dxf_issues(issues: Iterable[DxfValidationIssue], *, context: str = "upload") -> list[dict]:
+    """Explicit public projection; raw params/debug never leave the server."""
+    return [
+        {
+            "code": item.code, "category": item.category,
+            "problem": item.problem, "target": item.target,
+            "action": _action_for_context(item.action, context),
+            "details": list(item.details),
+            "highlight": item.highlight,
+            "table": [list(row) for row in item.detail_table],
+            "preview": item.preview,
+        }
+        for item in present_issues(issues)
+    ]
 
 
 def render_error_cards_html(
@@ -1725,6 +1770,8 @@ def render_error_cards_html(
         )
 
     def render_card(item: PresentedDxfError) -> str:
+        from almdina_erp.almdina_erp.presentation.cutting.dxf_layout_preview import render_layout_preview
+
         details = ""
         if item.code not in _GLASS_CODES and (item.details or item.detail_table):
             summary = (
@@ -1754,6 +1801,7 @@ def render_error_cards_html(
             f"<div style='margin-top:6px;'><strong>أين المشكلة؟</strong> {html.escape(item.target)}</div>"
             f"<div style='margin-top:6px;'><strong>ماذا أفعل؟</strong> {html.escape(_action_for_context(item.action, context))}</div>"
             f"{details}"
+            f"{render_layout_preview(item.preview)}"
             "</div>"
         )
 

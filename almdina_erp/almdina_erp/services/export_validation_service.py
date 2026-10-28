@@ -216,6 +216,13 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
     pieces_by_sheet: dict[int, list[Any]] = {}
     seen_labels: set[str] = set()
     snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import resolved_sheet_trim_cm
+
+    persisted_sheets = {
+        int(sheet.get("sheet_no") or 0): sheet
+        for sheet in (snapshot.get("sheets") or [])
+        if isinstance(sheet, dict)
+    }
 
     try:
         topology_aware = validate_snapshot_material_layout(
@@ -260,7 +267,42 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
         usable_w, usable_h = flt(source.usable_width_mm), flt(source.usable_length_mm)
         if width <= 0 or height <= 0:
             issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"actual_width_mm": width, "actual_height_mm": height}))
-        if x < -1e-7 or y < -1e-7 or x + width > usable_w + 1e-7 or y + height > usable_h + 1e-7:
+        resource_kind = str(getattr(source, "resource_kind", "FULL_BOARD") or "FULL_BOARD").upper()
+        if source.source_type == "Full Board" and resource_kind != "OFFCUT":
+            # Placed coordinates live in the applied-trim frame. Preferred trim
+            # is not a physical boundary: rebuild the same frame used by DXF
+            # export, including historical missing and explicit-zero trim.
+            stored = persisted_sheets.get(sheet_no) or {}
+            trim_source = {
+                "source_type": source.source_type,
+                "full_width_cm": flt(source.full_width_mm) / 10,
+                "full_length_cm": flt(source.full_length_mm) / 10,
+                "usable_width_cm": usable_w / 10,
+                "usable_length_cm": usable_h / 10,
+                **{key: stored[key] for key in ("applied_trim_width_cm", "applied_trim_length_cm") if key in stored},
+            }
+            try:
+                physical_x = x + resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
+                physical_y = y + resolved_sheet_trim_cm(trim_source, snapshot, axis="y") * 10
+            except DxfGeometrySnapshotError as exc:
+                issues.append(issue(
+                    CUT_INVALID_GEOMETRY, CATEGORY_LAYOUT, target=sheet_target(sheet_no),
+                    debug={"exception": str(exc)},
+                ))
+                continue
+            out_of_sheet = (
+                physical_x < -1e-7 or physical_y < -1e-7
+                or physical_x + width > flt(source.full_width_mm) + 1e-7
+                or physical_y + height > flt(source.full_length_mm) + 1e-7
+            )
+        else:
+            # Preserve the existing Remnant/OFFCUT usable-frame contract.
+            out_of_sheet = (
+                x < -1e-7 or y < -1e-7
+                or x + width > usable_w + 1e-7
+                or y + height > usable_h + 1e-7
+            )
+        if out_of_sheet:
             issues.append(issue(PIECE_OUTSIDE_SHEET, CATEGORY_LAYOUT, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"sheet_no": sheet_no}))
 
     if not topology_aware:

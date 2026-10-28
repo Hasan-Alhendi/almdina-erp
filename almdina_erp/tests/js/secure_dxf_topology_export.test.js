@@ -16,6 +16,7 @@ const nestedGlassRegressionSnapshot = JSON.parse(fs.readFileSync(
 
 let nextPlan = null;
 let originalUpload = null;
+let preferOriginalUpload = false;
 let lastCallMethod = "";
 let downloadedDxf = "";
 let downloadedName = "";
@@ -125,6 +126,7 @@ const fakeFrappe = {
         return Promise.resolve({
             message: {
                 plan: nextPlan,
+                prefer_original_upload: preferOriginalUpload,
                 include_saw_centers: explicit === null ? source === "approved" : explicit,
             },
         });
@@ -239,6 +241,18 @@ function cutPathEntityCount(dxf) {
 }
 
 async function run() {
+    // Python supplies synthetic cases for independent DXF parity/round-trip checks.
+    if (process.env.PERIMETER_CASES) {
+        const cases = JSON.parse(fs.readFileSync(process.env.PERIMETER_CASES, "utf8"));
+        for (const [index, plan] of cases.entries()) {
+            nextPlan = plan;
+            const before = JSON.stringify(nextPlan);
+            downloadedDxf = "";
+            await fakeFrappe.almdina.export_order_dxf("PERIMETER-" + index, "approved");
+            assert.equal(JSON.stringify(nextPlan), before);
+            fs.writeFileSync(path.join(process.env.PERIMETER_OUTPUT_DIR, index + ".dxf"), downloadedDxf);
+        }
+    }
     nextPlan = {
         full_board_width_cm: 100,
         full_board_length_cm: 100,
@@ -593,6 +607,7 @@ async function run() {
     assert.equal(downloadedDxf, "");
 
     const originalDxf = "0\nSECTION\n8\nalong\n8\nCUT_PATH\n0\nEOF\n";
+    preferOriginalUpload = true;
     originalUpload = {
         filename: "cutting_plan_DCO-2026-00018_corrected.dxf",
         content_b64: Buffer.from(originalDxf, "utf8").toString("base64"),
@@ -614,6 +629,7 @@ async function run() {
     assert.match(lastCallMethod, /download_uploaded_dxf/);
     assert.equal(downloadedDxf, originalDxf);
 
+    preferOriginalUpload = false;
     downloadedDxf = "";
     lastCallMethod = "";
     nextPlan = {
@@ -689,8 +705,9 @@ async function run() {
     assert.match(downloadedDxf, /2\r\nRear Groove\r\n/);
     assert.equal((downloadedDxf.match(/8\r\nLiner\r\n/g) || []).length, 4);
     assert.equal((downloadedDxf.match(/8\r\nRear Groove\r\n/g) || []).length, 1);
-    // The door is flush to the board on the left and the top, so those edges are not cuts.
-    assert.equal(cutPathEntityCount(downloadedDxf), 2);
+    // Flush board edges remain part of the complete closed cutter contour.
+    assert.equal(cutPathEntityCount(downloadedDxf), 1);
+    assert.equal(layerEdges(downloadedDxf, "CUT_PATH").length, 4);
     assert.match(downloadedDxf, /2\r\nTEXT\r\n/);
     assert.match(downloadedDxf, /2\r\nGEOMETRY\r\n/);
     assert.match(downloadedDxf, /0\r\nTEXT\r\n/);
@@ -1024,8 +1041,8 @@ async function run() {
     assert.ok(finishedLines.some(edge => edge.x1 === 10 && edge.x2 === 210));
     assert.ok(finishedLines.some(edge => edge.x1 === 215 && edge.x2 === 515));
     const shared = sawLines.filter(edge => Math.abs(edge.x1 - 212.5) < 0.02 && Math.abs(edge.x2 - 212.5) < 0.02);
-    // Multi Offset keeps the coincident side in each door's closed contour.
-    assert.equal(shared.length, 2);
+    // Shared physical centers are exported only once.
+    assert.equal(shared.length, 1);
     assert.ok(Math.abs(Math.min(shared[0].y1, shared[0].y2) - 1927.5) < 0.02);
     assert.ok(Math.abs(Math.max(shared[0].y1, shared[0].y2) - 2432.5) < 0.02);
     const trimCenters = sawLines.filter(edge => Math.abs(edge.x1 - 7.5) < 0.02 && Math.abs(edge.x2 - 7.5) < 0.02);
@@ -1086,8 +1103,9 @@ async function run() {
     assert.equal(Math.round(Math.max(...boardEdgeXs) * 10) / 10, 1222.5);
     assert.equal(constantAxisRuns(polylinePoints(downloadedDxf, "Liner"), 0, 10), 2);
     const shortDoorCuts = layerEdges(downloadedDxf, "CUT_PATH");
-    assert.equal(shortDoorCuts.length, 1);
-    assert.ok(shortDoorCuts.every(edge => Math.abs(edge.y1 - 1937.5) < 0.02 && Math.abs(edge.y2 - 1937.5) < 0.02));
+    assert.equal(shortDoorCuts.length, 4);
+    assert.ok(shortDoorCuts.some(edge => Math.abs(edge.y1 - 1937.5) < 0.02 && Math.abs(edge.y2 - 1937.5) < 0.02));
+    assert.ok(shortDoorCuts.some(edge => edge.x1 === -2.5 && edge.x2 === -2.5));
 
     nextPlan = linerEndPlan([linerDoor({
         w: 122,
@@ -1097,7 +1115,7 @@ async function run() {
     })]);
     downloadedDxf = "";
     await fakeFrappe.almdina.export_order_dxf("26-FULL-BOARD", "approved");
-    assert.equal(layerEdges(downloadedDxf, "CUT_PATH").length, 0);
+    assert.equal(layerEdges(downloadedDxf, "CUT_PATH").length, 4);
     assert.ok(layerLines(downloadedDxf, "GEOMETRY").some(edge => (
         Math.abs(edge.x1) < 0.02 && Math.abs(edge.x2 - 1220) < 0.02
         && Math.abs(edge.y1) < 0.02 && Math.abs(edge.y2) < 0.02
@@ -1161,10 +1179,10 @@ async function run() {
         Math.abs(edge.y1 - value) < 0.02 && Math.abs(edge.y2 - value) < 0.02
     ));
     assert.equal(onVertical(2.5).length, 1);
-    assert.equal(onVertical(407.5).length, 2);
-    assert.equal(onVertical(812.5).length, 2);
+    assert.equal(onVertical(407.5).length, 1);
+    assert.equal(onVertical(812.5).length, 1);
     assert.equal(onVertical(1217.5).length, 1);
-    assert.equal(onHorizontal(2.5).length, 3);
+    assert.equal(onHorizontal(2.5).length, 1);
     assert.equal(onVertical(0).length, 0);
     assert.equal(onVertical(1220).length, 0);
     assert.equal(onHorizontal(0).length, 0);
@@ -1202,10 +1220,10 @@ async function run() {
         Math.abs(edge.y1 - value) < 0.02 && Math.abs(edge.y2 - value) < 0.02
     ));
     assert.equal(kerf3Vertical(3.5).length, 1);
-    assert.equal(kerf3Vertical(406.5).length, 2);
-    assert.equal(kerf3Vertical(809.5).length, 2);
+    assert.equal(kerf3Vertical(406.5).length, 1);
+    assert.equal(kerf3Vertical(809.5).length, 1);
     assert.equal(kerf3Vertical(1212.5).length, 1);
-    assert.equal(kerf3Horizontal(3.5).length, 3);
+    assert.equal(kerf3Horizontal(3.5).length, 1);
     assert.equal(kerf3Vertical(0).length, 0);
     assert.equal(kerf3Vertical(1220).length, 0);
     const kerf3Geometry = layerLines(downloadedDxf, "GEOMETRY");
@@ -1229,7 +1247,7 @@ async function run() {
     assert.equal(Math.round(Math.max(...flushXs) * 10) / 10, 402.5);
     assert.equal(layerEdges(downloadedDxf, "CUT_PATH").some(edge => (
         Math.abs(edge.x1 + 2.5) < 0.02 && Math.abs(edge.x2 + 2.5) < 0.02
-    )), false);
+    )), true);
 
     nextPlan = linerEndPlan([
         linerDoor({ id: 1, label: "1.1", w: 40, width_cm: 40 }),
@@ -1510,6 +1528,7 @@ async function run() {
     assert.ok(cutPathEntityCount(downloadedDxf) > 0);
 
     // Custom tab before approval: keep the original designer file.
+    preferOriginalUpload = true;
     downloadedDxf = "";
     lastCallMethod = "";
     await fakeFrappe.almdina.export_order_dxf("DCO-CUSTOM-DRAFT", "custom", {
@@ -1521,6 +1540,7 @@ async function run() {
 
     // Custom tab after the same upload was approved without saw centers:
     // regenerate manufacturing DXF instead of shipping the design file.
+    preferOriginalUpload = false;
     nextPlan.include_saw_centers = true;
     downloadedDxf = "";
     lastCallMethod = "";
@@ -1539,6 +1559,7 @@ async function run() {
     assert.equal(cutPathEntityCount(downloadedDxf), customApprovedSaw);
 
     // Custom tab when a different plan is approved: still the uploaded original.
+    preferOriginalUpload = true;
     delete nextPlan.include_saw_centers;
     downloadedDxf = "";
     lastCallMethod = "";

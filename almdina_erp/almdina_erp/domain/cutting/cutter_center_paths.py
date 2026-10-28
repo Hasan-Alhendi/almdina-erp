@@ -39,21 +39,18 @@ def cutter_center_paths(
     tolerance: float = COLLINEAR_TOLERANCE_MM,
     board: Sequence[float] | None = None,
 ) -> list[CutterCenterPath]:
-    """Return independent closed offsets, with a safe board-edge fallback.
+    """Offset every finished edge toward waste, including physical board edges.
 
-    A ring wholly inside the physical board is exported as one closed path,
-    matching AutoCAD Multi Offset. A ring that uses a physical board edge
-    keeps the established contract that this raw edge is not cut; its remaining
-    centers are emitted as open, deduplicated segments instead.
+    ``board`` is retained for caller compatibility; it never clips cutter
+    centers. Independent rings remain closed. Shared centers use the existing
+    merged segment network so the same physical cut is exported only once.
+    Material bounds and machine travel/clamp safety are separate validations.
     """
 
     radius = max(0.0, float(radius_mm or 0.0))
     prepared = _prepare_shapes(shapes)
-    if not prepared:
-        return []
-
-    closed_paths: list[CutterCenterPath] = []
-    open_segments: list[Segment] = []
+    paths: list[CutterCenterPath] = []
+    segments: list[Segment] = []
     for outer, holes in prepared:
         for ring in [outer, *[hole for hole in holes if len(hole) >= 3]]:
             offset = (
@@ -63,32 +60,17 @@ def cutter_center_paths(
             )
             if len(offset) < 3:
                 continue
-            board_edges = {
-                index
-                for index, start in enumerate(ring)
-                if board is not None
-                and _edge_on_board(
-                    start,
-                    ring[(index + 1) % len(ring)],
-                    board,
-                    tolerance,
-                )
-            }
-            if not board_edges:
-                closed_paths.append(CutterCenterPath(tuple(offset), True))
-                continue
-            for index, start in enumerate(offset):
-                if index in board_edges:
-                    continue
-                end = offset[(index + 1) % len(offset)]
-                if math.dist(start, end) > tolerance:
-                    open_segments.append((start, end))
+            paths.append(CutterCenterPath(tuple(offset), True))
+            segments.extend(zip(offset, [*offset[1:], offset[0]]))
 
-    open_paths = [
-        CutterCenterPath((start, end), False)
-        for start, end in _merge_collinear(open_segments, tolerance)
-    ]
-    return [*closed_paths, *open_paths]
+    merged = _merge_collinear(segments, tolerance)
+    # Only overlapping centers reduce total length. Touching collinear sides
+    # alone must not discard independent closed contours.
+    if sum(math.dist(*segment) for segment in segments) - sum(
+        math.dist(*segment) for segment in merged
+    ) > tolerance:
+        return [CutterCenterPath((start, end), False) for start, end in merged]
+    return paths
 
 
 def cutter_center_segments(
@@ -126,22 +108,6 @@ def _prepare_shapes(
         for outer, holes in shapes
     ]
     return [(outer, holes) for outer, holes in prepared if len(outer) >= 3]
-
-
-def _edge_on_board(
-    start: Point,
-    end: Point,
-    board: Sequence[float],
-    tolerance: float,
-) -> bool:
-    """True when both endpoints lie on the same side of the physical board."""
-
-    min_x, min_y, max_x, max_y = (float(value) for value in board)
-    sides = ((0, min_x), (0, max_x), (1, min_y), (1, max_y))
-    return any(
-        abs(start[axis] - value) <= tolerance and abs(end[axis] - value) <= tolerance
-        for axis, value in sides
-    )
 
 
 def _open_ring(points: Sequence[Point]) -> list[Point]:

@@ -101,7 +101,7 @@
                 }).catch(error => {
                     if (!isActive() || !requests.isCurrent(token)) return;
                     frappe.show_alert({
-                        message: errorMessage(error, t("Could not fetch the QR code.")),
+                        message: frappe.utils.escape_html(errorMessage(error, t("Could not fetch the QR code."))),
                         indicator: "red",
                     }, 7);
                 });
@@ -135,7 +135,7 @@
                 return snapshot;
             }).catch(error => {
                 frappe.show_alert({
-                    message: errorMessage(error, t("Could not create WhatsApp session.")),
+                    message: frappe.utils.escape_html(errorMessage(error, t("Could not create WhatsApp session."))),
                     indicator: "red",
                 }, 7);
                 return null;
@@ -150,7 +150,7 @@
                 return snapshot;
             }).catch(error => {
                 frappe.show_alert({
-                    message: errorMessage(error, t("Could not reconnect WhatsApp.")),
+                    message: frappe.utils.escape_html(errorMessage(error, t("Could not reconnect WhatsApp."))),
                     indicator: "red",
                 }, 7);
                 return null;

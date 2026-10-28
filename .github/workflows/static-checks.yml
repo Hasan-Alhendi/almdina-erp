@@ -238,6 +238,8 @@ jobs:
             almdina_erp/tests/test_special_door_addon_dxf_matching.py \
             almdina_erp/tests/test_dxf_manufacturing_identity.py \
             almdina_erp/tests/test_dxf_original_upload_download.py \
+            almdina_erp/tests/test_deferred_saw_center_paths.py \
+            almdina_erp/tests/test_cutter_center_paths.py \
             almdina_erp/tests/test_corner_dxf_edge_binding.py \
             almdina_erp/tests/test_regular_machining_orientation.py \
             almdina_erp/tests/test_strict_regular_machining_rotation.py \
@@ -266,6 +268,8 @@ jobs:
 
       - name: Run active frontend browser simulations
         run: |
+          node almdina_erp/tests/js/error_diagnostics.test.js
+          python -m pytest -q almdina_erp/tests/test_error_diagnostics.py
           node almdina_erp/tests/js/frontend_foundation.test.js
           node almdina_erp/tests/js/almdina_locale.test.js
           node almdina_erp/tests/js/factory_workforce_languages.test.js
@@ -333,6 +337,8 @@ jobs:
           node almdina_erp/tests/js/door_cutting_order_addons_dialog.test.js
           node almdina_erp/tests/js/door_cutting_order_extra_addons_row_integration.test.js
           node almdina_erp/tests/js/secure_dxf_topology_export.test.js
+          node almdina_erp/tests/js/approved_dxf_download_routing.test.js
+          node almdina_erp/tests/js/dxf_download_after_delivery.test.js
           node almdina_erp/tests/test_shape_print.js
 
       - name: Run special-shape documentation regressions

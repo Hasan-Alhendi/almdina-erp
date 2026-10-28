@@ -9,7 +9,7 @@ app_include_css = [
     # Raw /assets paths are not content-fingerprinted by Frappe; bump when the
     # Light/Dark token boards or shared component/pattern paint contracts change.
     "/assets/almdina_erp/css/almdina_design_tokens.css?v=3",
-    "/assets/almdina_erp/css/almdina_components.css?v=2",
+    "/assets/almdina_erp/css/almdina_components.css?v=3",
     "/assets/almdina_erp/css/almdina_patterns.css",
     "/assets/almdina_erp/css/almdina_page_templates.css?v=1",
     "/assets/almdina_erp/css/almdina_desk_theme.css?v=2",
@@ -44,8 +44,8 @@ app_include_js = [
     # Desk app-name menu language item. Loads after locale; binds sidebar_setup.
     "/assets/almdina_erp/js/almdina_language_switcher.js",
     "/assets/almdina_erp/js/permission_context.js",
-    "/assets/almdina_erp/js/frontend_foundation.js",
-    "/assets/almdina_erp/js/almdina_ui.js",
+    "/assets/almdina_erp/js/frontend_foundation.js?v=2",
+    "/assets/almdina_erp/js/almdina_ui.js?v=2",
     "/assets/almdina_erp/js/notes/notes_panel.js",
     "/assets/almdina_erp/js/notes/notes_dco_list_integration.js?v=14",
     # Lightweight presentation policy only: it composes ListView formatters and
