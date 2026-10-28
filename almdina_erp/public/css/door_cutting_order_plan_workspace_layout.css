@@ -141,3 +141,64 @@ body.dco-plan-results-tab-active .dco-order-tab-layout .layout-main-section-wrap
     max-width: none !important;
     width: 100% !important;
 }
+
+/* Plan alternatives are transient System previews. Physical left placement is
+   intentional in both RTL and LTR; the canvas retains its own reading direction. */
+.dco-candidate-layout {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: var(--alm-space-3, 12px);
+    direction: ltr;
+    align-items: start;
+}
+.dco-candidate-gallery {
+    position: sticky;
+    top: var(--alm-space-3, 12px);
+    padding: var(--alm-space-3, 12px);
+    border: 1px solid var(--alm-border, var(--border-color));
+    border-radius: var(--alm-radius-lg, 12px);
+    background: var(--alm-surface, var(--card-bg));
+    min-width: 0;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+}
+.dco-candidate-gallery__body, .dco-candidate-gallery__cards,
+.dco-candidate-gallery__intro, .dco-candidate-card {
+    display: grid;
+    gap: var(--alm-space-2, 8px);
+}
+.dco-candidate-gallery__body { margin-top: var(--alm-space-3, 12px); }
+.dco-candidate-gallery__intro span, .dco-candidate-gallery__notice {
+    color: var(--alm-text-muted, var(--text-muted));
+    font-size: var(--alm-font-size-sm, 12px);
+    line-height: 1.7;
+}
+.dco-candidate-card {
+    text-align: start;
+    width: 100%;
+    padding: var(--alm-space-3, 12px);
+    border-radius: var(--alm-radius-md, 8px);
+    border: 1px solid var(--alm-border, var(--border-color));
+    color: var(--alm-text, var(--text-color));
+    background: var(--alm-surface, var(--card-bg));
+    cursor: pointer;
+    font: inherit;
+}
+.dco-candidate-card:hover, .dco-candidate-card.is-selected {
+    border-color: var(--alm-accent, #2563eb);
+    background: color-mix(in srgb, var(--alm-accent, #2563eb) 7%, var(--alm-surface, var(--card-bg)));
+}
+.dco-candidate-card:focus-visible { outline: 2px solid var(--alm-accent, #2563eb); outline-offset: 2px; }
+.dco-candidate-card:disabled { opacity: .65; cursor: wait; }
+.dco-candidate-card__heading { display: flex; justify-content: space-between; gap: var(--alm-space-2, 8px); }
+.dco-candidate-card__heading > span { font-size: var(--alm-font-size-xs, 11px); color: var(--alm-text-muted, var(--text-muted)); }
+.dco-candidate-card__valid { color: var(--alm-success, #15803d); font-size: var(--alm-font-size-sm, 12px); }
+.dco-candidate-canvas { min-width: 0; overflow: auto; }
+.dco-candidate-toggle, .dco-candidate-continue { width: 100%; white-space: normal; }
+.dco-candidate-layout.is-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+.dco-candidate-layout.is-collapsed .dco-candidate-gallery__body { display: none; }
+@media (max-width: 767px) {
+    .dco-candidate-layout, .dco-candidate-layout.is-collapsed { grid-template-columns: minmax(0, 1fr); }
+    .dco-candidate-gallery { position: static; max-height: none; }
+    .dco-candidate-gallery__cards { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+}

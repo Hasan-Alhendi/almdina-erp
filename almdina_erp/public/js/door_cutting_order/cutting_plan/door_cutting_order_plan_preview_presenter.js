@@ -457,7 +457,80 @@
         if (planUx && typeof planUx.refresh === "function") planUx.refresh(frm);
     }
 
+    function galleryMarkup(frm, canvas) {
+        const owner = window.AlmdinaPlanPreviewSession;
+        if (!owner?.isReady?.(frm)) return canvas;
+        const state = owner.snapshot(frm), payload = state.payload;
+        if (!payload?.candidates?.length) return canvas;
+        if (typeof frm.__almdinaCandidateGalleryCollapsed !== "boolean") {
+            frm.__almdinaCandidateGalleryCollapsed = Boolean(window.matchMedia?.("(max-width: 767px)").matches);
+        }
+        const collapsed = frm.__almdinaCandidateGalleryCollapsed;
+        const best = payload.candidates[0].summary;
+        function distinction(candidate) {
+            const boards = Number(candidate.summary?.totals?.required_boards || 0) - Number(best.totals?.required_boards || 0);
+            if (boards > 0) return translate("{0} additional boards", [boards]);
+            const difference = Number(best.quality?.largest_reusable_free_area_m2 || 0) - Number(candidate.summary?.quality?.largest_reusable_free_area_m2 || 0);
+            if (difference > .000001) return translate("{0} m² less reusable offcut", [difference.toFixed(3)]);
+            return translate("Alternative layout");
+        }
+        const cards = payload.candidates.map((candidate, index) => {
+            const totals = candidate.summary?.totals || {}, quality = candidate.summary?.quality || {};
+            const selected = candidate.candidate_id === payload.candidate_id;
+            return `<button type="button" class="dco-candidate-card${selected ? " is-selected" : ""}"
+                data-candidate-id="${escapeHtml(candidate.candidate_id)}" aria-pressed="${selected}" ${state.candidateBusy ? "disabled" : ""}>
+                <span class="dco-candidate-card__heading"><strong>${escapeHtml(translate("Plan {0}", [index + 1]))}</strong>
+                <span>${escapeHtml(index === 0 ? translate("Recommended") : distinction(candidate))}</span></span>
+                <span>${escapeHtml(translate("{0} boards", [Number(totals.required_boards || 0)]))}</span>
+                <span>${escapeHtml(translate("Reusable offcut: {0} m²", [Number(quality.largest_reusable_free_area_m2 || 0).toFixed(3)]))}</span>
+                <span class="dco-candidate-card__valid">${htmlMessage("Manufacturing checks passed")}</span>
+                </button>`;
+        }).join("");
+        const ui = window.AlmdinaUi;
+        const toggle = ui?.button?.({label: translate(collapsed ? "Plans" : "Collapse plan gallery"),
+            className: "dco-candidate-toggle", attrs: {"data-gallery-action": "toggle", "aria-expanded": !collapsed, "aria-label": translate(collapsed ? "Show plan gallery" : "Collapse plan gallery")}}) || "";
+        const more = ui?.button?.({label: translate("Continue search (+{0} seconds)", [payload.search_budget_sec]),
+            className: "dco-candidate-continue", disabled: state.candidateBusy || !payload.can_continue,
+            attrs: {"data-gallery-action": "continue"}}) || "";
+        return `<div class="almdina-ui dco-candidate-layout${collapsed ? " is-collapsed" : ""}">
+            <aside class="dco-candidate-gallery" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Plan alternatives"))}">
+                ${toggle}<div class="dco-candidate-gallery__body">
+                <div class="dco-candidate-gallery__intro"><strong>${htmlMessage("Plan alternatives")}</strong>
+                <span>${htmlMessage(payload.candidates.length === 1 ? "Only one manufacturing-valid plan was found." : "Choose a layout to preview. Nothing is saved until you press Save.")}</span></div>
+                <div class="dco-candidate-gallery__cards">${cards}</div>${more}
+                <span class="dco-candidate-gallery__notice">${htmlMessage(state.candidateBusy ? "Searching or loading a plan…" : "Search is limited to three batches per preview.")}</span>
+                </div></aside><div class="dco-candidate-canvas" dir="${escapeHtml(uiDirection())}">${canvas}</div></div>`;
+    }
+
+    function bindGallery(frm, wrapper) {
+        const root = wrapper?.[0] || wrapper;
+        if (!root?.querySelector) return;
+        const host = root.querySelector(".dco-candidate-gallery");
+        if (!host || host.__almdinaBound) return;
+        host.__almdinaBound = true;
+        host.addEventListener("click", async event => {
+            const control = event.target.closest?.("[data-candidate-id],[data-gallery-action]");
+            if (!control || control.disabled || window.cur_frm !== frm) return;
+            const owner = window.AlmdinaPlanPreviewSession;
+            try {
+                const action = control.getAttribute("data-gallery-action");
+                if (action === "toggle") {
+                    frm.__almdinaCandidateGalleryCollapsed = !frm.__almdinaCandidateGalleryCollapsed;
+                    window.AlmdinaPlanTabsUX?.renderDualTabs?.(frm);
+                } else if (action === "continue") {
+                    await owner.continueSearch(frm);
+                } else {
+                    await owner.selectCandidate(frm, control.getAttribute("data-candidate-id"));
+                }
+            } catch (error) {
+                frappe.msgprint(translate("Could not load the plan alternative. Create a new preview if it expired."));
+            }
+        });
+    }
+
     window.AlmdinaPlanPreviewPresenter = Object.freeze({
+        galleryMarkup,
+        bindGallery,
         renderActionMessage,
         renderPersistedEditingState,
         renderPreviewPlan,

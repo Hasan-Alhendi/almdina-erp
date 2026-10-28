@@ -3034,3 +3034,25 @@ An unexpected system error prevented completion. Contact support.,تعذر إك�
 Press “Edit” to try other settings. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
 Smart Search,بحث ذكي
 "Default geometry, cutting machine, and search limits.",إعدادات الأبعاد الافتراضية ومكنة القص وحدود البحث.
+The cutting plan preview expired. Create a new preview.,انتهت صلاحية معاينة خطة القص. أنشئ معاينة جديدة.
+Invalid cutting plan candidate.,الخطة البديلة المحددة غير صالحة.
+No manufacturing-valid cutting plan was found.,لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+The search batch limit was reached. Create a new preview.,وصلت إلى الحد المسموح لدفعات البحث. أنشئ معاينة جديدة.
+Plan {0},الخطة {0}
+{0} boards,{0} ألواح
+Reusable offcut: {0} m²,أكبر فضلة قابلة للاستعمال: {0} م²
+Manufacturing checks passed,اجتازت فحوص التصنيع
+Alternative layout,توزيع بديل
+Show plan gallery,إظهار معرض الخطط
+Collapse plan gallery,طي معرض الخطط
+Continue search (+{0} seconds),متابعة البحث (+{0} ثانية)
+Plan alternatives,بدائل خطة القص
+Only one manufacturing-valid plan was found.,توفرت خطة واحدة فقط تجتاز فحوص التصنيع.
+Choose a layout to preview. Nothing is saved until you press Save.,اختر توزيعًا لمعاينته. لا يُحفظ شيء حتى تضغط «حفظ».
+Searching or loading a plan…,جارٍ البحث أو تحميل الخطة…
+Search is limited to three batches per preview.,البحث محدود بثلاث دفعات لكل معاينة.
+Could not load the plan alternative. Create a new preview if it expired.,تعذر تحميل الخطة البديلة. أنشئ معاينة جديدة إذا انتهت صلاحيتها.
+Recommended,موصى بها
+Plans,الخطط
+{0} additional boards,{0} ألواح إضافية
+{0} m² less reusable offcut,فضلة قابلة للاستعمال أقل بمقدار {0} م²

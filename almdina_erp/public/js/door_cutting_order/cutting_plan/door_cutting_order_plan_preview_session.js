@@ -33,13 +33,48 @@
         ));
     }
 
+    function validPortfolio(payload) {
+        if (!payload.candidates && !payload.preview_version) return true;
+        const entries = payload.candidates;
+        return Array.isArray(entries) && entries.length > 0 && entries.length <= 5
+            && new Set(entries.map(c => c.candidate_id)).size === entries.length
+            && entries.every(c => c.candidate_id && c.manufacturing_status === "Validated"
+                && c.summary?.validation?.status === "Valid" && !c.summary.validation.needs_recalculation)
+            && entries.some(c => c.candidate_id === payload.candidate_id)
+            && payload.plan?.preview_candidate_id === payload.candidate_id;
+    }
+
+    function dropExpiry(state) {
+        if (state.expiryTimer != null && window.clearTimeout) window.clearTimeout(state.expiryTimer);
+        state.expiryTimer = null;
+    }
+
+    function armExpiry(frm, state) {
+        dropExpiry(state);
+        if (!state.expiresAt || !window.setTimeout) return;
+        const token = state.previewId;
+        state.expiryTimer = window.setTimeout(() => {
+            if (frm[STATE_KEY] !== state || state.previewId !== token || !ownsVisit(frm, state.documentToken)) return;
+            state.generation += 1;
+            state.status = "stale";
+            state.candidateBusy = false;
+            state.previewId = null;
+            state.payload = null;
+            state.error = "The cutting plan preview expired. Create a new preview.";
+            dispatch(frm);
+        }, Math.max(0, state.expiresAt - Date.now()));
+    }
+
     function exactCommitReceipt(result, state, orderName) {
         const payload = state.payload || {};
         return Boolean(result && typeof result === "object"
             && result.exact_preview_commit === true
             && result.committed_preview_id === state.previewId
+            && (!payload.candidate_id || result.committed_candidate_id === payload.candidate_id)
+            && (!payload.candidates?.find(c => c.candidate_id === payload.candidate_id)?.geometry_fingerprint
+                || result.candidate_geometry_fingerprint === payload.candidates.find(c => c.candidate_id === payload.candidate_id).geometry_fingerprint)
             && result.name === orderName
-            && result.cutting_plan === payload.source_plan_name
+            && (payload.is_first_system ? Boolean(result.cutting_plan) : result.cutting_plan === payload.source_plan_name)
             && Number.isInteger(Number(result.plan_revision))
             && Number(result.plan_revision) === Number(payload.source_plan_revision)
             && Number(result.plan_revision) > 0
@@ -67,7 +102,7 @@
             const row = data?.plans?.system_draft;
             const expected = state.payload;
             if (data?.order_name !== orderName || !row || !expected
-                || row.name !== expected.source_plan_name
+                || (!expected.is_first_system && row.name !== expected.source_plan_name)
                 || Number(row.revision) !== Number(expected.source_plan_revision)
                 || !expected.source_plan_modified
                 || !row.modified || String(row.modified) === String(expected.source_plan_modified)
@@ -97,6 +132,8 @@
             activeRequestGeneration: null,
             requestedSettings: null,
             identity: null,
+            candidateBusy: false,
+            expiresAt: null,
         };
     }
 
@@ -108,6 +145,7 @@
         if (state.identity && (context?.isSameDocument
             ? !context.isSameDocument(frm, state.documentToken || state.identity)
             : state.identity !== identity(frm))) {
+            dropExpiry(state);
             frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
         }
         return frm[STATE_KEY];
@@ -120,6 +158,7 @@
             previewId: state.previewId,
             payload: state.payload ? JSON.parse(JSON.stringify(state.payload)) : null,
             error: state.error,
+            candidateBusy: state.candidateBusy,
             requestedSettings: state.requestedSettings ? { ...state.requestedSettings } : null,
         });
     }
@@ -139,6 +178,10 @@
     function reset(frm) {
         if (!frm) return;
         const previous = stateFor(frm);
+        dropExpiry(previous);
+        if (previous.previewId && window.AlmdinaPlanWorkspaceAPI?.discardPreview) {
+            Promise.resolve(window.AlmdinaPlanWorkspaceAPI.discardPreview(frm.doc.name, previous.previewId)).catch(() => {});
+        }
         frm[STATE_KEY] = { ...emptyState(), generation: previous.generation + 1 };
         dispatch(frm);
     }
@@ -146,7 +189,9 @@
     function invalidate(frm) {
         const state = stateFor(frm);
         if (state.status === "idle" || state.status === "stale" || state.status === "saving") return false;
+        dropExpiry(state);
         state.generation += 1;
+        state.candidateBusy = false;
         state.activeRequestGeneration = null;
         state.requestedSettings = null;
         state.status = "stale";
@@ -159,7 +204,7 @@
 
     function isBusy(frm) {
         const status = stateFor(frm).status;
-        return status === "previewing" || status === "saving";
+        return status === "previewing" || status === "saving" || stateFor(frm).candidateBusy;
     }
 
     function isReady(frm) {
@@ -167,6 +212,7 @@
         return Boolean(
             state.status === "ready"
             && state.previewId
+            && (!state.expiresAt || Date.now() < state.expiresAt)
             && state.payload
             && state.payload.plan
             && state.identity === identity(frm)
@@ -179,6 +225,7 @@
         const validation = state.payload && state.payload.summary && state.payload.summary.validation;
         return Boolean(
             isReady(frm)
+            && !state.candidateBusy
             && validation
             && String(validation.status || "") === "Valid"
             && !validation.needs_recalculation
@@ -267,12 +314,14 @@
                 || Number(payload.source_plan_revision) < 1) {
                 throw new Error("Invalid cutting-plan preview response");
             }
-            if (!matchesSettings(payload, requested)) {
+            if (!matchesSettings(payload, requested) || !validPortfolio(payload)) {
                 throw new Error("Cutting-plan preview settings do not match the requested settings");
             }
             state.status = "ready";
             state.previewId = payload.preview_id;
             state.payload = payload;
+            state.expiresAt = payload.expires_in_sec == null ? null : Date.now() + Number(payload.expires_in_sec) * 1000;
+            armExpiry(frm, state);
             state.error = null;
             dispatch(frm);
             return true;
@@ -328,13 +377,14 @@
             return false;
         }
         try {
-            const result = await api.commitPreview(orderName, previewId);
+            const result = await api.commitPreview(orderName, previewId, state.payload?.candidate_id);
             if (!current()) return false;
             if (!exactCommitReceipt(result, state, orderName)) {
                 // A contradictory receipt is never promoted to a success by a
                 // later read. Only absent or lost replies need reconciliation.
                 return finishUncertain(result == null || result === false);
             }
+            dropExpiry(state);
             frm[STATE_KEY] = { ...emptyState(), generation: state.generation + 1 };
             dispatch(frm);
             return result;
@@ -350,8 +400,55 @@
         }
     }
 
+    async function candidateRequest(frm, candidateId, continueSearch = false) {
+        if (!isReady(frm) || isBusy(frm)) return false;
+        const state = stateFor(frm), api = window.AlmdinaPlanWorkspaceAPI;
+        if (!api) return false;
+        if (continueSearch && !state.payload.can_continue) return false;
+        if (!continueSearch && !state.payload.candidates?.some(c => c.candidate_id === candidateId)) return false;
+        const token = state.previewId, generation = ++state.generation;
+        state.candidateBusy = true;
+        dispatch(frm);
+        const current = () => frm[STATE_KEY] === state && state.generation === generation
+            && state.previewId === token && state.identity === identity(frm) && ownsVisit(frm, state.documentToken);
+        try {
+            const payload = continueSearch ? await api.continueSearch(frm.doc.name, token)
+                : await api.selectCandidate(frm.doc.name, token, candidateId);
+            if (!current()) return false;
+            if (!payload?.plan || payload.order_name !== frm.doc.name || !matchesSettings(payload, state.requestedSettings)
+                || (!continueSearch && (payload.preview_id !== token || payload.candidate_id !== candidateId))) {
+                throw new Error("Invalid cutting-plan candidate response");
+            }
+            if (continueSearch) {
+                if (!payload.preview_id || !validPortfolio(payload)) throw new Error("Invalid search response");
+                state.previewId = payload.preview_id;
+                state.payload = payload;
+                state.expiresAt = Date.now() + Number(payload.expires_in_sec || 0) * 1000;
+                armExpiry(frm, state);
+            } else {
+                state.payload = { ...state.payload, plan: payload.plan, summary: payload.summary, candidate_id: candidateId };
+            }
+            return true;
+        } catch (error) {
+            if (current()) {
+                state.status = "stale";
+                state.previewId = null;
+                state.payload = null;
+                state.error = String(error?.message || error);
+            }
+            throw error;
+        } finally {
+            if (frm[STATE_KEY] === state && state.generation === generation) {
+                state.candidateBusy = false;
+                dispatch(frm);
+            }
+        }
+    }
+
     window.AlmdinaPlanPreviewSession = Object.freeze({
         snapshot,
+        selectCandidate: (frm, id) => candidateRequest(frm, id),
+        continueSearch: frm => candidateRequest(frm, null, true),
         reset,
         invalidate,
         isBusy,

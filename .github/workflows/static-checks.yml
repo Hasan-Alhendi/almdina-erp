@@ -247,6 +247,7 @@ jobs:
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py \
             almdina_erp/tests/test_smart_cutting_search.py \
+            almdina_erp/tests/test_smart_plan_portfolio.py \
             almdina_erp/tests/test_smart_cutting_manufacturing.py \
             almdina_erp/tests/test_smart_cutting_lifecycle.py \
             almdina_erp/tests/test_almadina_136_cutting_catalog_contract.py \
@@ -296,6 +297,7 @@ jobs:
           node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
           node almdina_erp/tests/js/plan_edit_session_lifecycle.test.js
+          node almdina_erp/tests/js/plan_candidate_gallery.test.js
           node almdina_erp/tests/js/plan_preview_state_ownership.test.js
           node almdina_erp/tests/js/plan_preview_save_phase_lock.test.js
           node almdina_erp/tests/js/plan_cost_workspace_visual.test.js

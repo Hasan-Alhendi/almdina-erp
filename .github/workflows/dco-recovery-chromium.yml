@@ -39,6 +39,18 @@ jobs:
       - name: Certify error diagnostics and upload ownership in Chromium
         run: python -m pytest -q tests/browser/test_error_diagnostics_chromium.py
 
+      - name: Certify Smart plan gallery RTL and mobile selection in Chromium
+        run: python -m pytest -q tests/browser/test_smart_plan_gallery_chromium.py
+
+      - name: Upload Smart gallery desktop and mobile evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-gallery-chromium-evidence
+          path: ${{ runner.temp }}/smart-gallery-*.png
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Certify DCO recovery in Chromium
         if: github.event_name != 'workflow_dispatch' || (inputs.suite != 'native_quota' && inputs.suite != 'without_native_quota')
         run: python -m pytest -q -s tests/browser/test_dco_local_recovery_chromium.py

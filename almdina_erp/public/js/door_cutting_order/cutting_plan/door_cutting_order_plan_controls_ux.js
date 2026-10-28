@@ -346,15 +346,10 @@
 
         try {
             if (!hasSystemDraft(frm)) {
-                if (typeof transport.bootstrapPlan !== "function") return false;
-                await transport.bootstrapPlan(frm.doc.name, settings);
-                if (previews && typeof previews.reset === "function") previews.reset(frm);
-                await refreshWorkspaceOwners(frm);
-                frappe.show_alert({
-                    message: translate("The first cutting plan was created, saved, and the cost was updated."),
-                    indicator: "green",
-                }, 5);
-                return true;
+                const editor = window.AlmdinaPlanEditSessionUX;
+                if (!editor?.startEditing || !(await editor.startEditing(frm))) return false;
+                if (!previews?.preview) return false;
+                return Boolean(await previews.preview(frm, settings));
             }
 
             if (!previews || typeof previews.preview !== "function") return false;
