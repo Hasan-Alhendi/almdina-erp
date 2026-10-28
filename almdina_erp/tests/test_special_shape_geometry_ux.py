@@ -113,9 +113,9 @@ def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
     # The current renderer enriches the immutable piece with edge-type metadata
     # after double/liner specs, before resolving its exact manufacturing geometry.
     assert re.search(
-        r"const manufacturingPiece\\s*=\\s*pieceWithEdgeTypeSpec\\(\\s*"
-        r"frm,\\s*pieceWithDoubleSpec\\(frm,\\s*pieceWithLinerSpec\\(frm,\\s*piece\\)\\),\\s*"
-        r"\\);",
+        r"const manufacturingPiece\s*=\s*pieceWithEdgeTypeSpec\(\s*"
+        r"frm,\s*pieceWithDoubleSpec\(frm,\s*pieceWithLinerSpec\(frm,\s*piece\)\),\s*"
+        r"\);",
         plan_renderer,
     )
     assert "geometry.resolve(manufacturingPiece)" in plan_renderer
