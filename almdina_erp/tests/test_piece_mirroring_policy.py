@@ -14,6 +14,8 @@ from almdina_erp.tests.frappe_test_stub import install_if_unavailable
 
 install_if_unavailable()
 
+import frappe
+
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
@@ -114,7 +116,7 @@ class TestPieceMirroringPolicy(unittest.TestCase):
         self.assertEqual(0, chosen.allow_piece_mirroring)
 
         invalid = _order(allow_piece_mirroring="yes")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(frappe.ValidationError):
             FrappeOrderBoardInputAdapter(invalid, _BoardAccess()).load_snapshot()
 
     def test_doctype_is_one_unchecked_checkbox(self) -> None:
