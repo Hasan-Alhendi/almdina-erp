@@ -180,9 +180,24 @@ def test_final_selection_does_not_trade_boards_for_glass_guests():
     assert "glass_nesting_diagnostics" not in result
 
 
-def test_final_selection_checks_at_most_four_candidates_and_keeps_ties():
+def test_final_selection_reuses_proven_identical_layout_and_keeps_ties():
     pieces = _selection_pieces()
     plans = [_selection_plan(pieces, [2, 2, 2, 2], label=str(i)) for i in range(4)]
+    with patch.object(optimizer, "validate_plan", wraps=validate_plan) as validate:
+        result = _select_plans(pieces, *plans)
+    assert validate.call_count == 1
+    assert result["solver_status"] == "3"
+
+
+def test_final_selection_validates_all_four_distinct_tied_layouts():
+    pieces = _selection_pieces()
+    plans = [_selection_plan(pieces, [2, 2, 2, 2], label=str(i)) for i in range(4)]
+    # These translations preserve the board count, largest free rectangle,
+    # cut-line count/length and permissions, but each geometry is distinct.
+    for index, plan in enumerate(plans):
+        for sheet in plan["sheets"]:
+            for piece in sheet["pieces"]:
+                piece["x"] += 20 + index
     with patch.object(optimizer, "validate_plan", wraps=validate_plan) as validate:
         result = _select_plans(pieces, *plans)
     assert validate.call_count == 4

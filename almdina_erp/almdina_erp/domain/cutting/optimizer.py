@@ -1078,13 +1078,19 @@ def optimize_plan(
         # in boards, reusable offcut, or manufacturing complexity.
         if best is not None and _candidate_is_better(best, candidate):
             continue
-        if validate_plan(
+        # A no-op post-pass may change diagnostics but shares every input to
+        # both validators with the already proven best layout.
+        same_layout = best is not None and (
+            candidate.get("sheets") == best.get("sheets")
+            and candidate.get("unplaced") == best.get("unplaced")
+        )
+        if not same_layout and (validate_plan(
             candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
         ) or placement_permission_errors(
             candidate,
             pieces,
             mirroring_allowed=mirroring_allowed,
-        ):
+        )):
             continue
         best = candidate
     # Keep the original failure payload when no complete valid plan exists;
