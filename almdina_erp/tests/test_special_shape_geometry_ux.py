@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
@@ -109,7 +110,14 @@ def test_plan_and_current_dxf_paths_use_exact_special_polygon_when_available():
         assert "hasExactCutPath(piece)" in source
         assert "AlmdinaSpecialShapeGeometry" not in source
     assert "AlmdinaCuttingPlanPieceGeometry" in plan_renderer
-    assert "const manufacturingPiece = pieceWithDoubleSpec(frm, pieceWithLinerSpec(frm, piece));" in plan_renderer
+    # The current renderer enriches the immutable piece with edge-type metadata
+    # after double/liner specs, before resolving its exact manufacturing geometry.
+    assert re.search(
+        r"const manufacturingPiece\\s*=\\s*pieceWithEdgeTypeSpec\\(\\s*"
+        r"frm,\\s*pieceWithDoubleSpec\\(frm,\\s*pieceWithLinerSpec\\(frm,\\s*piece\\)\\),\\s*"
+        r"\\);",
+        plan_renderer,
+    )
     assert "geometry.resolve(manufacturingPiece)" in plan_renderer
     assert "const exactSpecial = piece.piece_type === \"Special\"" in plan_renderer
     assert "&& geometryModel.exact;" in plan_renderer
