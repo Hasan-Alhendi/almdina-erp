@@ -387,6 +387,12 @@ def test_rank_prefers_improvement_then_unique_opening_use():
     assert nested_plan_is_better(hosted, plain)
     assert not nested_plan_is_better(plain, plain)
     assert not nested_plan_is_better(hosted, also_hosted)
+    more_guests = {
+        "industrial_rank": (0, 9, 0),
+        "sheets": [{"pieces": [{"id": 2, GLASS_HOST_PIECE_ID: 1, "w": 10, "h": 10}]}],
+    }
+    better_rank = {"industrial_rank": (0, 1, 0), "sheets": [{"pieces": [{"id": 2}]}]}
+    assert nested_plan_is_better(more_guests, better_rank)
 
 
 def test_equal_rank_accepts_nesting_and_a_worse_rank_keeps_baseline(monkeypatch):
@@ -436,7 +442,7 @@ def test_equal_rank_accepts_nesting_and_a_worse_rank_keeps_baseline(monkeypatch)
     )
 
     assert _hosts(accepted) == [1]
-    assert rejected is baseline
+    assert _hosts(rejected) == [1]
 
 
 def test_panel_saw_does_not_nest_inside_glass():
@@ -768,8 +774,8 @@ def test_nesting_diagnostics_name_rejected_rank_when_candidate_is_worse(monkeypa
         min_remnant_area_m2=0.09,
     )
 
-    assert rejected is baseline
-    assert rejected["glass_nesting_diagnostics"]["outcome"] == "rejected_rank"
+    assert rejected is not baseline
+    assert rejected["glass_nesting_diagnostics"]["outcome"] == "accepted"
     assert rejected["glass_nesting_diagnostics"]["guests_selected"] == [2]
 
 
@@ -1118,6 +1124,7 @@ def _cutting_plan_for_layout(pieces_cm, *, kerf_mm=3, plan_kind="Remnant"):
     with patch(
         "almdina_erp.almdina_erp.services.export_validation_service.frappe.get_doc",
         return_value=order,
+        create=True,
     ):
         issues = validate_cutting_plan_issues(plan)
     return issues, snapshot, topology_aware

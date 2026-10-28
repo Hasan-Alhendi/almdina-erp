@@ -5,6 +5,11 @@ from typing import Any
 import frappe
 from frappe import _
 
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import (
+    PieceMirroringPolicyError,
+    normalize_allow_piece_mirroring,
+)
+
 from .document_access import FrappeOrderDocumentAccess
 
 
@@ -31,6 +36,12 @@ class FrappeOrderBoardInputAdapter:
         self.document.board_width_cm = width_cm
         self.document.full_board_length_mm = length_cm * 10
         self.document.full_board_width_mm = width_cm * 10
+        try:
+            self.document.allow_piece_mirroring = normalize_allow_piece_mirroring(
+                getattr(self.document, "allow_piece_mirroring", None)
+            )
+        except PieceMirroringPolicyError:
+            frappe.throw(_("Piece mirroring permission is invalid."))
 
 
 __all__ = ["FrappeOrderBoardInputAdapter"]

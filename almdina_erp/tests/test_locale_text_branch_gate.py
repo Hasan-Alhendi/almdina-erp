@@ -129,6 +129,7 @@ class TestActiveUiHasNoLanguageTextBranches(unittest.TestCase):
         paths = (
             PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_order_tab_layout_ux.js",
             PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_cutting_machine_ux.js",
+            PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_piece_mirroring_ux.js",
             PUBLIC_JS / "door_cutting_order" / "order_entry" / "door_cutting_order_whatsapp_delivery_ux.js",
             PUBLIC_JS / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_measurement_actions_ux.js",
             PUBLIC_JS / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_measurement_toolbar_ux.js",

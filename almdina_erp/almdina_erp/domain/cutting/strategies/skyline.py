@@ -42,6 +42,26 @@ def skyline_rect_fits(
     return {"x": x, "y": y}
 
 
+def _skyline_waste(
+    sheet: dict[str, Any],
+    index: int,
+    width: float,
+    y_pos: float,
+) -> float:
+    """Area between the skyline and the bottom of a candidate placement."""
+
+    waste = 0.0
+    remaining = width
+    current = index
+    while remaining > 1e-9 and current < len(sheet["skyline"]):
+        segment = sheet["skyline"][current]
+        used = min(segment["w"], remaining)
+        waste += max(0.0, y_pos - segment["y"]) * used
+        remaining -= segment["w"]
+        current += 1
+    return waste
+
+
 def skyline_find_position(
     sheet: dict[str, Any],
     piece: dict[str, Any],
@@ -59,8 +79,8 @@ def skyline_find_position(
             if not position:
                 continue
             if mode == "best_fit":
-                waste = position["y"] * sheet["w"]
-                score = position["y"] * 100000 + waste + position["x"]
+                waste = _skyline_waste(sheet, index, orientation["w"], position["y"])
+                score = waste * 1000000 + position["y"] * 1000 + position["x"]
             else:
                 score = position["y"] * 100000 + position["x"]
             if best is None or score < best["score"]:

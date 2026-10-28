@@ -385,6 +385,28 @@
         return createModel({ source: "corner", outerMm, placement, exact: true });
     }
 
+    function voidRotationModel(piece) {
+        const outline = piece && piece.placement_outline_cm;
+        if (!Array.isArray(outline) || outline.length < 3) return null;
+        const outerMm = outline.map(point => [number(point[0]) * 10, number(point[1]) * 10]);
+        if (outerMm.some(point => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) {
+            return null;
+        }
+        const bounds = geometryBounds(outerMm);
+        return createModel({
+            source: "void-rotation",
+            exact: true,
+            outerMm,
+            placement: {
+                xCm: bounds.minX / 10,
+                yCm: bounds.minY / 10,
+                widthCm: bounds.width / 10,
+                heightCm: bounds.height / 10,
+                rotationDegrees: 0,
+            },
+        });
+    }
+
     function rectangleModel(piece, options = {}) {
         const placement = piecePlacement(piece);
         const widthMm = Math.max(EPSILON, placement.widthCm * 10);
@@ -407,7 +429,7 @@
         } catch {
             return rectangleModel(piece, { source: "invalid-dxf", invalid: true });
         }
-        return manualSpecialModel(piece) || cornerModel(piece) || rectangleModel(piece);
+        return voidRotationModel(piece) || manualSpecialModel(piece) || cornerModel(piece) || rectangleModel(piece);
     }
 
     window.AlmdinaCuttingPlanPieceGeometry = Object.freeze({

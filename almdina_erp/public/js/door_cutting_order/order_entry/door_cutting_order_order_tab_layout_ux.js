@@ -50,6 +50,9 @@
             "default_edge_type",
             "edge_color",
         ]),
+        mirroring: Object.freeze([
+            "allow_piece_mirroring",
+        ]),
     });
 
     function formRoot(frm) {
@@ -369,6 +372,9 @@
                 .${ROOT_CLASS} .dco-material-row--edge {
                     grid-template-columns: repeat(2,minmax(0,1fr));
                 }
+                .${ROOT_CLASS} .dco-material-row--mirroring {
+                    grid-template-columns: minmax(0,1fr);
+                }
                 .${ROOT_CLASS} .dco-material-row > .frappe-control,
                 .${ROOT_CLASS} .dco-material-row > .form-group {
                     min-width: 0;
@@ -485,7 +491,8 @@
                     .${ROOT_CLASS} .dco-material-row--primary [data-fieldname="board_description"] {
                         grid-column: 1 / -1;
                     }
-                    .${ROOT_CLASS} .dco-material-row--edge {
+                    .${ROOT_CLASS} .dco-material-row--edge,
+                    .${ROOT_CLASS} .dco-material-row--mirroring {
                         grid-template-columns: 1fr;
                     }
                     .${ROOT_CLASS} .dco-order-section-heading {
@@ -649,6 +656,7 @@
 
         const primary = ensureMaterialRow(body, "primary");
         const edge = ensureMaterialRow(body, "edge");
+        const mirroring = ensureMaterialRow(body, "mirroring");
 
         MATERIAL_ROWS.primary.forEach((fieldname) => {
             const node = fieldNode(frm, fieldname);
@@ -657,6 +665,10 @@
         MATERIAL_ROWS.edge.forEach((fieldname) => {
             const node = fieldNode(frm, fieldname);
             if (node && node.parentElement !== edge) edge.appendChild(node);
+        });
+        MATERIAL_ROWS.mirroring.forEach((fieldname) => {
+            const node = fieldNode(frm, fieldname);
+            if (node && node.parentElement !== mirroring) mirroring.appendChild(node);
         });
     }
 
@@ -702,6 +714,7 @@
             }
         }
         syncLockedInput(frm, "order_cutting_machine");
+        syncLockedInput(frm, "allow_piece_mirroring");
     }
 
     function autoGrowNotes(frm) {
@@ -800,6 +813,8 @@
         removeLegacyRequiredHint(frm);
         const machine = window.AlmdinaOrderCuttingMachineUX;
         if (machine && typeof machine.schedule === "function") machine.schedule(frm);
+        const mirroring = window.AlmdinaPieceMirroringUX;
+        if (mirroring && typeof mirroring.schedule === "function") mirroring.schedule(frm);
     }
 
     function schedule(frm) {
@@ -826,6 +841,7 @@
         board_width_cm(frm) { schedule(frm); },
         default_edge_type(frm) { schedule(frm); },
         edge_color(frm) { schedule(frm); },
+        allow_piece_mirroring(frm) { schedule(frm); },
         pieces_add(frm) { schedule(frm); },
         pieces_remove(frm) { schedule(frm); },
     });

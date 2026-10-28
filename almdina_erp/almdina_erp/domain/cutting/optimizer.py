@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import random
 import time
+from collections import deque
 from copy import deepcopy
 from typing import Any
 
@@ -171,12 +172,25 @@ def _largest_reusable_free_area(
     min_remnant_width_cm: float,
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
+    machine_type: str = "Auto",
 ) -> float:
+    """Largest remnant that can actually be separated from the board.
+
+    An enclosed void is not a remnant. A panel saw can separate only a
+    through-cut strip. Fewer boards remain a higher priority than this area.
+    """
+
     best = 0.0
     for sheet in plan.get("sheets") or []:
+        board_w = num(sheet.get("w"))
+        board_h = num(sheet.get("h"))
         for rect in _free_rectangles_for_sheet(sheet):
             width = num(rect.get("w"))
             height = num(rect.get("h"))
+            if not _remnant_is_separable(
+                rect, board_w, board_h, machine_type=machine_type
+            ):
+                continue
             area = width * height / 10000
             dimension_ok = (
                 width >= min_remnant_width_cm
@@ -188,6 +202,27 @@ def _largest_reusable_free_area(
             if dimension_ok and area >= min_remnant_area_m2:
                 best = max(best, area)
     return best
+
+
+def _remnant_is_separable(
+    rect: dict[str, float],
+    board_w: float,
+    board_h: float,
+    *,
+    machine_type: str,
+) -> bool:
+    width = num(rect.get("w"))
+    height = num(rect.get("h"))
+    if machine_type == "Panel Saw":
+        spans_width = width >= board_w - 1e-6
+        spans_height = height >= board_h - 1e-6
+        return spans_width or spans_height
+    return (
+        num(rect.get("x")) <= 1e-6
+        or num(rect.get("y")) <= 1e-6
+        or num(rect.get("x")) + width >= board_w - 1e-6
+        or num(rect.get("y")) + height >= board_h - 1e-6
+    )
 
 
 def _cut_metrics(plan: dict[str, Any]) -> tuple[int, float]:
@@ -256,6 +291,7 @@ def enrich_plan_metrics(
         min_remnant_width_cm,
         min_remnant_length_cm,
         min_remnant_area_m2,
+        machine_type=machine_type,
     )
     panel_saw_penalty = 0
     if machine_type == "Panel Saw" and not method_key.startswith("Guillotine"):
@@ -399,6 +435,24 @@ def _local_sequences(
                 sequence[start : start + block]
             )
             sequences.append((f"reverse_block_{start}", sequence))
+    # Repeated rectangular sizes can consume the useful gaps in batches.
+    # Interleave those sizes with at most three starting groups, keeping the
+    # existing packers, per-piece permissions and industrial ranking intact.
+    if all((piece.get("piece_type") or "Regular") == "Regular" for piece in pieces):
+        sizes: dict[tuple[float, float], list[dict[str, Any]]] = {}
+        for piece in order_pieces(pieces, "area_desc"):
+            sizes.setdefault((num(piece.get("width_cm")), num(piece.get("length_cm"))), []).append(piece)
+        groups = list(sizes.values())
+        if 1 < len(groups) < len(pieces):
+            for start in range(min(3, len(groups))):
+                pending = deque(deque(group) for group in groups[start:] + groups[:start])
+                sequence = []
+                while pending:
+                    group = pending.popleft()
+                    sequence.append(group.popleft())
+                    if group:
+                        pending.append(group)
+                sequences.append((f"dimension_cycle_{start}", sequence))
     return sequences
 
 
@@ -446,9 +500,14 @@ def auto_pro(
     methods = _candidate_methods(machine_type)
     best: dict[str, Any] | None = None
     attempts = 0
+    seen_orders: set[tuple[str, tuple[int, ...]]] = set()
     for method in methods:
         for strategy in ORDERING_STRATEGIES:
             ordered = order_pieces(pieces, strategy)
+            signature = (method, tuple(int(piece["id"]) for piece in ordered))
+            if signature in seen_orders:
+                continue
+            seen_orders.add(signature)
             candidate = _run_preordered_method(
                 ordered,
                 pieces,
@@ -525,10 +584,16 @@ def deep_search(
     )
     deadline = started + max(0.5, float(time_limit_sec or 10.0))
 
+    seen_orders: set[tuple[str, tuple[int, ...]]] = set()
     while attempts < max_attempts and time.monotonic() < deadline:
         method = methods[attempts % len(methods)]
         sequence = deepcopy(pieces)
         rng.shuffle(sequence)
+        signature = (method, tuple(int(piece["id"]) for piece in sequence))
+        if signature in seen_orders:
+            attempts += 1
+            continue
+        seen_orders.add(signature)
         if attempts % 3 == 0 and len(sequence) > 4:
             large = order_pieces(sequence, "area_desc")
             split = max(1, len(large) // 4)
@@ -908,6 +973,7 @@ def optimize_plan(
     min_remnant_width_cm: float = 30.0,
     min_remnant_length_cm: float = 30.0,
     min_remnant_area_m2: float = 0.09,
+    mirroring_allowed: bool = False,
 ) -> dict[str, Any]:
     mode = selected_mode or AUTO_FAST
     metric_kwargs = {
@@ -973,9 +1039,14 @@ def optimize_plan(
         baseline["attempts"] = 1
 
     from .glass_opening_nesting import nest_glass_openings
+    from .plan_search import improve_plan_search
+    from .shape_aware_nesting import apply_shape_aware_nesting
 
-    return nest_glass_openings(
-        baseline,
+    # Post-passes may annotate their input even when they keep its geometry.
+    # Preserve each candidate, including its diagnostics, for final selection.
+    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
+    nested = nest_glass_openings(
+        deepcopy(baseline),
         pieces,
         board_w_cm,
         board_h_cm,
@@ -984,6 +1055,91 @@ def optimize_plan(
         time_limit_sec=time_limit_sec,
         **metric_kwargs,
     )
+    shaped = apply_shape_aware_nesting(
+        deepcopy(nested),
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        mirroring_allowed=mirroring_allowed,
+        machine_type=machine_type,
+        time_limit_sec=max(0.0, search_deadline - time.monotonic()),
+        formation_alternatives=True,
+        **metric_kwargs,
+    )
+    from .evaluation import placement_permission_errors
+
+    improved = improve_plan_search(
+        deepcopy(shaped),
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        machine_type=machine_type,
+        time_limit_sec=max(0.0, search_deadline - time.monotonic()),
+        deadline_monotonic=search_deadline,
+        mirroring_allowed=mirroring_allowed,
+        **metric_kwargs,
+    )
+    best: dict[str, Any] | None = None
+
+    def search_candidates():
+        # The final gate below proves the seed; this iterator only generates
+        # candidates and never replaces its selection decision.
+        yield from (baseline, nested, shaped)
+        previous_best = best
+        yield improved
+        if (
+            previous_best is None
+            or _candidate_is_better(best, previous_best)
+            or previous_best.get("sheets") == shaped.get("sheets")
+        ):
+            return
+        ranked_shape = enrich_plan_metrics(
+            shaped, str(shaped.get("method_key") or ""), machine_type, **metric_kwargs,
+        )
+        if not _candidate_is_better(previous_best, ranked_shape):
+            return
+        remaining = min(1.0, search_deadline - time.monotonic())
+        if remaining <= 0 or machine_type == "Panel Saw":
+            return
+        yield improve_plan_search(
+            deepcopy(previous_best), pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, time_limit_sec=remaining,
+            mirroring_allowed=mirroring_allowed,
+            deadline_monotonic=min(search_deadline, time.monotonic() + remaining),
+            **metric_kwargs,
+        )
+
+    for candidate in search_candidates():
+        candidate = enrich_plan_metrics(
+            candidate,
+            str(candidate.get("method_key") or ""),
+            machine_type,
+            **metric_kwargs,
+        )
+        # Keep post-pass behavior on an exact industrial tie, never at a cost
+        # in boards, reusable offcut, or manufacturing complexity.
+        if best is not None and _candidate_is_better(best, candidate):
+            continue
+        # A no-op post-pass may change diagnostics but shares every input to
+        # both validators with the already proven best layout.
+        same_layout = best is not None and (
+            candidate.get("sheets") == best.get("sheets")
+            and candidate.get("unplaced") == best.get("unplaced")
+        )
+        if not same_layout and (validate_plan(
+            candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
+        ) or placement_permission_errors(
+            candidate,
+            pieces,
+            mirroring_allowed=mirroring_allowed,
+        )):
+            continue
+        best = candidate
+    # Keep the original failure payload when no complete valid plan exists;
+    # callers need it for Adaptive Trim probes and explicit validation errors.
+    return best if best is not None else baseline
 
 
 __all__ = [

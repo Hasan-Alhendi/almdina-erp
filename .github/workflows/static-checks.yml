@@ -245,7 +245,12 @@ jobs:
             almdina_erp/tests/test_strict_regular_machining_rotation.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
-            almdina_erp/tests/test_advanced_cutting_optimizer.py
+            almdina_erp/tests/test_advanced_cutting_optimizer.py \
+            almdina_erp/tests/test_cutting_shape_search.py \
+            almdina_erp/tests/test_cutting_industrial_gaps.py \
+            almdina_erp/tests/test_liner_geometry.py \
+            almdina_erp/tests/test_glass_opening_nesting.py \
+            almdina_erp/tests/test_nesting_consolidation.py
 
       - name: Setup Node
         uses: actions/setup-node@v4

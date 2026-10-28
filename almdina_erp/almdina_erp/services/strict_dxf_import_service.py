@@ -55,6 +55,9 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
     physical_cut_quantity,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import (
+    piece_mirroring_allowed,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_DIMENSIONS,
@@ -70,6 +73,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CUT_DIMENSIONS_BIND_FAILED,
     CUT_DIMENSIONS_MISSING,
     CUT_SIZE_MISMATCH,
+    FORBIDDEN_MIRRORING,
     FORBIDDEN_ROTATION,
     PERSISTED_CUT_SPECS,
     PERSISTED_CUT_CONTEXT_CODES,
@@ -1017,6 +1021,8 @@ def _unique_unresolved_corner_dimension_candidate(
 def _bind_corner_edge_rotation(
     piece: dict[str, Any],
     candidate: dict[str, Any],
+    *,
+    allow_piece_mirroring: object = None,
 ) -> DxfValidationIssue | None:
     """Record the unique dihedral transform used to place corner edge bands.
 
@@ -1085,6 +1091,17 @@ def _bind_corner_edge_rotation(
             candidate=candidate,
             actual_w=actual_w,
             actual_h=actual_h,
+        )
+    if match.mirrored and not piece_mirroring_allowed(allow_piece_mirroring):
+        return issue(
+            FORBIDDEN_MIRRORING,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(
+                source_piece_no=spec.row_index,
+                copy_no=int(candidate.get("copy_no") or 1),
+                label=str(candidate.get("label") or ""),
+            ),
+            params={"piece_type": spec.piece_type},
         )
 
     piece["corner_rotation_quarter_turns"] = int(match.quarter_turns)
@@ -1456,7 +1473,13 @@ def _apply_strict_dimension_contract(
                     candidate,
                     rotated=bool(rotated),
                 )
-                binding_error = _bind_corner_edge_rotation(piece, candidate)
+                binding_error = _bind_corner_edge_rotation(
+                    piece,
+                    candidate,
+                    allow_piece_mirroring=(
+                        getattr(order, "allow_piece_mirroring", None) if order is not None else None
+                    ),
+                )
                 if binding_error:
                     issues.append(binding_error)
                 else:
@@ -1680,7 +1703,13 @@ def _apply_strict_dimension_contract(
 
             candidate = unmatched.pop(match_index)
             _apply_piece_contract_metadata(piece, candidate, rotated=rotated)
-            binding_error = _bind_corner_edge_rotation(piece, candidate)
+            binding_error = _bind_corner_edge_rotation(
+                piece,
+                candidate,
+                allow_piece_mirroring=(
+                    getattr(order, "allow_piece_mirroring", None) if order is not None else None
+                ),
+            )
             if binding_error:
                 issues.append(binding_error)
             else:

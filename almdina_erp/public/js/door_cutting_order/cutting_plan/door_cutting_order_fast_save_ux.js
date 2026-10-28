@@ -287,6 +287,7 @@
         board_length_cm(frm) { markOrderInputPlanStale(frm); },
         board_width_cm(frm) { markOrderInputPlanStale(frm); },
         default_edge_type(frm) { markOrderInputPlanStale(frm); },
+        allow_piece_mirroring(frm) { markOrderInputPlanStale(frm); },
         kerf_mm(frm) { markOptimizerPlanStale(frm); },
         trim_margin_mm(frm) { markOptimizerPlanStale(frm); },
         packing_mode(frm) { markOptimizerPlanStale(frm); },

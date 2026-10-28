@@ -1845,7 +1845,7 @@ def placed_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
     )
     local = piece_polygon_mm(liner)
     turns = piece_quarter_turns(piece)
-    mirrored = bool(piece.get("corner_mirrored"))
+    mirrored = bool(piece.get("corner_mirrored") or piece.get("mirrored"))
     origin_x = float(piece.get("x") or 0) * CM_TO_MM
     origin_y = float(piece.get("y") or 0) * CM_TO_MM
     width = _mm(liner.width_cm)

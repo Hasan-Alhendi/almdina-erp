@@ -8,6 +8,7 @@ from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
+    _physical_board_lower_bound,
     optimize_order_plan,
 )
 from almdina_erp.almdina_erp.application.cutting.plan_reuse import (
@@ -250,6 +251,77 @@ class TestOptimizeOrderPlan(unittest.TestCase):
 
 
 class TestAdaptiveTrimBusinessRule(unittest.TestCase):
+    def test_positive_trim_does_not_stop_at_a_false_l_piece_area_bound(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.evaluation import (
+            placement_permission_errors, validate_plan,
+        )
+        from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
+            domain_cutting_engine,
+        )
+
+        rows = (
+            {"piece_type": "L-Shaped Corner", "width_cm": 20, "length_cm": 20,
+             "qty": 4, "allow_rotation": 1, "clipped_corner_position": "Top Right",
+             "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+            {"width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0},
+        )
+        pieces = domain_cutting_engine.expand_pieces(list(rows))
+        kwargs = dict(selected_mode="Auto Pro", machine_type="CNC Router",
+                      time_limit_sec=2, exact_piece_limit=20, min_remnant_width_cm=30,
+                      min_remnant_length_cm=30, min_remnant_area_m2=0.09,
+                      mirroring_allowed=False)
+        # Both plans are produced by the real engine and independently proven.
+        preferred = domain_cutting_engine.optimize(pieces, 40.1, 40.8, 0.3, **kwargs)
+        relaxed = domain_cutting_engine.optimize(pieces, 40.3, 40.8, 0.3, **kwargs)
+        self.assertEqual(2, len(preferred["sheets"]))
+        self.assertEqual(1, len(relaxed["sheets"]))
+        self.assertFalse(validate_plan(preferred, pieces, 40.1, 40.8, kerf_cm=0.3))
+        self.assertFalse(validate_plan(relaxed, pieces, 40.3, 40.8, kerf_cm=0.3))
+        command = OptimizeOrderPlanCommand(
+            engine_version="p2-area-bound-test", input_fingerprint="p2-area-bound-test",
+            board=BoardGeometry(40.3, 41, 0.1, 0.3),
+            optimizer=OptimizerOptions("Auto Pro", "CNC Router", 2, 20, 30, 30, 0.09),
+            piece_rows=rows,
+        )
+        result = optimize_order_plan(command, engine=domain_cutting_engine)
+        self.assertEqual(1, result.required_boards)
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(0, result.snapshot["applied_trim_width_cm"])
+        self.assertEqual(0.1, result.snapshot["applied_trim_length_cm"])
+        self.assertFalse(validate_plan(result.snapshot, pieces, 40.3, 40.8, kerf_cm=0.3))
+        self.assertFalse(placement_permission_errors(
+            result.snapshot, pieces, mirroring_allowed=False,
+        ))
+
+    def test_physical_area_bound_preserves_rectangles_and_handles_shapes_conservatively(self) -> None:
+        board = BoardGeometry(40.3, 40.3, 0.1, 0.3)
+        base = {"width_cm": 20, "length_cm": 20, "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8}
+        regular = {"width_cm": 10, "length_cm": 10, "piece_type": "Regular"}
+        for kind, expected in (("Regular", 2), ("L-Shaped Corner", 1), ("Clipped Corner", 1)):
+            with self.subTest(kind=kind):
+                pieces = [dict(base, piece_type=kind) for _ in range(4)] + [regular]
+                self.assertEqual(expected, _physical_board_lower_bound(pieces, board))
+        glass = dict(base, piece_type="Glass", glass_margin_mm=20)
+        self.assertEqual(1, _physical_board_lower_bound([glass] * 5, board))
+        self.assertEqual(1, _physical_board_lower_bound([dict(base, piece_type="Glass")] * 5, board))
+        for geometry in (None, "malformed", {"version": 1, "kind": "polygon", "exact": False}):
+            with self.subTest(special_geometry=geometry):
+                special = dict(base, piece_type="Special", special_shape_geometry_json=geometry)
+                self.assertEqual(1, _physical_board_lower_bound([special] * 5, board))
+        broken = dict(base, piece_type="L-Shaped Corner", clipped_corner_width_cm=25)
+        self.assertEqual(1, _physical_board_lower_bound([broken] * 5, board))
+        self.assertEqual(0, _physical_board_lower_bound([], board))
+        self.assertEqual(0, _physical_board_lower_bound([dict(regular, width_cm=0)], board))
+        large_rectangles = [
+            {"width_cm": w, "length_cm": h}
+            for w, h, count in ((50, 90, 36), (30, 70, 36), (22, 40, 48))
+            for _ in range(count)
+        ]
+        self.assertEqual(10, _physical_board_lower_bound(
+            large_rectangles, BoardGeometry(122, 244, 0, 0.3),
+        ))
+
     @staticmethod
     def _piece(width: float, length: float, piece_id: int = 1) -> dict[str, Any]:
         return {

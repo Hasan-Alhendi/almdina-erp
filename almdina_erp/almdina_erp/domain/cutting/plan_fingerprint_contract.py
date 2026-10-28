@@ -95,6 +95,48 @@ def freeze_v4_execution_settings(*, machine_type: Any, kerf_mm: Any,
     return {'machine_type': machine, **numeric}
 
 
+def freeze_v4_board(
+    *,
+    width_mm: float,
+    length_mm: float,
+    material_description: str,
+    allow_piece_mirroring: bool = False,
+) -> dict[str, Any]:
+    """Board identity for a V4 baseline.
+
+    Historical baselines omit ``allow_piece_mirroring``. Absence means mirroring
+    is not allowed, so an old order keeps its stored hash. The key is recorded
+    only when mirroring is allowed, because that changes placement eligibility.
+    """
+
+    board = {
+        'width_mm': width_mm,
+        'length_mm': length_mm,
+        'material_description': material_description,
+    }
+    if allow_piece_mirroring is True:
+        board['allow_piece_mirroring'] = True
+    return board
+
+
+def _v4_board_is_canonical(board: Any) -> bool:
+    if not isinstance(board, dict):
+        return False
+    keys = set(board)
+    historical = {'width_mm', 'length_mm', 'material_description'}
+    if keys != historical and keys != historical | {'allow_piece_mirroring'}:
+        return False
+    if 'allow_piece_mirroring' in board and board['allow_piece_mirroring'] is not True:
+        return False
+    if any(
+        type(board[key]) is not float or not math.isfinite(board[key]) or board[key] <= 0
+        for key in ('width_mm', 'length_mm')
+    ):
+        return False
+    description = board.get('material_description')
+    return type(description) is str and bool(description)
+
+
 def validate_v4_baseline(value: Any) -> None:
     """Reject an altered schema before interpreting it as changed requirements."""
     if not isinstance(value, dict) or set(value) != {'version', 'order', 'board', 'execution_settings', 'pieces'}:
@@ -103,12 +145,7 @@ def validate_v4_baseline(value: Any) -> None:
         raise PlanFingerprintContractError('invalid_v4_baseline_version')
     if type(value['order']) is not str or not value['order']:
         raise PlanFingerprintContractError('invalid_v4_baseline_order')
-    board = value['board']
-    if (not isinstance(board, dict) or set(board) != {'width_mm', 'length_mm', 'material_description'}
-            or any(type(board[k]) is not float or not math.isfinite(board[k]) or board[k] <= 0
-                   for k in ('width_mm', 'length_mm'))
-            or type(board['material_description']) is not str
-            or not board['material_description']):
+    if not _v4_board_is_canonical(value['board']):
         raise PlanFingerprintContractError('invalid_v4_baseline_board')
     settings = value['execution_settings']
     if (not isinstance(settings, dict)

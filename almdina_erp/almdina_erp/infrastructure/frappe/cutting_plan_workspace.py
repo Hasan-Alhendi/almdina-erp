@@ -43,11 +43,13 @@ from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FingerprintCompatibility,
     PlanFingerprintContractError,
     freeze_geometry_piece,
+    freeze_v4_board,
     freeze_v4_execution_settings,
     legacy_omission_is_safe,
     validate_v4_baseline,
 )
 from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     matching_freshness_fingerprint,
 )
@@ -299,10 +301,14 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
     return {
         "version": MANUFACTURING_BASELINE_VERSION,
         "order": str(order.name),
-        "board": {
-            "width_mm": width_mm, "length_mm": length_mm,
-            "material_description": str(getattr(order, "board_description", "") or "").strip(),
-        },
+        "board": freeze_v4_board(
+            width_mm=width_mm,
+            length_mm=length_mm,
+            material_description=str(getattr(order, "board_description", "") or "").strip(),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
+        ),
         "execution_settings": freeze_v4_execution_settings(
             machine_type=_plan_attr(plan, "machine_type"),
             kerf_mm=_plan_attr(plan, "kerf_mm"),
@@ -443,6 +449,9 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
                 min_remnant_area_m2=flt(factory_settings.min_remnant_area_m2),
             ),
             piece_rows=_piece_rows(order),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
         ),
         engine=domain_cutting_engine,
     )

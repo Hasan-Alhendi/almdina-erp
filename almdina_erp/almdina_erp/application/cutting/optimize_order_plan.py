@@ -21,7 +21,12 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     normalize_plan_settings,
 )
+from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 
 
 class CuttingPlanEngine(Protocol):
@@ -43,6 +48,7 @@ class CuttingPlanEngine(Protocol):
         min_remnant_width_cm: float,
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
+        mirroring_allowed: bool = False,
     ) -> dict[str, Any]: ...
 
     def validate(
@@ -100,6 +106,7 @@ class OptimizeOrderPlanCommand:
     optimizer: OptimizerOptions
     piece_rows: tuple[dict[str, Any], ...]
     plan_settings: PlanSettings | None = None
+    allow_piece_mirroring: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,11 +207,20 @@ def optimize_order_plan(
         preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
     )
     plan["sheets"] = sheets
-    validation_errors = engine.validate(
-        plan,
-        expanded,
-        usable_width_cm,
-        usable_length_cm,
+    validation_errors = list(
+        engine.validate(
+            plan,
+            expanded,
+            usable_width_cm,
+            usable_length_cm,
+        )
+    )
+    validation_errors.extend(
+        placement_permission_errors(
+            plan,
+            expanded,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        )
     )
 
     trim_policy = _trim_policy_metadata(
@@ -243,6 +259,7 @@ def optimize_order_plan(
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
         "trim_cm": board.trim_cm,
+        "allow_piece_mirroring": piece_mirroring_allowed(command.allow_piece_mirroring),
         "applied_trim_width_cm": applied_trim.width_trim_cm,
         "applied_trim_length_cm": applied_trim.length_trim_cm,
         "trim_policy": trim_policy,
@@ -329,6 +346,7 @@ def _run_engine(
         min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
     )
 
 
@@ -339,12 +357,37 @@ def _physical_board_lower_bound(
     board_area = max(0.0, board.full_width_cm * board.full_length_cm)
     if board_area <= 0:
         return 0
-    piece_area = sum(
-        max(0.0, _number(piece.get("width_cm")))
-        * max(0.0, _number(piece.get("length_cm")))
-        for piece in pieces
-    )
-    return max(1, math.ceil(piece_area / board_area)) if piece_area else 0
+    areas = []
+    for piece in pieces:
+        kind = str(piece.get("piece_type") or "Regular")
+        if kind == "Regular":
+            areas.append(
+                max(0.0, _number(piece.get("width_cm")))
+                * max(0.0, _number(piece.get("length_cm")))
+            )
+            continue
+        # Special source outlines do not certify net material including all
+        # structural holes. Unknown geometry contributes zero, never its box.
+        if kind not in {"L-Shaped Corner", "Clipped Corner", "Glass"}:
+            continue
+        try:
+            outline = material_outline_cm(piece)
+            if outline is None:
+                continue
+            area = polygon_area(outline)
+            if kind == "Glass":
+                hole_mm = placed_glass_hole_mm(piece, rotated=False)
+                if hole_mm is None:
+                    continue
+                area -= polygon_area(hole_mm) / 100  # mm² -> cm²
+            if math.isfinite(area):
+                areas.append(max(0.0, area))
+        except (TypeError, ValueError, OverflowError):
+            continue
+    piece_area = sum(areas)
+    if piece_area:
+        return max(1, math.ceil(piece_area / board_area))
+    return int(any((piece.get("piece_type") or "Regular") != "Regular" for piece in pieces))
 
 
 def _plan_quality(plan: dict[str, Any]) -> PlanQuality:
