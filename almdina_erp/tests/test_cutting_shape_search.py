@@ -725,7 +725,9 @@ def test_void_rotation_keeps_piece_size_and_rejects_a_different_angle():
         "sheets": [{"sheet_no": 1, "pieces": [placed]}],
         "unplaced": [],
     }
-    assert validate_plan(fitting, pieces, 30, 30, kerf_cm=0) == []
+    # A recorded angle alone does not establish the four-host exception.
+    assert validate_plan(fitting, pieces, 30, 30, kerf_cm=0)
+    assert placement_permission_errors(fitting, pieces, mirroring_allowed=False)
 
     placed["placement_rotation_deg"] = 33
     rejected = validate_plan(

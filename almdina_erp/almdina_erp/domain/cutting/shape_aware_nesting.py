@@ -2051,6 +2051,12 @@ def _guest_in_clipped_void(
     board_h_cm: float,
     obstacles: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any] | None:
+    # Non-quarter openings/addon paths are not yet proven by the DXF importer.
+    # Keep those guests on the ordinary, fully represented quarter-turn path.
+    if str(piece.get("piece_type") or "Regular") != "Regular" or any(
+        piece.get(key) for key in ("extra_liner", "extra_back_groove", "extra_recessed_handle_cutout")
+    ):
+        return None
     angle = void_edge_angle_deg(cut_x, cut_y)
     if angle is None:
         return None
@@ -2161,22 +2167,20 @@ def admit_clipped_void_topology(
     from .dxf_geometry import point_in_polygon
     from .dxf_topology import PartGeometry, ResolvedPartGeometry, ResolvedTopology
 
-    clips = [
-        piece
-        for piece in expected
+    clip_indices = [
+        index for index, piece in enumerate(expected)
         if getattr(piece, "piece_type", "") == CLIPPED_CORNER_TYPE
         and float(getattr(piece, "clipped_cut_width_mm", 0) or 0) > 0
         and float(getattr(piece, "clipped_cut_length_mm", 0) or 0) > 0
     ]
-    if len(expected) != 5 or len(clips) != 4 or len(contours) != 5:
+    if len(expected) != 5 or len(clip_indices) != 4 or len(contours) != 5:
         return None
-    inners = [piece for piece in expected if piece not in clips]
-    if len(inners) != 1:
-        return None
-    inner = inners[0]
+    inner_index = next(index for index in range(len(expected)) if index not in clip_indices)
+    inner = expected[inner_index]
+    clips = [expected[index] for index in clip_indices]
     unused = list(contours)
     assigned: list[tuple[Any, Any]] = []
-    for clip in clips:
+    for clip_index, clip in zip(clip_indices, clips):
         found = None
         for contour in list(unused):
             if _contour_matches_clip(
@@ -2191,7 +2195,7 @@ def admit_clipped_void_topology(
         if found is None:
             return None
         unused.remove(found)
-        assigned.append((found, clip))
+        assigned.append((found, clip_index))
     polygon = _ring(unused[0].polygon)
     angle = _rectangle_angle_deg(polygon)
     cut_w = float(clips[0].clipped_cut_width_mm) / 10.0
@@ -2212,15 +2216,15 @@ def admit_clipped_void_topology(
         ResolvedPartGeometry(
             contour_key=int(contour.key),
             geometry=PartGeometry(outer=_ring(contour.polygon)),
-            expected_piece_index=list(expected).index(clip),
+            expected_piece_index=clip_index,
         )
-        for contour, clip in assigned
+        for contour, clip_index in assigned
     ]
     parts.append(
         ResolvedPartGeometry(
             contour_key=int(unused[0].key),
             geometry=PartGeometry(outer=polygon),
-            expected_piece_index=list(expected).index(inner),
+            expected_piece_index=inner_index,
         )
     )
     return ResolvedTopology(parts=tuple(parts))

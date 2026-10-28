@@ -754,6 +754,12 @@
     function finishedRings(piece, placement) {
         const voidOutline = piece && piece.placement_outline_cm;
         if (Array.isArray(voidOutline) && voidOutline.length >= 3) {
+            // This exception only has a proven plain-rectangle import contract.
+            // Never silently discard a Glass opening or misorient machining.
+            if (String(piece.piece_type || "Regular") !== "Regular"
+                || piece.extra_liner || piece.extra_back_groove || piece.extra_recessed_handle_cutout) {
+                throw new Error("Unsupported angled manufacturing contour");
+            }
             const { offsetX, offsetY, fullHeight, appliedTrim } = placement;
             const outer = voidOutline.map(point => [
                 offsetX + appliedTrim.width + num(point[0]) * 10,
