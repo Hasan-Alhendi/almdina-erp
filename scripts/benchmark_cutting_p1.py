@@ -43,6 +43,9 @@ CASES = {
     "L-tight": (40.3, 40.3, 0, [
         corner("L-Shaped Corner", 20, 20, 8, 4), regular(10, 10),
     ]),
+    "L-positive-trim": (40.3, 41, 0.1, [
+        corner("L-Shaped Corner", 20, 20, 8, 4), regular(10, 10),
+    ]),
     "Rectangular": (100, 100, 0, [
         regular(w, h) for w, h in ((100, 38.5), (38.5, 61), (100, 38.5),
                                   (58.5, 61), (40, 60), (60, 30))
@@ -125,19 +128,23 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--time-limit", type=float, default=2)
     parser.add_argument("--case", choices=CASES)
+    parser.add_argument("--mode", choices=MODES)
+    parser.add_argument("--exact-piece-limit", type=int, default=20)
     args = parser.parse_args()
     results = []
     for case, (width, length, trim, rows) in CASES.items():
         if args.case and args.case != case:
             continue
         for mode in MODES:
-            if mode == "Optimal Search" and sum(row["qty"] for row in rows) > 20:
+            if args.mode and args.mode != mode:
+                continue
+            if mode == "Optimal Search" and sum(row["qty"] for row in rows) > args.exact_piece_limit and not args.mode:
                 continue
             engine = RecordingEngine()
             command = OptimizeOrderPlanCommand(
                 engine_version="synthetic-p1-benchmark", input_fingerprint="synthetic-p1-benchmark",
                 board=BoardGeometry(width, length, trim, 0.3),
-                optimizer=OptimizerOptions(mode, "CNC Router", args.time_limit, 20, 30, 30, 0.09),
+                optimizer=OptimizerOptions(mode, "CNC Router", args.time_limit, args.exact_piece_limit, 30, 30, 0.09),
                 piece_rows=tuple(rows),
             )
             started = time.perf_counter()
@@ -146,6 +153,7 @@ def main():
                 label=args.label, head=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                 case=case, mode=mode, full_board_cm=[width, length], preferred_trim_cm=trim,
                 kerf_cm=0.3, mirroring=False, remnant=[30, 30, 0.09], time_limit_sec=args.time_limit,
+                exact_piece_limit=args.exact_piece_limit,
                 rows=rows, runtime_sec=time.perf_counter() - started,
                 probes=engine.probes, snapshot=outcome.snapshot,
             )

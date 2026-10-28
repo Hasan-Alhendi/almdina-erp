@@ -22,6 +22,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
 from almdina_erp.almdina_erp.domain.orders.costing import round_value
 from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 
@@ -354,12 +357,37 @@ def _physical_board_lower_bound(
     board_area = max(0.0, board.full_width_cm * board.full_length_cm)
     if board_area <= 0:
         return 0
-    piece_area = sum(
-        max(0.0, _number(piece.get("width_cm")))
-        * max(0.0, _number(piece.get("length_cm")))
-        for piece in pieces
-    )
-    return max(1, math.ceil(piece_area / board_area)) if piece_area else 0
+    areas = []
+    for piece in pieces:
+        kind = str(piece.get("piece_type") or "Regular")
+        if kind == "Regular":
+            areas.append(
+                max(0.0, _number(piece.get("width_cm")))
+                * max(0.0, _number(piece.get("length_cm")))
+            )
+            continue
+        # Special source outlines do not certify net material including all
+        # structural holes. Unknown geometry contributes zero, never its box.
+        if kind not in {"L-Shaped Corner", "Clipped Corner", "Glass"}:
+            continue
+        try:
+            outline = material_outline_cm(piece)
+            if outline is None:
+                continue
+            area = polygon_area(outline)
+            if kind == "Glass":
+                hole_mm = placed_glass_hole_mm(piece, rotated=False)
+                if hole_mm is None:
+                    continue
+                area -= polygon_area(hole_mm) / 100  # mm² -> cm²
+            if math.isfinite(area):
+                areas.append(max(0.0, area))
+        except (TypeError, ValueError, OverflowError):
+            continue
+    piece_area = sum(areas)
+    if piece_area:
+        return max(1, math.ceil(piece_area / board_area))
+    return int(any((piece.get("piece_type") or "Regular") != "Regular" for piece in pieces))
 
 
 def _plan_quality(plan: dict[str, Any]) -> PlanQuality:
