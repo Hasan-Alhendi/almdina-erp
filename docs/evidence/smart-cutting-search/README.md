@@ -158,7 +158,7 @@ Targeted catalog/settings/permission/preview/fingerprint/application/background 
 45 passed + 49 subtests. The local Static Checks command sequence was run; historical
 mode enumeration and metadata-visibility tests were updated for the explicit new
 contract, with frozen historical rejection of Smart retained. No assertion was
-weakened or new skip added. Final affected local Static Checks passed (940 tests + 22 subtests in the optimizer/UI
+weakened or new skip added. Final affected local Static Checks passed (964 tests + 22 subtests in the optimizer/UI
 step, one pre-existing skip; all other scheduled local steps passed). GitHub/Frappe CI results
 are recorded in the Draft PR.
 
