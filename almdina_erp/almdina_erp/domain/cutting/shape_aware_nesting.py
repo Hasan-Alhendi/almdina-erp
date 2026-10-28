@@ -1477,8 +1477,16 @@ def _compose_plan(
             continue
         translation = None
         target = None
+        constraint = "single" if block["kind"] == "single" else ""
         for sheet in sheets:
-            translation = _block_translation(sheet, body, kerf_cm, board_w_cm, board_h_cm)
+            translation = _block_translation(
+                sheet,
+                body,
+                kerf_cm,
+                board_w_cm,
+                board_h_cm,
+                constraint=constraint,
+            )
             if translation is not None:
                 target = sheet
                 break
@@ -1570,12 +1578,36 @@ def _seat_authored_pair(
     board_w_cm: float,
     board_h_cm: float,
 ) -> None:
-    """Keep the pair on the anchor that points its opening inward."""
+    """Place the authored pair on an existing board before opening another.
 
+    The two pieces stay a rigid block: the same facings, the same kerf gap,
+    and the shared opening toward the board interior. The original coordinates
+    are one candidate, not the only one.
+    """
+
+    from .nesting_consolidation import best_rigid_translation
+
+    normalized = _normalize_pieces(body)
+    best: tuple[tuple[Any, ...], dict[str, Any], float, float] | None = None
     for sheet in sheets:
-        if _pieces_clear(body, sheet.get("pieces") or [], kerf_cm):
-            sheet["pieces"].extend(dict(piece) for piece in body)
-            return
+        found = best_rigid_translation(
+            sheet,
+            normalized,
+            kerf_cm,
+            board_w_cm,
+            board_h_cm,
+            constraint="pair",
+        )
+        if found is None:
+            continue
+        dx, dy, rank = found
+        used = 0 if sheet.get("pieces") else 1
+        if best is None or (used, rank) < best[0]:
+            best = ((used, rank), sheet, dx, dy)
+    if best is not None:
+        _rank, sheet, dx, dy = best
+        sheet["pieces"].extend(_translate_pieces(normalized, dx, dy))
+        return
     sheets.append(
         {
             "sheet_no": len(sheets) + 1,
@@ -1606,26 +1638,24 @@ def _block_translation(
     kerf_cm: float,
     board_w_cm: float,
     board_h_cm: float,
+    *,
+    constraint: str = "",
 ) -> tuple[float, float] | None:
-    width, height = _block_size(body)
-    anchors = [(0.0, 0.0)]
-    for piece in sheet.get("pieces") or []:
-        anchors.append((num(piece.get("x")) + num(piece.get("w")) + kerf_cm, num(piece.get("y"))))
-        anchors.append((num(piece.get("x")), num(piece.get("y")) + num(piece.get("h")) + kerf_cm))
-    seen: set[tuple[float, float]] = set()
-    for x_cm, y_cm in anchors:
-        key = (round(x_cm, 3), round(y_cm, 3))
-        if key in seen or x_cm < -1e-6 or y_cm < -1e-6:
-            continue
-        if x_cm + width > board_w_cm + 1e-6 or y_cm + height > board_h_cm + 1e-6:
-            continue
-        seen.add(key)
-        moved = _translate_pieces(body, x_cm, y_cm)
-        if _pieces_inside(moved, board_w_cm, board_h_cm) and _pieces_clear(
-            moved, sheet.get("pieces") or [], kerf_cm
-        ):
-            return (x_cm, y_cm)
-    return None
+    """Shift a whole block onto this sheet. The return value is a delta."""
+
+    from .nesting_consolidation import best_rigid_translation
+
+    found = best_rigid_translation(
+        sheet,
+        body,
+        kerf_cm,
+        board_w_cm,
+        board_h_cm,
+        constraint=constraint,
+    )
+    if found is None:
+        return None
+    return found[0], found[1]
 
 
 def _sources_by_id(pieces: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:

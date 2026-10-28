@@ -2,10 +2,11 @@
 
 A board is cancelled only when every piece on it fits the remaining boards,
 the piece count is unchanged, and validation reports no overlap or kerf fault.
-When the board count stays the same, a short local search may still move or
-swap a few regular pieces so the largest separable remnant grows. Fewer
-boards remain better than a larger remnant. Glass nests, corner outlines, and
-the clipped-void angle are left where they are.
+Finished nests move only as rigid groups: the same rotation, mirror, kerf
+gaps, void guests, and glass-host links. Loose regular pieces may still move
+one at a time. When the board count stays the same, a short local search may
+move or swap a few of those loose pieces so the largest separable remnant
+grows. Fewer boards remain better than a larger remnant.
 """
 
 from __future__ import annotations
@@ -60,10 +61,10 @@ def improve_plan_search(
 
     if machine_type == "Panel Saw" or time_limit_sec <= 0:
         return plan
-    sheets = list(plan.get("sheets") or [])
-    if len(sheets) < 2 or plan.get("unplaced"):
+    if plan.get("unplaced") or not plan.get("sheets"):
         return plan
     from .evaluation import placement_permission_errors, validate_plan
+    from .nesting_consolidation import consolidate_nested_boards
     from .optimizer import _candidate_is_better, enrich_plan_metrics
 
     metric_kwargs = {
@@ -71,6 +72,30 @@ def improve_plan_search(
         "min_remnant_length_cm": min_remnant_length_cm,
         "min_remnant_area_m2": min_remnant_area_m2,
     }
+    consolidated = consolidate_nested_boards(
+        plan,
+        pieces,
+        board_w_cm,
+        board_h_cm,
+        kerf_cm,
+        machine_type=machine_type,
+        mirroring_allowed=mirroring_allowed,
+        deadline=time.monotonic() + min(1.5, max(0.05, 0.2 * float(time_limit_sec))),
+    )
+    best = plan
+    if consolidated is not plan:
+        best = enrich_plan_metrics(
+            consolidated,
+            str(plan.get("method_key") or ""),
+            machine_type,
+            **metric_kwargs,
+        )
+        for key in _PRESERVED_PLAN_KEYS:
+            if key in plan and key not in best:
+                best[key] = plan[key]
+    sheets = list(best.get("sheets") or [])
+    if len(sheets) < 2:
+        return best
     ordered = sorted(
         sheets,
         key=lambda sheet: (
@@ -78,7 +103,6 @@ def improve_plan_search(
             sum(num(piece.get("area_m2")) for piece in sheet.get("pieces") or []),
         ),
     )
-    best = plan
     for victim in ordered[:3]:
         candidate = _move_sheet_onto_others(best, victim, kerf_cm)
         if candidate is None:
