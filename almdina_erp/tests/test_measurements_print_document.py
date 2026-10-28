@@ -55,6 +55,14 @@ _ARABIC_LABELS = {
     "Width": "العرض",
     "cm": "سم",
     "Default type": "النوع الافتراضي",
+    "Corner": "الزاوية",
+    "Remaining on width side": "المتبقي على ضلع العرض",
+    "Remaining on length side": "المتبقي على ضلع الطول",
+    "Top right": "أعلى اليمين",
+    "Top left": "أعلى اليسار",
+    "Bottom right": "أسفل اليمين",
+    "Bottom left": "أسفل اليسار",
+    "Glass Margin": "هامش البلور",
 }
 
 
@@ -398,6 +406,113 @@ class MeasurementsPrintDocumentTests(unittest.TestCase):
         self.assertNotIn("90.0,140.0", html)
         self.assertIn("<path ", html)
         self.assertLess(html.index("<path "), html.index("70.0,40.0"))
+        self.assertIn("الزاوية:", html)
+        self.assertNotIn("المتبقي على ضلع العرض:", html)
+        self.assertIn('data-dco-remaining-axis="width"', html)
+        self.assertIn(">70 سم<", html)
+        self.assertIn(">160 سم<", html)
+        self.assertIn("أعلى اليمين", html)
+        self.assertIn("أسفل اليسار", html)
+        self.assertIn(">40 سم<", html)
+        self.assertIn(">65 سم<", html)
+        self.assertIn("بدون قص", html)
+        self.assertIn("أعلى اليسار", html)
+        missing_block = html.split("بدون قص", 1)[1]
+        self.assertNotIn("المتبقي على ضلع العرض", missing_block.split("</tr>", 1)[0])
+
+    def test_type_setup_measurements_print_remaining_glass_and_payload_fields(self) -> None:
+        order = _sample_order()
+        pieces = order["pieces"]
+        assert isinstance(pieces, list)
+        pieces.extend(
+            [
+                {
+                    "name": "ROW-55",
+                    "piece_type": "Clipped Corner",
+                    "width_cm": 55,
+                    "length_cm": 55,
+                    "qty": 1,
+                    "notes": "مثال 55",
+                    "clipped_corner_position": "Top Right",
+                    "clipped_corner_width_cm": 11,
+                    "clipped_corner_length_cm": 11,
+                    "edge_width_top": 1,
+                    "edge_long_right": 1,
+                    "edge_break_only": 1,
+                },
+                {
+                    "name": "ROW-AXES",
+                    "piece_type": "L-Shaped Corner",
+                    "width_cm": 80,
+                    "length_cm": 120,
+                    "qty": 1,
+                    "notes": "",
+                    "clipped_corner_position": "Bottom Left",
+                    "clipped_corner_width_cm": 15.5,
+                    "clipped_corner_length_cm": 40,
+                    "edge_break": 1,
+                },
+                {
+                    "name": "ROW-GLASS",
+                    "piece_type": "Glass",
+                    "width_cm": 60,
+                    "length_cm": 90,
+                    "qty": 1,
+                    "notes": "بلور",
+                    "glass_margin_mm": 20,
+                },
+                {
+                    "name": "ROW-GLASS-EMPTY",
+                    "piece_type": "Glass",
+                    "width_cm": 50,
+                    "length_cm": 70,
+                    "qty": 1,
+                    "notes": "بلا هامش",
+                },
+            ]
+        )
+        payload = order_print_payload(order)
+        glass = payload["pieces"][3]
+        self.assertEqual(glass["glass_margin_mm"], 20)
+        self.assertEqual(payload["pieces"][1]["clipped_corner_width_cm"], 11)
+        self.assertEqual(payload["pieces"][1]["edge_break_only"], 1)
+        self.assertEqual(payload["pieces"][2]["edge_break"], 1)
+        html = measurements_print_html(
+            payload,
+            language="ar",
+            translator=_arabic_translator,
+        )
+        self.assertEqual(html.count('data-dco-remaining-axis="width"'), 2)
+        self.assertIn(">44 سم<", html)
+        self.assertEqual(html.count(">44 سم<"), 2)
+        self.assertNotIn(">11 سم<", html)
+        self.assertNotIn("المتبقي على ضلع العرض:", html)
+        self.assertIn(">64.5 سم<", html)
+        self.assertIn(">80 سم<", html)
+        self.assertIn('stroke="#d00000"', html)
+        self.assertIn('data-dco-edge="breakOnly"', html)
+        self.assertIn('data-dco-edge="break"', html)
+        width_label = html.split('data-dco-remaining-axis="width"', 1)[1].split(">", 1)[0]
+        self.assertIn('y="', width_label)
+        first_width_y = float(width_label.split('y="', 1)[1].split('"', 1)[0])
+        self.assertLess(first_width_y, 5.0, "Top Right remaining width sits near the top edge")
+        self.assertIn("هامش البلور:", html)
+        self.assertIn('dir="ltr">2 سم</b>', html)
+        self.assertIn("بلور", html)
+        self.assertIn("بلا هامش", html)
+        empty_glass = html.split("بلا هامش", 1)[1].split("</tr>", 1)[0]
+        self.assertNotIn("هامش البلور", empty_glass)
+        english = measurements_print_html(
+            payload,
+            language="en",
+            translator=_identity_translator,
+        )
+        self.assertIn('data-dco-remaining-axis="width"', english)
+        self.assertIn(">44 cm<", english)
+        self.assertNotIn("Remaining on width side:", english)
+        self.assertIn("Glass Margin:", english)
+        self.assertIn('dir="ltr">2 cm</b>', english)
+        self.assertIn("Bottom left", english)
 
     def test_whatsapp_adapter_uses_unified_html_not_print_format(self) -> None:
         adapter = ADAPTER.read_text(encoding="utf-8")

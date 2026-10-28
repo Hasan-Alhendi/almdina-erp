@@ -126,6 +126,30 @@
         const points = geometry.orderOutlinePoints(piece);
         return Array.isArray(points) && points.length >= 3 ? points : [];
     }
+    function cornerDimensionLabelsSvg(piece, width, height) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.orderRemainingDimensionAnchors !== "function") return "";
+        const anchors = geometry.orderRemainingDimensionAnchors(piece) || [];
+        if (!anchors.length) return "";
+        const unit = translate("cm");
+        const fontSize = Math.max(Math.min(width, height) * 0.085, Math.max(width, height) * 0.045);
+        return anchors.map(anchor => {
+            const text = `${formatPrintNumber(anchor.value)} ${unit}`;
+            const leader = anchor.short
+                ? `<line x1="${finite(anchor.midX)}" y1="${finite(anchor.midY)}" x2="${finite(anchor.x)}" y2="${finite(anchor.y)}" stroke="#344054" stroke-width="0.9" vector-effect="non-scaling-stroke"/>`
+                : "";
+            return `${leader}<text data-dco-remaining-axis="${esc(anchor.axis)}" x="${finite(anchor.x)}" y="${finite(anchor.y)}" text-anchor="middle" dominant-baseline="middle" direction="ltr" font-family="Tahoma,Arial,sans-serif" font-size="${fontSize}" font-weight="800" fill="#172033">${esc(text)}</text>`;
+        }).join("");
+    }
+    function cornerEdgeBandSvg(piece) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.orderEdgeBandSvgMarkup !== "function") return "";
+        return geometry.orderEdgeBandSvgMarkup(piece, {
+            inset: Math.min(finite(piece.width_cm), finite(piece.length_cm)) * 0.035,
+            color: "#d00000",
+            strokeWidth: 2.2,
+        }) || "";
+    }
     function cornerSvg(piece, label) {
         const outline = cornerOutline(piece);
         if (!outline.length) return "";
@@ -133,20 +157,114 @@
         const height = Math.max(0, finite(piece.length_cm));
         if (!width || !height) return "";
         const pairs = outline.map(point => `${finite(point[0])},${finite(point[1])}`).join(" ");
-        const padding = Math.max(width, height) * 0.06;
-        return `<svg direction="ltr" style="direction:ltr" viewBox="${-padding} ${-padding} ${width + padding * 2} ${height + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><polygon points="${pairs}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke"/></svg>`;
+        const padding = Math.max(width, height) * 0.32;
+        const edges = cornerEdgeBandSvg(piece);
+        const dimensions = cornerDimensionLabelsSvg(piece, width, height);
+        return `<svg class="dco-corner-print-svg" direction="ltr" style="direction:ltr" viewBox="${-padding} ${-padding} ${width + padding * 2} ${height + padding * 2}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}"><polygon points="${pairs}" fill="#f5f7f9" stroke="#172033" stroke-width="1.8" vector-effect="non-scaling-stroke"/>${edges}${dimensions}</svg>`;
     }
     function translate(message, replacements) {
         if (typeof __ !== "function") return String(message);
         return replacements === undefined ? __(message) : __(message, replacements);
     }
+    function formatPrintNumber(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        const rounded = Math.round(number * 1000) / 1000;
+        return String(rounded);
+    }
+    function printRemainingCm(total, cut) {
+        const width = finite(total);
+        const cutValue = finite(cut);
+        // Fail closed: never invent a default remaining for print when the cut is missing.
+        if (!(width > 0) || !(cutValue > 0) || cutValue >= width) return null;
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (geometry && typeof geometry.remainingFromCut === "function") {
+            return geometry.remainingFromCut(width, cutValue);
+        }
+        return Math.round((width - cutValue) * 1000) / 1000;
+    }
+    function cornerPositionLabel(value) {
+        const key = String(value || "").trim();
+        const labels = {
+            "Top Right": "Top right",
+            "Top Left": "Top left",
+            "Bottom Right": "Bottom right",
+            "Bottom Left": "Bottom left",
+        };
+        const message = labels[key];
+        if (!message) return "";
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (geometry && typeof geometry.positionLabel === "function") {
+            return geometry.positionLabel(key);
+        }
+        return translate(message);
+    }
+    function glassMarginCmText(piece) {
+        const millimeters = Number(piece && piece.glass_margin_mm);
+        if (!Number.isFinite(millimeters) || !(millimeters > 0)) return "";
+        const glass = window.AlmdinaGlassShape;
+        if (glass && typeof glass.marginCmTextFromMm === "function") {
+            return String(glass.marginCmTextFromMm(millimeters) || "");
+        }
+        return String(Math.round(millimeters * 1000) / 10000);
+    }
+    function typeMetricLines(piece) {
+        const type = String(piece && piece.piece_type || "").trim();
+        const lines = [];
+        if (type === "L-Shaped Corner" || type === "Clipped Corner") {
+            const position = cornerPositionLabel(piece.clipped_corner_position);
+            if (position) lines.push({ label: translate("Corner"), value: position, unit: "" });
+            // Remaining lengths live on the drawing when an outline exists.
+            if (!cornerOutline(piece).length) {
+                const remainingWidth = printRemainingCm(piece.width_cm, piece.clipped_corner_width_cm);
+                if (remainingWidth != null) {
+                    lines.push({
+                        label: translate("Remaining on width side"),
+                        value: formatPrintNumber(remainingWidth),
+                        unit: translate("cm"),
+                    });
+                }
+                const remainingLength = printRemainingCm(piece.length_cm, piece.clipped_corner_length_cm);
+                if (remainingLength != null) {
+                    lines.push({
+                        label: translate("Remaining on length side"),
+                        value: formatPrintNumber(remainingLength),
+                        unit: translate("cm"),
+                    });
+                }
+            }
+            return lines;
+        }
+        if (type === "Glass") {
+            const margin = glassMarginCmText(piece);
+            if (margin) {
+                lines.push({
+                    label: translate("Glass Margin"),
+                    value: margin,
+                    unit: translate("cm"),
+                });
+            }
+        }
+        return lines;
+    }
+    function typeMetricsHtml(piece) {
+        const lines = typeMetricLines(piece);
+        if (!lines.length) return "";
+        return `<div class="dco-piece-type-metrics">${lines.map(line => {
+            const amount = line.unit ? `${esc(line.value)} ${esc(line.unit)}` : esc(line.value);
+            return `<div>${esc(line.label)}: <b dir="ltr">${amount}</b></div>`;
+        }).join("")}</div>`;
+    }
     function svg(piece, options = {}) { const selected = shapeOutput.visual(piece); const fallback = translate("Door piece drawing {0}", ["—"]); if (selected) return selected.kind === "documentation" ? documentationSvg(selected.payload, options.label || fallback) : geometrySvg(selected.payload, options.label || fallback); return cornerSvg(piece, options.label || fallback); }
     function notesCell(piece, notes, options = {}) {
-        const selected = shapeOutput.visual(piece), visual = svg(piece, options), text = String(notes || "").trim(), documentationNotes = selected && selected.kind === "documentation" ? String(selected.payload.notes || "").trim() : ""; if (!visual) return esc(text || "—");
+        const selected = shapeOutput.visual(piece), visual = svg(piece, options), text = String(notes || "").trim(), documentationNotes = selected && selected.kind === "documentation" ? String(selected.payload.notes || "").trim() : "", metrics = typeMetricsHtml(piece);
+        if (!visual && !metrics) return esc(text || "—");
         const caption = options.caption || translate("Door piece drawing {0}", ["—"]);
-        return `<div class="dco-piece-notes">${text ? `<div class="dco-piece-notes-text">${esc(text)}</div>` : ""}<figure class="dco-piece-sketch">${visual}<figcaption>${esc(caption)}</figcaption>${documentationNotes ? `<p>${esc(documentationNotes)}</p>` : ""}<em>${esc(translate("This documents the customer request and is not a manufacturing file."))}</em></figure></div>`;
+        const textHtml = text ? `<div class="dco-piece-notes-text">${esc(text)}</div>` : "";
+        if (!visual) return `<div class="dco-piece-notes">${textHtml}${metrics}</div>`;
+        return `<div class="dco-piece-notes">${textHtml}<figure class="dco-piece-sketch">${visual}<figcaption>${esc(caption)}</figcaption>${documentationNotes ? `<p>${esc(documentationNotes)}</p>` : ""}${metrics}<em>${esc(translate("This documents the customer request and is not a manufacturing file."))}</em></figure></div>`;
     }
-    const css = `.dco-piece-notes{display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:right}.dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.dco-piece-sketch{display:block;margin:0;padding:4px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}.dco-piece-sketch>svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}.dco-piece-sketch .dco-reference-crop{overflow:hidden}.dco-piece-sketch figcaption{margin-top:2px;color:#344054;font-size:7px;font-weight:700;text-align:center}.dco-piece-sketch p{margin:3px 0 0;font-size:7px;line-height:1.35;white-space:pre-wrap}.dco-piece-sketch em{display:block;margin-top:3px;color:#92400e;font-size:6px;font-style:normal;text-align:center}tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}td.dco-notes-has-sketch{min-width:38mm}`;
+    const css = `.dco-piece-notes{display:flex;flex-direction:column;gap:4px;align-items:stretch;text-align:right}.dco-piece-notes-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.dco-piece-sketch{display:block;margin:0;padding:4px;border:1px solid #aeb7bf;border-radius:4px;background:#fff;break-inside:avoid;page-break-inside:avoid}.dco-piece-sketch>svg{display:block;width:100%;height:68px;max-width:155px;margin:0 auto;overflow:visible;shape-rendering:geometricPrecision}.dco-piece-sketch>svg.dco-corner-print-svg{height:92px;max-width:175px}.dco-piece-sketch .dco-reference-crop{overflow:hidden}.dco-piece-sketch figcaption{margin-top:2px;color:#344054;font-size:7px;font-weight:700;text-align:center}.dco-piece-sketch p{margin:3px 0 0;font-size:7px;line-height:1.35;white-space:pre-wrap}.dco-piece-type-metrics{display:grid;gap:1px;margin:3px 0 0;padding:0;font-size:7px;line-height:1.35;font-weight:650;color:#344054;break-inside:avoid;page-break-inside:avoid;text-align:start}.dco-piece-type-metrics b{font-weight:800;font-variant-numeric:tabular-nums}.dco-piece-sketch em{display:block;margin-top:3px;color:#92400e;font-size:6px;font-style:normal;text-align:center}tr.dco-row-with-sketch{break-inside:avoid;page-break-inside:avoid}td.dco-notes-has-sketch{min-width:38mm}`;
     function hasVisual(piece) { return Boolean(shapeOutput.hasVisual(piece) || cornerOutline(piece).length); }
     window.AlmdinaShapePrint = Object.freeze({ parse: shapeOutput.parseDrawing, drawingPayload: shapeOutput.drawingFromPiece, geometryPayload: shapeOutput.geometryFromPiece, hasVisual, svg, notesCell, css });
 })();

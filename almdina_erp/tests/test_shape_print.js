@@ -306,7 +306,75 @@ const lCell = renderer.notesCell(lPiece, "إضافات: لاينر — ملاح�
 assert.match(lCell, /dco-piece-sketch/);
 assert.match(lCell, /إضافات: لاينر — ملاحظة L/);
 assert.match(lCell, /Door piece drawing 4/);
+assert.match(lCell, /dco-piece-type-metrics/);
+assert.match(lCell, /Corner:.*Top right/s);
+assert.doesNotMatch(lCell, /Remaining on width side/);
+assert.doesNotMatch(lCell, /Remaining on length side/);
+assert.match(lCell, /data-dco-remaining-axis="width"[^>]*>70 cm</);
+assert.match(lCell, /data-dco-remaining-axis="length"[^>]*>160 cm</);
 assert.match(lCell, /This documents the customer request and is not a manufacturing file\./);
+
+const squareCorner = {
+    piece_type: "Clipped Corner",
+    width_cm: 55,
+    length_cm: 55,
+    clipped_corner_position: "Bottom Right",
+    clipped_corner_width_cm: 11,
+    clipped_corner_length_cm: 11,
+    edge_width_top: 1,
+    edge_long_right: 1,
+    edge_break: 1,
+};
+const squareSvg = renderer.svg(squareCorner);
+const squareCell = renderer.notesCell(squareCorner, "");
+assert.match(squareSvg, /data-dco-remaining-axis="width"[^>]*>44 cm</);
+assert.match(squareSvg, /data-dco-remaining-axis="length"[^>]*>44 cm</);
+assert.match(squareSvg, /stroke="#d00000"/);
+assert.equal((squareSvg.match(/stroke="#d00000"/g) || []).length, 3);
+assert.doesNotMatch(squareCell, /Remaining on width side/);
+assert.doesNotMatch(squareCell, />11 cm</);
+const widthAnchor = squareSvg.match(/data-dco-remaining-axis="width" x="([^"]+)" y="([^"]+)"/);
+const lengthAnchor = squareSvg.match(/data-dco-remaining-axis="length" x="([^"]+)" y="([^"]+)"/);
+assert.ok(widthAnchor && lengthAnchor);
+assert.ok(Number(widthAnchor[2]) > 55 * 0.9, "width remaining sits near the bottom side");
+assert.ok(Number(lengthAnchor[1]) > 55 * 0.9, "length remaining sits near the right side");
+
+const swappedAxesSvg = renderer.svg({
+    piece_type: "L-Shaped Corner",
+    width_cm: 80,
+    length_cm: 120,
+    clipped_corner_position: "Top Left",
+    clipped_corner_width_cm: 15,
+    clipped_corner_length_cm: 40,
+    edge_break: 1,
+});
+assert.match(swappedAxesSvg, /data-dco-remaining-axis="width"[^>]*>65 cm</);
+assert.match(swappedAxesSvg, /data-dco-remaining-axis="length"[^>]*>80 cm</);
+assert.match(swappedAxesSvg, /stroke="#d00000"/);
+const swappedWidth = swappedAxesSvg.match(/data-dco-remaining-axis="width" x="([^"]+)" y="([^"]+)"/);
+const swappedLength = swappedAxesSvg.match(/data-dco-remaining-axis="length" x="([^"]+)" y="([^"]+)"/);
+assert.ok(Number(swappedWidth[2]) < 20, "width remaining on top side for Top Left");
+assert.ok(Number(swappedLength[1]) < 20, "length remaining on left side for Top Left");
+const breakPoints = swappedAxesSvg.match(/stroke="#d00000"[^>]*points="([^"]+)"/);
+assert.ok(breakPoints);
+const breakCoords = breakPoints[1].split(" ").map(pair => pair.split(",").map(Number));
+assert.equal(breakCoords.length, 3, "L corner edge band uses two orthogonal cut legs");
+assert.ok(Math.abs(breakCoords[0][0] - breakCoords[1][0]) < 0.2, "first L cut leg is vertical");
+assert.ok(Math.abs(breakCoords[1][1] - breakCoords[2][1]) < 0.2, "second L cut leg is horizontal");
+assert.ok(breakCoords.every(point => point[0] < 40 && point[1] < 55), "L band stays on the Top Left notch");
+
+const glassCell = renderer.notesCell({
+    piece_type: "Glass",
+    width_cm: 60,
+    length_cm: 90,
+    glass_margin_mm: 20,
+    notes: "بلور",
+}, "بلور");
+assert.match(glassCell, /dco-piece-type-metrics/);
+assert.match(glassCell, /Glass Margin:.*<b dir="ltr">2 cm<\/b>/);
+assert.match(glassCell, /بلور/);
+assert.doesNotMatch(glassCell, /dco-piece-sketch/);
+assert.equal(renderer.notesCell({ piece_type: "Glass", width_cm: 60, length_cm: 90 }, ""), "—");
 
 for (const position of ["Top Right", "Top Left", "Bottom Right", "Bottom Left"]) {
     const clipped = {
@@ -352,12 +420,24 @@ const incompleteCorner = {
     notes: "بدون قص",
 };
 assert.equal(renderer.hasVisual(incompleteCorner), false);
-assert.equal(renderer.notesCell(incompleteCorner, "بدون قص"), "بدون قص");
+const incompleteCell = renderer.notesCell(incompleteCorner, "بدون قص");
+assert.match(incompleteCell, /بدون قص/);
+assert.match(incompleteCell, /Corner:.*Top left/s);
+assert.doesNotMatch(incompleteCell, /Remaining on width side/);
+assert.doesNotMatch(incompleteCell, /Remaining on length side/);
+assert.doesNotMatch(incompleteCell, /dco-piece-sketch/);
 assert.equal(renderer.hasVisual({
     ...incompleteCorner,
     clipped_corner_width_cm: 100,
     clipped_corner_length_cm: 20,
 }), false);
+const invalidCutCell = renderer.notesCell({
+    ...incompleteCorner,
+    clipped_corner_width_cm: 100,
+    clipped_corner_length_cm: 20,
+}, "بدون قص");
+assert.match(invalidCutCell, /Corner:.*Top left/s);
+assert.doesNotMatch(invalidCutCell, /Remaining on width side/);
 assert.equal(renderer.hasVisual({
     ...lPiece,
     clipped_corner_position: "Center",
