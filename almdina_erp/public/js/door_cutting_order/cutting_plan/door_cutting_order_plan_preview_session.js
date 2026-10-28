@@ -416,7 +416,10 @@
                 : await api.selectCandidate(frm.doc.name, token, candidateId);
             if (!current()) return false;
             if (!payload?.plan || payload.order_name !== frm.doc.name || !matchesSettings(payload, state.requestedSettings)
-                || (!continueSearch && (payload.preview_id !== token || payload.candidate_id !== candidateId))) {
+                || (!continueSearch && (payload.preview_id !== token || payload.candidate_id !== candidateId
+                    || payload.plan.preview_candidate_id !== candidateId
+                    || (state.payload.candidates.find(c => c.candidate_id === candidateId)?.geometry_fingerprint
+                        && payload.geometry_fingerprint !== state.payload.candidates.find(c => c.candidate_id === candidateId).geometry_fingerprint)))) {
                 throw new Error("Invalid cutting-plan candidate response");
             }
             if (continueSearch) {

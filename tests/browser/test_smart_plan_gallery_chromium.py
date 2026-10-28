@@ -29,6 +29,7 @@ def setup_gallery(browser, origin, width):
         window.AlmdinaDocumentContext={formIdentity:f=>f.doc.name};
         window.AlmdinaPlanWorkspaceAPI={
             async preview(){calls.preview++;return {preview_version:2,preview_id:'token',order_name:'GALLERY',source_plan_name:'CP',
+                source_plan_modified:'before',source_plan_revision:1,
                 candidate_id:candidates[0].candidate_id,candidates,plan:window.plans[0],summary:candidates[0].summary,
                 search_budget_sec:1,can_continue:true,expires_in_sec:900};},
             async selectCandidate(name,token,id){calls.select++;const i=candidates.findIndex(c=>c.candidate_id===id);

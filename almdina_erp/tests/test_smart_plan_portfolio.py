@@ -35,10 +35,28 @@ def test_signature_ignores_names_but_retains_identity_holes_and_transforms():
         for p in sheet['pieces']:
             p.update(label='Display only',notes='memo')
     assert geometry_signature(same)==geometry_signature(plan)
-    for key,value in [('id',999),('x',.01),('mirrored',True),('glass_hole_local_mm',[[1,1],[2,1],[2,2],[1,2]])]:
+    for key,value in [('id',999),('x',.01),('mirrored',True),('corner_mirrored',True),('liner_width_cm',3),('glass_hole_local_mm',[[1,1],[2,1],[2,2],[1,2]])]:
         changed=deepcopy(plan)
         changed['sheets'][0]['pieces'][0][key]=value
         assert geometry_signature(changed)!=geometry_signature(plan)
+
+
+def test_signature_normalizes_json_ring_origins_and_numeric_representation():
+    plan=opt.auto_fast(problem(),100,100,.3)
+    piece=plan['sheets'][0]['pieces'][0]
+    piece['special_shape_geometry_json']='{"version":1,"points":[[0,0],[20,0],[20,20],[0,20]]}'
+    same=deepcopy(plan)
+    other=same['sheets'][0]['pieces'][0]
+    other['placement_rotation_deg']=360
+    other['special_shape_geometry_json']='{ "points": [[20.0,20],[20,0],[0,0],[0,20]], "version": 1 }'
+    assert geometry_signature(same)==geometry_signature(plan)
+
+
+def test_only_one_valid_geometry_is_not_padded_with_fake_alternatives():
+    pieces=expand_piece_groups([dict(width_cm=10,length_cm=4,qty=2)])
+    plan=opt.smart_search(pieces,10,8.29,.3,time_limit_sec=.3)
+    assert len(plan['smart_candidates'])==1
+    assert len(plan['sheets'])==2
 
 
 def test_continuation_uses_warm_candidates_even_when_no_search_time_remains(monkeypatch):

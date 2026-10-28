@@ -211,14 +211,14 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         frappe.db.set_value('Door Cutting Order Detail',order.pieces[0].name,'cut_width_cm',39)
         with self.assertRaises(frappe.ValidationError):
             previews.select_cutting_plan_candidate(order.name,preview['preview_id'],preview['candidate_id'])
-        # Lifecycle gate must run before a cached candidate is returned or saved.
-        with patch.object(previews,'assert_plan_settings_edit_lifecycle',side_effect=frappe.PermissionError('stage locked')):
-            for action,args in [(previews.select_cutting_plan_candidate,(preview['candidate_id'],)),
-                                (previews.commit_cutting_plan_preview,(preview['candidate_id'],)),
-                                (previews.continue_cutting_plan_search,()),
-                                (previews.discard_cutting_plan_preview,())]:
-                with self.assertRaises(frappe.PermissionError):
-                    action(order.name,preview['preview_id'],*args)
+        # A real terminal order must reject every cached-preview operation.
+        frappe.db.set_value('Door Cutting Order',order.name,'status','Delivered')
+        for action,args in [(previews.select_cutting_plan_candidate,(preview['candidate_id'],)),
+                            (previews.commit_cutting_plan_preview,(preview['candidate_id'],)),
+                            (previews.continue_cutting_plan_search,()),
+                            (previews.discard_cutting_plan_preview,())]:
+            with self.assertRaises(frappe.PermissionError):
+                action(order.name,preview['preview_id'],*args)
 
     def test_recalculate_without_settings_edit_and_reject_physical_changes(self):
         order, _ = self._order()
@@ -251,3 +251,19 @@ class TestSmartCuttingIntegration(FrappeTestCase):
                 kerf_mm=0,trim_margin_mm=0,optimization_time_limit_sec=.4)
         with self.assertRaises(frappe.PermissionError):
             commands.recalculate_order_plan(order.name, kerf_mm=0)
+        preview = previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+            kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=.4)
+        frappe.set_user('Administrator')
+        ProjectedPermissionMatrixRepository().save_role_state(role, {
+            Capability.VIEW_ORDERS: True, Capability.VIEW_ALL_ORDERS: True,
+            Capability.VIEW_SYSTEM_CUTTING_PLAN: True, Capability.RECALCULATE_PLAN: False,
+            Capability.EDIT_OPTIMIZER_SETTINGS: False,
+        })
+        frappe.clear_cache()
+        frappe.local.almdina_matrix_capabilities = {}
+        frappe.set_user(email)
+        for action,args in [(previews.select_cutting_plan_candidate,(preview['candidate_id'],)),
+                            (previews.commit_cutting_plan_preview,(preview['candidate_id'],)),
+                            (previews.continue_cutting_plan_search,())]:
+            with self.assertRaises(frappe.PermissionError):
+                action(order.name,preview['preview_id'],*args)

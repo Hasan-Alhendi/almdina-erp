@@ -35,6 +35,10 @@ async function run(){
  owner.invalidate(frm);pendingSelect=null;
  resolve({preview_id:'p',order_name:'DCO',candidate_id:'b',plan:plan('b'),summary:candidates[1].summary});
  assert.equal(await request,false);assert.equal(owner.isBusy(frm),false,'invalidating in-flight selection must unlock the next preview');
+ await owner.preview(frm,settings);
+ pendingSelect=Promise.resolve({preview_id:'p',order_name:'DCO',candidate_id:'b',plan:plan('a'),summary:candidates[1].summary});
+ await assert.rejects(owner.selectCandidate(frm,'b'),/Invalid cutting-plan candidate response/);
+ pendingSelect=null;assert.equal(owner.isCommittable(frm),false,'mismatched snapshot identity fails closed');
  console.log('Candidate selection, exact receipt, continuation, expiry and stale response tests passed');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

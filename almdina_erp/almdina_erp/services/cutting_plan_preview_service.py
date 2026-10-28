@@ -202,7 +202,8 @@ def _session(order, preview_id):
 
 
 def _candidate(session,candidate_id):
-    if not session.candidates and not candidate_id:  # Existing short-lived v1 tokens.
+    if session.version == 1 and not session.candidates and not candidate_id:
+        # Existing short-lived v1 tokens retain their original single-plan flow.
         return dict(snapshot=session.snapshot,summary={},candidate_id='')
     if not candidate_id:
         frappe.throw(_("Invalid cutting plan candidate."),frappe.ValidationError)
