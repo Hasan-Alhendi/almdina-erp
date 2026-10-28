@@ -94,6 +94,22 @@ flowchart LR
 - Preview والحساب النهائي يستهلكان نفس `PlanSettings` validated contract؛ لا يملك أي منهما قواعد normalization مستقلة.
 - Frappe metadata ليست سلطة Business Validation. حقل التخزين التاريخي `trim_margin_mm` يمثل `preferred_trim_mm` عند حدود Frappe فقط ولا يغيّر معنى العقد في Domain.
 
+### Smart Search للعمليات الجديدة
+
+إنشاء خطة System جديدة أو بدء إعادة الحساب يختار `smart` من سياسة Domain
+`settings_for_system_search` على السيرفر، قبل إنشاء بصمة الإدخال. لا تتغير أوضاع
+الخطط القديمة عند القراءة، ولا يتغير fallback التاريخي `auto_pro`. اختيار الوضع
+الداخلي لا يتطلب `EDIT_OPTIMIZER_SETTINGS`؛ تغيير الشفرة والهامش والمكنة والزمن
+يبقى محميًا بالصلاحية الحالية. عقد إعدادات المعاينة والبصمة والحفظ يحتفظ بالوضع
+حتى مع غياب المنتقي عن محرر الإعدادات والملخص وحقول Frappe الأصلية.
+
+يقارن Smart خططًا مكتملة عبر `industrial_rank` والتحقق المستقل، مع الاحتفاظ
+بنتيجة Auto الصحيحة ومرشحيها المحسنين. البحث محدود وقطعي عند التعادل؛ ولا يثبت
+الأمثلية العامة. عقد الاستيراد الصارم الحالي لا يثبت هوية ضيف الفراغ المائل غير
+ذي الدوران الربعي، لذلك يستبعد Smart هذه المرشحات ويحتفظ ببديل قابل للتصنيع.
+لم تتغير قواعد التعشيق أو مدققات DXF أو الخطط التاريخية. أدلة المقارنة والحدود:
+[Smart Search evidence](../evidence/smart-cutting-search/README.md).
+
 ## 8. Adaptive Trim
 
 Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.py`، وليس Strategy قص مستقلة ولا سلوكًا مخفيًا داخل optimizer.
@@ -105,7 +121,7 @@ Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.p
 - عند الحاجة إلى relaxation، يُخفّض محور العرض أو الطول فقط إذا كان هذا المحور هو الذي يحتاجه الحل؛ لا يُخفّض المحوران معًا إلا إذا تطلبت الهندسة ذلك.
 - يحتفظ القرار بأكبر Applied Trim ممكن بدقة `0.1 mm` بدل القفز مباشرة إلى الصفر.
 - ترتيب القرار deterministic: width-only ثم length-only ثم both، وبعدها refinement للمحاور التي ثبت أنها تحتاج relaxation.
-- كل probe/refinement/final evaluation يستخدم **نفس `optimization_mode` الذي اختاره المستخدم** ونفس machine/time-limit/options. Adaptive Trim لا يبدّل الخوارزمية سرًا إلى `Auto` أو غيرها.
+- كل probe/refinement/final evaluation يستخدم **نفس `optimization_mode` للعملية** ونفس المكنة والإعدادات الفيزيائية. Adaptive Trim لا يبدّل الخوارزمية سرًا إلى `Auto` أو غيرها. في Smart تتشارك التقييمات الميزانية المتبقية دون تعديل زمن البحث المحفوظ؛ تبقى التعبئة الأولية والتحقق مراحل ذرية قد تتجاوز المهلة. يسجل snapshot زمن البحث الفعلي و`total_elapsed_sec` منفصلًا عن الحد المطلوب.
 - `kerf_mm` لا يُخفّض ولا يُعدّل مطلقًا بواسطة Adaptive Trim؛ كل evaluations تستخدم Kerf نفسها.
 - أبعاد اللوح الفيزيائية `full_*` لا تتغير. الذي يتغير فقط هو `usable_*` الناتج عن Applied Trim.
 - عند غياب Applied Trim الصريح، فرق أبعاد اللوح المحفوظة `full − usable` يثبت الهامش لكل محور، بما فيه الصفر عند تساوي البعدين؛ لا يُستبدل هذا الصفر بالهامش المفضّل العام. أبعاد usable الأكبر من full متعارضة ولا تسمح بتصدير التصنيع. التحقق وإعادة بناء snapshot التصدير يستخدمان التفسير نفسه دون إعادة كتابة الخطة المحفوظة.

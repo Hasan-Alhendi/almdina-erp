@@ -3029,3 +3029,8 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+"Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة إعدادات أخرى. تنشئ إعادة الحساب معاينة، ولا يُحفظ التغيير حتى تضغط «حفظ».
+"The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.",يمكن إعادة الحساب بالإعدادات المحفوظة. تغيير الشفرة أو الهامش أو المكنة أو مدة البحث يحتاج صلاحية تعديل إعدادات المحسن.
+Press “Edit” to try other settings. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
+Smart Search,بحث ذكي
+"Default geometry, cutting machine, and search limits.",إعدادات الأبعاد الافتراضية ومكنة القص وحدود البحث.

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, Develop, develop]
   pull_request:
-    branches: [main, Develop, develop]
+    branches: [main, Develop, develop, fix/cutting-best-valid-plan]
 
 permissions:
   contents: read
@@ -246,6 +246,11 @@ jobs:
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py \
+            almdina_erp/tests/test_smart_cutting_search.py \
+            almdina_erp/tests/test_smart_cutting_manufacturing.py \
+            almdina_erp/tests/test_smart_cutting_lifecycle.py \
+            almdina_erp/tests/test_almadina_136_cutting_catalog_contract.py \
+            almdina_erp/tests/test_almadina_137_plan_settings_contract.py \
             almdina_erp/tests/test_cutting_shape_search.py \
             almdina_erp/tests/test_cutting_industrial_gaps.py \
             almdina_erp/tests/test_liner_geometry.py \

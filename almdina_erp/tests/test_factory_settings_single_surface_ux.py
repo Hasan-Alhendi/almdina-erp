@@ -14,7 +14,8 @@ SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_serv
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 MAIN_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json"
 
-OPERATIONAL_HIDDEN_FIELDS = {"whatsapp_session_id", "whatsapp_session_name"}
+OPERATIONAL_HIDDEN_FIELDS = {
+    "default_packing_mode","whatsapp_session_id", "whatsapp_session_name"}
 LEGACY_PRESERVED_FIELDS = {
     "enforce_stock_control",
     "default_warehouse",

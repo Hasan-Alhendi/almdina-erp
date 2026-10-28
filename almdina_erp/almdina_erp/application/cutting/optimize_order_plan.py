@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -125,8 +126,11 @@ def optimize_order_plan(
 ) -> OptimizationOutcome:
     """Expand pieces, resolve Adaptive Trim, optimize, validate, and snapshot."""
 
+    started = time.monotonic()
     board = command.board
     plan_settings = _canonical_trace_settings(command)
+    smart = plan_settings.optimization_mode == "smart"
+    deadline = started + command.optimizer.time_limit_sec
     rows = [dict(row) for row in command.piece_rows]
     expanded = engine.expand_pieces(rows)
     preferred_trim = AppliedTrim(
@@ -134,12 +138,13 @@ def optimize_order_plan(
         length_trim_cm=max(0.0, board.trim_cm),
     )
 
-    preferred_plan = _run_engine(
-        command,
-        engine=engine,
-        pieces=expanded,
-        trim=preferred_trim,
-    )
+    def run_for_trim(trim: AppliedTrim) -> dict[str, Any]:
+        return _run_engine(
+            command, engine=engine, pieces=expanded, trim=trim,
+            time_limit_sec=max(0.0, deadline - time.monotonic()) if smart else None,
+        )
+
+    preferred_plan = run_for_trim(preferred_trim)
     evaluated_plans: dict[AppliedTrim, dict[str, Any]] = {
         preferred_trim: preferred_plan,
     }
@@ -147,12 +152,7 @@ def optimize_order_plan(
     def evaluate_trim(trim: AppliedTrim) -> PlanQuality:
         plan = evaluated_plans.get(trim)
         if plan is None:
-            plan = _run_engine(
-                command,
-                engine=engine,
-                pieces=expanded,
-                trim=trim,
-            )
+            plan = run_for_trim(trim)
             evaluated_plans[trim] = plan
         return _plan_quality(plan)
 
@@ -166,12 +166,7 @@ def optimize_order_plan(
     applied_trim = trim_decision.applied
     plan = evaluated_plans.get(applied_trim)
     if plan is None:
-        plan = _run_engine(
-            command,
-            engine=engine,
-            pieces=expanded,
-            trim=applied_trim,
-        )
+        plan = run_for_trim(applied_trim)
 
     usable_width_cm = applied_trim.usable_width_cm(
         full_width_cm=board.full_width_cm
@@ -288,6 +283,12 @@ def optimize_order_plan(
         },
     }
 
+    if smart:
+        snapshot["smart_search"] = dict(plan.get("smart_search") or {})
+        snapshot["search_time_limit_sec"] = command.optimizer.time_limit_sec
+        snapshot["total_elapsed_sec"] = round(time.monotonic() - started, 3)
+        snapshot["smart_search"]["trim_evaluations"] = len(evaluated_plans)
+
     packing_score = (
         f"ألواح: {required_boards} | هدر: {waste_percent}% | "
         f"قصات تقديرية: {_integer(metrics.get('estimated_cut_count'))} | "
@@ -332,6 +333,7 @@ def _run_engine(
     engine: CuttingPlanEngine,
     pieces: list[dict[str, Any]],
     trim: AppliedTrim,
+    time_limit_sec: float | None = None,
 ) -> dict[str, Any]:
     board = command.board
     return engine.optimize(
@@ -341,7 +343,7 @@ def _run_engine(
         board.kerf_cm,
         selected_mode=command.optimizer.selected_mode,
         machine_type=command.optimizer.machine_type,
-        time_limit_sec=command.optimizer.time_limit_sec,
+        time_limit_sec=(command.optimizer.time_limit_sec if time_limit_sec is None else time_limit_sec),
         exact_piece_limit=command.optimizer.exact_piece_limit,
         min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,

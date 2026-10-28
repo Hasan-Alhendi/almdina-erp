@@ -223,11 +223,12 @@ def test_piece_financial_fields_are_protected_at_cost_permission_level():
         assert fields[fieldname].get("permlevel") == 1
 
 
-def test_algorithm_selector_consumes_workspace_catalog_without_post_render_label_patch():
+def test_algorithm_selector_is_absent_and_machine_catalog_stays_canonical():
     controls = source(CONTROLS_UX)
     edit_session = source(PLAN_EDIT_SESSION)
 
-    assert 'catalog: "optimization_catalog"' in edit_session
+    assert 'catalog: "optimization_catalog"' not in edit_session
+    assert 'catalog: "machine_type_catalog"' in edit_session
     assert "data[catalogName]" in edit_session
     assert "entry && entry.id" in edit_session
     assert "entry && entry.label" in edit_session

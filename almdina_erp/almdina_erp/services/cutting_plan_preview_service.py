@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import settings_for_system_search
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     cutting_plan_capability_allowed,
@@ -42,6 +43,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.stage_assignment_access impor
 )
 from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
     _assert_recalculation_state,
+    _settings_from_plan,
     plan_payload,
 )
 from almdina_erp.almdina_erp.services.plan_settings_edit_service import (
@@ -183,15 +185,23 @@ def preview_cutting_plan(
     _assert_recalculation_state(order)
 
     source_plan = _system_draft(order, Capability.RECALCULATE_PLAN)
-    settings = _normalized_settings(
-        {
-            "packing_mode": packing_mode,
-            "cutting_machine_type": cutting_machine_type,
-            "kerf_mm": kerf_mm,
-            "trim_margin_mm": trim_margin_mm,
-            "optimization_time_limit_sec": optimization_time_limit_sec,
-        }
-    )
+    requested_settings = {
+        "packing_mode": packing_mode,
+        "cutting_machine_type": cutting_machine_type,
+        "kerf_mm": kerf_mm,
+        "trim_margin_mm": trim_margin_mm,
+        "optimization_time_limit_sec": optimization_time_limit_sec,
+    }
+    # Validate any explicit historical API mode, then apply the same trusted
+    # server policy used by calculation before creating the preview fingerprint.
+    settings = _normalized_settings({
+        **requested_settings,
+        "packing_mode": (packing_mode if packing_mode is not None else
+                         settings_for_system_search(_settings_from_plan(source_plan)).optimization_mode),
+    })
+    settings["packing_mode"] = settings_for_system_search(
+        _settings_from_plan(source_plan, settings)
+    ).optimization_mode
 
     preview_plan = frappe.copy_doc(source_plan)
     _apply_settings(preview_plan, settings)

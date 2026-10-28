@@ -278,7 +278,6 @@
         const adaptive = trace.adaptive_trim || {};
         const optimizer = trace.optimizer || {};
         const items = [
-            ["Requested algorithm", knownSettingText("optimization_mode", requested.optimization_mode), "is-trace"],
             ["Strategy used", knownStrategyText(optimizer.method_key, optimizer.method_label), "is-trace"],
             ["Cutting machine", knownSettingText("machine_type", requested.machine_type), "is-trace"],
             ["Kerf used", translate("{0} mm", [numberText(requested.kerf_mm)]), "is-trace"],
@@ -427,7 +426,7 @@
         if (!note || !note.length) return;
         note.attr("dir", uiDirection());
         if (!editing) {
-            note.text(translate("Press “Edit” to try other settings or algorithms. The saved plan will not change while you are trying them."));
+            note.text(translate("Press “Edit” to try other settings. The saved plan will not change while you are trying them."));
             return;
         }
         const hasCost = previewCostVisible(frm);

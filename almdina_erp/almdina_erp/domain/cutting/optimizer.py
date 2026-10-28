@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import time
 from collections import deque
@@ -16,15 +17,17 @@ from .primitives import (
     liner_metadata,
     num,
     prune_free_rects,
+    sort_pieces,
     split_free_rect,
 )
-from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
+from .registry import METHOD_CONFIGS, PACKING_OPTIONS, STRATEGY_BY_KEY, run_single_method
 
 AUTO_FAST = "Auto"
 AUTO_PRO = "Auto Pro"
 DEEP_SEARCH = "Deep Search"
 OPTIMAL_SEARCH = "Optimal Search"
-ADVANCED_MODES = (AUTO_FAST, AUTO_PRO, DEEP_SEARCH, OPTIMAL_SEARCH)
+SMART_SEARCH = "Smart Search"
+ADVANCED_MODES = (AUTO_FAST, AUTO_PRO, DEEP_SEARCH, OPTIMAL_SEARCH, SMART_SEARCH)
 MACHINE_TYPES = ("Auto", "CNC Router", "Panel Saw")
 
 ORDERING_STRATEGIES = (
@@ -961,6 +964,172 @@ def optimal_search(
     return best
 
 
+def _layout_signature(plan: dict[str, Any]) -> str:
+    """Deduplicate layouts without discarding identity, holes or machining data."""
+    sheets = []
+    for sheet in plan.get("sheets") or []:
+        pieces = sorted(json.dumps(p, sort_keys=True) for p in sheet.get("pieces") or [])
+        sheets.append((sheet.get("w"), sheet.get("h"), pieces))
+    payload = json.dumps((sorted(sheets), plan.get("unplaced") or []), sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def smart_search(
+    pieces: list[dict[str, Any]], board_w_cm: float, board_h_cm: float,
+    kerf_cm: float, machine_type: str = "Auto", time_limit_sec: float = 10.0,
+    exact_piece_limit: int = 40, mirroring_allowed: bool = False,
+    **metric_kwargs: Any,
+) -> dict[str, Any]:
+    """Keep a completed Auto seed, then finish a bounded diverse seed portfolio.
+
+    Reuse Pro orderings/Deep seeded restarts, never their independent searches.
+    The deadline includes Auto startup; legacy atomic packing/post-passes may
+    overrun it. Optional work never receives a fresh request-sized budget.
+    """
+    from .evaluation import placement_permission_errors
+
+    started = time.monotonic()
+    budget = max(0.0, float(time_limit_sec))
+    deadline = started + budget
+    metric_kwargs = {"min_remnant_width_cm": 30.0, "min_remnant_length_cm": 30.0,
+                     "min_remnant_area_m2": .09, **metric_kwargs}
+    seed = auto_fast(pieces, board_w_cm, board_h_cm, kerf_cm, machine_type, **metric_kwargs)
+    attempts = int(seed.get("attempts") or 0)
+    best = _finish_plan_search(
+        seed, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
+        max(0.0, min(deadline, started + budget * .5) - time.monotonic()),
+        mirroring_allowed, metric_kwargs,
+        search_deadline=min(deadline, started + budget * .5),
+        require_importable_geometry=True,
+    )
+    seed_rank = list(best.get("industrial_rank") or [])
+    seed_valid = not (validate_plan(best, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm)
+                      or placement_permission_errors(best, pieces, mirroring_allowed=mirroring_allowed))
+    completed = 1
+    evaluated_ranks = [seed_rank] if seed_valid else []
+    seen_layouts = {_layout_signature(seed), _layout_signature(best)}
+    # Include the actual per-method Auto ordering; several methods use long-side
+    # order, and named methods can share a packing kernel/configuration.
+    methods = _candidate_methods(machine_type)
+
+    def packing_signature(method, sequence):
+        _, packer, args, _ = METHOD_CONFIGS[method]
+        return packer.__name__, args, tuple(int(p["id"]) for p in sequence)
+
+    seen_orders = {packing_signature(m, sort_pieces(pieces, STRATEGY_BY_KEY[m].sort_method))
+                   for m in methods}
+    rng = random.Random(_seed_for_problem(pieces, board_w_cm, board_h_cm, kerf_cm))
+    leaders: list[dict[str, Any]] = []
+    diverse: list[dict[str, Any]] = []
+
+    def sequences():
+        local = _local_sequences(best, pieces)
+        # Repeated-size cycles often close whole-board gaps. Try them before
+        # spending the budget on many equivalent descending-size orders.
+        cycles = [entry for entry in local if entry[0].startswith("dimension_cycle_")]
+        # Auto already covers largest-first; lead with the next size group.
+        yield from cycles[1:] + cycles[:1]
+        local = [entry for entry in local if not entry[0].startswith("dimension_cycle_")]
+        for index, strategy in enumerate(ORDERING_STRATEGIES[1:]):
+            yield strategy, order_pieces(pieces, strategy)
+            if index < len(local):
+                yield local[index]
+            sequence = list(pieces)
+            rng.shuffle(sequence)
+            yield f"seeded_restart_{index}", sequence
+        yield from local[len(ORDERING_STRATEGIES) - 1:]
+
+    trials = 0
+    for sequence_index, (name, sequence) in enumerate(sequences()):
+        # Four kernels per ordering leave room for local and seeded Deep orders.
+        selected_methods = ([methods[0]] if name.startswith("dimension_cycle_") else
+            list(dict.fromkeys([methods[0], seed["method_key"], *(
+                methods[(sequence_index * 2 + offset) % len(methods)] for offset in range(2)
+            )])))
+        for method in selected_methods:
+            if trials >= 64 or time.monotonic() >= started + budget * .65:
+                break
+            signature = packing_signature(method, sequence)
+            if signature in seen_orders:
+                continue
+            seen_orders.add(signature)
+            trials += 1
+            raw = _run_preordered_method(sequence, pieces, board_w_cm, board_h_cm,
+                                         kerf_cm, method, name)
+            attempts += 1
+            layout = _layout_signature(raw)
+            if layout in seen_layouts:
+                continue
+            seen_layouts.add(layout)
+            ranked = enrich_plan_metrics(raw, method, machine_type, **metric_kwargs)
+            # A complete raw plan is already a candidate. Prove improvements
+            # immediately so a deadline before its post-passes cannot lose it.
+            if (not seed_valid or _candidate_is_better(ranked, best)) and not (
+                validate_plan(ranked, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm)
+                or placement_permission_errors(ranked, pieces, mirroring_allowed=mirroring_allowed)
+            ):
+                best, seed_valid = ranked, True
+                evaluated_ranks.append(list(ranked["industrial_rank"]))
+            # Keep two diverse seeds independently of rectangular rank. A worse
+            # rectangle baseline can become a better Glass/shape plan.
+            if len(diverse) < 2 and not any(p.get("ordering_strategy") == name for p in diverse):
+                diverse.append(ranked)
+            leaders.append(ranked)
+            leaders.sort(key=lambda p: tuple(p["industrial_rank"]))
+            del leaders[3:]
+        if trials >= 64 or time.monotonic() >= started + budget * .65:
+            break
+
+    portfolio = []
+    signatures = {_layout_signature(seed)}
+    for raw in [*leaders, *diverse]:
+        signature = _layout_signature(raw)
+        if signature not in signatures:
+            signatures.add(signature)
+            portfolio.append(raw)
+    for index, raw in enumerate(portfolio):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        slice_deadline = time.monotonic() + remaining / (len(portfolio) - index)
+        candidate = _finish_plan_search(
+            raw, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
+            max(0.0, slice_deadline - time.monotonic()), mirroring_allowed,
+            metric_kwargs, search_deadline=slice_deadline, require_importable_geometry=True,
+        )
+        completed += 1
+        if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm) or placement_permission_errors(
+            candidate, pieces, mirroring_allowed=mirroring_allowed,
+        ):
+            continue
+        evaluated_ranks.append(list(candidate["industrial_rank"]))
+        if not seed_valid or _candidate_is_better(candidate, best):
+            best, seed_valid = candidate, True
+
+    remaining = deadline - time.monotonic()
+    if (remaining > .01 and seed_valid and machine_type != "Panel Saw"
+        and 0 < len(pieces) <= exact_piece_limit and len(best.get("sheets") or []) > 1
+        and all(str(p.get("piece_type") or "Regular") == "Regular" for p in pieces)
+        and _cp_sat_available()):
+        exact = _solve_cp_sat(pieces, board_w_cm, board_h_cm, kerf_cm,
+                              len(best["sheets"]) - 1, remaining)
+        if exact is not None:
+            exact = enrich_plan_metrics(exact, OPTIMAL_SEARCH, machine_type, **metric_kwargs)
+            if not (validate_plan(exact, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm)
+                    or placement_permission_errors(exact, pieces, mirroring_allowed=mirroring_allowed)):
+                evaluated_ranks.append(list(exact["industrial_rank"]))
+                if _candidate_is_better(exact, best):
+                    best = exact
+    best["optimization_mode"] = SMART_SEARCH
+    best["attempts"] = attempts
+    best["search_elapsed_sec"] = round(time.monotonic() - started, 3)
+    best["search_time_limit_sec"] = budget
+    best["smart_search"] = dict(auto_seed_rank=seed_rank, completed_candidates=completed,
+                               packing_trials=trials, valid_final_ranks=evaluated_ranks,
+                               deadline_overrun_sec=round(max(0.0, time.monotonic() - deadline), 3))
+    return best
+
+
 def optimize_plan(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -982,6 +1151,11 @@ def optimize_plan(
         "min_remnant_area_m2": min_remnant_area_m2,
     }
 
+    if mode == SMART_SEARCH:
+        return smart_search(
+            pieces, board_w_cm, board_h_cm, kerf_cm, machine_type, time_limit_sec,
+            exact_piece_limit, mirroring_allowed, **metric_kwargs,
+        )
     if mode == AUTO_FAST:
         baseline = auto_fast(
             pieces,
@@ -1038,13 +1212,27 @@ def optimize_plan(
         baseline["optimization_mode"] = "Manual"
         baseline["attempts"] = 1
 
+    return _finish_plan_search(
+        baseline, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
+        time_limit_sec, mirroring_allowed, metric_kwargs,
+    )
+
+
+def _finish_plan_search(
+    baseline: dict[str, Any], pieces: list[dict[str, Any]],
+    board_w_cm: float, board_h_cm: float, kerf_cm: float,
+    machine_type: str, time_limit_sec: float, mirroring_allowed: bool,
+    metric_kwargs: dict[str, Any], *, search_deadline: float | None = None,
+    require_importable_geometry: bool = False,
+) -> dict[str, Any]:
     from .glass_opening_nesting import nest_glass_openings
     from .plan_search import improve_plan_search
     from .shape_aware_nesting import apply_shape_aware_nesting
 
     # Post-passes may annotate their input even when they keep its geometry.
     # Preserve each candidate, including its diagnostics, for final selection.
-    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
+    if search_deadline is None:
+        search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
     nested = nest_glass_openings(
         deepcopy(baseline),
         pieces,
@@ -1112,6 +1300,15 @@ def optimize_plan(
         )
 
     for candidate in search_candidates():
+        # Actual JS export -> strict import rejects the old non-quarter void
+        # guest identity contract. Smart must keep a manufacturable earlier
+        # stage rather than certify that geometry. Legacy search stays intact.
+        if require_importable_geometry and any(
+            abs(float(p.get("placement_rotation_deg") or 0) / 90
+                - round(float(p.get("placement_rotation_deg") or 0) / 90)) > 1e-6
+            for sheet in candidate.get("sheets") or [] for p in sheet.get("pieces") or []
+        ):
+            continue
         candidate = enrich_plan_metrics(
             candidate,
             str(candidate.get("method_key") or ""),
@@ -1150,6 +1347,8 @@ __all__ = [
     "GUILLOTINE_METHODS",
     "MACHINE_TYPES",
     "OPTIMAL_SEARCH",
+    "SMART_SEARCH",
+    "smart_search",
     "ORDERING_STRATEGIES",
     "auto_fast",
     "auto_pro",

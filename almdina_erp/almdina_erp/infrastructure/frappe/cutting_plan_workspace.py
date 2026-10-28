@@ -33,6 +33,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     PlanSettingsValidationError,
     normalize_plan_settings,
+    settings_for_system_search,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FINGERPRINT_CONTRACT_KEY,
@@ -426,7 +427,8 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
 
     width_mm, length_mm = _board_dimensions_mm(order)
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
-    plan_settings = _validated_plan_settings(plan)
+    plan_settings = settings_for_system_search(_validated_plan_settings(plan))
+    plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(

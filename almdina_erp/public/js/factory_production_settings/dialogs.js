@@ -116,7 +116,6 @@
                     values.default_cutting_machine_type
                 );
                 return [
-                    { fieldname: "default_packing_mode", fieldtype: "Select", label: t("Distribution algorithm"), options: algorithms.map(entry => entry.label).join("\n"), default: catalogLabel(algorithms, values.default_packing_mode), reqd: 1 },
                     { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("Cutting machine type"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
                     { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Default kerf (mm)"), default: values.default_kerf_mm, reqd: 1 },
                     { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("Trimming margin (mm)"), default: values.default_trim_margin_mm, reqd: 1 },
@@ -282,7 +281,6 @@
             const machine = machines.find(entry => entry.label === payload.default_cutting_machine_type);
             return {
                 ...payload,
-                default_packing_mode: algorithm ? algorithm.id : payload.default_packing_mode,
                 default_cutting_machine_type: machine ? machine.id : payload.default_cutting_machine_type,
             };
         }

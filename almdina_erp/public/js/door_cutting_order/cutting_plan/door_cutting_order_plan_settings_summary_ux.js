@@ -11,7 +11,6 @@
     const FALLBACK_SPECS = Object.freeze([
         Object.freeze({ fieldname: "kerf_mm", shortLabel: "Blade", fieldtype: "Float", suffix: "mm" }),
         Object.freeze({ fieldname: "trim_margin_mm", shortLabel: "Margin", fieldtype: "Float", suffix: "mm" }),
-        Object.freeze({ fieldname: "packing_mode", shortLabel: "Algorithm", fieldtype: "Select" }),
         Object.freeze({ fieldname: "cutting_machine_type", shortLabel: "Cutting machine", fieldtype: "Select" }),
         Object.freeze({
             fieldname: "optimization_time_limit_sec",
@@ -108,7 +107,6 @@
             if (option && option.canonical) return translate(option.label);
             if (option && option.label) return String(option.label);
             if (normalized) return normalized;
-            if (spec.fieldname === "packing_mode") return translate("Auto Pro (recommended)");
             if (spec.fieldname === "cutting_machine_type") return translate("Automatic");
             return "—";
         }

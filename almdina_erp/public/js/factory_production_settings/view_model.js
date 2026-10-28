@@ -80,10 +80,9 @@
         function sections(current = {}) {
             const source = values(current);
             return [
-                section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
+                section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Trimming margin (mm)"), source.default_trim_margin_mm],
-                    [t("Algorithm"), catalogLabel(current, "optimization_catalog", source.default_packing_mode)],
                     [t("Cutting machine type"), catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type)],
                     [t("Optimization timeout (s)"), source.default_optimization_time_limit_sec],
                     [t("Piece limit for optimal search"), source.optimal_search_piece_limit],

@@ -240,7 +240,7 @@
         const state = stateFor(frm);
         const requestIdentity = identity(frm);
         const orderName = frm.doc.name;
-        const requested = settingsSnapshot(settings || {});
+        const requested = settingsSnapshot({ ...(settings || {}), packing_mode: "smart" });
         const generation = ++state.generation;
         state.activeRequestGeneration = generation;
         state.requestedSettings = requested;

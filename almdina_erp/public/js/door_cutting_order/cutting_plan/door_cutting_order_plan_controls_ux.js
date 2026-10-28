@@ -569,9 +569,9 @@
                     ? "Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically."
                     : "Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.";
             } else if (can(frm, "edit_optimizer_settings")) {
-                message = "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
+                message = "Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
             } else if (can(frm, "recalculate_plan")) {
-                message = "The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.";
+                message = "The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.";
             } else {
                 message = "You need the “Recalculate plan” permission to run the cutting plan engine.";
             }
