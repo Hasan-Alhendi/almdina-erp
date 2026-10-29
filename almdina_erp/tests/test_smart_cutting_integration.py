@@ -145,6 +145,41 @@ class TestSmartCuttingIntegration(FrappeTestCase):
                     imported = import_saved_plan(saved,rows,export_real_js(exported,Path(directory)))
                 self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),sum(r['qty'] for r in rows))
 
+    def test_geometry_first_native_selected_snapshot_and_manufacturing_roundtrip(self):
+        from almdina_erp.tests.geometry_nesting_cases import CASES as GEOMETRY_CASES, source_rows
+        from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
+        for name in ('P5-L-different','P5-clip-different','P5-many-guests','P5-joint-different','P5-L-addon'):
+            with self.subTest(case=name):
+                width,height,trim,_=GEOMETRY_CASES[name]
+                order,rows=self._order(width,height,trim,source_rows(name))
+                before=self._plan(order).snapshot_json
+                preview=previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+                    kerf_mm=3,trim_margin_mm=trim*10,optimization_time_limit_sec=4)
+                self.assertEqual(len(preview['plan']['sheets']),1,msg=repr(preview['plan'].get('smart_search')))
+                with patch.object(previews,'calculate_system_plan',side_effect=AssertionError('optimizer during exact selection/save')):
+                    selected=previews.select_cutting_plan_candidate(order.name,preview['preview_id'],preview['candidate_id'])
+                    self.assertEqual(self._plan(order).snapshot_json,before)
+                    receipt=previews.commit_cutting_plan_preview(order.name,preview['preview_id'],selected['candidate_id'])
+                plan=self._plan(order)
+                saved=json.loads(plan.snapshot_json)
+                self.assertEqual(saved,selected['plan'])
+                self.assertTrue(receipt['exact_preview_commit'])
+                self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
+                self.assertEqual(previews.validate_cutting_plan_issues(plan),[])
+                rebuilt=_plan_to_export_snapshot(plan)
+                with TemporaryDirectory() as directory:
+                    imported=import_saved_plan(saved,rows,export_real_js(rebuilt,Path(directory)))
+                self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),sum(r['qty'] for r in rows))
+
+    def test_unprovable_corner_machining_preview_does_not_change_existing_plan(self):
+        from almdina_erp.tests.geometry_nesting_cases import source_rows
+        order,_=self._order(45.3,45.3,0,source_rows('P5-addon-ambiguous'))
+        before=self._plan(order).snapshot_json
+        with self.assertRaises(frappe.ValidationError):
+            previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+                kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=2)
+        self.assertEqual(self._plan(order).snapshot_json,before)
+
     def _preview(self, order):
         return previews.preview_cutting_plan(order.name,packing_mode="smart",cutting_machine_type="CNC Router",
             kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=.6)

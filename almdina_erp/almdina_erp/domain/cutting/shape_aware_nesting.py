@@ -266,6 +266,7 @@ def _candidate_rejection(
         hosted=hosted,
         guest_exclusions=guest_exclusions,
         quarter_turns_only=quarter_turns_only,
+        deadline=deadline,
     )
     candidate = _compose_plan(
         plan,
@@ -1200,6 +1201,7 @@ def _seat_void_guests(
     hosted: set[int],
     guest_exclusions: frozenset[int] = frozenset(),
     quarter_turns_only: bool = False,
+    deadline: float | None = None,
 ) -> list[dict[str, Any]]:
     complements = [block for block in blocks if block["kind"] != "single"]
     singles = [block for block in blocks if block["kind"] == "single"]
@@ -1227,6 +1229,8 @@ def _seat_void_guests(
     best_score: tuple[int, float] | None = None
     best_trial = seated
     for order in orders:
+        if deadline is not None and time.monotonic()>=deadline:
+            break
         trial = [
             {
                 **block,
@@ -1237,6 +1241,8 @@ def _seat_void_guests(
         ]
         placed: list[tuple[int, dict[str, Any]]] = []
         for piece in order:
+            if deadline is not None and time.monotonic()>=deadline:
+                break
             found = _place_in_voids(
                 piece,
                 trial,

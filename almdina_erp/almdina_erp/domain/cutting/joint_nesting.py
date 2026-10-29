@@ -42,6 +42,27 @@ def _glass_ids(plan):
             if p.get('glass_host_piece_id') not in (None, '') for i in (p['id'], p['glass_host_piece_id'])}
 
 
+def complete_shape_candidate(candidate, pieces, width, height, kerf, *, machine_type,
+                             mirroring_allowed, deadline, metric_kwargs, excluded=frozenset()):
+    """Complete a proven shape seed without repeating formation enumeration."""
+    from .glass_opening_nesting import nest_glass_openings
+    from .plan_search import improve_plan_search
+    if time.monotonic() >= deadline:
+        return candidate
+    machining = {int(p['id']) for p in pieces if any(p.get(k) for k in (
+        'extra_liner', 'extra_back_groove', 'extra_recessed_handle_cutout'))}
+    protected = _shape_ids(candidate) | _glass_ids(candidate) | set(excluded) | machining
+    nested = nest_glass_openings(deepcopy(candidate), pieces, width, height, kerf,
+        machine_type=machine_type, time_limit_sec=max(0,deadline-time.monotonic()),
+        guest_exclusions=frozenset(protected), preserve_existing=True, **metric_kwargs)
+    nested = consolidate_nested_boards(nested,pieces,width,height,kerf,machine_type=machine_type,
+        mirroring_allowed=mirroring_allowed,
+        deadline=min(deadline,time.monotonic()+max(0,deadline-time.monotonic())*.5))
+    return improve_plan_search(nested,pieces,width,height,kerf,machine_type=machine_type,
+        mirroring_allowed=mirroring_allowed,time_limit_sec=max(0,deadline-time.monotonic())*.2,
+        deadline_monotonic=min(deadline,time.monotonic()+max(0,deadline-time.monotonic())*.2),**metric_kwargs)
+
+
 def _release_guest(plan, piece_id, width, height, kerf, deadline):
     """Detach just one selected relation and keep its descendants as a rigid unit."""
     copied = deepcopy(plan)
@@ -75,10 +96,8 @@ def _release_guest(plan, piece_id, width, height, kerf, deadline):
 def joint_nesting_candidates(baseline, incumbent, pieces, width, height, kerf, *,
                              machine_type, mirroring_allowed, deadline, metric_kwargs):
     """Return up to four proven finals and small diagnostics within one deadline."""
-    from . import glass_opening_nesting as glass
     from . import shape_aware_nesting as shape
     from .optimizer import enrich_plan_metrics
-    from .plan_search import improve_plan_search
 
     diagnostics = dict(joint_candidates_generated=0, joint_candidates_valid=0,
                        guest_reassignments=0, rejection_reasons={})
@@ -139,21 +158,8 @@ def joint_nesting_candidates(baseline, incumbent, pieces, width, height, kerf, *
     def complete(candidate, excluded=frozenset()):
         if time.monotonic() >= deadline or diagnostics['joint_candidates_generated'] >= _MAX_COMPLETED:
             return
-        # Retain machining guests outside Glass until Strict Import can prove
-        # overlay ownership. Their source geometry/addon settings never change.
-        machining = {int(p['id']) for p in pieces if any(p.get(k) for k in (
-            'extra_liner', 'extra_back_groove', 'extra_recessed_handle_cutout'))}
-        protected = _shape_ids(candidate) | _glass_ids(candidate) | set(excluded) | machining
-        nested = glass.nest_glass_openings(deepcopy(candidate), pieces, width, height, kerf,
-            machine_type=machine_type, time_limit_sec=max(0, deadline-time.monotonic()),
-            guest_exclusions=frozenset(protected), preserve_existing=True, **metric_kwargs)
-        nested = consolidate_nested_boards(nested, pieces, width, height, kerf,
-            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
-            deadline=min(deadline, time.monotonic()+max(0, deadline-time.monotonic())*.5))
-        nested = improve_plan_search(nested, pieces, width, height, kerf,
-            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
-            time_limit_sec=max(0, deadline-time.monotonic())*.2,
-            deadline_monotonic=min(deadline, time.monotonic()+max(0, deadline-time.monotonic())*.2), **metric_kwargs)
+        nested = complete_shape_candidate(candidate,pieces,width,height,kerf,machine_type=machine_type,
+            mirroring_allowed=mirroring_allowed,deadline=deadline,metric_kwargs=metric_kwargs,excluded=excluded)
         offer(nested)
 
     def shape_then_glass(source, excluded=frozenset(), glass_excluded=frozenset()):
