@@ -146,7 +146,10 @@ def test_unproven_angled_import_never_becomes_smart_manufacturing_result(tmp_pat
     ]
     pieces = expand_piece_groups(rows)
     legacy = opt.optimize_plan(pieces, 40.3, 40.3, .3, selected_mode="Auto", time_limit_sec=.4)
-    smart = opt.optimize_plan(pieces, 40.3, 40.3, .3, selected_mode="Smart Search", time_limit_sec=.4)
+    # Quality discovery has a real search budget; expiry/fallback is tested
+    # separately. A 0.4s wall-clock race cannot require a specific board saving.
+    quality_budget = 3
+    smart = opt.optimize_plan(pieces, 40.3, 40.3, .3, selected_mode="Smart Search", time_limit_sec=quality_budget)
     assert len(legacy["sheets"]) == 1  # Geometry-valid, strict-import-incompatible witness.
     # A newly discovered axis-aligned centre placement saves the second board;
     # the unsupported legacy angle still cannot become a Smart result.
@@ -159,7 +162,7 @@ def test_unproven_angled_import_never_becomes_smart_manufacturing_result(tmp_pat
     from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
     from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
     outcome=optimize_order_plan(OptimizeOrderPlanCommand(engine_version='quarter-proof',input_fingerprint='quarter-proof',
-        board=BoardGeometry(40.3,40.3,0,.3),optimizer=OptimizerOptions('smart','CNC Router',.4,20,30,30,.09),
+        board=BoardGeometry(40.3,40.3,0,.3),optimizer=OptimizerOptions('smart','CNC Router',quality_budget,20,30,30,.09),
         piece_rows=tuple(rows)),engine=domain_cutting_engine)
     assert len(outcome.snapshot['sheets'])==1
     imported=import_saved_plan(outcome.snapshot,rows,export_real_js(outcome.snapshot,tmp_path))

@@ -211,6 +211,11 @@ and deterministic repeated discovery. No tests are skipped or validation asserti
 relaxed. The old unsupported-angle witness's expected two-board fallback becomes
 one board only with the newly proven axis-aligned guest; its angle/clearance
 assertions stay intact and an actual JS Export/Strict Import proof is added.
+That quality/roundtrip witness uses a three-second test search budget; a CI
+failure demonstrated that its former 0.4-second wall-clock race could safely
+fall back to two boards. Every one-board/angle/geometry/import assertion remains;
+dedicated short-deadline tests protect expiry/fallback. Production defaults and
+the matched ten-second benchmarks are unchanged.
 
 Each supported P5 portfolio is JSON reloaded, rebuilt by the native export
 projection, exported using the actual JavaScript exporter and fully Strict
