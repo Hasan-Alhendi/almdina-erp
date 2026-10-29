@@ -138,15 +138,29 @@ def test_trim_probes_share_budget_without_changing_requested_settings(monkeypatc
     assert outcome.snapshot["trim_cm"] == .5
 
 
-def test_unproven_angled_import_never_becomes_smart_manufacturing_result():
-    pieces = expand_piece_groups([
+def test_unproven_angled_import_never_becomes_smart_manufacturing_result(tmp_path):
+    rows = [
         dict(piece_type="Clipped Corner", width_cm=20, length_cm=20, qty=4, allow_rotation=1,
              clipped_corner_position="Top Right", clipped_corner_width_cm=8, clipped_corner_length_cm=8),
         dict(width_cm=8, length_cm=3, qty=1),
-    ])
+    ]
+    pieces = expand_piece_groups(rows)
     legacy = opt.optimize_plan(pieces, 40.3, 40.3, .3, selected_mode="Auto", time_limit_sec=.4)
     smart = opt.optimize_plan(pieces, 40.3, 40.3, .3, selected_mode="Smart Search", time_limit_sec=.4)
     assert len(legacy["sheets"]) == 1  # Geometry-valid, strict-import-incompatible witness.
-    assert len(smart["sheets"]) == 2
+    # A newly discovered axis-aligned centre placement saves the second board;
+    # the unsupported legacy angle still cannot become a Smart result.
+    assert len(smart["sheets"]) == 1
     assert not any(p.get("placement_rotation_deg") for s in smart["sheets"] for p in s["pieces"])
     assert not validate_plan(smart, pieces, 40.3, 40.3, kerf_cm=.3)
+    from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+        BoardGeometry, OptimizeOrderPlanCommand, OptimizerOptions, optimize_order_plan)
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+    from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+    from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+    outcome=optimize_order_plan(OptimizeOrderPlanCommand(engine_version='quarter-proof',input_fingerprint='quarter-proof',
+        board=BoardGeometry(40.3,40.3,0,.3),optimizer=OptimizerOptions('smart','CNC Router',.4,20,30,30,.09),
+        piece_rows=tuple(rows)),engine=domain_cutting_engine)
+    assert len(outcome.snapshot['sheets'])==1
+    imported=import_saved_plan(outcome.snapshot,rows,export_real_js(outcome.snapshot,tmp_path))
+    assert sum(len(s['pieces']) for s in imported['sheets'])==5

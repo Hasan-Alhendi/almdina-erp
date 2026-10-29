@@ -148,10 +148,14 @@ class TestSmartCuttingIntegration(FrappeTestCase):
     def test_geometry_first_native_selected_snapshot_and_manufacturing_roundtrip(self):
         from almdina_erp.tests.geometry_nesting_cases import CASES as GEOMETRY_CASES, source_rows
         from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
-        for name in ('P5-L-different','P5-clip-different','P5-many-guests','P5-joint-different','P5-L-addon'):
+        for name in ('P5-L-different','P5-clip-different','P5-many-guests','P5-joint-different','P5-L-addon','Clipped-quad'):
             with self.subTest(case=name):
-                width,height,trim,_=GEOMETRY_CASES[name]
-                order,rows=self._order(width,height,trim,source_rows(name))
+                if name=='Clipped-quad':
+                    width,height,trim,source=CASES[1]
+                else:
+                    width,height,trim,_=GEOMETRY_CASES[name]
+                    source=source_rows(name)
+                order,rows=self._order(width,height,trim,source)
                 before=self._plan(order).snapshot_json
                 preview=previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
                     kerf_mm=3,trim_margin_mm=trim*10,optimization_time_limit_sec=4)
@@ -179,6 +183,33 @@ class TestSmartCuttingIntegration(FrappeTestCase):
             previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
                 kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=2)
         self.assertEqual(self._plan(order).snapshot_json,before)
+
+    def test_equivalent_corner_bands_keep_exact_machining_proof_on_native_save(self):
+        from almdina_erp.tests.geometry_nesting_cases import source_rows
+        from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
+        band='P5-BAND-'+frappe.generate_hash(length=10)
+        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0,disabled=0))
+        try:
+            rows=source_rows('P5-addon-ambiguous')
+            rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
+                           edge_long_type=band,edge_width_type=band)
+            for side in ('edge_long_left','edge_long_right','edge_width_top','edge_width_bottom'):
+                rows[0][side+'_type_override']=band
+            order,rows=self._order(45.3,45.3,0,rows)
+            preview=previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+                kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=4)
+            selected=previews.select_cutting_plan_candidate(order.name,preview['preview_id'],preview['candidate_id'])
+            with patch.object(previews,'calculate_system_plan',side_effect=AssertionError('optimizer during banded exact save')):
+                receipt=previews.commit_cutting_plan_preview(order.name,preview['preview_id'],selected['candidate_id'])
+            plan=self._plan(order)
+            self.assertEqual(json.loads(plan.snapshot_json),selected['plan'])
+            self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
+            self.assertEqual(previews.validate_cutting_plan_issues(plan),[])
+            with TemporaryDirectory() as directory:
+                imported=import_saved_plan(selected['plan'],rows,export_real_js(_plan_to_export_snapshot(plan),Path(directory)))
+            self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),2)
+        finally:
+            frappe.db.delete('Edge Banding Type',{'name':band})
 
     def _preview(self, order):
         return previews.preview_cutting_plan(order.name,packing_mode="smart",cutting_machine_type="CNC Router",

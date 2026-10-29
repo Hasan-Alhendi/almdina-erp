@@ -145,11 +145,30 @@ def manufacturing_export_rejection(plan):
             outline=material_outline_cm(p)
             if outline is None:
                 return 'corner_machining_unknown_outline'
+            # Import binds corners with selected bands before checking machining.
+            # Equal tokens mean the same physical band; the token spelling is
+            # irrelevant to the existing contour matcher. Preserve that proof.
+            sides={'top':('edge_width_top','width'),'bottom':('edge_width_bottom','width'),
+                   'left':('edge_long_left','long'),'right':('edge_long_right','long')}
+            banded=any(p.get(field) for field,_ in sides.values()) or p.get('edge_break') or p.get('edge_break_only')
+            tokens=None
+            if banded:
+                tokens={role:json.dumps([True,p.get(field+'_type_override') or p.get('edge_'+axis+'_type')
+                    or p.get('edge_type') or '',float(p.get('edge_'+axis+'_thickness_mm') or 0)])
+                    if p.get(field) else '0' for role,(field,axis) in sides.items()}
+                notch='break' if p.get('edge_break') else ('break-only' if p.get('edge_break_only')
+                    and p['piece_type']=='Clipped Corner' else 'open')
+                tokens.update(inner_horizontal=notch,inner_vertical=notch,chord=notch)
             match=match_corner_contour([(x*10,y*10) for x,y in outline],piece_type=p['piece_type'],
                 position=p.get('clipped_corner_position') or '',width_cm=float(p.get('original_w') or p.get('width_cm') or 0),
                 length_cm=float(p.get('original_h') or p.get('length_cm') or 0),
                 cut_width_cm=float(p.get('clipped_corner_width_cm') or 0),
-                cut_length_cm=float(p.get('clipped_corner_length_cm') or 0))
+                cut_length_cm=float(p.get('clipped_corner_length_cm') or 0),edge_bands=tokens)
             if match.quarter_turns is None:
                 return 'corner_machining_orientation_'+match.reason
+            if banded:
+                from .placement_orientation import resolve_placement_orientation
+                actual=resolve_placement_orientation(p)
+                if (actual.quarter_turns,actual.mirrored)!=(match.quarter_turns,match.mirrored):
+                    return 'corner_machining_semantic_orientation'
     return ''

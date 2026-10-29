@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -71,12 +72,6 @@ def coverage(plan):
     return sorted(kinds)
 
 
-class ObservedEngine(DomainCuttingEngineAdapter):
-    def optimize(self,*args,**kwargs):
-        self.raw=super().optimize(*args,**kwargs)
-        return self.raw
-
-
 def measure(item,label,budget):
     name,machine,mode,w,h,trim,rows=item
     generated=set()
@@ -89,7 +84,7 @@ def measure(item,label,budget):
                     int(p.get('corner_rotation_quarter_turns') or 0),bool(p.get('mirrored'))) for p in sorted(body,key=lambda p:int(p['id']))))
             return block
         return observed
-    engine=ObservedEngine()
+    engine=DomainCuttingEngineAdapter()
     with ExitStack() as stack:
         stack.enter_context(patch.object(shape,'_make_block',record(shape._make_block)))
         try:
@@ -109,7 +104,7 @@ def measure(item,label,budget):
     metrics=dict(case=name,machine_type=machine,mode=mode,budget_sec=budget,
         valid=plan['validation']['is_valid'],boards=len(plan['sheets']),
         offcut_m2=plan['industrial_metrics']['largest_reusable_free_area_m2'],
-        rank=engine.raw.get('industrial_rank'),potential_shape_pairs=sum(a['piece_type']==b['piece_type'] for a,b in combinations(corners,2)),
+        rank=plan.get('industrial_rank'),potential_shape_pairs=sum(a['piece_type']==b['piece_type'] for a,b in combinations(corners,2)),
         generated_unique_formations=len(generated),shape_first=search.get('shape_first') or {},
         joint=search.get('joint') or {},portfolio=search.get('portfolio') or {},
         final_plan_coverage=[coverage(c) for c in outcome.candidate_snapshots],
@@ -132,19 +127,25 @@ def main():
     args=parser.parse_args()
     inputs=cases(args.fixtures_root)
     if args.worker_index is not None:
-        args.output.write_text(json.dumps(measure(inputs[args.worker_index],args.label,args.time_limit),ensure_ascii=False))
+        row=measure(inputs[args.worker_index],args.label,args.time_limit)
+        args.output.write_text(json.dumps(row,ensure_ascii=False))
+        print(json.dumps(row['metrics']),flush=True)
         return
-    results=[]
-    with TemporaryDirectory() as td:
+    # Never retain prior snapshots in the launcher. Fork/exec high-water RSS
+    # otherwise includes the growing launcher's live memory, hiding engine cost.
+    with TemporaryDirectory() as td, args.output.open('w') as output:
+        output.write('[\n')
         for index in range(len(inputs)):
             path=Path(td)/f'{index}.json'
             subprocess.run([sys.executable,str(Path(__file__).resolve()),'--fixtures-root',str(args.fixtures_root),
                 '--label',args.label,'--output',str(path),'--time-limit',str(args.time_limit),
                 '--worker-index',str(index)],check=True)
-            row=json.loads(path.read_text())
-            results.append(row)
-            args.output.write_text(json.dumps(results,ensure_ascii=False,indent=2))
-            print(json.dumps(row['metrics']),flush=True)
+            if index:
+                output.write(',\n')
+            with path.open() as source:
+                shutil.copyfileobj(source,output)
+            output.flush()
+        output.write('\n]\n')
 
 
 if __name__=='__main__':

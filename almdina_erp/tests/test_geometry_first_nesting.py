@@ -218,3 +218,40 @@ def test_internal_counters_distinguish_proven_area_rejection_from_enumeration_li
     assert diagnostic['reasons']['combination_enumeration_limit']==18
     assert diagnostic['reasons']['material_area_exceeds_board']==48
     assert not diagnostic['reasons'].get('budget_unvisited_combinations')
+
+
+def test_quarter_turn_clipped_guest_needs_a_non_grid_anchor_from_original_sources():
+    from almdina_erp.tests.joint_nesting_cases import corner,regular
+    pieces=expand_piece_groups([corner('Clipped Corner'),regular(8,3)])
+    plan=opt.smart_search(pieces,40.3,40.3,.3,time_limit_sec=3,machine_type='CNC Router')
+    assert len(plan['sheets'])==1
+    assert not validate_plan(plan,pieces,40.3,40.3,kerf_cm=.3)
+    assert all(not p.get('placement_rotation_deg') for s in plan['sheets'] for p in s['pieces'])
+
+
+def test_symmetric_corner_with_equivalent_bands_keeps_a_provable_machining_baseline(tmp_path):
+    from unittest.mock import patch
+    from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+        BoardGeometry,OptimizeOrderPlanCommand,OptimizerOptions,optimize_order_plan)
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+    from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+    from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+    from almdina_erp.almdina_erp.services import piece_cut_dimension_service
+    rows=source_rows('P5-addon-ambiguous')
+    rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
+                   edge_long_type='P5-band',edge_width_type='P5-band')
+    for side in ('edge_long_left','edge_long_right','edge_width_top','edge_width_bottom'):
+        rows[0][side+'_type_override']='P5-band'
+    # Reference catalog fixture only; geometry/identity/import validators are real.
+    with patch.object(piece_cut_dimension_service,'_default_profile_loader',
+                      return_value={'P5-band':dict(thickness_mm=0,disabled=0)}):
+        for mode in ('Auto','smart'):
+            outcome=optimize_order_plan(OptimizeOrderPlanCommand(engine_version='p5-bands',input_fingerprint='p5-bands',
+                board=BoardGeometry(45.3,45.3,0,.3),optimizer=OptimizerOptions(mode,'CNC Router',2,20,30,30,.09),
+                piece_rows=tuple(rows)),engine=domain_cutting_engine)
+            assert outcome.snapshot['validation']['is_valid']
+            for snapshot in outcome.candidate_snapshots or (outcome.snapshot,):
+                imported=import_saved_plan(snapshot,rows,export_real_js(snapshot,tmp_path))
+                assert sum(len(s['pieces']) for s in imported['sheets'])==2
+            if mode=='smart':
+                assert outcome.candidate_snapshots

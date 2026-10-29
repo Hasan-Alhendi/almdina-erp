@@ -1320,6 +1320,7 @@ def _finish_plan_search(
         machine_type=machine_type,
         time_limit_sec=max(0.0, search_deadline - time.monotonic()),
         formation_alternatives=True,
+        quarter_turns_only=require_importable_geometry,
         **metric_kwargs,
     )
     from .evaluation import placement_permission_errors

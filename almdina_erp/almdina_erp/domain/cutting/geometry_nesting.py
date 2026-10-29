@@ -245,7 +245,8 @@ def _pack(baseline, pieces, blocks, width,height,kerf,mirror,excluded,deadline):
     from .optimizer import _run_preordered_method
     from .plan_search import _spot_on_sheet
     seated=shape._seat_void_guests(deepcopy(blocks),pieces,kerf,width,height,
-        mirroring_allowed=mirror,hosted=set(),guest_exclusions=excluded,quarter_turns_only=True,deadline=deadline)
+        mirroring_allowed=mirror,hosted=set(),guest_exclusions=excluded,quarter_turns_only=True,
+        deadline=deadline,contact_anchors=True)
     sheets=[]
     for block in seated:
         body=shape._normalize_pieces(block['pieces'])

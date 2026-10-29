@@ -1202,6 +1202,7 @@ def _seat_void_guests(
     guest_exclusions: frozenset[int] = frozenset(),
     quarter_turns_only: bool = False,
     deadline: float | None = None,
+    contact_anchors: bool = False,
 ) -> list[dict[str, Any]]:
     complements = [block for block in blocks if block["kind"] != "single"]
     singles = [block for block in blocks if block["kind"] == "single"]
@@ -1251,6 +1252,7 @@ def _seat_void_guests(
                 board_h_cm,
                 mirroring_allowed=mirroring_allowed,
                 quarter_turns_only=quarter_turns_only,
+                contact_anchors=contact_anchors,
             )
             if found is None:
                 continue
@@ -1342,6 +1344,7 @@ def _place_in_voids(
     *,
     mirroring_allowed: bool,
     quarter_turns_only: bool = False,
+    contact_anchors: bool = False,
 ) -> tuple[int, dict[str, Any]] | None:
     for index, block in enumerate(blocks):
         if (
@@ -1374,6 +1377,7 @@ def _place_in_voids(
                 board_w_cm,
                 board_h_cm,
                 mirroring_allowed=mirroring_allowed,
+                additional_anchors=contact_anchors,
             )
             if guest is not None:
                 return index, guest
@@ -1389,13 +1393,22 @@ def _guest_in_rect(
     board_h_cm: float,
     *,
     mirroring_allowed: bool,
+    additional_anchors: bool = False,
 ) -> dict[str, Any] | None:
     if void["w"] <= 0 or void["h"] <= 0:
         return None
     for mirrored, turns, width, height in _guest_orientations(piece, mirroring_allowed):
         if width > void["w"] + 1e-6 or height > void["h"] + 1e-6:
             continue
-        for x_cm, y_cm in _void_spots(void, width, height, kerf_cm):
+        spots=_void_spots(void,width,height,kerf_cm)
+        if additional_anchors:
+            # A grid starting at a diamond's tip can miss every legal axis-
+            # aligned guest. Centre/edge contacts are only proposals; the same
+            # actual material/kerf checks below remain authoritative.
+            xs=(void['x'],void['x']+(void['w']-width)/2,void['x']+void['w']-width)
+            ys=(void['y'],void['y']+(void['h']-height)/2,void['y']+void['h']-height)
+            spots=list(dict.fromkeys([*spots,*((x,y) for y in ys for x in xs)]))
+        for x_cm, y_cm in spots:
             guest = _guest_at(piece, x_cm, y_cm, width, height, mirrored, turns)
             outline = material_outline_cm(guest)
             if outline is None or not _outline_inside_rect(outline, void):
