@@ -8,7 +8,7 @@ new packing engine, dependency, migration, production access or deployment.
 Localization impact: internal diagnostic keys only; no new product text.
 
 Original HEAD: `cf11a2bed108ef646b5fa89a61cafa67d64e11a6`. Measured production
-implementation: `7a64b443dbfaf73bdd77a4ae04bf5e5e991b82ff`. Later evidence/reporting
+implementation: `45632abfa9722e8760874ef39a14e925948f92af`. Later evidence/reporting
 changes do not alter that engine. Same branch and stacked Draft PR #574; #570,
 Develop and main are unchanged.
 
@@ -96,13 +96,19 @@ is unchanged. Later completion is capped at two candidates, at most 0.3 seconds
 each from remaining time. Atomic validation/projection can finish after deadline;
 there is no hard real-time or global-optimum claim.
 
+Exact pair counts use linear type/dimension counts; pairs stream in the same
+cross-size/source-ID order under the cap and deadline. Orientation records are
+materialized lazily for tested sources. A 300-corner regression proves 44,850
+opportunities are counted while only 48 pairs / 49 source orientation sets are
+materialized, rather than constructing the quadratic pair list.
+
 Local caps: 48 source pairs, 192 contact positions per permitted orientation pair,
 eight diverse partitions, eight completed geometry-first alternatives and the
 unchanged five trusted cache/gallery candidates. Legacy global trial constants
 are not multiplied. Overlap/clearance/identity/permission checks are not skipped.
 
 `smart_search.shape_first` records eligible/tested source combinations, distinct
-generated and complete-plan-proven formations, completed plans, per-piece traces,
+generated and geometry-valid complete-plan formations (before export-identity filtering), completed plans, per-piece traces,
 initial Glass reservation, actual final coverage and explicit reasons. Reasons
 separate legacy dimension mismatch, denied transforms, provable material-area
 rejection, bounded contact miss, enumeration caps, budget exhaustion, repack,
@@ -131,17 +137,17 @@ the validated industrial rank. The four P4 two-to-one witnesses stay one board.
 
 | CNC witness | Generated formations before→after | Boards before→after | Reusable offcut m² before→after | Total seconds before→after |
 |---|---|---|---|---|
-| Existing Clipped quad, axis-aligned guest | 3→17 | 2→1 | 0.150319→0 | 0.942→1.410 |
-| Non-identical L | 2→3 | 2→1 | 0→0 | 0.111→0.256 |
-| Non-identical Clipped | 2→3 | 2→1 | 0→0 | 0.140→0.212 |
-| Single L, one guest | 0→2 | 2→1 | 0→0 | 0.073→0.126 |
-| Single L, two guests | 0→2 | 2→1 | 0→0 | 0.166→0.233 |
-| Single L, four guests | 0→2 | 2→1 | 0→0 | 0.850→0.971 |
-| Non-identical L + Clipped + Glass | 4→10 | 2→1 | 0.299433→0 | 2.581→2.895 |
-| Non-identical asymmetric L + liner | 2→3 | 2→1 | 0→0 | 0.129→0.221 |
-| Protected incompatible L | 0→4 | 2→2 | 0→0 | 0.099→0.148 |
-| Pair/quad choices | 3→29 | 1→1 | 0→0 | 1.704→2.871 |
-| Larger realistic mixed source order | 4→8 | 2→2 | 2.610800→2.610800 | 5.148→6.961 |
+| Existing Clipped quad, axis-aligned guest | 3→17 | 2→1 | 0.150319→0 | 0.942→1.470 |
+| Non-identical L | 2→3 | 2→1 | 0→0 | 0.111→0.204 |
+| Non-identical Clipped | 2→3 | 2→1 | 0→0 | 0.140→0.165 |
+| Single L, one guest | 0→2 | 2→1 | 0→0 | 0.073→0.095 |
+| Single L, two guests | 0→2 | 2→1 | 0→0 | 0.166→0.214 |
+| Single L, four guests | 0→2 | 2→1 | 0→0 | 0.850→0.793 |
+| Non-identical L + Clipped + Glass | 4→10 | 2→1 | 0.299433→0 | 2.581→2.823 |
+| Non-identical asymmetric L + liner | 2→3 | 2→1 | 0→0 | 0.129→0.182 |
+| Protected incompatible L | 0→4 | 2→2 | 0→0 | 0.099→0.134 |
+| Pair/quad choices | 3→29 | 1→1 | 0→0 | 1.704→2.505 |
+| Larger realistic mixed source order | 4→8 | 2→2 | 2.610800→2.610800 | 5.148→6.392 |
 
 The eight valid two-to-one improvements do not include the negative machining
 witness: it is rejected before export, **not** counted as a zero-board saving.
@@ -180,11 +186,11 @@ Before, two portfolios fail Strict Import: `P5-joint-different` candidate 2
 (`LINER_SHAPE_MISMATCH`). Those failures remain visible in the before CSV; they
 are not accepted as manufacturing evidence or hidden by weaker import checks.
 
-Maximum Smart total runtime is **10.472→10.556 seconds**, including final atomic
-validation/projection. Sum across the 43 Smart observations is 82.497→108.121
+Maximum Smart total runtime is **10.472→10.510 seconds**, including final atomic
+validation/projection. Sum across the 43 Smart observations is 82.497→104.872
 seconds; extra search effort consumes the same configured budget. Per-case peak
 RSS increases by at most 648 KiB in this run. Whole-worker peaks are
-100948→100756 KiB, dominated by optional CP-SAT/interpreter imports; no memory
+100948→101060 KiB, dominated by optional CP-SAT/interpreter imports; no memory
 reduction claim follows from those single observations.
 
 [Full before benchmark](benchmark-before.csv) · [Full after benchmark](benchmark-after.csv)
@@ -192,11 +198,11 @@ reduction claim follows from those single observations.
 
 ## Validation and reproduction
 
-Final targeted local regression suite: **205 passed** (`/tmp/p5-final-local.log`);
-36 new geometry tests are included. The implementation-stage CI at `307f54fa`
-passed all three workflows, including 1029 static tests + 22 subtests and native
-Frappe 1711 unit + 103 integration tests. Final delivered-head CI results are
-linked in PR #574, after the last two geometry/native regressions were added.
+Final targeted local regression suite: **206 passed** (`/tmp/p5-bounded-final-local.log`);
+37 new geometry tests are included. The implementation-stage CI at `80bf2c30`
+passed all three workflows, including 1031 static tests + 22 subtests and native
+Frappe 1711 unit + 104 integration tests. Final delivered-head CI results are
+linked in PR #574 after the bounded-enumeration regression was added.
 Existing P4 two-to-one witnesses remain active. New cases include
 compatible/incompatible non-identical L, unequal Clipped, single/two/four guests,
 pair-vs-quad full outcomes, mixed Glass/L/Clipped, asymmetric machining, ambiguous
