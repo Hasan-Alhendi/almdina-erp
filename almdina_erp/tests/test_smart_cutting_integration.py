@@ -111,9 +111,26 @@ class TestSmartCuttingIntegration(FrappeTestCase):
                 width,height,trim,_ = JOINT_CASES[name]
                 order,rows = self._order(width,height,trim,source_rows(name))
                 before = self._plan(order).snapshot_json
-                preview = previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
-                    kerf_mm=3,trim_margin_mm=trim*10,optimization_time_limit_sec=2)
-                self.assertEqual(len(preview['plan']['sheets']),1)
+                checks,calculated = [],[]
+                validate = previews.validate_cutting_plan_issues
+                calculate = previews.calculate_system_plan
+                def inspect_validation(plan):
+                    issues = validate(plan)
+                    checks.append(dict(boards=plan.required_boards,issues=[str(i) for i in issues]))
+                    return issues
+                def inspect_calculation(*args,**kwargs):
+                    result = calculate(*args,**kwargs)
+                    calculated.append(dict(boards=result.required_boards,search=result.snapshot.get('smart_search'),
+                        candidates=[len(p['sheets']) for p in result.candidate_snapshots],
+                        pieces=[{k:p.get(k) for k in ('id','piece_type','width_cm','length_cm','allow_rotation',
+                            'clipped_corner_width_cm','clipped_corner_length_cm','glass_margin_mm')}
+                            for p in result.expanded_pieces]))
+                    return result
+                with patch.object(previews,'validate_cutting_plan_issues',side_effect=inspect_validation), \
+                     patch.object(previews,'calculate_system_plan',side_effect=inspect_calculation):
+                    preview = previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+                        kerf_mm=3,trim_margin_mm=trim*10,optimization_time_limit_sec=2)
+                self.assertEqual(len(preview['plan']['sheets']),1,msg=repr((calculated,checks)))
                 selected = previews.select_cutting_plan_candidate(order.name,preview['preview_id'],preview['candidate_id'])
                 self.assertEqual(self._plan(order).snapshot_json,before)
                 with patch.object(previews,'calculate_system_plan',side_effect=AssertionError('joint save ran optimizer')):

@@ -11,7 +11,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import geometry_signa
 from almdina_erp.tests.joint_nesting_cases import CASES, source_rows
 
 
-def run(name, *, budget=2, kerf=.3, machine="CNC Router", rotate=None):
+def run(name, *, budget=2, kerf=.3, machine="CNC Router", rotate=None, mirror=False):
     width, height, _, _ = CASES[name]
     rows = source_rows(name)
     if rotate is not None:
@@ -19,10 +19,10 @@ def run(name, *, budget=2, kerf=.3, machine="CNC Router", rotate=None):
             row['allow_rotation'] = rotate
     pieces = expand_piece_groups(rows)
     plan = opt.smart_search(pieces, width, height, kerf, machine_type=machine,
-                            time_limit_sec=budget, mirroring_allowed=False)
+                            time_limit_sec=budget, mirroring_allowed=mirror)
     for candidate in plan['smart_candidates']:
         assert not validate_plan(candidate, pieces, width, height, kerf_cm=kerf)
-        assert not placement_permission_errors(candidate, pieces, mirroring_allowed=False)
+        assert not placement_permission_errors(candidate, pieces, mirroring_allowed=mirror)
     assert len({geometry_signature(p) for p in plan['smart_candidates']}) == len(plan['smart_candidates'])
     return pieces, plan
 
@@ -65,6 +65,12 @@ def test_joint_physics_and_rotation_denial_are_not_relaxed(kerf):
     run('P4-independent', kerf=kerf)
     pieces, plan = run('P4-independent', kerf=kerf, rotate=0)
     assert not placement_permission_errors(plan, pieces, mirroring_allowed=False)
+
+
+def test_joint_mirroring_is_available_only_when_the_order_permits_it():
+    pieces, plan = run('P4-independent', mirror=True)
+    assert len(plan['sheets']) == 1
+    assert not placement_permission_errors(plan,pieces,mirroring_allowed=True)
 
 
 @pytest.mark.parametrize('name,machine', [('P4-regular','CNC Router'), ('P4-independent','Panel Saw')])
@@ -135,7 +141,7 @@ def test_release_is_isolated_and_preserves_the_glass_subtree():
     assert all(changed[i] == original[i] for i in original if i not in {1,6})
 
 
-@pytest.mark.parametrize('name', ['P4-independent', 'P4-clipped', 'P4-dependent', 'P4-addon-guard'])
+@pytest.mark.parametrize('name', ['P4-independent', 'P4-clipped', 'P4-dependent', 'P4-addon-guard', 'P4-mixed'])
 def test_joint_portfolio_json_reload_exports_and_strictly_imports(name, tmp_path):
     import json
     from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
@@ -146,7 +152,7 @@ def test_joint_portfolio_json_reload_exports_and_strictly_imports(name, tmp_path
     width,height,trim,_ = CASES[name]
     rows = rows_with_identity(source_rows(name))
     outcome = optimize_order_plan(OptimizeOrderPlanCommand(engine_version='joint-test', input_fingerprint='joint-test',
-        board=BoardGeometry(width,height,trim,.3), optimizer=OptimizerOptions('smart','CNC Router',2,20,30,30,.09),
+        board=BoardGeometry(width,height,trim,.3), optimizer=OptimizerOptions('smart','CNC Router',4 if name == 'P4-mixed' else 2,20,30,30,.09),
         piece_rows=tuple(rows)), engine=domain_cutting_engine)
     if name != 'P4-addon-guard':
         assert len(outcome.snapshot['sheets']) == 1

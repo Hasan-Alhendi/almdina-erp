@@ -29,6 +29,8 @@ CASES = {
     "P4-dependent": (100.3, 100.3, 0, [glass(30, 30), corner(width=50, height=50, cut_x=20, cut_y=20),
                                       regular(10, 10)]),
     "P4-joint-not-best": (100, 100, 0, [glass(100, 100), corner(), regular(12, 12, 2)]),
+    "P4-mixed": (121.2, 40.3, 0, [glass(40, 40, margin=80), corner(), corner('Clipped Corner'),
+                                  regular(12, 12, 2), regular(5, 5, 2)]),
     "P4-regular": (100, 100, 0, [regular(40, 30, 2), regular(20, 20)]),
 }
 
