@@ -100,6 +100,9 @@ def apply_shape_aware_nesting(
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
     formation_alternatives: bool = False,
+    guest_exclusions: frozenset[int] = frozenset(),
+    quarter_turns_only: bool = False,
+    candidate_callback: Any = None,
 ) -> dict[str, Any]:
     """Return a valid nest, or the same plan object when none is proven.
 
@@ -160,6 +163,8 @@ def apply_shape_aware_nesting(
             validate_plan=validate_plan,
             placement_permission_errors=placement_permission_errors,
             deadline=deadline,
+            guest_exclusions=guest_exclusions,
+            quarter_turns_only=quarter_turns_only,
         )
         if candidate is None or _placement_signature(candidate) == _placement_signature(plan):
             continue
@@ -168,6 +173,22 @@ def apply_shape_aware_nesting(
         better = (best is None or _candidate_is_better(enriched, best)) if formation_alternatives and len(plan["sheets"]) > 1 else (
             best is None or key > best_key or (key == best_key and _candidate_is_better(enriched, best))
         )
+        enriched["shape_nesting_diagnostics"] = {
+            "outcome": "accepted",
+            "formations": [block["kind"] for block in seated],
+            "formation_ids": [
+                [int(piece["id"]) for piece in block["pieces"]]
+                for block in seated
+                if block["kind"] in {"quad", "pair"}
+            ],
+            "void_guests": [
+                int(piece["id"])
+                for block in seated
+                for piece in block.get("guests") or []
+            ],
+            "reserved_ids": sorted(reserved),
+            "dropped": dropped,
+        }
         if better:
             for preserved in (
                 "search_elapsed_sec",
@@ -183,24 +204,13 @@ def apply_shape_aware_nesting(
             ):
                 if preserved in plan and preserved not in enriched:
                     enriched[preserved] = plan[preserved]
-            enriched["shape_nesting_diagnostics"] = {
-                "outcome": "accepted",
-                "formations": [block["kind"] for block in seated],
-                "formation_ids": [
-                    [int(piece["id"]) for piece in block["pieces"]]
-                    for block in seated
-                    if block["kind"] in {"quad", "pair"}
-                ],
-                "void_guests": [
-                    int(piece["id"])
-                    for block in seated
-                    for piece in block.get("guests") or []
-                ],
-                "reserved_ids": sorted(reserved),
-                "dropped": dropped,
-            }
             best = enriched
             best_key = key
+        if candidate_callback is not None:
+            # Compare downstream Glass assignments before discarding a formation.
+            # The collector receives only independently validated full plans.
+            from copy import deepcopy
+            candidate_callback(deepcopy(enriched))
     if best is None:
         plan["shape_nesting_diagnostics"] = {
             "outcome": "kept_baseline",
@@ -241,6 +251,8 @@ def _candidate_rejection(
     validate_plan: Any,
     placement_permission_errors: Any,
     deadline: float | None = None,
+    guest_exclusions: frozenset[int] = frozenset(),
+    quarter_turns_only: bool = False,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str]:
     """Return a complete plan, or the reason this block set cannot be kept."""
 
@@ -252,6 +264,8 @@ def _candidate_rejection(
         board_h_cm,
         mirroring_allowed=mirroring_allowed,
         hosted=hosted,
+        guest_exclusions=guest_exclusions,
+        quarter_turns_only=quarter_turns_only,
     )
     candidate = _compose_plan(
         plan,
@@ -293,6 +307,8 @@ def _retain_shape_blocks(
     validate_plan: Any,
     placement_permission_errors: Any,
     deadline: float,
+    guest_exclusions: frozenset[int] = frozenset(),
+    quarter_turns_only: bool = False,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
     """Keep every block that still produces one complete valid plan.
 
@@ -317,6 +333,8 @@ def _retain_shape_blocks(
             validate_plan=validate_plan,
             placement_permission_errors=placement_permission_errors,
             deadline=deadline,
+            guest_exclusions=guest_exclusions,
+            quarter_turns_only=quarter_turns_only,
         )
         if candidate is not None:
             return candidate, seated, dropped
@@ -341,6 +359,8 @@ def _retain_shape_blocks(
                 validate_plan=validate_plan,
                 placement_permission_errors=placement_permission_errors,
                 deadline=deadline,
+                guest_exclusions=guest_exclusions,
+                quarter_turns_only=quarter_turns_only,
             )
             if candidate is None:
                 continue
@@ -1178,6 +1198,8 @@ def _seat_void_guests(
     *,
     mirroring_allowed: bool,
     hosted: set[int],
+    guest_exclusions: frozenset[int] = frozenset(),
+    quarter_turns_only: bool = False,
 ) -> list[dict[str, Any]]:
     complements = [block for block in blocks if block["kind"] != "single"]
     singles = [block for block in blocks if block["kind"] == "single"]
@@ -1197,7 +1219,7 @@ def _seat_void_guests(
     candidates = [
         piece
         for piece in pieces
-        if int(piece["id"]) not in used and _guest_outline_ready(piece)
+        if int(piece["id"]) not in used and int(piece["id"]) not in guest_exclusions and _guest_outline_ready(piece)
     ]
     voids = [void for block in seated for void in block["voids"]]
     orders = _guest_orders(candidates, voids)
@@ -1222,6 +1244,7 @@ def _seat_void_guests(
                 board_w_cm,
                 board_h_cm,
                 mirroring_allowed=mirroring_allowed,
+                quarter_turns_only=quarter_turns_only,
             )
             if found is None:
                 continue
@@ -1312,10 +1335,12 @@ def _place_in_voids(
     board_h_cm: float,
     *,
     mirroring_allowed: bool,
+    quarter_turns_only: bool = False,
 ) -> tuple[int, dict[str, Any]] | None:
     for index, block in enumerate(blocks):
         if (
             block["kind"] == "quad"
+            and not quarter_turns_only
             and block.get("host_kind") == "Clipped Corner"
             and str(piece.get("piece_type") or "Regular") in {"Regular", "Glass"}
             and not any(guest.get("placement_rotation_deg") for guest in block["guests"])

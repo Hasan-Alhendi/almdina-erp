@@ -104,6 +104,27 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         self.assertTrue(result["exact_preview_commit"])
         self.assertEqual(json.loads(self._plan(order).snapshot_json), preview["plan"])
 
+    def test_joint_candidates_select_save_reload_export_and_strict_import(self):
+        from almdina_erp.tests.joint_nesting_cases import CASES as JOINT_CASES, source_rows
+        for name in ('P4-independent', 'P4-clipped', 'P4-dependent'):
+            with self.subTest(case=name):
+                width,height,trim,_ = JOINT_CASES[name]
+                order,rows = self._order(width,height,trim,source_rows(name))
+                before = self._plan(order).snapshot_json
+                preview = previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
+                    kerf_mm=3,trim_margin_mm=trim*10,optimization_time_limit_sec=2)
+                self.assertEqual(len(preview['plan']['sheets']),1)
+                selected = previews.select_cutting_plan_candidate(order.name,preview['preview_id'],preview['candidate_id'])
+                self.assertEqual(self._plan(order).snapshot_json,before)
+                with patch.object(previews,'calculate_system_plan',side_effect=AssertionError('joint save ran optimizer')):
+                    receipt = previews.commit_cutting_plan_preview(order.name,preview['preview_id'],preview['candidate_id'])
+                saved = json.loads(self._plan(order).snapshot_json)
+                self.assertEqual(saved,selected['plan'])
+                self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
+                with TemporaryDirectory() as directory:
+                    imported = import_saved_plan(saved,rows,export_real_js(saved,Path(directory)))
+                self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),sum(r['qty'] for r in rows))
+
     def _preview(self, order):
         return previews.preview_cutting_plan(order.name,packing_mode="smart",cutting_machine_type="CNC Router",
             kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=.6)

@@ -248,6 +248,7 @@ jobs:
             almdina_erp/tests/test_advanced_cutting_optimizer.py \
             almdina_erp/tests/test_smart_cutting_search.py \
             almdina_erp/tests/test_smart_plan_portfolio.py \
+            almdina_erp/tests/test_joint_nesting.py \
             almdina_erp/tests/test_smart_cutting_manufacturing.py \
             almdina_erp/tests/test_smart_cutting_lifecycle.py \
             almdina_erp/tests/test_almadina_136_cutting_catalog_contract.py \

@@ -1003,8 +1003,8 @@ def smart_search(
                      "min_remnant_area_m2":.09, **metric_kwargs}
     finals: list[dict[str, Any]] = []
     def offer(candidate):
-        from .plan_portfolio import supports_manufacturing_rotation
-        if not supports_manufacturing_rotation(candidate):
+        from .plan_portfolio import manufacturing_export_rejection
+        if manufacturing_export_rejection(candidate):
             return
         if validate_plan(candidate,pieces,board_w_cm,board_h_cm,kerf_cm=kerf_cm) or placement_permission_errors(
             candidate,pieces,mirroring_allowed=mirroring_allowed):
@@ -1037,6 +1037,15 @@ def smart_search(
         return result
     initial = finish(seed,min(budget*.2,max(0,deadline-time.monotonic())))
     seed_rank = list(initial.get('industrial_rank') or [])
+    from .joint_nesting import has_joint_sources, joint_nesting_candidates
+    joint_diagnostics = None
+    if finals and has_joint_sources(pieces, machine_type) and time.monotonic() < deadline:
+        joint, joint_diagnostics = joint_nesting_candidates(seed, initial, pieces,
+            board_w_cm, board_h_cm, kerf_cm, machine_type=machine_type,
+            mirroring_allowed=mirroring_allowed,
+            deadline=min(deadline, time.monotonic()+min(1.5, budget*.2)), metric_kwargs=metric_kwargs)
+        for candidate in joint:
+            offer(candidate)
     methods = _candidate_methods(machine_type)
     def packing_signature(method,sequence):
         _,packer,args,_ = METHOD_CONFIGS[method]
@@ -1124,6 +1133,11 @@ def smart_search(
         unique_candidates=len(finals), search_round=search_round,
         valid_final_ranks=[list(p['industrial_rank']) for p in finals],
         deadline_overrun_sec=round(max(0,time.monotonic()-deadline),3))
+    if joint_diagnostics is not None:
+        joint_diagnostics.update(glass_guests=sum(bool(p.get('glass_host_piece_id')) for s in best['sheets'] for p in s['pieces']),
+            shape_void_guests=len((best.get('shape_nesting_diagnostics') or {}).get('void_guests') or []),
+            boards_before_after=[len(initial['sheets']), len(best['sheets'])])
+        best['smart_search']['joint'] = joint_diagnostics
     best['smart_candidates'] = [dict(p) for p in finals]
     return best
 
@@ -1301,14 +1315,11 @@ def _finish_plan_search(
         )
 
     for candidate in search_candidates():
-        # Actual JS export -> strict import rejects the old non-quarter void
-        # guest identity contract. Smart must keep a manufacturable earlier
-        # stage rather than certify that geometry. Legacy search stays intact.
-        if require_importable_geometry and any(
-            abs(float(p.get("placement_rotation_deg") or 0) / 90
-                - round(float(p.get("placement_rotation_deg") or 0) / 90)) > 1e-6
-            for sheet in candidate.get("sheets") or [] for p in sheet.get("pieces") or []
-        ):
+        # Strict import cannot prove non-quarter void guests or machining marks
+        # inside Glass guests. Keep a proven earlier stage; legacy modes and
+        # all export/import contracts remain intact.
+        from .plan_portfolio import manufacturing_export_rejection
+        if require_importable_geometry and manufacturing_export_rejection(candidate):
             continue
         candidate = enrich_plan_metrics(
             candidate,

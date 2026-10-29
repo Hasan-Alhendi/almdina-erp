@@ -69,3 +69,16 @@ def supports_manufacturing_rotation(plan):
     return all(abs(float(p.get('placement_rotation_deg') or 0)/90
                    -round(float(p.get('placement_rotation_deg') or 0)/90))<=1e-6
                for sheet in plan.get('sheets') or [] for p in sheet.get('pieces') or [])
+
+
+def manufacturing_export_rejection(plan):
+    """Known unsupported identity paths; validators/export contracts stay intact."""
+    if not supports_manufacturing_rotation(plan):
+        return 'unsupported_rotation'
+    # Strict overlay ownership currently sees both the Glass outer contour and
+    # its machined guest as owners (OVERLAY_SPANS_HOSTS). Do not certify it.
+    if any(p.get('glass_host_piece_id') not in (None, '') and any(
+            p.get(key) for key in ('extra_liner', 'extra_back_groove', 'extra_recessed_handle_cutout'))
+            for s in plan.get('sheets') or [] for p in s.get('pieces') or []):
+        return 'glass_guest_machining_identity'
+    return ''
