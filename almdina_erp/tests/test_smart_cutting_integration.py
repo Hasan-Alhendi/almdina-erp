@@ -138,8 +138,11 @@ class TestSmartCuttingIntegration(FrappeTestCase):
                 saved = json.loads(self._plan(order).snapshot_json)
                 self.assertEqual(saved,selected['plan'])
                 self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
+                from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
+                self.assertEqual(previews.validate_cutting_plan_issues(self._plan(order)),[])
+                exported = _plan_to_export_snapshot(self._plan(order))
                 with TemporaryDirectory() as directory:
-                    imported = import_saved_plan(saved,rows,export_real_js(saved,Path(directory)))
+                    imported = import_saved_plan(saved,rows,export_real_js(exported,Path(directory)))
                 self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),sum(r['qty'] for r in rows))
 
     def _preview(self, order):

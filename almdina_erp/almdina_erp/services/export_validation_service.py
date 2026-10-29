@@ -41,6 +41,13 @@ from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_thickness_mm,
 )
 
+# These existing snapshot fields are not stored on child placement rows. Both
+# readers must retain them so unchanged validators/exporters see the same shape.
+_SNAPSHOT_CORNER_TRANSFORMS = (
+    "corner_rotation_quarter_turns", "placement_quarter_turns",
+    "corner_mirrored", "mirrored", "placement_mirrored",
+)
+
 
 def _rects_overlap(a: dict[str, float], b: dict[str, float], tol: float = 1e-7) -> bool:
     return not (
@@ -125,6 +132,9 @@ def _placed_piece_layout_row(placed: Any, stored: dict[str, Any]) -> dict[str, A
     }
     for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
         if stored.get(key) not in (None, "", []):
+            row[key] = stored[key]
+    for key in _SNAPSHOT_CORNER_TRANSFORMS:
+        if key in stored:
             row[key] = stored[key]
     return row
 
@@ -555,6 +565,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
             host_id = stored.get("glass_host_piece_id")
             if host_id not in (None, ""):
                 public_piece["glass_host_piece_id"] = host_id
+            for key in _SNAPSHOT_CORNER_TRANSFORMS:
+                if key in stored:
+                    public_piece[key] = stored[key]
             sheet_pieces.append(public_piece)
         persisted = persisted_sheets.get(sheet_no) or {}
         rebuilt_sheet = {

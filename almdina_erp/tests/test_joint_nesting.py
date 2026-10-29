@@ -168,3 +168,23 @@ def test_glass_machining_guest_is_not_certified_with_ambiguous_overlay_ownership
     assert all(not manufacturing_export_rejection(p) for p in plan['smart_candidates'])
     assert all(not p.get('glass_host_piece_id') for c in plan['smart_candidates']
                for s in c['sheets'] for p in s['pieces'] if p.get('extra_back_groove'))
+
+
+@pytest.mark.parametrize('name', ['P4-independent', 'P4-clipped', 'P4-dependent'])
+def test_native_layout_reader_and_export_rebuild_preserve_recorded_corner_transforms(name):
+    from almdina_erp.tests.test_glass_opening_nesting import _cutting_plan_for_layout, _reload_export_snapshot
+    pieces, plan = run(name)
+    assert len(plan['sheets']) == 1
+    issues,_,_ = _cutting_plan_for_layout(plan['sheets'][0]['pieces'],kerf_mm=3)
+    assert not issues
+    width,height,_,_ = CASES[name]
+    # This legacy single-sheet fixture writes its child/source rows as sheet 1.
+    persisted = deepcopy(plan)
+    persisted['sheets'][0]['sheet_no'] = 1
+    _,rebuilt,_ = _reload_export_snapshot(persisted,board_w_cm=width,board_h_cm=height)
+    source = {p['id']:p for s in plan['sheets'] for p in s['pieces']}
+    for sheet in rebuilt['sheets']:
+        for p in sheet['pieces']:
+            for key in ('corner_rotation_quarter_turns','placement_quarter_turns','corner_mirrored','mirrored','placement_mirrored'):
+                if key in source[p['id']]:
+                    assert p.get(key) == source[p['id']][key]
