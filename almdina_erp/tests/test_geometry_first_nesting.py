@@ -255,3 +255,24 @@ def test_symmetric_corner_with_equivalent_bands_keeps_a_provable_machining_basel
                 assert sum(len(s['pieces']) for s in imported['sheets'])==2
             if mode=='smart':
                 assert outcome.candidate_snapshots
+
+
+def test_large_irregular_pool_is_bounded_before_pair_materialization(monkeypatch):
+    import time
+    from itertools import combinations
+    from almdina_erp.tests.geometry_nesting_cases import one
+    from almdina_erp.almdina_erp.domain.cutting import geometry_nesting as geometry
+    pieces=expand_piece_groups([dict(one(cut_x=2,cut_y=2),qty=300)])
+    inspected=[]
+    def bounded_pairs(pool,count):
+        for pair in combinations(pool,count):
+            inspected.append(pair)
+            assert len(inspected)<=64, 'Pair cap was applied after exhaustive enumeration'
+            yield pair
+    monkeypatch.setattr(geometry,'combinations',bounded_pairs)
+    diagnostic={'tested_combinations':0}
+    geometry._partitions(pieces,45,45,.3,False,time.monotonic()+2,diagnostic)
+    assert diagnostic['eligible_combinations']==44850
+    assert diagnostic['tested_combinations']==48
+    assert diagnostic['reasons']['combination_enumeration_limit']==44802
+    assert diagnostic['orientation_sources_materialized']==49

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from copy import deepcopy
-from itertools import combinations, product
+from itertools import combinations, islice, product
 import math
 import time
 
@@ -119,42 +119,60 @@ def _block(body,kerf):
 
 def _partitions(pieces,width,height,kerf,mirroring_allowed,deadline,diagnostic):
     counters = Counter()
-    corners = [p for p in pieces if p.get('piece_type') in shape._CORNER_TYPES]
+    corners = sorted((p for p in pieces if p.get('piece_type') in shape._CORNER_TYPES),key=lambda p:int(p['id']))
     trace = {int(p['id']): dict(eligible_combinations=0,tested_combinations=0,valid_formations=0)
              for p in corners}
-    options = {int(p['id']): [shape._placed_corner(p,x_cm=0,y_cm=0,mirrored=m,turns=t)
-                             for m,t,*_ in shape._orientations(p,mirroring_allowed)] for p in corners}
-    for piece_id,placed in options.items():
+    options={}
+    def options_for(piece):
+        piece_id=int(piece['id'])
+        if piece_id in options:
+            return options[piece_id]
+        placed=[shape._placed_corner(piece,x_cm=0,y_cm=0,mirrored=m,turns=t)
+                for m,t,*_ in shape._orientations(piece,mirroring_allowed)]
         proven=[p for p in placed if material_outline_cm(p) is not None]
         if len(proven)!=len(placed):
             counters['unknown_source_outline']+=1
         options[piece_id]=proven
+        return proven
     counters['rotation_not_permitted'] = sum(not shape._rotation_allowed(p) for p in corners)
     counters['mirroring_not_permitted'] = len(corners) if not mirroring_allowed else 0
-    eligible = [(a,b) for a,b in combinations(corners,2) if a['piece_type']==b['piece_type']]
-    diagnostic['eligible_combinations'] = len(eligible)
-    for a,b in eligible:
-        for p in (a,b):
-            trace[int(p['id'])]['eligible_combinations'] += 1
+    counts=Counter(p['piece_type'] for p in corners)
+    eligible_count=sum(n*(n-1)//2 for n in counts.values())
+    diagnostic['eligible_combinations'] = eligible_count
+    for p in corners:
+        trace[int(p['id'])]['eligible_combinations']=counts[p['piece_type']]-1
     groups = shape._identical_groups(corners)
-    counters['legacy_dimension_mismatch'] = len(eligible)-sum(len(g)*(len(g)-1)//2 for g in groups)
-    counters['no_eligible_combination'] = int(not eligible)
+    counters['legacy_dimension_mismatch'] = eligible_count-sum(len(g)*(len(g)-1)//2 for g in groups)
+    counters['no_eligible_combination'] = int(not eligible_count)
     partitions = shape._cluster_sheet(corners,width,height,kerf,mirroring_allowed=mirroring_allowed,
         deadline=deadline,formation_alternatives=True)
     pairs=[]
     # Cross-size opportunities are not gated on rectangular or legacy ranking.
     dimensions=('width_cm','length_cm','clipped_corner_width_cm','clipped_corner_length_cm')
-    eligible.sort(key=lambda ab: (all(ab[0].get(key)==ab[1].get(key) for key in dimensions),
-                                  int(ab[0]['id']),int(ab[1]['id'])))
-    counters['combination_enumeration_limit'] = max(0,len(eligible)-_MAX_COMBINATIONS)
-    for index,(a,b) in enumerate(eligible[:_MAX_COMBINATIONS]):
+    keys={int(p['id']):(p['piece_type'],*(p.get(key) for key in dimensions)) for p in corners}
+    equal_counts=Counter(keys.values())
+    equal_pairs=sum(n*(n-1)//2 for n in equal_counts.values())
+    def proposals():
+        # Exact counts are linear; never allocate/sort the quadratic pair pool.
+        # Preserve the previous (cross-size first, then source-ID) ordering.
+        for identical,available in ((False,eligible_count-equal_pairs),(True,equal_pairs)):
+            if not available:
+                continue
+            for a,b in combinations(corners,2):
+                if time.monotonic()>=deadline:
+                    counters['budget_unvisited_combinations']=max(0,min(eligible_count,_MAX_COMBINATIONS)-diagnostic['tested_combinations'])
+                    return
+                if a['piece_type']==b['piece_type'] and (keys[int(a['id'])]==keys[int(b['id'])])==identical:
+                    yield a,b
+    counters['combination_enumeration_limit'] = max(0,eligible_count-_MAX_COMBINATIONS)
+    for index,(a,b) in enumerate(islice(proposals(),_MAX_COMBINATIONS)):
         if time.monotonic() >= deadline:
-            counters['budget_unvisited_combinations'] += min(len(eligible),_MAX_COMBINATIONS)-index
+            counters['budget_unvisited_combinations'] = min(eligible_count,_MAX_COMBINATIONS)-index
             break
         diagnostic['tested_combinations'] += 1
         for p in (a,b):
             trace[int(p['id'])]['tested_combinations'] += 1
-        first,second = options[int(a['id'])], options[int(b['id'])]
+        first,second = options_for(a),options_for(b)
         if not first or not second:
             counters['no_permitted_orientation'] += 1
             continue
@@ -218,11 +236,12 @@ def _partitions(pieces,width,height,kerf,mirroring_allowed,deadline,diagnostic):
         single=shape._inward_single(p,width,height,mirroring_allowed=mirroring_allowed)
         if single:
             partitions.append([_block(single['pieces'],kerf)])
-        elif options[int(p['id'])]:
-            for placed in options[int(p['id'])][:2]:
+        elif options_for(p):
+            for placed in options_for(p)[:2]:
                 if shape._pieces_inside([placed],width,height):
                     partitions.append([_block([placed],kerf)])
     diagnostic['generated_formations']=len({ _signature(b['pieces']) for part in partitions for b in part })
+    diagnostic['orientation_sources_materialized']=len(options)
     diagnostic['piece_trace']=trace
     diagnostic['reasons']=dict(counters)
     # Alternate legacy and geometric partitions instead of spending every slot
