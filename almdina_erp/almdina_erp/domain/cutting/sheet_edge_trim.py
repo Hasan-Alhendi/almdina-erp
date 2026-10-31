@@ -189,30 +189,58 @@ def _realize_axis(
         return
     target = max(0.0, preferred_cm, current_cm)
     frame = full_cm - (target * 2.0)
-    if frame <= 0 or span > frame + precision_cm:
+    if frame <= 0:
         return
-    # Keep the mandatory inset fixed and split only the slack beyond it.
-    delta = ((frame - span) / 2.0) - span_start
-    if abs(delta) <= precision_cm / 10.0:
-        return
-    if span_start + delta < -precision_cm or span_end + delta > frame + precision_cm:
-        return
+    coordinate = "x" if axis == "x" else "y"
+    perpendicular = "y" if axis == "x" else "x"
+    size = "w" if axis == "x" else "h"
+    translations: list[tuple[list[dict[str, Any]], float]] = []
+    for group in _projection_groups(pieces, axis=perpendicular):
+        start = min(num(piece.get(coordinate)) for piece in group)
+        end = max(num(piece.get(coordinate)) + num(piece.get(size)) for piece in group)
+        span = end - start
+        if span > frame + precision_cm:
+            return
+        # Keep the mandatory inset fixed and split only this row/column's slack.
+        delta = ((frame - span) / 2.0) - start
+        if abs(delta) <= precision_cm / 10.0:
+            continue
+        if start + delta < -precision_cm or end + delta > frame + precision_cm:
+            return
+        translations.append((group, delta))
     sheet.pop("free_rects", None)
     sheet.pop("skyline", None)
     sheet.pop("shelves", None)
+    for group, delta in translations:
+        for piece in group:
+            piece[coordinate] = num(piece.get(coordinate)) + delta
     if axis == "x":
-        for piece in pieces:
-            piece["x"] = num(piece.get("x")) + delta
         sheet["w"] = frame
         sheet["usable_width_cm"] = frame
         sheet["applied_trim_width_cm"] = target
-        return
+    else:
+        sheet["h"] = frame
+        sheet["usable_length_cm"] = frame
+        sheet["applied_trim_length_cm"] = target
 
-    for piece in pieces:
-        piece["y"] = num(piece.get("y")) + delta
-    sheet["h"] = frame
-    sheet["usable_length_cm"] = frame
-    sheet["applied_trim_length_cm"] = target
+
+def _projection_groups(pieces: list[dict[str, Any]], *, axis: str) -> list[list[dict[str, Any]]]:
+    """Group pieces whose perpendicular spans overlap; only disjoint rows/columns move independently."""
+    coordinate = "x" if axis == "x" else "y"
+    size = "w" if axis == "x" else "h"
+    ordered = sorted(pieces, key=lambda piece: num(piece.get(coordinate)))
+    groups: list[list[dict[str, Any]]] = []
+    group_end = -math.inf
+    for piece in ordered:
+        start = num(piece.get(coordinate))
+        end = start + num(piece.get(size))
+        if not groups or start >= group_end - 1e-9:
+            groups.append([piece])
+            group_end = end
+        else:
+            groups[-1].append(piece)
+            group_end = max(group_end, end)
+    return groups
 
 
 def _occupied_span(pieces: list[dict[str, Any]], axis: str) -> tuple[float, float]:
