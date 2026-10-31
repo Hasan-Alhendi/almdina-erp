@@ -14,7 +14,6 @@ from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
     AppliedTrim,
     PlanQuality,
     TRIM_PRECISION_CM,
-    resolve_adaptive_trim,
 )
 from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
     realize_sheet_edge_trim,
@@ -150,17 +149,6 @@ def optimize_order_plan(
         )
 
     preferred_plan = run_for_trim(preferred_trim)
-    evaluated_plans: dict[AppliedTrim, dict[str, Any]] = {
-        preferred_trim: preferred_plan,
-    }
-
-    def evaluate_trim(trim: AppliedTrim) -> PlanQuality:
-        plan = evaluated_plans.get(trim)
-        if plan is None:
-            plan = run_for_trim(trim)
-            evaluated_plans[trim] = plan
-        return _plan_quality(plan)
-
     # New plans use the requested trim as a mandatory physical inset.
     # Do not spend the search budget probing smaller margins.
     preferred_quality = _plan_quality(preferred_plan)
@@ -171,9 +159,7 @@ def optimize_order_plan(
         applied_quality=preferred_quality,
     )
     applied_trim = trim_decision.applied
-    plan = evaluated_plans.get(applied_trim)
-    if plan is None:
-        plan = run_for_trim(applied_trim)
+    plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
     raw_seeds = []
@@ -188,7 +174,7 @@ def optimize_order_plan(
         outcome.snapshot['smart_search'] = dict(plan.get('smart_search') or {})
         outcome.snapshot['search_time_limit_sec'] = command.optimizer.time_limit_sec
         outcome.snapshot['total_elapsed_sec'] = round(time.monotonic()-started,3)
-        outcome.snapshot['smart_search']['trim_evaluations'] = len(evaluated_plans)
+        outcome.snapshot['smart_search']['trim_evaluations'] = 1
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
@@ -246,6 +232,10 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
         )
     )
+    if plan.get("unplaced"):
+        validation_errors.append(
+            "تعذر وضع جميع القطع ضمن أبعاد اللوح والهامش الأدنى المحددين."
+        )
 
     trim_policy = _trim_policy_metadata(
         board=board,
