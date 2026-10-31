@@ -305,7 +305,9 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
                 or physical_y + height > flt(source.full_length_mm) + 1e-7
             )
-            if persisted_sheets.get(sheet_no) and (snapshot.get("trim_policy") or {}).get("policy") == "mandatory_minimum_v1":
+            if (snapshot.get("trim_policy") or {}).get("policy") == (
+                "mandatory_minimum_v1"
+            ):
                 minimum_mm = flt(plan.trim_margin_mm)
                 edge_gaps = {
                     "left": physical_x,
