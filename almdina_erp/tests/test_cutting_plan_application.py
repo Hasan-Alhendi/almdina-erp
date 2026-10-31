@@ -9,6 +9,7 @@ from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
+    _centering_worsens_industrial_quality,
     _physical_board_lower_bound,
     optimize_order_plan,
 )
@@ -610,6 +611,73 @@ class TestPlanMetadataRefresh(unittest.TestCase):
         self.assertEqual(placed["edge_cost_usd"], 1.4)
         self.assertEqual(refreshed["input_fingerprint"], "new-input")
         self.assertEqual(refreshed["metadata_fingerprint"], "new-meta")
+
+
+def test_centering_rank_uses_remnant_and_board_priorities_before_cnc_line_estimates():
+    before = (0, 1, 0, -2.80722, 2, 300, 0, 0)
+    more_estimated_lines = (0, 1, 0, -2.80722, 4, 578, 0, 0)
+    less_remnant = (0, 1, 0, -2.7, 2, 300, 0, 0)
+
+    assert not _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="CNC Router"
+    )
+    assert _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="Panel Saw"
+    )
+    assert _centering_worsens_industrial_quality(
+        before, less_remnant, machine_type="CNC Router"
+    )
+
+
+def test_snapshot_rank_and_remnant_metrics_match_axis_centered_final_geometry():
+    import pytest
+    from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import _largest_reusable_free_area
+    from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
+
+    class RowEngine:
+        def expand_pieces(self, rows):
+            return expand_piece_groups(rows)
+
+        def optimize(self, pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs):
+            placed = []
+            for index, source in enumerate(pieces):
+                placed.append({
+                    **source, "x": index * 40.5, "y": 0,
+                    "w": 40, "h": 13.9, "rotated": False,
+                })
+            return {
+                "method_key": "row-test", "method_label": "Row test",
+                "sheets": [{"sheet_no": 1, "w": board_width_cm,
+                            "h": board_length_cm, "pieces": placed}],
+                "unplaced": [], "waste_area_m2": 0,
+            }
+
+        def validate(self, plan, pieces, board_width_cm, board_length_cm):
+            return validate_plan(
+                plan, pieces, board_width_cm, board_length_cm, kerf_cm=0.5
+            )
+
+    outcome = optimize_order_plan(
+        OptimizeOrderPlanCommand(
+            engine_version="axis-centering-test", input_fingerprint="axis-centering-test",
+            board=BoardGeometry(122, 244, 0, 0.5),
+            optimizer=OptimizerOptions("Auto Pro", "CNC Router", 1, 40, 30, 30, .09),
+            piece_rows=({"width_cm": 40, "length_cm": 13.9, "qty": 3},),
+        ),
+        engine=RowEngine(),
+    )
+    snapshot = outcome.snapshot
+    sheet = snapshot["sheets"][0]
+    assert [piece["x"] for piece in sheet["pieces"]] == pytest.approx([0.5, 41, 81.5])
+    assert [piece["y"] for piece in sheet["pieces"]] == [0, 0, 0]
+    actual_remnant = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+    assert snapshot["industrial_metrics"]["largest_reusable_free_area_m2"] == pytest.approx(actual_remnant)
+    assert actual_remnant == pytest.approx(2.80722)
+    assert snapshot["industrial_rank"][1] == 1
+    assert snapshot["validation"]["is_valid"] is True
 
 
 if __name__ == "__main__":

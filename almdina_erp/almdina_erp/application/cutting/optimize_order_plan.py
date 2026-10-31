@@ -237,8 +237,10 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     )
     plan["sheets"] = sheets
     plan = _enrich_final_geometry_metrics(plan, metric_options)
-    if tuple(plan.get("industrial_rank") or ()) > tuple(
-        original_metrics.get("industrial_rank") or ()
+    if _centering_worsens_industrial_quality(
+        original_metrics.get("industrial_rank") or (),
+        plan.get("industrial_rank") or (),
+        machine_type=machine_type,
     ):
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
@@ -378,6 +380,27 @@ def _enrich_final_geometry_metrics(
     return enrich_plan_metrics(
         plan, str(plan.get("method_key") or ""), **metric_options
     )
+
+
+def _centering_worsens_industrial_quality(
+    original_rank: list[Any] | tuple[Any, ...],
+    centered_rank: list[Any] | tuple[Any, ...],
+    *,
+    machine_type: str,
+) -> bool:
+    """Protect manufacturing priorities while centering final geometry.
+
+    CNC Router contour estimates count a newly interior edge as another line,
+    although the exported operation still cuts the same door contour. Keep
+    board, panel, remnant, rotation, and complexity priorities authoritative;
+    other machines retain the complete conservative rank comparison.
+    """
+
+    before, after = tuple(original_rank), tuple(centered_rank)
+    if len(before) != 8 or len(after) != 8 or machine_type != "CNC Router":
+        return after > before
+    protected_indices = (0, 1, 2, 3, 6, 7)
+    return any(after[index] > before[index] for index in protected_indices)
 
 
 def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings:

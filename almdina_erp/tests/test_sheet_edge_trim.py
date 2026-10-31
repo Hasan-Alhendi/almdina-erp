@@ -243,7 +243,7 @@ def test_shape_aware_row_is_left_untouched_for_safety():
     assert (piece["x"], piece["y"]) == (0, 0)
 
 
-def test_large_reusable_remnant_prevents_centering_single_400_by_139_door():
+def test_large_vertical_remnant_blocks_vertical_but_not_safe_horizontal_centering():
     piece = {"x": 0, "y": 0, "w": 40, "h": 13.9}
     sheet = _sheet([piece], width_trim=0.5, length_trim=0.5)
     sheet.update(full_width_cm=122, full_length_cm=244)
@@ -253,11 +253,12 @@ def test_large_reusable_remnant_prevents_centering_single_400_by_139_door():
 
     _apply([sheet], balance_existing_applied=True)
 
-    assert piece == original_piece
+    assert piece["x"] == pytest.approx(40.5)
+    assert piece["y"] == original_piece["y"]
     assert sheet["applied_trim_width_cm"] == 0.5
     assert sheet["applied_trim_length_cm"] == 0.5
     assert sheet["kerf_cm"] == original_kerf
-    before_remnant = _largest_reusable_free_area(
+    actual_remnant = _largest_reusable_free_area(
         {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
     )
     centered_sheet = _sheet(
@@ -268,12 +269,12 @@ def test_large_reusable_remnant_prevents_centering_single_400_by_139_door():
     after_remnant = _largest_reusable_free_area(
         {"sheets": [centered_sheet]}, 30, 30, .09, machine_type="CNC Router"
     )
-    assert before_remnant == pytest.approx(2.77211)
+    assert actual_remnant == pytest.approx(2.77211)
     assert after_remnant == pytest.approx(1.386055)
-    assert after_remnant < before_remnant
+    assert after_remnant < actual_remnant
 
 
-def test_useful_remnant_preserves_all_original_piece_coordinates():
+def test_useful_remnant_blocks_only_axis_moves_that_reduce_its_area():
     pieces = [
         {"x": 0, "y": 0, "w": 40, "h": 40},
         {"x": 40.3, "y": 0, "w": 40, "h": 40},
@@ -285,7 +286,12 @@ def test_useful_remnant_preserves_all_original_piece_coordinates():
 
     _apply([sheet], balance_existing_applied=True)
 
-    assert pieces == original
+    assert [piece["x"] for piece in pieces] == pytest.approx([20.35, 60.65, 40.5])
+    assert [piece["y"] for piece in pieces] == [piece["y"] for piece in original]
+    after_remnant = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, 0.09, machine_type="CNC Router"
+    )
+    assert after_remnant == pytest.approx(1.96867)
 
 
 def test_small_slack_centers_when_no_remnant_meets_factory_thresholds():
@@ -297,3 +303,32 @@ def test_small_slack_centers_when_no_remnant_meets_factory_thresholds():
 
     assert physical_edge_margins_mm(sheet)["left"] == pytest.approx(10)
     assert physical_edge_margins_mm(sheet)["right"] == pytest.approx(10)
+
+
+def test_centers_horizontal_row_without_splitting_large_vertical_remnant():
+    pieces = [
+        {"x": 0, "y": 0, "w": 40, "h": 13.9},
+        {"x": 40.5, "y": 0, "w": 40, "h": 13.9},
+        {"x": 81, "y": 0, "w": 40, "h": 13.9},
+    ]
+    sheet = _sheet(pieces, width_trim=0, length_trim=0)
+    sheet.update(full_width_cm=122, full_length_cm=244, kerf_cm=0.5)
+    before = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, 0.09, machine_type="CNC Router"
+    )
+
+    _apply(
+        [sheet], full_width_cm=122, full_length_cm=244,
+        preferred_width_trim_cm=0, preferred_length_trim_cm=0,
+        balance_existing_applied=True, machine_type="CNC Router",
+    )
+
+    after = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, 0.09, machine_type="CNC Router"
+    )
+    assert [piece["x"] for piece in pieces] == pytest.approx([0.5, 41, 81.5])
+    assert [piece["y"] for piece in pieces] == [0, 0, 0]
+    assert (sheet["applied_trim_width_cm"], sheet["applied_trim_length_cm"]) == (0, 0)
+    assert sheet["kerf_cm"] == 0.5
+    assert before == pytest.approx(2.80722)
+    assert after == pytest.approx(before)

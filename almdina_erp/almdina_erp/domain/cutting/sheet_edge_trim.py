@@ -9,6 +9,7 @@ trim. Doors keep their order, rotation, and kerf gaps. No board is added.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import math
 from typing import Any
 
@@ -39,58 +40,56 @@ def realize_sheet_edge_trim(
         pieces = list(sheet.get("pieces") or [])
         if not pieces:
             continue
-        balance_sheet = balance_existing_applied
-        if balance_sheet and _has_reusable_remnant(
-            sheet,
-            machine_type=machine_type,
-            min_remnant_width_cm=min_remnant_width_cm,
-            min_remnant_length_cm=min_remnant_length_cm,
-            min_remnant_area_m2=min_remnant_area_m2,
+        for axis, full_cm, preferred_cm in (
+            ("x", full_width_cm, preferred_width_trim_cm),
+            ("y", full_length_cm, preferred_length_trim_cm),
         ):
-            # Preserve the optimizer's original topology and coordinates when
-            # they already produce reusable stock. Centering is secondary.
-            balance_sheet = False
-        _realize_axis(
-            sheet,
-            pieces,
-            axis="x",
-            full_cm=full_width_cm,
-            preferred_cm=preferred_width_trim_cm,
-            current_cm=max(0.0, num(sheet.get("applied_trim_width_cm"))),
-            precision_cm=precision_cm,
-            balance_existing_applied=balance_sheet,
-        )
-        _realize_axis(
-            sheet,
-            pieces,
-            axis="y",
-            full_cm=full_length_cm,
-            preferred_cm=preferred_length_trim_cm,
-            current_cm=max(0.0, num(sheet.get("applied_trim_length_cm"))),
-            precision_cm=precision_cm,
-            balance_existing_applied=balance_sheet,
-        )
+            # Centering is evaluated as a physical translation on one axis at
+            # a time. A useful remnant on the other axis must not block a move
+            # that preserves its separable area.
+            original = deepcopy(sheet)
+            original_piece_refs = list(sheet.get("pieces") or [])
+            original_piece_values = [deepcopy(piece) for piece in original_piece_refs]
+            before = _largest_reusable_area(
+                sheet, machine_type, min_remnant_width_cm,
+                min_remnant_length_cm, min_remnant_area_m2,
+            )
+            _realize_axis(
+                sheet, list(sheet.get("pieces") or []), axis=axis,
+                full_cm=full_cm, preferred_cm=preferred_cm,
+                current_cm=max(0.0, num(sheet.get(
+                    "applied_trim_width_cm" if axis == "x" else "applied_trim_length_cm"
+                ))),
+                precision_cm=precision_cm,
+                balance_existing_applied=balance_existing_applied,
+            )
+            after = _largest_reusable_area(
+                sheet, machine_type, min_remnant_width_cm,
+                min_remnant_length_cm, min_remnant_area_m2,
+            )
+            if balance_existing_applied and after + 1e-9 < before:
+                sheet.clear()
+                sheet.update(original)
+                for piece, values in zip(original_piece_refs, original_piece_values):
+                    piece.clear()
+                    piece.update(values)
+                sheet["pieces"] = original_piece_refs
 
 
-def _has_reusable_remnant(
+def _largest_reusable_area(
     sheet: dict[str, Any],
-    *,
     machine_type: str,
     min_remnant_width_cm: float,
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
-) -> bool:
-    # Reuse the optimizer's separability and factory-threshold rules so layout
-    # realization and industrial ranking agree about what counts as a remnant.
+) -> float:
+    # Share the factory thresholds and separability rules with industrial rank.
     from .optimizer import _largest_reusable_free_area
 
     return _largest_reusable_free_area(
-        {"sheets": [sheet]},
-        min_remnant_width_cm,
-        min_remnant_length_cm,
-        min_remnant_area_m2,
-        machine_type=machine_type,
-    ) > 0
+        {"sheets": [sheet]}, min_remnant_width_cm, min_remnant_length_cm,
+        min_remnant_area_m2, machine_type=machine_type,
+    )
 
 
 def resolved_sheet_trim_cm(
