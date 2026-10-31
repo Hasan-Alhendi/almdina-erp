@@ -114,7 +114,7 @@ def test_smart_never_sends_irregular_geometry_to_cp_sat(monkeypatch):
     assert not validate_plan(plan, pieces, 10, 10, kerf_cm=.3)
 
 
-def test_trim_probes_share_budget_without_changing_requested_settings(monkeypatch):
+def test_mandatory_trim_skips_trim_probes_without_changing_requested_settings(monkeypatch):
     from almdina_erp.almdina_erp.application.cutting import optimize_order_plan as app
     from almdina_erp.tests.test_cutting_plan_application import AdaptiveTrimGeometryEngine
     clock, budgets = [0.0], []
@@ -129,10 +129,7 @@ def test_trim_probes_share_budget_without_changing_requested_settings(monkeypatc
         optimizer=app.OptimizerOptions("smart", "CNC Router", .5, 20, 30, 30, .09),
         piece_rows=({"id": 1, "width_cm": 100, "length_cm": 40, "qty": 1},))
     outcome = app.optimize_order_plan(command, engine=Engine())
-    assert len(budgets) > 1
-    assert budgets == sorted(budgets, reverse=True)
-    assert budgets[0] == .5
-    assert min(budgets) == 0
+    assert budgets == [.5]
     assert command.optimizer.time_limit_sec == outcome.snapshot["search_time_limit_sec"] == .5
     assert outcome.snapshot["kerf_cm"] == .3
     assert outcome.snapshot["trim_cm"] == .5
