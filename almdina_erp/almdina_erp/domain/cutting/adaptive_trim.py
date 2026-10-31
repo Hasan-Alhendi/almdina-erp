@@ -22,10 +22,10 @@ class AppliedTrim:
     length_trim_cm: float
 
     def usable_width_cm(self, *, full_width_cm: float) -> float:
-        return max(0.0, full_width_cm - (self.width_trim_cm * 2))
+        return full_width_cm - (self.width_trim_cm * 2)
 
     def usable_length_cm(self, *, full_length_cm: float) -> float:
-        return max(0.0, full_length_cm - (self.length_trim_cm * 2))
+        return full_length_cm - (self.length_trim_cm * 2)
 
     @property
     def retained_trim_cm(self) -> float:
