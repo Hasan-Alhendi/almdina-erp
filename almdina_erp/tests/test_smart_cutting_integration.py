@@ -104,6 +104,34 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         self.assertTrue(result["exact_preview_commit"])
         self.assertEqual(json.loads(self._plan(order).snapshot_json), preview["plan"])
 
+    def test_real_243_zero_trim_preview_select_exact_save_reload_and_manufacture(self):
+        from almdina_erp.tests.cutting_243_cases import source_case
+        from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
+
+        order, rows = self._order(122, 244, 0, source_case()["rows"])
+        before = self._plan(order).snapshot_json
+        preview = previews.preview_cutting_plan(order.name, packing_mode="smart",
+            cutting_machine_type="CNC Router", kerf_mm=5, trim_margin_mm=0,
+            optimization_time_limit_sec=5)
+        self.assertEqual(len(preview["plan"]["sheets"]), 3)
+        self.assertEqual(self._plan(order).snapshot_json, before)
+        with patch.object(previews, "calculate_system_plan", side_effect=AssertionError("optimizer during selected save")):
+            selected = previews.select_cutting_plan_candidate(order.name, preview["preview_id"], preview["candidate_id"])
+            receipt = previews.commit_cutting_plan_preview(order.name, preview["preview_id"], selected["candidate_id"])
+        plan = self._plan(order)
+        saved = json.loads(plan.snapshot_json)
+        self.assertEqual(saved, selected["plan"])
+        self.assertTrue(receipt["exact_preview_commit"])
+        self.assertEqual(plan.required_boards, 3)
+        self.assertEqual(plan.trim_margin_mm, 0)
+        self.assertEqual(plan.kerf_mm, 5)
+        self.assertEqual(previews.validate_cutting_plan_issues(plan), [])
+        self.assertEqual(len({p["piece_instance_id"] for s in saved["sheets"] for p in s["pieces"]}), 50)
+        with TemporaryDirectory() as directory:
+            imported = import_saved_plan(saved, rows, export_real_js(_plan_to_export_snapshot(plan), Path(directory)))
+        self.assertEqual(len(imported["sheets"]), 3)
+        self.assertEqual(sum(len(s["pieces"]) for s in imported["sheets"]), 50)
+
     def test_joint_candidates_select_save_reload_export_and_strict_import(self):
         from almdina_erp.tests.joint_nesting_cases import CASES as JOINT_CASES, source_rows
         for name in ('P4-independent', 'P4-clipped', 'P4-dependent'):

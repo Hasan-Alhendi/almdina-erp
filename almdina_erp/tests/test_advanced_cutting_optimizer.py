@@ -4,6 +4,8 @@ from contextlib import ExitStack
 from copy import deepcopy
 from unittest.mock import patch
 
+import pytest
+
 from almdina_erp.almdina_erp.domain.cutting import (
     AUTO_PRO,
     DEEP_SEARCH,
@@ -15,6 +17,90 @@ from almdina_erp.almdina_erp.domain.cutting import (
 from almdina_erp.almdina_erp.domain.cutting import optimizer
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
 from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
+
+
+@pytest.mark.parametrize("trim_mm", [0, .1, 1, 2, 3])
+def test_real_243_reference_is_complete_at_every_requested_trim(trim_mm):
+    from almdina_erp.tests.cutting_243_cases import observed_plan
+
+    pieces, plan = observed_plan(2, trim_mm)
+    assert len(pieces) == 50
+    assert sum(p["area_m2"] for p in pieces) == pytest.approx(8.180127)
+    assert len(plan["sheets"]) == 3
+    assert not validate_plan(plan, pieces, 122-.2*trim_mm, 244-.2*trim_mm, kerf_cm=.5)
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_real_243_zero_trim_cancellation_repacks_the_receiving_board(index):
+    from almdina_erp.tests.cutting_243_cases import observed_plan
+    from almdina_erp.almdina_erp.domain.cutting.plan_search import improve_plan_search
+
+    pieces, plan = observed_plan(index)
+    original = deepcopy(plan)
+    assert len(plan["sheets"]) == 4
+    assert not validate_plan(plan, pieces, 122, 244, kerf_cm=.5)
+    result = improve_plan_search(plan, pieces, 122, 244, .5, machine_type="CNC Router",
+        time_limit_sec=2, min_remnant_width_cm=30, min_remnant_length_cm=30, min_remnant_area_m2=.09)
+    assert len(result["sheets"]) == 3
+    assert not validate_plan(result, pieces, 122, 244, kerf_cm=.5)
+    assert not placement_permission_errors(result, pieces, mirroring_allowed=False)
+    assert result["total_board_area_m2"] == pytest.approx(3*1.22*2.44)
+    assert result["waste_area_m2"] == pytest.approx(3*1.22*2.44-8.180127)
+    assert plan == original
+
+
+@pytest.mark.parametrize("trim_mm", [0, .1, 1, 2, 3])
+def test_real_243_smart_discovers_three_boards_without_reference_seeds(trim_mm):
+    from almdina_erp.tests.cutting_243_cases import source_case
+
+    pieces = expand_piece_groups(source_case()["rows"])
+    result = optimizer.smart_search(pieces, 122-.2*trim_mm, 244-.2*trim_mm, .5,
+        machine_type="CNC Router", time_limit_sec=5, exact_piece_limit=40)
+    assert len(result["sheets"]) == 3
+    assert not validate_plan(result, pieces, 122-.2*trim_mm, 244-.2*trim_mm, kerf_cm=.5)
+    assert not placement_permission_errors(result, pieces, mirroring_allowed=False)
+
+
+def test_free_rect_pruning_has_consistent_precision_and_keeps_one_equal_representative():
+    from almdina_erp.almdina_erp.domain.cutting.primitives import prune_free_rects
+
+    narrow = dict(x=0., y=91.19999999999999, w=90.5, h=152.20000000000005)
+    wide = dict(x=0., y=91.19999999999999, w=121.4, h=152.20000000000002)
+    assert prune_free_rects([narrow, wide]) == [wide]
+    assert prune_free_rects([wide, dict(wide)]) == [wide]
+    separate = dict(wide, x=130)
+    assert prune_free_rects([wide, separate]) == [wide, separate]
+
+
+def test_board_reformation_respects_caps_deadline_and_locked_pieces(monkeypatch):
+    from almdina_erp.tests.cutting_243_cases import observed_plan
+    from almdina_erp.almdina_erp.domain.cutting import plan_search
+
+    pieces, plan = observed_plan(1)
+    original = deepcopy(plan)
+    calls = []
+    def no_fit(*args, **kwargs):
+        calls.append(args)
+        return dict(sheets=[{}, {}], unplaced=[])
+    monkeypatch.setattr(optimizer, "_run_preordered_method", no_fit)
+    assert list(plan_search._repacked_board_candidates(plan, pieces, 122, 244, .5, 0)) == []
+    assert not calls
+    list(plan_search._repacked_board_candidates(plan, pieces, 122, 244, .5, optimizer.time.monotonic()+10))
+    assert 0 < len(calls) <= plan_search._MAX_REPACK_ATTEMPTS
+    assert all(len(call[0]) <= plan_search._MAX_REPACK_PIECES for call in calls)
+    assert plan == original
+    calls.clear()
+    many = expand_piece_groups([dict(width_cm=10, length_cm=10, qty=6)])
+    many_plan = dict(sheets=[dict(sheet_no=i+1, w=100, h=100,
+        pieces=[make_placed_piece(p, 0, 0, 10, 10, False)]) for i, p in enumerate(many)], unplaced=[])
+    list(plan_search._repacked_board_candidates(many_plan, many, 100, 100, .5, optimizer.time.monotonic()+10))
+    assert calls
+    assert {p["id"] for call in calls for p in call[0]} <= {1, 2, 3, 4}
+    calls.clear()
+    for sheet in plan["sheets"]:
+        sheet["pieces"][0]["glass_host_piece_id"] = 999
+    assert list(plan_search._repacked_board_candidates(plan, pieces, 122, 244, .5, optimizer.time.monotonic()+10)) == []
+    assert not calls
 
 
 def _selection_pieces():

@@ -621,6 +621,9 @@ def test_centering_rank_uses_remnant_and_board_priorities_before_cnc_line_estima
     assert not _centering_worsens_industrial_quality(
         before, more_estimated_lines, machine_type="CNC Router"
     )
+    assert not _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="Auto"
+    )
     assert _centering_worsens_industrial_quality(
         before, more_estimated_lines, machine_type="Panel Saw"
     )
@@ -678,6 +681,27 @@ def test_snapshot_rank_and_remnant_metrics_match_axis_centered_final_geometry():
     assert actual_remnant == pytest.approx(2.80722)
     assert snapshot["industrial_rank"][1] == 1
     assert snapshot["validation"]["is_valid"] is True
+
+
+def test_snapshot_publishes_the_validated_geometry_after_rejected_centering():
+    from unittest.mock import patch
+    from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+
+    def unsafe_translation(sheets, **kwargs):
+        first, second = sheets[0]["pieces"]
+        second.update(x=first["x"], y=first["y"])
+
+    with patch("almdina_erp.almdina_erp.application.cutting.optimize_order_plan.realize_sheet_edge_trim",
+               side_effect=unsafe_translation):
+        outcome = optimize_order_plan(OptimizeOrderPlanCommand(
+            engine_version="centering-rollback", input_fingerprint="centering-rollback",
+            board=BoardGeometry(122, 244, 0, .5),
+            optimizer=OptimizerOptions("Auto", "CNC Router", 1, 40, 30, 30, .09),
+            piece_rows=({"width_cm": 40, "length_cm": 13.9, "qty": 2},),
+        ), engine=domain_cutting_engine)
+    assert outcome.snapshot["validation"]["is_valid"]
+    assert not validate_plan(outcome.snapshot, list(outcome.expanded_pieces), 122, 244, kerf_cm=.5)
 
 
 if __name__ == "__main__":

@@ -333,7 +333,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         "total_board_area_m2": plan.get("total_board_area_m2"),
         "waste_area_m2": plan.get("waste_area_m2"),
         "special_shape_raw_summary": summarize_special_shapes(expanded, plan),
-        "sheets": sheets,
+        "sheets": plan["sheets"],
         "unplaced": plan.get("unplaced") or [],
         "validation": {
             "is_valid": not validation_errors,
@@ -396,11 +396,12 @@ def _centering_worsens_industrial_quality(
     CNC Router contour estimates count a newly interior edge as another line,
     although the exported operation still cuts the same door contour. Keep
     board, panel, remnant, rotation, and complexity priorities authoritative;
-    other machines retain the complete conservative rank comparison.
+    Auto uses the same contour/separability rules as Router. Panel Saw and
+    unknown machine types retain the conservative complete-rank comparison.
     """
 
     before, after = tuple(original_rank), tuple(centered_rank)
-    if len(before) != 8 or len(after) != 8 or machine_type != "CNC Router":
+    if len(before) != 8 or len(after) != 8 or machine_type not in {"Auto", "CNC Router"}:
         return after > before
     protected_indices = (0, 1, 2, 3, 6, 7)
     return any(after[index] > before[index] for index in protected_indices)
