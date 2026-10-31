@@ -284,9 +284,11 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
             piece_rows=rows,
         )
         result = optimize_order_plan(command, engine=domain_cutting_engine)
-        self.assertEqual(1, result.required_boards)
+        # A fixed 1 mm minimum can require an extra board; the old search
+        # silently reduced the width inset to force this into one board.
+        self.assertEqual(2, result.required_boards)
         self.assertTrue(result.snapshot["validation"]["is_valid"])
-        self.assertEqual(0, result.snapshot["applied_trim_width_cm"])
+        self.assertEqual(0.1, result.snapshot["applied_trim_width_cm"])
         self.assertEqual(0.1, result.snapshot["applied_trim_length_cm"])
         self.assertFalse(validate_plan(result.snapshot, pieces, 40.3, 40.8, kerf_cm=0.3))
         self.assertFalse(placement_permission_errors(
@@ -372,7 +374,7 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
         self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 5)
         self.assertEqual(len(engine.calls), 1)
 
-    def test_full_length_piece_relaxes_only_length_with_same_mode_and_kerf(self) -> None:
+    def test_full_length_piece_keeps_mandatory_trim_with_same_mode_and_kerf(self) -> None:
         engine = AdaptiveTrimGeometryEngine()
         outcome = optimize_order_plan(
             self._command((self._piece(30, 244),), mode="maxrects", kerf_cm=0.3),
@@ -381,31 +383,34 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
 
         policy = outcome.snapshot["trim_policy"]
         self.assertEqual(policy["applied_width_trim_mm"], 5)
-        self.assertEqual(policy["applied_length_trim_mm"], 0)
-        self.assertEqual(policy["relaxed_axes"], ["length"])
+        self.assertEqual(policy["applied_length_trim_mm"], 5)
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
         self.assertTrue(engine.calls)
         self.assertTrue(all(call["selected_mode"] == "maxrects" for call in engine.calls))
         self.assertTrue(all(abs(call["kerf_cm"] - 0.3) < 1e-9 for call in engine.calls))
 
-    def test_full_width_piece_relaxes_only_width(self) -> None:
+    def test_full_width_piece_keeps_mandatory_trim_on_both_axes(self) -> None:
         outcome = optimize_order_plan(
             self._command((self._piece(122, 30),)),
             engine=AdaptiveTrimGeometryEngine(),
         )
         policy = outcome.snapshot["trim_policy"]
-        self.assertEqual(policy["applied_width_trim_mm"], 0)
+        self.assertEqual(policy["applied_width_trim_mm"], 5)
         self.assertEqual(policy["applied_length_trim_mm"], 5)
-        self.assertEqual(policy["relaxed_axes"], ["width"])
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
 
-    def test_full_board_piece_relaxes_both_axes(self) -> None:
+    def test_full_board_piece_does_not_relax_mandatory_trim(self) -> None:
         outcome = optimize_order_plan(
             self._command((self._piece(122, 244),)),
             engine=AdaptiveTrimGeometryEngine(),
         )
         policy = outcome.snapshot["trim_policy"]
-        self.assertEqual(policy["applied_width_trim_mm"], 0)
-        self.assertEqual(policy["applied_length_trim_mm"], 0)
-        self.assertEqual(policy["relaxed_axes"], ["width", "length"])
+        self.assertEqual(policy["applied_width_trim_mm"], 5)
+        self.assertEqual(policy["applied_length_trim_mm"], 5)
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
 
     def test_largest_feasible_three_mm_trim_is_preserved(self) -> None:
         preferred = AppliedTrim(0.5, 0.5)
@@ -435,7 +440,7 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
         self.assertAlmostEqual(first.applied.length_trim_cm, 0.3)
         self.assertEqual(first.relaxed_axes, ("length",))
 
-    def test_four_full_length_30cm_pieces_fit_with_real_kerf(self) -> None:
+    def test_four_full_length_30cm_pieces_do_not_bypass_mandatory_trim(self) -> None:
         pieces = tuple(
             self._piece(30, 244, piece_id=index)
             for index in range(1, 5)
@@ -445,13 +450,10 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
             engine=AdaptiveTrimGeometryEngine(),
         )
 
-        self.assertEqual(outcome.required_boards, 1)
-        self.assertTrue(outcome.snapshot["validation"]["is_valid"])
+        self.assertEqual(outcome.required_boards, 0)
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
         self.assertEqual(outcome.snapshot["trim_policy"]["applied_width_trim_mm"], 5)
-        self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 0)
-        usable_width = outcome.snapshot["usable_board_width_cm"]
-        self.assertAlmostEqual(usable_width, 121)
-        self.assertLessEqual(4 * 30 + 3 * 0.3, usable_width)
+        self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 5)
 
 
 class TestPlanReusePolicy(unittest.TestCase):
