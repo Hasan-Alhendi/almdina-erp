@@ -59,7 +59,14 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         preview = ast.unparse(functions["preview_cutting_plan"])
         commit = ast.unparse(functions["commit_cutting_plan_preview"])
 
-        self.assertIn("calculate_system_plan(order, preview_plan)", preview)
+        builder = ast.unparse(functions["_build_session"])
+        session_guard = ast.unparse(functions["_session"])
+        response = ast.unparse(functions["_response"])
+        self.assertIn("calculate_system_plan(order, preview_plan", builder)
+        self.assertIn("_build_session(order, source_plan, settings)", preview)
+        for body in (preview, builder, ast.unparse(functions["_system_draft"])):
+            self.assertNotIn("save_document", body)
+            self.assertNotIn(".insert(", body)
         self.assertNotIn("save_document", preview)
         self.assertNotIn(".save(", preview)
         self.assertNotIn(".insert(", preview)
@@ -68,15 +75,15 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("repository.save_document(plan)", commit)
         self.assertNotIn("calculate_system_plan", commit)
         self.assertNotIn("optimize_order_plan", commit)
-        self.assertIn("session.source_plan_modified", commit)
-        self.assertIn("session.user != frappe.session.user", commit)
+        self.assertIn("session.source_plan_modified", session_guard)
+        self.assertIn("session.user != frappe.session.user", session_guard)
         self.assertIn("result['committed_preview_id'] = token", commit)
         self.assertIn("result['exact_preview_commit'] = True", commit)
         self.assertLess(commit.index("repository.save_document(plan)"),
                         commit.index("result['exact_preview_commit'] = True"))
-        self.assertIn("'source_plan_name': source_plan.name", preview)
-        self.assertIn("'source_plan_revision': int(source_plan.revision or 0)", preview)
-        self.assertIn("'source_plan_modified': str(source_plan.modified or '')", preview)
+        self.assertIn("source_plan_name=session.source_plan_name", response)
+        self.assertIn("source_plan_revision=int(source.revision or 0)", response)
+        self.assertIn("source_plan_modified=session.source_plan_modified", response)
 
     def test_exact_commit_recomputes_input_fingerprint_and_rejects_invalid_geometry(self) -> None:
         source = (
@@ -100,7 +107,7 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("PREVIEW_METHOD", source)
         self.assertIn("COMMIT_PREVIEW_METHOD", source)
         self.assertIn("function preview(orderName, settings)", source)
-        self.assertIn("function commitPreview(orderName, previewId)", source)
+        self.assertIn("function commitPreview(orderName, previewId, candidateId)", source)
         self.assertNotIn("querySelector", source)
         self.assertNotIn("fields_dict", source)
 
@@ -111,7 +118,7 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("__almdinaPlanPreviewSession", source)
         self.assertIn("almdina:plan-preview-updated", source)
         self.assertIn("api.preview(orderName", source)
-        self.assertIn("api.commitPreview(orderName, previewId)", source)
+        self.assertIn("api.commitPreview(orderName, previewId, state.payload?.candidate_id)", source)
         self.assertIn("function isCommittable(frm)", source)
         self.assertIn('String(validation.status || "") === "Valid"', source)
         self.assertNotIn("AlmdinaWorkspaceStore", source)
@@ -172,8 +179,11 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         )
 
         self.assertIn("(firstPlan || workspaceEditing(frm))", controls)
-        self.assertIn('typeof transport.bootstrapPlan === "function"', controls)
-        self.assertIn("await transport.bootstrapPlan(frm.doc.name, settings)", controls)
+        self.assertIn('typeof previews.preview === "function"', controls)
+        self.assertNotIn('transport.bootstrapPlan', controls)
+        self.assertNotIn('Create and save the first cutting plan and update the cost automatically', controls)
+        self.assertNotIn("await transport.bootstrapPlan(frm.doc.name, settings)", controls)
+        self.assertIn("await editor.startEditing(frm)", controls)
         self.assertIn('typeof previews.preview === "function"', controls)
         self.assertIn("await previews.preview(frm, settings)", controls)
         self.assertIn('"almdina:plan-preview-updated"', controls)

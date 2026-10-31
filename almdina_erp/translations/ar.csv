@@ -3029,3 +3029,32 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+"Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة إعدادات أخرى. تنشئ إعادة الحساب معاينة، ولا يُحفظ التغيير حتى تضغط «حفظ».
+"The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.",يمكن إعادة الحساب بالإعدادات المحفوظة. تغيير الشفرة أو الهامش أو المكنة أو مدة البحث يحتاج صلاحية تعديل إعدادات المحسن.
+Press “Edit” to try other settings. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
+Smart Search,بحث ذكي
+"Default geometry, cutting machine, and search limits.",إعدادات الأبعاد الافتراضية ومكنة القص وحدود البحث.
+The cutting plan preview expired. Create a new preview.,انتهت صلاحية معاينة خطة القص. أنشئ معاينة جديدة.
+Invalid cutting plan candidate.,الخطة البديلة المحددة غير صالحة.
+No manufacturing-valid cutting plan was found.,لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+The search batch limit was reached. Create a new preview.,وصلت إلى الحد المسموح لدفعات البحث. أنشئ معاينة جديدة.
+Plan {0},الخطة {0}
+{0} boards,{0} ألواح
+Reusable offcut: {0} m²,أكبر فضلة قابلة للاستعمال: {0} م²
+Manufacturing checks passed,اجتازت فحوص التصنيع
+Alternative layout,توزيع بديل
+Show plan gallery,إظهار معرض الخطط
+Collapse plan gallery,طي معرض الخطط
+Continue search (+{0} seconds),متابعة البحث (+{0} ثانية)
+Plan alternatives,بدائل خطة القص
+Only one manufacturing-valid plan was found.,توفرت خطة واحدة فقط تجتاز فحوص التصنيع.
+Choose a layout to preview. Nothing is saved until you press Save.,اختر توزيعًا لمعاينته. لا يُحفظ شيء حتى تضغط «حفظ».
+Searching or loading a plan…,جارٍ البحث أو تحميل الخطة…
+Search is limited to three batches per preview.,البحث محدود بثلاث دفعات لكل معاينة.
+Could not load the plan alternative. Create a new preview if it expired.,تعذر تحميل الخطة البديلة. أنشئ معاينة جديدة إذا انتهت صلاحيتها.
+Recommended,موصى بها
+Plans,الخطط
+{0} additional boards,{0} ألواح إضافية
+{0} m² less reusable offcut,فضلة قابلة للاستعمال أقل بمقدار {0} م²
+Maximum centerable edge gap (cm),أقصى فراغ مسموح بتوسيطه (سم)
+Center an axis only when both edge gaps are within this limit.,وسّط المحور فقط إذا كان فراغا الحافتين ضمن هذا الحد.

@@ -101,6 +101,12 @@ function environment() {
 
 async function run() {
     const startEnv = environment();
+    const editor = startEnv.window.AlmdinaPlanEditSessionUX;
+    assert.deepEqual(Array.from(editor.planSettingSpecs(startEnv.frm).map(spec => spec.fieldname)),
+        ["kerf_mm", "trim_margin_mm", "cutting_machine_type", "optimization_time_limit_sec"],
+        "only physical settings render, with no empty algorithm slot");
+    assert.ok(editor.PLAN_SETTING_FIELDS.includes("packing_mode"),
+        "the internal mode remains in preview/settings contracts");
     startEnv.state.status = "idle";
     startEnv.setLoadMode("pending");
     const start = startEnv.window.AlmdinaPlanEditSessionUX.startEditing(startEnv.frm);

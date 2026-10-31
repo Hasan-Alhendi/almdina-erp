@@ -42,6 +42,7 @@ EXPECTED_ACTIVE_IDS = (
     "auto_pro",
     "deep_search",
     "optimal",
+    "smart",
     "maxrects",
     "guillotine",
     "shelf",
@@ -63,6 +64,7 @@ EXPECTED_LABELS = {
     "auto_pro": "تلقائي متقدم (موصى به)",
     "deep_search": "بحث معمّق",
     "optimal": "بحث أمثل",
+    "smart": "بحث ذكي",
     "maxrects": "تعبئة المستطيلات القصوى",
     "guillotine": "القص المقصلي",
     "shelf": "التعبئة بالرفوف",
@@ -81,6 +83,7 @@ EXPECTED_IMPLEMENTED_MAPPINGS = {
     "auto_pro": "Auto Pro",
     "deep_search": "Deep Search",
     "optimal": "Optimal Search",
+    "smart": "Smart Search",
     "maxrects": "MaxRects Best Short Side",
     "guillotine": "Guillotine Short Axis",
     "shelf": "Shelf Horizontal",
@@ -179,9 +182,9 @@ def _settings(mode: str) -> PlanSettings:
     )
 
 
-def test_canonical_catalog_contains_exactly_the_sixteen_story_ids() -> None:
+def test_canonical_catalog_keeps_legacy_ids_and_adds_smart() -> None:
     assert tuple(mode.id for mode in OPTIMIZATION_MODES) == EXPECTED_IDS
-    assert len(set(EXPECTED_IDS)) == 16
+    assert len(set(EXPECTED_IDS)) == 17
     assert DEFAULT_OPTIMIZATION_MODE_ID == "auto_pro"
 
     catalog = optimization_catalog()
@@ -344,7 +347,7 @@ def test_frontend_consumes_payload_catalog_and_blocks_disabled_modes() -> None:
     adapter_source = ENGINE_ADAPTER.read_text(encoding="utf-8")
     production_settings_source = PRODUCTION_SETTINGS.read_text(encoding="utf-8")
 
-    assert 'catalog: "optimization_catalog"' in edit_source
+    assert 'catalog: "optimization_catalog"' not in edit_source
     assert 'catalog: "machine_type_catalog"' in edit_source
     assert "data[catalogName]" in edit_source
     assert 'option.available === false ? " disabled"' in edit_source

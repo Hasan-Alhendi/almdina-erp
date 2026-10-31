@@ -24,7 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CUT_SIZE_MISMATCH, EXTRA_CUT_PATH, FORBIDDEN_ROTATION,
     KERF_VIOLATION, MANUFACTURING_REQUIREMENTS_MISSING, MATERIAL_OVERLAP,
     PIECE_COUNT_MISMATCH, PIECE_IDENTITY_MISMATCH, PIECE_INVALID_DIMENSIONS,
-    PIECE_MISSING, PIECE_OUTSIDE_SHEET, PLAN_LABEL_DUPLICATE,
+    PIECE_MISSING, PIECE_OUTSIDE_SHEET, APPLIED_TRIM_OVERFLOW, PLAN_LABEL_DUPLICATE,
     PLAN_SOURCE_IDENTITY_MISMATCH, PLAN_SOURCE_MISSING, PLAN_UNPLACED_PIECES,
     PLAN_VALIDATION_FAILED,
     PLAN_UNKNOWN_PIECES, REMNANT_IDENTITY_MISMATCH, REMNANT_NOT_FOUND,
@@ -39,6 +39,13 @@ from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
     order_board_thickness_mm,
+)
+
+# These existing snapshot fields are not stored on child placement rows. Both
+# readers must retain them so unchanged validators/exporters see the same shape.
+_SNAPSHOT_CORNER_TRANSFORMS = (
+    "corner_rotation_quarter_turns", "placement_quarter_turns",
+    "corner_mirrored", "mirrored", "placement_mirrored",
 )
 
 
@@ -125,6 +132,9 @@ def _placed_piece_layout_row(placed: Any, stored: dict[str, Any]) -> dict[str, A
     }
     for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
         if stored.get(key) not in (None, "", []):
+            row[key] = stored[key]
+    for key in _SNAPSHOT_CORNER_TRANSFORMS:
+        if key in stored:
             row[key] = stored[key]
     return row
 
@@ -295,6 +305,24 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
                 or physical_y + height > flt(source.full_length_mm) + 1e-7
             )
+            if (snapshot.get("trim_policy") or {}).get("policy") == (
+                "mandatory_minimum_v1"
+            ):
+                minimum_mm = flt(plan.trim_margin_mm)
+                edge_gaps = {
+                    "left": physical_x,
+                    "right": flt(source.full_width_mm) - physical_x - width,
+                    "top": physical_y,
+                    "bottom": flt(source.full_length_mm) - physical_y - height,
+                }
+                for edge, actual_mm in edge_gaps.items():
+                    if actual_mm < minimum_mm - 1e-6:
+                        issues.append(issue(
+                            APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT,
+                            target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)),
+                            params={"sheet_no": sheet_no, "edge": edge, "actual_margin_mm": actual_mm, "required_trim_mm": minimum_mm},
+                        ))
+                        break
         else:
             # Preserve the existing Remnant/OFFCUT usable-frame contract.
             out_of_sheet = (
@@ -555,6 +583,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
             host_id = stored.get("glass_host_piece_id")
             if host_id not in (None, ""):
                 public_piece["glass_host_piece_id"] = host_id
+            for key in _SNAPSHOT_CORNER_TRANSFORMS:
+                if key in stored:
+                    public_piece[key] = stored[key]
             sheet_pieces.append(public_piece)
         persisted = persisted_sheets.get(sheet_no) or {}
         rebuilt_sheet = {

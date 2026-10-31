@@ -17,7 +17,7 @@ function deferred() {
 }
 
 function settings() {
-    return { packing_mode: "optimal", cutting_machine_type: "Auto", kerf_mm: 3,
+    return { packing_mode: "smart", cutting_machine_type: "Auto", kerf_mm: 3,
         trim_margin_mm: 5, optimization_time_limit_sec: 30 };
 }
 

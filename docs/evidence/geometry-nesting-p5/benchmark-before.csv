@@ -1,0 +1,45 @@
+label,head,case,mode,machine,valid,boards,reusable_offcut_m2,budget_sec,runtime_sec,unique_candidates,strict_import_valid,strict_import_error,roundtrip_candidates,expected_rejection
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-tight,Smart Search,CNC Router,True,1,0.0,10.0,0.9788,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Clipped-quad,Smart Search,CNC Router,True,2,0.15031899999999998,10.0,0.942,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-positive-trim,Smart Search,CNC Router,True,1,0.0,10.0,6.071,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Rectangular,Smart Search,CNC Router,True,2,0.193725,10.0,1.21,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-mixed,Smart Search,CNC Router,True,2,0.9059800000000001,10.0,3.9988,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Glass-clipped,Smart Search,CNC Router,True,3,0.6,10.0,2.2241,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Large-120,Smart Search,CNC Router,True,11,0.8500380000000001,10.0,10.4724,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Adaptive-trim,Smart Search,CNC Router,True,1,0.0,10.0,0.2103,4,True,,4,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Glass-assignment-gap,Smart Search,CNC Router,True,1,0.0,10.0,0.4989,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-pair-offcut,Smart Search,CNC Router,True,2,0.2,10.0,1.385,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Boundary-kerf,Smart Search,CNC Router,True,1,0.0,10.0,0.0806,2,True,,2,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Mandatory-gap,Smart Search,CNC Router,True,2,0.0,10.0,0.4292,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-tight,Smart Search,Panel Saw,True,2,0.12210899999999997,10.0,0.6532,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Clipped-quad,Smart Search,Panel Saw,True,2,0.15031899999999998,10.0,0.6174,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-positive-trim,Smart Search,Panel Saw,True,2,0.0,10.0,1.9319,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Rectangular,Smart Search,Panel Saw,True,2,0.0,10.0,0.7687,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-mixed,Smart Search,Panel Saw,True,2,0.9564800000000001,10.0,3.1044,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Glass-clipped,Smart Search,Panel Saw,True,3,0.3,10.0,1.4631,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Large-120,Smart Search,Panel Saw,True,12,1.8922200000000005,10.0,10.4646,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Adaptive-trim,Smart Search,Panel Saw,True,1,0.0,10.0,0.1216,2,True,,2,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Glass-assignment-gap,Smart Search,Panel Saw,True,2,0.0,10.0,0.2267,4,True,,4,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-pair-offcut,Smart Search,Panel Saw,True,2,0.2,10.0,0.79,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Boundary-kerf,Smart Search,Panel Saw,True,1,0.0,10.0,0.0561,2,True,,2,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,Mandatory-gap,Smart Search,Panel Saw,True,2,0.0,10.0,0.0511,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-independent,Smart Search,CNC Router,True,1,0.0,10.0,3.0425,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-competing,Smart Search,CNC Router,True,1,0.12210899999999997,10.0,2.5437,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-clipped,Smart Search,CNC Router,True,1,0.0,10.0,2.9882,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-addon-guard,Smart Search,CNC Router,True,2,0.30466799999999994,10.0,1.9321,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-dependent,Smart Search,CNC Router,True,1,0.0,10.0,1.7697,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-joint-not-best,Smart Search,CNC Router,True,1,0.0,10.0,2.1647,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-mixed,Smart Search,CNC Router,True,1,0.0,10.0,8.018,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P4-regular,Smart Search,CNC Router,True,1,0.6,10.0,0.1579,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-L-different,Smart Search,CNC Router,True,2,0.0,10.0,0.1107,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-L-incompatible,Smart Search,CNC Router,True,2,0.0,10.0,0.0987,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-clip-different,Smart Search,CNC Router,True,2,0.0,10.0,0.1398,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-single-guest,Smart Search,CNC Router,True,2,0.0,10.0,0.0733,1,True,,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-two-guests,Smart Search,CNC Router,True,2,0.0,10.0,0.1665,4,True,,4,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-many-guests,Smart Search,CNC Router,True,2,0.0,10.0,0.8499,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-four-choices,Smart Search,CNC Router,True,1,0.0,10.0,1.7038,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-joint-different,Smart Search,CNC Router,True,2,0.29943300000000006,10.0,2.5814,5,False,candidate 2: PIECE_IDENTITY_AMBIGUOUS; PIECE_MISSING,1,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-realistic-mixed,Smart Search,CNC Router,True,2,2.6108,10.0,5.1482,5,True,,5,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-L-addon,Smart Search,CNC Router,True,2,0.0,10.0,0.129,2,True,,2,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,P5-addon-ambiguous,Smart Search,CNC Router,True,2,0.0,10.0,0.129,1,False,candidate 1: LINER_SHAPE_MISMATCH,0,False
+before,cf11a2bed108ef646b5fa89a61cafa67d64e11a6,L-mixed,Deep Search,CNC Router,True,2,0.9601399999999998,10.0,2.1905,1,True,,1,False

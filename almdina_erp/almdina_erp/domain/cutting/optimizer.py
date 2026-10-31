@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import time
 from collections import deque
@@ -16,15 +17,17 @@ from .primitives import (
     liner_metadata,
     num,
     prune_free_rects,
+    sort_pieces,
     split_free_rect,
 )
-from .registry import METHOD_CONFIGS, PACKING_OPTIONS, run_single_method
+from .registry import METHOD_CONFIGS, PACKING_OPTIONS, STRATEGY_BY_KEY, run_single_method
 
 AUTO_FAST = "Auto"
 AUTO_PRO = "Auto Pro"
 DEEP_SEARCH = "Deep Search"
 OPTIMAL_SEARCH = "Optimal Search"
-ADVANCED_MODES = (AUTO_FAST, AUTO_PRO, DEEP_SEARCH, OPTIMAL_SEARCH)
+SMART_SEARCH = "Smart Search"
+ADVANCED_MODES = (AUTO_FAST, AUTO_PRO, DEEP_SEARCH, OPTIMAL_SEARCH, SMART_SEARCH)
 MACHINE_TYPES = ("Auto", "CNC Router", "Panel Saw")
 
 ORDERING_STRATEGIES = (
@@ -353,7 +356,10 @@ def _seed_for_problem(
     board_h_cm: float,
     kerf_cm: float,
 ) -> int:
-    payload = [f"{board_w_cm:.4f}|{board_h_cm:.4f}|{kerf_cm:.4f}"]
+    # Keep the random order stream stable across trim settings: usable board
+    # dimensions change with the requested margin, but should not independently
+    # reshuffle which heuristic candidates receive the bounded search budget.
+    payload = [f"{kerf_cm:.4f}"]
     payload.extend(
         f"{piece.get('id')}:{num(piece.get('width_cm')):.4f}:"
         f"{num(piece.get('length_cm')):.4f}:"
@@ -566,10 +572,14 @@ def deep_search(
     machine_type: str = "Auto",
     time_limit_sec: float = 10.0,
     max_attempts: int = 500,
+    initial_plan: dict[str, Any] | None = None,
+    candidate_callback: Any = None,
+    known_orders: set | None = None,
+    signature_key: Any = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     started = time.monotonic()
-    best = auto_pro(
+    best = deepcopy(initial_plan) if initial_plan is not None else auto_pro(
         pieces,
         board_w_cm,
         board_h_cm,
@@ -582,9 +592,9 @@ def deep_search(
     rng = random.Random(
         _seed_for_problem(pieces, board_w_cm, board_h_cm, kerf_cm)
     )
-    deadline = started + max(0.5, float(time_limit_sec or 10.0))
+    deadline = started + (max(0.0,float(time_limit_sec)) if initial_plan is not None else max(0.5,float(time_limit_sec or 10.0)))
 
-    seen_orders: set[tuple[str, tuple[int, ...]]] = set()
+    seen_orders = known_orders if known_orders is not None else set()
     while attempts < max_attempts and time.monotonic() < deadline:
         method = methods[attempts % len(methods)]
         sequence = deepcopy(pieces)
@@ -601,6 +611,12 @@ def deep_search(
             tail = large[split:]
             rng.shuffle(tail)
             sequence = head + tail
+        if signature_key is not None:
+            actual_signature = signature_key(method,sequence)
+            if actual_signature in seen_orders:
+                attempts += 1
+                continue
+            seen_orders.add(actual_signature)
         candidate = _run_preordered_method(
             sequence,
             pieces,
@@ -619,6 +635,8 @@ def deep_search(
         attempts += 1
         if _candidate_is_better(candidate, best):
             best = candidate
+            if candidate_callback is not None:
+                candidate_callback(candidate)
 
     best["optimization_mode"] = DEEP_SEARCH
     best["method_label"] = "بحث معمق اختار: " + best["method_label"].split(
@@ -961,6 +979,223 @@ def optimal_search(
     return best
 
 
+def _layout_signature(plan: dict[str, Any]) -> str:
+    from .plan_portfolio import geometry_signature
+    return geometry_signature(plan)
+
+
+def smart_search(
+    pieces: list[dict[str, Any]], board_w_cm: float, board_h_cm: float,
+    kerf_cm: float, machine_type: str = "Auto", time_limit_sec: float = 10.0,
+    exact_piece_limit: int = 40, mirroring_allowed: bool = False,
+    seed_plans: tuple[dict[str, Any], ...] = (), search_round: int = 0,
+    **metric_kwargs: Any,
+) -> dict[str, Any]:
+    """Finish diverse seeds before selection; retain five distinct valid finals.
+
+    Pro orders and deterministic Deep restarts share one deadline. Short batches
+    promote a rectangular leader and a different layout, rather than discarding
+    all but a rectangular winner before shape/Glass passes. Warm finals survive
+    every continuation even if the next search produces no improvement.
+    """
+    from .evaluation import placement_permission_errors
+    started = time.monotonic()
+    budget = max(0.0, float(time_limit_sec))
+    deadline = started + budget
+    metric_kwargs = {"min_remnant_width_cm":30.0,"min_remnant_length_cm":30.0,
+                     "min_remnant_area_m2":.09, **metric_kwargs}
+    from .plan_portfolio import retain_diverse_finals, nesting_coverage
+    accepted_ranks = {}
+    rejected_finals = {}
+    finals: list[dict[str, Any]] = []
+    def offer(candidate):
+        from .plan_portfolio import manufacturing_export_rejection
+        rejection = manufacturing_export_rejection(candidate)
+        if rejection:
+            rejected_finals[rejection] = rejected_finals.get(rejection,0)+1
+            return
+        if validate_plan(candidate,pieces,board_w_cm,board_h_cm,kerf_cm=kerf_cm) or placement_permission_errors(
+            candidate,pieces,mirroring_allowed=mirroring_allowed):
+            rejected_finals['validation_or_permission'] = rejected_finals.get('validation_or_permission',0)+1
+            return
+        signature = _layout_signature(candidate)
+        rank=tuple(candidate['industrial_rank'])
+        accepted_ranks[signature] = min(accepted_ranks.get(signature,rank),rank)
+        existing = next((p for p in finals if _layout_signature(p)==signature),None)
+        if existing is not None:
+            if not _candidate_is_better(candidate,existing):
+                return
+            finals.remove(existing)
+        finals.append(candidate)
+        finals[:] = retain_diverse_finals(finals)
+
+    for plan in seed_plans[:5]:
+        if all(abs(float(sh.get('w',0))-board_w_cm)<1e-8 and abs(float(sh.get('h',0))-board_h_cm)<1e-8
+               for sh in plan.get('sheets') or []):
+            offer(enrich_plan_metrics(plan,str(plan.get('method_key') or ''),machine_type,**metric_kwargs))
+    seed = (deepcopy(finals[0]) if finals else
+            auto_fast(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,**metric_kwargs))
+    completed, attempts, trials = 0, int(seed.get('attempts') or 0), 0
+    def finish(raw, share):
+        nonlocal completed
+        end = min(deadline,time.monotonic()+max(0,share))
+        result = _finish_plan_search(raw,pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,
+            max(0,end-time.monotonic()),mirroring_allowed,metric_kwargs,
+            search_deadline=end,require_importable_geometry=True,final_candidate_callback=offer)
+        completed += 1
+        offer(result)
+        return result
+    initial = finish(seed,min(budget*.2,max(0,deadline-time.monotonic())))
+    seed_rank = list(initial.get('industrial_rank') or [])
+    from .joint_nesting import has_joint_sources, joint_nesting_candidates
+    joint_diagnostics = None
+    if finals and has_joint_sources(pieces, machine_type) and time.monotonic() < deadline:
+        joint, joint_diagnostics = joint_nesting_candidates(seed, initial, pieces,
+            board_w_cm, board_h_cm, kerf_cm, machine_type=machine_type,
+            mirroring_allowed=mirroring_allowed,
+            deadline=min(deadline, time.monotonic()+min(1.5, budget*.2)), metric_kwargs=metric_kwargs)
+        for candidate in joint:
+            offer(candidate)
+    from .geometry_nesting import geometry_first_candidates, has_shape_sources
+    shape_diagnostics = None
+    if has_shape_sources(pieces,machine_type) and time.monotonic()<deadline:
+        shaped,shape_diagnostics = geometry_first_candidates(seed,pieces,board_w_cm,board_h_cm,kerf_cm,
+            machine_type=machine_type,mirroring_allowed=mirroring_allowed,
+            deadline=min(deadline,time.monotonic()+min(3.0,budget*.35)),metric_kwargs=metric_kwargs)
+        for candidate in shaped:
+            offer(candidate)
+    late_completions = 0
+    completed_topologies = {_layout_signature(p) for p in finals if nesting_coverage(p)}
+    methods = _candidate_methods(machine_type)
+    def packing_signature(method,sequence):
+        _,packer,args,_ = METHOD_CONFIGS[method]
+        return packer.__name__,args,tuple(int(p['id']) for p in sequence)
+    seen_orders = set() if seed_plans else {
+        packing_signature(m,sort_pieces(pieces,STRATEGY_BY_KEY[m].sort_method)) for m in methods}
+    seen_layouts = {_layout_signature(seed)}
+    rng = random.Random(_seed_for_problem(pieces,board_w_cm,board_h_cm,kerf_cm)+int(search_round)*104729)
+    def sequences():
+        local = _local_sequences(finals[0] if finals else initial,pieces)
+        cycles = [entry for entry in local if entry[0].startswith('dimension_cycle_')]
+        yield from cycles[1:]+cycles[:1]
+        for strategy in ORDERING_STRATEGIES:
+            yield strategy,order_pieces(pieces,strategy)
+        yield from (entry for entry in local if not entry[0].startswith('dimension_cycle_'))
+        for index in range(500):
+            sequence = list(pieces)
+            rng.shuffle(sequence)
+            yield f'seeded_restart_{index}',sequence
+    batch = []
+    def finish_batch():
+        nonlocal late_completions
+        if not batch:
+            return
+        batch.sort(key=lambda p:tuple(p['industrial_rank']))
+        # Retain diversity even when the second seed has a worse rectangle rank.
+        choices = [batch[0]]
+        if len(batch)>1:
+            choices.append(batch[-1] if any(p.get('piece_type') in {'Glass','L-Shaped Corner','Clipped Corner'} for p in pieces)
+                           else batch[min(1,len(batch)-1)])
+        for raw in choices:
+            if completed>=8 or time.monotonic()>=deadline:
+                break
+            finished = finish(raw,max(0,deadline-time.monotonic())/max(2,16-completed))
+            coverage = nesting_coverage(finished)
+            shape_signature = _layout_signature(finished)
+            if (late_completions<2 and coverage & {'L-Shaped Corner','Clipped Corner'}
+                    and shape_signature not in completed_topologies
+                    and len(finished.get('sheets') or [])<=len(finals[0]['sheets'])
+                    and has_joint_sources(pieces,machine_type) and time.monotonic()<deadline):
+                from .joint_nesting import complete_shape_candidate
+                late = complete_shape_candidate(finished,pieces,board_w_cm,board_h_cm,kerf_cm,
+                    machine_type=machine_type,mirroring_allowed=mirroring_allowed,
+                    deadline=min(deadline,time.monotonic()+min(.3,budget*.05)),metric_kwargs=metric_kwargs)
+                offer(enrich_plan_metrics(late,str(late.get('method_key') or ''),machine_type,**metric_kwargs))
+                completed_topologies.add(shape_signature)
+                late_completions+=1
+        batch.clear()
+    for index,(name,sequence) in enumerate(sequences()):
+        selected = [methods[0]] if name.startswith('dimension_cycle_') else list(dict.fromkeys(
+            [methods[0],seed['method_key'],methods[index%len(methods)]]))
+        for method in selected:
+            if trials>=500 or completed>=8 or time.monotonic()>=deadline:
+                break
+            signature = packing_signature(method,sequence)
+            if signature in seen_orders:
+                continue
+            seen_orders.add(signature)
+            raw = _run_preordered_method(sequence,pieces,board_w_cm,board_h_cm,kerf_cm,method,name)
+            trials += 1
+            attempts += 1
+            signature = _layout_signature(raw)
+            if signature in seen_layouts:
+                continue
+            seen_layouts.add(signature)
+            batch.append(enrich_plan_metrics(raw,method,machine_type,**metric_kwargs))
+            if len(batch)>=12:
+                finish_batch()
+        if trials>=500 or completed>=8 or time.monotonic()>=deadline:
+            break
+    finish_batch()
+    if time.monotonic()<deadline and finals:
+        def deep_candidate(raw):
+            if completed<16 and time.monotonic()<deadline:
+                finish(raw,min(.5,max(0,deadline-time.monotonic())*.2))
+        warm = dict(finals[0])
+        warm['attempts'] = 0
+        deep = deep_search(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,
+            max(0,deadline-time.monotonic()),max_attempts=max(0,500-trials),
+            initial_plan=warm,candidate_callback=deep_candidate,known_orders=seen_orders,
+            signature_key=packing_signature,**metric_kwargs)
+        attempts += int(deep.get('attempts') or 0)
+        if completed<16 and time.monotonic()<deadline:
+            finish(deep,max(0,deadline-time.monotonic())*.5)
+    best = finals[0] if finals else initial
+    remaining = deadline-time.monotonic()
+    if (remaining>.01 and finals and machine_type!='Panel Saw' and 0<len(pieces)<=exact_piece_limit
+        and len(best.get('sheets') or [])>1 and all((p.get('piece_type') or 'Regular')=='Regular' for p in pieces)
+        and _cp_sat_available()):
+        exact = _solve_cp_sat(pieces,board_w_cm,board_h_cm,kerf_cm,len(best['sheets'])-1,max(.001,deadline-time.monotonic()))
+        if exact is not None:
+            finish(enrich_plan_metrics(exact,OPTIMAL_SEARCH,machine_type,**metric_kwargs),max(0,deadline-time.monotonic()))
+    best = dict(finals[0] if finals else initial)
+    from .plan_portfolio import manufacturing_export_rejection
+    if not finals and manufacturing_export_rejection(best):
+        # Keep the established incomplete-plan failure contract. Returning the
+        # unprovable baseline here would falsely certify it in the Application.
+        best = enrich_plan_metrics(dict(best,sheets=[],unplaced=deepcopy(pieces)),
+            str(best.get('method_key') or ''),machine_type,**metric_kwargs)
+    best['optimization_mode'] = SMART_SEARCH
+    best['attempts'] = attempts
+    best['search_elapsed_sec'] = round(time.monotonic()-started,3)
+    best['search_time_limit_sec'] = budget
+    best['smart_search'] = dict(auto_seed_rank=seed_rank,completed_candidates=completed,packing_trials=trials,
+        unique_candidates=len(finals), search_round=search_round,
+        valid_final_ranks=[list(p['industrial_rank']) for p in finals],
+        deadline_overrun_sec=round(max(0,time.monotonic()-deadline),3))
+    best['smart_search']['portfolio'] = dict(valid_unique_completed=len(accepted_ranks),
+        dominated_by_winner=sum(rank>tuple(best['industrial_rank']) for rank in accepted_ranks.values()),
+        pruned_unique=len(set(accepted_ranks)-{_layout_signature(p) for p in finals}),
+        coverage=[sorted(nesting_coverage(p)) for p in finals],rejections=rejected_finals)
+    if shape_diagnostics is not None:
+        shape_diagnostics['late_joint_completions']=late_completions
+        for piece_id,trace in shape_diagnostics['piece_trace'].items():
+            trace['reserved_by_initial_glass']=any(int(p['id'])==piece_id and p.get('glass_host_piece_id')
+                for s in initial.get('sheets') or [] for p in s['pieces'])
+            trace['portfolio_formations']=sum(any(piece_id in ids for ids in
+                (p.get('shape_nesting_diagnostics') or {}).get('formation_ids') or []) for p in finals)
+        shape_diagnostics['final_plans_using']={kind:sum(kind in nesting_coverage(p) for p in finals)
+            for kind in ('L-Shaped Corner','Clipped Corner','Glass','Joint')}
+        best['smart_search']['shape_first']=shape_diagnostics
+    if joint_diagnostics is not None:
+        joint_diagnostics.update(glass_guests=sum(bool(p.get('glass_host_piece_id')) for s in best['sheets'] for p in s['pieces']),
+            shape_void_guests=len((best.get('shape_nesting_diagnostics') or {}).get('void_guests') or []),
+            boards_before_after=[len(initial['sheets']), len(best['sheets'])])
+        best['smart_search']['joint'] = joint_diagnostics
+    best['smart_candidates'] = [dict(p) for p in finals]
+    return best
+
+
 def optimize_plan(
     pieces: list[dict[str, Any]],
     board_w_cm: float,
@@ -974,6 +1209,8 @@ def optimize_plan(
     min_remnant_length_cm: float = 30.0,
     min_remnant_area_m2: float = 0.09,
     mirroring_allowed: bool = False,
+    seed_plans: tuple[dict[str, Any], ...] = (),
+    search_round: int = 0,
 ) -> dict[str, Any]:
     mode = selected_mode or AUTO_FAST
     metric_kwargs = {
@@ -982,6 +1219,11 @@ def optimize_plan(
         "min_remnant_area_m2": min_remnant_area_m2,
     }
 
+    if mode == SMART_SEARCH:
+        return smart_search(
+            pieces, board_w_cm, board_h_cm, kerf_cm, machine_type, time_limit_sec,
+            exact_piece_limit, mirroring_allowed, seed_plans, search_round, **metric_kwargs,
+        )
     if mode == AUTO_FAST:
         baseline = auto_fast(
             pieces,
@@ -1038,13 +1280,29 @@ def optimize_plan(
         baseline["optimization_mode"] = "Manual"
         baseline["attempts"] = 1
 
+    return _finish_plan_search(
+        baseline, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
+        time_limit_sec, mirroring_allowed, metric_kwargs,
+    )
+
+
+def _finish_plan_search(
+    baseline: dict[str, Any], pieces: list[dict[str, Any]],
+    board_w_cm: float, board_h_cm: float, kerf_cm: float,
+    machine_type: str, time_limit_sec: float, mirroring_allowed: bool,
+    metric_kwargs: dict[str, Any], *, search_deadline: float | None = None,
+    require_importable_geometry: bool = False,
+    final_candidates: list[dict[str, Any]] | None = None,
+    final_candidate_callback: Any = None,
+) -> dict[str, Any]:
     from .glass_opening_nesting import nest_glass_openings
     from .plan_search import improve_plan_search
     from .shape_aware_nesting import apply_shape_aware_nesting
 
     # Post-passes may annotate their input even when they keep its geometry.
     # Preserve each candidate, including its diagnostics, for final selection.
-    search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
+    if search_deadline is None:
+        search_deadline = time.monotonic() + max(0.0, float(time_limit_sec))
     nested = nest_glass_openings(
         deepcopy(baseline),
         pieces,
@@ -1065,6 +1323,7 @@ def optimize_plan(
         machine_type=machine_type,
         time_limit_sec=max(0.0, search_deadline - time.monotonic()),
         formation_alternatives=True,
+        quarter_turns_only=require_importable_geometry,
         **metric_kwargs,
     )
     from .evaluation import placement_permission_errors
@@ -1112,12 +1371,32 @@ def optimize_plan(
         )
 
     for candidate in search_candidates():
+        # Strict import cannot prove non-quarter void guests or machining marks
+        # inside Glass guests. Keep a proven earlier stage; legacy modes and
+        # all export/import contracts remain intact.
+        from .plan_portfolio import manufacturing_export_rejection
+        if require_importable_geometry and manufacturing_export_rejection(candidate):
+            continue
         candidate = enrich_plan_metrics(
             candidate,
             str(candidate.get("method_key") or ""),
             machine_type,
             **metric_kwargs,
         )
+        if (final_candidates is not None or final_candidate_callback is not None) and not (validate_plan(
+            candidate,pieces,board_w_cm,board_h_cm,kerf_cm=kerf_cm) or placement_permission_errors(
+                candidate,pieces,mirroring_allowed=mirroring_allowed)):
+            if final_candidate_callback is not None:
+                final_candidate_callback(candidate)
+            if final_candidates is not None:
+                signature = _layout_signature(candidate)
+                same = next((p for p in final_candidates if _layout_signature(p)==signature),None)
+                if same is None or _candidate_is_better(candidate,same):
+                    if same is not None:
+                        final_candidates.remove(same)
+                    final_candidates.append(candidate)
+                    from .plan_portfolio import retain_diverse_finals
+                    final_candidates[:] = retain_diverse_finals(final_candidates)
         # Keep post-pass behavior on an exact industrial tie, never at a cost
         # in boards, reusable offcut, or manufacturing complexity.
         if best is not None and _candidate_is_better(best, candidate):
@@ -1150,6 +1429,8 @@ __all__ = [
     "GUILLOTINE_METHODS",
     "MACHINE_TYPES",
     "OPTIMAL_SEARCH",
+    "SMART_SEARCH",
+    "smart_search",
     "ORDERING_STRATEGIES",
     "auto_fast",
     "auto_pro",

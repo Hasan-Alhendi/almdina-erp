@@ -169,11 +169,28 @@
         return typeof fallback === "function" ? fallback(frm) : false;
     }
 
+    function firstPlanPreviewAllowed(frm) {
+        const data = window.AlmdinaPlanWorkspaceState?.snapshot?.(frm)?.data;
+        return Boolean(data && !data.plans?.system_draft
+            && window.AlmdinaPlanControlsUX?.canCalculate?.(frm) === true
+            && window.AlmdinaPermissions?.canDocument?.(frm, "recalculate_plan"));
+    }
+
     async function startEditingCommand(frm, sessionContext = null) {
         if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
         const owner = previewOwner();
         if (owner) owner.reset(frm);
-        const result = await Promise.resolve(runBaseCommand("start", frm, sessionContext));
+        let result;
+        if (firstPlanPreviewAllowed(frm) && !legacy.canEditPlanSettings?.(frm)) {
+            const store = window.AlmdinaPlanWorkspaceState?.storeFor?.(frm);
+            const settings = window.AlmdinaPlanWorkspacePresenterAdapter?.activeSettings?.(frm);
+            if (!store || !settings) return false;
+            store.beginEdit(settings);
+            frm.trigger?.("almdina_edit_session_changed");
+            result = true;
+        } else {
+            result = await Promise.resolve(runBaseCommand("start", frm, sessionContext));
+        }
         schedule(frm);
         return result;
     }
@@ -309,6 +326,7 @@
             baseCoordinatorAdapter = base;
             return {
                 ...base,
+                canStart: frm => firstPlanPreviewAllowed(frm) || base.canStart?.(frm) === true,
                 start: startEditingCommand,
                 save: saveEditingCommand,
                 cancel: cancelEditingCommand,

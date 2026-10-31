@@ -46,7 +46,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "get_system_plan_recalculation_status",
         ),
     ),
-    ("almdina_erp.almdina_erp.services.cutting_plan_preview_service", C, ("commit_cutting_plan_preview", "preview_cutting_plan")),
+    ("almdina_erp.almdina_erp.services.cutting_plan_preview_service", C, ("commit_cutting_plan_preview", "preview_cutting_plan", "select_cutting_plan_candidate", "continue_cutting_plan_search", "discard_cutting_plan_preview")),
     ("almdina_erp.almdina_erp.services.cutting_plan_workspace_query_service", C, ("get_plan_workspace_snapshot",)),
     ("almdina_erp.almdina_erp.services.cutting_plan_service", D, ("approve_order", "lock_cutting_plan", "reject_order", "send_order_to_production", "submit_order_for_review")),
     ("almdina_erp.almdina_erp.services.drawing_approval_service", C, ("approve_production_dxf", "cancel_production_plan_approval")),

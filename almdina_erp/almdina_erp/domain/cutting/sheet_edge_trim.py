@@ -9,6 +9,7 @@ trim. Doors keep their order, rotation, and kerf gaps. No board is added.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import math
 from typing import Any
 
@@ -25,6 +26,12 @@ def realize_sheet_edge_trim(
     preferred_width_trim_cm: float,
     preferred_length_trim_cm: float,
     precision_cm: float = TRIM_PRECISION_CM,
+    balance_existing_applied: bool = False,
+    machine_type: str = "Auto",
+    min_remnant_width_cm: float = 30.0,
+    min_remnant_length_cm: float = 30.0,
+    min_remnant_area_m2: float = 0.09,
+    max_centerable_edge_gap_cm: float = 5.0,
 ) -> None:
     """Write the largest symmetric trim each sheet can actually hold."""
 
@@ -34,24 +41,57 @@ def realize_sheet_edge_trim(
         pieces = list(sheet.get("pieces") or [])
         if not pieces:
             continue
-        _realize_axis(
-            sheet,
-            pieces,
-            axis="x",
-            full_cm=full_width_cm,
-            preferred_cm=preferred_width_trim_cm,
-            current_cm=max(0.0, num(sheet.get("applied_trim_width_cm"))),
-            precision_cm=precision_cm,
-        )
-        _realize_axis(
-            sheet,
-            pieces,
-            axis="y",
-            full_cm=full_length_cm,
-            preferred_cm=preferred_length_trim_cm,
-            current_cm=max(0.0, num(sheet.get("applied_trim_length_cm"))),
-            precision_cm=precision_cm,
-        )
+        for axis, full_cm, preferred_cm in (
+            ("x", full_width_cm, preferred_width_trim_cm),
+            ("y", full_length_cm, preferred_length_trim_cm),
+        ):
+            # Centering is evaluated as a physical translation on one axis at
+            # a time. A useful remnant on the other axis must not block a move
+            # that preserves its separable area.
+            original = deepcopy(sheet)
+            original_piece_refs = list(sheet.get("pieces") or [])
+            original_piece_values = [deepcopy(piece) for piece in original_piece_refs]
+            before = _largest_reusable_area(
+                sheet, machine_type, min_remnant_width_cm,
+                min_remnant_length_cm, min_remnant_area_m2,
+            )
+            _realize_axis(
+                sheet, list(sheet.get("pieces") or []), axis=axis,
+                full_cm=full_cm, preferred_cm=preferred_cm,
+                current_cm=max(0.0, num(sheet.get(
+                    "applied_trim_width_cm" if axis == "x" else "applied_trim_length_cm"
+                ))),
+                precision_cm=precision_cm,
+                balance_existing_applied=balance_existing_applied,
+                max_centerable_edge_gap_cm=max(0.0, num(max_centerable_edge_gap_cm)),
+            )
+            after = _largest_reusable_area(
+                sheet, machine_type, min_remnant_width_cm,
+                min_remnant_length_cm, min_remnant_area_m2,
+            )
+            if balance_existing_applied and after + 1e-9 < before:
+                sheet.clear()
+                sheet.update(original)
+                for piece, values in zip(original_piece_refs, original_piece_values):
+                    piece.clear()
+                    piece.update(values)
+                sheet["pieces"] = original_piece_refs
+
+
+def _largest_reusable_area(
+    sheet: dict[str, Any],
+    machine_type: str,
+    min_remnant_width_cm: float,
+    min_remnant_length_cm: float,
+    min_remnant_area_m2: float,
+) -> float:
+    # Share the factory thresholds and separability rules with industrial rank.
+    from .optimizer import _largest_reusable_free_area
+
+    return _largest_reusable_free_area(
+        {"sheets": [sheet]}, min_remnant_width_cm, min_remnant_length_cm,
+        min_remnant_area_m2, machine_type=machine_type,
+    )
 
 
 def resolved_sheet_trim_cm(
@@ -145,37 +185,110 @@ def _realize_axis(
     preferred_cm: float,
     current_cm: float,
     precision_cm: float,
+    balance_existing_applied: bool,
+    max_centerable_edge_gap_cm: float,
 ) -> None:
     span_start, span_end = _occupied_span(pieces, axis)
-    span = max(0.0, span_end - span_start)
-    free_cm = max(0.0, full_cm - span)
-    target = _symmetric_trim(free_cm, preferred_cm, precision_cm)
-    target = max(target, current_cm)
-    # ``target == current`` means this sheet already records the trim it can
-    # hold. Coordinates stay in the usable frame, so a group that is already
-    # inside that frame must not be shifted again.
-    if target <= current_cm + (precision_cm / 10.0):
+    coordinate = "x" if axis == "x" else "y"
+    size = "w" if axis == "x" else "h"
+    if full_cm <= 0 or any(
+        piece.get(coordinate) is None or piece.get(size) is None
+        for piece in pieces
+    ):
+        # Incomplete legacy/test snapshots do not carry movable geometry.
         return
-
-    frame = max(0.0, full_cm - (target * 2.0))
+    span = max(0.0, span_end - span_start)
+    if balance_existing_applied and any(
+        piece.get("placement_outline_cm")
+        or piece.get("geometry")
+        or piece.get("overlays")
+        or str(piece.get("piece_type") or "Regular") != "Regular"
+        for piece in pieces
+    ):
+        # Until every attached outline can be translated as one solid unit,
+        # keep shape-aware layouts untouched.
+        return
+    # Compatibility: older snapshots may have no applied trim. Keep their
+    # historical edge realization behavior; new snapshots already carry M.
+    if current_cm + precision_cm / 10.0 < preferred_cm:
+        free_cm = max(0.0, full_cm - span)
+        target = max(current_cm, _symmetric_trim(free_cm, preferred_cm, precision_cm))
+        if target <= current_cm + precision_cm / 10.0:
+            return
+        frame = max(0.0, full_cm - target * 2.0)
+        if axis == "x":
+            delta = span_start
+            for piece in pieces:
+                piece["x"] = num(piece.get("x")) - delta
+            sheet["w"] = frame
+            sheet["usable_width_cm"] = frame
+            sheet["applied_trim_width_cm"] = target
+            return
+        delta = span_end - frame
+        for piece in pieces:
+            piece["y"] = num(piece.get("y")) - delta
+        sheet["h"] = frame
+        sheet["usable_length_cm"] = frame
+        sheet["applied_trim_length_cm"] = target
+        return
+    if not balance_existing_applied:
+        return
+    target = max(0.0, preferred_cm, current_cm)
+    frame = full_cm - (target * 2.0)
+    if frame <= 0:
+        return
+    perpendicular = "y" if axis == "x" else "x"
+    translations: list[tuple[list[dict[str, Any]], float]] = []
+    for group in _projection_groups(pieces, axis=perpendicular):
+        start = min(num(piece.get(coordinate)) for piece in group)
+        end = max(num(piece.get(coordinate)) + num(piece.get(size)) for piece in group)
+        span = end - start
+        if span > frame + precision_cm:
+            return
+        left_gap = max(0.0, start)
+        right_gap = max(0.0, frame - end)
+        if max(left_gap, right_gap) > max_centerable_edge_gap_cm + 1e-7:
+            continue
+        # Keep the mandatory inset fixed and split only this row/column's slack.
+        delta = ((frame - span) / 2.0) - start
+        if abs(delta) <= precision_cm / 10.0:
+            continue
+        if start + delta < -precision_cm or end + delta > frame + precision_cm:
+            return
+        translations.append((group, delta))
     sheet.pop("free_rects", None)
     sheet.pop("skyline", None)
     sheet.pop("shelves", None)
+    for group, delta in translations:
+        for piece in group:
+            piece[coordinate] = num(piece.get(coordinate)) + delta
     if axis == "x":
-        delta = span_start
-        for piece in pieces:
-            piece["x"] = num(piece.get("x")) - delta
         sheet["w"] = frame
         sheet["usable_width_cm"] = frame
         sheet["applied_trim_width_cm"] = target
-        return
+    else:
+        sheet["h"] = frame
+        sheet["usable_length_cm"] = frame
+        sheet["applied_trim_length_cm"] = target
 
-    delta = span_end - frame
-    for piece in pieces:
-        piece["y"] = num(piece.get("y")) - delta
-    sheet["h"] = frame
-    sheet["usable_length_cm"] = frame
-    sheet["applied_trim_length_cm"] = target
+
+def _projection_groups(pieces: list[dict[str, Any]], *, axis: str) -> list[list[dict[str, Any]]]:
+    """Group pieces whose perpendicular spans overlap; only disjoint rows/columns move independently."""
+    coordinate = "x" if axis == "x" else "y"
+    size = "w" if axis == "x" else "h"
+    ordered = sorted(pieces, key=lambda piece: num(piece.get(coordinate)))
+    groups: list[list[dict[str, Any]]] = []
+    group_end = -math.inf
+    for piece in ordered:
+        start = num(piece.get(coordinate))
+        end = start + num(piece.get(size))
+        if not groups or start >= group_end - 1e-9:
+            groups.append([piece])
+            group_end = end
+        else:
+            groups[-1].append(piece)
+            group_end = max(group_end, end)
+    return groups
 
 
 def _occupied_span(pieces: list[dict[str, Any]], axis: str) -> tuple[float, float]:

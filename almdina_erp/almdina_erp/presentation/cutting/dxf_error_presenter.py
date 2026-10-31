@@ -1200,13 +1200,28 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.TRIM_EXCEEDS_BOARD:
         return PresentedDxfError(
-            "هامش التشذيب أكبر من أبعاد اللوح ولا توجد مساحة صالحة للقص.",
+            "الهامش الأدنى المطلوب لا يترك مساحة صالحة على أبعاد اللوح المحدد.",
             "اللوح.",
-            "قلّل التشذيب أو زد أبعاد اللوح ثم أعد المحاولة.",
+            "اختر لوحًا أكبر، أو صحح قيمة الحد الأدنى إذا أُدخلت خطأً، ثم أعد الحساب.",
             code,
             issue.category,
         )
     if code == codes.APPLIED_TRIM_OVERFLOW:
+        actual = format_mm(params.get("actual_margin_mm") or 0)
+        required = format_mm(params.get("required_trim_mm") or 0)
+        edge_ar = {
+            "left": "اليسرى", "right": "اليمنى",
+            "top": "العليا", "bottom": "السفلى",
+        }.get(str(params.get("edge") or ""), "")
+        if edge_ar:
+            sheet_no = params.get("sheet_no")
+            return PresentedDxfError(
+                f"{_piece_noun(issue)} على اللوح {sheet_no} تبعد {actual} مم فقط عن الحافة {edge_ar}.",
+                target_text,
+                f"الحد الأدنى المطلوب {required} مم. أعد توزيع الدرفة داخل اللوح ثم أعد المحاولة.",
+                code,
+                issue.category,
+            )
         return PresentedDxfError(
             "القطع تتجاوز حدود اللوح حتى بعد التشذيب.",
             "اللوح.",

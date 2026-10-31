@@ -146,6 +146,45 @@ class TestSpecialExportValidation(unittest.TestCase):
             errors = validate_cutting_plan_issues(plan)
         return plan, piece, geometry, errors
 
+    def test_new_mandatory_trim_policy_rejects_physical_edge_gap_below_minimum(self):
+        plan, order, piece, _ = _saved_plan(
+            piece_type="Regular", width_cm=30, length_cm=40,
+        )
+        piece.x_mm = 2
+        plan.trim_margin_mm = 5
+        snapshot = json.loads(plan.snapshot_json)
+        snapshot["trim_policy"] = {"policy": "mandatory_minimum_v1"}
+        snapshot["sheets"][0].update(
+            full_width_cm=100,
+            full_length_cm=100,
+            usable_width_cm=100,
+            usable_length_cm=100,
+            applied_trim_width_cm=0,
+            applied_trim_length_cm=0,
+        )
+        snapshot["sheets"][0]["pieces"][0]["x"] = 0.2
+        plan.snapshot_json = json.dumps(snapshot)
+
+        with patch.object(frappe, "get_doc", return_value=order, create=True):
+            errors = validate_cutting_plan_issues(plan)
+
+        trim_issue = next(error for error in errors if error.code == "APPLIED_TRIM_OVERFLOW")
+        self.assertEqual(trim_issue.target.source_piece_no, 1)
+        self.assertEqual(trim_issue.target.copy_no, 1)
+        self.assertEqual(trim_issue.params["sheet_no"], 1)
+        self.assertEqual(trim_issue.params["edge"], "left")
+        self.assertEqual(trim_issue.params["actual_margin_mm"], 2)
+        self.assertEqual(trim_issue.params["required_trim_mm"], 5)
+
+        snapshot["sheets"] = []
+        plan.snapshot_json = json.dumps(snapshot)
+        with patch.object(frappe, "get_doc", return_value=order, create=True):
+            missing_geometry_issues = validate_cutting_plan_issues(plan)
+        self.assertTrue(any(
+            error.code == "APPLIED_TRIM_OVERFLOW"
+            for error in missing_geometry_issues
+        ))
+
     def test_expected_snapshot_preserves_piece_type_from_manufacturing_requirements(self):
         plan, _, _, _ = _saved_plan(
             piece_type="Special", width_cm=30, length_cm=40

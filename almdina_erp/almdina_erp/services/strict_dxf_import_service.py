@@ -1874,8 +1874,19 @@ def parse_production_dxf(
             preferred_trim_mm=settings.preferred_trim_mm,
         )
     except DxfAppliedTrimError as exc:
+        details = exc.details
+        target = piece_target(
+            source_piece_no=details.get("source_piece_no"),
+            copy_no=details.get("copy_no"),
+            label=details.get("label"),
+        )
         raise DxfImportError(
-            issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
+            issues=[issue(
+                APPLIED_TRIM_OVERFLOW,
+                CATEGORY_LAYOUT,
+                target=target,
+                params={key: value for key, value in details.items() if key not in {"source_piece_no", "copy_no", "label"}},
+            )]
         ) from exc
 
     exact_issues = _apply_strict_dimension_contract(

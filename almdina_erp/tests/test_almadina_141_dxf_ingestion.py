@@ -7,6 +7,7 @@ from pathlib import Path
 import ezdxf
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
+    DxfAppliedTrimError,
     apply_adaptive_trim_to_fixed_dxf_layout,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
@@ -219,25 +220,19 @@ class TestAlmadina141AppliedTrim(unittest.TestCase):
         self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["y"], 0.5)
 
     def test_only_blocked_axis_is_relaxed_and_refined(self) -> None:
-        result = apply_adaptive_trim_to_fixed_dxf_layout(
-            self._snapshot(x=0.2, y=1.0, w=20.0, h=30.0),
-            preferred_trim_mm=5.0,
-        )
-
-        self.assertAlmostEqual(result["applied_trim_width_cm"], 0.2)
-        self.assertAlmostEqual(result["applied_trim_length_cm"], 0.5)
-        self.assertEqual(result["trim_policy"]["relaxed_axes"], ["width"])
-        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["x"], 0.0)
-        self.assertAlmostEqual(result["sheets"][0]["pieces"][0]["y"], 0.5)
+        with self.assertRaises(DxfAppliedTrimError) as caught:
+            apply_adaptive_trim_to_fixed_dxf_layout(
+                self._snapshot(x=0.2, y=1.0, w=20.0, h=30.0),
+                preferred_trim_mm=5.0,
+            )
+        self.assertEqual(caught.exception.details["edge"], "left")
+        self.assertAlmostEqual(caught.exception.details["actual_margin_mm"], 2.0)
+        self.assertAlmostEqual(caught.exception.details["required_trim_mm"], 5.0)
 
     def test_physical_layout_is_not_repacked_when_trim_relaxes(self) -> None:
         source = self._snapshot(x=0.0, y=0.0, w=100.0, h=200.0)
-        result = apply_adaptive_trim_to_fixed_dxf_layout(source, preferred_trim_mm=5.0)
-
-        self.assertEqual(result["applied_trim_width_cm"], 0.0)
-        self.assertEqual(result["applied_trim_length_cm"], 0.0)
-        self.assertEqual(result["sheets"][0]["pieces"][0]["w"], 100.0)
-        self.assertEqual(result["sheets"][0]["pieces"][0]["h"], 200.0)
+        with self.assertRaises(DxfAppliedTrimError):
+            apply_adaptive_trim_to_fixed_dxf_layout(source, preferred_trim_mm=5.0)
         self.assertEqual(source["sheets"][0]["pieces"][0]["x"], 0.0)
 
     def test_applied_trim_shifts_extra_overlay_paths_with_piece_geometry(self) -> None:

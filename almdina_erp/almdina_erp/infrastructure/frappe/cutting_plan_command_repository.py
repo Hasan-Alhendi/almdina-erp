@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.application.cutting.plan_revisions import (
     PlanSettings,
     create_revision,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import settings_for_system_search
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
     DRAFT,
@@ -133,6 +134,8 @@ class FrappeCuttingPlanCommandRepository:
         plan.revision = max(1, cint(revision))
         plan.based_on_plan = based_on_plan
         plan.status = status or DRAFT
+        if plan.source_type == SYSTEM:
+            settings = settings_for_system_search(settings)
         plan.optimization_mode = settings.optimization_mode
         plan.machine_type = settings.machine_type
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
