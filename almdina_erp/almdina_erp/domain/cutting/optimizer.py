@@ -356,7 +356,10 @@ def _seed_for_problem(
     board_h_cm: float,
     kerf_cm: float,
 ) -> int:
-    payload = [f"{board_w_cm:.4f}|{board_h_cm:.4f}|{kerf_cm:.4f}"]
+    # Keep the random order stream stable across trim settings: usable board
+    # dimensions change with the requested margin, but should not independently
+    # reshuffle which heuristic candidates receive the bounded search budget.
+    payload = [f"{kerf_cm:.4f}"]
     payload.extend(
         f"{piece.get('id')}:{num(piece.get('width_cm')):.4f}:"
         f"{num(piece.get('length_cm')):.4f}:"

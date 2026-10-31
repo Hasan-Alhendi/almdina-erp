@@ -10,7 +10,10 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
 from almdina_erp.almdina_erp.domain.cutting.evaluation import (
     placement_permission_errors, validate_plan,
 )
-from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
+from almdina_erp.almdina_erp.domain.cutting.primitives import (
+    expand_piece_groups,
+    make_placed_piece,
+)
 
 
 def test_smart_catalog_preserves_historical_defaults():
@@ -112,6 +115,61 @@ def test_smart_never_sends_irregular_geometry_to_cp_sat(monkeypatch):
     monkeypatch.setattr(opt, "_solve_cp_sat", lambda *a, **kw: pytest.fail("irregular exact solve"))
     plan = opt.smart_search(pieces, 10, 10, .3, time_limit_sec=.2)
     assert not validate_plan(plan, pieces, 10, 10, kerf_cm=.3)
+
+
+def test_trim_variants_share_the_same_random_order_seed():
+    pieces = expand_piece_groups([dict(width_cm=10, length_cm=20, qty=2)])
+
+    assert opt._seed_for_problem(pieces, 122, 244, .3) == opt._seed_for_problem(
+        pieces, 121.4, 243.4, .3
+    )
+
+
+def test_three_board_seed_is_never_replaced_by_a_four_board_seed():
+    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import retain_diverse_finals
+
+    pieces = expand_piece_groups([dict(width_cm=4, length_cm=4, qty=4)])
+
+    def candidate(counts):
+        sheets = []
+        cursor = 0
+        for sheet_no, count in enumerate(counts, 1):
+            placed = []
+            for local_index, piece in enumerate(pieces[cursor:cursor + count]):
+                placed.append(
+                    make_placed_piece(
+                        piece,
+                        local_index * 4.3,
+                        0,
+                        4,
+                        4,
+                        False,
+                    )
+                )
+            cursor += count
+            sheets.append({"sheet_no": sheet_no, "w": 10, "h": 10, "pieces": placed})
+        plan = {
+            "sheets": sheets,
+            "unplaced": [],
+            "method_key": "MaxRects Best Short Side",
+            "complexity": 0,
+        }
+        return opt.enrich_plan_metrics(plan, plan["method_key"])
+
+    four_board = candidate([1, 1, 1, 1])
+    three_board = candidate([2, 1, 1])
+
+    assert len(retain_diverse_finals([four_board, three_board])[0]["sheets"]) == 3
+    result = opt.smart_search(
+        pieces,
+        10,
+        10,
+        .3,
+        time_limit_sec=0,
+        seed_plans=(four_board, three_board),
+    )
+    assert len(result["sheets"]) == 3
+    assert not validate_plan(result, pieces, 10, 10, kerf_cm=.3)
 
 
 def test_mandatory_trim_skips_trim_probes_without_changing_requested_settings(monkeypatch):

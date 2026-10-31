@@ -23,6 +23,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
+from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
@@ -171,6 +172,20 @@ def optimize_order_plan(
             snapshots.append(result.snapshot)
             raw_seeds.append(deepcopy(raw))
     if smart:
+        ranked = sorted(
+            zip(snapshots, raw_seeds),
+            key=lambda pair: tuple(pair[0].get("industrial_rank") or ()),
+        )
+        snapshots = [snapshot for snapshot, _ in ranked]
+        raw_seeds = [seed for _, seed in ranked]
+        if snapshots:
+            outcome = replace(
+                outcome,
+                snapshot=snapshots[0],
+                required_boards=len(snapshots[0].get("sheets") or []),
+                method_label=str(snapshots[0].get("method_label") or ""),
+                packing_score=_packing_score_for_snapshot(snapshots[0]),
+            )
         outcome.snapshot['smart_search'] = dict(plan.get('smart_search') or {})
         outcome.snapshot['search_time_limit_sec'] = command.optimizer.time_limit_sec
         outcome.snapshot['total_elapsed_sec'] = round(time.monotonic()-started,3)
@@ -190,14 +205,6 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     )
     margin_notes = _build_margin_notes(board, applied_trim)
 
-    metrics = dict(plan.get("industrial_metrics") or {})
-    required_boards = len(plan.get("sheets") or [])
-    waste_area = max(0.0, _number(plan.get("waste_area_m2")))
-    total_board_area = _number(plan.get("total_board_area_m2"))
-    waste_percent = round_value(
-        (waste_area / total_board_area * 100) if total_board_area else 0,
-        2,
-    )
     method_label = str(plan.get("method_label") or "")
 
     sheets = [dict(sheet) for sheet in (plan.get("sheets") or [])]
@@ -208,6 +215,17 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         sheet.setdefault("usable_length_cm", usable_length_cm)
         sheet["applied_trim_width_cm"] = applied_trim.width_trim_cm
         sheet["applied_trim_length_cm"] = applied_trim.length_trim_cm
+    machine_type = command.optimizer.machine_type or "Auto"
+    metric_options = {
+        "machine_type": machine_type,
+        "min_remnant_width_cm": command.optimizer.min_remnant_width_cm,
+        "min_remnant_length_cm": command.optimizer.min_remnant_length_cm,
+        "min_remnant_area_m2": command.optimizer.min_remnant_area_m2,
+    }
+    original_sheets = deepcopy(sheets)
+    original_metrics = _enrich_final_geometry_metrics(
+        {**plan, "sheets": original_sheets}, metric_options
+    )
     realize_sheet_edge_trim(
         sheets,
         full_width_cm=board.full_width_cm,
@@ -215,27 +233,43 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
         preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
         balance_existing_applied=True,
+        **metric_options,
     )
     plan["sheets"] = sheets
-    validation_errors = list(
-        engine.validate(
-            plan,
-            expanded,
-            usable_width_cm,
-            usable_length_cm,
+    plan = _enrich_final_geometry_metrics(plan, metric_options)
+    if tuple(plan.get("industrial_rank") or ()) > tuple(
+        original_metrics.get("industrial_rank") or ()
+    ):
+        plan["sheets"] = original_sheets
+        plan = _enrich_final_geometry_metrics(plan, metric_options)
+
+    def validate_snapshot_plan() -> list[str]:
+        errors = list(
+            engine.validate(plan, expanded, usable_width_cm, usable_length_cm)
         )
-    )
-    validation_errors.extend(
-        placement_permission_errors(
-            plan,
-            expanded,
-            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        errors.extend(
+            placement_permission_errors(
+                plan,
+                expanded,
+                mirroring_allowed=piece_mirroring_allowed(
+                    command.allow_piece_mirroring
+                ),
+            )
         )
-    )
-    if plan.get("unplaced"):
-        validation_errors.append(
-            "تعذر وضع جميع القطع ضمن أبعاد اللوح والهامش الأدنى المحددين."
-        )
+        if plan.get("unplaced"):
+            errors.append(
+                "تعذر وضع جميع القطع ضمن أبعاد اللوح والهامش الأدنى المحددين."
+            )
+        return errors
+
+    validation_errors = validate_snapshot_plan()
+    if validation_errors and plan.get("sheets") != original_sheets:
+        plan["sheets"] = original_sheets
+        plan = _enrich_final_geometry_metrics(plan, metric_options)
+        validation_errors = validate_snapshot_plan()
+
+    metrics = dict(plan.get("industrial_metrics") or {})
+    required_boards = len(plan.get("sheets") or [])
 
     trim_policy = _trim_policy_metadata(
         board=board,
@@ -302,22 +336,47 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         },
     }
 
-    packing_score = (
-        f"ألواح: {required_boards} | هدر: {waste_percent}% | "
-        f"قصات تقديرية: {_integer(metrics.get('estimated_cut_count'))} | "
-        "أكبر بقايا مفيدة: "
-        f"{round_value(metrics.get('largest_reusable_free_area_m2') or 0, 3)} م² | "
-        f"محاولات: {_integer(plan.get('attempts'))} | الخوارزمية: {method_label}"
-    )
-    if margin_notes:
-        packing_score += " | ⚠ " + " ".join(margin_notes)
-
     return OptimizationOutcome(
         snapshot=snapshot,
-        packing_score=packing_score,
+        packing_score=_packing_score_for_snapshot(snapshot),
         required_boards=required_boards,
         method_label=method_label,
         expanded_pieces=tuple(expanded),
+    )
+
+
+def _packing_score_for_snapshot(snapshot: dict[str, Any]) -> str:
+    metrics = dict(snapshot.get("industrial_metrics") or {})
+    waste_area = max(0.0, _number(snapshot.get("waste_area_m2")))
+    total_board_area = _number(snapshot.get("total_board_area_m2"))
+    waste_percent = round_value(
+        (waste_area / total_board_area * 100) if total_board_area else 0,
+        2,
+    )
+    score = (
+        f"ألواح: {len(snapshot.get('sheets') or [])} | هدر: {waste_percent}% | "
+        f"قصات تقديرية: {_integer(metrics.get('estimated_cut_count'))} | "
+        "أكبر بقايا مفيدة: "
+        f"{round_value(metrics.get('largest_reusable_free_area_m2') or 0, 3)} م² | "
+        f"محاولات: {_integer(snapshot.get('attempts'))} | "
+        f"الخوارزمية: {snapshot.get('method_label') or ''}"
+    )
+    notes = snapshot.get("margin_notes") or []
+    return score + (" | ⚠ " + " ".join(notes) if notes else "")
+
+
+def _enrich_final_geometry_metrics(
+    plan: dict[str, Any], metric_options: dict[str, Any]
+) -> dict[str, Any]:
+    """Refresh quality only when the snapshot has complete placed geometry."""
+    for sheet in plan.get("sheets") or []:
+        if _number(sheet.get("w")) <= 0 or _number(sheet.get("h")) <= 0:
+            return plan
+        for piece in sheet.get("pieces") or []:
+            if any(piece.get(key) is None for key in ("x", "y", "w", "h")):
+                return plan
+    return enrich_plan_metrics(
+        plan, str(plan.get("method_key") or ""), **metric_options
     )
 
 

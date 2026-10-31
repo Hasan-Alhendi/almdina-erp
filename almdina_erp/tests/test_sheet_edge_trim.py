@@ -6,6 +6,7 @@ from almdina_erp.almdina_erp.domain.cutting.sheet_edge_trim import (
 import pytest
 
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import DxfGeometrySnapshotError
+from almdina_erp.almdina_erp.domain.cutting.optimizer import _largest_reusable_free_area
 
 
 @pytest.mark.parametrize("axis", ["x", "y"])
@@ -48,6 +49,12 @@ def _sheet(pieces, *, width_trim=0.0, length_trim=0.0, board_w=122.0, board_h=24
 
 def _apply(sheets, **kwargs):
     balance = kwargs.pop("balance_existing_applied", False)
+    remnant_options = {
+        "machine_type": kwargs.pop("machine_type", "Auto"),
+        "min_remnant_width_cm": kwargs.pop("min_remnant_width_cm", 30.0),
+        "min_remnant_length_cm": kwargs.pop("min_remnant_length_cm", 30.0),
+        "min_remnant_area_m2": kwargs.pop("min_remnant_area_m2", 0.09),
+    }
     realize_sheet_edge_trim(
         sheets,
         full_width_cm=kwargs.pop("full_width_cm", 122),
@@ -55,6 +62,7 @@ def _apply(sheets, **kwargs):
         preferred_width_trim_cm=kwargs.pop("preferred_width_trim_cm", 0.5),
         preferred_length_trim_cm=kwargs.pop("preferred_length_trim_cm", 0.5),
         balance_existing_applied=balance,
+        **remnant_options,
     )
 
 
@@ -215,7 +223,12 @@ def test_balances_vertical_rows_independently_when_their_geometry_is_disjoint():
     sheet = _sheet(pieces, width_trim=0.5, length_trim=0.5, board_w=100, board_h=40)
     sheet["full_width_cm"] = 100
     sheet["full_length_cm"] = 40
-    _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
+    _apply(
+        [sheet], full_width_cm=100, full_length_cm=40,
+        balance_existing_applied=True,
+        min_remnant_width_cm=101,
+        min_remnant_length_cm=41,
+    )
 
     assert [piece["x"] for piece in pieces] == pytest.approx([29.25, 49.75, 44.5])
     assert physical_edge_margins_mm(sheet)["left"] >= 5
@@ -228,3 +241,59 @@ def test_shape_aware_row_is_left_untouched_for_safety():
     _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
 
     assert (piece["x"], piece["y"]) == (0, 0)
+
+
+def test_large_reusable_remnant_prevents_centering_single_400_by_139_door():
+    piece = {"x": 0, "y": 0, "w": 40, "h": 13.9}
+    sheet = _sheet([piece], width_trim=0.5, length_trim=0.5)
+    sheet.update(full_width_cm=122, full_length_cm=244)
+    original_piece = dict(piece)
+    original_kerf = 0.3
+    sheet["kerf_cm"] = original_kerf
+
+    _apply([sheet], balance_existing_applied=True)
+
+    assert piece == original_piece
+    assert sheet["applied_trim_width_cm"] == 0.5
+    assert sheet["applied_trim_length_cm"] == 0.5
+    assert sheet["kerf_cm"] == original_kerf
+    before_remnant = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+    centered_sheet = _sheet(
+        [{"x": 40.5, "y": (243 - 13.9) / 2, "w": 40, "h": 13.9}],
+        width_trim=0.5,
+        length_trim=0.5,
+    )
+    after_remnant = _largest_reusable_free_area(
+        {"sheets": [centered_sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+    assert before_remnant == pytest.approx(2.77211)
+    assert after_remnant == pytest.approx(1.386055)
+    assert after_remnant < before_remnant
+
+
+def test_useful_remnant_preserves_all_original_piece_coordinates():
+    pieces = [
+        {"x": 0, "y": 0, "w": 40, "h": 40},
+        {"x": 40.3, "y": 0, "w": 40, "h": 40},
+        {"x": 0, "y": 40.3, "w": 40, "h": 40},
+    ]
+    sheet = _sheet(pieces, width_trim=0.5, length_trim=0.5)
+    sheet.update(full_width_cm=122, full_length_cm=244)
+    original = [dict(piece) for piece in pieces]
+
+    _apply([sheet], balance_existing_applied=True)
+
+    assert pieces == original
+
+
+def test_small_slack_centers_when_no_remnant_meets_factory_thresholds():
+    piece = {"x": 0.5, "y": 10, "w": 98, "h": 20}
+    sheet = _sheet([piece], width_trim=0.5, length_trim=0.5, board_w=100, board_h=40)
+    sheet.update(full_width_cm=100, full_length_cm=40)
+
+    _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
+
+    assert physical_edge_margins_mm(sheet)["left"] == pytest.approx(10)
+    assert physical_edge_margins_mm(sheet)["right"] == pytest.approx(10)

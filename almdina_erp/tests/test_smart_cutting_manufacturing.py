@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry, OptimizeOrderPlanCommand, OptimizerOptions, optimize_order_plan,
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan, placement_permission_errors
+from almdina_erp.almdina_erp.domain.cutting.optimizer import _largest_reusable_free_area
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
 from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
 from almdina_erp.almdina_erp.services import dxf_import_service as legacy
@@ -65,6 +66,17 @@ def test_smart_saved_snapshot_exports_and_strictly_imports(width, height, trim, 
         piece_rows=tuple(rows), allow_piece_mirroring=True,
     ), engine=domain_cutting_engine)
     assert outcome.snapshot["validation"]["is_valid"]
+    for candidate in outcome.candidate_snapshots or (outcome.snapshot,):
+        assert candidate["industrial_metrics"]["largest_reusable_free_area_m2"] == pytest.approx(
+            _largest_reusable_free_area(
+                {"sheets": candidate["sheets"]}, 30, 30, .09,
+                machine_type="CNC Router",
+            )
+        )
+    ranks = [tuple(candidate["industrial_rank"]) for candidate in outcome.candidate_snapshots]
+    assert ranks == sorted(ranks)
+    if ranks:
+        assert tuple(outcome.snapshot["industrial_rank"]) == ranks[0]
     saved = tmp_path / "saved-snapshot.json"
     for candidate in outcome.candidate_snapshots or (outcome.snapshot,):
         saved.write_text(json.dumps(candidate))

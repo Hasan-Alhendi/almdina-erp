@@ -26,6 +26,10 @@ def realize_sheet_edge_trim(
     preferred_length_trim_cm: float,
     precision_cm: float = TRIM_PRECISION_CM,
     balance_existing_applied: bool = False,
+    machine_type: str = "Auto",
+    min_remnant_width_cm: float = 30.0,
+    min_remnant_length_cm: float = 30.0,
+    min_remnant_area_m2: float = 0.09,
 ) -> None:
     """Write the largest symmetric trim each sheet can actually hold."""
 
@@ -35,6 +39,17 @@ def realize_sheet_edge_trim(
         pieces = list(sheet.get("pieces") or [])
         if not pieces:
             continue
+        balance_sheet = balance_existing_applied
+        if balance_sheet and _has_reusable_remnant(
+            sheet,
+            machine_type=machine_type,
+            min_remnant_width_cm=min_remnant_width_cm,
+            min_remnant_length_cm=min_remnant_length_cm,
+            min_remnant_area_m2=min_remnant_area_m2,
+        ):
+            # Preserve the optimizer's original topology and coordinates when
+            # they already produce reusable stock. Centering is secondary.
+            balance_sheet = False
         _realize_axis(
             sheet,
             pieces,
@@ -43,7 +58,7 @@ def realize_sheet_edge_trim(
             preferred_cm=preferred_width_trim_cm,
             current_cm=max(0.0, num(sheet.get("applied_trim_width_cm"))),
             precision_cm=precision_cm,
-            balance_existing_applied=balance_existing_applied,
+            balance_existing_applied=balance_sheet,
         )
         _realize_axis(
             sheet,
@@ -53,8 +68,29 @@ def realize_sheet_edge_trim(
             preferred_cm=preferred_length_trim_cm,
             current_cm=max(0.0, num(sheet.get("applied_trim_length_cm"))),
             precision_cm=precision_cm,
-            balance_existing_applied=balance_existing_applied,
+            balance_existing_applied=balance_sheet,
         )
+
+
+def _has_reusable_remnant(
+    sheet: dict[str, Any],
+    *,
+    machine_type: str,
+    min_remnant_width_cm: float,
+    min_remnant_length_cm: float,
+    min_remnant_area_m2: float,
+) -> bool:
+    # Reuse the optimizer's separability and factory-threshold rules so layout
+    # realization and industrial ranking agree about what counts as a remnant.
+    from .optimizer import _largest_reusable_free_area
+
+    return _largest_reusable_free_area(
+        {"sheets": [sheet]},
+        min_remnant_width_cm,
+        min_remnant_length_cm,
+        min_remnant_area_m2,
+        machine_type=machine_type,
+    ) > 0
 
 
 def resolved_sheet_trim_cm(
@@ -151,6 +187,14 @@ def _realize_axis(
     balance_existing_applied: bool,
 ) -> None:
     span_start, span_end = _occupied_span(pieces, axis)
+    coordinate = "x" if axis == "x" else "y"
+    size = "w" if axis == "x" else "h"
+    if full_cm <= 0 or any(
+        piece.get(coordinate) is None or piece.get(size) is None
+        for piece in pieces
+    ):
+        # Incomplete legacy/test snapshots do not carry movable geometry.
+        return
     span = max(0.0, span_end - span_start)
     if balance_existing_applied and any(
         piece.get("placement_outline_cm")
@@ -191,9 +235,7 @@ def _realize_axis(
     frame = full_cm - (target * 2.0)
     if frame <= 0:
         return
-    coordinate = "x" if axis == "x" else "y"
     perpendicular = "y" if axis == "x" else "x"
-    size = "w" if axis == "x" else "h"
     translations: list[tuple[list[dict[str, Any]], float]] = []
     for group in _projection_groups(pieces, axis=perpendicular):
         start = min(num(piece.get(coordinate)) for piece in group)
