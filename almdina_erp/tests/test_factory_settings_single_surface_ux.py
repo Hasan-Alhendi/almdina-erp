@@ -66,6 +66,26 @@ def test_every_active_factory_setting_is_present_in_the_unified_console() -> Non
     assert not missing, f"Active factory settings missing from unified console: {missing}"
 
 
+def test_centering_limit_is_a_server_backed_nonnegative_factory_setting() -> None:
+    field = next(
+        row for row in _settings_fields()
+        if row.get("fieldname") == "max_centerable_edge_gap_cm"
+    )
+    service_source = SETTINGS_SERVICE.read_text(encoding="utf-8")
+    view_model_source = SETTINGS_VIEW_MODEL.read_text(encoding="utf-8")
+    dialogs_source = SETTINGS_DIALOGS.read_text(encoding="utf-8")
+    settings_domain = (ROOT / "almdina_erp" / "domain" / "security" / "factory_settings.py").read_text(encoding="utf-8")
+
+    assert field["fieldtype"] == "Float"
+    assert float(field["default"]) == 5
+    assert int(field["non_negative"]) == 1
+    assert '"max_centerable_edge_gap_cm"' in service_source
+    assert '"max_centerable_edge_gap_cm": _(' in service_source
+    assert '"max_centerable_edge_gap_cm"' in settings_domain
+    assert 'values.max_centerable_edge_gap_cm' in dialogs_source
+    assert 'source.max_centerable_edge_gap_cm' in view_model_source
+
+
 def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:
     view_model_source = SETTINGS_VIEW_MODEL.read_text(encoding="utf-8")
     renderer_source = SETTINGS_RENDERER.read_text(encoding="utf-8")

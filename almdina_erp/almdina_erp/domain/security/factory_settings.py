@@ -27,6 +27,7 @@ SECTION_FIELDS = MappingProxyType(
                 "default_cutting_machine_type",
                 "default_optimization_time_limit_sec",
                 "optimal_search_piece_limit",
+                "max_centerable_edge_gap_cm",
             }
         ),
         FactorySettingsSection.COSTING: frozenset(

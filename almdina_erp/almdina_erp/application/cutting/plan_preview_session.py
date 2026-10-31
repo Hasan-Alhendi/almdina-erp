@@ -11,23 +11,28 @@ PREVIEW_SESSION_VERSION = 2
 
 def optimizer_settings_fingerprint(settings: Mapping[str, Any]) -> str:
     """Fingerprint one normalized optimizer-settings draft deterministically."""
-
-    return fingerprint_payload(
-        {
-            "version": 1,
-            "settings": {
-                "packing_mode": str(settings.get("packing_mode") or "").strip(),
-                "cutting_machine_type": str(
-                    settings.get("cutting_machine_type") or ""
-                ).strip(),
-                "kerf_mm": float(settings.get("kerf_mm") or 0),
-                "trim_margin_mm": float(settings.get("trim_margin_mm") or 0),
-                "optimization_time_limit_sec": float(
-                    settings.get("optimization_time_limit_sec") or 0
-                ),
-            },
-        }
-    )
+    payload = {
+        "version": 1,
+        "settings": {
+            "packing_mode": str(settings.get("packing_mode") or "").strip(),
+            "cutting_machine_type": str(
+                settings.get("cutting_machine_type") or ""
+            ).strip(),
+            "kerf_mm": float(settings.get("kerf_mm") or 0),
+            "trim_margin_mm": float(settings.get("trim_margin_mm") or 0),
+            "optimization_time_limit_sec": float(
+                settings.get("optimization_time_limit_sec") or 0
+            ),
+        },
+    }
+    # Preserve hashes for already-issued v1 preview tokens. New sessions carry
+    # the factory-owned centering policy and therefore use an explicit v2 hash.
+    if "max_centerable_edge_gap_cm" in settings:
+        payload["version"] = 2
+        payload["settings"]["max_centerable_edge_gap_cm"] = float(
+            settings.get("max_centerable_edge_gap_cm") or 0
+        )
+    return fingerprint_payload(payload)
 
 
 @dataclass(frozen=True, slots=True)

@@ -54,6 +54,7 @@ def _apply(sheets, **kwargs):
         "min_remnant_width_cm": kwargs.pop("min_remnant_width_cm", 30.0),
         "min_remnant_length_cm": kwargs.pop("min_remnant_length_cm", 30.0),
         "min_remnant_area_m2": kwargs.pop("min_remnant_area_m2", 0.09),
+        "max_centerable_edge_gap_cm": kwargs.pop("max_centerable_edge_gap_cm", 5.0),
     }
     realize_sheet_edge_trim(
         sheets,
@@ -226,6 +227,7 @@ def test_balances_vertical_rows_independently_when_their_geometry_is_disjoint():
     _apply(
         [sheet], full_width_cm=100, full_length_cm=40,
         balance_existing_applied=True,
+        max_centerable_edge_gap_cm=100,
         min_remnant_width_cm=101,
         min_remnant_length_cm=41,
     )
@@ -251,9 +253,9 @@ def test_large_vertical_remnant_blocks_vertical_but_not_safe_horizontal_centerin
     original_kerf = 0.3
     sheet["kerf_cm"] = original_kerf
 
-    _apply([sheet], balance_existing_applied=True)
+    _apply([sheet], balance_existing_applied=True, max_centerable_edge_gap_cm=50)
 
-    assert piece["x"] == pytest.approx(40.5)
+    assert piece["x"] == original_piece["x"]
     assert piece["y"] == original_piece["y"]
     assert sheet["applied_trim_width_cm"] == 0.5
     assert sheet["applied_trim_length_cm"] == 0.5
@@ -284,7 +286,7 @@ def test_useful_remnant_blocks_only_axis_moves_that_reduce_its_area():
     sheet.update(full_width_cm=122, full_length_cm=244)
     original = [dict(piece) for piece in pieces]
 
-    _apply([sheet], balance_existing_applied=True)
+    _apply([sheet], balance_existing_applied=True, max_centerable_edge_gap_cm=100)
 
     assert [piece["x"] for piece in pieces] == pytest.approx([20.35, 60.65, 40.5])
     assert [piece["y"] for piece in pieces] == [piece["y"] for piece in original]
@@ -332,3 +334,69 @@ def test_centers_horizontal_row_without_splitting_large_vertical_remnant():
     assert sheet["kerf_cm"] == 0.5
     assert before == pytest.approx(2.80722)
     assert after == pytest.approx(before)
+
+
+@pytest.mark.parametrize(
+    ("left", "right", "limit", "expected_center"),
+    [(1, 3, 5, True), (0, 5, 5, True), (0, 6, 5, False),
+     (41, 41, 5, False), (1, 3, 10, True), (0, 1, 0, False),
+     (0.4, 0.5, 0.5, True), (0.4, 0.5001, 0.5, False)],
+)
+def test_axis_centering_respects_factory_edge_gap_limit(left, right, limit, expected_center):
+    board_w, piece_w = 100.0, 100.0 - left - right
+    x = left
+    piece = {"x": x, "y": 0, "w": piece_w, "h": 20}
+    sheet = _sheet([piece], width_trim=0, length_trim=0, board_w=board_w, board_h=40)
+    sheet.update(full_width_cm=board_w, full_length_cm=40)
+
+    _apply(
+        [sheet], full_width_cm=board_w, full_length_cm=40,
+        preferred_width_trim_cm=0, preferred_length_trim_cm=0,
+        balance_existing_applied=True, max_centerable_edge_gap_cm=limit,
+        min_remnant_width_cm=101, min_remnant_length_cm=41,
+    )
+
+    if expected_center:
+        assert piece["x"] == pytest.approx((board_w - piece_w) / 2)
+    else:
+        assert piece["x"] == pytest.approx(x)
+
+
+def test_three_door_row_centers_x_within_gap_limit_and_preserves_long_offcut():
+    pieces = [
+        {"x": 0, "y": 0, "w": 40, "h": 13.9},
+        {"x": 40.5, "y": 0, "w": 40, "h": 13.9},
+        {"x": 81, "y": 0, "w": 40, "h": 13.9},
+    ]
+    sheet = _sheet(pieces, width_trim=0, length_trim=0)
+    sheet.update(full_width_cm=122, full_length_cm=244, kerf_cm=0.5)
+    before = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+
+    _apply(
+        [sheet], full_width_cm=122, full_length_cm=244,
+        preferred_width_trim_cm=0, preferred_length_trim_cm=0,
+        balance_existing_applied=True, machine_type="CNC Router",
+    )
+
+    after = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+    assert [piece["x"] for piece in pieces] == pytest.approx([0.5, 41, 81.5])
+    assert [piece["y"] for piece in pieces] == [0, 0, 0]
+    assert after == pytest.approx(before)
+
+
+def test_single_door_far_from_both_edges_is_not_centered_by_default_limit():
+    piece = {"x": 0, "y": 0, "w": 40, "h": 13.9}
+    sheet = _sheet([piece], width_trim=0, length_trim=0)
+    sheet.update(full_width_cm=122, full_length_cm=244)
+
+    _apply(
+        [sheet], full_width_cm=122, full_length_cm=244,
+        preferred_width_trim_cm=0, preferred_length_trim_cm=0,
+        balance_existing_applied=True,
+    )
+
+    assert (piece["x"], piece["y"]) == (0, 0)

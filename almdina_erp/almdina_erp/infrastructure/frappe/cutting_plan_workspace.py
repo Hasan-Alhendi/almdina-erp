@@ -450,6 +450,9 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 min_remnant_width_cm=flt(factory_settings.min_remnant_width_mm) / 10,
                 min_remnant_length_cm=flt(factory_settings.min_remnant_length_mm) / 10,
                 min_remnant_area_m2=flt(factory_settings.min_remnant_area_m2),
+                max_centerable_edge_gap_cm=flt(
+                    getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
+                ),
             ),
             piece_rows=_piece_rows(order),
             allow_piece_mirroring=piece_mirroring_allowed(

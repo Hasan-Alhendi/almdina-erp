@@ -31,6 +31,7 @@ def realize_sheet_edge_trim(
     min_remnant_width_cm: float = 30.0,
     min_remnant_length_cm: float = 30.0,
     min_remnant_area_m2: float = 0.09,
+    max_centerable_edge_gap_cm: float = 5.0,
 ) -> None:
     """Write the largest symmetric trim each sheet can actually hold."""
 
@@ -62,6 +63,7 @@ def realize_sheet_edge_trim(
                 ))),
                 precision_cm=precision_cm,
                 balance_existing_applied=balance_existing_applied,
+                max_centerable_edge_gap_cm=max(0.0, num(max_centerable_edge_gap_cm)),
             )
             after = _largest_reusable_area(
                 sheet, machine_type, min_remnant_width_cm,
@@ -184,6 +186,7 @@ def _realize_axis(
     current_cm: float,
     precision_cm: float,
     balance_existing_applied: bool,
+    max_centerable_edge_gap_cm: float,
 ) -> None:
     span_start, span_end = _occupied_span(pieces, axis)
     coordinate = "x" if axis == "x" else "y"
@@ -242,6 +245,10 @@ def _realize_axis(
         span = end - start
         if span > frame + precision_cm:
             return
+        left_gap = max(0.0, start)
+        right_gap = max(0.0, frame - end)
+        if max(left_gap, right_gap) > max_centerable_edge_gap_cm + 1e-7:
+            continue
         # Keep the mandatory inset fixed and split only this row/column's slack.
         delta = ((frame - span) / 2.0) - start
         if abs(delta) <= precision_cm / 10.0:

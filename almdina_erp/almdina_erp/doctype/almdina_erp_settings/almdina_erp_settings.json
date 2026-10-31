@@ -3,7 +3,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
-    "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode","default_cutting_machine_type","default_optimization_time_limit_sec","optimal_search_piece_limit",
+    "cutting_defaults_section","default_kerf_mm","default_trim_margin_mm","default_cutting_cost_per_board_usd","default_packing_mode","default_cutting_machine_type","default_optimization_time_limit_sec","optimal_search_piece_limit","max_centerable_edge_gap_cm",
     "stock_section","enforce_stock_control","default_warehouse","reserve_stock_on_approval","stock_consumption_point",
     "remnant_section","prefer_remnants_before_full_boards","min_remnant_width_mm","min_remnant_length_mm","min_remnant_area_m2","remnant_cost_policy","remnant_rate_usd_per_m2",
     "special_shape_pricing_section","default_special_design_fee_usd","default_special_cnc_fee_usd","default_special_manual_edge_fee_usd","default_special_margin_percent",
@@ -24,6 +24,7 @@
     {"default":"Auto","fieldname":"default_cutting_machine_type","fieldtype":"Select","label":"Default Cutting Machine Type","options":"Auto\nCNC Router\nPanel Saw"},
     {"default":"10","fieldname":"default_optimization_time_limit_sec","fieldtype":"Float","label":"Default Optimization Time Limit (Sec)","non_negative":1},
     {"default":"40","fieldname":"optimal_search_piece_limit","fieldtype":"Int","label":"Optimal Search Exact Piece Limit","non_negative":1},
+    {"default":"5","fieldname":"max_centerable_edge_gap_cm","fieldtype":"Float","label":"Maximum Centerable Edge Gap (cm)","non_negative":1},
     {"fieldname":"stock_section","fieldtype":"Section Break","hidden":1,"label":"Legacy Stock Policy"},
     {"default":"0","fieldname":"enforce_stock_control","fieldtype":"Check","hidden":1,"label":"Legacy Stock Control"},
     {"fieldname":"default_warehouse","fieldtype":"Link","hidden":1,"label":"Legacy Default Warehouse","options":"Warehouse"},

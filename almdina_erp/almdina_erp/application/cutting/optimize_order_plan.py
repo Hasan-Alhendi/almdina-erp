@@ -98,6 +98,7 @@ class OptimizerOptions:
     min_remnant_width_cm: float
     min_remnant_length_cm: float
     min_remnant_area_m2: float
+    max_centerable_edge_gap_cm: float = 5.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +234,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
         preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
         balance_existing_applied=True,
+        max_centerable_edge_gap_cm=command.optimizer.max_centerable_edge_gap_cm,
         **metric_options,
     )
     plan["sheets"] = sheets
@@ -308,6 +310,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         "usable_board_width_cm": usable_width_cm,
         "usable_board_length_cm": usable_length_cm,
         "kerf_cm": board.kerf_cm,
+        "max_centerable_edge_gap_cm": command.optimizer.max_centerable_edge_gap_cm,
         "trim_cm": board.trim_cm,
         "allow_piece_mirroring": piece_mirroring_allowed(command.allow_piece_mirroring),
         "applied_trim_width_cm": applied_trim.width_trim_cm,

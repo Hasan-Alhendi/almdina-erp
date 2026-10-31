@@ -193,6 +193,11 @@ def _session(order, preview_id):
         frappe.throw(_("تغيّرت نسخة خطة القص بعد المعاينة. أعد المعاينة قبل الحفظ."),frappe.ValidationError)
     if optimizer_settings_fingerprint(session.settings)!=session.settings_fingerprint:
         frappe.throw(_("معاينة خطة القص غير صالحة للحفظ."),frappe.ValidationError)
+    current_center_gap = flt(
+        getattr(frappe.get_cached_doc("Almdina ERP Settings"), "max_centerable_edge_gap_cm", 5.0)
+    )
+    if flt(session.settings.get("max_centerable_edge_gap_cm", 5.0)) != current_center_gap:
+        frappe.throw(_("تغيّرت إعدادات توسيط خطة القص. أعد المعاينة قبل الحفظ."),frappe.ValidationError)
     _settings_authority(order,source,session.settings)
     check = frappe.copy_doc(source)
     _apply_settings(check,session.settings)
@@ -334,6 +339,10 @@ def preview_cutting_plan(
     settings["packing_mode"] = settings_for_system_search(
         _settings_from_plan(source_plan, settings)
     ).optimization_mode
+    factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
+    settings["max_centerable_edge_gap_cm"] = flt(
+        getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
+    )
 
     _settings_authority(order,source_plan,settings)
     session = _build_session(order,source_plan,settings)

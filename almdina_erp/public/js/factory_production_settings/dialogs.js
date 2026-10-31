@@ -119,6 +119,7 @@
                     { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("Cutting machine type"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
                     { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Default kerf (mm)"), default: values.default_kerf_mm, reqd: 1 },
                     { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("Trimming margin (mm)"), default: values.default_trim_margin_mm, reqd: 1 },
+                    { fieldname: "max_centerable_edge_gap_cm", fieldtype: "Float", label: t("Maximum centerable edge gap (cm)"), default: values.max_centerable_edge_gap_cm, reqd: 1, description: t("Center an axis only when both edge gaps are within this limit.") },
                     { fieldname: "default_optimization_time_limit_sec", fieldtype: "Float", label: t("Optimization timeout (seconds)"), default: values.default_optimization_time_limit_sec, reqd: 1 },
                     { fieldname: "optimal_search_piece_limit", fieldtype: "Int", label: t("Piece limit for optimal search"), default: values.optimal_search_piece_limit, reqd: 1 },
                 ];
