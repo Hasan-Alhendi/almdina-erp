@@ -47,12 +47,14 @@ def _sheet(pieces, *, width_trim=0.0, length_trim=0.0, board_w=122.0, board_h=24
 
 
 def _apply(sheets, **kwargs):
+    balance = kwargs.pop("balance_existing_applied", False)
     realize_sheet_edge_trim(
         sheets,
         full_width_cm=kwargs.pop("full_width_cm", 122),
         full_length_cm=kwargs.pop("full_length_cm", 244),
         preferred_width_trim_cm=kwargs.pop("preferred_width_trim_cm", 0.5),
         preferred_length_trim_cm=kwargs.pop("preferred_length_trim_cm", 0.5),
+        balance_existing_applied=balance,
     )
 
 
@@ -185,3 +187,20 @@ def test_old_flush_snapshot_is_not_given_trim_without_recalculation():
     assert resolved_sheet_trim_cm(sheet, plan, axis="x") == 0
     assert physical_edge_margins_mm(sheet, plan)["left"] == 0
     assert physical_edge_margins_mm(sheet, plan)["right"] == 14
+
+
+@pytest.mark.parametrize(
+    ("piece_width", "expected_margin"),
+    [(98.0, 10.0), (97.0, 15.0)],
+)
+def test_mandatory_five_mm_minimum_balances_additional_width_slack(piece_width, expected_margin):
+    pieces = [{"x": 0.5, "y": 10, "w": piece_width, "h": 20}]
+    sheet = _sheet(pieces, width_trim=0.5, length_trim=0.5, board_w=100, board_h=40)
+    sheet["full_width_cm"] = 100
+    sheet["full_length_cm"] = 40
+    _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
+
+    margins = physical_edge_margins_mm(sheet)
+    assert margins["left"] == pytest.approx(expected_margin)
+    assert margins["right"] == pytest.approx(expected_margin)
+    assert sheet["applied_trim_width_cm"] >= 0.5

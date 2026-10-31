@@ -25,6 +25,7 @@ def realize_sheet_edge_trim(
     preferred_width_trim_cm: float,
     preferred_length_trim_cm: float,
     precision_cm: float = TRIM_PRECISION_CM,
+    balance_existing_applied: bool = False,
 ) -> None:
     """Write the largest symmetric trim each sheet can actually hold."""
 
@@ -42,6 +43,7 @@ def realize_sheet_edge_trim(
             preferred_cm=preferred_width_trim_cm,
             current_cm=max(0.0, num(sheet.get("applied_trim_width_cm"))),
             precision_cm=precision_cm,
+            balance_existing_applied=balance_existing_applied,
         )
         _realize_axis(
             sheet,
@@ -51,6 +53,7 @@ def realize_sheet_edge_trim(
             preferred_cm=preferred_length_trim_cm,
             current_cm=max(0.0, num(sheet.get("applied_trim_length_cm"))),
             precision_cm=precision_cm,
+            balance_existing_applied=balance_existing_applied,
         )
 
 
@@ -145,34 +148,68 @@ def _realize_axis(
     preferred_cm: float,
     current_cm: float,
     precision_cm: float,
+    balance_existing_applied: bool,
 ) -> None:
     span_start, span_end = _occupied_span(pieces, axis)
     span = max(0.0, span_end - span_start)
-    free_cm = max(0.0, full_cm - span)
-    target = _symmetric_trim(free_cm, preferred_cm, precision_cm)
-    target = max(target, current_cm)
-    # ``target == current`` means this sheet already records the trim it can
-    # hold. Coordinates stay in the usable frame, so a group that is already
-    # inside that frame must not be shifted again.
-    if target <= current_cm + (precision_cm / 10.0):
+    if balance_existing_applied and any(
+        piece.get("placement_outline_cm")
+        or piece.get("geometry")
+        or piece.get("overlays")
+        or str(piece.get("piece_type") or "Regular") != "Regular"
+        for piece in pieces
+    ):
+        # Until every attached outline can be translated as one solid unit,
+        # keep shape-aware layouts untouched.
         return
-
-    frame = max(0.0, full_cm - (target * 2.0))
+    # Compatibility: older snapshots may have no applied trim. Keep their
+    # historical edge realization behavior; new snapshots already carry M.
+    if current_cm + precision_cm / 10.0 < preferred_cm:
+        free_cm = max(0.0, full_cm - span)
+        target = max(current_cm, _symmetric_trim(free_cm, preferred_cm, precision_cm))
+        if target <= current_cm + precision_cm / 10.0:
+            return
+        frame = max(0.0, full_cm - target * 2.0)
+        if axis == "x":
+            delta = span_start
+            for piece in pieces:
+                piece["x"] = num(piece.get("x")) - delta
+            sheet["w"] = frame
+            sheet["usable_width_cm"] = frame
+            sheet["applied_trim_width_cm"] = target
+            return
+        delta = span_end - frame
+        for piece in pieces:
+            piece["y"] = num(piece.get("y")) - delta
+        sheet["h"] = frame
+        sheet["usable_length_cm"] = frame
+        sheet["applied_trim_length_cm"] = target
+        return
+    if not balance_existing_applied:
+        return
+    target = max(0.0, preferred_cm, current_cm)
+    frame = full_cm - (target * 2.0)
+    if frame <= 0 or span > frame + precision_cm:
+        return
+    # Keep the mandatory inset fixed and split only the slack beyond it.
+    delta = ((frame - span) / 2.0) - span_start
+    if abs(delta) <= precision_cm / 10.0:
+        return
+    if span_start + delta < -precision_cm or span_end + delta > frame + precision_cm:
+        return
     sheet.pop("free_rects", None)
     sheet.pop("skyline", None)
     sheet.pop("shelves", None)
     if axis == "x":
-        delta = span_start
         for piece in pieces:
-            piece["x"] = num(piece.get("x")) - delta
+            piece["x"] = num(piece.get("x")) + delta
         sheet["w"] = frame
         sheet["usable_width_cm"] = frame
         sheet["applied_trim_width_cm"] = target
         return
 
-    delta = span_end - frame
     for piece in pieces:
-        piece["y"] = num(piece.get("y")) - delta
+        piece["y"] = num(piece.get("y")) + delta
     sheet["h"] = frame
     sheet["usable_length_cm"] = frame
     sheet["applied_trim_length_cm"] = target

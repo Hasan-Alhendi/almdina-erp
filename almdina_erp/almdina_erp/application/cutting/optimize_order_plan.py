@@ -161,12 +161,14 @@ def optimize_order_plan(
             evaluated_plans[trim] = plan
         return _plan_quality(plan)
 
-    trim_decision = resolve_adaptive_trim(
+    # New plans use the requested trim as a mandatory physical inset.
+    # Do not spend the search budget probing smaller margins.
+    preferred_quality = _plan_quality(preferred_plan)
+    trim_decision = AdaptiveTrimDecision(
         preferred=preferred_trim,
-        preferred_quality=_plan_quality(preferred_plan),
-        evaluate=evaluate_trim,
-        has_pieces=bool(expanded),
-        physical_board_lower_bound=_physical_board_lower_bound(expanded, board),
+        applied=preferred_trim,
+        preferred_quality=preferred_quality,
+        applied_quality=preferred_quality,
     )
     applied_trim = trim_decision.applied
     plan = evaluated_plans.get(applied_trim)
@@ -226,6 +228,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         full_length_cm=board.full_length_cm,
         preferred_width_trim_cm=trim_decision.preferred.width_trim_cm,
         preferred_length_trim_cm=trim_decision.preferred.length_trim_cm,
+        balance_existing_applied=True,
     )
     plan["sheets"] = sheets
     validation_errors = list(
@@ -428,6 +431,7 @@ def _trim_policy_metadata(
 ) -> dict[str, Any]:
     return {
         "mode": decision.mode,
+        "policy": "mandatory_minimum_v1",
         "preferred_trim_mm": round_value(max(0.0, board.trim_cm) * 10, 2),
         "applied_width_trim_mm": round_value(
             max(0.0, decision.applied.width_trim_cm) * 10,

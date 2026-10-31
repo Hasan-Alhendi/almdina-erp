@@ -86,6 +86,7 @@ def _shift_overlay_geometry(geometry: Any, *, dx_mm: float, dy_mm: float) -> Any
 def _trim_policy(*, preferred: AppliedTrim, decision: AdaptiveTrimDecision) -> dict[str, Any]:
     return {
         "mode": decision.mode,
+        "policy": "mandatory_minimum_v1",
         "preferred_trim_mm": round(preferred.width_trim_cm * 10.0, 2),
         "applied_width_trim_mm": round(decision.applied.width_trim_cm * 10.0, 2),
         "applied_length_trim_mm": round(decision.applied.length_trim_cm * 10.0, 2),
@@ -118,15 +119,14 @@ def apply_adaptive_trim_to_fixed_dxf_layout(
     preferred = AppliedTrim(preferred_cm, preferred_cm)
     preferred_quality = _quality(snapshot, preferred)
     has_pieces = any(sheet.get("pieces") for sheet in (snapshot.get("sheets") or []))
-    decision = resolve_adaptive_trim(
+    # Uploaded layouts are immutable evidence. Validate them against the
+    # requested minimum; never relax the margin or move an invalid layout to
+    # make it appear valid.
+    decision = AdaptiveTrimDecision(
         preferred=preferred,
+        applied=preferred,
         preferred_quality=preferred_quality,
-        evaluate=lambda candidate: _quality(snapshot, candidate),
-        has_pieces=has_pieces,
-        # Fixed DXF import cannot improve board count by repacking. A zero lower
-        # bound prevents the optimizer-only early exit while preserving the
-        # canonical ALMADINA-138 candidate/refinement algorithm.
-        physical_board_lower_bound=0,
+        applied_quality=preferred_quality,
     )
     if decision.applied_quality.unplaced_count:
         raise DxfAppliedTrimError("dxf_layout_exceeds_physical_board_or_applied_trim")
@@ -164,12 +164,12 @@ def apply_adaptive_trim_to_fixed_dxf_layout(
             "full_board_width_cm": full_w,
             "full_board_length_cm": full_h,
         }
-        sheet_decision = resolve_adaptive_trim(
+        sheet_quality = _quality(single_sheet, preferred)
+        sheet_decision = AdaptiveTrimDecision(
             preferred=preferred,
-            preferred_quality=_quality(single_sheet, preferred),
-            evaluate=lambda candidate: _quality(single_sheet, candidate),
-            has_pieces=bool(sheet.get("pieces")),
-            physical_board_lower_bound=0,
+            applied=preferred,
+            preferred_quality=sheet_quality,
+            applied_quality=sheet_quality,
         )
         if sheet_decision.applied_quality.unplaced_count:
             raise DxfAppliedTrimError("dxf_layout_exceeds_physical_board_or_applied_trim")
