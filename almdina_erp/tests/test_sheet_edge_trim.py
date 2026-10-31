@@ -204,3 +204,27 @@ def test_mandatory_five_mm_minimum_balances_additional_width_slack(piece_width, 
     assert margins["left"] == pytest.approx(expected_margin)
     assert margins["right"] == pytest.approx(expected_margin)
     assert sheet["applied_trim_width_cm"] >= 0.5
+
+
+def test_balances_vertical_rows_independently_when_their_geometry_is_disjoint():
+    pieces = [
+        {"x": 0, "y": 0, "w": 20, "h": 10},
+        {"x": 20.5, "y": 0, "w": 20, "h": 10},
+        {"x": 0, "y": 20, "w": 10, "h": 10},
+    ]
+    sheet = _sheet(pieces, width_trim=0.5, length_trim=0.5, board_w=100, board_h=40)
+    sheet["full_width_cm"] = 100
+    sheet["full_length_cm"] = 40
+    _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
+
+    assert [piece["x"] for piece in pieces] == pytest.approx([29.25, 49.75, 44.5])
+    assert physical_edge_margins_mm(sheet)["left"] >= 5
+    assert physical_edge_margins_mm(sheet)["right"] >= 5
+
+
+def test_shape_aware_row_is_left_untouched_for_safety():
+    piece = {"x": 0, "y": 0, "w": 20, "h": 10, "piece_type": "Glass"}
+    sheet = _sheet([piece], width_trim=0.5, length_trim=0.5, board_w=100, board_h=40)
+    _apply([sheet], full_width_cm=100, full_length_cm=40, balance_existing_applied=True)
+
+    assert (piece["x"], piece["y"]) == (0, 0)
