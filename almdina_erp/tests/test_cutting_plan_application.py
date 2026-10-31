@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import unittest
+from dataclasses import replace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
@@ -251,6 +252,24 @@ class TestOptimizeOrderPlan(unittest.TestCase):
 
 
 class TestAdaptiveTrimBusinessRule(unittest.TestCase):
+    def test_trim_larger_than_board_capacity_is_not_clamped_to_zero(self) -> None:
+        command = self._command((self._piece(1, 1),))
+        command = replace(
+            command,
+            board=BoardGeometry(
+                full_width_cm=1,
+                full_length_cm=1,
+                trim_cm=0.6,
+                kerf_cm=0,
+            ),
+        )
+        outcome = optimize_order_plan(command, engine=AdaptiveTrimGeometryEngine())
+
+        self.assertAlmostEqual(outcome.snapshot["usable_board_width_cm"], -0.2)
+        self.assertEqual(outcome.snapshot["trim_policy"]["applied_width_trim_mm"], 6)
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
+        self.assertEqual(len(outcome.snapshot["sheets"]), 0)
+
     def test_positive_trim_does_not_stop_at_a_false_l_piece_area_bound(self) -> None:
         from almdina_erp.almdina_erp.domain.cutting.evaluation import (
             placement_permission_errors, validate_plan,
