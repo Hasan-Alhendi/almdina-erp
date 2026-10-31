@@ -1,0 +1,20 @@
+{
+  "actions": [],
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": ["path_key", "operation_key", "piece_instance_id", "dxf_layer", "sequence", "tool_preset"],
+  "fields": [
+    {"description": "Stable path identity. It does not follow the row's display order.", "fieldname": "path_key", "fieldtype": "Data", "in_list_view": 1, "label": "Path Key", "reqd": 1},
+    {"fieldname": "operation_key", "fieldtype": "Data", "in_list_view": 1, "label": "Operation Key", "reqd": 1},
+    {"fieldname": "piece_instance_id", "fieldtype": "Data", "label": "Piece Instance ID", "read_only": 1, "reqd": 1},
+    {"fieldname": "dxf_layer", "fieldtype": "Data", "label": "DXF Layer", "read_only": 1, "reqd": 1},
+    {"fieldname": "sequence", "fieldtype": "Int", "label": "Sequence", "read_only": 1},
+    {"description": "Optional override. Empty means the operation preset is used.", "fieldname": "tool_preset", "fieldtype": "Link", "label": "Tool Preset Override", "options": "CNC Tool Preset"}
+  ],
+  "istable": 1,
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "CNC Operational Path",
+  "permissions": []
+}

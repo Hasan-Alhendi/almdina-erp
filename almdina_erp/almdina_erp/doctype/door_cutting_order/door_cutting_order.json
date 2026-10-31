@@ -16,6 +16,7 @@
     "totals_section","total_area_m2","total_edge_meters","required_boards","waste_area_m2","waste_percent","costs_column","mdf_cost_usd","cutting_cost_usd","edge_cost_usd","total_cost_usd","material_variance_cost_usd","actual_cost_usd",
     "technical_section","packing_method","packing_score","engine_version",
     "shop_floor_section","production_path","current_department","shop_floor_column","current_assignee","department_status","current_production_stage","drawing_dxf_status",
+    "operational_files_tab","operational_files_section","operational_files_html",
     "cost_tab","cost_settings_section","board_rate_usd","cost_settings_column","cutting_cost_per_board_usd","cost_content_section","order_cost_invoice_html",
     "status","revision","revision_of","revision_root","superseded_by","revision_reason","revision_state","revision_activated_by","revision_activated_on","approved_plan","board_item","full_board_length_mm","full_board_width_mm","price_approval_status","current_price_approval","recovery_creation_token","recovery_creation_user","cancellation_snapshot"
   ],
@@ -42,6 +43,9 @@
     {"fieldname":"pieces_section","fieldtype":"Section Break","label":"Pieces"},
     {"fieldname":"pieces_fast_entry","fieldtype":"HTML","label":"Fast Measurements Entry"},
     {"fieldname":"pieces","fieldtype":"Table","hidden":1,"label":"Pieces","options":"Door Cutting Order Detail"},
+    {"fieldname":"operational_files_tab","fieldtype":"Tab Break","label":"Operational Files"},
+    {"fieldname":"operational_files_section","fieldtype":"Section Break"},
+    {"fieldname":"operational_files_html","fieldtype":"HTML"},
     {"fieldname":"cost_tab","fieldtype":"Tab Break","label":"Order Cost"},
     {"fieldname":"cost_settings_section","fieldtype":"Section Break","label":"إعدادات تكلفة الطلب"},
     {"fieldname":"board_rate_usd","fieldtype":"Currency","label":"سعر اللوح ($)","non_negative":1,"permlevel":1},

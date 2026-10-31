@@ -14,6 +14,7 @@ class FactorySettingsSection:
     PRODUCTION = "production"
     PRINT_IDENTITY = "print_identity"
     WHATSAPP_MESSAGES = "whatsapp_messages"
+    CNC = "cnc"
     BACKUP_RESTORE = "backup_restore"
 
 
@@ -70,6 +71,25 @@ SECTION_FIELDS = MappingProxyType(
                 "whatsapp_stage_messages",
             }
         ),
+        FactorySettingsSection.CNC: frozenset(
+            {
+                "cnc_default_preset_cut_path",
+                "cnc_default_preset_liner",
+                "cnc_default_preset_rear_groove",
+                "cnc_default_preset_handle_recess",
+                "cnc_machine_tool_number",
+                "cnc_machine_spindle_speed_rpm",
+                "cnc_machine_cutting_feed_mm_min",
+                "cnc_machine_plunge_feed_mm_min",
+                "cnc_machine_retract_z_mm",
+                "cnc_machine_distance_mode",
+                "cnc_machine_work_offset",
+                "cnc_machine_example_depth_a_mm",
+                "cnc_machine_example_depth_b_mm",
+                "cnc_machine_profile_production_approved",
+                "cnc_machine_profile_source",
+            }
+        ),
         FactorySettingsSection.BACKUP_RESTORE: frozenset(
             {
                 "local_backup_enabled",
@@ -104,6 +124,7 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.PRODUCTION: Capability.EDIT_FACTORY_PRODUCTION_CONTROLS,
         FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
         FactorySettingsSection.WHATSAPP_MESSAGES: Capability.EDIT_WHATSAPP_MESSAGES,
+        FactorySettingsSection.CNC: Capability.EDIT_FACTORY_CNC_DEFAULTS,
         FactorySettingsSection.BACKUP_RESTORE: Capability.MANAGE_BACKUPS,
     }
 )

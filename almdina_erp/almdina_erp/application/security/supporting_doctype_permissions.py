@@ -18,6 +18,8 @@ SUPPORTING_DOCTYPES = (
     "Customer",
     "Edge Banding Type",
     "Door Cutting Price Approval",
+    "CNC Tool Preset",
+    "CNC Operational File",
 )
 
 _STAGE_READ_CAPABILITIES = frozenset(PRODUCTION_CAPABILITIES)
@@ -97,6 +99,28 @@ def supporting_standard_permission_projection(
     if doctype == "Edge Banding Type":
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {"read": can_read, "select": can_read}
+    if doctype == "CNC Tool Preset":
+        can_read = (
+            normalized[Capability.VIEW_CNC_OPERATIONAL_FILES]
+            or normalized[Capability.VIEW_FACTORY_SETTINGS]
+        )
+        can_maintain = normalized[Capability.EDIT_FACTORY_CNC_DEFAULTS]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": can_maintain,
+            "write": can_maintain,
+            "delete": can_maintain,
+        }
+    if doctype == "CNC Operational File":
+        can_read = normalized[Capability.VIEW_CNC_OPERATIONAL_FILES]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": False,
+            "write": False,
+            "delete": False,
+        }
     if doctype == "Door Cutting Price Approval":
         # Financial history is readable only with cost visibility. Create/write/
         # delete stay closed so Desk never mutates approval rows; phase-2

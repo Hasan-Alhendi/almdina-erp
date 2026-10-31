@@ -54,6 +54,8 @@ _CONTEXTUAL_RULES: dict[str, tuple[ContextualRule, ...]] = {
     Capability.UPLOAD_DXF: ("lifecycle", "document_scope"),
     Capability.REPLACE_DXF: ("lifecycle", "document_scope"),
     Capability.EXPORT_DXF: ("document_scope",),
+    Capability.VIEW_CNC_OPERATIONAL_FILES: ("document_scope",),
+    Capability.PREPARE_CNC_OPERATIONAL_FILES: ("document_scope",),
     Capability.EDIT_SPECIAL_DRAWING: ("lifecycle", "document_scope"),
     Capability.DISPATCH_ORDER: ("lifecycle", "document_scope"),
     Capability.START_ASSIGNED_STAGE: (

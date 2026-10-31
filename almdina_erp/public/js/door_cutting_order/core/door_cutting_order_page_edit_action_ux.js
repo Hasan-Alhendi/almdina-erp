@@ -6,6 +6,7 @@
     const TAB_KIND = Object.freeze({
         order_tab: "order",
         results_tab: "plan",
+        operational_files_tab: "operational_files",
         cost_tab: "cost",
     });
     const KIND_CONFIG = Object.freeze({
@@ -370,6 +371,10 @@
     }
 
     function renderToolbar(frm, kind) {
+        if (kind === "operational_files") {
+            removeToolbars(frm);
+            return false;
+        }
         const toolbar = ensureToolbar(frm, kind);
         const config = KIND_CONFIG[kind];
         if (!toolbar || !config) return false;

@@ -3025,3 +3025,157 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+Operational Files,الملفات التشغيلية
+CNC Tool Preset,إعداد تشغيل CNC
+CNC Operational File,ملف تشغيلي
+CNC Operational Operation,عملية تشغيل
+CNC Operational Path,مسار تشغيل
+CNC Operational Defaults,إعدادات التشغيل الافتراضية
+Cut Between Pieces Preset,إعداد القص بين الدرفات
+Liner Preset,إعداد اللاينر
+Rear Groove Preset,إعداد فرزة الظهر
+Handle Recess Preset,إعداد مسكة الغطس
+Sample Tool Number,رقم الريشة في العينة
+Sample Spindle Speed RPM,سرعة دوران العينة
+Sample Cutting Feed MM/Min,سرعة القطع في العينة
+Sample Plunge Feed MM/Min,سرعة النزول في العينة
+Sample Retract Z MM,ارتفاع السحب في العينة
+Sample Distance Mode,نمط الإحداثيات في العينة
+Sample Work Offset,إزاحة العمل في العينة
+Sample Example Depth A MM,عمق المثال الأول
+Sample Example Depth B MM,عمق المثال الثاني
+Machine Profile Approved For Production,اعتماد ملف الماكينة للإنتاج
+Machine Profile Source Note,ملاحظة مصدر ملف الماكينة
+View operational files,عرض الملفات التشغيلية
+Prepare operational files,إعداد الملفات التشغيلية
+Edit CNC defaults,إعدادات التشغيل الافتراضية
+CNC operational defaults,إعدادات التشغيل الافتراضية
+"Default tool presets for the operational DXF layers, plus the sample machine profile. Changing a default does not rewrite operational files that were already saved. This sample is not approved for production and does not generate an NC file.",إعدادات الريش الافتراضية لطبقات التشغيل، مع عينة ملف الماكينة. تغيير الإعداد الافتراضي لا يغيّر الملفات التشغيلية المحفوظة سابقًا. هذه العينة غير معتمدة للإنتاج ولا تولّد ملف NC.
+Cut between pieces,القص بين الدرفات
+Liner operation,اللاينر
+Rear groove,فرزة الظهر
+Handle recess,مسكة الغطس
+Sample tool number,رقم الريشة في العينة
+Sample spindle speed (RPM),سرعة دوران العينة (دورة/دقيقة)
+Sample cutting feed (mm/min),سرعة القطع في العينة (مم/دقيقة)
+Sample plunge feed (mm/min),سرعة النزول في العينة (مم/دقيقة)
+Sample retract Z (mm),ارتفاع السحب في العينة (مم)
+Sample distance mode,نمط الإحداثيات في العينة
+Sample work offset,إزاحة العمل في العينة
+Sample example depth A (mm),عمق المثال الأول (مم)
+Sample example depth B (mm),عمق المثال الثاني (مم)
+Machine profile,ملف الماكينة
+Approved for production,معتمد للإنتاج
+Sample only — not approved for production,عينة فقط — غير معتمدة للإنتاج
+Profile note,ملاحظة الملف
+Edit CNC operational defaults,تعديل إعدادات التشغيل الافتراضية
+DXF layer CUT_PATH. Leave empty when this operation has no factory default.,طبقة CUT_PATH. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Liner. Leave empty when this operation has no factory default.,طبقة Liner. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Rear Groove. Leave empty when this operation has no factory default.,طبقة Rear Groove. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+DXF layer Handle Recess. Leave empty when this operation has no factory default.,طبقة Handle Recess. اترك الحقل فارغًا إذا لم يكن لهذه العملية إعداد افتراضي.
+"Example from a previous file, such as T9. This is not a confirmed tool for every job.",مثال من ملف سابق مثل T9. ليست ريشة مؤكدة لكل تشغيل.
+Stored sample token, such as G90. This does not choose a controller.,رمز العينة المحفوظ مثل G90. لا يحدّد نوع وحدة التحكم.
+Stored sample token, such as G54. This does not set the machine origin.,رمز العينة المحفوظ مثل G54. لا يحدّد نقطة صفر الماكينة.
+Mark the sample as approved for production,اعتماد العينة للإنتاج
+"The stored sample is not a controller, origin, or travel-limit specification.",العينة المحفوظة ليست مواصفة لوحدة التحكم أو نقطة الصفر أو حدود حركة الماكينة.
+Not generated,لم يتم التوليد
+Generated,تم التوليد
+Needs regeneration,يحتاج إعادة توليد
+System plan,خطة من النظام
+Uploaded plan,خطة مرفوعة
+Uses the operation preset,يستخدم إعداد العملية
+Save sheet settings,حفظ إعدادات اللوح
+Sheet {0},اللوح {0}
+Operation,العملية
+DXF layer,طبقة DXF
+Tool preset,إعداد الريشة
+Path-level preset changes are not available in this step.,تخصيص إعداد لمسار واحد غير متاح في هذه الخطوة.
+Path,المسار
+Preset override,إعداد خاص بالمسار
+Earlier operational files,ملفات تشغيلية سابقة
+These files stay linked to the plan revision they were prepared for.,تبقى هذه الملفات مرتبطة بإصدار الخطة الذي جُهّزت له.
+Plan revision,إصدار الخطة
+Approved plan,الخطة المعتمدة
+The stored machine profile is marked approved for production.,ملف الماكينة المحفوظ معلّم بأنه معتمد للإنتاج.
+The stored machine profile is a sample and is not approved for production.,ملف الماكينة المحفوظ عينة وغير معتمد للإنتاج.
+This step saves machining settings only. It does not create a machine file.,هذه الخطوة تحفظ إعدادات التشغيل فقط. لا تنشئ ملف ماكينة.
+Save the order before preparing operational files.,احفظ الطلب قبل تجهيز الملفات التشغيلية.
+Loading operational files...,جارٍ تحميل الملفات التشغيلية...
+Operational files could not be loaded.,تعذر تحميل الملفات التشغيلية.
+"This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved.",لا توجد خطة قص معتمدة لهذا الطلب. لا يمكن تجهيز الملفات التشغيلية إلا من الخطة المعتمدة الحالية، سواء حُسبت في النظام أو رُفعت ثم اعتُمدت.
+This approved plan source cannot be used for operational files.,لا يمكن استخدام مصدر هذه الخطة المعتمدة للملفات التشغيلية.
+The approved plan is missing a stable piece identity.,الخطة المعتمدة تفتقد هوية ثابتة للدرفة.
+The approved plan liner setup cannot be read.,تعذر قراءة إعداد اللاينر في الخطة المعتمدة.
+That sheet is not part of the approved cutting plan.,هذا اللوح ليس جزءًا من خطة القص المعتمدة.
+That machining operation is not on this sheet.,عملية التشغيل هذه غير موجودة على هذا اللوح.
+That machining path is not on this sheet.,مسار التشغيل هذا غير موجود على هذا اللوح.
+The selected CNC tool preset does not exist.,إعداد الريشة المحدد غير موجود.
+The selected CNC tool preset is disabled.,إعداد الريشة المحدد معطّل.
+One board file must keep the same physical tool number.,يجب أن يحتفظ ملف اللوح الواحد برقم الريشة الفيزيائية نفسه.
+The same tool cannot use two diameters in one operational file.,لا يجوز استخدام قطرين مختلفين للريشة نفسها داخل ملف التشغيل الواحد.
+Tool number must look like T9.,يجب أن يكون رقم الريشة بالشكل T9.
+Tool diameter must be a positive number of millimetres within the supported range.,يجب أن يكون قطر الريشة رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Final depth must be a positive number of millimetres within the supported range.,يجب أن يكون العمق النهائي رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Spindle speed must be a positive whole number of RPM within the supported range.,يجب أن تكون سرعة الدوران عددًا صحيحًا موجبًا من الدورات في الدقيقة ضمن المدى المدعوم.
+Feed rate must be a positive number of millimetres per minute within the supported range.,يجب أن تكون سرعة القطع رقمًا موجبًا بالمليمتر في الدقيقة ضمن المدى المدعوم.
+Plunge rate must be a positive number of millimetres per minute within the supported range.,يجب أن تكون سرعة النزول رقمًا موجبًا بالمليمتر في الدقيقة ضمن المدى المدعوم.
+Pass depth must be a positive number of millimetres within the supported range.,يجب أن يكون عمق التمريرة رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Pass depth cannot be deeper than the final depth.,لا يجوز أن يتجاوز عمق التمريرة العمق النهائي.
+You do not have permission to use operational files for this order.,ليست لديك صلاحية استخدام الملفات التشغيلية لهذا الطلب.
+Operational file settings are not valid.,إعدادات الملف التشغيلي غير صالحة.
+The approved plan snapshot cannot be read.,تعذر قراءة لقطة الخطة المعتمدة.
+The CNC machine profile sample is not valid.,عينة ملف الماكينة غير صالحة.
+Preset name is required.,اسم الإعداد مطلوب.
+Tool name is required.,اسم الريشة مطلوب.
+Operational file status is not valid.,حالة الملف التشغيلي غير صالحة.
+Operational file identity is incomplete.,هوية الملف التشغيلي غير مكتملة.
+An operational file already exists for this approved sheet.,يوجد ملف تشغيلي لهذا اللوح في الخطة المعتمدة.
+This CNC tool preset is in use and cannot be deleted: {0},إعداد الريشة مستخدم ولا يمكن حذفه: {0}
+Preset Name,اسم الإعداد
+Tool Name,اسم الريشة
+Tool Number,رقم الريشة
+Tool Diameter (mm),قطر الريشة (مم)
+Final Depth (mm),العمق النهائي (مم)
+Spindle Speed (RPM),سرعة الدوران (دورة/دقيقة)
+Feed Rate (mm/min),سرعة القطع (مم/دقيقة)
+Plunge Rate (mm/min),سرعة النزول (مم/دقيقة)
+Pass Depth (mm),عمق التمريرة (مم)
+Plan Revision,إصدار الخطة
+Plan Source Type,مصدر الخطة
+Sheet Key,مفتاح اللوح
+Identity Key,مفتاح الهوية
+Settings Fingerprint,بصمة الإعدادات
+Operations,العمليات
+Paths,المسارات
+Generated File,الملف الناتج
+Generated By,ولّده
+Generated On,تاريخ التوليد
+Generation Snapshot,لقطة التوليد
+Path Key,مفتاح المسار
+Operation Key,مفتاح العملية
+Piece Instance ID,هوية الدرفة
+DXF Layer,طبقة DXF
+Tool Preset,إعداد الريشة
+Tool Preset Override,إعداد خاص بالمسار
+Open sheet settings,فتح إعدادات اللوح
+"{0} paths",{0} مسارات
+"Piece {0}",الدرفة {0}
+Piece number is not available,رقم الدرفة غير متاح
+"Select a path to see its piece, layer, and preset.",اختر مسارًا لعرض الدرفة والطبقة وإعداد التشغيل.
+Uses the layer preset,يستخدم إعداد الطبقة
+Custom preset,إعداد مخصص
+Use the layer preset,استخدم إعداد الطبقة
+Show paths,عرض المسارات
+Hide paths,إخفاء المسارات
+Operation order,ترتيب عمليات التشغيل
+Move earlier,تقديم
+Move later,تأخير
+"Cutting first may let the pieces move after they separate from the board.",تقديم القص قد يؤدي إلى تحرك الدرفات بعد فصلها عن اللوح.
+I understand and want to keep this operation order.,أفهم ذلك وأريد الإبقاء على هذا الترتيب.
+Board preview is not available.,معاينة اللوح غير متاحة.
+Discard the unsaved changes?,هل تريد تجاهل التغييرات غير المحفوظة؟
+Operational files saved.,تم حفظ إعدادات الملف التشغيلي.
+The operation order does not include every operation on this sheet.,ترتيب العمليات لا يشمل كل العمليات الموجودة على هذا اللوح.
+Confirm the warning before saving a cut that comes before the internal operations.,أكّد التنبيه قبل حفظ قص يسبق عمليات التشغيل الداخلية.
+Cut Path Early Confirmation,تأكيد تقديم القص
+"Records that this sheet's cut was placed before an internal operation. It does not waive later generation checks.",يسجّل أن قص هذا اللوح وُضع قبل عملية تشغيل داخلية. لا يلغي فحوص التوليد اللاحقة.

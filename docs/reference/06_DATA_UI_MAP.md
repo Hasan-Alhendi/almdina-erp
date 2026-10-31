@@ -11,6 +11,7 @@
 |---|---|---|---|
 | الطلب | `Door Cutting Order` + details | Form/List + خدمات الطلب | المحور المركزي |
 | خطة القص | `Cutting Plan` + pieces/sources | Order planning / archive / print | Approved snapshot له قواعد immutability |
+| الملفات التشغيلية | `CNC Operational File` + operations/paths، و`CNC Tool Preset` | تاب الطلب «الملفات التشغيلية» وإعدادات المصنع | يعرض ألواح الخطة المعتمدة ويعيد رسمها بمكوّن خطة القص، ويحفظ إعداد الطبقة وتخصيص المسار وترتيب العمليات لكل لوح. لا يولّد NC ولا يغيّر القص أو الاعتماد |
 | المسارات | `Production Routing` + stage definitions | Master Data / settings | المراحل قابلة للضبط |
 | التنفيذ | `Production Stage` + events | Shop Floor | Current assignment وstatus |
 | القشاط | `Edge Banding Type` | Order entry / master data | rates/defaults وفق الصلاحية |

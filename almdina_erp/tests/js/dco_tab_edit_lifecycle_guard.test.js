@@ -121,6 +121,7 @@ function verifyEditOwnerNavigationLock() {
     const makeTabs = () => [
         makeTab("order_tab", activeState),
         makeTab("results_tab", activeState),
+        makeTab("operational_files_tab", activeState),
         makeTab("cost_tab", activeState),
     ];
 
@@ -212,9 +213,9 @@ function verifyEditOwnerNavigationLock() {
     });
 
     const scenarios = [
-        { kind: "order", owner: "order_tab", blocked: ["results_tab", "cost_tab"] },
-        { kind: "plan", owner: "results_tab", blocked: ["order_tab", "cost_tab"] },
-        { kind: "cost", owner: "cost_tab", blocked: ["order_tab", "results_tab"] },
+        { kind: "order", owner: "order_tab", blocked: ["results_tab", "operational_files_tab", "cost_tab"] },
+        { kind: "plan", owner: "results_tab", blocked: ["order_tab", "operational_files_tab", "cost_tab"] },
+        { kind: "cost", owner: "cost_tab", blocked: ["order_tab", "results_tab", "operational_files_tab"] },
     ];
 
     for (const scenario of scenarios) {

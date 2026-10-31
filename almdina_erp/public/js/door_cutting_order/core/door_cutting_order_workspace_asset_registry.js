@@ -71,6 +71,19 @@
                 "AlmdinaFinalPriceApprovalUX",
             ]),
         }),
+        operational_files: Object.freeze({
+            activationField: "operational_files_tab",
+            assets: Object.freeze([
+                `${ASSET_ROOT}/cutting_plan/door_cutting_order_piece_geometry.js`,
+                `${ASSET_ROOT}/cutting_plan/door_cutting_order_cutting_plan_renderer.js`,
+                `${ASSET_ROOT}/cnc/door_cutting_order_operational_files_ux.js`,
+            ]),
+            readyGlobals: Object.freeze([
+                "AlmdinaCuttingPlanPieceGeometry",
+                "AlmdinaCuttingPlanRender",
+                "AlmdinaOperationalFilesUX",
+            ]),
+        }),
     });
 
     function descriptor(featureName) {

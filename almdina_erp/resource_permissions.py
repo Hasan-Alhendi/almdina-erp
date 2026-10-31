@@ -152,6 +152,37 @@ def production_routing_has_permission(
     )
 
 
+def cnc_tool_preset_query(user: str | None = None) -> str:
+    return _query_for(
+        (
+            Capability.VIEW_CNC_OPERATIONAL_FILES,
+            Capability.VIEW_FACTORY_SETTINGS,
+        ),
+        user,
+    )
+
+
+def cnc_tool_preset_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    del doc
+    return _has_permission(
+        user=user,
+        ptype=ptype,
+        permission_type=permission_type,
+        view=(
+            Capability.VIEW_CNC_OPERATIONAL_FILES,
+            Capability.VIEW_FACTORY_SETTINGS,
+        ),
+        create=Capability.EDIT_FACTORY_CNC_DEFAULTS,
+        write=Capability.EDIT_FACTORY_CNC_DEFAULTS,
+        delete=Capability.EDIT_FACTORY_CNC_DEFAULTS,
+    )
+
+
 def factory_settings_has_permission(
     doc: Any,
     user: str | None = None,
@@ -171,6 +202,8 @@ def factory_settings_has_permission(
 
 
 __all__ = [
+    "cnc_tool_preset_has_permission",
+    "cnc_tool_preset_query",
     "customer_has_permission",
     "customer_query",
     "edge_banding_type_has_permission",

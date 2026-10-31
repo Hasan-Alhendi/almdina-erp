@@ -181,6 +181,25 @@
                     })),
                 ];
             }
+            if (section === "cnc") {
+                return [
+                    { fieldname: "cnc_default_preset_cut_path", fieldtype: "Link", options: "CNC Tool Preset", label: t("Cut between pieces"), description: t("DXF layer CUT_PATH. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_cut_path || "" },
+                    { fieldname: "cnc_default_preset_liner", fieldtype: "Link", options: "CNC Tool Preset", label: t("Liner operation"), description: t("DXF layer Liner. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_liner || "" },
+                    { fieldname: "cnc_default_preset_rear_groove", fieldtype: "Link", options: "CNC Tool Preset", label: t("Rear groove"), description: t("DXF layer Rear Groove. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_rear_groove || "" },
+                    { fieldname: "cnc_default_preset_handle_recess", fieldtype: "Link", options: "CNC Tool Preset", label: t("Handle recess"), description: t("DXF layer Handle Recess. Leave empty when this operation has no factory default."), default: values.cnc_default_preset_handle_recess || "" },
+                    { fieldname: "cnc_machine_tool_number", fieldtype: "Data", label: t("Sample tool number"), description: t("Example from a previous file, such as T9. This is not a confirmed tool for every job."), default: values.cnc_machine_tool_number || "" },
+                    { fieldname: "cnc_machine_spindle_speed_rpm", fieldtype: "Int", label: t("Sample spindle speed (RPM)"), default: values.cnc_machine_spindle_speed_rpm, reqd: 1 },
+                    { fieldname: "cnc_machine_cutting_feed_mm_min", fieldtype: "Float", label: t("Sample cutting feed (mm/min)"), default: values.cnc_machine_cutting_feed_mm_min, reqd: 1 },
+                    { fieldname: "cnc_machine_plunge_feed_mm_min", fieldtype: "Float", label: t("Sample plunge feed (mm/min)"), default: values.cnc_machine_plunge_feed_mm_min, reqd: 1 },
+                    { fieldname: "cnc_machine_retract_z_mm", fieldtype: "Float", label: t("Sample retract Z (mm)"), default: values.cnc_machine_retract_z_mm, reqd: 1 },
+                    { fieldname: "cnc_machine_distance_mode", fieldtype: "Data", label: t("Sample distance mode"), description: t("Stored sample token, such as G90. This does not choose a controller."), default: values.cnc_machine_distance_mode || "" },
+                    { fieldname: "cnc_machine_work_offset", fieldtype: "Data", label: t("Sample work offset"), description: t("Stored sample token, such as G54. This does not set the machine origin."), default: values.cnc_machine_work_offset || "" },
+                    { fieldname: "cnc_machine_example_depth_a_mm", fieldtype: "Float", label: t("Sample example depth A (mm)"), default: values.cnc_machine_example_depth_a_mm, reqd: 1 },
+                    { fieldname: "cnc_machine_example_depth_b_mm", fieldtype: "Float", label: t("Sample example depth B (mm)"), default: values.cnc_machine_example_depth_b_mm, reqd: 1 },
+                    { fieldname: "cnc_machine_profile_production_approved", fieldtype: "Check", label: t("Mark the sample as approved for production"), default: values.cnc_machine_profile_production_approved },
+                    { fieldname: "cnc_machine_profile_source", fieldtype: "Small Text", label: t("Profile note"), description: t("The stored sample is not a controller, origin, or travel-limit specification."), default: values.cnc_machine_profile_source || "" },
+                ];
+            }
             if (section === "backup_restore") {
                 const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
                 return [
@@ -222,6 +241,7 @@
             if (section === "extra_addons") return t("Edit door leaf add-on prices");
             if (section === "print_identity") return t("Edit print sheet identity");
             if (section === "whatsapp_messages") return t("Edit WhatsApp messages");
+            if (section === "cnc") return t("Edit CNC operational defaults");
             if (section === "backup_restore") return t("Backup & Restore settings");
             return t("Edit production controls");
         }

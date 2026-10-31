@@ -34,13 +34,13 @@ CATEGORY_PRESENTATION: dict[str, dict[str, str]] = {
     "order": {"label": "Orders", "description": "Create, review, approve, and manage the lifecycle of an order.", "icon": "file-text"},
     "costing": {"label": "Costing and pricing", "description": "View costs, edit cost settings, and approve internal prices.", "icon": "accounting"},
     "documents": {"label": "Documents and printing", "description": "Print measurements, the customer invoice, and the confidential internal report.", "icon": "printer"},
-    "cutting_plan": {"label": "Cutting plan", "description": "View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, and print them.", "icon": "organization"},
+    "cutting_plan": {"label": "Cutting plan", "description": "View the plan tabs (system / uploaded / approved), calculate plans, edit optimizer settings, approve plans, print them, and open operational files.", "icon": "organization"},
     "drawing": {"label": "Drawing and DXF", "description": "Special drawing, plus exporting, uploading, and replacing DXF files.", "icon": "image-view"},
     "production": {"label": "Production and assignment", "description": "Dispatch orders, start stages, hand them off, revert them, and reassign them.", "icon": "tool"},
     "shop_floor": {"label": "Production floor", "description": "Additional view permissions within the Production floor, without granting access or any production actions by themselves.", "icon": "list"},
     "control_center": {"label": "Control center and quality", "description": "Archive plans, view and record production incidents, and manage replacement pieces.", "icon": "dashboard"},
     "workforce": {"label": "Users and workforce", "description": "View, create, edit, and enable factory accounts, and manage their roles.", "icon": "users"},
-    "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
+    "factory_settings": {"label": "Factory settings", "description": "View and edit cutting, costing, production, CNC, printing, WhatsApp, and backup settings, each section independently.", "icon": "setting-gear"},
     "master_data": {"label": "Master data", "description": "Manage production routings and edge banding types, with separate view, create, edit, and delete permissions.", "icon": "database"},
     "administration": {"label": "Permission management", "description": "Edit the permission matrix for all roles.", "icon": "lock"},
 }
@@ -125,6 +125,15 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "View completed orders that already fall within the user's scope. Does not grant access to the Production floor, nor any action or additional order scope.",
     ),
     Capability.ARCHIVE_APPROVED_PLAN: _presentation("Archive approved plan", "Generate and save an official PDF of the approved plan.", "sensitive"),
+    Capability.VIEW_CNC_OPERATIONAL_FILES: _presentation(
+        "View operational files",
+        "Open the operational files tab for an order that has a current approved cutting plan.",
+    ),
+    Capability.PREPARE_CNC_OPERATIONAL_FILES: _presentation(
+        "Prepare operational files",
+        "Choose the machining preset for each operation on a sheet of the approved plan. Does not generate an NC file.",
+        "sensitive",
+    ),
     Capability.VIEW_USERS: _presentation("View factory users", "View Almdina accounts only, along with their status and assigned roles."),
     Capability.CREATE_USERS: _presentation("Create user", "Create a new system account for the factory with a temporary password.", "critical"),
     Capability.EDIT_USERS: _presentation("Edit user details", "Edit the name, language, and non-financial account details.", "sensitive"),
@@ -137,6 +146,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
     Capability.EDIT_FACTORY_COST_DEFAULTS: _presentation("Edit cost defaults", "Edit the cutting fee, special door leaf charges, and their margins.", "critical"),
     Capability.EDIT_FACTORY_PRODUCTION_CONTROLS: _presentation("Edit production controls", "Edit the default routing and sensitive operational exceptions.", "critical"),
     Capability.EDIT_FACTORY_PRINT_IDENTITY: _presentation("Edit print identity", "Edit the factory name, tagline, address, and contact numbers shown on printed sheets. Does not include WhatsApp messages or session linking.", "sensitive"),
+    Capability.EDIT_FACTORY_CNC_DEFAULTS: _presentation(
+        "Edit CNC defaults",
+        "Edit factory default tool presets for operational layers and the sample machine profile. Does not change operational files that were already saved.",
+        "sensitive",
+    ),
     Capability.MANAGE_WHATSAPP_SESSION: _presentation("Manage WhatsApp session", "View the factory session status, create it, link it via QR code, and reconnect. Does not grant message editing or sending customer files.", "critical"),
     Capability.EDIT_WHATSAPP_MESSAGES: _presentation("Edit WhatsApp messages", "Edit the texts for measurements, measurement changes, the invoice, and stage completion in the factory settings. Does not grant session creation or file sending.", "sensitive"),
     Capability.MANAGE_BACKUPS: _presentation("Manage backups", "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore.", "critical"),
@@ -249,6 +263,8 @@ def normalize_capability_state(raw: Mapping[str, Any] | None) -> dict[str, bool]
         state[Capability.VIEW_CUTTING_PLAN] = True
         state[Capability.VIEW_APPROVED_CUTTING_PLAN] = True
         state[Capability.PRINT_CUTTING_PLAN] = True
+    if state[Capability.PREPARE_CNC_OPERATIONAL_FILES]:
+        state[Capability.VIEW_CNC_OPERATIONAL_FILES] = True
     if state[Capability.VIEW_CUTTING_PLAN]:
         granular_supplied = any(key in supplied for key in _PLAN_TAB_VIEW_ACTIONS)
         if not granular_supplied:

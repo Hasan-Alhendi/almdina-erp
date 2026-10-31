@@ -67,7 +67,7 @@ class CustomEvent {
 
     const registry = fakeWindow.AlmdinaDcoWorkspaceAssetRegistry;
     assert.ok(registry);
-    assert.deepEqual(Array.from(registry.activationFields()), ["results_tab", "cost_tab"]);
+    assert.deepEqual(Array.from(registry.activationFields()), ["results_tab", "cost_tab", "operational_files_tab"]);
     assert.equal(registry.featureForTab("order_tab"), "");
     assert.equal(await registry.ensureForTab("order_tab"), false);
     assert.equal(calls.length, 0, "Order workspace must not request a derived asset bundle");

@@ -8,6 +8,14 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
+    MachineProfileError,
+    normalize_machine_profile,
+)
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
+    ToolPresetError,
+    resolve_selected_presets,
+)
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
     DEFAULT_OPTIMIZATION_MODE_ID,
     MACHINE_TYPES as CANONICAL_MACHINE_TYPES,
@@ -105,6 +113,46 @@ _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
         Capability.PRINT_CUTTING_PLAN,
     }
 )
+_CNC_PRESET_FIELDS = (
+    "cnc_default_preset_cut_path",
+    "cnc_default_preset_liner",
+    "cnc_default_preset_rear_groove",
+    "cnc_default_preset_handle_recess",
+)
+_CNC_MACHINE_FIELDS = (
+    "cnc_machine_tool_number",
+    "cnc_machine_spindle_speed_rpm",
+    "cnc_machine_cutting_feed_mm_min",
+    "cnc_machine_plunge_feed_mm_min",
+    "cnc_machine_retract_z_mm",
+    "cnc_machine_distance_mode",
+    "cnc_machine_work_offset",
+    "cnc_machine_example_depth_a_mm",
+    "cnc_machine_example_depth_b_mm",
+    "cnc_machine_profile_production_approved",
+    "cnc_machine_profile_source",
+)
+_CNC_TEXT_FIELDS = frozenset(
+    {
+        *_CNC_PRESET_FIELDS,
+        "cnc_machine_tool_number",
+        "cnc_machine_distance_mode",
+        "cnc_machine_work_offset",
+        "cnc_machine_profile_source",
+    }
+)
+_CNC_INTEGER_FIELDS = frozenset(
+    {
+        "cnc_machine_spindle_speed_rpm",
+        "cnc_machine_profile_production_approved",
+    }
+)
+_CNC_PRESET_MESSAGES = {
+    "preset_not_found": "The selected CNC tool preset does not exist.",
+    "preset_disabled": "The selected CNC tool preset is disabled.",
+    "tool_identity_conflict": "One board file must keep the same physical tool number.",
+    "tool_diameter_conflict": "The same tool cannot use two diameters in one operational file.",
+}
 _SETTINGS_FIELDS = (
     "default_kerf_mm",
     "default_trim_margin_mm",
@@ -125,6 +173,8 @@ _SETTINGS_FIELDS = (
     "default_production_routing",
     "allow_stage_override",
     "allow_unplaced_approval",
+    *_CNC_PRESET_FIELDS,
+    *_CNC_MACHINE_FIELDS,
     *_PRINT_IDENTITY_FIELDS,
     *_WHATSAPP_MESSAGE_FIELDS,
     _WHATSAPP_STAGE_MESSAGES_FIELD,
@@ -432,6 +482,97 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     ):
         _validate_backup_settings(settings)
 
+    _apply_cnc_values(settings, payload)
+
+
+def _apply_cnc_values(settings: Any, payload: dict[str, Any]) -> None:
+    """Validate factory CNC defaults without rewriting saved operational files."""
+
+    if set(payload).intersection(_CNC_PRESET_FIELDS):
+        selected = {
+            fieldname: str(
+                payload[fieldname] if fieldname in payload else settings.get(fieldname) or ""
+            ).strip()
+            for fieldname in _CNC_PRESET_FIELDS
+        }
+        known = _known_cnc_presets([name for name in selected.values() if name])
+        try:
+            resolve_selected_presets(list(selected.values()), known)
+        except ToolPresetError as exc:
+            frappe.throw(
+                _(_CNC_PRESET_MESSAGES.get(exc.code, "The CNC tool preset is not valid.")),
+                frappe.ValidationError,
+            )
+        for fieldname in _CNC_PRESET_FIELDS:
+            if fieldname in payload:
+                settings.set(fieldname, selected[fieldname])
+
+    if set(payload).intersection(_CNC_MACHINE_FIELDS):
+        merged = {
+            fieldname: payload[fieldname] if fieldname in payload else settings.get(fieldname)
+            for fieldname in _CNC_MACHINE_FIELDS
+        }
+        try:
+            profile = normalize_machine_profile(merged)
+        except MachineProfileError:
+            frappe.throw(_("The CNC machine profile sample is not valid."), frappe.ValidationError)
+        stored = {
+            "cnc_machine_tool_number": profile.tool_number,
+            "cnc_machine_spindle_speed_rpm": profile.spindle_speed_rpm,
+            "cnc_machine_cutting_feed_mm_min": profile.cutting_feed_mm_min,
+            "cnc_machine_plunge_feed_mm_min": profile.plunge_feed_mm_min,
+            "cnc_machine_retract_z_mm": profile.retract_z_mm,
+            "cnc_machine_distance_mode": profile.distance_mode,
+            "cnc_machine_work_offset": profile.work_offset,
+            "cnc_machine_example_depth_a_mm": profile.example_depth_a_mm,
+            "cnc_machine_example_depth_b_mm": profile.example_depth_b_mm,
+            "cnc_machine_profile_production_approved": 1 if profile.production_approved else 0,
+            "cnc_machine_profile_source": profile.source_note,
+        }
+        for fieldname in _CNC_MACHINE_FIELDS:
+            if fieldname in payload:
+                settings.set(fieldname, stored[fieldname])
+
+
+def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
+    wanted = [name for name in names if name]
+    if not wanted:
+        return {}
+    rows = frappe.get_all(
+        "CNC Tool Preset",
+        filters={"name": ["in", wanted]},
+        fields=[
+            "name",
+            "preset_name",
+            "tool_name",
+            "tool_number",
+            "tool_diameter_mm",
+            "final_depth_mm",
+            "spindle_speed_rpm",
+            "feed_rate_mm_min",
+            "plunge_rate_mm_min",
+            "pass_depth_mm",
+            "enabled",
+        ],
+        limit_page_length=0,
+        ignore_permissions=True,
+    )
+    return {
+        str(row.name): {
+            "preset_name": row.preset_name,
+            "tool_name": row.tool_name,
+            "tool_number": row.tool_number,
+            "tool_diameter_mm": row.tool_diameter_mm,
+            "final_depth_mm": row.final_depth_mm,
+            "spindle_speed_rpm": row.spindle_speed_rpm,
+            "feed_rate_mm_min": row.feed_rate_mm_min,
+            "plunge_rate_mm_min": row.plunge_rate_mm_min,
+            "pass_depth_mm": row.pass_depth_mm,
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    }
+
 
 def _backup_time(value: Any, default: str) -> str:
     if hasattr(value, "total_seconds"):
@@ -666,6 +807,10 @@ def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str
             value = str(value or "")
         elif fieldname == "default_packing_mode":
             value = public_mode_value(value)
+        elif fieldname in _CNC_TEXT_FIELDS:
+            value = str(value or "")
+        elif fieldname in _CNC_INTEGER_FIELDS:
+            value = cint(value)
         elif fieldname not in {"default_cutting_machine_type", "default_production_routing"}:
             value = flt(value)
             if fieldname == "optimal_search_piece_limit":

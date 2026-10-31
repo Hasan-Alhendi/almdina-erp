@@ -387,6 +387,18 @@ def door_cutting_order_has_permission(
         )
     if resolved_type == "delete":
         return False
+    if str(resolved_type or "") in {
+        Capability.VIEW_CNC_OPERATIONAL_FILES,
+        Capability.PREPARE_CNC_OPERATIONAL_FILES,
+    }:
+        order_name = str(getattr(doc, "name", None) or "").strip()
+        if not order_name:
+            return False
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=str(resolved_type),
+            order_name=order_name,
+        )
 
     required = _DCO_PERMISSION_CAPABILITIES.get(str(resolved_type or ""))
     if required:
@@ -486,7 +498,56 @@ def door_cutting_price_approval_has_permission(
     return False
 
 
+def cnc_operational_file_query(user: str | None = None) -> str:
+    """List operational files only inside the parent orders the user may see."""
+
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return ""
+    parent_present = "ifnull(`tabCNC Operational File`.door_cutting_order, '') != ''"
+    if not _has(user, Capability.VIEW_CNC_OPERATIONAL_FILES):
+        return "1=0"
+    if not _requires_assigned_scope(user):
+        return parent_present
+    return (
+        parent_present
+        + " and `tabCNC Operational File`.door_cutting_order in ("
+        + _assigned_order_subquery(user)
+        + ")"
+    )
+
+
+def cnc_operational_file_has_permission(
+    doc: Any,
+    user: str | None = None,
+    ptype: str | None = None,
+    permission_type: str | None = None,
+) -> bool:
+    """Desk writes stay closed. Reads follow the parent order and capability."""
+
+    resolved_user = user or frappe.session.user
+    resolved_type = _resolved_permission_type(ptype, permission_type)
+    order_name = str(getattr(doc, "door_cutting_order", None) or "").strip()
+
+    if resolved_user == "Administrator":
+        return True
+    if not order_name:
+        return False
+    if resolved_type in _MUTATING_PERMISSION_TYPES:
+        return False
+    if resolved_type in _READ_PERMISSION_TYPES:
+        return _scoped_read_decision(
+            user=resolved_user,
+            required_capability=Capability.VIEW_CNC_OPERATIONAL_FILES,
+            order_name=order_name,
+            supporting_workflow=True,
+        )
+    return False
+
+
 __all__ = [
+    "cnc_operational_file_has_permission",
+    "cnc_operational_file_query",
     "cutting_plan_has_permission",
     "cutting_plan_query",
     "door_cutting_order_has_permission",

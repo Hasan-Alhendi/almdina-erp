@@ -1,0 +1,40 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:preset_name",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "preset_name",
+    "tool_name",
+    "tool_number",
+    "tool_diameter_mm",
+    "final_depth_mm",
+    "spindle_speed_rpm",
+    "feed_rate_mm_min",
+    "plunge_rate_mm_min",
+    "pass_depth_mm",
+    "enabled"
+  ],
+  "fields": [
+    {"fieldname": "preset_name", "fieldtype": "Data", "in_list_view": 1, "label": "Preset Name", "reqd": 1, "unique": 1},
+    {"fieldname": "tool_name", "fieldtype": "Data", "in_list_view": 1, "label": "Tool Name", "reqd": 1},
+    {"description": "Physical tool number, for example T9. One board file uses one tool number.", "fieldname": "tool_number", "fieldtype": "Data", "in_list_view": 1, "label": "Tool Number", "reqd": 1},
+    {"fieldname": "tool_diameter_mm", "fieldtype": "Float", "in_list_view": 1, "label": "Tool Diameter (mm)", "precision": "3", "reqd": 1},
+    {"fieldname": "final_depth_mm", "fieldtype": "Float", "label": "Final Depth (mm)", "precision": "3", "reqd": 1},
+    {"fieldname": "spindle_speed_rpm", "fieldtype": "Int", "label": "Spindle Speed (RPM)", "non_negative": 1, "reqd": 1},
+    {"fieldname": "feed_rate_mm_min", "fieldtype": "Float", "label": "Feed Rate (mm/min)", "precision": "1", "reqd": 1},
+    {"fieldname": "plunge_rate_mm_min", "fieldtype": "Float", "label": "Plunge Rate (mm/min)", "precision": "1", "reqd": 1},
+    {"description": "Leave empty when the operation is cut in a single pass.", "fieldname": "pass_depth_mm", "fieldtype": "Float", "label": "Pass Depth (mm)", "precision": "3"},
+    {"default": "1", "fieldname": "enabled", "fieldtype": "Check", "in_list_view": 1, "label": "Enabled"}
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "CNC Tool Preset",
+  "naming_rule": "By fieldname",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "preset_name",
+  "track_changes": 1
+}

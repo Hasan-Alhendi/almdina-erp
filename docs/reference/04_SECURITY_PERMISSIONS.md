@@ -79,6 +79,8 @@ flowchart LR
 
 `view_cutting_plan`, `view_system_cutting_plan`, `view_uploaded_cutting_plan`, `view_approved_cutting_plan`, `recalculate_plan`, `edit_optimizer_settings`, `print_cutting_plan`, `view_drawing_workspace`, `edit_special_drawing`, `export_dxf`, `upload_dxf`, `replace_dxf`, `approve_dxf`.
 
+`view_cnc_operational_files` يعرض تاب الملفات التشغيلية على الطلب عند وجود خطة قص معتمدة حالية. `prepare_cnc_operational_files` يحفظ إعداد الريشة لكل عملية على اللوح ويستلزم العرض. لا يمنحان `view_cutting_plan`، ولا يولّدان ملف NC في المرحلة الأولى. التحقق يتم على السيرفر عبر `require_document_capability` ونطاق الطلب، وكتابة `CNC Operational File` من المكتب مغلقة.
+
 `approve_dxf` اسم تاريخي محفوظ للتوافق، ومعناه التجاري الحالي اعتماد Production Cutting Plan المختارة سواء كانت System أو imported/custom.
 
 `archive_approved_plan` يفتح أرشيف الخطط المعتمدة ولا يمنح تعديل الخطة.
@@ -110,7 +112,7 @@ flowchart LR
 
 ### Factory settings
 
-`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل)، `manage_backups` (الإعداد والجدولة والنسخ اليدوي واختبار SSH والسجل)، و`restore_backups` (الاستعادة المؤكدة فقط). عرض الإعدادات لا يمنح ربط الجلسة أو إدارة النسخ، و`manage_backups` لا يمنح الاستعادة. لا يحصل `System Manager` على أي منهما تلقائيًا؛ `Administrator` هو الاستثناء الصريح.
+`view_factory_settings`, `edit_factory_cutting_defaults`, `edit_factory_cost_defaults`, `edit_factory_production_controls`, `edit_factory_print_identity`, `edit_factory_cnc_defaults` (إعدادات الريش الافتراضية لطبقات التشغيل وعينة ملف الماكينة، دون تعديل الملفات التشغيلية المحفوظة)، `manage_whatsapp_session` (إنشاء جلسة المصنع وربطها وإعادة الاتصال)، `edit_whatsapp_messages` (نصوص القياسات والفاتورة وإتمام المراحل)، `manage_backups` (الإعداد والجدولة والنسخ اليدوي واختبار SSH والسجل)، و`restore_backups` (الاستعادة المؤكدة فقط). عرض الإعدادات لا يمنح ربط الجلسة أو إدارة النسخ، و`manage_backups` لا يمنح الاستعادة. لا يحصل `System Manager` على أي منهما تلقائيًا؛ `Administrator` هو الاستثناء الصريح.
 
 اختيار نسخة للاستعادة يكون بمعرّف عملية محلية مكتملة من السجل، وليس بمسار يرسله العميل. يتحقق الخادم من نطاق ملفات النسخة وحجمها وchecksum، وينشئ نسخة أمان قبل استدعاء Frappe Restore. حقول SSH الحساسة من نوع `Password` وتبقى في مخزن Frappe المشفر؛ لا تُعاد قيمها إلى المتصفح أو السجل أو رسائل الخطأ.
 

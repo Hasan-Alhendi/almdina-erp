@@ -35,6 +35,7 @@ app_include_css = [
     "/assets/almdina_erp/css/door_cutting_order_extra_addons.css?v=46",
     "/assets/almdina_erp/css/door_cutting_order_glass_shape.css?v=1",
     "/assets/almdina_erp/css/door_cutting_order_final_price_approval.css?v=1",
+    "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=2",
     "/assets/almdina_erp/css/notes.css?v=1",
     "/assets/almdina_erp/css/notes_interactions.css?v=1",
 ]
