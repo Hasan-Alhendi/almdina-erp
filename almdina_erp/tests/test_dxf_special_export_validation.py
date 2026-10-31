@@ -176,6 +176,15 @@ class TestSpecialExportValidation(unittest.TestCase):
         self.assertEqual(trim_issue.params["actual_margin_mm"], 2)
         self.assertEqual(trim_issue.params["required_trim_mm"], 5)
 
+        snapshot["sheets"] = []
+        plan.snapshot_json = json.dumps(snapshot)
+        with patch.object(frappe, "get_doc", return_value=order, create=True):
+            missing_geometry_issues = validate_cutting_plan_issues(plan)
+        self.assertTrue(any(
+            error.code == "APPLIED_TRIM_OVERFLOW"
+            for error in missing_geometry_issues
+        ))
+
     def test_expected_snapshot_preserves_piece_type_from_manufacturing_requirements(self):
         plan, _, _, _ = _saved_plan(
             piece_type="Special", width_cm=30, length_cm=40
