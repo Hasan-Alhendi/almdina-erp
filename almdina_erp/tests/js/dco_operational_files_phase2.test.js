@@ -75,7 +75,7 @@ assert.ok(panel.includes("draggable"));
 assert.ok(panel.includes("Discard the unsaved changes?"));
 assert.ok(!panel.includes("GEOMETRY"));
 assert.ok(!panel.includes("G01"));
-assert.ok(panel.includes("generate_cnc_sheet_nc") || panel.includes("Prepare simulation NC") || panel.includes("data-cnc-generate-nc"));
+assert.ok(panel.includes("generate_cnc_sheet_nc") || panel.includes("Generate simulation NC") || panel.includes("data-cnc-generate-nc"));
 assert.ok(registry.includes("door_cutting_order_cutting_plan_renderer.js"));
 assert.ok(translations.includes("تقديم القص قد يؤدي إلى تحرك الدرفات بعد فصلها عن اللوح."));
 assert.ok(translations.includes("فتح إعدادات اللوح"));

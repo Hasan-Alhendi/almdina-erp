@@ -12,12 +12,16 @@ from typing import Any
 
 import frappe
 from frappe.utils import cint
+from frappe.utils.file_manager import save_file
 
 from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
     MachineProfileError,
     normalize_machine_profile,
 )
-from almdina_erp.almdina_erp.domain.cnc.operational_file import ApprovedPlanRef
+from almdina_erp.almdina_erp.domain.cnc.operational_file import (
+    ApprovedPlanRef,
+    generation_snapshot_is_complete,
+)
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATION_TYPES
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     approved_plan_for_order,
@@ -174,6 +178,7 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
         snapshot = document.generation_snapshot_json or {}
         if isinstance(snapshot, str):
             snapshot = json.loads(snapshot) if snapshot else {}
+        file_url = str(document.generated_file or "")
         rows.append(
             {
                 "name": document.name,
@@ -182,8 +187,15 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "plan_source_type": document.plan_source_type,
                 "sheet_no": cint(document.sheet_no),
                 "status": document.status,
+                "settings_fingerprint": str(document.settings_fingerprint or ""),
                 "generation_fingerprint": str((snapshot or {}).get("settings_fingerprint") or ""),
-                "generated_file": document.generated_file,
+                "generation_snapshot": dict(snapshot or {}),
+                "snapshot_complete": generation_snapshot_is_complete(snapshot),
+                "generated_file": file_url,
+                "file_present": private_generated_file_present(
+                    file_url,
+                    attached_to_name=str(document.name),
+                ),
                 "generated_by": document.generated_by,
                 "generated_on": document.generated_on,
                 "cut_path_early_confirmed": bool(cint(document.cut_path_early_confirmed)),
@@ -205,6 +217,122 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def private_generated_file_present(file_url: str, *, attached_to_name: str) -> bool:
+    """True when a private File is attached to this operational-file row."""
+
+    url = str(file_url or "").strip()
+    name = str(attached_to_name or "").strip()
+    if not url or not name:
+        return False
+    row = frappe.db.get_value(
+        "File",
+        {
+            "file_url": url,
+            "attached_to_doctype": "CNC Operational File",
+            "attached_to_name": name,
+            "is_private": 1,
+        },
+        ["name", "is_private"],
+        as_dict=True,
+    )
+    return bool(row and cint(row.is_private))
+
+
+def _snapshot_dict(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, Mapping):
+        return dict(raw)
+    if isinstance(raw, str) and raw.strip():
+        parsed = json.loads(raw)
+        return dict(parsed) if isinstance(parsed, Mapping) else {}
+    return {}
+
+
+def read_simulation_nc_bytes(
+    *,
+    operational_file_name: str,
+    expected_order: str,
+    file_url: str | None = None,
+) -> tuple[str, bytes]:
+    """Return (filename, content) for a scoped private Simulation NC attachment."""
+
+    document = _without_permission_check(
+        lambda: frappe.get_doc("CNC Operational File", operational_file_name)
+    )
+    if str(document.door_cutting_order or "") != str(expected_order or ""):
+        raise frappe.PermissionError("Operational file is outside the authorized order.")
+    snapshot = _snapshot_dict(document.generation_snapshot_json)
+    current = str(document.generated_file or "").strip()
+    previous = str(snapshot.get("previous_generated_file") or "").strip()
+    url = str(file_url or current or "").strip()
+    if not url:
+        raise frappe.ValidationError("No simulation NC file is stored for this sheet.")
+    allowed = {value for value in (current, previous) if value}
+    if url not in allowed:
+        raise frappe.PermissionError("File is not linked to this operational record.")
+    file_row = frappe.db.get_value(
+        "File",
+        {
+            "file_url": url,
+            "attached_to_doctype": "CNC Operational File",
+            "attached_to_name": str(document.name),
+            "is_private": 1,
+        },
+        ["name", "file_name", "is_private"],
+        as_dict=True,
+    )
+    if not file_row:
+        raise frappe.ValidationError("The stored simulation NC file could not be found.")
+    if not cint(file_row.is_private):
+        raise frappe.PermissionError("Public simulation NC downloads are not allowed.")
+    file_doc = _without_permission_check(lambda: frappe.get_doc("File", file_row.name))
+    content = file_doc.get_content()
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    return str(file_row.file_name or "sheet.sim.nc"), bytes(content or b"")
+
+
+def attach_simulation_nc(
+    *,
+    operational_file_name: str,
+    filename: str,
+    content: str | bytes,
+) -> str:
+    """Create a private File attached to the operational-file row. Does not update status."""
+
+    payload = content.encode("utf-8") if isinstance(content, str) else bytes(content or b"")
+    file_doc = save_file(
+        fname=str(filename),
+        content=payload,
+        dt="CNC Operational File",
+        dn=str(operational_file_name),
+        folder=None,
+        is_private=1,
+        df="generated_file",
+    )
+    if not cint(getattr(file_doc, "is_private", 0)):
+        try:
+            file_doc.delete(ignore_permissions=True)
+        except Exception:
+            frappe.log_error(title="CNC simulation NC public file cleanup failed")
+        raise frappe.ValidationError("Simulation NC must stay private.")
+    return str(file_doc.file_url)
+
+
+def discard_orphan_file(file_url: str) -> None:
+    """Best-effort cleanup when record update fails after File creation."""
+
+    url = str(file_url or "").strip()
+    if not url:
+        return
+    name = frappe.db.get_value("File", {"file_url": url}, "name")
+    if not name:
+        return
+    try:
+        _without_permission_check(lambda: frappe.get_doc("File", name).delete())
+    except Exception:
+        frappe.log_error(title="CNC simulation NC orphan cleanup failed")
 
 
 def known_tool_presets() -> dict[str, dict[str, Any]]:
@@ -313,13 +441,19 @@ def manufacturing_source(order: Any) -> dict[str, Any]:
     }
 
 
-def record_nc_generation(name: str, snapshot: Mapping[str, Any], file_url: str = "") -> None:
-    """Store the generation snapshot after a verified simulation NC export."""
+def record_nc_generation(name: str, snapshot: Mapping[str, Any], file_url: str) -> None:
+    """Store the generation snapshot only when a private NC file URL is present."""
 
+    url = str(file_url or "").strip()
+    if not url:
+        raise frappe.ValidationError("Generated status requires a stored simulation NC file.")
+    if not generation_snapshot_is_complete(snapshot):
+        raise frappe.ValidationError("Generation snapshot is incomplete.")
+    if not private_generated_file_present(url, attached_to_name=str(name)):
+        raise frappe.ValidationError("Generated status requires a private attached NC file.")
     document = _without_permission_check(lambda: frappe.get_doc("CNC Operational File", name))
     document.generation_snapshot_json = dict(snapshot or {})
-    if file_url:
-        document.generated_file = file_url
+    document.generated_file = url
     document.generated_by = frappe.session.user
     document.generated_on = frappe.utils.now_datetime()
     document.status = "Generated"
@@ -381,11 +515,15 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
 __all__ = [
     "approved_plan_ref",
     "approved_plan_snapshot",
+    "attach_simulation_nc",
+    "discard_orphan_file",
     "factory_operation_defaults",
     "known_tool_presets",
     "machine_profile_view",
     "manufacturing_source",
     "placed_piece_views",
+    "private_generated_file_present",
+    "read_simulation_nc_bytes",
     "record_nc_generation",
     "save_sheet",
     "saved_operational_files",

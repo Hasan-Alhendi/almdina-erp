@@ -309,15 +309,60 @@ def assert_viewed_plan_token(plan: ApprovedPlanRef | None, token: str | None) ->
         raise OperationalFileError("plan_not_current")
 
 
+def generation_snapshot_is_complete(snapshot: Mapping[str, Any] | None) -> bool:
+    """True when a generation snapshot carries the fields required for Generated."""
+
+    if not isinstance(snapshot, Mapping):
+        return False
+    required = (
+        "door_cutting_order",
+        "cutting_plan",
+        "plan_revision",
+        "sheet_no",
+        "settings_fingerprint",
+        "file_kind",
+        "content_sha256",
+        "post_processor_version",
+        "production",
+        "verification_ok",
+    )
+    for key in required:
+        if key not in snapshot:
+            return False
+    if str(snapshot.get("file_kind") or "") != "simulation":
+        return False
+    if snapshot.get("production") is True:
+        return False
+    if not str(snapshot.get("content_sha256") or "").strip():
+        return False
+    if not str(snapshot.get("settings_fingerprint") or "").strip():
+        return False
+    return True
+
+
 def effective_status(
     *,
     generation_fingerprint: str,
     current_fingerprint: str,
     stored_plan: tuple[str, int] | None,
     current_plan: tuple[str, int] | None,
+    generated_file: str = "",
+    file_present: bool | None = None,
+    snapshot_complete: bool | None = None,
 ) -> str:
-    """Return the file status without deleting a previous generation snapshot."""
+    """Return the file status without deleting a previous generation snapshot.
 
+    Generated requires a real persisted NC file reference. A fingerprint alone
+    never means the file is ready to download.
+    """
+
+    has_file = bool(str(generated_file or "").strip())
+    if file_present is False:
+        has_file = False
+    if not has_file:
+        return NOT_GENERATED
+    if snapshot_complete is False:
+        return NOT_GENERATED
     if not str(generation_fingerprint or "").strip():
         return NOT_GENERATED
     if stored_plan != current_plan:
@@ -480,6 +525,7 @@ __all__ = [
     "cut_path_precedes_internal",
     "default_operation_order",
     "effective_status",
+    "generation_snapshot_is_complete",
     "merge_operation_order",
     "resolve_operation_order",
     "settings_fingerprint",

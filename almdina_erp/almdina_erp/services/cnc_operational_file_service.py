@@ -8,6 +8,7 @@ post processor and is never treated as a workshop controller approval.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 import frappe
@@ -16,6 +17,11 @@ from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
+from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
+    build_generation_snapshot,
+    nc_content_sha256,
+    simulation_nc_filename,
+)
 from almdina_erp.almdina_erp.application.cnc.workspace import (
     build_operational_workspace,
     operational_board_layout,
@@ -24,7 +30,7 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
     assert_viewed_plan_token,
-    settings_fingerprint,
+    operation_preset_choice,
 )
 from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError
@@ -39,11 +45,14 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import DxfReadErr
 from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository import (
     approved_plan_ref,
     approved_plan_snapshot,
+    attach_simulation_nc,
+    discard_orphan_file,
     factory_operation_defaults,
     known_tool_presets,
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
+    read_simulation_nc_bytes,
     record_nc_generation,
     save_sheet,
     saved_operational_files,
@@ -114,6 +123,8 @@ _MESSAGES = {
     "toolpath_missing": "The approved drawing does not contain this machining path.",
     "cut_path_does_not_match_approved_centers": "The uploaded cut does not match the approved cutter centers.",
     "dxf_unreadable": "The operational drawing could not be read.",
+    "file_persist_failed": "The simulation NC file could not be stored.",
+    "generation_incomplete": "The simulation NC record could not be completed.",
 }
 
 
@@ -362,6 +373,55 @@ def _compile_authorized_program(
     return plan, payload, presets
 
 
+def _parse_sheet_settings(
+    operation_presets: str | dict[str, Any] | None,
+    path_overrides: str | dict[str, Any] | None,
+    operation_order: str | list[Any] | None,
+    operation_sources: str | dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], list[Any], dict[str, Any] | None]:
+    parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
+    parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
+    parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+    if operation_sources is None:
+        parsed_sources = None
+    else:
+        parsed_sources = frappe.parse_json(operation_sources) if isinstance(operation_sources, str) else dict(operation_sources)
+    if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list) or (
+        parsed_sources is not None and not isinstance(parsed_sources, dict)
+    ):
+        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    return parsed_operations, parsed_paths, parsed_order, parsed_sources
+
+
+def _settings_from_saved(
+    saved: Mapping[str, Any] | None,
+    factory_defaults: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, str], dict[str, str], list[str], bool, dict[str, str]]:
+    defaults = dict(factory_defaults or {})
+    rows = list((saved or {}).get("operations") or [])
+    operations: dict[str, str] = {}
+    sources: dict[str, str] = {}
+    order: list[str] = []
+    for row in sorted(rows, key=lambda item: int(item.get("sequence") or 0)):
+        key = str(row.get("operation_key") or "").strip()
+        if not key:
+            continue
+        chosen, source = operation_preset_choice(
+            row.get("tool_preset"),
+            row.get("preset_source"),
+            defaults.get(key, ""),
+        )
+        operations[key] = chosen
+        sources[key] = source
+        order.append(key)
+    paths = {
+        str(row.get("path_key") or ""): str(row.get("tool_preset") or "").strip()
+        for row in (saved or {}).get("paths") or []
+        if str(row.get("tool_preset") or "").strip()
+    }
+    return operations, paths, order, bool((saved or {}).get("cut_path_early_confirmed")), sources
+
+
 @frappe.whitelist()
 def generate_cnc_sheet_nc(
     order_name: str,
@@ -371,34 +431,63 @@ def generate_cnc_sheet_nc(
     operation_order: str | list[Any] | None = None,
     cut_path_early_confirmed: int | str | bool = 0,
     viewed_plan_token: str | None = None,
+    operation_sources: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Generate a verified simulation NC file for one sheet. Not production-approved."""
+    """Save sheet settings, then persist a verified Simulation NC file. Not production-approved."""
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
-    parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
-    parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
-    parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
-    if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list):
-        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    parsed_operations, parsed_paths, parsed_order, parsed_sources = _parse_sheet_settings(
+        operation_presets,
+        path_overrides,
+        operation_order,
+        operation_sources,
+    )
+    plan = approved_plan_ref(order)
+    existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    try:
+        assert_viewed_plan_token(plan, viewed_plan_token)
+        prepared = prepare_sheet_settings(
+            order_name=str(order.name),
+            approved_plan=plan,
+            plan_is_current=plan is not None,
+            pieces=placed_piece_views(order),
+            sheet_no=cint(sheet_no),
+            existing=existing,
+            operation_presets={str(key): value for key, value in parsed_operations.items()},
+            path_overrides={str(key): value for key, value in parsed_paths.items()},
+            known_presets=known_tool_presets(),
+            machine_profile=machine_profile_view(),
+            operation_order=[str(item) for item in parsed_order],
+            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
+            operation_sources=None if parsed_sources is None else {
+                str(key): value for key, value in parsed_sources.items()
+            },
+            factory_defaults=factory_operation_defaults(),
+        )
+    except (OperationalFileError, ToolPresetError) as exc:
+        frappe.throw(_message(exc.code), frappe.ValidationError)
+    operational_name = save_sheet(str((existing or {}).get("name") or ""), prepared)
+    saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    if not saved or str(saved.get("name") or "") != operational_name:
+        frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
+    operations, paths, order_keys, confirmed, _sources = _settings_from_saved(
+        saved,
+        factory_operation_defaults(),
+    )
     try:
         plan, program, presets = _compile_authorized_program(
             order,
             sheet_no=cint(sheet_no),
-            operation_presets=parsed_operations,
-            path_overrides=parsed_paths,
-            operation_order=parsed_order,
-            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
+            operation_presets=operations,
+            path_overrides=paths,
+            operation_order=order_keys,
+            cut_path_early_confirmed=confirmed,
             viewed_plan_token=viewed_plan_token,
         )
         machine = machine_profile_view()
-        fingerprint = settings_fingerprint(
-            operation_presets={str(key): value for key, value in parsed_operations.items()},
-            path_overrides={str(key): value for key, value in parsed_paths.items()},
-            presets=presets,
-            machine_profile=machine.get("fingerprint_payload") or {},
-            operation_order=[str(item) for item in parsed_order],
-            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
-        )
+        fingerprint = str(prepared["settings_fingerprint"])
+        if str(saved.get("settings_fingerprint") or "") != fingerprint:
+            frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
         package = build_simulation_nc(
             program,
             machine_profile={
@@ -413,26 +502,106 @@ def generate_cnc_sheet_nc(
         frappe.throw(_message(exc.code), frappe.ValidationError)
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
-    existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    if existing and existing.get("name"):
-        record_nc_generation(
-            str(existing["name"]),
-            {
-                "settings_fingerprint": fingerprint,
-                "post_processor_version": package["post_processor_version"],
-                "dialect": package["dialect"],
-                "production": False,
-                "verification": package.get("verification") or {},
-                "plan_revision": int(plan.revision),
-                "sheet_no": cint(sheet_no),
-            },
+
+    text = str(package.get("text") or "")
+    content_hash = nc_content_sha256(text)
+    package["content_sha256"] = content_hash
+    package["production"] = False
+    filename = simulation_nc_filename(
+        order_name=str(order.name),
+        cutting_plan=str(plan.name),
+        plan_revision=int(plan.revision),
+        sheet_no=cint(sheet_no),
+        content_sha256=content_hash,
+    )
+    previous_file = str(saved.get("generated_file") or "")
+    file_url = ""
+    try:
+        file_url = attach_simulation_nc(
+            operational_file_name=operational_name,
+            filename=filename,
+            content=text,
         )
+        snapshot = build_generation_snapshot(
+            order_name=str(order.name),
+            cutting_plan=str(plan.name),
+            plan_revision=int(plan.revision),
+            plan_source_type=str(plan.source_type or ""),
+            sheet_no=cint(sheet_no),
+            settings_fingerprint=fingerprint,
+            operation_presets=operations,
+            path_overrides=paths,
+            operation_order=order_keys,
+            cut_path_early_confirmed=confirmed,
+            known_presets=presets,
+            machine_profile={
+                **(machine.get("fingerprint_payload") or {}),
+                "production_approved": bool(machine.get("production_approved")),
+                "source_note": str(machine.get("source_note") or ""),
+            },
+            package=package,
+            program=program,
+            previous_generated_file=previous_file if previous_file != file_url else "",
+            generated_by=str(frappe.session.user or ""),
+            generated_on=str(frappe.utils.now_datetime()),
+        )
+        record_nc_generation(operational_name, snapshot, file_url)
+    except Exception as exc:
+        if file_url:
+            discard_orphan_file(file_url)
+        if isinstance(exc, frappe.ValidationError):
+            raise
+        frappe.throw(_message("file_persist_failed"), frappe.ValidationError)
+
+    workspace = _workspace_for(order, can_prepare=True)
+    sheet = next(
+        (
+            item
+            for item in workspace.get("sheets") or []
+            if int(item.get("sheet_no") or 0) == int(cint(sheet_no))
+        ),
+        None,
+    )
     package["message"] = _(
         "Simulation NC prepared. This file is not approved for a workshop machine."
     )
-    for issue in (package.get("verification") or {}).get("issues") or []:
-        pass
+    package["filename"] = filename
+    package["file_url"] = file_url
+    package["operational_file"] = operational_name
+    package["status"] = (sheet or {}).get("status") or "Generated"
+    package["workspace"] = workspace
+    package["download_method"] = "almdina_erp.almdina_erp.services.cnc_operational_file_service.download_cnc_sheet_nc"
     return package
+
+
+@frappe.whitelist()
+def download_cnc_sheet_nc(
+    order_name: str,
+    operational_file_name: str,
+    file_url: str | None = None,
+) -> None:
+    """Stream a private Simulation NC attachment after VIEW + order scope checks."""
+
+    order = _authorized_order(order_name, Capability.VIEW_CNC_OPERATIONAL_FILES)
+    name = str(operational_file_name or "").strip()
+    if not name:
+        frappe.throw(_("Operational file was not found."), frappe.ValidationError)
+    try:
+        filename, content = read_simulation_nc_bytes(
+            operational_file_name=name,
+            expected_order=str(order.name),
+            file_url=file_url,
+        )
+    except frappe.PermissionError:
+        frappe.throw(
+            _("You do not have permission to download this simulation NC file."),
+            frappe.PermissionError,
+        )
+    except frappe.ValidationError as exc:
+        frappe.throw(str(exc) or _("The simulation NC file could not be downloaded."), frappe.ValidationError)
+    frappe.local.response.filename = filename
+    frappe.local.response.filecontent = content
+    frappe.local.response.type = "download"
 
 
 def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any] | None:
@@ -449,6 +618,7 @@ def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any]
 
 
 __all__ = [
+    "download_cnc_sheet_nc",
     "generate_cnc_sheet_nc",
     "get_cnc_operational_workspace",
     "get_cnc_sheet_program",

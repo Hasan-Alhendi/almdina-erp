@@ -3283,3 +3283,20 @@ NC verification failed,فشل التحقق من NC
 "The simulation NC file could not be prepared.",تعذر تجهيز ملف NC للمحاكاة.
 simulation_dialect_only,لهجة المحاكاة فقط
 machine_origin_not_established,أصل الماكينة غير محدد
+Generate simulation NC,توليد NC تجريبي
+Download previous simulation NC,تنزيل النسخة السابقة من NC التجريبي
+Simulation NC is for review only. It is not approved for a workshop machine.,ملف NC التجريبي للمراجعة فقط. وهو غير معتمد لماكينة الورشة.
+The stored simulation NC needs regeneration.,ملف NC التجريبي المخزّن يحتاج إعادة توليد.
+"{0} geometry problems block simulation NC generation.",{0} مشاكل هندسية تمنع توليد NC التجريبي.
+Geometry is not ready, so simulation NC generation stays disabled.,الهندسة غير جاهزة، لذلك يبقى توليد NC التجريبي معطّلاً.
+The simulation NC file could not be stored.,تعذر حفظ ملف NC التجريبي.
+The simulation NC record could not be completed.,تعذر إكمال سجل NC التجريبي.
+No simulation NC file is stored for this sheet.,لا يوجد ملف NC تجريبي محفوظ لهذا اللوح.
+The stored simulation NC file could not be found.,تعذر العثور على ملف NC التجريبي المخزّن.
+You do not have permission to download this simulation NC file.,ليست لديك صلاحية تنزيل ملف NC التجريبي هذا.
+The simulation NC file could not be downloaded.,تعذر تنزيل ملف NC التجريبي.
+Public simulation NC downloads are not allowed.,تنزيل ملفات NC التجريبية العامة غير مسموح.
+Simulation NC must stay private.,يجب أن يبقى ملف NC التجريبي خاصًا.
+Generated status requires a stored simulation NC file.,حالة «تم التوليد» تتطلب ملف NC تجريبيًا محفوظًا.
+Generation snapshot is incomplete.,لقطة التوليد غير مكتملة.
+Generated status requires a private attached NC file.,حالة «تم التوليد» تتطلب مرفق NC خاصًا.

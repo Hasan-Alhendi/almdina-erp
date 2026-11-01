@@ -257,25 +257,50 @@ def test_status_asks_for_regeneration_without_deleting_the_previous_file():
         current_fingerprint=original,
         stored_plan=("PLAN-1", 1),
         current_plan=("PLAN-1", 1),
+        generated_file="/private/files/a.sim.nc",
     ) == NOT_GENERATED
     assert effective_status(
         generation_fingerprint=original,
         current_fingerprint=original,
         stored_plan=("PLAN-1", 1),
         current_plan=("PLAN-1", 1),
+    ) == NOT_GENERATED
+    assert effective_status(
+        generation_fingerprint=original,
+        current_fingerprint=original,
+        stored_plan=("PLAN-1", 1),
+        current_plan=("PLAN-1", 1),
+        generated_file="/private/files/a.sim.nc",
+        file_present=True,
+        snapshot_complete=True,
     ) == GENERATED
     assert effective_status(
         generation_fingerprint=original,
         current_fingerprint=changed,
         stored_plan=("PLAN-1", 1),
         current_plan=("PLAN-1", 1),
+        generated_file="/private/files/a.sim.nc",
+        file_present=True,
+        snapshot_complete=True,
     ) == NEEDS_REGENERATION
     assert effective_status(
         generation_fingerprint=original,
         current_fingerprint=original,
         stored_plan=("PLAN-1", 1),
         current_plan=("PLAN-1", 2),
+        generated_file="/private/files/a.sim.nc",
+        file_present=True,
+        snapshot_complete=True,
     ) == NEEDS_REGENERATION
+    assert effective_status(
+        generation_fingerprint=original,
+        current_fingerprint=original,
+        stored_plan=("PLAN-1", 1),
+        current_plan=("PLAN-1", 1),
+        generated_file="/private/files/a.sim.nc",
+        file_present=False,
+        snapshot_complete=True,
+    ) == NOT_GENERATED
 
 
 def test_sheet_assignment_rejects_conflicting_tools_and_unknown_paths():

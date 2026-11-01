@@ -254,6 +254,9 @@ def build_operational_workspace(
                 current_fingerprint=current_fingerprint,
                 stored_plan=(str(saved.get("cutting_plan") or ""), int(saved.get("plan_revision") or 0)),
                 current_plan=plan.identity,
+                generated_file=str(saved.get("generated_file") or ""),
+                file_present=saved.get("file_present"),
+                snapshot_complete=saved.get("snapshot_complete"),
             )
             operational_file = str(saved.get("name") or "")
             fingerprint = current_fingerprint
@@ -275,8 +278,19 @@ def build_operational_workspace(
                 ),
                 "paths": _path_rows(catalog, overrides if saved is not None else {}, labels),
                 "generated_file": str((saved or {}).get("generated_file") or ""),
+                "file_present": bool((saved or {}).get("file_present")),
+                "can_download_current": bool(
+                    (saved or {}).get("file_present")
+                    and str((saved or {}).get("generated_file") or "").strip()
+                    and status in {"Generated", "Needs Regeneration"}
+                ),
+                "download_is_previous": status == "Needs Regeneration"
+                and bool((saved or {}).get("file_present")),
                 "generated_by": str((saved or {}).get("generated_by") or ""),
                 "generated_on": (saved or {}).get("generated_on") or None,
+                "content_sha256": str(
+                    ((saved or {}).get("generation_snapshot") or {}).get("content_sha256") or ""
+                ),
             }
         )
 
@@ -291,8 +305,13 @@ def build_operational_workspace(
                 current_fingerprint="",
                 stored_plan=(str(row.get("cutting_plan") or ""), int(row.get("plan_revision") or 0)),
                 current_plan=plan.identity,
+                generated_file=str(row.get("generated_file") or ""),
+                file_present=row.get("file_present"),
+                snapshot_complete=row.get("snapshot_complete"),
             ),
             "generated_file": str(row.get("generated_file") or ""),
+            "file_present": bool(row.get("file_present")),
+            "can_download": bool(row.get("file_present") and str(row.get("generated_file") or "").strip()),
         }
         for row in saved_files
         if (str(row.get("cutting_plan") or ""), int(row.get("plan_revision") or 0)) != plan.identity
@@ -380,11 +399,15 @@ def prepare_sheet_settings(
         cut_path_early_confirmed=confirmed,
     )
     generation_fingerprint = str((existing or {}).get("generation_fingerprint") or "")
+    generated_file = str((existing or {}).get("generated_file") or "")
     status = effective_status(
         generation_fingerprint=generation_fingerprint,
         current_fingerprint=fingerprint,
         stored_plan=plan.identity,
         current_plan=plan.identity,
+        generated_file=generated_file,
+        file_present=(existing or {}).get("file_present"),
+        snapshot_complete=(existing or {}).get("snapshot_complete"),
     )
     return {
         "door_cutting_order": order_name,
@@ -406,7 +429,7 @@ def prepare_sheet_settings(
         ),
         "paths": _path_rows(catalog, assigned.path_overrides, _piece_labels(pieces)),
         "keep_generation_snapshot": bool(generation_fingerprint),
-        "generated_file": str((existing or {}).get("generated_file") or ""),
+        "generated_file": generated_file,
         "generated_by": str((existing or {}).get("generated_by") or ""),
         "generated_on": (existing or {}).get("generated_on"),
     }
