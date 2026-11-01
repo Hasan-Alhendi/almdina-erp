@@ -16,6 +16,8 @@ def pack_with_stable_kerf(
     board_h_cm: float,
     kerf_cm: float,
     args: tuple[Any, ...],
+    *,
+    discarded_direct_callback: Callable[[dict[str, Any], dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Keep the zero-kerf arrangement and widen its saw gaps when that still fits.
 
@@ -26,6 +28,9 @@ def pack_with_stable_kerf(
     then separating that arrangement preserves door order. The direct kerf
     pack remains the result when separation would add a board or leave a piece
     unplaced.
+
+    The optional research callback receives detached raw Direct/Expanded copies
+    only when Expanded wins. It does not select or evaluate either candidate.
     """
 
     kerf = max(0.0, num(kerf_cm))
@@ -41,6 +46,10 @@ def pack_with_stable_kerf(
         board_h_cm=board_h_cm,
     )
     if expanded is not None and _placement_quality(expanded) <= _placement_quality(direct):
+        if discarded_direct_callback is not None:
+            # Research-only observation: callbacks cannot mutate the chosen plan.
+            # These are raw packer coordinates; evaluate each copy once later.
+            discarded_direct_callback(deepcopy(direct), deepcopy(expanded))
         return expanded
     return direct
 

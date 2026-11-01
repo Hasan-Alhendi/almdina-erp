@@ -125,8 +125,16 @@ def _run_preordered_method(
     kerf_cm: float,
     method_key: str,
     ordering_label: str,
+    *,
+    discarded_direct_callback: Any = None,
 ) -> dict[str, Any]:
     label, packer, args, complexity = METHOD_CONFIGS[method_key]
+    capture = {}
+    if discarded_direct_callback is not None:
+        capture["discarded_direct_callback"] = lambda direct, expanded: discarded_direct_callback(
+            direct, expanded, dict(method_key=method_key, ordering_strategy=ordering_label,
+                complexity=complexity, piece_ids=tuple(p["id"] for p in ordered_pieces)),
+        )
     raw = pack_with_stable_kerf(
         packer,
         ordered_pieces,
@@ -134,6 +142,7 @@ def _run_preordered_method(
         board_h_cm,
         kerf_cm,
         args,
+        **capture,
     )
     plan = evaluate_plan(
         raw,
@@ -468,8 +477,11 @@ def auto_fast(
     board_h_cm: float,
     kerf_cm: float,
     machine_type: str = "Auto",
+    discarded_direct_callback: Any = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
+    capture = ({"discarded_direct_callback": discarded_direct_callback}
+               if discarded_direct_callback is not None else {})
     methods = _candidate_methods(machine_type)
     best: dict[str, Any] | None = None
     for method in methods:
@@ -479,6 +491,7 @@ def auto_fast(
             board_h_cm,
             kerf_cm,
             method,
+            **capture,
         )
         candidate = enrich_plan_metrics(
             candidate,
@@ -501,8 +514,11 @@ def auto_pro(
     board_h_cm: float,
     kerf_cm: float,
     machine_type: str = "Auto",
+    discarded_direct_callback: Any = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
+    capture = ({"discarded_direct_callback": discarded_direct_callback}
+               if discarded_direct_callback is not None else {})
     methods = _candidate_methods(machine_type)
     best: dict[str, Any] | None = None
     attempts = 0
@@ -522,6 +538,7 @@ def auto_pro(
                 kerf_cm,
                 method,
                 strategy,
+                **capture,
             )
             candidate = enrich_plan_metrics(
                 candidate,
@@ -547,6 +564,7 @@ def auto_pro(
                 kerf_cm,
                 method,
                 sequence_name,
+                **capture,
             )
             candidate = enrich_plan_metrics(
                 candidate,
@@ -576,8 +594,11 @@ def deep_search(
     candidate_callback: Any = None,
     known_orders: set | None = None,
     signature_key: Any = None,
+    discarded_direct_callback: Any = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
+    capture = ({"discarded_direct_callback": discarded_direct_callback}
+               if discarded_direct_callback is not None else {})
     started = time.monotonic()
     best = deepcopy(initial_plan) if initial_plan is not None else auto_pro(
         pieces,
@@ -585,6 +606,7 @@ def deep_search(
         board_h_cm,
         kerf_cm,
         machine_type,
+        **capture,
         **metric_kwargs,
     )
     attempts = int(best.get("attempts") or 0)
@@ -625,6 +647,7 @@ def deep_search(
             kerf_cm,
             method,
             f"seeded_restart_{attempts}",
+            **capture,
         )
         candidate = enrich_plan_metrics(
             candidate,
@@ -989,6 +1012,7 @@ def smart_search(
     kerf_cm: float, machine_type: str = "Auto", time_limit_sec: float = 10.0,
     exact_piece_limit: int = 40, mirroring_allowed: bool = False,
     seed_plans: tuple[dict[str, Any], ...] = (), search_round: int = 0,
+    discarded_direct_callback: Any = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     """Finish diverse seeds before selection; retain five distinct valid finals.
@@ -998,6 +1022,8 @@ def smart_search(
     all but a rectangular winner before shape/Glass passes. Warm finals survive
     every continuation even if the next search produces no improvement.
     """
+    capture = ({"discarded_direct_callback": discarded_direct_callback}
+               if discarded_direct_callback is not None else {})
     from .evaluation import placement_permission_errors
     started = time.monotonic()
     budget = max(0.0, float(time_limit_sec))
@@ -1034,7 +1060,7 @@ def smart_search(
                for sh in plan.get('sheets') or []):
             offer(enrich_plan_metrics(plan,str(plan.get('method_key') or ''),machine_type,**metric_kwargs))
     seed = (deepcopy(finals[0]) if finals else
-            auto_fast(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,**metric_kwargs))
+            auto_fast(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,**capture,**metric_kwargs))
     completed, attempts, trials = 0, int(seed.get('attempts') or 0), 0
     def finish(raw, share):
         nonlocal completed
@@ -1124,7 +1150,7 @@ def smart_search(
             if signature in seen_orders:
                 continue
             seen_orders.add(signature)
-            raw = _run_preordered_method(sequence,pieces,board_w_cm,board_h_cm,kerf_cm,method,name)
+            raw = _run_preordered_method(sequence,pieces,board_w_cm,board_h_cm,kerf_cm,method,name,**capture)
             trials += 1
             attempts += 1
             signature = _layout_signature(raw)
@@ -1146,7 +1172,7 @@ def smart_search(
         deep = deep_search(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,
             max(0,deadline-time.monotonic()),max_attempts=max(0,500-trials),
             initial_plan=warm,candidate_callback=deep_candidate,known_orders=seen_orders,
-            signature_key=packing_signature,**metric_kwargs)
+            signature_key=packing_signature,**capture,**metric_kwargs)
         attempts += int(deep.get('attempts') or 0)
         if completed<16 and time.monotonic()<deadline:
             finish(deep,max(0,deadline-time.monotonic())*.5)
