@@ -21,6 +21,22 @@
         return frappe.utils.escape_html(String(value == null ? "" : value));
     }
 
+    function frappeIcon(name) {
+        if (window.frappe && frappe.utils && typeof frappe.utils.icon === "function") {
+            return frappe.utils.icon(name, "sm", "", "", "currentColor", true);
+        }
+        return `<svg class="icon icon-sm abe-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-${esc(name)}"></use></svg>`;
+    }
+
+    function toolButton(className, iconName, label, options) {
+        const extra = options || {};
+        const disabled = extra.disabled ? " disabled" : "";
+        const pressed = extra.pressed == null ? "" : ` aria-pressed="${extra.pressed ? "true" : "false"}"`;
+        const title = extra.title || label;
+        const attrs = extra.attrs || "";
+        return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${frappeIcon(iconName)}</button>`;
+    }
+
     function aciToCss(aci, fallback) {
         const key = Number(aci);
         if (Number.isFinite(key) && ACI[key]) return ACI[key];
@@ -270,6 +286,7 @@
     const BOARD_TITLE_MM = 36;
     const FIT_PADDING_PX = 28;
     const SCENE_PAD_PX = 16;
+    const FLOAT_CLEARANCE_PX = 72;
     const SCALE_MIN = 0.02;
     const SCALE_MAX = 8;
     const GRID_WIDTH_RATIO = 0.625;
@@ -735,8 +752,7 @@
             1
         );
         const stageH = Math.max(
-            (previousStage && previousStage.clientHeight)
-                || Math.max((host.clientHeight || 480) - 56, 1),
+            (previousStage && previousStage.clientHeight) || host.clientHeight || 480,
             1
         );
         const boardWidths = sheets.map((sheet) => sheetSize(sheet).widthMm);
@@ -759,7 +775,7 @@
         const contentH = Math.max(
             stageH,
             Math.ceil(metrics.height * scale + SCENE_PAD_PX * 2)
-        );
+        ) + FLOAT_CLEARANCE_PX;
 
         const selectedKeys = new Set(selectedPieceKeys(storeView, session));
         const multiSelection = selectedKeys.size > 1;
@@ -1156,30 +1172,9 @@
             && session.boards[String(storeView.selectedSheetNo)]
         );
 
+        const magnetOn = storeView.magnetEnabled !== false;
+        const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
-            <div class="abe-canvas-toolbar" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
-                <div class="abe-canvas-tools">
-                    <button type="button" class="alm-btn-secondary abe-magnet${storeView.magnetEnabled !== false ? " is-active" : ""}" data-abe-magnet="1" aria-pressed="${storeView.magnetEnabled !== false ? "true" : "false"}" title="${esc(__("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."))}">
-                        <span class="abe-magnet-icon" aria-hidden="true">⌁</span>
-                        <span>${esc(__("Magnet"))}</span>
-                    </button>
-                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}">
-                        <span>${esc(__("Angle"))}</span>
-                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(__("Rotation angle in degrees"))}" />
-                        <span aria-hidden="true">°</span>
-                    </label>
-                    <button type="button" class="alm-btn-secondary abe-undo" ${storeView.canUndo ? "" : "disabled"}>${esc(__("Undo"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-redo" ${storeView.canRedo ? "" : "disabled"}>${esc(__("Redo"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-restore">${esc(__("Restore entry layout"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-remove-piece" ${canRemovePiece ? "" : "disabled"} title="${esc(removePieceTitle)}"><span aria-hidden="true">🗑</span> ${esc(__("Remove from distribution"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-remove-board" ${canRemoveBoard ? "" : "disabled"}>${esc(__("Remove board from distribution"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-fit-all">${esc(__("Fit all"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-zoom-in">${esc(__("Zoom in"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-zoom-out">${esc(__("Zoom out"))}</button>
-                    <span class="abe-canvas-hint">${esc(__("Click to select, long-press then drag to move. Drag the rotation handle for free angles. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet."))}</span>
-                </div>
-                <button type="button" class="alm-btn-secondary abe-back">${esc(__("Back to order"))}</button>
-            </div>
             ${dropNote}
             <div class="abe-canvas-stage" data-abe-stage="1">
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="${metrics.minX * scale} ${metrics.minY * scale} ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
@@ -1188,6 +1183,35 @@
                         ${body.join("")}
                     </g>
                 </svg>
+            </div>
+            <div class="abe-float-dock">
+                <div class="abe-canvas-tools abe-float-tools" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
+                    ${toolButton("abe-zoom-in", "zoom-in", __("Zoom in"))}
+                    ${toolButton("abe-zoom-out", "zoom-out", __("Zoom out"))}
+                    ${toolButton("abe-fit-all", "maximize-2", __("Fit all"))}
+                    ${toolSep}
+                    ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !storeView.canUndo })}
+                    ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !storeView.canRedo })}
+                    ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"))}
+                    ${toolSep}
+                    ${toolButton("abe-magnet" + (magnetOn ? " is-active" : ""), "magnet", __("Magnet"), {
+                        pressed: magnetOn,
+                        attrs: ` data-abe-magnet="1"`,
+                        title: __("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."),
+                    })}
+                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}">
+                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(__("Rotation angle in degrees"))}" title="${esc(__("Rotation angle in degrees"))}" />
+                        <span aria-hidden="true">°</span>
+                    </label>
+                    ${toolSep}
+                    ${toolButton("abe-remove-piece", "trash-2", __("Remove from distribution"), {
+                        disabled: !canRemovePiece,
+                        title: removePieceTitle,
+                    })}
+                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}
+                    ${toolSep}
+                    ${toolButton("abe-back", "arrow-left", __("Back to order"))}
+                </div>
             </div>
         `;
 
@@ -1212,6 +1236,15 @@
         host.querySelector(".abe-zoom-out").onclick = () => handlers && handlers.zoom && handlers.zoom(1 / 1.2);
         const back = host.querySelector(".abe-back");
         if (back) back.onclick = () => handlers && handlers.onBack && handlers.onBack();
+        const floatDock = host.querySelector(".abe-float-dock");
+        if (floatDock) {
+            floatDock.addEventListener("pointerdown", (event) => {
+                event.stopPropagation();
+            });
+            floatDock.addEventListener("wheel", (event) => {
+                event.stopPropagation();
+            });
+        }
         const magnet = host.querySelector("[data-abe-magnet]");
         if (magnet) {
             magnet.onclick = () => handlers && handlers.toggleMagnet && handlers.toggleMagnet();
@@ -1245,11 +1278,17 @@
                 }
             };
             angleInput.addEventListener("keydown", (event) => {
+                if (event.key === " " || event.code === "Space" || event.key === "Delete") {
+                    event.stopPropagation();
+                }
                 if (event.key === "Enter") {
                     event.preventDefault();
                     commitAngle();
                     angleInput.blur();
                 }
+            });
+            angleInput.addEventListener("wheel", (event) => {
+                event.stopPropagation();
             });
             angleInput.addEventListener("change", commitAngle);
         }
@@ -1386,6 +1425,7 @@
         clickTargetKeepsSelection,
         FIT_PADDING_PX,
         SCENE_PAD_PX,
+        FLOAT_CLEARANCE_PX,
         GRID_WIDTH_RATIO,
         BOARD_SCREEN_MIN_PX,
         BOARD_SCREEN_MAX_PX,

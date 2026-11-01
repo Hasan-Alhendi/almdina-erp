@@ -51,7 +51,9 @@ const controllerSource = fs.readFileSync(path.join(root, "public/js/board_editor
 const sidebarSource = fs.readFileSync(path.join(root, "public/js/board_editor/sidebar_renderer.js"), "utf8");
 assert.doesNotMatch(canvasSource, /abe-tool-select|abe-tool-move|data-abe-tool/);
 assert.doesNotMatch(controllerSource, /setTool/);
-assert.match(canvasSource, /long-press then drag to move/);
+assert.doesNotMatch(canvasSource, /long-press then drag to move/);
+assert.match(canvasSource, /beginPieceGesture/);
+assert.match(canvasSource, /abe-float-tools/);
 assert.match(controllerSource, /onPanIntent|pagehide|blur/);
 assert.match(sidebarSource, /data-layer-key|abe-piece-row/);
 assert.doesNotMatch(sidebarSource, /beginPieceGesture|LONG_PRESS/);

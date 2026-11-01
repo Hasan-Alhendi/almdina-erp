@@ -115,8 +115,140 @@ assert.match(controllerSource, /Space/);
 assert.doesNotMatch(cssSource, /min-height:\s*calc\(100vh/);
 assert.match(cssSource, /\.abe-canvas-stage[\s\S]*overflow:\s*auto/);
 assert.match(cssSource, /\.abe-canvas-tools/);
+assert.match(cssSource, /grid-template-columns:\s*270px/);
+assert.match(cssSource, /\.abe-float-dock[\s\S]*pointer-events:\s*none/);
+assert.match(cssSource, /\.abe-float-tools[\s\S]*pointer-events:\s*auto/);
+assert.match(cssSource, /overflow-x:\s*hidden/);
+assert.match(cssSource, /--alm-surface/);
+assert.match(cssSource, /--alm-shadow-sm/);
+assert.doesNotMatch(cssSource, /\.abe-canvas-toolbar/);
+assert.doesNotMatch(cssSource, /\.abe-canvas-hint/);
 assert.match(sidebarSource, /abe-layers-scroll/);
 assert.match(sidebarSource, /abe-tree-scroll/);
+assert.match(sidebarSource, /abe-layer-visibility/);
+assert.doesNotMatch(sidebarSource, /abe-layer-solo/);
+assert.doesNotMatch(sidebarSource, /abe-show-all/);
+assert.doesNotMatch(sidebarSource, /abe-hide-all/);
 assert.doesNotMatch(sidebarSource, /scrollIntoView/);
+assert.match(controllerSource, /abe-float-tools/);
+
+function chromeHost() {
+    return {
+        clientWidth: 900,
+        clientHeight: 640,
+        style: {},
+        __html: "",
+        set innerHTML(value) { this.__html = String(value); },
+        get innerHTML() { return this.__html; },
+        querySelector() {
+            return {
+                scrollTop: 0,
+                clientWidth: 900,
+                clientHeight: 640,
+                scrollLeft: 0,
+                scrollTop: 0,
+                classList: { add() {}, remove() {} },
+                style: {},
+                addEventListener() {},
+                setPointerCapture() {},
+                querySelector() { return null; },
+                querySelectorAll() { return []; },
+                getBoundingClientRect() {
+                    return { left: 0, top: 0, width: 900, height: 640, right: 900, bottom: 640 };
+                },
+            };
+        },
+        querySelectorAll() { return []; },
+    };
+}
+
+const canvasHost = chromeHost();
+renderer.render(canvasHost, {
+    projection: { layers: [], sheets: [{ sheet_no: 1, full_width_cm: 100, full_length_cm: 100 }], elements: [] },
+    session: null,
+    layerVisibility: {},
+    viewport: { scale: 0.4, opened: true, userAdjusted: true, columns: 1, cameraToken: 1, scrollX: 0, scrollY: 0 },
+    magnetEnabled: true,
+    canUndo: false,
+    canRedo: false,
+    selectedPieceKeys: [],
+    selectedSheetNo: null,
+    dropMessage: "",
+}, {});
+assert.equal(canvasHost.innerHTML.includes("abe-canvas-toolbar"), false);
+assert.equal(canvasHost.innerHTML.includes("abe-canvas-hint"), false);
+assert.equal(canvasHost.innerHTML.includes("Click to select"), false);
+assert.match(canvasHost.innerHTML, /abe-float-dock/);
+assert.match(canvasHost.innerHTML, /abe-float-tools/);
+assert.ok(canvasHost.innerHTML.indexOf("data-abe-stage") < canvasHost.innerHTML.indexOf("abe-float-dock"));
+assert.match(canvasHost.innerHTML, /#icon-zoom-in/);
+assert.match(canvasHost.innerHTML, /#icon-zoom-out/);
+assert.match(canvasHost.innerHTML, /#icon-maximize-2/);
+assert.match(canvasHost.innerHTML, /#icon-undo-2/);
+assert.match(canvasHost.innerHTML, /#icon-redo-2/);
+assert.match(canvasHost.innerHTML, /#icon-refresh-ccw/);
+assert.match(canvasHost.innerHTML, /#icon-magnet/);
+assert.match(canvasHost.innerHTML, /#icon-trash-2/);
+assert.match(canvasHost.innerHTML, /#icon-square-x/);
+assert.match(canvasHost.innerHTML, /#icon-arrow-left/);
+assert.match(canvasHost.innerHTML, /aria-pressed="true"/);
+assert.match(canvasHost.innerHTML, /aria-label="Rotation angle in degrees"/);
+assert.doesNotMatch(canvasHost.innerHTML, />Angle</);
+assert.match(canvasHost.innerHTML, /°/);
+const svgHeight = Number((canvasHost.innerHTML.match(/class="abe-svg"[^>]*height="(\d+)"/) || [])[1]);
+assert.ok(svgHeight >= 640 + renderer.FLOAT_CLEARANCE_PX);
+
+const sidebarApi = load("public/js/board_editor/sidebar_renderer.js");
+function sidebarHtml(visibility) {
+    const host = chromeHost();
+    sidebarApi.SidebarRenderer.render(host, {
+        projection: {
+            layers: [
+                { match_key: "A", original_name: "GEOMETRY", content_state: "empty", aci_color: 1 },
+                { match_key: "B", original_name: "CUT_PATH", content_state: "unavailable", aci_color: 3 },
+                { match_key: "C", original_name: "TEXT", content_state: "present", aci_color: 5 },
+            ],
+            sheets: [
+                { sheet_no: 1, resource_kind: "FULL_BOARD", pieces: [{ piece_id: 9, label: "A very long piece name that must stay readable" }] },
+                { sheet_no: 2, resource_kind: "OFFCUT", pieces: [] },
+            ],
+        },
+        layerVisibility: visibility,
+        expandedSheets: {},
+        selectedPieceKeys: [],
+        sidebarSplit: 0.4,
+    }, {});
+    return host.innerHTML;
+}
+const allVisible = sidebarHtml({ A: true, B: true, C: true });
+assert.match(allVisible, /data-abe-layer-action="hide-all"/);
+assert.match(allVisible, /data-abe-layer-state="all-visible"/);
+assert.match(allVisible, /#icon-eye-off/);
+assert.match(allVisible, /All layers are visible\. Hide all\./);
+const allHidden = sidebarHtml({ A: false, B: false, C: false });
+assert.match(allHidden, /data-abe-layer-action="show-all"/);
+assert.match(allHidden, /data-abe-layer-state="all-hidden"/);
+assert.match(allHidden, /#icon-eye"/);
+assert.match(allHidden, /All layers are hidden\. Show all\./);
+const mixed = sidebarHtml({ A: true, B: false, C: true });
+assert.match(mixed, /data-abe-layer-state="mixed"/);
+assert.match(mixed, /Some layers are hidden\. Show all\./);
+[allVisible, allHidden, mixed].forEach((html) => {
+    assert.equal(html.includes("abe-layer-solo"), false);
+    assert.equal(html.includes("abe-show-all"), false);
+    assert.equal(html.includes("abe-hide-all"), false);
+    assert.equal(html.includes("abe-layer-badge"), false);
+    assert.equal(html.includes(">Only<"), false);
+    assert.equal(html.includes(">Empty<"), false);
+    assert.equal(html.includes(">Unavailable<"), false);
+    assert.equal(html.includes(">FULL_BOARD<"), false);
+    assert.match(html, /data-resource-kind="FULL_BOARD"/);
+    assert.match(html, />OFFCUT</);
+    assert.match(html, /No content on this layer/);
+    assert.match(html, /Content is unavailable for this layer/);
+    assert.match(html, /A very long piece name/);
+    assert.match(html, /abe-sheet-chevron/);
+    assert.equal(html.includes("content_state"), false);
+});
 
 console.log("board editor layout contract passed");

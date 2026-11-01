@@ -392,6 +392,11 @@
 
         function onCanvasWheel(event) {
             if (!store || suspended || !CanvasRenderer.shouldZoomWheel(event)) return;
+            const target = event.target;
+            if (target && target.closest && target.closest(".abe-float-tools, .abe-angle-field, .abe-angle-input")) {
+                event.preventDefault();
+                return;
+            }
             let stage = null;
             try {
                 stage = ensureShell().querySelector("[data-abe-stage]");

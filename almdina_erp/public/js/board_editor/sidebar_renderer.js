@@ -19,11 +19,49 @@
         return map[Number(aci)] || "#98a2b3";
     }
 
-    function contentBadge(layer) {
+    function frappeIcon(name) {
+        if (window.frappe && frappe.utils && typeof frappe.utils.icon === "function") {
+            return frappe.utils.icon(name, "sm", "", "", "currentColor", true);
+        }
+        return `<svg class="icon icon-sm abe-tool-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-${esc(name)}"></use></svg>`;
+    }
+
+    function layerHint(layer, key) {
         const state = String(layer.content_state || "");
-        if (state === "empty") return `<span class="abe-layer-badge is-empty">${esc(__("Empty"))}</span>`;
-        if (state === "unavailable") return `<span class="abe-layer-badge is-unavailable">${esc(__("Unavailable"))}</span>`;
-        return "";
+        if (state === "empty") return __("No content on this layer");
+        if (state === "unavailable") return __("Content is unavailable for this layer");
+        return layer.original_name || key;
+    }
+
+    function layerVisibilityAction(layers, visibility) {
+        if (!layers.length) return null;
+        let visible = 0;
+        layers.forEach((layer) => {
+            const key = String(layer.match_key || "");
+            if (visibility[key] !== false) visible += 1;
+        });
+        if (visible === layers.length) {
+            return {
+                action: "hide-all",
+                state: "all-visible",
+                icon: "eye-off",
+                label: __("All layers are visible. Hide all."),
+            };
+        }
+        if (visible === 0) {
+            return {
+                action: "show-all",
+                state: "all-hidden",
+                icon: "eye",
+                label: __("All layers are hidden. Show all."),
+            };
+        }
+        return {
+            action: "show-all",
+            state: "mixed",
+            icon: "eye",
+            label: __("Some layers are hidden. Show all."),
+        };
     }
 
     function hostingHtml(node, depth, sheetNo, selectedKeys) {
@@ -34,7 +72,7 @@
             ? `<span class="abe-host-hint">${esc(__("Not editable"))}</span>`
             : "";
         const selected = selectedKeys && selectedKeys.has && selectedKeys.has(node.piece_key);
-        let html = `<button type="button" class="abe-piece-row${selected ? " is-selected" : ""}" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="${esc(sheetNo == null ? "" : sheetNo)}" style="padding-inline-start:${12 + indent * 14}px">
+        let html = `<button type="button" class="abe-piece-row${selected ? " is-selected" : ""}" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="${esc(sheetNo == null ? "" : sheetNo)}" style="padding-inline-start:${12 + indent * 14}px" title="${esc(label)}">
             <span class="abe-piece-label" dir="ltr">${esc(label)}</span>
             ${node.glass_host_piece_id != null ? `<span class="abe-host-hint">${esc(__("Hosted"))}</span>` : ""}
             ${locked}
@@ -57,12 +95,11 @@
         const layerRows = layers.map((layer) => {
             const key = String(layer.match_key || "");
             const checked = storeView.layerVisibility[key] !== false;
-            return `<label class="abe-layer-row">
+            const hint = layerHint(layer, key);
+            return `<label class="abe-layer-row" title="${esc(hint)}">
                 <input type="checkbox" data-layer-key="${esc(key)}" ${checked ? "checked" : ""}/>
                 <span class="abe-layer-swatch" style="background:${esc(aciSwatch(layer.aci_color))}" aria-hidden="true"></span>
-                <span class="abe-layer-name" dir="ltr">${esc(layer.original_name || key)}</span>
-                ${contentBadge(layer)}
-                <button type="button" class="abe-layer-solo" data-layer-solo="${esc(key)}" title="${esc(__("Show only this layer"))}">${esc(__("Only"))}</button>
+                <span class="abe-layer-name" dir="ltr" title="${esc(hint)}">${esc(layer.original_name || key)}</span>
             </label>`;
         }).join("");
 
@@ -88,15 +125,20 @@
                 const hosting = (sheet.hosting && sheet.hosting.roots) || [];
                 pieceButtons = hosting.length
                     ? hosting.map((node) => hostingHtml(node, 0, sheetNo, selectedKeySet)).join("")
-                    : (sheet.pieces || []).map((piece) => `<button type="button" class="abe-piece-row" data-piece-id="${esc(piece.piece_id)}" data-sheet-no="${esc(sheetNo)}">
+                    : (sheet.pieces || []).map((piece) => `<button type="button" class="abe-piece-row" data-piece-id="${esc(piece.piece_id)}" data-sheet-no="${esc(sheetNo)}" title="${esc(piece.label || piece.piece_id)}">
                         <span class="abe-piece-label" dir="ltr">${esc(piece.label || piece.piece_id)}</span>
                     </button>`).join("");
             }
-            return `<div class="abe-sheet-block${selected ? " is-selected" : ""}" data-sheet-block="${esc(sheetNo)}">
+            const resourceKind = String(sheet.resource_kind || "FULL_BOARD");
+            const sheetLabel = __("Sheet {0}", [sheetNo]);
+            const kindLabel = resourceKind.toUpperCase() === "FULL_BOARD"
+                ? ""
+                : `<span class="abe-sheet-kind" dir="ltr" title="${esc(resourceKind)}">${esc(resourceKind)}</span>`;
+            return `<div class="abe-sheet-block${selected ? " is-selected" : ""}" data-sheet-block="${esc(sheetNo)}" data-resource-kind="${esc(resourceKind)}">
                 <div class="abe-sheet-head">
                     <button type="button" class="abe-sheet-chevron" data-sheet-toggle="${esc(sheetNo)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "▾" : "▸"}</button>
-                    <button type="button" class="abe-sheet-title" data-sheet-select="${esc(sheetNo)}">${esc(__("Sheet {0}", [sheetNo]))}</button>
-                    <span class="abe-sheet-kind" dir="ltr">${esc(sheet.resource_kind || "FULL_BOARD")}</span>
+                    <button type="button" class="abe-sheet-title" data-sheet-select="${esc(sheetNo)}" title="${esc(sheetLabel)}">${esc(sheetLabel)}</button>
+                    ${kindLabel}
                 </div>
                 <div class="abe-sheet-body" ${expanded ? "" : "hidden"}>${pieceButtons || `<div class="abe-empty-inline">${esc(__("No pieces on this sheet"))}</div>`}</div>
             </div>`;
@@ -124,7 +166,7 @@
                 const indent = Math.max(0, Number(depth) || 0);
                 const guests = Array.isArray(node.guests) ? node.guests : [];
                 let html = `<div class="abe-excluded-row" style="padding-inline-start:${12 + indent * 14}px">
-                    <button type="button" class="abe-piece-row" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="">
+                    <button type="button" class="abe-piece-row" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="" title="${esc(node.label || node.piece_id || "")}">
                         <span class="abe-piece-label" dir="ltr">${esc(node.label || node.piece_id || "")}</span>
                         <span class="abe-host-hint">${esc(reasonText(node.exclusion_reason))}</span>
                     </button>
@@ -154,15 +196,16 @@
         const layersScrollTop = previousLayers ? previousLayers.scrollTop : 0;
         const treeScrollTop = previousTree ? previousTree.scrollTop : 0;
 
+        const layerAction = layerVisibilityAction(layers, storeView.layerVisibility || {});
+        const layerActionHtml = layerAction
+            ? `<button type="button" class="abe-layer-visibility" data-abe-layer-action="${esc(layerAction.action)}" data-abe-layer-state="${esc(layerAction.state)}" title="${esc(layerAction.label)}" aria-label="${esc(layerAction.label)}">${frappeIcon(layerAction.icon)}</button>`
+            : "";
         host.innerHTML = `
             <div class="abe-sidebar" style="--abe-split:${split}%">
                 <section class="abe-sidebar-section abe-layers-section" aria-label="${esc(__("DXF layers"))}">
                     <header class="abe-section-head">
                         <h2>${esc(__("DXF layers"))}</h2>
-                        <div class="abe-layer-actions">
-                            <button type="button" class="abe-show-all">${esc(__("Show all"))}</button>
-                            <button type="button" class="abe-hide-all">${esc(__("Hide all"))}</button>
-                        </div>
+                        <div class="abe-layer-actions">${layerActionHtml}</div>
                     </header>
                     <div class="abe-section-scroll abe-layers-scroll">${layerRows || `<div class="abe-empty-inline">${esc(__("No layers"))}</div>`}</div>
                 </section>
@@ -186,15 +229,13 @@
                 );
             });
         });
-        host.querySelectorAll("[data-layer-solo]").forEach((button) => {
-            button.addEventListener("click", () => {
-                handlers && handlers.showOnlyLayer && handlers.showOnlyLayer(button.getAttribute("data-layer-solo"));
-            });
-        });
-        const showAll = host.querySelector(".abe-show-all");
-        const hideAll = host.querySelector(".abe-hide-all");
-        if (showAll) showAll.onclick = () => handlers && handlers.setAllLayersVisible && handlers.setAllLayersVisible(true);
-        if (hideAll) hideAll.onclick = () => handlers && handlers.setAllLayersVisible && handlers.setAllLayersVisible(false);
+        const layerVisibility = host.querySelector(".abe-layer-visibility");
+        if (layerVisibility) {
+            layerVisibility.onclick = () => {
+                const hide = layerVisibility.getAttribute("data-abe-layer-action") === "hide-all";
+                handlers && handlers.setAllLayersVisible && handlers.setAllLayersVisible(!hide);
+            };
+        }
 
         host.querySelectorAll("[data-sheet-toggle]").forEach((button) => {
             button.addEventListener("click", () => handlers && handlers.toggleSheet && handlers.toggleSheet(button.getAttribute("data-sheet-toggle")));
