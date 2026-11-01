@@ -254,6 +254,35 @@ def machine_profile_view() -> dict[str, Any]:
     }
 
 
+def _dxf_disk_path(file_url: str) -> str | None:
+    import os
+    from pathlib import Path
+
+    normalized = str(file_url or "").strip().lstrip("/")
+    if not normalized or ".." in Path(normalized).parts:
+        return None
+    for candidate in (
+        frappe.get_site_path(normalized),
+        frappe.get_site_path("public", normalized),
+    ):
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def manufacturing_source(order: Any) -> dict[str, Any]:
+    """Return how the approved plan should be read. This does not export DXF."""
+
+    plan = approved_plan_for_order(order)
+    if plan is None:
+        return {"source_type": "", "saw_center_status": "", "dxf_path": None}
+    return {
+        "source_type": str(getattr(plan, "source_type", "") or ""),
+        "saw_center_status": str(getattr(plan, "saw_center_status", "") or "Unknown"),
+        "dxf_path": _dxf_disk_path(str(getattr(plan, "dxf_file", "") or "")),
+    }
+
+
 def sync_status(name: str, status: str) -> None:
     current = frappe.db.get_value("CNC Operational File", name, "status")
     if current == status:
@@ -311,6 +340,7 @@ __all__ = [
     "factory_operation_defaults",
     "known_tool_presets",
     "machine_profile_view",
+    "manufacturing_source",
     "placed_piece_views",
     "save_sheet",
     "saved_operational_files",

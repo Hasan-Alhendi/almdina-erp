@@ -13,6 +13,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.workspace import (
     build_operational_workspace,
     operational_board_layout,
@@ -28,12 +29,15 @@ from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import 
     document_has_capability,
     require_document_capability,
 )
+from almdina_erp.almdina_erp.infrastructure.cutting.cnc_dxf_source import read_operational_dxf
+from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import DxfReadError
 from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository import (
     approved_plan_ref,
     approved_plan_snapshot,
     factory_operation_defaults,
     known_tool_presets,
     machine_profile_view,
+    manufacturing_source,
     placed_piece_views,
     save_sheet,
     saved_operational_files,
@@ -70,6 +74,20 @@ _MESSAGES = {
     "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
     "operation_order_incomplete": "The operation order does not include every operation on this sheet.",
     "cut_path_early_unconfirmed": "Confirm the warning before saving a cut that comes before the internal operations.",
+    "units_unknown": "The drawing units are not millimetres, so the path was not prepared.",
+    "sheet_frame_unknown": "The sheet frame could not be established, so the path was not prepared.",
+    "kerf_unknown": "The kerf is missing, so cutter centers were not calculated.",
+    "finished_geometry_missing": "The approved plan has no finished geometry for this piece.",
+    "geometry_invalid": "This path geometry cannot be used.",
+    "region_not_supported": "This closed region needs a pocket, which this version does not machine.",
+    "cut_path_is_piece_boundary": "This cut is the piece boundary, not a cutter center.",
+    "compensation_unverified": "The cutter compensation for this path is not verified.",
+    "cut_side_unknown": "The cut side of this closed path is not known.",
+    "preset_missing": "This path has no tool preset.",
+    "shared_cut_preset_ambiguous": "A shared cut cannot use a different preset for each piece.",
+    "toolpath_missing": "The approved drawing does not contain this machining path.",
+    "cut_path_does_not_match_approved_centers": "The uploaded cut does not match the approved cutter centers.",
+    "dxf_unreadable": "The operational drawing could not be read.",
 }
 
 
@@ -196,6 +214,76 @@ def save_cnc_operational_sheet(
     return _workspace_for(order, can_prepare=True)
 
 
+def _describe_program(payload: dict[str, Any]) -> dict[str, Any]:
+    for issue in payload.get("issues") or []:
+        issue["message"] = _message(str(issue.get("code") or ""))
+    for operation in payload.get("operations") or []:
+        for path in operation.get("toolpaths") or []:
+            path["issue_messages"] = [_message(str(code)) for code in path.get("issues") or []]
+    return payload
+
+
+def _manufacturing_inputs(order: Any, sheet_no: int) -> tuple[str, dict[str, Any] | None]:
+    source = manufacturing_source(order)
+    status = source["saw_center_status"]
+    if source["source_type"] != "Uploaded DXF" or status == "Absent":
+        return "generated", None
+    mode = {
+        "Present": "uploaded_present",
+        "Legacy": "uploaded_legacy",
+    }.get(status, "uploaded_unknown")
+    path = source["dxf_path"]
+    if not path:
+        return mode, {"unreadable": True, "origin": None, "units": "mm", "cut_segments": [], "overlays": []}
+    try:
+        return mode, read_operational_dxf(path, sheet_no=sheet_no)
+    except DxfReadError:
+        return mode, {"unreadable": True, "origin": None, "units": "mm", "cut_segments": [], "overlays": []}
+
+
+@frappe.whitelist()
+def get_cnc_sheet_program(
+    order_name: str,
+    sheet_no: int | str,
+    operation_presets: str | dict[str, Any] | None = None,
+    path_overrides: str | dict[str, Any] | None = None,
+    operation_order: str | list[Any] | None = None,
+    cut_path_early_confirmed: int | str | bool = 0,
+    viewed_plan_token: str | None = None,
+) -> dict[str, Any]:
+    """Return a computed motion program. This does not save or write NC text."""
+
+    order = _authorized_order(order_name, Capability.VIEW_CNC_OPERATIONAL_FILES)
+    plan = approved_plan_ref(order)
+    if plan is None:
+        frappe.throw(_message("no_approved_plan"), frappe.ValidationError)
+    parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
+    parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
+    parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+    if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list):
+        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    try:
+        assert_viewed_plan_token(plan, viewed_plan_token)
+        mode, uploaded = _manufacturing_inputs(order, cint(sheet_no))
+        payload = compile_sheet_program(
+            sheet_no=cint(sheet_no),
+            pieces=placed_piece_views(order),
+            snapshot=approved_plan_snapshot(order),
+            operation_presets={str(key): value for key, value in parsed_operations.items()},
+            path_overrides={str(key): value for key, value in parsed_paths.items()},
+            operation_order=[str(item) for item in parsed_order],
+            known_presets=known_tool_presets(),
+            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
+            manufacturing_mode=mode,
+            uploaded=uploaded,
+        )
+    except OperationalFileError as exc:
+        frappe.throw(_message(exc.code), frappe.ValidationError)
+    except json.JSONDecodeError as exc:
+        raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
+    return _describe_program(payload)
+
+
 def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any] | None:
     if plan is None:
         return None
@@ -211,5 +299,6 @@ def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any]
 
 __all__ = [
     "get_cnc_operational_workspace",
+    "get_cnc_sheet_program",
     "save_cnc_operational_sheet",
 ]

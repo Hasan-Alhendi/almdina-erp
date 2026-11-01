@@ -35,7 +35,13 @@
         if (typeof __ === "function") {
             return replacements === undefined ? __(message) : __(message, replacements);
         }
-        return String(message == null ? "" : message);
+        let text = String(message == null ? "" : message);
+        if (Array.isArray(replacements)) {
+            replacements.forEach((value, index) => {
+                text = text.split(`{${index}}`).join(String(value));
+            });
+        }
+        return text;
     }
 
     function escapeHtml(value) {
@@ -349,6 +355,7 @@
             <div class="dco-operational-sheet__preview">
                 <div data-sheet-preview></div>
                 <p class="dco-operational-sheet__selection" role="status">${escapeHtml(selectionText(workspace, sheet, state))}</p>
+                <div data-cnc-program><p class="dco-cnc-program__note">${escapeHtml(translate("Preparing the machining preview..."))}</p></div>
             </div>
             <div class="dco-operational-sheet__settings">
                 <section>
@@ -368,6 +375,7 @@
         const preview = body.querySelector("[data-sheet-preview]");
         mountBoard(preview, board);
         highlightBoard(preview, sheet, state);
+        scheduleProgram(frm, dialog, workspace, sheet, state);
         preview.addEventListener("click", event => {
             const overlay = event.target.closest && event.target.closest("[data-overlay-kind]");
             const piece = event.target.closest && event.target.closest(".dco-piece");
@@ -636,10 +644,145 @@
         });
     }
 
+    const PROGRAM_COLORS = Object.freeze({
+        liner: "#1d4e89",
+        recessed_handle_cutout: "#c45c12",
+        back_groove: "#5c4d2e",
+        cut_path: "#a61b1b",
+    });
+    const DIRECTION_LABELS = Object.freeze({
+        ccw: "Counterclockwise",
+        cw: "Clockwise",
+        start_to_end: "Start to end",
+    });
+
+    function formatPoint(point) {
+        if (!Array.isArray(point) || point.length < 2) return "";
+        return `${Number(point[0]).toFixed(1)}, ${Number(point[1]).toFixed(1)}`;
+    }
+
+    function programMarkup(program) {
+        const drawing = program || {};
+        const width = Number(drawing.sheet_width_mm);
+        const length = Number(drawing.sheet_length_mm);
+        const operations = Array.isArray(drawing.operations) ? drawing.operations : [];
+        const boardIssues = Array.isArray(drawing.issues) ? drawing.issues : [];
+        const steps = [];
+        const paths = [];
+        let execution = 0;
+        operations.forEach(operation => {
+            (operation.toolpaths || []).forEach(path => {
+                execution += 1;
+                steps.push({ execution, operation, path });
+                if (Array.isArray(path.points) && path.points.length >= 2) paths.push({ execution, path });
+            });
+        });
+        const issueText = boardIssues.map(issue => issue && (issue.message || issue.code)).filter(Boolean);
+        const rows = steps.map(step => {
+            const path = step.path;
+            const preset = path.preset || {};
+            const depth = preset.final_depth_mm;
+            const passes = (path.motions || []).filter(motion => motion.kind === "plunge").length;
+            const messages = Array.isArray(path.issue_messages) && path.issue_messages.length
+                ? path.issue_messages
+                : (path.issues || []);
+            const details = [
+                operationLabel(path.operation_key),
+                path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"),
+                path.preset_name || translate("Not specified"),
+                depth ? translate("Depth {0} mm", [depth]) : "",
+                passes > 1 ? translate("{0} passes", [passes]) : "",
+                DIRECTION_LABELS[path.direction] ? translate(DIRECTION_LABELS[path.direction]) : "",
+                path.start ? `${translate("Path start")} ${formatPoint(path.start)}` : "",
+                path.end && !path.closed ? `${translate("Path end")} ${formatPoint(path.end)}` : "",
+            ].filter(Boolean).join(" · ");
+            const errors = messages.map(message => `<p class="dco-cnc-program__error">${escapeHtml(message)}</p>`).join("");
+            return `<li><span>${escapeHtml(step.execution)}</span> ${escapeHtml(details)}${errors}</li>`;
+        }).join("");
+        const boardError = issueText.map(message => `<p class="dco-cnc-program__error">${escapeHtml(message)}</p>`).join("");
+        const list = `<div class="dco-cnc-program">
+            <h4>${escapeHtml(translate("Machining preview"))}</h4>
+            ${boardError}
+            ${rows ? `<ol class="dco-cnc-program__steps">${rows}</ol>` : `<p class="dco-cnc-program__note">${escapeHtml(translate("The machining preview could not be prepared."))}</p>`}
+            <p class="dco-cnc-program__note">${escapeHtml(translate("This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file."))}</p>
+        </div>`;
+        let svg = "";
+        if (width > 0 && length > 0 && paths.length) {
+            const strokes = paths.map((item, index) => {
+                const color = PROGRAM_COLORS[item.path.operation_key] || "#333";
+                const points = item.path.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
+                const start = item.path.points[0];
+                return `<polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" marker-end="url(#cnc-arrow-${index})"/>
+                    <circle cx="${Number(start[0])}" cy="${Number(start[1])}" r="2.2" fill="${color}"/>
+                    ${item.path.closed || !item.path.end ? "" : `<rect x="${Number(item.path.end[0]) - 1.6}" y="${Number(item.path.end[1]) - 1.6}" width="3.2" height="3.2" fill="${color}"/>`}`;
+            }).join("");
+            const labels = paths.map(item => {
+                const start = item.path.points[0];
+                return `<text class="dco-cnc-program__label" x="${Number(start[0])}" y="${length - Number(start[1])}">${item.execution}</text>`;
+            }).join("");
+            const markers = paths.map((item, index) => {
+                const color = PROGRAM_COLORS[item.path.operation_key] || "#333";
+                return `<marker id="cnc-arrow-${index}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="${color}"/></marker>`;
+            }).join("");
+            svg = `<svg class="dco-cnc-program__drawing" viewBox="0 0 ${width} ${length}" preserveAspectRatio="none" aria-hidden="true"><defs>${markers}</defs><g transform="translate(0,${length}) scale(1,-1)">${strokes}</g>${labels}</svg>`;
+        }
+        return { list, drawing: svg };
+    }
+
+    function paintProgram(dialog, program) {
+        const root = dialogRoot(dialog);
+        const host = root && root.querySelector("[data-cnc-program]");
+        if (!host) return;
+        const markup = programMarkup(program);
+        host.innerHTML = markup.list;
+        const board = root.querySelector(".dco-sheet-board");
+        if (!board) return;
+        const previous = board.querySelector(".dco-cnc-program__drawing");
+        if (previous) previous.remove();
+        if (markup.drawing) board.insertAdjacentHTML("beforeend", markup.drawing);
+    }
+
+    function scheduleProgram(frm, dialog, workspace, sheet, state) {
+        if (!window.frappe || typeof frappe.call !== "function" || !frm || !frm.doc || !frm.doc.name) return;
+        const request = (dialog._cncProgramRequest || 0) + 1;
+        dialog._cncProgramRequest = request;
+        const token = stateSnapshot(state);
+        const overrides = {};
+        Object.keys(state.overrides || {}).forEach(key => {
+            if (state.overrides[key]) overrides[key] = state.overrides[key];
+        });
+        frappe.call({
+            method: `${METHOD}.get_cnc_sheet_program`,
+            args: {
+                order_name: frm.doc.name,
+                sheet_no: sheet.sheet_no,
+                operation_presets: state.operations,
+                path_overrides: overrides,
+                operation_order: state.order,
+                cut_path_early_confirmed: state.confirmed ? 1 : 0,
+                viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
+            },
+            callback(response) {
+                if (dialog._cncProgramRequest !== request) return;
+                const live = dialog._almdinaSheet;
+                if (!live || stateSnapshot(live.state) !== token) return;
+                paintProgram(dialog, (response && response.message) || {});
+            },
+            error() {
+                if (dialog._cncProgramRequest !== request) return;
+                const root = dialogRoot(dialog);
+                const host = root && root.querySelector("[data-cnc-program]");
+                if (!host) return;
+                host.innerHTML = `<p class="dco-cnc-program__note" role="alert">${escapeHtml(translate("The machining preview could not be prepared."))}</p>`;
+            },
+        });
+    }
+
     window.AlmdinaOperationalFilesUX = Object.freeze({
         render,
         cutPathIsEarly,
         effectivePreset,
         toolConflict,
+        programMarkup,
     });
 })();

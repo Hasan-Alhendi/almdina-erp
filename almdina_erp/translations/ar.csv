@@ -3179,3 +3179,28 @@ The operation order does not include every operation on this sheet.,ترتيب �
 Confirm the warning before saving a cut that comes before the internal operations.,أكّد التنبيه قبل حفظ قص يسبق عمليات التشغيل الداخلية.
 Cut Path Early Confirmation,تأكيد تقديم القص
 "Records that this sheet's cut was placed before an internal operation. It does not waive later generation checks.",يسجّل أن قص هذا اللوح وُضع قبل عملية تشغيل داخلية. لا يلغي فحوص التوليد اللاحقة.
+Preparing the machining preview...,جارٍ تجهيز معاينة التشغيل...
+The machining preview could not be prepared.,تعذر تجهيز معاينة التشغيل.
+Machining preview,معاينة التشغيل
+"Depth {0} mm",العمق {0} مم
+"{0} passes",{0} تمريرات
+Counterclockwise,عكس عقارب الساعة
+Clockwise,مع عقارب الساعة
+Start to end,من البداية إلى النهاية
+Path start,بداية المسار
+Path end,نهاية المسار
+"This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file.",هذه المعاينة تستخدم أعماقًا موجبة بالمليمتر. أصل الماكينة غير محدد، لذا هذه ليست ملف ماكينة.
+"The drawing units are not millimetres, so the path was not prepared.",وحدات الرسم ليست بالمليمتر، لذلك لم يُجهَّز المسار.
+"The sheet frame could not be established, so the path was not prepared.",تعذر تحديد إطار اللوح، لذلك لم يُجهَّز المسار.
+"The kerf is missing, so cutter centers were not calculated.",سماكة القص غير موجودة، لذلك لم تُحسب مراكز الريشة.
+The approved plan has no finished geometry for this piece.,الخطة المعتمدة لا تحتوي هندسة نهائية لهذه الدرفة.
+This path geometry cannot be used.,لا يمكن استخدام هندسة هذا المسار.
+"This closed region needs a pocket, which this version does not machine.",هذه المنطقة المغلقة تحتاج تفريغًا، وهذه النسخة لا تشغّله.
+"This cut is the piece boundary, not a cutter center.",هذا القص هو حد الدرفة وليس مركز الريشة.
+The cutter compensation for this path is not verified.,تعويض الريشة لهذا المسار غير مؤكد.
+The cut side of this closed path is not known.,جهة القص لهذا المسار المغلق غير معروفة.
+This path has no tool preset.,هذا المسار بلا إعداد ريشة.
+A shared cut cannot use a different preset for each piece.,القص المشترك لا يقبل إعدادًا مختلفًا لكل درفة.
+The approved drawing does not contain this machining path.,الرسم المعتمد لا يحتوي مسار التشغيل هذا.
+The uploaded cut does not match the approved cutter centers.,القص المرفوع لا يطابق مراكز الريشة المعتمدة.
+The operational drawing could not be read.,تعذر قراءة رسم التشغيل.
