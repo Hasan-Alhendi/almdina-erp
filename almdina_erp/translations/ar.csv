@@ -3025,3 +3025,128 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+Board layout editor,محرر توزيع القطع على الألواح
+Open board editor,فتح محرر الألواح
+"View and select only. Moving, rotating, and saving layouts are not available in this version.",العرض والتحديد فقط. التحريك والتدوير وحفظ التوزيع غير متاحة في هذا الإصدار.
+Back to order,العودة إلى الطلب
+Loading board editor…,جارٍ فتح محرر الألواح…
+"Preparing layers, boards, and pieces.",تجهيز الطبقات والألواح والقطع.
+DXF layers,طبقات DXF
+Boards and pieces,الألواح والقطع
+Show all,إظهار الكل
+Hide all,إخفاء الكل
+Show only this layer,إظهار هذه الطبقة فقط
+Only,فقط
+Empty,فارغة
+Unavailable,غير متاحة
+Sheet {0},اللوح {0}
+No pieces on this sheet,لا توجد قطع على هذا اللوح
+Unplaced pieces,قطع غير موزعة
+No layers,لا توجد طبقات
+No boards,لا توجد ألواح
+Fit all,ملاءمة الكل
+Zoom in,تكبير
+Zoom out,تصغير
+Canvas tools,أدوات مساحة العرض
+Board layout canvas,مساحة عرض توزيع الألواح
+"Drag to pan. Display only — no move or save in this version.",اسحب للتحريك ضمن العرض. للعرض فقط — لا تحريك للقطع ولا حفظ في هذا الإصدار.
+"Scroll to move. Hold Space and drag to pan. Display only — no move or save in this version.",مرّر للانتقال. اضغط المسافة واسحب للتحريك. للعرض فقط — لا تحريك للقطع ولا حفظ في هذا الإصدار.
+Incomplete board editor link,رابط محرر الألواح غير مكتمل
+Open the board editor from a cutting plan tab on the order.,افتح محرر الألواح من تبويب خطة القص في الطلب.
+Permission denied,رفض الصلاحية
+You do not have permission to open this cutting plan in the board editor.,لا تملك صلاحية فتح خطة القص هذه في محرر الألواح.
+Cutting plan unavailable,خطة القص غير متاحة
+The selected cutting plan is not available for this order.,خطة القص المحددة غير متاحة لهذا الطلب.
+Could not load the board editor,تعذر تحميل محرر الألواح
+Reload the page or return to the order and try again.,أعد تحميل الصفحة أو ارجع إلى الطلب ثم حاول مجددًا.
+Could not load the board editor. Reload the page and try again.,تعذر تحميل محرر الألواح. أعد تحميل الصفحة ثم حاول مجددًا.
+No board editor data,لا توجد بيانات لمحرر الألواح
+The selected cutting plan has no displayable geometry.,خطة القص المحددة لا تحتوي على هندسة قابلة للعرض.
+Hosted,مستضافة
+Resize sidebar sections,تغيير ارتفاع أقسام الشريط الجانبي
+Order name is required.,يجب تحديد اسم الطلب.
+Cutting plan name is required.,يجب تحديد اسم خطة القص.
+The selected cutting plan is not available.,خطة القص المحددة غير متاحة.
+The selected cutting plan does not belong to this order.,خطة القص المحددة لا تتبع هذا الطلب.
+You do not have permission to view the cutting plan for this order.,لا تملك صلاحية عرض خطة القص لهذا الطلب.
+This uploaded plan has no attached DXF file.,هذه الخطة المرفوعة لا تحتوي على ملف DXF مرفق.
+The original DXF could not be opened for layer display.,تعذر فتح ملف DXF الأصلي لعرض الطبقات.
+The original DXF could not be parsed for board-editor display.,تعذر تحليل ملف DXF الأصلي لعرض محرر الألواح.
+An unsupported DXF entity type was skipped for display.,تم تخطي نوع عنصر DXF غير مدعوم عند العرض.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Select,تحديد
+Move,تحريك
+Undo,تراجع
+Redo,إعادة
+Restore entry layout,استعادة توزيع الدخول
+"Session trial only — moves stay in this editor and are not saved. Hold Space or middle-click to pan.",تجريبي داخل الجلسة فقط — التحريك لا يُحفظ. اضغط المسافة أو الزر الأوسط للتحريك.
+Outside boards,خارج الألواح
+Not editable,غير قابلة للتحرير
+"Special geometry unavailable — not editable",هندسة خاصة غير متاحة — غير قابلة للتحرير
+"Drop rejected: the piece crosses a board edge.",رُفض الإفلات: القطعة تعبر حافة لوح.
+"Drop rejected: the piece overlaps more than one board.",رُفض الإفلات: القطعة تتقاطع مع أكثر من لوح.
+"Drop rejected: the piece overlaps another piece.",رُفض الإفلات: القطعة تتداخل مع قطعة أخرى.
+"Drop rejected: kerf clearance is insufficient.",رُفض الإفلات: مسافة القص (Kerf) غير كافية.
+"Drop rejected: boards would overlap.",رُفض الإفلات: الألواح ستتراكب.
+"This piece cannot be moved in the session.",لا يمكن تحريك هذه القطعة في الجلسة.
+Drop rejected.,رُفض الإفلات.
+"Click to select, long-press then drag to move. Session-only — not saved. Space or middle-click to pan.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك.
+Magnet,المغنطة
+"Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass.",المغنطة: محاذاة القطع مع حدود اللوح والقطع المجاورة أثناء السحب. Alt للتجاوز المؤقت.
+"Click to select, long-press then drag to move. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+"Click to select, long-press then drag to move. Drag the rotation handle for free angles. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. اسحب مقبض الدوران لزوايا حرة. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+Angle,الزاوية
+Rotation angle in degrees,زاوية الدوران بالدرجات
+Rotation rejected.,رُفض الدوران.
+"Rotation is not allowed for this piece.",الدوران غير مسموح لهذه القطعة.
+"A nested piece does not allow rotation.",قطعة متداخلة لا تسمح بالدوران.
+"Special geometry unavailable — not rotatable.",الهندسة الخاصة غير متاحة — لا يمكن التدوير.
+"Incomplete geometry — not rotatable.",هندسة غير مكتملة — لا يمكن التدوير.
+"Guest must remain inside the host opening.",يجب أن يبقى الضيف داخل فتحة المضيف.
+"Enter a valid angle in degrees.",أدخل زاوية صالحة بالدرجات.
+"Piece would leave the usable board area.",القطعة ستخرج من المساحة الصالحة للوح.
+"Click to select, long-press then drag to move. Drag the rotation handle for free angles. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. اسحب مقبض الدوران لزوايا حرة. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+Angle,الزاوية
+Rotation angle in degrees,زاوية الدوران بالدرجات
+Rotation rejected.,رُفض الدوران.
+"Rotation is not allowed for this piece.",الدوران غير مسموح لهذه القطعة.
+"A nested piece does not allow rotation.",قطعة متداخلة لا تسمح بالدوران.
+"Special geometry unavailable — not rotatable.",هندسة خاصة غير متاحة — لا يمكن التدوير.
+"Incomplete geometry — not rotatable.",هندسة غير مكتملة — لا يمكن التدوير.
+"Guest must remain inside the host opening.",يجب أن يبقى الضيف داخل فتحة المضيف.
+"Enter a valid angle in degrees.",أدخل زاوية صالحة بالدرجات.
+"Piece would leave the usable board area.",القطعة ستخرج من المساحة الصالحة للوح.
+Cutting plan recalculation in progress,إعادة حساب خطة القص جارية
+"This editor still shows the previous plan snapshot. It will refresh when the calculation finishes — without running the optimizer from here.",ما زال المحرر يعرض لقطة الخطة السابقة. سيُحدَّث عند انتهاء الحساب — دون تشغيل المحسّن من هنا.
+Check again,تحقق مجددًا
+Historical cutting plan,خطة قص تاريخية
+"This snapshot is read-only history. Opening it does not change the approved or system plan.",هذه لقطة تاريخية للقراءة فقط. فتحها لا يغيّر الخطة المعتمدة أو خطة النظام.
+Cutting plan is out of date,خطة القص غير محدّثة
+"Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout.",تغيّرت قياسات الطلب بعد هذه الخطة. أعد حساب خطة القص من الطلب ثم افتح المحرر مجددًا. هذا العرض ليس التوزيع الجديد.
+Plan source changed while editing,تغيّر مصدر الخطة أثناء التحرير
+"Local move/rotate changes are still in this session. Reload to take the updated plan and lose those edits, or go back to the order.",ما زالت تعديلات التحريك/الدوران في هذه الجلسة. أعد التحميل لاعتماد الخطة المحدّثة وفقدان تلك التعديلات، أو ارجع إلى الطلب.
+Reload and discard local edits,إعادة التحميل وإهمال التعديلات المحلية
+Cutting plan mismatch,عدم تطابق خطة القص
+"The server returned a different cutting plan than the one requested. Return to the order and open the editor again.",أعاد الخادم خطة قص مختلفة عن المطلوبة. ارجع إلى الطلب وافتح المحرر مجددًا.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Retry,إعادة المحاولة
+Cutting plan recalculation in progress,جارٍ إعادة حساب خطة القص
+This editor still shows the previous plan snapshot. It will refresh when the calculation finishes — without running the optimizer from here.,لا يزال المحرر يعرض لقطة الخطة السابقة. سيُحدَّث عند انتهاء الحساب — دون تشغيل المحسّن من هنا.
+Check again,تحقق مجددًا
+Historical cutting plan,خطة قص تاريخية
+This snapshot is read-only history. Opening it does not change the approved or system plan.,هذه اللقطة تاريخية للقراءة فقط. فتحها لا يغيّر الخطة المعتمدة أو خطة النظام.
+Cutting plan is out of date,خطة القص غير محدّثة
+Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout.,تغيّرت قياسات الطلب بعد هذه الخطة. أعد حساب خطة القص من الطلب ثم افتح المحرر مجددًا. هذا العرض ليس التوزيع الجديد.
+Plan source changed while editing,تغيّر مصدر الخطة أثناء التعديل
+Local move/rotate changes are still in this session. Reload to take the updated plan and lose those edits, or go back to the order.,ما زالت تعديلات التحريك/الدوران المحلية في هذه الجلسة. أعد التحميل لأخذ الخطة المحدّثة مع فقدان تلك التعديلات، أو ارجع إلى الطلب.
+Reload and discard local edits,أعد التحميل وتخلَّ عن التعديلات المحلية
+Cutting plan mismatch,عدم تطابق خطة القص
+The server returned a different cutting plan than the one requested. Return to the order and open the editor again.,أعاد الخادم خطة قص مختلفة عن المطلوبة. ارجع إلى الطلب وافتح المحرر مجددًا.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Remove from distribution,إزالة من التوزيع
+Remove the selected piece from this session layout. The order row stays unchanged.,أزل القطعة المحددة من توزيع هذه الجلسة. صف الطلب يبقى كما هو.
+Remove board from distribution,إزالة اللوح من التوزيع
+Excluded from distribution,مستبعدة من التوزيع
+Removed from the layout,أُزيلت من التوزيع
+Removed with the host,أُزيلت مع المضيف
+Return to staging,إعادة إلى مساحة التجهيز

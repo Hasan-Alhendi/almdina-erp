@@ -206,6 +206,39 @@
         );
     }
 
+    function canOpenBoardEditor(frm, row) {
+        const caps = workspaceCapabilities(frm);
+        const tab = activeTab(frm);
+        const tabCapability = tab === "Custom"
+            ? "view_uploaded_cutting_plan"
+            : tab === "Approved"
+                ? "view_approved_cutting_plan"
+                : "view_system_cutting_plan";
+        const tabCapOk = tab === "Custom"
+            ? caps.view_uploaded
+            : tab === "Approved"
+                ? caps.view_approved
+                : caps.view_system;
+        return Boolean(
+            !isEditing(frm)
+            && row
+            && String(row.name || "").trim()
+            && rowHasPlan(row)
+            && can(frm, "view_cutting_plan")
+            && can(frm, tabCapability)
+            && tabCapOk
+        );
+    }
+
+    function runOpenBoardEditor(frm) {
+        const row = rowForTab(frm);
+        if (!canOpenBoardEditor(frm, row)) return;
+        const orderName = String((frm.doc && frm.doc.name) || "").trim();
+        const planName = String((row && row.name) || "").trim();
+        if (!orderName || !planName) return;
+        frappe.set_route("board-editor", orderName, planName);
+    }
+
     function canExport(frm, row) {
         const caps = workspaceCapabilities(frm);
         const archiveOnly = isHistoricalRow(frm, row)
@@ -523,6 +556,9 @@
 
     function toolsHtml(frm, row) {
         const tab = activeTab(frm);
+        const boardEditor = canOpenBoardEditor(frm, row)
+            ? `<button type="button" class="btn btn-default btn-sm dco-open-board-editor"><span aria-hidden="true">▦</span>${esc(translate("Open board editor"))}</button>`
+            : "";
         const print = canPrint(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(translate("Print"))}</button>`
             : "";
@@ -532,7 +568,7 @@
         const upload = canUpload(frm)
             ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan"><span aria-hidden="true">↑</span>${esc(uploadedFile(frm) ? translate("Replace the uploaded plan") : translate("Upload a DXF plan"))}</button>`
             : "";
-        return `${upload}${exportDxf}${print}`;
+        return `${boardEditor}${upload}${exportDxf}${print}`;
     }
 
     function render(frm, host) {
@@ -574,6 +610,7 @@
 
         target.find(".dco-plan-context-approve").off("click").on("click", () => runApproval(frm));
         target.find(".dco-plan-context-cancel").off("click").on("click", () => runCancelApproval(frm));
+        target.find(".dco-open-board-editor").off("click").on("click", () => runOpenBoardEditor(frm));
         target.find(".dco-print-cutting-plan").off("click").on("click", () => runPrint(frm));
         target.find(".dco-export-dxf").off("click").on("click", () => runExport(frm));
         target.find(".dco-upload-dxf-plan").off("click").on("click", () => runUpload(frm));

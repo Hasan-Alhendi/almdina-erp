@@ -172,36 +172,28 @@
         return String((frm && frm.doc && frm.doc.default_edge_type) || "").trim();
     }
 
+    function edgeDisplay() {
+        const api = window.AlmdinaEdgeDisplay;
+        if (!api) throw new Error("Cutting plan edge display is unavailable");
+        return api;
+    }
+
     function edgeTypeIsNonDefault(effectiveType, defaultType) {
-        const effective = String(effectiveType || "").trim();
-        const fallback = String(defaultType || "").trim();
-        if (!effective) return false;
-        return effective !== fallback;
+        return edgeDisplay().edgeTypeIsNonDefault(effectiveType, defaultType);
     }
 
     function effectiveSideEdgeType(frm, piece, side) {
-        if (!piece || !EDGE_SIDE_SELECTED[side] || !piece[EDGE_SIDE_SELECTED[side]]) return "";
-        const banding = window.AlmdinaMultiEdgeBanding;
-        if (banding && typeof banding.effectiveType === "function") {
-            return String(banding.effectiveType(frm, piece, side) || "").trim();
-        }
-        const override = String(piece[EDGE_SIDE_OVERRIDE[side]] || "").trim();
-        return override || defaultEdgeTypeName(frm);
+        return edgeDisplay().effectiveSideEdgeType(piece, side, defaultEdgeTypeName(frm));
     }
 
     function sideEdgeIsNonDefault(frm, piece, side) {
-        return edgeTypeIsNonDefault(
-            effectiveSideEdgeType(frm, piece, side),
-            defaultEdgeTypeName(frm),
-        );
+        return edgeDisplay().sideIsCustom(piece, side, defaultEdgeTypeName(frm));
     }
 
     function breakEdgeIsNonDefault(frm, piece) {
-        if (!piece || !(piece.edge_break || piece.edge_break_only)) return false;
         // Inner L / clipped break follows the same resolver as cut dimensions:
         // row.edge_type, else order default — not a per-side override field.
-        const effective = String(piece.edge_type || "").trim() || defaultEdgeTypeName(frm);
-        return edgeTypeIsNonDefault(effective, defaultEdgeTypeName(frm));
+        return edgeDisplay().breakIsCustom(piece, defaultEdgeTypeName(frm));
     }
 
     function pieceWithEdgeTypeSpec(frm, piece) {
@@ -226,61 +218,15 @@
     }
 
     function mapSemanticSidesToDisplay(semantic, piece, geometryModel = null) {
-        let left = semantic.long_left ? 1 : 0;
-        let right = semantic.long_right ? 1 : 0;
-        let top = semantic.width_top ? 1 : 0;
-        let bottom = semantic.width_bottom ? 1 : 0;
-
-        if (geometryModel && geometryModel.source === "dxf"
-            && Number.isInteger(piece.rotation_quarter_turns)) {
-            // Imported DXF geometry is already physically oriented. Rotate
-            // the original semantic bands only, never its stored contour.
-            const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
-            for (let turn = 0; turn < turns; turn += 1) {
-                const previous = { left, top, right, bottom };
-                left = previous.bottom;
-                top = previous.left;
-                right = previous.top;
-                bottom = previous.right;
-            }
-        } else if (piece.rotated) {
-            // 90 degrees clockwise, preserving the physical edge meaning.
-            top = semantic.long_left ? 1 : 0;
-            bottom = semantic.long_right ? 1 : 0;
-            right = semantic.width_top ? 1 : 0;
-            left = semantic.width_bottom ? 1 : 0;
-        }
-
-        return {
-            left,
-            right,
-            top,
-            bottom,
-            edgeBreak: semantic.edgeBreak ? 1 : 0,
-            edgeBreakOnly: semantic.edgeBreakOnly ? 1 : 0,
-        };
+        return edgeDisplay().mapSemanticSidesToDisplay(semantic, piece, geometryModel);
     }
 
     function piece_edge_flags(piece, geometryModel = null) {
-        return mapSemanticSidesToDisplay({
-            long_left: piece.edge_long_left,
-            long_right: piece.edge_long_right,
-            width_top: piece.edge_width_top,
-            width_bottom: piece.edge_width_bottom,
-            edgeBreak: piece.edge_break,
-            edgeBreakOnly: piece.edge_break_only,
-        }, piece, geometryModel);
+        return edgeDisplay().pieceEdgeFlags(piece, geometryModel);
     }
 
     function piece_edge_custom_flags(frm, piece, geometryModel = null) {
-        return mapSemanticSidesToDisplay({
-            long_left: sideEdgeIsNonDefault(frm, piece, "long_left"),
-            long_right: sideEdgeIsNonDefault(frm, piece, "long_right"),
-            width_top: sideEdgeIsNonDefault(frm, piece, "width_top"),
-            width_bottom: sideEdgeIsNonDefault(frm, piece, "width_bottom"),
-            edgeBreak: breakEdgeIsNonDefault(frm, piece),
-            edgeBreakOnly: breakEdgeIsNonDefault(frm, piece),
-        }, piece, geometryModel);
+        return edgeDisplay().pieceEdgeCustomFlags(piece, defaultEdgeTypeName(frm), geometryModel);
     }
 
     function svgEdgeLineMarkup(x1, y1, x2, y2, custom) {
@@ -1383,52 +1329,16 @@
 
     function resolvedTrimCm(plan, sheet, axis) {
         // Usable-frame coordinates. Physical inset is this trim. An explicit
-        // sheet value, including 0, wins. A missing value is recovered from
-        // full - usable before the plan-level applied trim, so a plan-wide 0
-        // does not hide a sheet that recovered leftover edge space.
-        const trimKey = axis === "x" ? "applied_trim_width_cm" : "applied_trim_length_cm";
-        const fullKey = axis === "x" ? "full_width_cm" : "full_length_cm";
-        const usableKey = axis === "x" ? "usable_width_cm" : "usable_length_cm";
-        const sizeKey = axis === "x" ? "w" : "h";
-        const planFullKey = axis === "x" ? "full_board_width_cm" : "full_board_length_cm";
-        const planUsableKey = axis === "x" ? "usable_board_width_cm" : "usable_board_length_cm";
-        if (hasOwn(sheet, trimKey)) return Math.max(0, num(sheet[trimKey]));
-        const sheetFull = num(sheet && sheet[fullKey]);
-        const sheetUsable = num(sheet && sheet[usableKey]) || num(sheet && sheet[sizeKey]);
-        if (sheetFull > sheetUsable && sheetUsable > 0) return (sheetFull - sheetUsable) / 2;
-        if (hasOwn(plan, trimKey)) return Math.max(0, num(plan[trimKey]));
-        const planFull = num(plan && plan[planFullKey]);
-        const planUsable = num(plan && plan[planUsableKey]);
-        if (planFull > planUsable && planUsable > 0) return (planFull - planUsable) / 2;
-        return Math.max(0, num(plan && plan.trim_cm));
-    }
-
-    function roundMm(value) {
-        return Math.round(num(value) * 1000) / 1000;
+        // sheet value, including 0, wins. The shared display module owns the rule.
+        return edgeDisplay().resolvedTrimCm(plan, sheet, axis);
     }
 
     function physicalMarginsMm(plan, sheet) {
-        const pieces = (sheet && sheet.pieces) || [];
-        const trimW = resolvedTrimCm(plan, sheet, "x");
-        const trimH = resolvedTrimCm(plan, sheet, "y");
-        const fullW = num(sheet && sheet.full_width_cm) || num(plan && plan.full_board_width_cm);
-        const fullH = num(sheet && sheet.full_length_cm) || num(plan && plan.full_board_length_cm);
-        if (!pieces.length) return { left: 0, right: 0, top: 0, bottom: 0 };
-        const minX = Math.min(...pieces.map(piece => num(piece.x)));
-        const maxX = Math.max(...pieces.map(piece => num(piece.x) + num(piece.w)));
-        const minY = Math.min(...pieces.map(piece => num(piece.y)));
-        const maxY = Math.max(...pieces.map(piece => num(piece.y) + num(piece.h)));
-        return {
-            left: roundMm((trimW + minX) * 10),
-            right: roundMm((fullW - trimW - maxX) * 10),
-            top: roundMm((trimH + minY) * 10),
-            bottom: roundMm((fullH - trimH - maxY) * 10),
-        };
+        return edgeDisplay().physicalMarginsMm(plan, sheet);
     }
 
     function originalEdges(plan, sheet) {
-        const margins = physicalMarginsMm(plan, sheet);
-        return ["right", "left", "top", "bottom"].filter(edge => Math.abs(margins[edge]) <= 0.001);
+        return edgeDisplay().originalEdges(plan, sheet);
     }
 
     function sheetBoardFrame(plan, sheet, frm) {

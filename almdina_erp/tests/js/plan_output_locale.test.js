@@ -212,6 +212,7 @@ for (const relative of geometryFiles) {
     vm.runInContext(fs.readFileSync(path.join(root, relative), "utf8"), context, { filename: relative });
 }
 for (const name of [
+    "door_cutting_order_edge_display.js",
     "door_cutting_order_cutting_plan_renderer.js",
     "door_cutting_order_plan_tabs_ux.js",
     "door_cutting_order_plan_source_presentation.js",

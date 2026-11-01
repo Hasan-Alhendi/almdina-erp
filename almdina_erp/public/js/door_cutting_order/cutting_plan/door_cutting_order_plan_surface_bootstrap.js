@@ -11,6 +11,10 @@
             asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js",
         }),
         Object.freeze({
+            global: "AlmdinaEdgeDisplay",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js",
+        }),
+        Object.freeze({
             global: "AlmdinaCuttingPlanRender",
             asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         }),
