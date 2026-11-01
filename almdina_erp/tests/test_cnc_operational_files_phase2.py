@@ -314,6 +314,7 @@ def test_phase2_surface_does_not_generate_nc_or_recompute_cutting():
     assert "draggable" in panel
     assert "Cutting first may let the pieces move" in panel
     assert "G01" not in panel
-    assert ".nc" not in panel
-    assert "Download" not in panel
+    assert "generate_cnc_sheet_nc" in panel
+    assert "Download simulation NC" in panel
+    assert "not approved for a workshop machine" in panel
     assert Capability.VIEW_CNC_OPERATIONAL_FILES

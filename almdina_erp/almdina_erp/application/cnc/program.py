@@ -485,6 +485,8 @@ def compile_sheet_program(
         path_overrides=path_overrides,
         known_presets=known_presets,
         blocked_path=blocked_path,
+        manufacturing_mode=mode,
+        require_upload_match=mode == _PRESENT and use_file_overlays,
     )
     extracted = {entity.path_key for entity in entities if entity.path_key}
     extracted_cut = any(entity.layer.upper() == "CUT_PATH" for entity in entities)
@@ -639,7 +641,7 @@ def _append_snapshot_overlays(
             seen[base] = seen.get(base, 0) + 1
             path_key = base if seen[base] == 1 else f"{base}:{seen[base]}"
             closed = bool(geometry.get("closed"))
-            toolpath = bool(geometry.get("toolpath")) and not closed
+            verified_center = bool(geometry.get("toolpath")) and not closed
             points = _to_sheet(path, trim_x=trim_x, trim_y=trim_y, length_mm=length_mm)
             if points is None:
                 entities.append(
@@ -656,13 +658,19 @@ def _append_snapshot_overlays(
                     )
                 )
                 continue
+            if closed:
+                role = "region_boundary"
+            elif verified_center:
+                role = "tool_center"
+            else:
+                role = "mill_path_unverified"
             entities.append(
                 _entity(
                     layer=EXTRA_OVERLAY_LAYER_BY_KIND[kind],
                     points=points,
                     closed=closed,
                     entity_type="LINE" if str(geometry.get("entity_type") or "").upper() == "LINE" else "LWPOLYLINE",
-                    role="tool_center" if (toolpath or not closed) else "region_boundary",
+                    role=role,
                     ring="open" if not closed else "unknown",
                     path_key=path_key,
                     piece_id=piece_id,
@@ -698,6 +706,7 @@ def _placement(piece: Mapping[str, Any]) -> dict[str, Any] | None:
         "x_mm": origin_x,
         "y_mm": origin_y,
         "quarter_turns": piece_quarter_turns(piece),
+        "mirrored": bool(int(piece.get("corner_mirrored") or 0)),
         "clipped_corner_position": str(piece.get("clipped_corner_position") or "Top Right"),
         "clipped_corner_width_cm": _number(piece.get("clipped_corner_width_cm")) or 0.0,
         "clipped_corner_length_cm": _number(piece.get("clipped_corner_length_cm")) or 0.0,
@@ -764,7 +773,7 @@ def _place_mill_path(
     for point in path:
         turned = transform_point(
             (float(point[0]), float(point[1])),
-            mirrored=False,
+            mirrored=bool(placement.get("mirrored")),
             quarter_turns=int(placement["quarter_turns"]),
             width=width,
             height=height,
@@ -790,7 +799,7 @@ def _to_canonical(
         canonical.append(
             inverse_transform_point(
                 local,
-                mirrored=False,
+                mirrored=bool(placement.get("mirrored")),
                 quarter_turns=int(placement["quarter_turns"]),
                 width=width,
                 height=height,
@@ -921,6 +930,48 @@ def _bind_mill_paths(
     return bindings, {key for key in catalog_keys if key not in used}, merged
 
 
+def _effective_mill_diameter(
+    catalog_keys: Sequence[str],
+    kind: str,
+    operation_presets: Mapping[str, str],
+    path_overrides: Mapping[str, str],
+    known_presets: Mapping[str, Mapping[str, Any]],
+) -> float | None | str:
+    """Return one diameter, None when missing, or ``conflict`` when paths disagree."""
+
+    keys = list(catalog_keys) or [""]
+    diameters: set[float] = set()
+    for key in keys:
+        name = str(path_overrides.get(key) or operation_presets.get(kind) or "").strip()
+        diameter = _preset_diameter(name, known_presets)
+        if diameter is None:
+            return None
+        diameters.add(round(diameter, 3))
+    if len(diameters) != 1:
+        return "conflict"
+    return next(iter(diameters))
+
+
+def _uploaded_matches_generated(
+    existing: Sequence[CncSourceEntity],
+    generated_sheet: Sequence[Sequence[tuple[float, float]]],
+) -> bool:
+    uploaded = [entity.points for entity in existing if len(entity.points) >= 2]
+    if not uploaded:
+        return False
+    unused = list(range(len(uploaded)))
+    for expected in generated_sheet:
+        found = None
+        for index in unused:
+            if _same_polyline(uploaded[index], expected):
+                found = index
+                break
+        if found is None:
+            return False
+        unused.remove(found)
+    return not unused
+
+
 def _apply_parametric_mills(
     entities: list[CncSourceEntity],
     pieces: Sequence[Mapping[str, Any]],
@@ -934,6 +985,8 @@ def _apply_parametric_mills(
     path_overrides: Mapping[str, str],
     known_presets: Mapping[str, Mapping[str, Any]],
     blocked_path,
+    manufacturing_mode: str = _GENERATED,
+    require_upload_match: bool = False,
 ) -> set[str]:
     """Replace a mill outline with the existing cutter-center path when it can be calculated."""
 
@@ -963,6 +1016,8 @@ def _apply_parametric_mills(
             existing = _layer_entities(entities, piece_id, layer)
             if not catalog_keys and not existing:
                 continue
+            if manufacturing_mode in {_LEGACY, _UNKNOWN}:
+                continue
             open_centers = [
                 entity for entity in existing if not entity.closed and entity.role == "tool_center"
             ]
@@ -973,7 +1028,14 @@ def _apply_parametric_mills(
                 for key in catalog_keys:
                     blocked_path("mill_placement_unknown", key)
                 continue
-            diameter = _preset_diameter(str(operation_presets.get(kind) or ""), known_presets)
+            diameter = _effective_mill_diameter(
+                catalog_keys, kind, operation_presets, path_overrides, known_presets
+            )
+            if diameter == "conflict":
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys:
+                    blocked_path("tool_diameter_conflict", key)
+                continue
             if diameter is None:
                 if open_centers:
                     continue
@@ -989,13 +1051,14 @@ def _apply_parametric_mills(
                 float(placement["clipped_corner_width_cm"]),
                 float(placement["clipped_corner_length_cm"]),
             )
+            mirrored = bool(placement.get("mirrored"))
             try:
                 sawn = [
                     sawn_liner_ends(
                         liner_piece,
                         spec["side"],
                         origin_mm=(placement["x_mm"], placement["y_mm"]),
-                        mirrored=False,
+                        mirrored=mirrored,
                         quarter_turns=placement["quarter_turns"],
                         board=board,
                         start_cm=spec["start_cm"],
@@ -1012,7 +1075,7 @@ def _apply_parametric_mills(
                         width_cm=float(width_cm),
                         start_cm=spec["start_cm"],
                         length_cm=spec["length_cm"],
-                        cutter_diameter_mm=diameter,
+                        cutter_diameter_mm=float(diameter),
                         start_sawn=sawn[index][0],
                         end_sawn=sawn[index][1],
                     )
@@ -1023,7 +1086,7 @@ def _apply_parametric_mills(
                         piece=liner_piece,
                         specs=specs,
                         width_cm=float(width_cm),
-                        cutter_diameter_mm=diameter,
+                        cutter_diameter_mm=float(diameter),
                         start_sawn=[item[0] for item in sawn],
                         end_sawn=[item[1] for item in sawn],
                     )
@@ -1039,6 +1102,34 @@ def _apply_parametric_mills(
                 _drop_layer(entities, piece_id, layer)
                 for key in catalog_keys:
                     blocked_path("mill_parameters_missing", key)
+                continue
+            sheet_generated = []
+            for path in generated:
+                sheet_points = _place_mill_path(
+                    path,
+                    placement,
+                    trim_x=trim_x,
+                    trim_y=trim_y,
+                    length_mm=length_mm,
+                )
+                if not sheet_points:
+                    sheet_generated = []
+                    break
+                sheet_generated.append(sheet_points)
+            if not sheet_generated:
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys:
+                    blocked_path("geometry_invalid", key)
+                continue
+            if require_upload_match and existing:
+                if not _uploaded_matches_generated(existing, sheet_generated):
+                    _drop_layer(entities, piece_id, layer)
+                    for key in catalog_keys or [f"{kind}:{piece_id}:primary"]:
+                        blocked_path("mill_upload_mismatch", key)
+                    continue
+            elif require_upload_match and not existing:
+                for key in catalog_keys:
+                    blocked_path("toolpath_missing", key)
                 continue
             overlay_keys = _overlay_spec_keys(
                 existing,
@@ -1061,21 +1152,11 @@ def _apply_parametric_mills(
                 for key in catalog_keys
             )
             _drop_layer(entities, piece_id, layer)
-            for path, key in zip(generated, bindings):
-                sheet_points = _place_mill_path(
-                    path,
-                    placement,
-                    trim_x=trim_x,
-                    trim_y=trim_y,
-                    length_mm=length_mm,
-                )
-                if not sheet_points:
-                    blocked_path("geometry_invalid", key)
-                    continue
+            for path, key in zip(sheet_generated, bindings):
                 entities.append(
                     _entity(
                         layer=layer,
-                        points=sheet_points,
+                        points=path,
                         closed=False,
                         entity_type="LWPOLYLINE",
                         role="merged_mill_preset_ambiguous" if ambiguous else "tool_center",

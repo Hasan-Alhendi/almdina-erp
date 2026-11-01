@@ -100,11 +100,22 @@ def placed_piece_views(order: Any) -> list[dict[str, Any]]:
                 "x_mm": getattr(piece, "x_mm", 0),
                 "y_mm": getattr(piece, "y_mm", 0),
                 "rotated": cint(getattr(piece, "rotated", 0)),
+                "rotation_quarter_turns": cint(
+                    stored.get("rotation_quarter_turns")
+                    if stored.get("rotation_quarter_turns") is not None
+                    else stored.get("corner_rotation_quarter_turns")
+                    if stored.get("corner_rotation_quarter_turns") is not None
+                    else (1 if cint(getattr(piece, "rotated", 0)) else 0)
+                ),
+                "corner_mirrored": cint(
+                    stored.get("corner_mirrored")
+                    if stored.get("corner_mirrored") is not None
+                    else getattr(piece, "corner_mirrored", 0)
+                ),
                 "clipped_corner_position": getattr(piece, "clipped_corner_position", "") or "",
                 "clipped_corner_width_cm": getattr(piece, "clipped_corner_width_cm", 0),
                 "clipped_corner_length_cm": getattr(piece, "clipped_corner_length_cm", 0),
-                "label": str(stored.get("label") or ""),
-                "label": str(stored.get("label") or ""),
+                "label": str(stored.get("label") or getattr(piece, "piece_label", "") or ""),
                 "geometry": geometry,
                 "overlays": overlays,
             }
@@ -302,6 +313,20 @@ def manufacturing_source(order: Any) -> dict[str, Any]:
     }
 
 
+def record_nc_generation(name: str, snapshot: Mapping[str, Any], file_url: str = "") -> None:
+    """Store the generation snapshot after a verified simulation NC export."""
+
+    document = _without_permission_check(lambda: frappe.get_doc("CNC Operational File", name))
+    document.generation_snapshot_json = dict(snapshot or {})
+    if file_url:
+        document.generated_file = file_url
+    document.generated_by = frappe.session.user
+    document.generated_on = frappe.utils.now_datetime()
+    document.status = "Generated"
+    document.flags.ignore_permissions = True
+    document.save()
+
+
 def sync_status(name: str, status: str) -> None:
     current = frappe.db.get_value("CNC Operational File", name, "status")
     if current == status:
@@ -361,6 +386,7 @@ __all__ = [
     "machine_profile_view",
     "manufacturing_source",
     "placed_piece_views",
+    "record_nc_generation",
     "save_sheet",
     "saved_operational_files",
     "sync_status",

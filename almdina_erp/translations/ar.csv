@@ -3256,3 +3256,30 @@ the shared cut,القص المشترك
 "This piece shape has no supported side for this milling operation.",شكل هذه الدرفة بلا جهة مدعومة لعملية التفريز هذه.
 "Overlapping milling cannot use a different preset for each path.",التفريز المتداخل لا يقبل إعدادًا مختلفًا لكل مسار.
 "Tool diameter {0} mm",قطر الريشة {0} مم
+"The uploaded milling path does not match the approved milling geometry.",مسار التفريز المرفوع لا يطابق هندسة التفريز المعتمدة.
+"The machining geometry is not ready, so an NC file was not created.",هندسة التشغيل غير جاهزة، لذلك لم يُنشأ ملف NC.
+"The generated NC file does not match the intermediate program.",ملف NC المولَّد لا يطابق البرنامج الوسيط.
+"A production controller is not confirmed for this factory profile.",متحكم الإنتاج غير مؤكد لملف الماكينة في المصنع.
+"This coordinate space cannot be posted to NC.",لا يمكن إرسال فضاء الإحداثيات هذا إلى NC.
+"Only absolute distance mode G90 is supported.",يُدعم وضع المسافة المطلقة G90 فقط.
+"The selected tool preset is missing spindle or feed values needed for NC.",إعداد الريشة المختار ينقصه قيم المغزل أو التغذية اللازمة لـ NC.
+"This intermediate motion cannot be posted to NC.",لا يمكن إرسال هذه الحركة الوسيطة إلى NC.
+"The intermediate program is not valid.",البرنامج الوسيط غير صالح.
+"The machine profile values are not valid for NC generation.",قيم ملف الماكينة غير صالحة لتوليد NC.
+Geometry ready,الهندسة جاهزة
+Geometry not ready,الهندسة غير جاهزة
+Machine ready,الماكينة جاهزة
+Machine not ready,الماكينة غير جاهزة
+Simulation NC export ready,تصدير NC للمحاكاة جاهز
+Simulation NC export not ready,تصدير NC للمحاكاة غير جاهز
+Prepare simulation NC,تجهيز NC للمحاكاة
+Download simulation NC,تنزيل NC للمحاكاة
+Simulation NC,NC للمحاكاة
+"{0} paths",{0} مسارات
+"{0} depth passes",{0} مراحل عمق
+NC matches the intermediate program,NC يطابق البرنامج الوسيط
+NC verification failed,فشل التحقق من NC
+"Simulation NC prepared. This file is not approved for a workshop machine.",جُهّز NC للمحاكاة. هذا الملف غير معتمد لماكينة الورشة.
+"The simulation NC file could not be prepared.",تعذر تجهيز ملف NC للمحاكاة.
+simulation_dialect_only,لهجة المحاكاة فقط
+machine_origin_not_established,أصل الماكينة غير محدد

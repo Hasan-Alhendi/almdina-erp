@@ -375,9 +375,10 @@ def test_server_boundary_does_not_accept_a_client_plan_or_offer_machine_output()
     assert "get_cnc_operational_workspace" in panel
     assert "save_cnc_operational_sheet" in panel
     assert "Save sheet settings" in panel
-    assert ".nc" not in panel
     assert "G01" not in panel
-    assert "Download" not in panel
+    assert "generate_cnc_sheet_nc" in panel
+    assert "Download simulation NC" in panel
+    assert "not approved for a workshop machine" in panel
 
     order = json.loads(
         (APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json").read_text(

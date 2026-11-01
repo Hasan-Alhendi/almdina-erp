@@ -62,17 +62,22 @@ def _geometry(outer, holes=None):
     }
 
 
-def _overlay(kind, layer, path, *, closed=False):
+def _overlay(kind, layer, path, *, closed=False, toolpath=None):
+    geometry = {
+        "schema_version": 1,
+        "unit": "mm",
+        "coordinate_space": "usable_sheet",
+        "path": path,
+        "closed": closed,
+    }
+    if toolpath is None:
+        toolpath = not closed
+    if toolpath:
+        geometry["toolpath"] = True
     return {
         "kind": kind,
         "layer": layer,
-        "geometry": {
-            "schema_version": 1,
-            "unit": "mm",
-            "coordinate_space": "usable_sheet",
-            "path": path,
-            "closed": closed,
-        },
+        "geometry": geometry,
     }
 
 

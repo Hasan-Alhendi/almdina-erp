@@ -1030,6 +1030,9 @@
         let dxf = "";
         dxf += pair(0, "SECTION") + pair(2, "HEADER");
         dxf += pair(9, "$ACADVER") + pair(1, DXF_VERSION);
+        // Millimetre drawing units. CNC readers treat $INSUNITS 4 as mm and
+        // refuse 0 as unspecified.
+        dxf += pair(9, "$INSUNITS") + pair(70, 4);
         dxf += pair(9, "$EXTMIN") + pair(10, 0) + pair(20, 0) + pair(30, 0);
         dxf += pair(9, "$EXTMAX") + pair(10, dxfNumber(extmaxX)) + pair(20, dxfNumber(extmaxY)) + pair(30, 0);
         dxf += pair(0, "ENDSEC");

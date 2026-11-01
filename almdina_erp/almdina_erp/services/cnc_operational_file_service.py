@@ -1,7 +1,8 @@
 """Thin RPC boundary for CNC operational files.
 
 Authorization and the current approved plan are resolved here. Machining
-rules stay in the domain, and this module never generates NC text.
+rules stay in the domain. NC text is generated only through the simulation
+post processor and is never treated as a workshop controller approval.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.workspace import (
     build_operational_workspace,
@@ -22,7 +24,9 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
     assert_viewed_plan_token,
+    settings_fingerprint,
 )
+from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
@@ -40,6 +44,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
+    record_nc_generation,
     save_sheet,
     saved_operational_files,
     sync_status,
@@ -91,6 +96,16 @@ _MESSAGES = {
     "liner_narrower_than_cutter": "The selected tool is wider than this milling band, so the path was not calculated.",
     "side_unavailable": "This piece shape has no supported side for this milling operation.",
     "merged_mill_preset_ambiguous": "Overlapping milling cannot use a different preset for each path.",
+    "mill_upload_mismatch": "The uploaded milling path does not match the approved milling geometry.",
+    "geometry_not_ready": "The machining geometry is not ready, so an NC file was not created.",
+    "nc_verification_failed": "The generated NC file does not match the intermediate program.",
+    "production_controller_not_confirmed": "A production controller is not confirmed for this factory profile.",
+    "coordinate_space_unsupported": "This coordinate space cannot be posted to NC.",
+    "distance_mode_unsupported": "Only absolute distance mode G90 is supported.",
+    "preset_incomplete": "The selected tool preset is missing spindle or feed values needed for NC.",
+    "motion_unsupported": "This intermediate motion cannot be posted to NC.",
+    "program_invalid": "The intermediate program is not valid.",
+    "machine_profile_value_invalid": "The machine profile values are not valid for NC generation.",
     "cut_path_is_piece_boundary": "This cut is the piece boundary, not a cutter center.",
     "compensation_unverified": "The cutter compensation for this path is not verified.",
     "cut_side_unknown": "The cut side of this closed path is not known.",
@@ -316,6 +331,110 @@ def get_cnc_sheet_program(
     return _describe_program(payload)
 
 
+def _compile_authorized_program(
+    order: Any,
+    *,
+    sheet_no: int,
+    operation_presets: dict[str, Any],
+    path_overrides: dict[str, Any],
+    operation_order: list[Any],
+    cut_path_early_confirmed: bool,
+    viewed_plan_token: str | None,
+) -> tuple[Any, dict[str, Any], dict[str, Any]]:
+    plan = approved_plan_ref(order)
+    if plan is None:
+        raise OperationalFileError("no_approved_plan")
+    assert_viewed_plan_token(plan, viewed_plan_token)
+    mode, uploaded = _manufacturing_inputs(order, int(sheet_no))
+    presets = known_tool_presets()
+    payload = compile_sheet_program(
+        sheet_no=int(sheet_no),
+        pieces=placed_piece_views(order),
+        snapshot=approved_plan_snapshot(order),
+        operation_presets={str(key): value for key, value in operation_presets.items()},
+        path_overrides={str(key): value for key, value in path_overrides.items()},
+        operation_order=[str(item) for item in operation_order],
+        known_presets=presets,
+        cut_path_early_confirmed=bool(cut_path_early_confirmed),
+        manufacturing_mode=mode,
+        uploaded=uploaded,
+    )
+    return plan, payload, presets
+
+
+@frappe.whitelist()
+def generate_cnc_sheet_nc(
+    order_name: str,
+    sheet_no: int | str,
+    operation_presets: str | dict[str, Any] | None = None,
+    path_overrides: str | dict[str, Any] | None = None,
+    operation_order: str | list[Any] | None = None,
+    cut_path_early_confirmed: int | str | bool = 0,
+    viewed_plan_token: str | None = None,
+) -> dict[str, Any]:
+    """Generate a verified simulation NC file for one sheet. Not production-approved."""
+
+    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
+    parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
+    parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
+    parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+    if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list):
+        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    try:
+        plan, program, presets = _compile_authorized_program(
+            order,
+            sheet_no=cint(sheet_no),
+            operation_presets=parsed_operations,
+            path_overrides=parsed_paths,
+            operation_order=parsed_order,
+            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
+            viewed_plan_token=viewed_plan_token,
+        )
+        machine = machine_profile_view()
+        fingerprint = settings_fingerprint(
+            operation_presets={str(key): value for key, value in parsed_operations.items()},
+            path_overrides={str(key): value for key, value in parsed_paths.items()},
+            presets=presets,
+            machine_profile=machine.get("fingerprint_payload") or {},
+            operation_order=[str(item) for item in parsed_order],
+            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
+        )
+        package = build_simulation_nc(
+            program,
+            machine_profile={
+                **(machine.get("fingerprint_payload") or {}),
+                "production_approved": machine.get("production_approved"),
+                "retract_z_mm": (machine.get("fingerprint_payload") or {}).get("retract_z_mm", 20),
+            },
+            sheet_no=cint(sheet_no),
+            settings_fingerprint=fingerprint,
+        )
+    except (OperationalFileError, ToolPresetError, PostProcessorError) as exc:
+        frappe.throw(_message(exc.code), frappe.ValidationError)
+    except json.JSONDecodeError as exc:
+        raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
+    existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    if existing and existing.get("name"):
+        record_nc_generation(
+            str(existing["name"]),
+            {
+                "settings_fingerprint": fingerprint,
+                "post_processor_version": package["post_processor_version"],
+                "dialect": package["dialect"],
+                "production": False,
+                "verification": package.get("verification") or {},
+                "plan_revision": int(plan.revision),
+                "sheet_no": cint(sheet_no),
+            },
+        )
+    package["message"] = _(
+        "Simulation NC prepared. This file is not approved for a workshop machine."
+    )
+    for issue in (package.get("verification") or {}).get("issues") or []:
+        pass
+    return package
+
+
 def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any] | None:
     if plan is None:
         return None
@@ -330,6 +449,7 @@ def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any]
 
 
 __all__ = [
+    "generate_cnc_sheet_nc",
     "get_cnc_operational_workspace",
     "get_cnc_sheet_program",
     "save_cnc_operational_sheet",

@@ -116,6 +116,9 @@ class CncBoardProgram:
     cut_path_early_confirmed: bool
     issues: tuple[tuple[str, str], ...]
     operations: tuple[CncOperationProgram, ...]
+    geometry_ready: bool = False
+    machine_ready: bool = False
+    nc_export_ready: bool = False
 
 
 def _finite_point(point: Sequence[float]) -> tuple[float, float] | None:
@@ -646,10 +649,14 @@ def build_board_program(
                 toolpaths=tuple(numbered),
             )
         )
-    ready = not issues and all(path.ready for operation in operations for path in operation.toolpaths) and bool(operations)
+    geometry_ready = (
+        not issues
+        and all(path.ready for operation in operations for path in operation.toolpaths)
+        and bool(operations)
+    )
     return CncBoardProgram(
         sheet_no=int(sheet_no),
-        ready=ready,
+        ready=geometry_ready,
         coordinate_space=COORDINATE_SPACE,
         machine_origin=MACHINE_ORIGIN,
         depth_convention=DEPTH_CONVENTION,
@@ -659,6 +666,9 @@ def build_board_program(
         cut_path_early_confirmed=bool(early and cut_path_early_confirmed),
         issues=tuple(issues),
         operations=tuple(operations),
+        geometry_ready=geometry_ready,
+        machine_ready=False,
+        nc_export_ready=geometry_ready,
     )
 
 
@@ -682,6 +692,9 @@ def _empty_program(
         cut_path_early_confirmed=bool(early and confirmed),
         issues=tuple(issues),
         operations=(),
+        geometry_ready=False,
+        machine_ready=False,
+        nc_export_ready=False,
     )
 
 
@@ -699,6 +712,9 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
     return {
         "sheet_no": program.sheet_no,
         "ready": program.ready,
+        "geometry_ready": program.geometry_ready,
+        "machine_ready": program.machine_ready,
+        "nc_export_ready": program.nc_export_ready,
         "coordinate_space": program.coordinate_space,
         "machine_origin": program.machine_origin,
         "depth_convention": program.depth_convention,

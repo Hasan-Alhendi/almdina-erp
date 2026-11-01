@@ -810,6 +810,13 @@
             });
         });
         const issueText = boardIssues.map(issue => issue && (issue.message || issue.code)).filter(Boolean);
+        const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
+        const machineReady = Boolean(drawing.machine_ready);
+        const readiness = [
+            geometryReady ? translate("Geometry ready") : translate("Geometry not ready"),
+            machineReady ? translate("Machine ready") : translate("Machine not ready"),
+            drawing.nc_export_ready ? translate("Simulation NC export ready") : translate("Simulation NC export not ready"),
+        ].join(" · ");
         const rows = steps.map(step => {
             const path = step.path;
             const preset = path.preset || {};
@@ -838,8 +845,15 @@
         const boardError = issueText.map(message => `<p class="dco-cnc-program__error">${escapeHtml(message)}</p>`).join("");
         const list = `<div class="dco-cnc-program">
             <h4>${escapeHtml(translate("Machining preview"))}</h4>
+            <p class="dco-cnc-program__note">${escapeHtml(readiness)}</p>
             ${boardError}
             ${rows ? `<ol class="dco-cnc-program__steps">${rows}</ol>` : `<p class="dco-cnc-program__note">${escapeHtml(translate("The machining preview could not be prepared."))}</p>`}
+            <div class="dco-cnc-program__actions">
+                <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc ${geometryReady ? "" : "disabled"}>
+                    ${escapeHtml(translate("Prepare simulation NC"))}
+                </button>
+            </div>
+            <div data-cnc-nc-panel></div>
             <p class="dco-cnc-program__note">${escapeHtml(translate("This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file."))}</p>
         </div>`;
         let svg = "";
@@ -865,17 +879,90 @@
         return { list, drawing: svg };
     }
 
-    function paintProgram(dialog, program) {
+    function downloadTextFile(filename, text) {
+        const blob = new Blob([String(text || "")], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
+    function paintNcPanel(host, packagePayload) {
+        if (!host) return;
+        const payload = packagePayload || {};
+        const verification = payload.verification || {};
+        const summary = [
+            translate("Simulation NC"),
+            payload.tool_number || "",
+            payload.spindle_speed_rpm ? translate("{0} RPM", [payload.spindle_speed_rpm]) : "",
+            payload.path_count ? translate("{0} paths", [payload.path_count]) : "",
+            payload.pass_count ? translate("{0} depth passes", [payload.pass_count]) : "",
+            verification.ok ? translate("NC matches the intermediate program") : translate("NC verification failed"),
+        ].filter(Boolean).join(" · ");
+        const warnings = (payload.warnings || []).map(code => `<p class="dco-cnc-program__error">${escapeHtml(translate(String(code)))}</p>`).join("");
+        host.innerHTML = `
+            <p class="dco-cnc-program__note">${escapeHtml(summary)}</p>
+            ${warnings}
+            <p class="dco-cnc-program__note">${escapeHtml(payload.message || translate("Simulation NC prepared. This file is not approved for a workshop machine."))}</p>
+            <pre class="dco-cnc-program__nc" tabindex="0">${escapeHtml(payload.text || "")}</pre>
+            <button type="button" class="btn btn-primary btn-sm" data-cnc-download-nc>
+                ${escapeHtml(translate("Download simulation NC"))}
+            </button>
+        `;
+        const download = host.querySelector("[data-cnc-download-nc]");
+        if (download) {
+            download.addEventListener("click", () => {
+                downloadTextFile(
+                    `sheet-${payload.sheet_no || "nc"}${payload.filename_suffix || ".sim.nc"}`,
+                    payload.text || ""
+                );
+            });
+        }
+    }
+
+    function paintProgram(dialog, program, context) {
         const root = dialogRoot(dialog);
         const host = root && root.querySelector("[data-cnc-program]");
         if (!host) return;
         const markup = programMarkup(program);
         host.innerHTML = markup.list;
         const board = root.querySelector(".dco-sheet-board");
-        if (!board) return;
-        const previous = board.querySelector(".dco-cnc-program__drawing");
-        if (previous) previous.remove();
-        if (markup.drawing) board.insertAdjacentHTML("beforeend", markup.drawing);
+        if (board) {
+            const previous = board.querySelector(".dco-cnc-program__drawing");
+            if (previous) previous.remove();
+            if (markup.drawing) board.insertAdjacentHTML("beforeend", markup.drawing);
+        }
+        const generate = host.querySelector("[data-cnc-generate-nc]");
+        if (!generate || !context || !context.canPrepare) return;
+        generate.addEventListener("click", () => {
+            if (!window.frappe || typeof frappe.call !== "function") return;
+            const request = (dialog._cncNcRequest || 0) + 1;
+            dialog._cncNcRequest = request;
+            generate.disabled = true;
+            frappe.call({
+                method: `${METHOD}.generate_cnc_sheet_nc`,
+                args: context.args,
+                callback(response) {
+                    if (dialog._cncNcRequest !== request) return;
+                    generate.disabled = false;
+                    const payload = (response && response.message) || {};
+                    payload.sheet_no = context.sheetNo;
+                    paintNcPanel(host.querySelector("[data-cnc-nc-panel]"), payload);
+                },
+                error() {
+                    if (dialog._cncNcRequest !== request) return;
+                    generate.disabled = false;
+                    const panel = host.querySelector("[data-cnc-nc-panel]");
+                    if (panel) {
+                        panel.innerHTML = `<p class="dco-cnc-program__error" role="alert">${escapeHtml(translate("The simulation NC file could not be prepared."))}</p>`;
+                    }
+                },
+            });
+        });
     }
 
     function scheduleProgram(frm, dialog, workspace, sheet, state) {
@@ -887,22 +974,27 @@
         Object.keys(state.overrides || {}).forEach(key => {
             if (state.overrides[key]) overrides[key] = state.overrides[key];
         });
+        const args = {
+            order_name: frm.doc.name,
+            sheet_no: sheet.sheet_no,
+            operation_presets: state.operations,
+            path_overrides: overrides,
+            operation_order: state.order,
+            cut_path_early_confirmed: state.confirmed ? 1 : 0,
+            viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
+        };
         frappe.call({
             method: `${METHOD}.get_cnc_sheet_program`,
-            args: {
-                order_name: frm.doc.name,
-                sheet_no: sheet.sheet_no,
-                operation_presets: state.operations,
-                path_overrides: overrides,
-                operation_order: state.order,
-                cut_path_early_confirmed: state.confirmed ? 1 : 0,
-                viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
-            },
+            args,
             callback(response) {
                 if (dialog._cncProgramRequest !== request) return;
                 const live = dialog._almdinaSheet;
                 if (!live || stateSnapshot(live.state) !== token) return;
-                paintProgram(dialog, (response && response.message) || {});
+                paintProgram(dialog, (response && response.message) || {}, {
+                    canPrepare: Boolean(workspace.can_prepare),
+                    args,
+                    sheetNo: sheet.sheet_no,
+                });
             },
             error() {
                 if (dialog._cncProgramRequest !== request) return;

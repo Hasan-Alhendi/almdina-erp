@@ -594,8 +594,8 @@ def test_missing_placement_invalid_geometry_and_a_narrow_band_do_not_invent_a_pa
     assert _paths(blocked, "liner")[0]["motions"] == []
 
 
-def test_an_open_drawing_path_without_placement_is_not_offset_again():
-    program = _compile([
+def test_an_open_drawing_path_is_not_a_center_unless_marked_or_calculated():
+    unverified = _compile([
         _piece(
             "piece-a",
             _rect(0, 0, 200, 400),
@@ -611,13 +611,33 @@ def test_an_open_drawing_path_without_placement_is_not_offset_again():
             }],
         )
     ])
-    path = _paths(program, "liner")[0]
+    assert "mill_path_unverified" in _codes(unverified)
+    assert unverified["ready"] is False
+    verified = _compile([
+        _piece(
+            "piece-a",
+            _rect(0, 0, 200, 400),
+            overlays=[{
+                "kind": "liner",
+                "layer": "Liner",
+                "geometry": {
+                    "unit": "mm",
+                    "coordinate_space": "usable_sheet",
+                    "path": [[20, 30], [20, 120]],
+                    "closed": False,
+                    "toolpath": True,
+                },
+            }],
+        )
+    ])
+    path = _paths(verified, "liner")[0]
     assert path["ready"] is True
-    assert len(path["points"]) == 2
     assert _same_sequence(path["points"], [(20, 2440 - 30), (20, 2440 - 120)])
 
 
 def test_results_are_stable_and_this_compiler_does_not_own_nesting_or_export(tmp_path):
+    from almdina_erp.almdina_erp.services.dxf_autocad_normalization import rebuild_autocad_dxf
+
     piece = _mill_piece(
         extra_liner=1,
         liner_reference_side="edge_width_top",
@@ -625,6 +645,10 @@ def test_results_are_stable_and_this_compiler_does_not_own_nesting_or_export(tmp
         liner_width_cm=1.8,
     )
     assert _compile([piece]) == _compile([piece])
+    first = _compile([piece])
+    assert first["geometry_ready"] is True
+    assert first["machine_ready"] is False
+    assert first["nc_export_ready"] is True
     source = APPLICATION.read_text(encoding="utf-8")
     assert "dxf_export_service" not in source
     assert "nesting" not in source
@@ -640,3 +664,11 @@ def test_results_are_stable_and_this_compiler_does_not_own_nesting_or_export(tmp
     stated = tmp_path / "millimetres.dxf"
     document.saveas(stated)
     assert read_operational_dxf(str(stated), sheet_no=1)["units"] == "mm"
+    raw = (
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n"
+        "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n1\n0\nLAYER\n2\nSHEET_OUTLINE\n70\n0\n62\n8\n6\nCONTINUOUS\n0\nENDTAB\n0\nENDSEC\n"
+        "0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nSHEET_OUTLINE\n10\n0\n20\n0\n11\n10\n21\n0\n0\nENDSEC\n0\nEOF\n"
+    ).encode("ascii")
+    rebuilt = tmp_path / "rebuilt.dxf"
+    rebuilt.write_bytes(rebuild_autocad_dxf(raw))
+    assert read_operational_dxf(str(rebuilt), sheet_no=1)["units"] == "mm"

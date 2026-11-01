@@ -165,8 +165,9 @@ assert.strictEqual(ux.cutPathIsEarly(["liner", "recessed_handle_cutout", "back_g
 assert.ok(panel.includes("Cutting first may let the pieces move after they separate from the board."));
 assert.ok(!panel.includes("GEOMETRY"));
 assert.ok(!panel.includes("G01"));
-assert.ok(!panel.includes(".nc"));
-assert.ok(!panel.includes("Download"));
+assert.ok(panel.includes("generate_cnc_sheet_nc"));
+assert.ok(panel.includes("Download simulation NC"));
+assert.ok(panel.includes("not approved for a workshop machine"));
 assert.ok(translations.includes("إضافة إعداد ريشة"));
 assert.ok(translations.includes("استعادة إعداد المصنع"));
 assert.ok(translations.includes("إعدادات ريش CNC"));
