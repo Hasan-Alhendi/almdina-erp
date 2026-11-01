@@ -822,6 +822,7 @@
                 operationLabel(path.operation_key),
                 path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"),
                 path.preset_name || translate("Not specified"),
+                preset.tool_diameter_mm ? translate("Tool diameter {0} mm", [preset.tool_diameter_mm]) : "",
                 depth ? translate("Depth {0} mm", [depth]) : "",
                 preset.spindle_speed_rpm ? translate("{0} RPM", [preset.spindle_speed_rpm]) : "",
                 preset.feed_rate_mm_min ? translate("Feed {0} mm/min", [preset.feed_rate_mm_min]) : "",

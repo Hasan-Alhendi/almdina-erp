@@ -35,7 +35,7 @@ const markup = ux.programMarkup({
                     end: [10, 80],
                     points: [[10, 20], [10, 80]],
                     preset_name: "Finish",
-                    preset: { final_depth_mm: 7 },
+                    preset: { final_depth_mm: 7, tool_diameter_mm: 5 },
                     ready: true,
                     issues: [],
                     issue_messages: [],
@@ -77,6 +77,7 @@ assert.ok(markup.drawing.includes("#a61b1b"));
 assert.ok(markup.drawing.includes("marker-end"));
 assert.ok(markup.drawing.includes("translate(0,2000) scale(1,-1)"));
 assert.ok(markup.list.includes("Depth {0} mm") || markup.list.includes("7"));
+assert.ok(markup.list.includes("Tool diameter {0} mm") || markup.list.includes("Tool diameter 5 mm"));
 assert.ok(markup.list.includes("1.1"));
 assert.ok(markup.list.includes("This path geometry cannot be used."));
 assert.ok(markup.list.includes("Counterclockwise") || markup.list.includes("عكس عقارب الساعة"));
@@ -89,7 +90,8 @@ assert.ok(!panel.includes("G01"));
 assert.ok(!panel.includes(".nc"));
 assert.ok(!panel.includes("Download"));
 assert.ok(translations.includes("معاينة التشغيل"));
-assert.ok(translations.includes("هذه المنطقة المغلقة تحتاج تفريغًا، وهذه النسخة لا تشغّله."));
+assert.ok(translations.includes("هذه المنطقة المغلقة ليست مسار ريشة، والخطة المعتمدة لا تتضمن إعدادات التفريز اللازمة لحسابه."));
+assert.ok(translations.includes("مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة."));
 assert.ok(translations.includes("أصل الماكينة غير محدد"));
 
 console.log("dco_operational_files_phase3a.test.js passed");

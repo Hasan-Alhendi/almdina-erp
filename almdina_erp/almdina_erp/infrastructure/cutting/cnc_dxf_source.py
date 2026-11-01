@@ -2,7 +2,8 @@
 
 INSERT transforms stay in the existing reader. Sheet-local coordinates are the
 entity coordinates minus that sheet outline's minimum corner. A missing
-outline does not become a machine origin.
+outline does not become a machine origin. ``$INSUNITS`` 0 is unspecified and
+is not treated as millimetres.
 """
 
 from __future__ import annotations
@@ -38,7 +39,11 @@ def _length_unit(file_path: str) -> str:
             "تعذر قراءة وحدات ملف DXF.",
             code="DXF_UNREADABLE",
         ) from exc
-    return "mm" if code in (0, 4) else "unknown"
+    if code == 4:
+        return "mm"
+    if code == 0:
+        return "unspecified"
+    return "unknown"
 
 
 def _polyline(segments: list[dict[str, Any]]) -> tuple[list[tuple[float, float]], bool]:

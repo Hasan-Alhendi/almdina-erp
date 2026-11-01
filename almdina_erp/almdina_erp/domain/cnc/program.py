@@ -27,9 +27,24 @@ from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
 
 
 CHAIN_TOLERANCE_MM = 0.05
+_DIAMETER_TOLERANCE_MM = 0.05
 COORDINATE_SPACE = "sheet_bottom_left_y_up_mm"
 MACHINE_ORIGIN = "not_established"
 DEPTH_CONVENTION = "positive_millimetres"
+_ROLE_ISSUES = {
+    "region_boundary": "region_not_supported",
+    "finished_boundary": "cut_path_is_piece_boundary",
+    "unmatched_cut": "cut_path_does_not_match_approved_centers",
+    "unverified": "compensation_unverified",
+    "invalid": "geometry_invalid",
+    "mill_path_unverified": "mill_path_unverified",
+    "mill_placement_unknown": "mill_placement_unknown",
+    "mill_parameters_missing": "mill_parameters_missing",
+    "mill_diameter_required": "mill_diameter_required",
+    "liner_narrower_than_cutter": "liner_narrower_than_cutter",
+    "side_unavailable": "side_unavailable",
+    "merged_mill_preset_ambiguous": "merged_mill_preset_ambiguous",
+}
 
 _OPERATIONS_BY_LAYER = {
     operation.dxf_layer.upper(): operation for operation in CNC_OPERATION_TYPES
@@ -415,6 +430,7 @@ def build_board_program(
     sheet_length_mm: float | None = None,
     blocked_catalog_paths: Sequence[Mapping[str, str]] = (),
     shared_cut_ambiguous: bool = False,
+    approved_kerf_mm: float | None = None,
 ) -> CncBoardProgram:
     """Build one board program. Confirmation never clears a geometric block."""
 
@@ -424,7 +440,11 @@ def build_board_program(
         for key in ("liner", "recessed_handle_cutout", "back_groove")
     )
     issues: list[tuple[str, str]] = []
-    if str(units or "").strip().lower() != "mm":
+    unit_name = str(units or "").strip().lower()
+    if unit_name == "unspecified":
+        issues.append(("units_unspecified", ""))
+        return _empty_program(sheet_no, issues, early, cut_path_early_confirmed, sheet_width_mm, sheet_length_mm)
+    if unit_name != "mm":
         issues.append(("units_unknown", ""))
         return _empty_program(sheet_no, issues, early, cut_path_early_confirmed, sheet_width_mm, sheet_length_mm)
     if frame_origin_mm is None:
@@ -444,21 +464,13 @@ def build_board_program(
         closed = bool(item.get("closed"))
         oriented: tuple[tuple[float, float], ...] = ()
         direction = ""
-        if issue:
-            pass
-        elif entity.role == "region_boundary":
-            issue = "region_not_supported"
-        elif entity.role == "finished_boundary":
-            issue = "cut_path_is_piece_boundary"
-        elif entity.role == "unmatched_cut":
-            issue = "cut_path_does_not_match_approved_centers"
-        elif entity.role == "unverified":
-            issue = "compensation_unverified"
-        elif entity.role == "invalid":
-            issue = "geometry_invalid"
-        elif entity.role != "tool_center":
-            issue = "compensation_unverified"
-        else:
+        if not issue:
+            mapped = _ROLE_ISSUES.get(entity.role)
+            if mapped:
+                issue = mapped
+            elif entity.role != "tool_center":
+                issue = "compensation_unverified"
+        if not issue:
             result = orient_path(raw_points, closed=closed, ring=entity.ring if closed else "open")
             if isinstance(result, str):
                 issue = result
@@ -468,21 +480,33 @@ def build_board_program(
         path_key = entity.path_key or f"{operation.key}:center:{_identity(shown, closed)}"
         preset_name = str(path_overrides.get(path_key) or operation_presets.get(operation.key) or "").strip()
         preset: ToolPresetValues | None = None
-        if not issue and not preset_name:
-            issue = "preset_missing"
-        elif not issue and preset_name:
+        preset_issue = ""
+        if not preset_name:
+            preset_issue = "preset_missing"
+        else:
             raw = known_presets.get(preset_name)
             if raw is None:
-                issue = "preset_not_found"
+                preset_issue = "preset_not_found"
             else:
                 try:
                     preset = normalize_tool_preset(raw)
                 except ToolPresetError as exc:
-                    issue = exc.code
+                    preset_issue = exc.code
                 else:
                     if not preset.enabled:
-                        issue = "preset_disabled"
+                        preset_issue = "preset_disabled"
                         preset = None
+        if not issue:
+            issue = preset_issue
+        if (
+            not issue
+            and preset is not None
+            and operation.key == "cut_path"
+            and entity.role == "tool_center"
+            and approved_kerf_mm is not None
+            and abs(float(preset.tool_diameter_mm) - float(approved_kerf_mm)) > _DIAMETER_TOLERANCE_MM
+        ):
+            issue = "tool_diameter_kerf_mismatch"
         selected.append(
             (
                 {
@@ -526,6 +550,10 @@ def build_board_program(
             path_issues.append("shared_cut_preset_ambiguous")
             if ("shared_cut_preset_ambiguous", "") not in issues:
                 issues.append(("shared_cut_preset_ambiguous", ""))
+        if "tool_diameter_kerf_mismatch" in path_issues:
+            pair = ("tool_diameter_kerf_mismatch", str(item["path_key"]))
+            if pair not in issues:
+                issues.append(pair)
         ready = not path_issues
         points = item["points"] if isinstance(item["points"], tuple) else ()
         motions: tuple[CncMotion, ...] = ()
@@ -548,7 +576,7 @@ def build_board_program(
             start=points[0] if points else None,
             end=(points[0] if item["closed"] else points[-1]) if points else None,
             preset_name=str(item["preset_name"]),
-            preset=_preset_payload(preset, str(item["preset_name"])) if preset is not None and ready else None,
+            preset=_preset_payload(preset, str(item["preset_name"])) if preset is not None else None,
             ready=ready,
             issues=tuple(path_issues),
             motions=motions,

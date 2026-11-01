@@ -77,11 +77,20 @@ _MESSAGES = {
     "cut_path_early_unconfirmed": "Confirm the warning before saving a cut that comes before the internal operations.",
     "preset_source_invalid": "The layer preset source is not valid.",
     "units_unknown": "The drawing units are not millimetres, so the path was not prepared.",
+    "units_unspecified": "The drawing does not state its units, so millimetres were not assumed and the path was not prepared.",
     "sheet_frame_unknown": "The sheet frame could not be established, so the path was not prepared.",
     "kerf_unknown": "The kerf is missing, so cutter centers were not calculated.",
     "finished_geometry_missing": "The approved plan has no finished geometry for this piece.",
     "geometry_invalid": "This path geometry cannot be used.",
-    "region_not_supported": "This closed region needs a pocket, which this version does not machine.",
+    "region_not_supported": "This closed region is not a cutter path, and the approved plan does not include the mill settings needed to calculate one.",
+    "tool_diameter_kerf_mismatch": "This CUT_PATH was calculated for the approved kerf and does not match the selected tool diameter.",
+    "mill_path_unverified": "This milling path is not a verified cutter center for the selected tool.",
+    "mill_placement_unknown": "The approved plan does not record where this piece sits, so the milling path was not calculated.",
+    "mill_parameters_missing": "The approved plan does not include the side, offset, and width needed to calculate this milling path.",
+    "mill_diameter_required": "This milling path needs the layer tool diameter before its cutter center can be calculated.",
+    "liner_narrower_than_cutter": "The selected tool is wider than this milling band, so the path was not calculated.",
+    "side_unavailable": "This piece shape has no supported side for this milling operation.",
+    "merged_mill_preset_ambiguous": "Overlapping milling cannot use a different preset for each path.",
     "cut_path_is_piece_boundary": "This cut is the piece boundary, not a cutter center.",
     "compensation_unverified": "The cutter compensation for this path is not verified.",
     "cut_side_unknown": "The cut side of this closed path is not known.",
@@ -95,6 +104,14 @@ _MESSAGES = {
 
 def _message(code: str) -> str:
     return _(_MESSAGES.get(code, _NO_APPROVED_PLAN))
+
+
+def _issue_message(code: str, path_key: str = "") -> str:
+    if code == "tool_diameter_kerf_mismatch":
+        return _(
+            "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter."
+        ).format(path_key or _("the shared cut"))
+    return _message(code)
 
 
 def _authorized_order(order_name: str, capability: str) -> Any:
@@ -228,10 +245,13 @@ def save_cnc_operational_sheet(
 
 def _describe_program(payload: dict[str, Any]) -> dict[str, Any]:
     for issue in payload.get("issues") or []:
-        issue["message"] = _message(str(issue.get("code") or ""))
+        issue["message"] = _issue_message(str(issue.get("code") or ""), str(issue.get("path_key") or ""))
     for operation in payload.get("operations") or []:
         for path in operation.get("toolpaths") or []:
-            path["issue_messages"] = [_message(str(code)) for code in path.get("issues") or []]
+            path_key = str(path.get("path_key") or "")
+            path["issue_messages"] = [
+                _issue_message(str(code), path_key) for code in path.get("issues") or []
+            ]
     return payload
 
 

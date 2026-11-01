@@ -3195,7 +3195,7 @@ Path end,نهاية المسار
 "The kerf is missing, so cutter centers were not calculated.",سماكة القص غير موجودة، لذلك لم تُحسب مراكز الريشة.
 The approved plan has no finished geometry for this piece.,الخطة المعتمدة لا تحتوي هندسة نهائية لهذه الدرفة.
 This path geometry cannot be used.,لا يمكن استخدام هندسة هذا المسار.
-"This closed region needs a pocket, which this version does not machine.",هذه المنطقة المغلقة تحتاج تفريغًا، وهذه النسخة لا تشغّله.
+"This closed region is not a cutter path, and the approved plan does not include the mill settings needed to calculate one.",هذه المنطقة المغلقة ليست مسار ريشة، والخطة المعتمدة لا تتضمن إعدادات التفريز اللازمة لحسابه.
 "This cut is the piece boundary, not a cutter center.",هذا القص هو حد الدرفة وليس مركز الريشة.
 The cutter compensation for this path is not verified.,تعويض الريشة لهذا المسار غير مؤكد.
 The cut side of this closed path is not known.,جهة القص لهذا المسار المغلق غير معروفة.
@@ -3244,3 +3244,15 @@ The preset name cannot be changed.,لا يمكن تغيير اسم الإعدا�
 "This tool preset is still used. Disable it instead of deleting it.",إعداد الريشة هذا ما زال مستخدمًا. عطّله بدل حذفه.
 The CNC tool preset is not valid.,إعداد ريشة CNC غير صالح.
 The layer preset source is not valid.,مصدر إعداد الطبقة غير صالح.
+"The drawing does not state its units, so millimetres were not assumed and the path was not prepared.",الرسم لا يصرّح بوحداته، لذلك لم تُفترض المليمترات ولم يُجهَّز المسار.
+"This CUT_PATH was calculated for the approved kerf and does not match the selected tool diameter.",حُسب مسار CUT_PATH لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
+"CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter.",مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
+the shared cut,القص المشترك
+"This milling path is not a verified cutter center for the selected tool.",مسار التفريز هذا ليس مركز ريشة مؤكدًا للريشة المختارة.
+"The approved plan does not record where this piece sits, so the milling path was not calculated.",الخطة المعتمدة لا تسجّل موضع هذه الدرفة، لذلك لم يُحسب مسار التفريز.
+"The approved plan does not include the side, offset, and width needed to calculate this milling path.",الخطة المعتمدة لا تتضمن الجهة والإزاحة والعرض اللازمين لحساب مسار التفريز.
+"This milling path needs the layer tool diameter before its cutter center can be calculated.",يحتاج مسار التفريز إلى قطر ريشة الطبقة قبل حساب مركز الريشة.
+"The selected tool is wider than this milling band, so the path was not calculated.",الريشة المختارة أعرض من شريط التفريز، لذلك لم يُحسب المسار.
+"This piece shape has no supported side for this milling operation.",شكل هذه الدرفة بلا جهة مدعومة لعملية التفريز هذه.
+"Overlapping milling cannot use a different preset for each path.",التفريز المتداخل لا يقبل إعدادًا مختلفًا لكل مسار.
+"Tool diameter {0} mm",قطر الريشة {0} مم

@@ -1,7 +1,9 @@
-"""Compile one sheet program from the approved plan geometry.
+"""Compile one sheet program from the approved plan.
 
-Cutter centers come from the existing manufacturing offset. This module does
-not nest, approve, or invent a path the approved drawing does not contain.
+CUT_PATH centers use the approved kerf offset and are not accepted when the
+selected tool diameter differs. Liner, handle recess, and rear groove reuse
+the existing cutter-center toolpath when the approved piece has its mill
+settings. This module does not nest, approve, or write a machine file.
 """
 
 from __future__ import annotations
@@ -24,13 +26,29 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
     build_board_program,
     program_payload,
 )
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError, normalize_tool_preset
 from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     classify_saw_center_segments,
     cutter_center_paths,
     cutter_center_segments,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
+    LinerGeometryError,
+    LinerPiece,
+    inverse_transform_point,
+    liner_region_polygon_mm,
+    piece_quarter_turns,
+    sawn_liner_ends,
+    transform_point,
+)
+from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
+    generate_liner_set_toolpaths,
+    generate_toolpath,
+    machining_values,
+)
 from almdina_erp.almdina_erp.domain.orders.extra_addons import EXTRA_OVERLAY_LAYER_BY_KIND
+from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError, door_liners_from_source
 
 
 _BIND_TOLERANCE_MM = 0.25
@@ -319,8 +337,12 @@ def compile_sheet_program(
         return program_payload(program)
 
     units = "mm"
-    if isinstance(uploaded, Mapping) and str(uploaded.get("units") or "mm") != "mm":
-        units = "unknown"
+    if isinstance(uploaded, Mapping):
+        raw_units = str(uploaded.get("units") or "mm")
+        if raw_units == "unspecified":
+            units = "unspecified"
+        elif raw_units != "mm":
+            units = "unknown"
     if isinstance(uploaded, Mapping) and uploaded.get("unsupported"):
         blocked_path("geometry_invalid", "")
 
@@ -451,6 +473,19 @@ def compile_sheet_program(
     else:
         _append_snapshot_overlays(entities, sheet_pieces, trim_x=trim_x, trim_y=trim_y, length_mm=length_mm)
 
+    absorbed = _apply_parametric_mills(
+        entities,
+        sheet_pieces,
+        catalog,
+        trim_x=trim_x,
+        trim_y=trim_y,
+        length_mm=length_mm,
+        width_mm=width_mm,
+        operation_presets=operation_presets,
+        path_overrides=path_overrides,
+        known_presets=known_presets,
+        blocked_path=blocked_path,
+    )
     extracted = {entity.path_key for entity in entities if entity.path_key}
     extracted_cut = any(entity.layer.upper() == "CUT_PATH" for entity in entities)
     covered_overlays = {
@@ -462,7 +497,7 @@ def compile_sheet_program(
     }
     kerf_blocked = any(item["code"] == "kerf_unknown" for item in blocked)
     for path in catalog.paths:
-        if path.path_key in extracted:
+        if path.path_key in extracted or path.path_key in absorbed:
             continue
         if (path.piece_instance_id, path.operation_key) in covered_overlays:
             continue
@@ -498,6 +533,7 @@ def compile_sheet_program(
         sheet_length_mm=length_mm,
         blocked_catalog_paths=blocked,
         shared_cut_ambiguous=ambiguous,
+        approved_kerf_mm=float(kerf) if isinstance(kerf, (int, float)) and not isinstance(kerf, bool) else None,
     )
     return program_payload(program)
 
@@ -561,7 +597,7 @@ def _append_file_overlays(
                     points=points,
                     closed=closed,
                     entity_type=str(overlay.get("entity_type") or "LWPOLYLINE"),
-                    role="region_boundary" if closed else "tool_center",
+                    role="region_boundary" if closed else "mill_path_unverified",
                     ring="unknown" if closed else "open",
                     piece_id=piece_id,
                     piece_label=label,
@@ -633,6 +669,427 @@ def _append_snapshot_overlays(
                     piece_label=label,
                 )
             )
+
+
+def _preset_diameter(name: str, known: Mapping[str, Mapping[str, Any]]) -> float | None:
+    raw = known.get(str(name or "").strip())
+    if not isinstance(raw, Mapping):
+        return None
+    try:
+        preset = normalize_tool_preset(raw)
+    except ToolPresetError:
+        return None
+    if not preset.enabled:
+        return None
+    return float(preset.tool_diameter_mm)
+
+
+def _placement(piece: Mapping[str, Any]) -> dict[str, Any] | None:
+    width = _positive(piece.get("original_width_cm"))
+    length = _positive(piece.get("original_length_cm"))
+    origin_x = _number(piece.get("x_mm"))
+    origin_y = _number(piece.get("y_mm"))
+    if width is None or length is None or origin_x is None or origin_y is None:
+        return None
+    return {
+        "piece_type": str(piece.get("piece_type") or "Regular"),
+        "width_cm": width,
+        "length_cm": length,
+        "x_mm": origin_x,
+        "y_mm": origin_y,
+        "quarter_turns": piece_quarter_turns(piece),
+        "clipped_corner_position": str(piece.get("clipped_corner_position") or "Top Right"),
+        "clipped_corner_width_cm": _number(piece.get("clipped_corner_width_cm")) or 0.0,
+        "clipped_corner_length_cm": _number(piece.get("clipped_corner_length_cm")) or 0.0,
+    }
+
+
+def _same_polyline(
+    left: Sequence[tuple[float, float]],
+    right: Sequence[tuple[float, float]],
+) -> bool:
+    if len(left) < 2 or len(right) < 2:
+        return False
+    for candidate in (tuple(right), tuple(reversed(right))):
+        if len(candidate) != len(left):
+            continue
+        if all(math.dist(start, end) <= 0.05 for start, end in zip(left, candidate)):
+            return True
+    return False
+
+
+def _on_ring(points: Sequence[tuple[float, float]], ring: Sequence[tuple[float, float]]) -> bool:
+    if len(points) < 2 or len(ring) < 2:
+        return False
+    edges = list(zip(ring, ring[1:]))
+    if math.dist(ring[0], ring[-1]) > 0.5:
+        edges.append((ring[-1], ring[0]))
+    return all(
+        min(_point_segment_distance(point, start, end) for start, end in edges) <= 0.5
+        for point in points
+    )
+
+
+def _drop_layer(entities: list[CncSourceEntity], piece_id: str, layer: str) -> None:
+    entities[:] = [
+        entity
+        for entity in entities
+        if not (entity.piece_instance_id == piece_id and entity.layer.upper() == layer.upper())
+    ]
+
+
+def _layer_entities(
+    entities: Sequence[CncSourceEntity],
+    piece_id: str,
+    layer: str,
+) -> list[CncSourceEntity]:
+    return [
+        entity
+        for entity in entities
+        if entity.piece_instance_id == piece_id and entity.layer.upper() == layer.upper()
+    ]
+
+
+def _place_mill_path(
+    path: Sequence[tuple[float, float]],
+    placement: Mapping[str, Any],
+    *,
+    trim_x: float,
+    trim_y: float,
+    length_mm: float,
+) -> list[tuple[float, float]] | None:
+    width = float(placement["width_cm"]) * 10.0
+    height = float(placement["length_cm"]) * 10.0
+    placed = []
+    for point in path:
+        turned = transform_point(
+            (float(point[0]), float(point[1])),
+            mirrored=False,
+            quarter_turns=int(placement["quarter_turns"]),
+            width=width,
+            height=height,
+        )
+        placed.append((turned[0] + float(placement["x_mm"]), turned[1] + float(placement["y_mm"])))
+    return _to_sheet(placed, trim_x=trim_x, trim_y=trim_y, length_mm=length_mm)
+
+
+def _to_canonical(
+    sheet_points: Sequence[tuple[float, float]],
+    placement: Mapping[str, Any],
+    *,
+    trim_x: float,
+    trim_y: float,
+    length_mm: float,
+) -> list[tuple[float, float]]:
+    width = float(placement["width_cm"]) * 10.0
+    height = float(placement["length_cm"]) * 10.0
+    canonical = []
+    for point in sheet_points:
+        usable = (point[0] - trim_x, length_mm - trim_y - point[1])
+        local = (usable[0] - float(placement["x_mm"]), usable[1] - float(placement["y_mm"]))
+        canonical.append(
+            inverse_transform_point(
+                local,
+                mirrored=False,
+                quarter_turns=int(placement["quarter_turns"]),
+                width=width,
+                height=height,
+            )
+        )
+    return canonical
+
+
+def _kind_specs(piece: Mapping[str, Any], kind: str, values: Mapping[str, Mapping[str, Any]]):
+    if kind == "liner":
+        try:
+            liner_set = door_liners_from_source(piece)
+        except DoorLinerError:
+            return None
+        if not liner_set.enabled or not liner_set.liners or liner_set.width_cm <= 0:
+            return []
+        if any(not str(spec.side or "").strip() for spec in liner_set.liners):
+            return []
+        return liner_set.width_cm, [
+            {
+                "id": spec.liner_id,
+                "side": spec.side,
+                "offset_cm": spec.offset_cm,
+                "start_cm": spec.start_cm,
+                "length_cm": spec.length_cm,
+            }
+            for spec in liner_set.liners
+        ]
+    spec = values[kind]
+    if not spec["enabled"] or not str(spec["side"] or "").strip() or float(spec["width_cm"] or 0) <= 0:
+        return []
+    return float(spec["width_cm"]), [
+        {
+            "id": "primary",
+            "side": spec["side"],
+            "offset_cm": spec["offset_cm"],
+            "start_cm": spec["start_cm"],
+            "length_cm": spec["length_cm"],
+        }
+    ]
+
+
+def _mill_issue(code: str) -> str:
+    if code == "liner_narrower_than_cutter":
+        return code
+    if code == "side_unavailable":
+        return code
+    if code == "cutter_diameter_invalid":
+        return "mill_diameter_required"
+    return "mill_parameters_missing"
+
+
+def _overlay_spec_keys(
+    existing: Sequence[CncSourceEntity],
+    catalog_keys: Sequence[str],
+    specs: Sequence[Mapping[str, Any]],
+    solos: Sequence[Sequence[tuple[float, float]]],
+    liner_piece: LinerPiece,
+    width_cm: float,
+    placement: Mapping[str, Any],
+    *,
+    trim_x: float,
+    trim_y: float,
+    length_mm: float,
+) -> dict[int, str]:
+    found: dict[int, str] = {}
+    for entity in existing:
+        if entity.path_key not in catalog_keys or len(entity.points) < 2:
+            continue
+        canonical = _to_canonical(
+            entity.points,
+            placement,
+            trim_x=trim_x,
+            trim_y=trim_y,
+            length_mm=length_mm,
+        )
+        hits = []
+        for index, spec in enumerate(specs):
+            if _same_polyline(canonical, tuple(solos[index])):
+                hits.append(index)
+                continue
+            try:
+                region = liner_region_polygon_mm(
+                    liner_piece,
+                    spec["side"],
+                    spec["offset_cm"],
+                    width_cm,
+                    spec["start_cm"],
+                    spec["length_cm"],
+                )
+            except LinerGeometryError:
+                continue
+            if _on_ring(canonical, region) and _on_ring(region, canonical):
+                hits.append(index)
+        if len(hits) == 1 and hits[0] not in found:
+            found[hits[0]] = entity.path_key
+    return found
+
+
+def _bind_mill_paths(
+    kind: str,
+    piece_id: str,
+    catalog_keys: Sequence[str],
+    generated: Sequence[Sequence[tuple[float, float]]],
+    solos: Sequence[Sequence[tuple[float, float]]],
+    specs: Sequence[Mapping[str, Any]],
+    overlay_keys: Mapping[int, str],
+) -> tuple[list[str], set[str], bool]:
+    matches = []
+    for path in generated:
+        matches.append([index for index, solo in enumerate(solos) if _same_polyline(path, solo)])
+    merged = any(len(hits) != 1 for hits in matches) or len(generated) != len(specs)
+    used: set[str] = set()
+    bindings = []
+    for index, hits in enumerate(matches):
+        key = ""
+        if len(hits) == 1:
+            spec_id = str(specs[hits[0]]["id"])
+            exact = f"{kind}:{piece_id}:{spec_id}"
+            key = exact if exact in catalog_keys else overlay_keys.get(hits[0], "")
+        if not key and len(catalog_keys) == 1 and len(generated) == 1:
+            key = catalog_keys[0]
+        if not key:
+            key = f"{kind}:{piece_id}:merged:{_fingerprint([[round(point[0], 3), round(point[1], 3)] for point in generated[index]])}"
+        bindings.append(key)
+        if key in catalog_keys:
+            used.add(key)
+    return bindings, {key for key in catalog_keys if key not in used}, merged
+
+
+def _apply_parametric_mills(
+    entities: list[CncSourceEntity],
+    pieces: Sequence[Mapping[str, Any]],
+    catalog,
+    *,
+    trim_x: float,
+    trim_y: float,
+    length_mm: float,
+    width_mm: float,
+    operation_presets: Mapping[str, str],
+    path_overrides: Mapping[str, str],
+    known_presets: Mapping[str, Mapping[str, Any]],
+    blocked_path,
+) -> set[str]:
+    """Replace a mill outline with the existing cutter-center path when it can be calculated."""
+
+    absorbed: set[str] = set()
+    board = (-trim_x, -trim_y, width_mm - trim_x, length_mm - trim_y)
+    for piece in pieces:
+        piece_id = str(piece.get("piece_instance_id") or "")
+        label = str(piece.get("label") or "")
+        if not piece_id:
+            continue
+        values = machining_values(piece)
+        placement = _placement(piece)
+        for kind in ("liner", "back_groove", "recessed_handle_cutout"):
+            parsed = _kind_specs(piece, kind, values)
+            if parsed is None:
+                blocked_path("liner_specs_invalid", "")
+                continue
+            if not parsed:
+                continue
+            width_cm, specs = parsed
+            layer = EXTRA_OVERLAY_LAYER_BY_KIND[kind]
+            catalog_keys = [
+                path.path_key
+                for path in catalog.paths
+                if path.piece_instance_id == piece_id and path.operation_key == kind
+            ]
+            existing = _layer_entities(entities, piece_id, layer)
+            if not catalog_keys and not existing:
+                continue
+            open_centers = [
+                entity for entity in existing if not entity.closed and entity.role == "tool_center"
+            ]
+            if placement is None:
+                if open_centers:
+                    continue
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys:
+                    blocked_path("mill_placement_unknown", key)
+                continue
+            diameter = _preset_diameter(str(operation_presets.get(kind) or ""), known_presets)
+            if diameter is None:
+                if open_centers:
+                    continue
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys:
+                    blocked_path("mill_diameter_required", key)
+                continue
+            liner_piece = LinerPiece(
+                placement["piece_type"],
+                placement["width_cm"],
+                placement["length_cm"],
+                placement["clipped_corner_position"],
+                float(placement["clipped_corner_width_cm"]),
+                float(placement["clipped_corner_length_cm"]),
+            )
+            try:
+                sawn = [
+                    sawn_liner_ends(
+                        liner_piece,
+                        spec["side"],
+                        origin_mm=(placement["x_mm"], placement["y_mm"]),
+                        mirrored=False,
+                        quarter_turns=placement["quarter_turns"],
+                        board=board,
+                        start_cm=spec["start_cm"],
+                        length_cm=spec["length_cm"],
+                    )
+                    for spec in specs
+                ]
+                solos = [
+                    generate_toolpath(
+                        kind=kind,
+                        piece=liner_piece,
+                        reference_side=spec["side"],
+                        offset_cm=float(spec["offset_cm"]),
+                        width_cm=float(width_cm),
+                        start_cm=spec["start_cm"],
+                        length_cm=spec["length_cm"],
+                        cutter_diameter_mm=diameter,
+                        start_sawn=sawn[index][0],
+                        end_sawn=sawn[index][1],
+                    )
+                    for index, spec in enumerate(specs)
+                ]
+                if kind == "liner":
+                    generated = generate_liner_set_toolpaths(
+                        piece=liner_piece,
+                        specs=specs,
+                        width_cm=float(width_cm),
+                        cutter_diameter_mm=diameter,
+                        start_sawn=[item[0] for item in sawn],
+                        end_sawn=[item[1] for item in sawn],
+                    )
+                else:
+                    generated = solos
+            except LinerGeometryError as exc:
+                _drop_layer(entities, piece_id, layer)
+                code = _mill_issue(exc.code)
+                for key in catalog_keys or [f"{kind}:{piece_id}:primary"]:
+                    blocked_path(code, key)
+                continue
+            if not generated or any(len(path) < 2 for path in generated):
+                _drop_layer(entities, piece_id, layer)
+                for key in catalog_keys:
+                    blocked_path("mill_parameters_missing", key)
+                continue
+            overlay_keys = _overlay_spec_keys(
+                existing,
+                catalog_keys,
+                specs,
+                solos,
+                liner_piece,
+                float(width_cm),
+                placement,
+                trim_x=trim_x,
+                trim_y=trim_y,
+                length_mm=length_mm,
+            )
+            bindings, unused, merged = _bind_mill_paths(
+                kind, piece_id, catalog_keys, generated, solos, specs, overlay_keys
+            )
+            layer_preset = str(operation_presets.get(kind) or "").strip()
+            ambiguous = merged and any(
+                str(path_overrides.get(key) or "").strip() not in {"", layer_preset}
+                for key in catalog_keys
+            )
+            _drop_layer(entities, piece_id, layer)
+            for path, key in zip(generated, bindings):
+                sheet_points = _place_mill_path(
+                    path,
+                    placement,
+                    trim_x=trim_x,
+                    trim_y=trim_y,
+                    length_mm=length_mm,
+                )
+                if not sheet_points:
+                    blocked_path("geometry_invalid", key)
+                    continue
+                entities.append(
+                    _entity(
+                        layer=layer,
+                        points=sheet_points,
+                        closed=False,
+                        entity_type="LWPOLYLINE",
+                        role="merged_mill_preset_ambiguous" if ambiguous else "tool_center",
+                        ring="open",
+                        path_key=key,
+                        piece_id=piece_id,
+                        piece_label=label,
+                    )
+                )
+            absorbed.update(unused)
+            if ambiguous:
+                for key in unused:
+                    blocked_path("merged_mill_preset_ambiguous", key)
+    return absorbed
 
 
 __all__ = ["compile_sheet_program"]

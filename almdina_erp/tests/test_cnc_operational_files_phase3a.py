@@ -28,7 +28,7 @@ def _raw(**overrides):
         "preset_name": "Finish",
         "tool_name": "Finish",
         "tool_number": "T9",
-        "tool_diameter_mm": 6,
+        "tool_diameter_mm": 5,
         "final_depth_mm": 18.5,
         "spindle_speed_rpm": 15000,
         "feed_rate_mm_min": 10200,
