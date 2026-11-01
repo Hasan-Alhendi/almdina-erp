@@ -241,6 +241,7 @@ jobs:
             almdina_erp/tests/test_deferred_saw_center_paths.py \
             almdina_erp/tests/test_cutter_center_paths.py \
             almdina_erp/tests/test_corner_dxf_edge_binding.py \
+            almdina_erp/tests/test_mixed_corner_dxf_identity.py \
             almdina_erp/tests/test_regular_machining_orientation.py \
             almdina_erp/tests/test_strict_regular_machining_rotation.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
