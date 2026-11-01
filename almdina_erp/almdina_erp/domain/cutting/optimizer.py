@@ -1028,6 +1028,10 @@ def smart_search(
     started = time.monotonic()
     budget = max(0.0, float(time_limit_sec))
     deadline = started + budget
+    overall_deadline = deadline
+    # Only reclaim quality-search time after a valid plan proves minimum boards.
+    quality_reserve = min(.25, budget*.05)
+    from .plan_search import regular_board_floor_proven, improve_same_count_layout
     metric_kwargs = {"min_remnant_width_cm":30.0,"min_remnant_length_cm":30.0,
                      "min_remnant_area_m2":.09, **metric_kwargs}
     from .plan_portfolio import retain_diverse_finals, nesting_coverage
@@ -1035,6 +1039,7 @@ def smart_search(
     rejected_finals = {}
     finals: list[dict[str, Any]] = []
     def offer(candidate):
+        nonlocal deadline
         from .plan_portfolio import manufacturing_export_rejection
         rejection = manufacturing_export_rejection(candidate)
         if rejection:
@@ -1054,6 +1059,10 @@ def smart_search(
             finals.remove(existing)
         finals.append(candidate)
         finals[:] = retain_diverse_finals(finals)
+        if machine_type in {"Auto", "CNC Router"} and regular_board_floor_proven(
+            finals[0], pieces, board_w_cm, board_h_cm
+        ):
+            deadline = min(deadline, overall_deadline-quality_reserve)
 
     for plan in seed_plans[:5]:
         if all(abs(float(sh.get('w',0))-board_w_cm)<1e-8 and abs(float(sh.get('h',0))-board_h_cm)<1e-8
@@ -1184,6 +1193,13 @@ def smart_search(
         exact = _solve_cp_sat(pieces,board_w_cm,board_h_cm,kerf_cm,len(best['sheets'])-1,max(.001,deadline-time.monotonic()))
         if exact is not None:
             finish(enrich_plan_metrics(exact,OPTIMAL_SEARCH,machine_type,**metric_kwargs),max(0,deadline-time.monotonic()))
+    if finals and time.monotonic() < overall_deadline:
+        repaired = improve_same_count_layout(finals[0], pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
+            metric_kwargs=metric_kwargs, deadline=overall_deadline)
+        if repaired is not finals[0] and time.monotonic() < overall_deadline:
+            offer(repaired)
+    deadline = overall_deadline
     best = dict(finals[0] if finals else initial)
     from .plan_portfolio import manufacturing_export_rejection
     if not finals and manufacturing_export_rejection(best):
@@ -1409,7 +1425,16 @@ def _finish_plan_search(
             machine_type,
             **metric_kwargs,
         )
-        if (final_candidates is not None or final_candidate_callback is not None) and not (validate_plan(
+        # Both validators read sheets/unplaced and the fixed request arguments.
+        # Reuse the existing exact no-op proof; every changed layout still passes
+        # full validation. Better-ranked metadata must still reach the portfolio.
+        same_layout = best is not None and (
+            candidate.get("sheets") == best.get("sheets")
+            and candidate.get("unplaced") == best.get("unplaced")
+        )
+        if (final_candidates is not None or final_candidate_callback is not None) and (
+            not same_layout or _candidate_is_better(candidate, best)
+        ) and not (validate_plan(
             candidate,pieces,board_w_cm,board_h_cm,kerf_cm=kerf_cm) or placement_permission_errors(
                 candidate,pieces,mirroring_allowed=mirroring_allowed)):
             if final_candidate_callback is not None:

@@ -191,6 +191,94 @@ def improve_plan_search(
     )
 
 
+def regular_board_floor_proven(plan, pieces, board_w_cm, board_h_cm):
+    """A valid all-full-board rectangular plan cannot lose another board."""
+    sheets = plan.get("sheets") or []
+    return (board_w_cm > 0 and board_h_cm > 0 and len(sheets) > 1
+        and not plan.get("unplaced") and bool(pieces)
+        and all((p.get("piece_type") or "Regular") == "Regular"
+            and (p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD" for p in pieces)
+        and not _locked_piece_ids(plan)
+        and all((s.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+            and all((p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+                    and (p.get("piece_type") or "Regular") == "Regular"
+                    and not p.get("geometry") and not p.get("overlays")
+                    for p in s.get("pieces") or []) for s in sheets)
+        and sum(num(p.get("width_cm"))*num(p.get("length_cm")) for p in pieces)
+            > (len(sheets)-1)*board_w_cm*board_h_cm + 1e-9)
+
+
+def _regular_layout_quality(plan, kerf_cm):
+    """Exact adjacency fraction and repeated-size board splits; no score."""
+    aligned = adjacent = 0
+    sizes = {}
+    for sheet_index, sheet in enumerate(plan.get("sheets") or []):
+        placed = sheet.get("pieces") or []
+        for index, piece in enumerate(placed):
+            size = tuple(sorted((round(num(piece.get("w")), 6), round(num(piece.get("h")), 6))))
+            sizes.setdefault(size, set()).add(sheet_index)
+            for other in placed[index+1:]:
+                dx = max(other["x"]-piece["x"]-piece["w"], piece["x"]-other["x"]-other["w"])
+                dy = max(other["y"]-piece["y"]-piece["h"], piece["y"]-other["y"]-other["h"])
+                if (abs(dx-kerf_cm) <= 1e-6 and dy < 0) or (abs(dy-kerf_cm) <= 1e-6 and dx < 0):
+                    adjacent += 1
+                    axis, extent = ("y", "h") if abs(dx-kerf_cm) <= 1e-6 else ("x", "w")
+                    aligned += int(abs(piece[axis]-other[axis]) <= 1e-6 or
+                        abs(piece[axis]+piece[extent]-other[axis]-other[extent]) <= 1e-6)
+    return aligned, max(1, adjacent), sum(len(boards)-1 for boards in sizes.values())
+
+
+def improve_same_count_layout(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs, deadline):
+    """At most three dense regular-board pairs; no cancellation/shape policy change."""
+    if machine_type not in {"Auto", "CNC Router"} or time.monotonic() >= deadline:
+        return plan
+    if not regular_board_floor_proven(plan, pieces, board_w_cm, board_h_cm):
+        return plan
+    from .evaluation import placement_permission_errors, validate_plan
+    from .optimizer import _run_preordered_method, order_pieces, enrich_plan_metrics, _candidate_is_better
+
+    source = {int(p["id"]): p for p in pieces}
+    locked = _locked_piece_ids(plan)
+    eligible = [(i, s) for i, s in enumerate(plan["sheets"]) if s.get("pieces") and all(
+        int(p["id"]) in source and int(p["id"]) not in locked for p in s["pieces"])]
+    # Preserve the sparse remnant board where possible; organize dense pairs first.
+    eligible.sort(key=lambda item: -sum(num(p.get("w"))*num(p.get("h")) for p in item[1]["pieces"]))
+    best = plan
+    before = _regular_layout_quality(plan, kerf_cm)
+    attempts = 0
+    for left in range(min(3, len(eligible))):
+        for right in range(left+1, min(3, len(eligible))):
+            if attempts >= 3 or time.monotonic() >= deadline:
+                return best
+            i, first = eligible[left]
+            j, second = eligible[right]
+            subset = [source[int(p["id"])] for sheet in (first, second) for p in sheet["pieces"]]
+            if len(subset) > _MAX_REPACK_PIECES:
+                continue
+            attempts += 1
+            packed = _run_preordered_method(order_pieces(subset, "long_side_desc"), subset,
+                board_w_cm, board_h_cm, kerf_cm, "MaxRects Contact Point", "long_side_desc")
+            if packed.get("unplaced") or len(packed.get("sheets") or []) != 2:
+                continue
+            candidate = deepcopy(plan)
+            for index, sheet in zip((i, j), packed["sheets"]):
+                candidate["sheets"][index]["pieces"] = sheet["pieces"]
+                for cache in ("free_rects", "skyline", "shelves"):
+                    candidate["sheets"][index].pop(cache, None)
+            after = _regular_layout_quality(candidate, kerf_cm)
+            alignment_change = after[0]*before[1] - before[0]*after[1]
+            if alignment_change < 0 or after[2] > before[2] or (alignment_change == 0 and after[2] == before[2]):
+                continue
+            accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+                machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metric_kwargs,
+                enrich_plan_metrics=enrich_plan_metrics, validate_plan=validate_plan,
+                permission_errors=placement_permission_errors, is_better=_candidate_is_better, deadline=deadline)
+            if accepted is not None and time.monotonic() < deadline:
+                best = accepted
+    return best
+
+
 def _repacked_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
     """Try cancelling a board by re-packing one receiving board with its pieces.
 
