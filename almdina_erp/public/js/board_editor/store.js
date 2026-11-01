@@ -16,6 +16,7 @@
             layerVisibility,
             selectedPieceId: null,
             selectedPieceKey: null,
+            selectedPieceKeys: [],
             selectedSheetNo: null,
             selectedElementId: null,
             expandedSheets: {},
@@ -64,6 +65,7 @@
                 layerVisibility: { ...state.layerVisibility },
                 selectedPieceId: state.selectedPieceId,
                 selectedPieceKey: state.selectedPieceKey,
+                selectedPieceKeys: state.selectedPieceKeys.slice(),
                 selectedSheetNo: state.selectedSheetNo,
                 selectedElementId: state.selectedElementId,
                 expandedSheets: { ...state.expandedSheets },
@@ -178,15 +180,44 @@
             emit();
         }
 
+        function syncPrimaryPiece() {
+            const keys = state.selectedPieceKeys;
+            state.selectedPieceKey = keys.length ? keys[keys.length - 1] : null;
+            if (!state.selectedPieceKey) {
+                state.selectedPieceId = null;
+                return;
+            }
+            const piece = state.session && state.session.pieces[state.selectedPieceKey];
+            if (piece) state.selectedPieceId = piece.piece_id;
+        }
+
         function selectPiece(pieceId, options) {
             const opts = options || {};
-            state.selectedPieceId = pieceId == null || pieceId === "" ? null : Number(pieceId);
-            state.selectedPieceKey = opts.pieceKey || null;
-            if (opts.sheetNo != null) state.selectedSheetNo = Number(opts.sheetNo);
-            if (opts.elementId !== undefined) state.selectedElementId = opts.elementId;
-            if (opts.expandSheet && state.selectedSheetNo != null) {
-                state.expandedSheets[String(state.selectedSheetNo)] = true;
+            if (pieceId == null || pieceId === "") {
+                state.selectedPieceKeys = [];
+                state.selectedPieceId = null;
+                state.selectedPieceKey = null;
+                if (opts.elementId !== undefined) state.selectedElementId = opts.elementId;
+                emit();
+                return;
             }
+            const key = opts.pieceKey || null;
+            if (opts.mode === "toggle" && key) {
+                const next = state.selectedPieceKeys.filter((item) => item !== key);
+                if (next.length === state.selectedPieceKeys.length) next.push(key);
+                state.selectedPieceKeys = next;
+                state.selectedSheetNo = null;
+            } else {
+                state.selectedPieceId = Number(pieceId);
+                state.selectedPieceKeys = key ? [key] : [];
+                state.selectedPieceKey = key;
+                if (opts.sheetNo != null) state.selectedSheetNo = Number(opts.sheetNo);
+            }
+            if (opts.elementId !== undefined) state.selectedElementId = opts.elementId;
+            if (opts.expandSheet && opts.sheetNo != null) {
+                state.expandedSheets[String(opts.sheetNo)] = true;
+            }
+            syncPrimaryPiece();
             emit();
         }
 
@@ -194,6 +225,7 @@
             state.selectedSheetNo = sheetNo == null ? null : Number(sheetNo);
             state.selectedPieceId = null;
             state.selectedPieceKey = null;
+            state.selectedPieceKeys = [];
             state.selectedElementId = null;
             if (state.selectedSheetNo != null) {
                 state.expandedSheets[String(state.selectedSheetNo)] = true;

@@ -257,6 +257,9 @@
         const movingEdges = footprintEdges(proposed);
         const targets = usableEdgesWorld(board).map((edge) => ["usable", edge, 0]);
         const movingKeys = new Set(MoveGeometry.draggedPieceIds(session, pieceKey));
+        if (opts.ignoreKeys && typeof opts.ignoreKeys.forEach === "function") {
+            opts.ignoreKeys.forEach((key) => movingKeys.add(key));
+        }
         const pad = thresholdMm + Math.max(proposed.bounds.w, proposed.bounds.h);
         Object.entries(session.pieces || {}).forEach(([otherKey, other]) => {
             if (movingKeys.has(otherKey)) return;

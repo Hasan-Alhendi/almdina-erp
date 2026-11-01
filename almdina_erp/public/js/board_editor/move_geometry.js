@@ -225,6 +225,89 @@
         return ids;
     }
 
+    function groupMovePlan(session, selectedKeys, pressedKey) {
+        const selectedList = (selectedKeys || []).filter((key) => session && session.pieces && session.pieces[key]);
+        const selected = new Set(selectedList);
+        const pressed = resolvePieceKey(session, pressedKey);
+        const useSelection = Boolean(pressed && selected.has(pressed));
+        const seeds = useSelection ? selectedList.slice() : (pressed ? [pressed] : []);
+        const seedSet = new Set(seeds);
+        const roots = [];
+        seeds.forEach((key) => {
+            const piece = session.pieces[key];
+            if (!piece || piece.distribution === "excluded") return;
+            const hostKey = piece.glass_host_key;
+            if (
+                hostKey
+                && seedSet.has(hostKey)
+                && session.pieces[hostKey]
+                && session.pieces[hostKey].distribution !== "excluded"
+            ) {
+                return;
+            }
+            roots.push(key);
+        });
+        const moving = [];
+        const seen = new Set();
+        roots.forEach((key) => {
+            draggedPieceIds(session, key).forEach((id) => {
+                if (seen.has(id)) return;
+                seen.add(id);
+                moving.push(id);
+            });
+        });
+        const locked = seeds.length > 1 && seeds.some((key) => {
+            const piece = session.pieces[key];
+            return piece && !piece.editable;
+        });
+        return { roots, moving, locked, seeds };
+    }
+
+    function proposeGroupMove(session, rootKeys, dx, dy) {
+        const roots = (rootKeys || []).filter((key) => session && session.pieces && session.pieces[key]);
+        if (!roots.length) {
+            return { ok: false, code: DROP_NOT_EDITABLE, reason: reasonMessage(DROP_NOT_EDITABLE), commands: [] };
+        }
+        const moving = new Set();
+        roots.forEach((key) => draggedPieceIds(session, key).forEach((id) => moving.add(id)));
+        const commands = [];
+        for (let index = 0; index < roots.length; index += 1) {
+            const key = roots[index];
+            const origin = pieceWorldOrigin(session, key);
+            const decision = validatePieceDrop(session, key, origin.x + num(dx), origin.y + num(dy), moving);
+            if (!decision.ok) {
+                return { ok: false, code: decision.code, reason: reasonMessage(decision.code), commands: [] };
+            }
+            const piece = session.pieces[key];
+            let detachHost = false;
+            const host = piece.glass_host_key ? session.pieces[piece.glass_host_key] : null;
+            if (host && !moving.has(piece.glass_host_key)) {
+                const trial = {
+                    ...piece,
+                    sheet_no: decision.sheet_no,
+                    local_x_mm: decision.local_x_mm,
+                    local_y_mm: decision.local_y_mm,
+                };
+                if (
+                    Number(trial.sheet_no) !== Number(host.sheet_no)
+                    || !guestRemainsInHost(trial, host)
+                ) {
+                    detachHost = true;
+                }
+            }
+            commands.push({
+                piece_key: key,
+                target_sheet_no: decision.sheet_no,
+                local_x_mm: decision.local_x_mm,
+                local_y_mm: decision.local_y_mm,
+                delta_x_mm: decision.delta_x_mm,
+                delta_y_mm: decision.delta_y_mm,
+                detach_host: detachHost,
+            });
+        }
+        return { ok: true, commands, dx: num(dx), dy: num(dy) };
+    }
+
     function boardsOverlap(a, b, gapMm) {
         const pad = Math.max(0, num(gapMm));
         const titleA = num(a.title_band_mm) || 36;
@@ -384,7 +467,7 @@
         return null;
     }
 
-    function validatePieceDrop(session, pieceKeyOrInstance, worldX, worldY) {
+    function validatePieceDrop(session, pieceKeyOrInstance, worldX, worldY, ignoreKeys) {
         const pieceKey = resolvePieceKey(session, pieceKeyOrInstance);
         const piece = pieceKey && session.pieces[pieceKey];
         if (!piece || !piece.editable || piece.distribution === "excluded") {
@@ -435,7 +518,9 @@
                 : piece.pivot_mm,
         };
         const movedLocal = footprint(moved);
-        const movingKeys = new Set(draggedPieceIds(session, pieceKey));
+        const movingKeys = ignoreKeys && typeof ignoreKeys.has === "function"
+            ? ignoreKeys
+            : new Set(draggedPieceIds(session, pieceKey));
         if (target.sheet_no != null) {
             for (const [otherKey, other] of Object.entries(session.pieces)) {
                 if (movingKeys.has(otherKey)) continue;
@@ -601,9 +686,11 @@
         reframePieceGeometry,
         pieceWorldOrigin,
         draggedPieceIds,
+        groupMovePlan,
         validatePieceDrop,
         validateBoardPlacement,
         proposePieceDrop,
+        proposeGroupMove,
         proposeBoardDrop,
         applyPieceMove,
         applyBoardMove,

@@ -40,13 +40,22 @@
         ));
     }
 
-    function selectionChromeSvg(session, storeView, scale) {
-        if (!session || !storeView) return "";
-        if (storeView.selectedPieceId == null && !storeView.selectedPieceKey) return "";
-        const sessionPiece = (storeView.selectedPieceKey && session.pieces[storeView.selectedPieceKey])
-            || Object.values(session.pieces || {}).find(
-                (row) => Number(row.piece_id) === Number(storeView.selectedPieceId)
-            );
+    function selectedPieceKeys(storeView, session) {
+        const listed = Array.isArray(storeView && storeView.selectedPieceKeys)
+            ? storeView.selectedPieceKeys.filter((key) => session && session.pieces && session.pieces[key])
+            : [];
+        if (listed.length) return listed;
+        if (storeView && storeView.selectedPieceKey && session && session.pieces && session.pieces[storeView.selectedPieceKey]) {
+            return [storeView.selectedPieceKey];
+        }
+        if (!session || storeView.selectedPieceId == null) return [];
+        const match = Object.values(session.pieces || {}).find(
+            (row) => Number(row.piece_id) === Number(storeView.selectedPieceId)
+        );
+        return match ? [match.piece_key] : [];
+    }
+
+    function selectionChromeForPiece(session, sessionPiece, scale, showHandle) {
         if (!sessionPiece || sessionPiece.distribution === "excluded") return "";
         const RG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.RotationGeometry;
         const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
@@ -70,12 +79,20 @@
         const handleRadius = Math.max(5, 7 / safeScale);
         let chrome = `<g class="abe-selection-chrome" data-abe-selection-chrome="1" data-abe-selection-for="${esc(sessionPiece.piece_key)}" data-rotation-deg="${esc(String(Number(sessionPiece.rotation_deg) || 0))}" style="pointer-events:none">
             <path class="abe-selection-outline" d="${esc(framePath)}" fill="none" stroke="#0b5fff" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
-        if (eligibility.rotatable) {
+        if (showHandle && eligibility.rotatable) {
             chrome += `<line x1="${handle.pivotWorld.x}" y1="${handle.pivotWorld.y}" x2="${handle.handleWorld.x}" y2="${handle.handleWorld.y}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}" pointer-events="none"/>
             <circle class="abe-rotate-handle" data-abe-rotate-handle="${esc(sessionPiece.piece_key)}" cx="${handle.handleWorld.x}" cy="${handle.handleWorld.y}" r="${handleRadius}" fill="#fff" stroke="#0b5fff" stroke-width="2" style="pointer-events:all;cursor:grab"/>`;
         }
         chrome += `</g>`;
         return chrome;
+    }
+
+    function selectionChromeSvg(session, storeView, scale) {
+        if (!session || !storeView) return "";
+        const keys = selectedPieceKeys(storeView, session);
+        if (!keys.length) return "";
+        const showHandle = keys.length === 1;
+        return keys.map((key) => selectionChromeForPiece(session, session.pieces[key], scale, showHandle)).join("");
     }
 
     function pointsToPath(points, closed) {
@@ -253,6 +270,8 @@
     const BOARD_TITLE_MM = 36;
     const FIT_PADDING_PX = 28;
     const SCENE_PAD_PX = 16;
+    const SCALE_MIN = 0.02;
+    const SCALE_MAX = 8;
     const GRID_WIDTH_RATIO = 0.625;
     const BOARD_SCREEN_MIN_PX = 300;
     const BOARD_SCREEN_MAX_PX = 380;
@@ -273,6 +292,50 @@
         const twoColumnMm = boardMm * 2 + BOARD_GAP_MM;
         const scale = (width * GRID_WIDTH_RATIO) / twoColumnMm;
         return boardMm * scale < BOARD_SCREEN_MIN_PX ? 1 : 2;
+    }
+
+    function shouldZoomWheel(event) {
+        return Boolean(event && event.ctrlKey);
+    }
+
+    function normalizedWheelPixels(deltaY, deltaMode, viewportSize) {
+        const delta = Number(deltaY) || 0;
+        const mode = Number(deltaMode) || 0;
+        if (mode === 1) return delta * 16;
+        if (mode === 2) return delta * Math.max(1, Number(viewportSize) || 1);
+        return delta;
+    }
+
+    function wheelZoomFactor(deltaY, deltaMode, viewportSize) {
+        const pixels = normalizedWheelPixels(deltaY, deltaMode, viewportSize);
+        return Math.exp(-pixels * 0.0016);
+    }
+
+    function cameraPointToWorld(scrollX, scrollY, focalX, focalY, scale, pad) {
+        const safeScale = Number(scale) || 1;
+        const origin = pad == null ? SCENE_PAD_PX : Number(pad) || 0;
+        return {
+            x: ((Number(scrollX) || 0) + Number(focalX) - origin) / safeScale,
+            y: ((Number(scrollY) || 0) + Number(focalY) - origin) / safeScale,
+        };
+    }
+
+    function zoomAroundFocal(camera, focal, factor) {
+        const previous = Number(camera && camera.scale) || 1;
+        const next = Math.min(SCALE_MAX, Math.max(SCALE_MIN, previous * (Number(factor) || 1)));
+        const pad = camera && camera.pad != null ? Number(camera.pad) || 0 : SCENE_PAD_PX;
+        const scrollX = Number(camera && camera.scrollX) || 0;
+        const scrollY = Number(camera && camera.scrollY) || 0;
+        const focalX = Number(focal && focal.x) || 0;
+        const focalY = Number(focal && focal.y) || 0;
+        const world = cameraPointToWorld(scrollX, scrollY, focalX, focalY, previous, pad);
+        return {
+            scale: next,
+            scrollX: Math.max(0, world.x * next + pad - focalX),
+            scrollY: Math.max(0, world.y * next + pad - focalY),
+            worldX: world.x,
+            worldY: world.y,
+        };
     }
 
     function openingScale(maxBoardMm, columns, viewportWidth) {
@@ -698,6 +761,8 @@
             Math.ceil(metrics.height * scale + SCENE_PAD_PX * 2)
         );
 
+        const selectedKeys = new Set(selectedPieceKeys(storeView, session));
+        const multiSelection = selectedKeys.size > 1;
         const staleCut = new Set((session && session.stale_cut_path_sheets) || []);
         const staleText = new Set((session && session.stale_unbound_text_sheets) || []);
         const body = [];
@@ -733,8 +798,10 @@
             const color = element.aci_color != null
                 ? aciToCss(element.aci_color, layerColor(storeView, matchKey))
                 : layerColor(storeView, matchKey);
-            const selectedPiece = storeView.selectedPieceId != null
-                && Number(element.piece_id) === Number(storeView.selectedPieceId);
+            const selectedPiece = sessionPiece
+                ? selectedKeys.has(sessionPiece.piece_key)
+                : (storeView.selectedPieceId != null
+                    && Number(element.piece_id) === Number(storeView.selectedPieceId));
             const selectedSheet = storeView.selectedSheetNo != null
                 && Number(element.sheet_no) === Number(storeView.selectedSheetNo)
                 && element.kind === "sheet_outline";
@@ -1057,12 +1124,10 @@
             ? `<div class="abe-drop-message" role="status">${esc(storeView.dropMessage)}</div>`
             : "";
 
-        const selectedSessionPiece = session && (
-            (storeView.selectedPieceKey && session.pieces[storeView.selectedPieceKey])
-            || Object.values(session.pieces || {}).find(
-                (row) => Number(row.piece_id) === Number(storeView.selectedPieceId)
-            )
-        );
+        const selectedKeyList = selectedPieceKeys(storeView, session);
+        const selectedSessionPiece = !multiSelection && selectedKeyList.length === 1
+            ? session.pieces[selectedKeyList[0]]
+            : null;
         const angleEditable = Boolean(
             selectedSessionPiece
             && window.AlmdinaBoardEditor
@@ -1076,10 +1141,14 @@
             ? (Number(selectedSessionPiece.rotation_deg) || 0)
             : 0;
         const canRemovePiece = Boolean(
-            selectedSessionPiece
+            !multiSelection
+            && selectedSessionPiece
             && selectedSessionPiece.editable
             && selectedSessionPiece.distribution !== "excluded"
         );
+        const removePieceTitle = multiSelection
+            ? __("Select one piece to remove it.")
+            : __("Remove the selected piece from this session layout. The order row stays unchanged.");
         const canRemoveBoard = Boolean(
             session
             && session.boards
@@ -1102,7 +1171,7 @@
                     <button type="button" class="alm-btn-secondary abe-undo" ${storeView.canUndo ? "" : "disabled"}>${esc(__("Undo"))}</button>
                     <button type="button" class="alm-btn-secondary abe-redo" ${storeView.canRedo ? "" : "disabled"}>${esc(__("Redo"))}</button>
                     <button type="button" class="alm-btn-secondary abe-restore">${esc(__("Restore entry layout"))}</button>
-                    <button type="button" class="alm-btn-secondary abe-remove-piece" ${canRemovePiece ? "" : "disabled"} title="${esc(__("Remove the selected piece from this session layout. The order row stays unchanged."))}"><span aria-hidden="true">🗑</span> ${esc(__("Remove from distribution"))}</button>
+                    <button type="button" class="alm-btn-secondary abe-remove-piece" ${canRemovePiece ? "" : "disabled"} title="${esc(removePieceTitle)}"><span aria-hidden="true">🗑</span> ${esc(__("Remove from distribution"))}</button>
                     <button type="button" class="alm-btn-secondary abe-remove-board" ${canRemoveBoard ? "" : "disabled"}>${esc(__("Remove board from distribution"))}</button>
                     <button type="button" class="alm-btn-secondary abe-fit-all">${esc(__("Fit all"))}</button>
                     <button type="button" class="alm-btn-secondary abe-zoom-in">${esc(__("Zoom in"))}</button>
@@ -1253,6 +1322,7 @@
                 return;
             }
             if (suppressed()) return;
+            if (event.shiftKey) return;
             if (clickTargetKeepsSelection(event.target)) return;
             if (handlers && handlers.clearSelection) handlers.clearSelection();
         });
@@ -1305,6 +1375,13 @@
         fitBoards,
         columnCount,
         openingScale,
+        shouldZoomWheel,
+        normalizedWheelPixels,
+        wheelZoomFactor,
+        cameraPointToWorld,
+        zoomAroundFocal,
+        SCALE_MIN,
+        SCALE_MAX,
         patchDragPreview,
         clickTargetKeepsSelection,
         FIT_PADDING_PX,

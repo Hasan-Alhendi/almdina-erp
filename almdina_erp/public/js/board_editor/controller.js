@@ -361,6 +361,53 @@
             return true;
         }
 
+        function zoomByFactor(factor, client) {
+            if (!store || !CanvasRenderer.zoomAroundFocal) return;
+            const stage = ensureShell().querySelector("[data-abe-stage]");
+            const current = store.snapshot().viewport;
+            const scrollX = stage ? Number(stage.scrollLeft) || 0 : liveScroll.x;
+            const scrollY = stage ? Number(stage.scrollTop) || 0 : liveScroll.y;
+            const rect = stage && stage.getBoundingClientRect
+                ? stage.getBoundingClientRect()
+                : { left: 0, top: 0, width: stageSize().width, height: stageSize().height };
+            const focalX = client ? client.x - rect.left : rect.width / 2;
+            const focalY = client ? client.y - rect.top : rect.height / 2;
+            const rendered = lastCanvasApi && lastCanvasApi.metrics && lastCanvasApi.metrics.scale;
+            const next = CanvasRenderer.zoomAroundFocal({
+                scale: Number(current.scale) || rendered || 1,
+                scrollX,
+                scrollY,
+                pad: CanvasRenderer.SCENE_PAD_PX,
+            }, { x: focalX, y: focalY }, factor);
+            rememberCamera({
+                scale: next.scale,
+                scrollX: next.scrollX,
+                scrollY: next.scrollY,
+                columns: current.columns,
+                opened: true,
+                userAdjusted: true,
+                fitted: false,
+            });
+        }
+
+        function onCanvasWheel(event) {
+            if (!store || suspended || !CanvasRenderer.shouldZoomWheel(event)) return;
+            let stage = null;
+            try {
+                stage = ensureShell().querySelector("[data-abe-stage]");
+            } catch (err) {
+                stage = null;
+            }
+            if (!stage || !event.target || typeof stage.contains !== "function" || !stage.contains(event.target)) return;
+            event.preventDefault();
+            const factor = CanvasRenderer.wheelZoomFactor(
+                event.deltaY,
+                event.deltaMode,
+                stage.clientHeight || stageSize().height
+            );
+            zoomByFactor(factor, { x: event.clientX, y: event.clientY });
+        }
+
         function revealSheet(sheetNo) {
             if (!store || sheetNo == null || sheetNo === "") return;
             const size = stageSize();
@@ -446,7 +493,7 @@
                         frappe.show_alert({ message: translate(reason || "Drop rejected."), indicator: "orange" }, 4);
                     }
                 },
-                onSelectPiece: (pieceId, elementId, pieceKey) => {
+                onSelectPiece: (pieceId, elementId, pieceKey, meta) => {
                     if (!store || pieceId == null || pieceId === "") return;
                     const view = store.snapshot();
                     const piece = ((view.projection.pieces) || []).find((row) => Number(row.piece_id) === Number(pieceId));
@@ -455,10 +502,12 @@
                             (pieceKey && view.session.pieces[pieceKey])
                             || Object.values(view.session.pieces || {}).find((row) => Number(row.piece_id) === Number(pieceId))
                         );
+                    const resolvedKey = (sessionPiece && sessionPiece.piece_key) || pieceKey;
                     store.selectPiece(pieceId, {
+                        mode: meta && meta.shiftKey ? "toggle" : "replace",
                         sheetNo: (sessionPiece && sessionPiece.sheet_no) || (piece && piece.sheet_no),
                         elementId,
-                        pieceKey: (sessionPiece && sessionPiece.piece_key) || pieceKey,
+                        pieceKey: resolvedKey,
                         expandSheet: true,
                     });
                 },
@@ -544,19 +593,23 @@
                         });
                     }
                 },
-                selectPiece: (pieceId, sheetNo) => {
+                selectPiece: (pieceId, sheetNo, meta) => {
                     const piece = ((view.projection.pieces) || []).find((row) => Number(row.piece_id) === Number(pieceId));
                     const sessionPiece = view.session
-                        && Object.values(view.session.pieces || {}).find((row) => Number(row.piece_id) === Number(pieceId));
+                        && (
+                            (meta && meta.pieceKey && view.session.pieces[meta.pieceKey])
+                            || Object.values(view.session.pieces || {}).find((row) => Number(row.piece_id) === Number(pieceId))
+                        );
                     const targetSheet = sheetNo
                         || (sessionPiece && sessionPiece.sheet_no)
                         || (piece && piece.sheet_no);
                     store.selectPiece(pieceId, {
+                        mode: meta && meta.shiftKey ? "toggle" : "replace",
                         sheetNo: targetSheet,
-                        pieceKey: sessionPiece && sessionPiece.piece_key,
+                        pieceKey: (sessionPiece && sessionPiece.piece_key) || (meta && meta.pieceKey),
                         expandSheet: true,
                     });
-                    if (targetSheet != null) revealSheet(targetSheet);
+                    if (!(meta && meta.shiftKey) && targetSheet != null) revealSheet(targetSheet);
                 },
                 setSidebarSplit: (ratio, sidebarHeight) => store.setSidebarSplit(ratio, sidebarHeight),
             });
@@ -634,25 +687,7 @@
                 consumeClickSuppression: () => (
                     moveInteraction ? moveInteraction.consumeClickSuppression() : false
                 ),
-                zoom: (factor) => {
-                    const current = store.snapshot().viewport;
-                    const size = stageSize();
-                    const previous = Number(current.scale) || 1;
-                    const next = Math.min(8, Math.max(0.02, previous * factor));
-                    const focalX = size.width / 2;
-                    const focalY = size.height / 2;
-                    const worldX = (liveScroll.x + focalX - CanvasRenderer.SCENE_PAD_PX) / previous;
-                    const worldY = (liveScroll.y + focalY - CanvasRenderer.SCENE_PAD_PX) / previous;
-                    rememberCamera({
-                        scale: next,
-                        scrollX: Math.max(0, worldX * next + CanvasRenderer.SCENE_PAD_PX - focalX),
-                        scrollY: Math.max(0, worldY * next + CanvasRenderer.SCENE_PAD_PX - focalY),
-                        columns: current.columns,
-                        opened: true,
-                        userAdjusted: true,
-                        fitted: false,
-                    });
-                },
+                zoom: (factor) => zoomByFactor(factor, null),
                 onBack: () => backToOrder(activeOrderName),
                 readScroll: () => liveScroll,
                 onScroll: (x, y) => {
@@ -853,6 +888,7 @@
         }
 
         lifecycle.listen(window, "resize", onShellGeometryChange);
+        lifecycle.listen(window, "wheel", onCanvasWheel, { capture: true, passive: false }, "abe-wheel-zoom");
         lifecycle.listen(window, "keydown", (event) => {
             if (event.code === "Space" && !isEditableTarget(event.target)) {
                 spaceHeld = true;
@@ -872,10 +908,12 @@
             if (isEditableTarget(event.target) || (Distribution && !Distribution.keyboardDeleteApplies(event.target))) return;
             if (event.key === "Delete" && store && Distribution) {
                 const view = store.snapshot();
-                const key = view.selectedPieceKey;
-                if (key) {
+                const keys = Array.isArray(view.selectedPieceKeys) && view.selectedPieceKeys.length
+                    ? view.selectedPieceKeys
+                    : (view.selectedPieceKey ? [view.selectedPieceKey] : []);
+                if (keys.length === 1) {
                     event.preventDefault();
-                    applyDistribution(() => Distribution.excludePiece(view.session, key));
+                    applyDistribution(() => Distribution.excludePiece(view.session, keys[0]));
                 }
                 return;
             }

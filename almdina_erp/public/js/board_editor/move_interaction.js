@@ -205,6 +205,9 @@
                 elementId: spec.elementId || null,
                 sheetNo: spec.sheetNo == null ? null : Number(spec.sheetNo),
                 ids: spec.ids || [],
+                roots: spec.roots || [],
+                blockReason: spec.blockReason || null,
+                shiftKey: Boolean(spec.shiftKey),
                 canDrag: Boolean(spec.canDrag),
                 canSelect: Boolean(spec.canSelect),
                 moved: false,
@@ -251,14 +254,24 @@
             const piece = pieceKey && snap.session.pieces[pieceKey];
             const pieceId = (meta && meta.pieceId) || (piece && piece.piece_id);
             if (!piece && pieceId == null) return false;
+            const selected = Array.isArray(snap.selectedPieceKeys) ? snap.selectedPieceKeys : [];
+            const plan = MoveGeometry.groupMovePlan(snap.session, selected, pieceKey);
+            const blocked = Boolean(plan.locked);
+            const rootsEditable = plan.roots.every((key) => {
+                const row = snap.session.pieces[key];
+                return row && row.editable;
+            });
             return beginGesture({
                 kind: "piece",
                 pieceKey,
                 pieceInstanceId: piece && piece.piece_instance_id,
                 pieceId,
                 elementId: meta && meta.elementId,
-                ids: piece && piece.editable ? MoveGeometry.draggedPieceIds(snap.session, pieceKey) : [],
-                canDrag: Boolean(piece && piece.editable),
+                ids: plan.moving,
+                roots: plan.roots,
+                blockReason: blocked ? "A selected piece cannot be moved." : null,
+                shiftKey: Boolean(event && event.shiftKey),
+                canDrag: blocked || (plan.roots.length > 0 && rootsEditable),
                 canSelect: true,
             }, event);
         }
@@ -301,17 +314,26 @@
                     thresholdMm,
                     exitThresholdMm: exitMm,
                     activeSnap: gesture.activeSnap,
+                    ignoreKeys: gesture.ids,
                 }
             );
             if (suggestion && suggestion.ok) {
-                gesture.activeSnap = suggestion;
-                return {
-                    dx: suggestion.dx,
-                    dy: suggestion.dy,
-                    guides: suggestion.guides || [],
-                    snapped: true,
-                    suggestion,
-                };
+                const groupCheck = MoveGeometry.proposeGroupMove(
+                    snap.session,
+                    gesture.roots,
+                    suggestion.dx,
+                    suggestion.dy
+                );
+                if (groupCheck.ok) {
+                    gesture.activeSnap = suggestion;
+                    return {
+                        dx: suggestion.dx,
+                        dy: suggestion.dy,
+                        guides: suggestion.guides || [],
+                        snapped: true,
+                        suggestion,
+                    };
+                }
             }
             gesture.activeSnap = null;
             return { dx: rawDx, dy: rawDy, guides: [], snapped: false };
@@ -325,11 +347,11 @@
                 const resolved = resolvePiecePreviewDelta(dx, dy);
                 gesture.lastDx = resolved.dx;
                 gesture.lastDy = resolved.dy;
-                const proposal = MoveGeometry.proposePieceDrop(
+                const proposal = MoveGeometry.proposeGroupMove(
                     snap.session,
-                    gesture.pieceKey,
-                    gesture.worldOriginX + resolved.dx,
-                    gesture.worldOriginY + resolved.dy
+                    gesture.roots,
+                    resolved.dx,
+                    resolved.dy
                 );
                 publishPreview({
                     kind: "piece",
@@ -344,9 +366,9 @@
                     snapped: Boolean(resolved.snapped),
                     valid: proposal.ok,
                     reason: proposal.ok ? null : proposal.reason,
-                    targetSheetNo: proposal.ok ? proposal.target_sheet_no : null,
-                    ghostLocalX: proposal.ok ? proposal.local_x_mm : null,
-                    ghostLocalY: proposal.ok ? proposal.local_y_mm : null,
+                    targetSheetNo: proposal.ok && proposal.commands[0] ? proposal.commands[0].target_sheet_no : null,
+                    ghostLocalX: proposal.ok && proposal.commands[0] ? proposal.commands[0].local_x_mm : null,
+                    ghostLocalY: proposal.ok && proposal.commands[0] ? proposal.commands[0].local_y_mm : null,
                 });
             } else if (gesture.kind === "board") {
                 gesture.activeSnap = null;
@@ -394,6 +416,13 @@
 
             if (gesture.phase === "armed") {
                 if (dist < MOVE_THRESHOLD_PX) return;
+                if (gesture.blockReason) {
+                    store.setDropMessage(__(gesture.blockReason));
+                    suppressClick = true;
+                    resetGesture();
+                    event.preventDefault();
+                    return;
+                }
                 const world = clientToWorld(event.clientX, event.clientY);
                 if (!world) return;
                 // Re-anchor world delta at first real move so the piece does not jump.
@@ -424,7 +453,9 @@
             if (!gesture || !gesture.canSelect) return;
             if (gesture.kind === "piece") {
                 if (onSelectPiece) {
-                    onSelectPiece(gesture.pieceId, gesture.elementId, gesture.pieceKey);
+                    onSelectPiece(gesture.pieceId, gesture.elementId, gesture.pieceKey, {
+                        shiftKey: Boolean(gesture.shiftKey),
+                    });
                 }
             } else if (gesture.kind === "board") {
                 if (onSelectSheet) onSelectSheet(gesture.sheetNo);
@@ -438,11 +469,11 @@
             const dy = gesture.lastDy;
 
             if (gesture.kind === "piece") {
-                const proposal = MoveGeometry.proposePieceDrop(
+                const proposal = MoveGeometry.proposeGroupMove(
                     snap.session,
-                    gesture.pieceKey,
-                    gesture.worldOriginX + dx,
-                    gesture.worldOriginY + dy
+                    gesture.roots,
+                    dx,
+                    dy
                 );
                 if (!proposal.ok) {
                     store.setDropMessage(__(proposal.reason || "Drop rejected."));
@@ -451,16 +482,9 @@
                     resetGesture();
                     return;
                 }
-                let next = JSON.parse(JSON.stringify(snap.session));
-                next = MoveGeometry.applyPieceMove(next, {
-                    piece_key: gesture.pieceKey,
-                    piece_instance_id: gesture.pieceInstanceId,
-                    target_sheet_no: proposal.target_sheet_no,
-                    local_x_mm: proposal.local_x_mm,
-                    local_y_mm: proposal.local_y_mm,
-                    delta_x_mm: proposal.delta_x_mm,
-                    delta_y_mm: proposal.delta_y_mm,
-                    detach_host: proposal.detach_host,
+                let next = snap.session;
+                proposal.commands.forEach((command) => {
+                    next = MoveGeometry.applyPieceMove(next, command);
                 });
                 store.commitSession(next);
                 store.setDropMessage(null);
@@ -498,6 +522,7 @@
 
         function finish(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            if (event && typeof event.shiftKey === "boolean") gesture.shiftKey = event.shiftKey;
             const phase = gesture.phase;
             const wasDragging = phase === "dragging" && gesture.moved;
 

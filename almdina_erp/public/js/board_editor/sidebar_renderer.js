@@ -26,20 +26,21 @@
         return "";
     }
 
-    function hostingHtml(node, depth, sheetNo) {
+    function hostingHtml(node, depth, sheetNo, selectedKeys) {
         const indent = Math.max(0, Number(depth) || 0);
         const guests = Array.isArray(node.guests) ? node.guests : [];
         const label = node.label || String(node.piece_id || "");
         const locked = node.editable === false
             ? `<span class="abe-host-hint">${esc(__("Not editable"))}</span>`
             : "";
-        let html = `<button type="button" class="abe-piece-row" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="${esc(sheetNo == null ? "" : sheetNo)}" style="padding-inline-start:${12 + indent * 14}px">
+        const selected = selectedKeys && selectedKeys.has && selectedKeys.has(node.piece_key);
+        let html = `<button type="button" class="abe-piece-row${selected ? " is-selected" : ""}" data-piece-id="${esc(node.piece_id)}" data-piece-key="${esc(node.piece_key || "")}" data-sheet-no="${esc(sheetNo == null ? "" : sheetNo)}" style="padding-inline-start:${12 + indent * 14}px">
             <span class="abe-piece-label" dir="ltr">${esc(label)}</span>
             ${node.glass_host_piece_id != null ? `<span class="abe-host-hint">${esc(__("Hosted"))}</span>` : ""}
             ${locked}
         </button>`;
         guests.forEach((guest) => {
-            html += hostingHtml(guest, indent + 1, sheetNo);
+            html += hostingHtml(guest, indent + 1, sheetNo, selectedKeys);
         });
         return html;
     }
@@ -68,6 +69,11 @@
         const visibleSheets = (session && session.boards)
             ? sheets.filter((sheet) => session.boards[String(sheet.sheet_no)])
             : sheets;
+        const selectedKeySet = new Set(
+            Array.isArray(storeView.selectedPieceKeys) && storeView.selectedPieceKeys.length
+                ? storeView.selectedPieceKeys
+                : (storeView.selectedPieceKey ? [storeView.selectedPieceKey] : [])
+        );
         const sheetRows = visibleSheets.map((sheet) => {
             const sheetNo = sheet.sheet_no;
             const expanded = storeView.expandedSheets[String(sheetNo)] !== false;
@@ -76,12 +82,12 @@
             if (session && SessionDocument) {
                 const roots = SessionDocument.hostingRoots(session, sheetNo);
                 pieceButtons = roots.length
-                    ? roots.map((node) => hostingHtml(node, 0, sheetNo)).join("")
+                    ? roots.map((node) => hostingHtml(node, 0, sheetNo, selectedKeySet)).join("")
                     : "";
             } else {
                 const hosting = (sheet.hosting && sheet.hosting.roots) || [];
                 pieceButtons = hosting.length
-                    ? hosting.map((node) => hostingHtml(node, 0, sheetNo)).join("")
+                    ? hosting.map((node) => hostingHtml(node, 0, sheetNo, selectedKeySet)).join("")
                     : (sheet.pieces || []).map((piece) => `<button type="button" class="abe-piece-row" data-piece-id="${esc(piece.piece_id)}" data-sheet-no="${esc(sheetNo)}">
                         <span class="abe-piece-label" dir="ltr">${esc(piece.label || piece.piece_id)}</span>
                     </button>`).join("");
@@ -102,7 +108,7 @@
             if (outsideRoots.length) {
                 outsideHtml = `<div class="abe-unplaced abe-outside-boards">
                     <div class="abe-unplaced-title">${esc(__("Outside boards"))}</div>
-                    ${outsideRoots.map((node) => hostingHtml(node, 0, "")).join("")}
+                    ${outsideRoots.map((node) => hostingHtml(node, 0, "", selectedKeySet)).join("")}
                 </div>`;
             }
         }
@@ -203,14 +209,27 @@
                 handlers && handlers.returnPiece && handlers.returnPiece(button.getAttribute("data-return-key"));
             });
         });
+        const selectedKeys = new Set(
+            Array.isArray(storeView.selectedPieceKeys) && storeView.selectedPieceKeys.length
+                ? storeView.selectedPieceKeys
+                : (storeView.selectedPieceKey ? [storeView.selectedPieceKey] : [])
+        );
         host.querySelectorAll(".abe-piece-row[data-piece-id]").forEach((button) => {
-            button.addEventListener("click", () => {
+            button.addEventListener("click", (event) => {
                 handlers && handlers.selectPiece && handlers.selectPiece(
                     button.getAttribute("data-piece-id"),
-                    button.getAttribute("data-sheet-no")
+                    button.getAttribute("data-sheet-no"),
+                    {
+                        shiftKey: Boolean(event.shiftKey),
+                        pieceKey: button.getAttribute("data-piece-key"),
+                    }
                 );
             });
-            if (Number(button.getAttribute("data-piece-id")) === Number(storeView.selectedPieceId)) {
+            const pieceKey = button.getAttribute("data-piece-key");
+            const selected = pieceKey
+                ? selectedKeys.has(pieceKey)
+                : Number(button.getAttribute("data-piece-id")) === Number(storeView.selectedPieceId);
+            if (selected) {
                 button.classList.add("is-selected");
                 const scroller = button.closest(".abe-section-scroll");
                 if (scroller) {
