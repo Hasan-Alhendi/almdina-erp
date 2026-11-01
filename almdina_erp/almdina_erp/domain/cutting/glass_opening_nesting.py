@@ -752,6 +752,12 @@ def material_outline_cm(piece: Mapping[str, Any]) -> tuple[tuple[float, float], 
     return None
 
 
+def finished_part_geometry_cm(piece: Mapping[str, Any]) -> PartGeometry | None:
+    """Proven finished cut geometry in board centimetres, including Glass holes."""
+
+    return _part_geometry(piece)
+
+
 def _publish_nested_opening(
     guest: Mapping[str, Any],
     parent: Mapping[str, Any],

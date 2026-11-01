@@ -98,64 +98,57 @@
             `;
         }
 
-        function toolPresetCatalog(section) {
-            if (!Array.isArray(section.toolPresets)) return "";
-            const rows = section.toolPresets.map(preset => {
-                const enabled = Boolean(preset && preset.enabled);
-                const facts = [
-                    preset.tool_name,
-                    preset.tool_number,
-                    preset.tool_diameter_mm ? `${preset.tool_diameter_mm} mm` : "",
-                    preset.final_depth_mm ? t("Depth {0} mm", [preset.final_depth_mm]) : "",
-                ].filter(Boolean).join(" · ");
-                const actions = section.editable ? [
-                    uiButton({
-                        label: t("Edit"),
-                        variant: "secondary",
-                        className: "aps-cnc-preset-edit",
-                        attrs: { "data-preset": preset.name || "" },
-                    }),
-                    uiButton({
-                        label: enabled ? t("Disable") : t("Enable"),
-                        variant: "secondary",
-                        className: "aps-cnc-preset-enabled",
-                        attrs: { "data-preset": preset.name || "", "data-enabled": enabled ? "0" : "1" },
-                    }),
-                    uiButton({
-                        label: t("Delete"),
-                        variant: "secondary",
-                        className: "aps-cnc-preset-delete",
-                        attrs: { "data-preset": preset.name || "" },
-                    }),
-                ].join("") : "";
-                return `
-                    <div class="aps-cnc-presets__row">
-                        <div>
-                            <strong>${esc(preset.preset_name || preset.name || "")}</strong>
-                            <span>${esc(facts)}</span>
-                        </div>
-                        ${uiBadge({ label: enabled ? t("Enabled") : t("Disabled"), tone: enabled ? "success" : "neutral" })}
-                        <div class="aps-cnc-presets__actions">${actions}</div>
-                    </div>
-                `;
-            }).join("");
-            const empty = rows
-                ? ""
-                : `<p class="aps-cnc-presets__empty">${t("No CNC tool presets have been created yet.")}</p>`;
-            const add = section.editable
-                ? uiButton({
-                    label: t("Add a tool preset"),
-                    variant: "primary",
-                    className: "aps-cnc-preset-add",
-                })
-                : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`;
+        function tabButton(id, label, activeTab) {
+            const selected = activeTab === id;
             return `
-                <div class="aps-cnc-presets">
-                    <h4>${t("CNC tool presets")}</h4>
-                    ${add}
-                    ${empty}
-                    ${rows}
-                </div>
+                <button
+                    type="button"
+                    class="aps-tab${selected ? " is-active" : ""}"
+                    role="tab"
+                    data-aps-tab="${esc(id)}"
+                    aria-selected="${selected ? "true" : "false"}"
+                    tabindex="${selected ? "0" : "-1"}"
+                >${esc(label)}</button>
+            `;
+        }
+
+        function operationalFilesPanel(model) {
+            const panel = model.operationalFiles || {};
+            const count = Number(panel.presetCount || 0);
+            const actions = [
+                uiButton({
+                    label: t("Manage tool presets"),
+                    variant: "primary",
+                    className: "aps-cnc-preset-manage",
+                }),
+                panel.editable
+                    ? uiButton({
+                        label: t("Add a tool preset"),
+                        variant: "secondary",
+                        className: "aps-cnc-preset-add",
+                    })
+                    : "",
+            ].filter(Boolean).join("");
+            return `
+                <article class="aps-section is-editable" data-section="operational_files">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("CNC tool presets")}</h3>
+                                <div class="aps-section-desc">${t("Manage saved CNC tool presets with the standard Desk list and form. Board NC settings only select a saved preset or create a new one.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${actions}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${count
+                            ? t("{0} saved tool presets are available in Desk.", [count])
+                            : t("No CNC tool presets have been created yet.")}</p>
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
+                    </div>
+                </article>
             `;
         }
 
@@ -186,7 +179,6 @@
                         </div>
                     </div>
                     <div class="aps-values">${section.rows.map(rowHtml).join("")}</div>
-                    ${toolPresetCatalog(section)}
                     ${section.editable ? "" : `
                         <div class="aps-readonly-note">${t("You can review the values here, but editing this section is not available for your current permissions.")}</div>
                     `}
@@ -214,6 +206,8 @@
         }
 
         function render(model) {
+            const activeTab = model.activeTab === "operational_files" ? "operational_files" : "settings";
+            const settingsSelected = activeTab === "settings";
             $body.html(`
                 <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
                     <header class="aps-hero alm-page-intro alm-page-intro--accented">
@@ -227,30 +221,50 @@
                         </div>
                     </header>
 
-                    <div class="aps-section-intro alm-section-header">
-                        <div>
-                            <span class="alm-section-header__kicker">${t("Active settings")}</span>
-                            <strong class="alm-section-header__title">${t("Configure each group from its dedicated place")}</strong>
+                    <nav class="aps-tabs" role="tablist" aria-label="${esc(t("Factory settings sections"))}">
+                        ${tabButton("settings", t("Operating settings"), activeTab)}
+                        ${tabButton("operational_files", t("Operational file settings"), activeTab)}
+                    </nav>
+
+                    <div class="aps-tab-panel" data-aps-tab-panel="settings" role="tabpanel"${settingsSelected ? "" : " hidden"}>
+                        <div class="aps-section-intro alm-section-header">
+                            <div>
+                                <span class="alm-section-header__kicker">${t("Active settings")}</span>
+                                <strong class="alm-section-header__title">${t("Configure each group from its dedicated place")}</strong>
+                            </div>
+                            <span class="aps-section-intro-note alm-section-header__note">${t("Editing is shown only for sections you are allowed to edit")}</span>
                         </div>
-                        <span class="aps-section-intro-note alm-section-header__note">${t("Editing is shown only for sections you are allowed to edit")}</span>
+                        <section class="aps-sections">
+                            ${model.sections.map(sectionCard).join("")}
+                            ${model.canManageWhatsAppSession ? `
+                            <article class="aps-section aps-whatsapp" data-whatsapp-root>
+                                <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
+                            </article>
+                            ` : ""}
+                            ${model.showBackupPanel ? `
+                            <article class="aps-section aps-backup" data-backup-root>
+                                <div class="aps-backup-loading">${t("Loading backup history...")}</div>
+                            </article>
+                            ` : ""}
+                        </section>
+                        ${legacySettingsDetails(model)}
+                        <div class="aps-note">
+                            <span class="aps-note-icon" aria-hidden="true">i</span>
+                            <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
+                        </div>
                     </div>
-                    <section class="aps-sections">
-                        ${model.sections.map(sectionCard).join("")}
-                        ${model.canManageWhatsAppSession ? `
-                        <article class="aps-section aps-whatsapp" data-whatsapp-root>
-                            <div class="aps-whatsapp-loading">${t("Loading WhatsApp status...")}</div>
-                        </article>
-                        ` : ""}
-                        ${model.showBackupPanel ? `
-                        <article class="aps-section aps-backup" data-backup-root>
-                            <div class="aps-backup-loading">${t("Loading backup history...")}</div>
-                        </article>
-                        ` : ""}
-                    </section>
-                    ${legacySettingsDetails(model)}
-                    <div class="aps-note">
-                        <span class="aps-note-icon" aria-hidden="true">i</span>
-                        <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
+
+                    <div class="aps-tab-panel" data-aps-tab-panel="operational_files" role="tabpanel"${settingsSelected ? " hidden" : ""}>
+                        <div class="aps-section-intro alm-section-header">
+                            <div>
+                                <span class="alm-section-header__kicker">${t("Operational files")}</span>
+                                <strong class="alm-section-header__title">${t("Manage CNC tool presets from Desk")}</strong>
+                            </div>
+                            <span class="aps-section-intro-note alm-section-header__note">${t("List View and Form View use the current factory CNC permissions")}</span>
+                        </div>
+                        <section class="aps-sections">
+                            ${operationalFilesPanel(model)}
+                        </section>
                     </div>
                 </div>
             `);

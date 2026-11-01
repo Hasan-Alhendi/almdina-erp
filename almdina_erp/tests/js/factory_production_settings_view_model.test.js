@@ -151,6 +151,24 @@ assert.equal(page.hasLegacy, true);
 assert.equal(page.canManageWhatsAppSession, true);
 assert.equal(page.sections.length, 7);
 assert.equal(page.legacy.length, 10);
+assert.equal(page.activeTab, "settings");
+assert.equal(page.operationalFiles.editable, false);
+assert.equal(page.operationalFiles.presetCount, 0);
+
+const tabbed = model.page({
+    current: Object.assign({}, current, {
+        cnc_tool_presets: [{ name: "Finish" }, { name: "Shallow" }],
+        permissions: Object.assign({}, current.permissions, {
+            sections: Object.assign({}, current.permissions.sections, {
+                cnc: { editable: true },
+            }),
+        }),
+    }),
+    activeTab: "operational_files",
+});
+assert.equal(tabbed.activeTab, "operational_files");
+assert.equal(tabbed.operationalFiles.editable, true);
+assert.equal(tabbed.operationalFiles.presetCount, 2);
 
 const backupCurrent = JSON.parse(JSON.stringify(current));
 backupCurrent.permissions.can_manage_backups = true;

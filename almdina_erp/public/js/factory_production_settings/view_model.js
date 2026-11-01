@@ -154,11 +154,32 @@
                     [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
                 ], current)] : []),
             ];
-            const cnc = built.find(item => item.key === "cnc");
-            if (cnc) {
-                cnc.toolPresets = Array.isArray(current.cnc_tool_presets) ? current.cnc_tool_presets : [];
-            }
             return built;
+        }
+
+        function resolvePageInput(input = {}) {
+            if (
+                input
+                && typeof input === "object"
+                && Object.prototype.hasOwnProperty.call(input, "current")
+            ) {
+                return {
+                    current: input.current || {},
+                    activeTab: input.activeTab === "operational_files" ? "operational_files" : "settings",
+                };
+            }
+            return {
+                current: input || {},
+                activeTab: "settings",
+            };
+        }
+
+        function operationalFiles(current = {}) {
+            const presets = Array.isArray(current.cnc_tool_presets) ? current.cnc_tool_presets : [];
+            return {
+                editable: sectionEditable(current, "cnc"),
+                presetCount: presets.length,
+            };
         }
 
         function legacy(current = {}) {
@@ -178,9 +199,13 @@
             ].map(([label, value]) => ({ label, value }));
         }
 
-        function page(current = {}) {
+        function page(input = {}) {
+            const resolved = resolvePageInput(input);
+            const current = resolved.current;
             return {
+                activeTab: resolved.activeTab,
                 sections: sections(current),
+                operationalFiles: operationalFiles(current),
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
                 canManageWhatsAppSession: canManageWhatsAppSession(current),
@@ -198,6 +223,7 @@
             display,
             catalogLabel,
             sections,
+            operationalFiles,
             legacy,
             page,
         });

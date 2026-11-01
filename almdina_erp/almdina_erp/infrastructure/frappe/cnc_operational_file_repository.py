@@ -23,6 +23,9 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     generation_snapshot_is_complete,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATION_TYPES
+from almdina_erp.almdina_erp.domain.cutting.finished_piece_geometry import (
+    resolve_finished_geometry_mm,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     approved_plan_for_order,
 )
@@ -59,85 +62,99 @@ def placed_piece_views(order: Any) -> list[dict[str, Any]]:
             raise frappe.ValidationError("Approved plan snapshot is not an object.")
         snapshot = parsed
     stored_by_identity: dict[tuple[int, int], Mapping[str, Any]] = {}
+    stored_by_instance: dict[str, Mapping[str, Any]] = {}
     for index, sheet in enumerate(snapshot.get("sheets") or [], start=1):
         if not isinstance(sheet, Mapping):
             continue
         sheet_no = cint(sheet.get("sheet_no") or index)
         for piece in sheet.get("pieces") or []:
-            if isinstance(piece, Mapping):
-                stored_by_identity[(sheet_no, cint(piece.get("id") or 0))] = piece
+            if not isinstance(piece, Mapping):
+                continue
+            stored_by_identity[(sheet_no, cint(piece.get("id") or 0))] = piece
+            instance = str(
+                piece.get("piece_instance_id") or piece.get("label") or ""
+            ).strip()
+            if instance and instance not in stored_by_instance:
+                stored_by_instance[instance] = piece
     views: list[dict[str, Any]] = []
     for piece in plan.placed_pieces or []:
         sheet_no = cint(piece.sheet_no)
-        stored = stored_by_identity.get((sheet_no, cint(piece.piece_id)), {})
-        geometry = stored.get("geometry") if isinstance(stored.get("geometry"), Mapping) else None
+        piece_id = cint(piece.piece_id)
+        stored = stored_by_identity.get((sheet_no, piece_id))
+        if stored is None:
+            instance = str(getattr(piece, "piece_instance_id", "") or "").strip()
+            label = str(getattr(piece, "piece_label", "") or "").strip()
+            stored = stored_by_instance.get(instance) or stored_by_instance.get(label) or {}
         overlays = stored.get("overlays") if isinstance(stored.get("overlays"), list) else []
-        views.append(
-            {
-                "piece_instance_id": str(piece.piece_instance_id or ""),
-                "sheet_no": sheet_no,
-                "piece_id": cint(piece.piece_id),
-                "extra_liner": cint(getattr(piece, "extra_liner", 0)),
-                "liner_specs_json": getattr(piece, "liner_specs_json", "") or "",
-                "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
-                "liner_offset_cm": getattr(piece, "liner_offset_cm", 0),
-                "liner_width_cm": getattr(piece, "liner_width_cm", 0),
-                "liner_start_cm": getattr(piece, "liner_start_cm", 0),
-                "liner_length_cm": getattr(piece, "liner_length_cm", 0),
-                "extra_back_groove": cint(getattr(piece, "extra_back_groove", 0)),
-                "back_groove_reference_side": getattr(piece, "back_groove_reference_side", "") or "",
-                "back_groove_offset_cm": getattr(piece, "back_groove_offset_cm", 0),
-                "back_groove_width_cm": getattr(piece, "back_groove_width_cm", 0),
-                "back_groove_start_cm": getattr(piece, "back_groove_start_cm", 0),
-                "back_groove_length_cm": getattr(piece, "back_groove_length_cm", 0),
-                "extra_recessed_handle_cutout": cint(
-                    getattr(piece, "extra_recessed_handle_cutout", 0)
-                ),
-                "recessed_handle_reference_side": getattr(piece, "recessed_handle_reference_side", "") or "",
-                "recessed_handle_offset_cm": getattr(piece, "recessed_handle_offset_cm", 0),
-                "recessed_handle_width_cm": getattr(piece, "recessed_handle_width_cm", 0),
-                "recessed_handle_start_cm": getattr(piece, "recessed_handle_start_cm", 0),
-                "recessed_handle_length_cm": getattr(piece, "recessed_handle_length_cm", 0),
-                "piece_type": getattr(piece, "piece_type", "") or "Regular",
-                "original_width_cm": getattr(piece, "original_width_cm", 0),
-                "original_length_cm": getattr(piece, "original_length_cm", 0),
-                "x_mm": getattr(piece, "x_mm", 0),
-                "y_mm": getattr(piece, "y_mm", 0),
-                "rotated": cint(getattr(piece, "rotated", 0)),
-                "rotation_quarter_turns": cint(
-                    stored.get("rotation_quarter_turns")
-                    if stored.get("rotation_quarter_turns") is not None
-                    else stored.get("corner_rotation_quarter_turns")
-                    if stored.get("corner_rotation_quarter_turns") is not None
-                    else (1 if cint(getattr(piece, "rotated", 0)) else 0)
-                ),
-                "corner_mirrored": cint(
-                    stored.get("corner_mirrored")
-                    if stored.get("corner_mirrored") is not None
-                    else getattr(piece, "corner_mirrored", 0)
-                ),
-                "clipped_corner_position": getattr(piece, "clipped_corner_position", "") or "",
-                "clipped_corner_width_cm": getattr(piece, "clipped_corner_width_cm", 0),
-                "clipped_corner_length_cm": getattr(piece, "clipped_corner_length_cm", 0),
-                "label": str(stored.get("label") or getattr(piece, "piece_label", "") or ""),
-                "geometry": geometry,
-                "overlays": overlays,
-            }
+        view = {
+            "piece_instance_id": str(piece.piece_instance_id or ""),
+            "sheet_no": sheet_no,
+            "piece_id": piece_id,
+            "extra_liner": cint(getattr(piece, "extra_liner", 0)),
+            "liner_specs_json": getattr(piece, "liner_specs_json", "") or "",
+            "liner_reference_side": getattr(piece, "liner_reference_side", "") or "",
+            "liner_offset_cm": getattr(piece, "liner_offset_cm", 0),
+            "liner_width_cm": getattr(piece, "liner_width_cm", 0),
+            "liner_start_cm": getattr(piece, "liner_start_cm", 0),
+            "liner_length_cm": getattr(piece, "liner_length_cm", 0),
+            "extra_back_groove": cint(getattr(piece, "extra_back_groove", 0)),
+            "back_groove_reference_side": getattr(piece, "back_groove_reference_side", "") or "",
+            "back_groove_offset_cm": getattr(piece, "back_groove_offset_cm", 0),
+            "back_groove_width_cm": getattr(piece, "back_groove_width_cm", 0),
+            "back_groove_start_cm": getattr(piece, "back_groove_start_cm", 0),
+            "back_groove_length_cm": getattr(piece, "back_groove_length_cm", 0),
+            "extra_recessed_handle_cutout": cint(
+                getattr(piece, "extra_recessed_handle_cutout", 0)
+            ),
+            "recessed_handle_reference_side": getattr(piece, "recessed_handle_reference_side", "") or "",
+            "recessed_handle_offset_cm": getattr(piece, "recessed_handle_offset_cm", 0),
+            "recessed_handle_width_cm": getattr(piece, "recessed_handle_width_cm", 0),
+            "recessed_handle_start_cm": getattr(piece, "recessed_handle_start_cm", 0),
+            "recessed_handle_length_cm": getattr(piece, "recessed_handle_length_cm", 0),
+            "piece_type": getattr(piece, "piece_type", "") or "Regular",
+            "original_width_cm": getattr(piece, "original_width_cm", 0),
+            "original_length_cm": getattr(piece, "original_length_cm", 0),
+            "width_mm": getattr(piece, "width_mm", 0),
+            "height_mm": getattr(piece, "height_mm", 0),
+            "x_mm": getattr(piece, "x_mm", 0),
+            "y_mm": getattr(piece, "y_mm", 0),
+            "rotated": cint(getattr(piece, "rotated", 0)),
+            "rotation_quarter_turns": cint(
+                stored.get("rotation_quarter_turns")
+                if stored.get("rotation_quarter_turns") is not None
+                else stored.get("corner_rotation_quarter_turns")
+                if stored.get("corner_rotation_quarter_turns") is not None
+                else (1 if cint(getattr(piece, "rotated", 0)) else 0)
+            ),
+            "corner_mirrored": cint(
+                stored.get("corner_mirrored")
+                if stored.get("corner_mirrored") is not None
+                else getattr(piece, "corner_mirrored", 0)
+            ),
+            "clipped_corner_position": getattr(piece, "clipped_corner_position", "") or "",
+            "clipped_corner_width_cm": getattr(piece, "clipped_corner_width_cm", 0),
+            "clipped_corner_length_cm": getattr(piece, "clipped_corner_length_cm", 0),
+            "special_shape_geometry_json": (
+                getattr(piece, "special_shape_geometry_json", "")
+                or stored.get("special_shape_geometry_json")
+                or ""
+            ),
+            "label": str(stored.get("label") or getattr(piece, "piece_label", "") or ""),
+            "overlays": overlays,
+        }
+        for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
+            if stored.get(key) not in (None, "", []):
+                view[key] = stored.get(key)
+        stored_geometry = (
+            stored.get("geometry") if isinstance(stored.get("geometry"), Mapping) else None
         )
+        view["geometry"] = resolve_finished_geometry_mm(
+            stored_geometry=stored_geometry,
+            piece=view,
+            stored_piece=stored,
+        )
+        views.append(view)
     return views
-
-
-def approved_plan_snapshot(order: Any) -> dict[str, Any] | None:
-    plan = approved_plan_for_order(order)
-    if plan is None:
-        return None
-    raw_snapshot = plan.snapshot_json or ""
-    if not str(raw_snapshot).strip():
-        return None
-    parsed = json.loads(raw_snapshot)
-    if not isinstance(parsed, dict):
-        raise frappe.ValidationError("Approved plan snapshot is not an object.")
-    return parsed
 
 
 def approved_plan_snapshot(order: Any) -> dict[str, Any] | None:

@@ -82,22 +82,18 @@
         page.add_inner_button(translate("Refresh"), load, null, "refresh");
         const cncPresetModule = window.AlmdinaFactoryProductionSettingsCncPresets;
         const cncPresets = cncPresetModule ? cncPresetModule.attach({
-            api, dialogs, translate, freezeOptions,
             editable: () => viewModel.sectionEditable(state.current, "cnc"),
-            presets: () => (state.current && state.current.cnc_tool_presets) || [],
-            reload: () => load(),
         }) : null;
         interactionsModule.bind({
             $body,
             lifecycle: store.lifecycle,
             callbacks: {
+                onSelectTab: key => { state.activeTab = key === "operational_files" ? "operational_files" : "settings"; render(); },
                 onEditSection: openSectionDialog,
                 onCreateWhatsApp: () => whatsapp && whatsapp.create(),
                 onReconnectWhatsApp: () => whatsapp && whatsapp.reconnect(),
-                onAddToolPreset: () => cncPresets && cncPresets.open(),
-                onEditToolPreset: name => cncPresets && cncPresets.open(name),
-                onSetToolPresetEnabled: (name, enabled) => cncPresets && cncPresets.setEnabled(name, enabled),
-                onDeleteToolPreset: name => cncPresets && cncPresets.remove(name),
+                onManageToolPresets: () => cncPresets && cncPresets.manage(),
+                onAddToolPreset: () => cncPresets && cncPresets.create(),
             },
         });
         const instance = Object.freeze({
@@ -174,18 +170,20 @@
         }
 
         function render() {
-            renderer.render(viewModel.page(state.current));
+            const model = viewModel.page(state);
+            renderer.render(model);
+            if (model.activeTab !== "settings") return;
             // Full-page render always replaces the live session card with the
             // loading placeholder, so the OpenWA snapshot must be re-fetched.
             if (
-                viewModel.canManageWhatsAppSession(state.current)
+                model.canManageWhatsAppSession
                 && whatsapp
                 && typeof whatsapp.refresh === "function"
             ) {
                 whatsapp.refresh();
             }
             if (
-                viewModel.page(state.current).showBackupPanel
+                model.showBackupPanel
                 && backups
                 && typeof backups.refresh === "function"
             ) {

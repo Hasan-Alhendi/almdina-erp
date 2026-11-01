@@ -49,7 +49,8 @@ class FactoryProductionSettingsFrontendSecurityTest(unittest.TestCase):
         self.assertIn("current.permissions.sections", view_model)
         self.assertIn("current.permissions.can_manage_whatsapp_session", view_model)
         self.assertIn("viewModel.sectionEditable(state.current, section)", controller)
-        self.assertIn("viewModel.canManageWhatsAppSession(state.current)", controller)
+        self.assertIn("model.canManageWhatsAppSession", controller)
+        self.assertIn("viewModel.page(state)", controller)
         self.assertNotIn("frappe.call(", controller)
 
 

@@ -101,28 +101,43 @@
         return map;
     }
 
-    function presetOptions(workspace, selected) {
-        const presets = Array.isArray(workspace.presets) ? workspace.presets : [];
-        const options = [`<option value="">${escapeHtml(translate("Not specified"))}</option>`];
-        presets.forEach(preset => {
-            if (!preset || (!preset.enabled && preset.name !== selected)) return;
-            const name = String(preset.name || "");
-            const label = `${preset.preset_name || name} · ${preset.tool_number || ""}`;
-            options.push(
-                `<option value="${escapeHtml(name)}"${name === selected ? " selected" : ""}>${escapeHtml(label)}</option>`
-            );
-        });
-        if (selected && !presets.some(preset => preset && preset.name === selected)) {
-            options.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`);
-        }
-        return options.join("");
-    }
-
     function presetLabel(workspace, name) {
         if (!name) return translate("Not specified");
         const preset = presetByName(workspace).get(name);
         if (!preset) return name;
         return `${preset.preset_name || preset.name} · ${preset.tool_number || ""}`;
+    }
+
+    function disposePresetLinks(dialog) {
+        (dialog && dialog._cncPresetLinks || []).forEach(link => {
+            if (link && typeof link.dispose === "function") link.dispose();
+        });
+        if (dialog) dialog._cncPresetLinks = [];
+    }
+
+    function mountPresetLink(host, options = {}) {
+        const ui = window.AlmdinaUi;
+        if (!host || !ui || typeof ui.control !== "function") return null;
+        return ui.control({
+            parent: host,
+            fieldname: options.fieldname || "tool_preset",
+            fieldtype: "Link",
+            options: "CNC Tool Preset",
+            value: options.value || "",
+            readOnly: Boolean(options.readOnly),
+            onlyInput: true,
+            className: "dco-operational-preset-link",
+            df: {
+                get_query() {
+                    return { filters: { enabled: 1 } };
+                },
+            },
+            onChange(value) {
+                if (typeof options.onChange === "function") {
+                    options.onChange(String(value || ""));
+                }
+            },
+        });
     }
 
     function sheetState(sheet) {
@@ -392,10 +407,12 @@
         const preset = name ? presetByName(workspace).get(name) : null;
         if (!preset) return "";
         return [
+            preset.tool_name || preset.preset_name || preset.name || "",
+            preset.tool_number || "",
+            preset.tool_diameter_mm ? translate("Diameter {0} mm", [preset.tool_diameter_mm]) : "",
             preset.final_depth_mm ? translate("Depth {0} mm", [preset.final_depth_mm]) : "",
             preset.spindle_speed_rpm ? translate("{0} RPM", [preset.spindle_speed_rpm]) : "",
             preset.feed_rate_mm_min ? translate("Feed {0} mm/min", [preset.feed_rate_mm_min]) : "",
-            preset.plunge_rate_mm_min ? translate("Plunge {0} mm/min", [preset.plunge_rate_mm_min]) : "",
         ].filter(Boolean).join(" · ");
     }
 
@@ -423,15 +440,29 @@
         return translate("Every saved tool preset is disabled. Enable one before preparing new machining.");
     }
 
+    function orderMoveIcon(name) {
+        if (window.frappe && frappe.utils && typeof frappe.utils.icon === "function") {
+            return frappe.utils.icon(name, "sm");
+        }
+        return name === "up-line" ? "↑" : "↓";
+    }
+
     function dialogMarkup(workspace, sheet, state) {
         const canPrepare = Boolean(workspace.can_prepare);
         const disabled = canPrepare ? "" : " disabled";
         const early = cutPathIsEarly(state.order);
-        const orderItems = state.order.map(key => `<li class="dco-operational-order__item" tabindex="0" draggable="${canPrepare ? "true" : "false"}" data-operation-key="${escapeHtml(key)}">
+        const lastIndex = Math.max(0, state.order.length - 1);
+        const orderItems = state.order.map((key, index) => {
+            const earlierDisabled = !canPrepare || index === 0 ? " disabled" : "";
+            const laterDisabled = !canPrepare || index === lastIndex ? " disabled" : "";
+            return `<li class="dco-operational-order__item" tabindex="0" draggable="${canPrepare ? "true" : "false"}" data-operation-key="${escapeHtml(key)}">
             <span class="dco-operational-order__label">${escapeHtml(operationLabel(key))}</span>
-            <button type="button" class="btn btn-default btn-xs" data-move="earlier"${disabled}>${escapeHtml(translate("Move earlier"))}</button>
-            <button type="button" class="btn btn-default btn-xs" data-move="later"${disabled}>${escapeHtml(translate("Move later"))}</button>
-        </li>`).join("");
+            <span class="dco-operational-order__moves">
+                <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="earlier" title="${escapeHtml(translate("Move the operation earlier"))}" aria-label="${escapeHtml(translate("Move the operation earlier"))}"${earlierDisabled}>${orderMoveIcon("up-line")}</button>
+                <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="later" title="${escapeHtml(translate("Move the operation later"))}" aria-label="${escapeHtml(translate("Move the operation later"))}"${laterDisabled}>${orderMoveIcon("down-line")}</button>
+            </span>
+        </li>`;
+        }).join("");
         const layers = state.order.map(key => {
             const operation = (sheet.operations || []).find(item => item.operation_key === key) || {};
             const paths = (sheet.paths || []).filter(path => path.operation_key === key);
@@ -445,8 +476,10 @@
                 const editing = canPrepare && (custom || Boolean(state.customizing && state.customizing[path.path_key]));
                 const selected = effectivePreset(state, path);
                 const control = editing
-                    ? `<select data-path-preset="${escapeHtml(path.path_key)}">${presetOptions(workspace, selected)}</select>
-                        <button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>`
+                    ? `<div class="dco-operational-path__preset">
+                        <div data-path-preset-host="${escapeHtml(path.path_key)}"></div>
+                        <button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>
+                       </div>`
                     : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
                         ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`;
                 return `<div class="dco-operational-path${custom ? " is-custom" : ""}${path.path_key === state.selectedPathKey ? " is-selected" : ""}" data-path-key="${escapeHtml(path.path_key)}" data-path-operation="${escapeHtml(key)}" data-custom="${custom ? "1" : "0"}">
@@ -467,7 +500,7 @@
                     </div>
                     <p class="dco-operational-layer__source" data-layer-source="${escapeHtml(source)}">${escapeHtml(translate(source === "sheet" ? "Sheet choice" : "Factory default"))}</p>
                     <label class="dco-operational-layer__choice">${escapeHtml(translate("Tool preset"))}
-                        <select data-operation-key="${escapeHtml(key)}"${disabled}>${presetOptions(workspace, selectedLayer)}</select>
+                        <div data-operation-preset-host="${escapeHtml(key)}" data-readonly="${canPrepare ? "0" : "1"}"></div>
                     </label>
                     ${restore}
                 </header>
@@ -488,50 +521,47 @@
         const permissionNote = canPrepare
             ? ""
             : `<p class="dco-operational-sheet__note" role="status">${escapeHtml(translate("You can review these settings. Preparing operational files is not available for your current permissions."))}</p>`;
-        const addPreset = workspace.can_edit_factory_cnc
-            ? `<button type="button" class="btn btn-default btn-sm" data-add-preset>${escapeHtml(translate("Add a tool preset"))}</button>`
-            : "";
         const restoreSheet = canPrepare
             ? `<button type="button" class="btn btn-default btn-sm" data-restore-sheet>${escapeHtml(translate("Restore factory presets for this sheet"))}</button>`
             : "";
-        const existingDownload = sheet.can_download_current && sheet.operational_file
-            ? `<button type="button" class="btn btn-primary btn-sm" data-cnc-dialog-download="${escapeHtml(sheet.operational_file)}" data-file-url="${escapeHtml(sheet.generated_file || "")}">${escapeHtml(translate(sheet.download_is_previous ? "Download previous simulation NC" : "Download simulation NC"))}</button>`
-            : "";
-        const ncActions = `<section class="dco-operational-sheet__nc-actions" data-cnc-nc-actions>
-                <h4>${escapeHtml(translate("Simulation NC"))}</h4>
-                <p class="dco-operational-sheet__note" role="status">${escapeHtml(translate("Simulation NC is for review only. It is not approved for a workshop machine."))}</p>
-                <p class="dco-operational-files__status" data-sheet-nc-status="${escapeHtml(sheet.status || "")}">${escapeHtml(statusLabel(sheet.status))}</p>
-                <div class="dco-operational-files__actions">
-                    ${canPrepare ? `<button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc disabled title="${escapeHtml(translate("Preparing the machining preview..."))}">${escapeHtml(translate("Generate simulation NC"))}</button>` : ""}
-                    ${existingDownload}
-                </div>
-                <div data-cnc-nc-panel></div>
-            </section>`;
         return `<div class="dco-operational-sheet">
-            <div class="dco-operational-sheet__preview">
-                <div data-sheet-preview></div>
-                <p class="dco-operational-sheet__selection" role="status">${escapeHtml(selectionText(workspace, sheet, state))}</p>
-                <div data-cnc-program><p class="dco-cnc-program__note">${escapeHtml(translate("Preparing the machining preview..."))}</p></div>
-            </div>
-            <div class="dco-operational-sheet__settings">
-                ${ncActions}
-                <section>
-                    <h4>${escapeHtml(translate("Operation order"))}</h4>
-                    <ol class="dco-operational-order">${orderItems}</ol>
-                    ${warning}
-                </section>
-                <section class="dco-operational-layers">
-                    <div class="dco-operational-layers__tools">
-                        <h4>${escapeHtml(translate("Layer presets"))}</h4>
-                        ${restoreSheet}
-                        ${addPreset}
-                    </div>
-                    ${permissionNote}
-                    ${availabilityHtml}
-                    ${layers}
-                </section>
+            <div class="dco-operational-sheet__body">
+                <div class="dco-operational-sheet__preview">
+                    <div data-sheet-preview></div>
+                    <p class="dco-operational-sheet__selection" role="status">${escapeHtml(selectionText(workspace, sheet, state))}</p>
+                    <p class="dco-operational-files__status" data-sheet-nc-status="${escapeHtml(sheet.status || "")}">${escapeHtml(statusLabel(sheet.status))}</p>
+                </div>
+                <div class="dco-operational-sheet__settings">
+                    <section class="dco-operational-sheet__order">
+                        <h4>${escapeHtml(translate("Operation order"))}</h4>
+                        <ol class="dco-operational-order">${orderItems}</ol>
+                        ${warning}
+                    </section>
+                    <section class="dco-operational-layers">
+                        <div class="dco-operational-layers__tools">
+                            <h4>${escapeHtml(translate("Layer presets"))}</h4>
+                            ${restoreSheet}
+                        </div>
+                        ${permissionNote}
+                        ${availabilityHtml}
+                        <div class="dco-operational-layers__list">${layers}</div>
+                    </section>
+                </div>
             </div>
         </div>`;
+    }
+
+    function generateNcControlState({ canPrepare }) {
+        if (!canPrepare) {
+            return {
+                disabled: true,
+                reason: translate("You can review these settings. Preparing operational files is not available for your current permissions."),
+            };
+        }
+        return {
+            disabled: false,
+            reason: translate("Simulation NC is for review only. It is not approved for a workshop machine."),
+        };
     }
 
     function bindDialog(frm, dialog, workspace, sheet, state, board) {
@@ -541,7 +571,7 @@
         const preview = body.querySelector("[data-sheet-preview]");
         mountBoard(preview, board);
         highlightBoard(preview, sheet, state);
-        scheduleProgram(frm, dialog, workspace, sheet, state);
+        syncSheetFooter(dialog, workspace, sheet, state);
         preview.addEventListener("click", event => {
             const overlay = event.target.closest && event.target.closest("[data-overlay-kind]");
             const piece = event.target.closest && event.target.closest(".dco-piece");
@@ -577,20 +607,9 @@
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
-        const addPreset = body.querySelector("[data-add-preset]");
-        if (addPreset) {
-            addPreset.addEventListener("click", () => {
-                openPresetEditor(frm, dialog, workspace, sheet, state, board);
-            });
-        }
+        mountPresetControls(frm, dialog, workspace, sheet, state, board);
         if (!canPrepare) return;
 
-        body.querySelectorAll("select[data-operation-key]").forEach(select => {
-            select.addEventListener("change", () => {
-                applyLayerPreset(state, select.getAttribute("data-operation-key"), select.value);
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
         body.querySelectorAll("[data-restore-layer]").forEach(button => {
             button.addEventListener("click", () => {
                 restoreLayerPreset(state, button.getAttribute("data-restore-layer"));
@@ -611,15 +630,6 @@
                 const row = button.closest(".dco-operational-path");
                 const operationKey = row && row.getAttribute("data-path-operation");
                 if (operationKey) state.expanded[operationKey] = true;
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
-        body.querySelectorAll("select[data-path-preset]").forEach(select => {
-            select.addEventListener("change", () => {
-                const pathKey = select.getAttribute("data-path-preset");
-                const row = select.closest(".dco-operational-path");
-                const operationKey = row.getAttribute("data-path-operation");
-                customizePath(state, pathKey, select.value, state.operations[operationKey] || "");
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
@@ -685,9 +695,303 @@
         return wrapper[0] || wrapper;
     }
 
+    function syncWorkspacePresets(frm, dialog, workspace, sheet, state, board, selectedName, applySelected) {
+        const request = (dialog._cncPresetRequest || 0) + 1;
+        dialog._cncPresetRequest = request;
+        frappe.call({
+            method: `${METHOD}.get_cnc_operational_workspace`,
+            args: { order_name: frm.doc.name },
+            callback(response) {
+                if (dialog._cncPresetRequest !== request) return;
+                const message = (response && response.message) || {};
+                workspace.presets = message.presets || workspace.presets;
+                workspace.can_edit_factory_cnc = message.can_edit_factory_cnc;
+                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                if (saved) {
+                    const next = sheetState(saved);
+                    state.order.forEach(key => {
+                        const previousFactory = state.factoryPresets[key] || "";
+                        state.factoryPresets[key] = next.factoryPresets[key] || "";
+                        if (state.sources[key] !== "sheet" && (state.operations[key] || "") === previousFactory) {
+                            state.operations[key] = state.factoryPresets[key];
+                        }
+                    });
+                }
+                if (typeof applySelected === "function") applySelected(selectedName || "");
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+            },
+            error() {
+                if (dialog._cncPresetRequest !== request) return;
+                if (typeof applySelected === "function") applySelected(selectedName || "");
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+            },
+        });
+    }
+
+    function onPresetChosen(frm, dialog, workspace, sheet, state, board, applySelected, name) {
+        const selected = String(name || "");
+        if (selected && !presetByName(workspace).has(selected)) {
+            syncWorkspacePresets(frm, dialog, workspace, sheet, state, board, selected, applySelected);
+            return;
+        }
+        applySelected(selected);
+        refreshDialog(frm, dialog, workspace, sheet, state, board);
+    }
+
+    function mountPresetControls(frm, dialog, workspace, sheet, state, board) {
+        const body = dialogRoot(dialog);
+        if (!body) return;
+        disposePresetLinks(dialog);
+        const links = [];
+        const canPrepare = Boolean(workspace.can_prepare);
+        body.querySelectorAll("[data-operation-preset-host]").forEach(host => {
+            const key = host.getAttribute("data-operation-preset-host");
+            const readOnly = !canPrepare || host.getAttribute("data-readonly") === "1";
+            const link = mountPresetLink(host, {
+                fieldname: `operation_preset_${key}`,
+                value: state.operations[key] || "",
+                readOnly,
+                onChange(value) {
+                    onPresetChosen(
+                        frm,
+                        dialog,
+                        workspace,
+                        sheet,
+                        state,
+                        board,
+                        next => applyLayerPreset(state, key, next),
+                        value
+                    );
+                },
+            });
+            if (link) links.push(link);
+        });
+        body.querySelectorAll("[data-path-preset-host]").forEach(host => {
+            const pathKey = host.getAttribute("data-path-preset-host");
+            const row = host.closest(".dco-operational-path");
+            const operationKey = row && row.getAttribute("data-path-operation");
+            const link = mountPresetLink(host, {
+                fieldname: `path_preset_${pathKey}`,
+                value: effectivePreset(state, { path_key: pathKey, operation_key: operationKey }),
+                readOnly: !canPrepare,
+                onChange(value) {
+                    onPresetChosen(
+                        frm,
+                        dialog,
+                        workspace,
+                        sheet,
+                        state,
+                        board,
+                        next => customizePath(state, pathKey, next, state.operations[operationKey] || ""),
+                        value
+                    );
+                },
+            });
+            if (link) links.push(link);
+        });
+        dialog._cncPresetLinks = links;
+    }
+
+    function sheetGenerateArgs(frm, workspace, sheet, state) {
+        const overrides = {};
+        Object.keys(state.overrides || {}).forEach(key => {
+            if (state.overrides[key]) overrides[key] = state.overrides[key];
+        });
+        return {
+            order_name: frm.doc.name,
+            sheet_no: sheet.sheet_no,
+            operation_presets: state.operations,
+            path_overrides: overrides,
+            operation_order: state.order,
+            cut_path_early_confirmed: state.confirmed ? 1 : 0,
+            viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
+            operation_sources: state.sources || {},
+        };
+    }
+
+    function issueAction(code) {
+        const actions = {
+            tool_diameter_kerf_mismatch: translate("Choose a tool preset whose diameter matches the approved kerf."),
+            finished_geometry_missing: translate("Recalculate or re-approve the cutting plan so finished geometry is available."),
+            geometry_invalid: translate("Fix the path geometry in the approved plan, then open this sheet again."),
+            preset_disabled: translate("Enable the tool preset in factory settings, or choose another enabled preset."),
+            preset_not_found: translate("Choose an available CNC tool preset."),
+            tool_identity_conflict: translate("Use one physical tool number for every operation on this sheet."),
+            tool_diameter_conflict: translate("Use one tool diameter for every operation on this sheet."),
+            geometry_not_ready: translate("Resolve the listed geometry problems, then generate the NC file again."),
+            mill_parameters_missing: translate("Complete the milling parameters on the approved plan, then try again."),
+            liner_narrower_than_cutter: translate("Choose a narrower tool, or widen the milling band on the approved plan."),
+        };
+        return actions[code] || translate("Correct the listed issue, then generate the NC file again.");
+    }
+
+    function collectProgramIssues(program, sheetNo) {
+        const drawing = program || {};
+        const unique = new Map();
+        function remember(entry) {
+            const code = String(entry.code || "").trim();
+            if (!code) return;
+            const pathKey = String(entry.path_key || "").trim();
+            const pieceLabel = String(entry.piece_label || "").trim();
+            const key = `${code}::${pathKey || pieceLabel || entry.layer || ""}`;
+            if (unique.has(key)) return;
+            unique.set(key, {
+                code: (/^[A-Z][A-Z0-9_]{0,79}$/.test(code)
+                    ? code
+                    : `CNC_${String(code).toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`).slice(0, 80),
+                rawCode: code,
+                problem: entry.message || code,
+                target: [
+                    sheetNo ? translate("Sheet {0}", [sheetNo]) : "",
+                    entry.layer || "",
+                    pieceLabel ? translate("Piece {0}", [pieceLabel]) : "",
+                ].filter(Boolean).join(" — "),
+                action: issueAction(code),
+                path_key: pathKey,
+                piece_label: pieceLabel,
+            });
+        }
+        (Array.isArray(drawing.issues) ? drawing.issues : []).forEach(issue => {
+            if (!issue) return;
+            remember({
+                code: issue.code || "",
+                message: issue.message || issue.code || "",
+                layer: issue.operation_key ? operationLabel(issue.operation_key) : translate("Sheet"),
+                piece_label: issue.piece_label || "",
+                path_key: issue.path_key || "",
+            });
+        });
+        (Array.isArray(drawing.operations) ? drawing.operations : []).forEach(operation => {
+            (operation.toolpaths || []).forEach(path => {
+                const codes = Array.isArray(path.issues) ? path.issues : [];
+                const messages = Array.isArray(path.issue_messages) && path.issue_messages.length
+                    ? path.issue_messages
+                    : codes;
+                codes.forEach((code, index) => {
+                    remember({
+                        code,
+                        message: messages[index] || code,
+                        layer: operationLabel(path.operation_key || operation.operation_key),
+                        piece_label: path.piece_label || "",
+                        path_key: path.path_key || "",
+                    });
+                });
+            });
+        });
+        const grouped = new Map();
+        unique.forEach(item => {
+            const bucket = grouped.get(item.rawCode) || [];
+            bucket.push(item);
+            grouped.set(item.rawCode, bucket);
+        });
+        const issues = [];
+        grouped.forEach((items, rawCode) => {
+            const first = items[0];
+            const affected = items
+                .map(item => [item.target, item.path_key].filter(Boolean).join(" · "))
+                .filter(Boolean);
+            issues.push({
+                code: first.code,
+                problem: items.length === 1
+                    ? first.problem
+                    : translate("{0} problems: {1}", [items.length, first.problem]),
+                target: first.target,
+                action: first.action,
+                details: affected.length > 1 ? affected : [],
+            });
+        });
+        return {
+            uniqueCount: unique.size,
+            pathCount: unique.size,
+            issues,
+        };
+    }
+
+    function showGenerationIssueDialog(error, program, sheetNo) {
+        const ui = window.AlmdinaUi;
+        if (ui && typeof ui.errorDialog === "function" && error) {
+            const shown = ui.errorDialog(error, {
+                title: translate("NC generation could not be completed"),
+                fallback: translate("The NC file could not be prepared."),
+                outcomeMessages: {
+                    rejected: translate("No NC file was created."),
+                },
+            });
+            const normalized = window.AlmdinaFrontend
+                && typeof window.AlmdinaFrontend.normalizeError === "function"
+                ? window.AlmdinaFrontend.normalizeError(error)
+                : null;
+            if (shown && normalized && normalized.issues && normalized.issues.length) return shown;
+        }
+        const collected = collectProgramIssues(program, sheetNo);
+        if (!collected.issues.length && error && ui && typeof ui.errorDialog === "function") {
+            return ui.errorDialog(error, {
+                title: translate("NC generation could not be completed"),
+                fallback: translate("The NC file could not be prepared."),
+            });
+        }
+        if (!window.frappe || !frappe.ui || !frappe.ui.Dialog) return null;
+        const cards = collected.issues.map(item => {
+            const details = item.details.length
+                ? `<details><summary>${escapeHtml(translate("Affected paths"))}</summary><ul>${item.details.map(line => `<li>${escapeHtml(line)}</li>`).join("")}</ul></details>`
+                : "";
+            return `<section class="alm-error-card">
+                <p><strong>${escapeHtml(translate("What is the problem?"))}</strong> ${escapeHtml(item.problem)}</p>
+                ${item.target ? `<p><strong>${escapeHtml(translate("Where is it?"))}</strong> ${escapeHtml(item.target)}</p>` : ""}
+                ${item.action ? `<p><strong>${escapeHtml(translate("What should I do?"))}</strong> ${escapeHtml(item.action)}</p>` : ""}
+                ${details}
+                <small>${escapeHtml(item.code)}</small>
+            </section>`;
+        }).join("");
+        const countNote = collected.uniqueCount
+            ? `<p>${escapeHtml(translate("{0} unique validation problems must be fixed before NC generation.", [collected.uniqueCount]))}</p>`
+            : "";
+        const dialog = new frappe.ui.Dialog({
+            title: translate("NC generation could not be completed"),
+            size: "large",
+            secondary_action_label: translate("Close"),
+            secondary_action() { dialog.hide(); },
+        });
+        dialog.$body.html(`<div class="almdina-ui"><div class="alm-error-summary" role="alert">${countNote}${cards || `<p>${escapeHtml(translate("The NC file could not be prepared."))}</p>`}<p>${escapeHtml(translate("No NC file was created."))}</p></div></div>`);
+        dialog.show();
+        return dialog;
+    }
+
+    function syncSheetFooter(dialog, workspace, sheet, state) {
+        if (!dialog || !dialog.$wrapper) return;
+        const actions = dialog.$wrapper.find(".modal-footer .standard-actions");
+        if (!actions.length) return;
+        actions.find("[data-cnc-footer-action]").remove();
+        const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const control = generateNcControlState({ canPrepare });
+        const generate = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="generate" data-cnc-generate-nc title="${escapeHtml(control.reason)}"></button>`);
+        generate.text(translate("Generate NC file"));
+        generate.prop("disabled", Boolean(control.disabled));
+        if (sheet && sheet.can_download_current && sheet.operational_file) {
+            const download = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="download" data-cnc-dialog-download="${escapeHtml(sheet.operational_file)}" data-file-url="${escapeHtml(sheet.generated_file || "")}"></button>`);
+            download.text(translate(
+                sheet.download_is_previous ? "Download previous simulation NC" : "Download NC file"
+            ));
+            actions.prepend(download);
+        }
+        actions.prepend(generate);
+        const live = dialog._almdinaSheet;
+        if (!live) return;
+        bindGenerateNc(dialog, dialog.$wrapper[0], {
+            canPrepare,
+            args: sheetGenerateArgs(live.frm, live.workspace || workspace, live.sheet || sheet, live.state || state),
+            sheetNo: (live.sheet || sheet).sheet_no,
+            frm: live.frm,
+            state: live.state || state,
+            sheet: live.sheet || sheet,
+            workspace: live.workspace || workspace,
+        });
+    }
+
     function refreshDialog(frm, dialog, workspace, sheet, state, board) {
         const wrapper = dialogRoot(dialog);
         if (!wrapper) return;
+        disposePresetLinks(dialog);
         dialog._almdinaSheet = { frm, workspace, sheet, state, board };
         wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
         bindDialog(frm, dialog, workspace, sheet, state, board);
@@ -721,6 +1025,11 @@
         };
         dialog.show();
         dialog.$wrapper.addClass("dco-operational-sheet-dialog");
+        const locale = window.AlmdinaLocale;
+        const dir = locale && typeof locale.direction === "function"
+            ? locale.direction()
+            : (document.documentElement && document.documentElement.getAttribute("dir")) || "rtl";
+        dialog.$wrapper.attr("dir", dir === "ltr" ? "ltr" : "rtl");
         dialog.$wrapper.on("keydown", event => {
             const live = dialog._almdinaSheet;
             const target = event.target;
@@ -866,7 +1175,6 @@
                 if (Array.isArray(path.points) && path.points.length >= 2) paths.push({ execution, path });
             });
         });
-        const issueText = boardIssues.map(issue => issue && (issue.message || issue.code)).filter(Boolean);
         const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
         const machineReady = Boolean(drawing.machine_ready);
         const readiness = [
@@ -874,35 +1182,84 @@
             machineReady ? translate("Machine ready") : translate("Machine not ready"),
             drawing.nc_export_ready ? translate("Simulation NC export ready") : translate("Simulation NC export not ready"),
         ].join(" · ");
-        const blocking = [];
+        const uniqueIssues = new Map();
+        function rememberIssue(entry) {
+            const code = String(entry.code || entry.message || "").trim();
+            const pathKey = String(entry.path_key || "").trim();
+            const pieceLabel = String(entry.piece_label || "").trim();
+            const key = `${code}::${pathKey || pieceLabel || entry.layer || ""}`;
+            if (!code || uniqueIssues.has(key)) return;
+            uniqueIssues.set(key, {
+                code,
+                message: entry.message || code,
+                layer: entry.layer || "",
+                piece_label: pieceLabel,
+                path_key: pathKey,
+            });
+        }
         steps.forEach(step => {
             const path = step.path || {};
+            const codes = Array.isArray(path.issues) ? path.issues : [];
             const messages = Array.isArray(path.issue_messages) && path.issue_messages.length
                 ? path.issue_messages
-                : (path.issues || []);
-            if (!messages.length && path.ready !== false) return;
-            messages.forEach(message => {
-                blocking.push({
+                : codes;
+            codes.forEach((code, index) => {
+                rememberIssue({
+                    code,
+                    message: messages[index] || code,
                     layer: operationLabel(path.operation_key),
-                    piece: path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"),
+                    piece_label: path.piece_label || "",
                     path_key: path.path_key || "",
-                    message: message,
                 });
             });
         });
         boardIssues.forEach(issue => {
             if (!issue) return;
-            blocking.push({
-                layer: issue.operation_key ? operationLabel(issue.operation_key) : translate("Sheet"),
-                piece: issue.piece_label ? translate("Piece {0}", [issue.piece_label]) : "",
-                path_key: issue.path_key || "",
+            rememberIssue({
+                code: issue.code || issue.message || "",
                 message: issue.message || issue.code || "",
+                layer: issue.operation_key ? operationLabel(issue.operation_key) : translate("Sheet"),
+                piece_label: issue.piece_label || "",
+                path_key: issue.path_key || "",
             });
         });
-        const blockingHtml = !geometryReady && blocking.length
+        const grouped = new Map();
+        uniqueIssues.forEach(item => {
+            const bucket = grouped.get(item.code) || [];
+            bucket.push(item);
+            grouped.set(item.code, bucket);
+        });
+        const uniqueCount = uniqueIssues.size;
+        const groupHtml = Array.from(grouped.entries()).map(([code, items]) => {
+            let title = translate("{0} geometry problems block simulation NC generation.", [items.length]);
+            if (code === "finished_geometry_missing") {
+                title = translate(
+                    "Cut paths for {0} pieces could not be prepared because finished geometry is missing from the approved plan.",
+                    [items.length]
+                );
+            } else if (items.length === 1) {
+                title = items[0].message;
+            } else {
+                title = translate("{0} problems: {1}", [items.length, items[0].message || code]);
+            }
+            const details = items.map(item => {
+                const piece = item.piece_label
+                    ? translate("Piece {0}", [item.piece_label])
+                    : "";
+                const tech = item.path_key
+                    ? ` title="${escapeHtml(item.path_key)}"`
+                    : "";
+                return `<li${tech}>${escapeHtml(item.layer || "")}${piece ? ` · ${escapeHtml(piece)}` : ""} — ${escapeHtml(item.message)}</li>`;
+            }).join("");
+            return `<details class="dco-cnc-program__issue-group">
+                <summary class="dco-cnc-program__error">${escapeHtml(title)}</summary>
+                <ul>${details}</ul>
+            </details>`;
+        }).join("");
+        const blockingHtml = !geometryReady && uniqueCount
             ? `<div class="dco-cnc-program__blockers" role="status">
-                <p class="dco-cnc-program__error">${escapeHtml(translate("{0} geometry problems block simulation NC generation.", [blocking.length]))}</p>
-                <ul>${blocking.map(item => `<li><strong>${escapeHtml(item.layer)}</strong>${item.piece ? ` · ${escapeHtml(item.piece)}` : ""}${item.path_key ? ` · <code>${escapeHtml(item.path_key)}</code>` : ""} — ${escapeHtml(item.message)}</li>`).join("")}</ul>
+                <p class="dco-cnc-program__error">${escapeHtml(translate("{0} geometry problems block simulation NC generation.", [uniqueCount]))}</p>
+                ${groupHtml}
                </div>`
             : (!geometryReady
                 ? `<p class="dco-cnc-program__error" role="status">${escapeHtml(translate("Geometry is not ready, so simulation NC generation stays disabled."))}</p>`
@@ -912,9 +1269,10 @@
             const preset = path.preset || {};
             const depth = preset.final_depth_mm;
             const passes = (path.motions || []).filter(motion => motion.kind === "plunge").length;
+            const codes = Array.isArray(path.issues) ? path.issues : [];
             const messages = Array.isArray(path.issue_messages) && path.issue_messages.length
                 ? path.issue_messages
-                : (path.issues || []);
+                : codes;
             const details = [
                 operationLabel(path.operation_key),
                 path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"),
@@ -929,15 +1287,17 @@
                 path.start ? `${translate("Path start")} ${formatPoint(path.start)}` : "",
                 path.end && !path.closed ? `${translate("Path end")} ${formatPoint(path.end)}` : "",
             ].filter(Boolean).join(" · ");
-            const errors = messages.map(message => `<p class="dco-cnc-program__error">${escapeHtml(message)}</p>`).join("");
+            const errors = messages
+                .map((message, index) => ({ message, code: codes[index] || message }))
+                .filter(item => item.code !== "finished_geometry_missing")
+                .map(item => `<p class="dco-cnc-program__error">${escapeHtml(item.message)}</p>`)
+                .join("");
             return `<li><span>${escapeHtml(step.execution)}</span> ${escapeHtml(details)}${errors}</li>`;
         }).join("");
-        const boardError = issueText.map(message => `<p class="dco-cnc-program__error">${escapeHtml(message)}</p>`).join("");
         const list = `<div class="dco-cnc-program">
             <h4>${escapeHtml(translate("Machining preview"))}</h4>
             <p class="dco-cnc-program__note">${escapeHtml(readiness)}</p>
             ${blockingHtml}
-            ${boardError}
             ${rows ? `<ol class="dco-cnc-program__steps">${rows}</ol>` : `<p class="dco-cnc-program__note">${escapeHtml(translate("The machining preview could not be prepared."))}</p>`}
             <p class="dco-cnc-program__note">${escapeHtml(translate("This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file."))}</p>
         </div>`;
@@ -998,106 +1358,48 @@
         }
     }
 
-    function bindGenerateNc(dialog, root, context) {
-        const generate = root && root.querySelector("[data-cnc-nc-actions] [data-cnc-generate-nc]");
-        if (!generate || !context || !context.canPrepare) return;
-        const geometryReady = Boolean(context.geometryReady);
-        generate.disabled = !geometryReady;
-        generate.setAttribute("title", geometryReady
-            ? ""
-            : translate("Geometry is not ready, so simulation NC generation stays disabled."));
-        generate.onclick = () => {
-            if (!window.frappe || typeof frappe.call !== "function" || !geometryReady) return;
-            const request = (dialog._cncNcRequest || 0) + 1;
-            dialog._cncNcRequest = request;
-            generate.disabled = true;
-            const args = Object.assign({}, context.args || {}, {
-                operation_sources: (context.state && context.state.sources) || {},
-            });
+    function applyGenerateNcControl(root, state) {
+        const button = root && typeof root.querySelector === "function"
+            ? root.querySelector("[data-cnc-generate-nc]")
+            : null;
+        if (!button) return null;
+        button.disabled = Boolean(state.disabled);
+        button.setAttribute("title", state.reason || "");
+        return button;
+    }
+
+    function loadProgramForIssues(args) {
+        return new Promise(resolve => {
+            if (!window.frappe || typeof frappe.call !== "function") {
+                resolve(null);
+                return;
+            }
             frappe.call({
-                method: `${METHOD}.generate_cnc_sheet_nc`,
-                args,
-                callback(response) {
-                    if (dialog._cncNcRequest !== request) return;
-                    generate.disabled = false;
-                    const payload = (response && response.message) || {};
-                    payload.sheet_no = context.sheetNo;
-                    const panel = root.querySelector("[data-cnc-nc-panel]");
-                    paintNcPanel(panel, payload, context);
-                    if (payload.workspace && context.frm) {
-                        const hostEl = host(context.frm);
-                        if (hostEl) paint(context.frm, hostEl, payload.workspace);
-                        const saved = (payload.workspace.sheets || []).find(
-                            item => Number(item.sheet_no) === Number(context.sheetNo)
-                        );
-                        if (saved) {
-                            const live = dialog._almdinaSheet;
-                            if (live) {
-                                live.workspace = payload.workspace;
-                                live.sheet = saved;
-                                const status = root.querySelector("[data-sheet-nc-status]");
-                                if (status) {
-                                    status.setAttribute("data-sheet-nc-status", saved.status || "");
-                                    status.textContent = statusLabel(saved.status);
-                                }
-                                const actions = root.querySelector("[data-cnc-nc-actions] .dco-operational-files__actions");
-                                if (actions && saved.can_download_current && saved.operational_file) {
-                                    let button = actions.querySelector("[data-cnc-dialog-download]");
-                                    if (!button) {
-                                        button = document.createElement("button");
-                                        button.type = "button";
-                                        button.className = "btn btn-primary btn-sm";
-                                        button.setAttribute("data-cnc-dialog-download", saved.operational_file);
-                                        actions.appendChild(button);
-                                    }
-                                    button.setAttribute("data-cnc-dialog-download", saved.operational_file);
-                                    button.setAttribute("data-file-url", saved.generated_file || "");
-                                    button.textContent = translate(
-                                        saved.download_is_previous
-                                            ? "Download previous simulation NC"
-                                            : "Download simulation NC"
-                                    );
-                                    button.onclick = () => downloadServerNc(
-                                        context.frm,
-                                        saved.operational_file,
-                                        saved.generated_file || ""
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    if (window.frappe && frappe.show_alert) {
-                        frappe.show_alert({
-                            message: translate("Simulation NC prepared. This file is not approved for a workshop machine."),
-                            indicator: "green",
-                        });
-                    }
+                method: `${METHOD}.get_cnc_sheet_program`,
+                args: {
+                    order_name: args.order_name,
+                    sheet_no: args.sheet_no,
+                    operation_presets: args.operation_presets,
+                    path_overrides: args.path_overrides,
+                    operation_order: args.operation_order,
+                    cut_path_early_confirmed: args.cut_path_early_confirmed,
+                    viewed_plan_token: args.viewed_plan_token,
                 },
-                error(err) {
-                    if (dialog._cncNcRequest !== request) return;
-                    generate.disabled = !geometryReady;
-                    const panel = root.querySelector("[data-cnc-nc-panel]");
-                    const serverMessage = err
-                        && err.message
-                        && (err.message.message || err.message._server_messages || err.message);
-                    let text = translate("The simulation NC file could not be prepared.");
-                    if (typeof serverMessage === "string" && serverMessage.trim()) {
-                        try {
-                            const parsed = JSON.parse(serverMessage);
-                            if (Array.isArray(parsed) && parsed.length) {
-                                const first = typeof parsed[0] === "string" ? JSON.parse(parsed[0]) : parsed[0];
-                                if (first && first.message) text = first.message;
-                            }
-                        } catch (_ignore) {
-                            if (!serverMessage.includes("_server_messages")) text = serverMessage;
-                        }
-                    }
-                    if (panel) {
-                        panel.innerHTML = `<p class="dco-cnc-program__error" role="alert">${escapeHtml(text)}</p>`;
-                    }
+                callback(response) {
+                    resolve((response && response.message) || null);
+                },
+                error() {
+                    resolve(null);
                 },
             });
-        };
+        });
+    }
+
+    function bindGenerateNc(dialog, root, context) {
+        if (!root || !context) return;
+        const canPrepare = Boolean(context.canPrepare);
+        const control = generateNcControlState({ canPrepare });
+        const generate = applyGenerateNcControl(root, control);
         root.querySelectorAll("[data-cnc-dialog-download]").forEach(button => {
             button.onclick = () => downloadServerNc(
                 context.frm,
@@ -1105,128 +1407,80 @@
                 button.getAttribute("data-file-url")
             );
         });
-    }
-
-    function paintProgram(dialog, program, context) {
-        const root = dialogRoot(dialog);
-        const hostEl = root && root.querySelector("[data-cnc-program]");
-        if (!hostEl) return;
-        const markup = programMarkup(program);
-        hostEl.innerHTML = markup.list;
-        const board = root.querySelector(".dco-sheet-board");
-        if (board) {
-            const previous = board.querySelector(".dco-cnc-program__drawing");
-            if (previous) previous.remove();
-            if (markup.drawing) board.insertAdjacentHTML("beforeend", markup.drawing);
-        }
-        const geometryReady = Boolean((program || {}).geometry_ready || (program || {}).ready);
-        bindGenerateNc(dialog, root, Object.assign({}, context || {}, { geometryReady }));
-    }
-
-    function scheduleProgram(frm, dialog, workspace, sheet, state) {
-        if (!window.frappe || typeof frappe.call !== "function" || !frm || !frm.doc || !frm.doc.name) return;
-        const request = (dialog._cncProgramRequest || 0) + 1;
-        dialog._cncProgramRequest = request;
-        const token = stateSnapshot(state);
-        const overrides = {};
-        Object.keys(state.overrides || {}).forEach(key => {
-            if (state.overrides[key]) overrides[key] = state.overrides[key];
-        });
-        const args = {
-            order_name: frm.doc.name,
-            sheet_no: sheet.sheet_no,
-            operation_presets: state.operations,
-            path_overrides: overrides,
-            operation_order: state.order,
-            cut_path_early_confirmed: state.confirmed ? 1 : 0,
-            viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
+        if (!generate) return;
+        generate.onclick = null;
+        if (!canPrepare) return;
+        generate.onclick = () => {
+            if (!window.frappe || typeof frappe.call !== "function") return;
+            if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
+                frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
+                return;
+            }
+            const conflict = toolConflict(context.workspace, context.sheet, context.state);
+            if (conflict) {
+                frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
+                return;
+            }
+            const request = (dialog._cncNcRequest || 0) + 1;
+            dialog._cncNcRequest = request;
+            applyGenerateNcControl(root, {
+                disabled: true,
+                reason: translate("Preparing the simulation NC file..."),
+            });
+            const args = sheetGenerateArgs(
+                context.frm,
+                context.workspace,
+                context.sheet,
+                context.state
+            );
+            frappe.call({
+                method: `${METHOD}.generate_cnc_sheet_nc`,
+                args,
+                callback(response) {
+                    if (dialog._cncNcRequest !== request) return;
+                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    const payload = (response && response.message) || {};
+                    if (payload.workspace && context.frm) {
+                        const hostEl = host(context.frm);
+                        if (hostEl) paint(context.frm, hostEl, payload.workspace);
+                        const saved = (payload.workspace.sheets || []).find(
+                            item => Number(item.sheet_no) === Number(context.sheetNo)
+                        );
+                        const live = dialog._almdinaSheet;
+                        if (saved && live) {
+                            live.workspace = payload.workspace;
+                            live.sheet = saved;
+                            const status = dialogRoot(dialog) && dialogRoot(dialog).querySelector("[data-sheet-nc-status]");
+                            if (status) {
+                                status.setAttribute("data-sheet-nc-status", saved.status || "");
+                                status.textContent = statusLabel(saved.status);
+                            }
+                            syncSheetFooter(dialog, live.workspace, saved, live.state);
+                        }
+                    }
+                    if (window.frappe && frappe.show_alert) {
+                        frappe.show_alert({
+                            message: translate("Simulation NC prepared. This file is not approved for a workshop machine."),
+                            indicator: "green",
+                        }, 7);
+                    }
+                    if (payload.operational_file && payload.file_url) {
+                        frappe.confirm(
+                            translate("Download the simulation NC file now? It is not approved for a workshop machine."),
+                            () => downloadServerNc(context.frm, payload.operational_file, payload.file_url)
+                        );
+                    }
+                },
+                error(err) {
+                    if (dialog._cncNcRequest !== request) return;
+                    applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
+                    loadProgramForIssues(args).then(program => {
+                        if (dialog._cncNcRequest !== request) return;
+                        showGenerationIssueDialog(err, program, context.sheetNo);
+                    });
+                },
+            });
         };
-        frappe.call({
-            method: `${METHOD}.get_cnc_sheet_program`,
-            args,
-            callback(response) {
-                if (dialog._cncProgramRequest !== request) return;
-                const live = dialog._almdinaSheet;
-                if (!live || stateSnapshot(live.state) !== token) return;
-                paintProgram(dialog, (response && response.message) || {}, {
-                    canPrepare: Boolean(workspace.can_prepare),
-                    args,
-                    sheetNo: sheet.sheet_no,
-                    frm,
-                    state: live.state,
-                    sheet: live.sheet,
-                    workspace: live.workspace,
-                });
-            },
-            error() {
-                if (dialog._cncProgramRequest !== request) return;
-                const root = dialogRoot(dialog);
-                const host = root && root.querySelector("[data-cnc-program]");
-                if (!host) return;
-                host.innerHTML = `<p class="dco-cnc-program__note" role="alert">${escapeHtml(translate("The machining preview could not be prepared."))}</p>`;
-            },
-        });
-    }
-
-    function openPresetEditor(frm, dialog, workspace, sheet, state, board) {
-        if (!workspace.can_edit_factory_cnc || !window.frappe || !frappe.ui || !frappe.ui.Dialog) return;
-        const editor = new frappe.ui.Dialog({
-            title: translate("Add a tool preset"),
-            fields: [
-                { fieldname: "preset_name", fieldtype: "Data", label: translate("Preset name"), reqd: 1 },
-                { fieldname: "tool_name", fieldtype: "Data", label: translate("Tool name"), reqd: 1 },
-                { fieldname: "tool_number", fieldtype: "Data", label: translate("Tool number"), reqd: 1 },
-                { fieldname: "tool_diameter_mm", fieldtype: "Float", label: translate("Tool diameter (mm)"), reqd: 1 },
-                { fieldname: "final_depth_mm", fieldtype: "Float", label: translate("Final depth (mm)"), reqd: 1 },
-                { fieldname: "spindle_speed_rpm", fieldtype: "Int", label: translate("Spindle speed (RPM)"), reqd: 1 },
-                { fieldname: "feed_rate_mm_min", fieldtype: "Float", label: translate("Cutting feed (mm/min)"), reqd: 1 },
-                { fieldname: "plunge_rate_mm_min", fieldtype: "Float", label: translate("Plunge feed (mm/min)"), reqd: 1 },
-                { fieldname: "pass_depth_mm", fieldtype: "Float", label: translate("Pass depth (mm)"), description: translate("Optional. Leave empty for one pass.") },
-                { fieldname: "enabled", fieldtype: "Check", label: translate("Enabled"), default: 1 },
-            ],
-            primary_action_label: translate("Save tool preset"),
-            primary_action(values) {
-                const request = (dialog._cncPresetRequest || 0) + 1;
-                dialog._cncPresetRequest = request;
-                const button = editor.get_primary_btn();
-                button.prop("disabled", true);
-                frappe.call({
-                    method: "almdina_erp.almdina_erp.services.production_settings_service.save_cnc_tool_preset",
-                    args: { values },
-                    callback() {
-                        frappe.call({
-                            method: `${METHOD}.get_cnc_operational_workspace`,
-                            args: { order_name: frm.doc.name },
-                            callback(response) {
-                                if (dialog._cncPresetRequest !== request) return;
-                                const message = (response && response.message) || {};
-                                workspace.presets = message.presets || workspace.presets;
-                                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
-                                if (saved) {
-                                    const next = sheetState(saved);
-                                    state.order.forEach(key => {
-                                        const previousFactory = state.factoryPresets[key] || "";
-                                        state.factoryPresets[key] = next.factoryPresets[key] || "";
-                                        if (state.sources[key] !== "sheet" && (state.operations[key] || "") === previousFactory) {
-                                            state.operations[key] = state.factoryPresets[key];
-                                        }
-                                    });
-                                }
-                                refreshDialog(frm, dialog, workspace, sheet, state, board);
-                                editor.hide();
-                            },
-                            error() {
-                                button.prop("disabled", false);
-                            },
-                        });
-                    },
-                    error() {
-                        button.prop("disabled", false);
-                    },
-                });
-            },
-        });
-        editor.show();
     }
 
     window.AlmdinaOperationalFilesUX = Object.freeze({
@@ -1236,7 +1490,9 @@
         toolConflict,
         programMarkup,
         dialogMarkup,
+        generateNcControlState,
         paintNcPanel,
+        collectProgramIssues,
         sheetCardActions,
         sheetState,
         applyLayerPreset,

@@ -3221,6 +3221,16 @@ Add a tool preset,إضافة إعداد ريشة
 "This tool preset is no longer available. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا لم يعد متاحًا. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
 "This tool preset is disabled. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا معطّل. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
 CNC tool presets,إعدادات ريش CNC
+Operational file settings,إعدادات الملفات التشغيلية
+Operating settings,إعدادات التشغيل
+Factory settings sections,أقسام إعدادات المعمل
+Operational files,الملفات التشغيلية
+Manage tool presets,إدارة الريش
+"Manage CNC tool presets from Desk",إدارة إعدادات ريش CNC من Desk
+"List View and Form View use the current factory CNC permissions",قائمة Desk ونموذج السجل يستخدمان صلاحيات CNC الحالية في المعمل
+"Manage saved CNC tool presets with the standard Desk list and form. Board NC settings only select a saved preset or create a new one.",أدِر إعدادات ريش CNC المحفوظة عبر قائمة Desk والنموذج القياسيين. إعدادات ملف NC للوح تقتصر على اختيار ريشة محفوظة أو إنشاء ريشة جديدة.
+"{0} saved tool presets are available in Desk.",يتوفر {0} من إعدادات الريش المحفوظة في Desk.
+"Diameter {0} mm",القطر {0} مم
 Preset name,اسم الإعداد
 Tool name,اسم الريشة
 Tool number,رقم الريشة
@@ -3284,7 +3294,31 @@ NC verification failed,فشل التحقق من NC
 simulation_dialect_only,لهجة المحاكاة فقط
 machine_origin_not_established,أصل الماكينة غير محدد
 Generate simulation NC,توليد NC تجريبي
+Generate NC file,توليد ملف NC
+Download NC file,تنزيل ملف NC
 Download previous simulation NC,تنزيل النسخة السابقة من NC التجريبي
+Move the operation earlier,تقديم العملية
+Move the operation later,تأخير العملية
+What is the problem?,ما المشكلة؟
+Where is it?,أين المشكلة؟
+What should I do?,ماذا أفعل؟
+Affected paths,المسارات المتأثرة
+NC generation could not be completed,تعذر إكمال توليد ملف NC
+The NC file could not be prepared.,تعذر تجهيز ملف NC.
+No NC file was created.,لم يُنشأ ملف NC.
+"{0} unique validation problems must be fixed before NC generation.",يجب إصلاح {0} من مشاكل التحقق الفريدة قبل توليد ملف NC.
+Choose a tool preset whose diameter matches the approved kerf.,اختر إعداد ريشة قطرها يطابق سماكة القص المعتمدة.
+Recalculate or re-approve the cutting plan so finished geometry is available.,أعد حساب خطة القص أو اعتمدها من جديد حتى تتوفر الهندسة النهائية.
+Fix the path geometry in the approved plan, then open this sheet again.,أصلح هندسة المسار في الخطة المعتمدة، ثم افتح هذا اللوح مجددًا.
+Enable the tool preset in factory settings, or choose another enabled preset.,فعّل إعداد الريشة من إعدادات المعمل، أو اختر إعدادًا مفعّلًا آخر.
+Choose an available CNC tool preset.,اختر إعداد ريشة CNC متاحًا.
+Use one physical tool number for every operation on this sheet.,استخدم رقم ريشة فيزيائيًا واحدًا لكل عمليات هذا اللوح.
+Use one tool diameter for every operation on this sheet.,استخدم قطر ريشة واحدًا لكل عمليات هذا اللوح.
+Resolve the listed geometry problems, then generate the NC file again.,أصلح المشاكل الهندسية المدرجة، ثم ولّد ملف NC مجددًا.
+Complete the milling parameters on the approved plan, then try again.,أكمل معاملات التفريز في الخطة المعتمدة، ثم أعد المحاولة.
+Choose a narrower tool, or widen the milling band on the approved plan.,اختر ريشة أضيق، أو وسّع شريط التفريز في الخطة المعتمدة.
+Correct the listed issue, then generate the NC file again.,صحّح المشكلة المدرجة، ثم ولّد ملف NC مجددًا.
+Download the simulation NC file now? It is not approved for a workshop machine.,هل تريد تنزيل ملف NC التجريبي الآن؟ وهو غير معتمد لماكينة الورشة.
 Simulation NC is for review only. It is not approved for a workshop machine.,ملف NC التجريبي للمراجعة فقط. وهو غير معتمد لماكينة الورشة.
 The stored simulation NC needs regeneration.,ملف NC التجريبي المخزّن يحتاج إعادة توليد.
 "{0} geometry problems block simulation NC generation.",{0} مشاكل هندسية تمنع توليد NC التجريبي.
@@ -3300,3 +3334,7 @@ Simulation NC must stay private.,يجب أن يبقى ملف NC التجريبي
 Generated status requires a stored simulation NC file.,حالة «تم التوليد» تتطلب ملف NC تجريبيًا محفوظًا.
 Generation snapshot is incomplete.,لقطة التوليد غير مكتملة.
 Generated status requires a private attached NC file.,حالة «تم التوليد» تتطلب مرفق NC خاصًا.
+Cut paths for {0} pieces could not be prepared because finished geometry is missing from the approved plan.,تعذر تجهيز مسارات قص {0} درفة لأن هندستها النهائية غير متاحة في الخطة المعتمدة.
+"{0} problems: {1}",{0} مشاكل: {1}
+Geometry is ready. Simulation NC can be generated for review.,الهندسة جاهزة. يمكن توليد NC التجريبي للمراجعة.
+Preparing the simulation NC file...,جاري تجهيز ملف NC التجريبي...

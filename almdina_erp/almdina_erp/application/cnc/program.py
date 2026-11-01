@@ -33,6 +33,9 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     cutter_center_segments,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
+from almdina_erp.almdina_erp.domain.cutting.finished_piece_geometry import (
+    resolve_finished_geometry_mm,
+)
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
     LinerPiece,
@@ -207,6 +210,25 @@ def _usable_geometry(geometry: Mapping[str, Any] | None) -> tuple[list[list[floa
     )
 
 
+def _finished_geometry_for_piece(piece: Mapping[str, Any]) -> tuple[list[list[float]], list[list[list[float]]]] | str:
+    """Use stored geometry when valid; otherwise rebuild from approved placement."""
+
+    stored = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
+    parsed = _usable_geometry(stored)
+    if not isinstance(parsed, str):
+        return parsed
+    if parsed != "finished_geometry_missing":
+        return parsed
+    rebuilt = resolve_finished_geometry_mm(
+        stored_geometry=None,
+        piece=piece,
+        stored_piece=piece,
+    )
+    if rebuilt is None:
+        return "finished_geometry_missing"
+    return _usable_geometry(rebuilt)
+
+
 def _hole_keys(piece_id: str, holes: Sequence[Any]) -> list[tuple[str, Any]]:
     ranked = sorted((_fingerprint(hole), hole) for hole in holes)
     seen: dict[str, int] = {}
@@ -350,7 +372,7 @@ def compile_sheet_program(
     for piece in sheet_pieces:
         piece_id = str(piece.get("piece_instance_id") or "")
         label = str(piece.get("label") or "")
-        parsed = _usable_geometry(piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None)
+        parsed = _finished_geometry_for_piece(piece)
         if isinstance(parsed, str):
             for path in catalog.paths:
                 if path.piece_instance_id == piece_id and path.operation_key == "cut_path" and path.path_key.endswith(":outer"):

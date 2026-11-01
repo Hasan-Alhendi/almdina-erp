@@ -844,31 +844,48 @@
     }
 }
 
+.aps-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-block: 0.25rem 1rem;
+    padding: 0.35rem;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: var(--aps-radius-sm, 10px);
+    background: var(--alm-card, #fff);
+}
+
+.aps-tab {
+    appearance: none;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--alm-text, #344054);
+    font: inherit;
+    font-weight: 600;
+    padding-block: 0.55rem;
+    padding-inline: 0.9rem;
+    cursor: pointer;
+}
+
+.aps-tab.is-active {
+    background: var(--alm-accent-soft, #eef4ff);
+    color: var(--alm-text-strong, #101828);
+}
+
+.aps-tab-panel[hidden] {
+    display: none;
+}
+
 .aps-cnc-presets {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    margin-block-start: 1rem;
+    margin-block-start: 0.25rem;
 }
 
-.aps-cnc-presets h4 {
-    margin: 0;
-}
-
-.aps-cnc-presets__row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem 0.75rem;
-    padding-block: 0.75rem;
-    padding-inline: 0.75rem;
-    border: 1px solid var(--alm-card-border, #e4e8ee);
-    border-radius: var(--aps-radius-sm, 10px);
-}
-
-.aps-cnc-presets__row span,
 .aps-cnc-presets__empty {
+    margin: 0;
     color: var(--text-muted, #687481);
 }
 

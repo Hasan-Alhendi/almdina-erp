@@ -84,12 +84,15 @@ linerPaths.forEach(pathRow => {
     assert.strictEqual(state.overrides[pathRow.path_key], undefined);
 });
 const html = ux.dialogMarkup(workspace, sheet, state);
-assert.strictEqual((html.match(/<select data-operation-key=/g) || []).length, 2);
-assert.strictEqual((html.match(/data-path-preset=/g) || []).length, 0);
+assert.strictEqual((html.match(/data-operation-preset-host=/g) || []).length, 2);
+assert.strictEqual((html.match(/data-path-preset-host=/g) || []).length, 0);
 assert.strictEqual((html.match(/Uses the layer preset/g) || []).length, 6);
 assert.ok(html.includes("Factory default"));
 assert.ok(html.includes("data-layer-source=\"factory\""));
 assert.ok(html.includes("Depth 18.5 mm"));
+assert.ok(html.includes("Diameter 6 mm"));
+assert.ok(!html.includes("data-add-preset"));
+assert.ok(!html.includes("<select data-operation-key="));
 assert.ok(!html.includes("data-customize-path") || html.includes("Customize this path"));
 
 ux.applyLayerPreset(state, "liner", "Shallow");
@@ -99,7 +102,7 @@ linerPaths.forEach(pathRow => {
 assert.strictEqual(state.sources.liner, "sheet");
 const changed = ux.dialogMarkup(workspace, sheet, state);
 assert.ok(changed.includes("Sheet choice"));
-assert.strictEqual((changed.match(/data-path-preset=/g) || []).length, 0);
+assert.strictEqual((changed.match(/data-path-preset-host=/g) || []).length, 0);
 
 ux.customizePath(state, linerPaths[0].path_key, "Finish", state.operations.liner);
 assert.strictEqual(ux.effectivePreset(state, linerPaths[0]), "Finish");
@@ -109,7 +112,7 @@ linerPaths.slice(1).forEach(pathRow => {
 state.expanded.liner = true;
 state.customizing[linerPaths[0].path_key] = true;
 const custom = ux.dialogMarkup(workspace, sheet, state);
-assert.strictEqual((custom.match(/data-path-preset=/g) || []).length, 1);
+assert.strictEqual((custom.match(/data-path-preset-host=/g) || []).length, 1);
 assert.ok(custom.includes("Custom preset"));
 assert.ok(custom.includes("Use the layer preset"));
 
@@ -134,8 +137,9 @@ const creatable = ux.dialogMarkup({
     can_edit_factory_cnc: true,
     presets: [],
 }, sheet, ux.sheetState(sheet));
-assert.ok(creatable.includes("data-add-preset"));
+assert.ok(!creatable.includes("data-add-preset"));
 assert.ok(creatable.includes("No CNC tool presets have been created yet."));
+assert.ok(creatable.includes("data-operation-preset-host="));
 
 const readonly = ux.dialogMarkup({
     can_prepare: false,
@@ -143,22 +147,22 @@ const readonly = ux.dialogMarkup({
     presets: workspace.presets,
 }, sheet, ux.sheetState(sheet));
 assert.ok(readonly.includes("Preparing operational files is not available"));
-assert.ok(readonly.includes("disabled"));
+assert.ok(readonly.includes('data-readonly="1"'));
 assert.ok(!readonly.includes("data-customize-path"));
-assert.ok(!readonly.includes("data-path-preset="));
+assert.ok(!readonly.includes("data-path-preset-host="));
 
 const disabledSheet = ux.sheetState(sheet);
 disabledSheet.operations.liner = "Off";
 const disabled = ux.dialogMarkup(workspace, sheet, disabledSheet);
 assert.ok(disabled.includes("This tool preset is disabled."));
 
-const handler = panel.slice(
-    panel.indexOf("select[data-operation-key]"),
-    panel.indexOf("select[data-path-preset]")
-);
-assert.ok(handler.includes("refreshDialog("));
-assert.ok(!handler.includes("refreshSelection("));
-assert.ok(panel.includes("dialog._cncProgramRequest"));
+assert.ok(panel.includes("mountPresetControls("));
+assert.ok(panel.includes('fieldtype: "Link"'));
+assert.ok(panel.includes('options: "CNC Tool Preset"'));
+assert.ok(panel.includes("frappe.ui.form.Quick Entry") || panel.includes("get_query"));
+assert.ok(!panel.includes("openPresetEditor("));
+assert.ok(!panel.includes("save_cnc_tool_preset"));
+assert.ok(panel.includes("dialog._cncNcRequest"));
 assert.ok(panel.includes("get_cnc_sheet_program"));
 assert.ok(panel.includes("operation_sources"));
 assert.strictEqual(ux.cutPathIsEarly(["liner", "recessed_handle_cutout", "back_groove", "cut_path"]), false);
@@ -166,10 +170,14 @@ assert.ok(panel.includes("Cutting first may let the pieces move after they separ
 assert.ok(!panel.includes("GEOMETRY"));
 assert.ok(!panel.includes("G01"));
 assert.ok(panel.includes("generate_cnc_sheet_nc"));
-assert.ok(panel.includes("Download simulation NC"));
+assert.ok(panel.includes("Generate NC file"));
+assert.ok(panel.includes("syncSheetFooter("));
 assert.ok(panel.includes("not approved for a workshop machine"));
-assert.ok(translations.includes("إضافة إعداد ريشة"));
+assert.ok(!panel.includes("data-cnc-program"));
+assert.ok(translations.includes("إدارة الريش"));
+assert.ok(translations.includes("إعدادات الملفات التشغيلية"));
 assert.ok(translations.includes("استعادة إعداد المصنع"));
 assert.ok(translations.includes("إعدادات ريش CNC"));
+assert.ok(translations.includes("توليد ملف NC"));
 
 console.log("dco_operational_files_presets.test.js passed");

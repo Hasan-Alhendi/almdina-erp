@@ -475,46 +475,6 @@
             return dialog;
         }
 
-        function openToolPreset(config = {}) {
-            const preset = config.preset || {};
-            const editing = Boolean(preset.name);
-            const dialog = own(new frappe.ui.Dialog({
-                title: editing ? t("Edit tool preset") : t("Add a tool preset"),
-                fields: [
-                    { fieldname: "preset_name", fieldtype: "Data", label: t("Preset name"), reqd: 1, read_only: editing ? 1 : 0, default: preset.preset_name || "" },
-                    { fieldname: "tool_name", fieldtype: "Data", label: t("Tool name"), reqd: 1, default: preset.tool_name || "" },
-                    { fieldname: "tool_number", fieldtype: "Data", label: t("Tool number"), reqd: 1, default: preset.tool_number || "" },
-                    { fieldname: "tool_diameter_mm", fieldtype: "Float", label: t("Tool diameter (mm)"), reqd: 1, default: preset.tool_diameter_mm },
-                    { fieldname: "final_depth_mm", fieldtype: "Float", label: t("Final depth (mm)"), reqd: 1, default: preset.final_depth_mm },
-                    { fieldname: "spindle_speed_rpm", fieldtype: "Int", label: t("Spindle speed (RPM)"), reqd: 1, default: preset.spindle_speed_rpm },
-                    { fieldname: "feed_rate_mm_min", fieldtype: "Float", label: t("Cutting feed (mm/min)"), reqd: 1, default: preset.feed_rate_mm_min },
-                    { fieldname: "plunge_rate_mm_min", fieldtype: "Float", label: t("Plunge feed (mm/min)"), reqd: 1, default: preset.plunge_rate_mm_min },
-                    { fieldname: "pass_depth_mm", fieldtype: "Float", label: t("Pass depth (mm)"), description: t("Optional. Leave empty for one pass."), default: preset.pass_depth_mm || "" },
-                    { fieldname: "enabled", fieldtype: "Check", label: t("Enabled"), default: editing ? (preset.enabled ? 1 : 0) : 1 },
-                ],
-                primary_action_label: t("Save tool preset"),
-                primary_action(values) {
-                    const button = dialog.get_primary_btn();
-                    button.prop("disabled", true);
-                    Promise.resolve(config.onSubmit ? config.onSubmit(Object.assign({ name: preset.name || "" }, values)) : null)
-                        .then(() => complete(dialog))
-                        .catch(error => {
-                            if (!ownedSurfaces.has(dialog)) return;
-                            frappe.msgprint({
-                                title: t("Could not save"),
-                                message: escapeHtml(error && error.message ? error.message : t("An unexpected error occurred.")),
-                                indicator: "red",
-                            });
-                        })
-                        .finally(() => {
-                            if (ownedSurfaces.has(dialog)) button.prop("disabled", false);
-                        });
-                },
-            }));
-            dialog.show();
-            return dialog;
-        }
-
         return Object.freeze({
             sectionFields,
             sectionTitle,
@@ -522,7 +482,6 @@
             openAudit,
             openQr,
             openRestore,
-            openToolPreset,
             showSaved,
             deactivate,
             dispose,

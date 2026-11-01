@@ -150,9 +150,13 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
         self.assertIn('".aps-edit"', self.interactions)
         self.assertIn('".aps-whatsapp-create"', self.interactions)
         self.assertIn('".aps-whatsapp-reconnect"', self.interactions)
+        self.assertIn("[data-aps-tab]", self.interactions)
+        self.assertIn('".aps-cnc-preset-manage"', self.interactions)
         self.assertIn("onEditSection", self.interactions)
         self.assertIn("onCreateWhatsApp", self.interactions)
         self.assertIn("onReconnectWhatsApp", self.interactions)
+        self.assertIn("onSelectTab", self.interactions)
+        self.assertIn("onManageToolPresets", self.interactions)
         self.assertIn("lifecycle.track", self.interactions)
         for forbidden in (
             "frappe.call(",

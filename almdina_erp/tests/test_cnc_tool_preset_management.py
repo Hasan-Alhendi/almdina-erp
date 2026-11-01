@@ -138,8 +138,25 @@ def test_creating_a_preset_requires_the_factory_capability_and_then_appears_for_
     assert unused_tool_preset_can_be_deleted(operation_uses=1, path_uses=0, factory_uses=0) is False
     assert unused_tool_preset_can_be_deleted(operation_uses=0, path_uses=1, factory_uses=0) is False
     assert unused_tool_preset_can_be_deleted(operation_uses=0, path_uses=0, factory_uses=1) is False
-    assert "CNC tool presets" in PANEL.read_text(encoding="utf-8")
-    assert "Add a tool preset" in PANEL.read_text(encoding="utf-8")
+    panel = PANEL.read_text(encoding="utf-8")
+    assert "Operational file settings" in panel
+    assert "CNC tool presets" in panel
+    assert "Manage tool presets" in panel
+    assert "Add a tool preset" in panel
+    assert "aps-cnc-preset-manage" in panel
+    assert "aps-cnc-preset-edit" not in panel
+    presets_js = (
+        APP_ROOT / "public" / "js" / "factory_production_settings" / "cnc_presets.js"
+    ).read_text(encoding="utf-8")
+    assert 'frappe.set_route("List", DOCTYPE)' in presets_js or 'frappe.set_route("List", "CNC Tool Preset")' in presets_js
+    assert "frappe.new_doc" in presets_js
+    doctype = (
+        APP_ROOT / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.json"
+    ).read_text(encoding="utf-8")
+    assert '"quick_entry": 1' in doctype
+    assert '"search_fields": "tool_name,tool_number,preset_name"' in doctype
+    assert '"in_list_view": 1' in doctype
+    assert "spindle_speed_rpm" in doctype
 
     known = {"Liner finish": _raw(preset_name="Liner finish")}
     workspace = _workspace(

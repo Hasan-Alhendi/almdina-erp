@@ -69,13 +69,15 @@ assert.strictEqual(
 assert.ok(panel.includes("AlmdinaCuttingPlanRender.build"));
 assert.ok(panel.includes("data-path-key"));
 assert.ok(panel.includes("viewed_plan_token"));
-assert.ok(panel.includes("Move earlier"));
+assert.ok(panel.includes("Move the operation earlier") || panel.includes("Move earlier"));
 assert.ok(panel.includes("ArrowUp"));
 assert.ok(panel.includes("draggable"));
 assert.ok(panel.includes("Discard the unsaved changes?"));
+assert.ok(panel.includes("dco-operational-order__move"));
 assert.ok(!panel.includes("GEOMETRY"));
 assert.ok(!panel.includes("G01"));
-assert.ok(panel.includes("generate_cnc_sheet_nc") || panel.includes("Generate simulation NC") || panel.includes("data-cnc-generate-nc"));
+assert.ok(panel.includes("generate_cnc_sheet_nc") || panel.includes("Generate NC file") || panel.includes("data-cnc-generate-nc"));
+assert.ok(panel.includes("syncSheetFooter("));
 assert.ok(registry.includes("door_cutting_order_cutting_plan_renderer.js"));
 assert.ok(translations.includes("تقديم القص قد يؤدي إلى تحرك الدرفات بعد فصلها عن اللوح."));
 assert.ok(translations.includes("فتح إعدادات اللوح"));
