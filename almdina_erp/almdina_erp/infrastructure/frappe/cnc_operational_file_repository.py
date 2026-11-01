@@ -159,7 +159,7 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "cut_path_early_confirmed": bool(cint(document.cut_path_early_confirmed)),
                 "operations": _child_rows(
                     document.operations,
-                    ("operation_key", "dxf_layer", "sequence", "tool_preset"),
+                    ("operation_key", "dxf_layer", "sequence", "tool_preset", "preset_source"),
                 ),
                 "paths": _child_rows(
                     document.paths,
@@ -206,7 +206,7 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
             "spindle_speed_rpm": row.spindle_speed_rpm,
             "feed_rate_mm_min": row.feed_rate_mm_min,
             "plunge_rate_mm_min": row.plunge_rate_mm_min,
-            "pass_depth_mm": row.pass_depth_mm,
+            "pass_depth_mm": None if not row.pass_depth_mm else row.pass_depth_mm,
             "enabled": bool(cint(row.enabled)),
         }
         for row in rows

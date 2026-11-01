@@ -127,12 +127,16 @@
 
     function sheetState(sheet) {
         const operations = {};
+        const sources = {};
+        const factoryPresets = {};
         const order = [];
         (sheet.operations || []).forEach(operation => {
             const key = String(operation.operation_key || "");
             if (!key) return;
             order.push(key);
             operations[key] = String(operation.tool_preset || "");
+            sources[key] = operation.preset_source === "sheet" ? "sheet" : "factory";
+            factoryPresets[key] = String(operation.factory_preset || "");
         });
         const overrides = {};
         (sheet.paths || []).forEach(path => {
@@ -141,10 +145,13 @@
         });
         return {
             operations,
+            sources,
+            factoryPresets,
             overrides,
             order,
             confirmed: Boolean(sheet.cut_path_early_confirmed),
             expanded: {},
+            customizing: {},
             selectedPathKey: "",
         };
     }
@@ -152,10 +159,42 @@
     function stateSnapshot(state) {
         return JSON.stringify({
             operations: state.order.map(key => [key, state.operations[key] || ""]),
+            sources: state.order.map(key => [key, (state.sources && state.sources[key]) || "factory"]),
             overrides: Object.keys(state.overrides).sort().map(key => [key, state.overrides[key] || ""]),
             order: state.order.slice(),
             confirmed: Boolean(state.confirmed) && cutPathIsEarly(state.order),
         });
+    }
+
+    function applyLayerPreset(state, key, name) {
+        state.operations[key] = String(name || "");
+        state.sources[key] = "sheet";
+        return state;
+    }
+
+    function restoreLayerPreset(state, key) {
+        state.sources[key] = "factory";
+        state.operations[key] = String((state.factoryPresets && state.factoryPresets[key]) || "");
+        return state;
+    }
+
+    function restoreFactoryPresets(state) {
+        (state.order || []).forEach(key => restoreLayerPreset(state, key));
+        return state;
+    }
+
+    function customizePath(state, pathKey, name, layerPreset) {
+        const chosen = String(name || "");
+        if (chosen && chosen !== String(layerPreset || "")) state.overrides[pathKey] = chosen;
+        else delete state.overrides[pathKey];
+        if (state.customizing) delete state.customizing[pathKey];
+        return state;
+    }
+
+    function clearPathPreset(state, pathKey) {
+        delete state.overrides[pathKey];
+        if (state.customizing) delete state.customizing[pathKey];
+        return state;
     }
 
     function effectivePreset(state, path) {
@@ -306,6 +345,41 @@
         });
     }
 
+    function presetFacts(workspace, name) {
+        const preset = name ? presetByName(workspace).get(name) : null;
+        if (!preset) return "";
+        return [
+            preset.final_depth_mm ? translate("Depth {0} mm", [preset.final_depth_mm]) : "",
+            preset.spindle_speed_rpm ? translate("{0} RPM", [preset.spindle_speed_rpm]) : "",
+            preset.feed_rate_mm_min ? translate("Feed {0} mm/min", [preset.feed_rate_mm_min]) : "",
+            preset.plunge_rate_mm_min ? translate("Plunge {0} mm/min", [preset.plunge_rate_mm_min]) : "",
+        ].filter(Boolean).join(" · ");
+    }
+
+    function presetIssue(workspace, name) {
+        if (!name) return "";
+        const preset = presetByName(workspace).get(name);
+        if (!preset) {
+            return translate("This tool preset is no longer available. It remains visible for history and cannot be used for new machining.");
+        }
+        if (!preset.enabled) {
+            return translate("This tool preset is disabled. It remains visible for history and cannot be used for new machining.");
+        }
+        return "";
+    }
+
+    function presetAvailability(workspace) {
+        const presets = Array.isArray(workspace.presets) ? workspace.presets : [];
+        const enabled = presets.filter(preset => preset && preset.enabled);
+        if (enabled.length) return "";
+        if (!presets.length) {
+            return workspace.can_edit_factory_cnc
+                ? translate("No CNC tool presets have been created yet.")
+                : translate("No CNC tool presets have been created yet. A factory settings manager must create them.");
+        }
+        return translate("Every saved tool preset is disabled. Enable one before preparing new machining.");
+    }
+
     function dialogMarkup(workspace, sheet, state) {
         const canPrepare = Boolean(workspace.can_prepare);
         const disabled = canPrepare ? "" : " disabled";
@@ -319,19 +393,28 @@
             const operation = (sheet.operations || []).find(item => item.operation_key === key) || {};
             const paths = (sheet.paths || []).filter(path => path.operation_key === key);
             const expanded = Boolean(state.expanded[key]);
+            const selectedLayer = state.operations[key] || "";
+            const source = (state.sources && state.sources[key]) === "sheet" ? "sheet" : "factory";
+            const issue = presetIssue(workspace, selectedLayer);
+            const facts = presetFacts(workspace, selectedLayer);
             const pathRows = paths.map(path => {
                 const custom = Boolean(state.overrides[path.path_key]);
+                const editing = canPrepare && (custom || Boolean(state.customizing && state.customizing[path.path_key]));
                 const selected = effectivePreset(state, path);
-                const reset = custom && canPrepare
-                    ? `<button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>`
-                    : "";
+                const control = editing
+                    ? `<select data-path-preset="${escapeHtml(path.path_key)}">${presetOptions(workspace, selected)}</select>
+                        <button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>`
+                    : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
+                        ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`;
                 return `<div class="dco-operational-path${custom ? " is-custom" : ""}${path.path_key === state.selectedPathKey ? " is-selected" : ""}" data-path-key="${escapeHtml(path.path_key)}" data-path-operation="${escapeHtml(key)}" data-custom="${custom ? "1" : "0"}">
                     <button type="button" class="btn btn-link btn-xs dco-operational-path__pick" data-select-path="${escapeHtml(path.path_key)}">${escapeHtml(path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"))}</button>
                     <span class="dco-operational-path__badge">${escapeHtml(translate(custom ? "Custom preset" : "Uses the layer preset"))}</span>
-                    <select data-path-preset="${escapeHtml(path.path_key)}"${disabled}>${presetOptions(workspace, selected)}</select>
-                    ${reset}
+                    ${control}
                 </div>`;
             }).join("");
+            const restore = canPrepare
+                ? `<button type="button" class="btn btn-default btn-xs" data-restore-layer="${escapeHtml(key)}">${escapeHtml(translate("Restore the factory preset"))}</button>`
+                : "";
             return `<article class="dco-operational-layer" data-layer="${escapeHtml(key)}">
                 <header class="dco-operational-layer__head">
                     <div>
@@ -339,10 +422,14 @@
                         <code>${escapeHtml(operation.dxf_layer || "")}</code>
                         <span>${escapeHtml(translate("{0} paths", [paths.length || operation.path_count || 0]))}</span>
                     </div>
-                    <label>${escapeHtml(translate("Tool preset"))}
-                        <select data-operation-key="${escapeHtml(key)}"${disabled}>${presetOptions(workspace, state.operations[key] || "")}</select>
+                    <p class="dco-operational-layer__source" data-layer-source="${escapeHtml(source)}">${escapeHtml(translate(source === "sheet" ? "Sheet choice" : "Factory default"))}</p>
+                    <label class="dco-operational-layer__choice">${escapeHtml(translate("Tool preset"))}
+                        <select data-operation-key="${escapeHtml(key)}"${disabled}>${presetOptions(workspace, selectedLayer)}</select>
                     </label>
+                    ${restore}
                 </header>
+                ${facts ? `<p class="dco-operational-layer__facts">${escapeHtml(facts)}</p>` : ""}
+                ${issue ? `<p class="dco-operational-layer__issue" role="status">${escapeHtml(issue)}</p>` : ""}
                 <button type="button" class="btn btn-default btn-xs" data-toggle-layer="${escapeHtml(key)}" aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(translate(expanded ? "Hide paths" : "Show paths"))}</button>
                 <div class="dco-operational-layer__paths"${expanded ? "" : " hidden"}>${pathRows}</div>
             </article>`;
@@ -350,6 +437,19 @@
         const warning = early
             ? `<p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting first may let the pieces move after they separate from the board."))}</p>
                 <label class="dco-operational-sheet__confirm"><input type="checkbox" data-cut-confirm${state.confirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to keep this operation order."))}</label>`
+            : "";
+        const availability = presetAvailability(workspace);
+        const availabilityHtml = availability
+            ? `<p class="dco-operational-sheet__note" role="status">${escapeHtml(availability)}</p>`
+            : "";
+        const permissionNote = canPrepare
+            ? ""
+            : `<p class="dco-operational-sheet__note" role="status">${escapeHtml(translate("You can review these settings. Preparing operational files is not available for your current permissions."))}</p>`;
+        const addPreset = workspace.can_edit_factory_cnc
+            ? `<button type="button" class="btn btn-default btn-sm" data-add-preset>${escapeHtml(translate("Add a tool preset"))}</button>`
+            : "";
+        const restoreSheet = canPrepare
+            ? `<button type="button" class="btn btn-default btn-sm" data-restore-sheet>${escapeHtml(translate("Restore factory presets for this sheet"))}</button>`
             : "";
         return `<div class="dco-operational-sheet">
             <div class="dco-operational-sheet__preview">
@@ -363,7 +463,16 @@
                     <ol class="dco-operational-order">${orderItems}</ol>
                     ${warning}
                 </section>
-                <section class="dco-operational-layers">${layers}</section>
+                <section class="dco-operational-layers">
+                    <div class="dco-operational-layers__tools">
+                        <h4>${escapeHtml(translate("Layer presets"))}</h4>
+                        ${restoreSheet}
+                        ${addPreset}
+                    </div>
+                    ${permissionNote}
+                    ${availabilityHtml}
+                    ${layers}
+                </section>
             </div>
         </div>`;
     }
@@ -411,19 +520,41 @@
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
+        const addPreset = body.querySelector("[data-add-preset]");
+        if (addPreset) {
+            addPreset.addEventListener("click", () => {
+                openPresetEditor(frm, dialog, workspace, sheet, state, board);
+            });
+        }
         if (!canPrepare) return;
 
         body.querySelectorAll("select[data-operation-key]").forEach(select => {
             select.addEventListener("change", () => {
-                const key = select.getAttribute("data-operation-key");
-                state.operations[key] = select.value;
-                body.querySelectorAll(`[data-path-operation="${key}"]`).forEach(row => {
-                    const pathKey = row.getAttribute("data-path-key");
-                    if (state.overrides[pathKey]) return;
-                    const pathSelect = row.querySelector("select");
-                    if (pathSelect) pathSelect.value = select.value;
-                });
-                refreshSelection();
+                applyLayerPreset(state, select.getAttribute("data-operation-key"), select.value);
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+            });
+        });
+        body.querySelectorAll("[data-restore-layer]").forEach(button => {
+            button.addEventListener("click", () => {
+                restoreLayerPreset(state, button.getAttribute("data-restore-layer"));
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+            });
+        });
+        const restoreSheet = body.querySelector("[data-restore-sheet]");
+        if (restoreSheet) {
+            restoreSheet.addEventListener("click", () => {
+                restoreFactoryPresets(state);
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+            });
+        }
+        body.querySelectorAll("[data-customize-path]").forEach(button => {
+            button.addEventListener("click", () => {
+                const pathKey = button.getAttribute("data-customize-path");
+                state.customizing[pathKey] = true;
+                const row = button.closest(".dco-operational-path");
+                const operationKey = row && row.getAttribute("data-path-operation");
+                if (operationKey) state.expanded[operationKey] = true;
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
         body.querySelectorAll("select[data-path-preset]").forEach(select => {
@@ -431,15 +562,13 @@
                 const pathKey = select.getAttribute("data-path-preset");
                 const row = select.closest(".dco-operational-path");
                 const operationKey = row.getAttribute("data-path-operation");
-                const layer = state.operations[operationKey] || "";
-                if (select.value && select.value !== layer) state.overrides[pathKey] = select.value;
-                else delete state.overrides[pathKey];
+                customizePath(state, pathKey, select.value, state.operations[operationKey] || "");
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
         body.querySelectorAll("[data-reset-path]").forEach(button => {
             button.addEventListener("click", () => {
-                delete state.overrides[button.getAttribute("data-reset-path")];
+                clearPathPreset(state, button.getAttribute("data-reset-path"));
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
@@ -579,6 +708,7 @@
                 order_name: frm.doc.name,
                 sheet_no: sheet.sheet_no,
                 operation_presets: state.operations,
+                operation_sources: state.sources,
                 path_overrides: overrides,
                 operation_order: state.order,
                 cut_path_early_confirmed: state.confirmed ? 1 : 0,
@@ -594,6 +724,8 @@
                 if (saved) {
                     const next = sheetState(saved);
                     state.operations = next.operations;
+                    state.sources = next.sources;
+                    state.factoryPresets = next.factoryPresets;
                     state.overrides = next.overrides;
                     state.order = next.order;
                     state.confirmed = next.confirmed;
@@ -691,6 +823,9 @@
                 path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"),
                 path.preset_name || translate("Not specified"),
                 depth ? translate("Depth {0} mm", [depth]) : "",
+                preset.spindle_speed_rpm ? translate("{0} RPM", [preset.spindle_speed_rpm]) : "",
+                preset.feed_rate_mm_min ? translate("Feed {0} mm/min", [preset.feed_rate_mm_min]) : "",
+                preset.plunge_rate_mm_min ? translate("Plunge {0} mm/min", [preset.plunge_rate_mm_min]) : "",
                 passes > 1 ? translate("{0} passes", [passes]) : "",
                 DIRECTION_LABELS[path.direction] ? translate(DIRECTION_LABELS[path.direction]) : "",
                 path.start ? `${translate("Path start")} ${formatPoint(path.start)}` : "",
@@ -778,11 +913,79 @@
         });
     }
 
+    function openPresetEditor(frm, dialog, workspace, sheet, state, board) {
+        if (!workspace.can_edit_factory_cnc || !window.frappe || !frappe.ui || !frappe.ui.Dialog) return;
+        const editor = new frappe.ui.Dialog({
+            title: translate("Add a tool preset"),
+            fields: [
+                { fieldname: "preset_name", fieldtype: "Data", label: translate("Preset name"), reqd: 1 },
+                { fieldname: "tool_name", fieldtype: "Data", label: translate("Tool name"), reqd: 1 },
+                { fieldname: "tool_number", fieldtype: "Data", label: translate("Tool number"), reqd: 1 },
+                { fieldname: "tool_diameter_mm", fieldtype: "Float", label: translate("Tool diameter (mm)"), reqd: 1 },
+                { fieldname: "final_depth_mm", fieldtype: "Float", label: translate("Final depth (mm)"), reqd: 1 },
+                { fieldname: "spindle_speed_rpm", fieldtype: "Int", label: translate("Spindle speed (RPM)"), reqd: 1 },
+                { fieldname: "feed_rate_mm_min", fieldtype: "Float", label: translate("Cutting feed (mm/min)"), reqd: 1 },
+                { fieldname: "plunge_rate_mm_min", fieldtype: "Float", label: translate("Plunge feed (mm/min)"), reqd: 1 },
+                { fieldname: "pass_depth_mm", fieldtype: "Float", label: translate("Pass depth (mm)"), description: translate("Optional. Leave empty for one pass.") },
+                { fieldname: "enabled", fieldtype: "Check", label: translate("Enabled"), default: 1 },
+            ],
+            primary_action_label: translate("Save tool preset"),
+            primary_action(values) {
+                const request = (dialog._cncPresetRequest || 0) + 1;
+                dialog._cncPresetRequest = request;
+                const button = editor.get_primary_btn();
+                button.prop("disabled", true);
+                frappe.call({
+                    method: "almdina_erp.almdina_erp.services.production_settings_service.save_cnc_tool_preset",
+                    args: { values },
+                    callback() {
+                        frappe.call({
+                            method: `${METHOD}.get_cnc_operational_workspace`,
+                            args: { order_name: frm.doc.name },
+                            callback(response) {
+                                if (dialog._cncPresetRequest !== request) return;
+                                const message = (response && response.message) || {};
+                                workspace.presets = message.presets || workspace.presets;
+                                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                                if (saved) {
+                                    const next = sheetState(saved);
+                                    state.order.forEach(key => {
+                                        const previousFactory = state.factoryPresets[key] || "";
+                                        state.factoryPresets[key] = next.factoryPresets[key] || "";
+                                        if (state.sources[key] !== "sheet" && (state.operations[key] || "") === previousFactory) {
+                                            state.operations[key] = state.factoryPresets[key];
+                                        }
+                                    });
+                                }
+                                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                                editor.hide();
+                            },
+                            error() {
+                                button.prop("disabled", false);
+                            },
+                        });
+                    },
+                    error() {
+                        button.prop("disabled", false);
+                    },
+                });
+            },
+        });
+        editor.show();
+    }
+
     window.AlmdinaOperationalFilesUX = Object.freeze({
         render,
         cutPathIsEarly,
         effectivePreset,
         toolConflict,
         programMarkup,
+        dialogMarkup,
+        sheetState,
+        applyLayerPreset,
+        restoreLayerPreset,
+        restoreFactoryPresets,
+        customizePath,
+        clearPathPreset,
     });
 })();

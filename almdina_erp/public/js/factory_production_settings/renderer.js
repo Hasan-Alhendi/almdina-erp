@@ -98,6 +98,67 @@
             `;
         }
 
+        function toolPresetCatalog(section) {
+            if (!Array.isArray(section.toolPresets)) return "";
+            const rows = section.toolPresets.map(preset => {
+                const enabled = Boolean(preset && preset.enabled);
+                const facts = [
+                    preset.tool_name,
+                    preset.tool_number,
+                    preset.tool_diameter_mm ? `${preset.tool_diameter_mm} mm` : "",
+                    preset.final_depth_mm ? t("Depth {0} mm", [preset.final_depth_mm]) : "",
+                ].filter(Boolean).join(" · ");
+                const actions = section.editable ? [
+                    uiButton({
+                        label: t("Edit"),
+                        variant: "secondary",
+                        className: "aps-cnc-preset-edit",
+                        attrs: { "data-preset": preset.name || "" },
+                    }),
+                    uiButton({
+                        label: enabled ? t("Disable") : t("Enable"),
+                        variant: "secondary",
+                        className: "aps-cnc-preset-enabled",
+                        attrs: { "data-preset": preset.name || "", "data-enabled": enabled ? "0" : "1" },
+                    }),
+                    uiButton({
+                        label: t("Delete"),
+                        variant: "secondary",
+                        className: "aps-cnc-preset-delete",
+                        attrs: { "data-preset": preset.name || "" },
+                    }),
+                ].join("") : "";
+                return `
+                    <div class="aps-cnc-presets__row">
+                        <div>
+                            <strong>${esc(preset.preset_name || preset.name || "")}</strong>
+                            <span>${esc(facts)}</span>
+                        </div>
+                        ${uiBadge({ label: enabled ? t("Enabled") : t("Disabled"), tone: enabled ? "success" : "neutral" })}
+                        <div class="aps-cnc-presets__actions">${actions}</div>
+                    </div>
+                `;
+            }).join("");
+            const empty = rows
+                ? ""
+                : `<p class="aps-cnc-presets__empty">${t("No CNC tool presets have been created yet.")}</p>`;
+            const add = section.editable
+                ? uiButton({
+                    label: t("Add a tool preset"),
+                    variant: "primary",
+                    className: "aps-cnc-preset-add",
+                })
+                : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`;
+            return `
+                <div class="aps-cnc-presets">
+                    <h4>${t("CNC tool presets")}</h4>
+                    ${add}
+                    ${empty}
+                    ${rows}
+                </div>
+            `;
+        }
+
         function sectionCard(section) {
             const stateClass = section.editable ? "is-editable" : "is-readonly";
             return `
@@ -125,6 +186,7 @@
                         </div>
                     </div>
                     <div class="aps-values">${section.rows.map(rowHtml).join("")}</div>
+                    ${toolPresetCatalog(section)}
                     ${section.editable ? "" : `
                         <div class="aps-readonly-note">${t("You can review the values here, but editing this section is not available for your current permissions.")}</div>
                     `}

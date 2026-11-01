@@ -40,6 +40,23 @@
         ));
     }
 
+    function saveCncToolPreset(values, options = {}) {
+        return request(`${BASE}.save_cnc_tool_preset`, {
+            values: JSON.stringify(values || {}),
+        }, options).then(data => data || {});
+    }
+
+    function setCncToolPresetEnabled(name, enabled, options = {}) {
+        return request(`${BASE}.set_cnc_tool_preset_enabled`, {
+            name,
+            enabled: enabled ? 1 : 0,
+        }, options).then(data => data || {});
+    }
+
+    function deleteCncToolPreset(name, options = {}) {
+        return request(`${BASE}.delete_cnc_tool_preset`, { name }, options).then(data => data || {});
+    }
+
     const WHATSAPP = "almdina_erp.almdina_erp.services.whatsapp_service";
     const BACKUPS = "almdina_erp.almdina_erp.services.backup_restore_service";
 
@@ -82,6 +99,9 @@
         getSettings,
         updateSettings,
         getAudit,
+        saveCncToolPreset,
+        setCncToolPresetEnabled,
+        deleteCncToolPreset,
         getWhatsAppSession,
         createWhatsAppSession,
         reconnectWhatsAppSession,

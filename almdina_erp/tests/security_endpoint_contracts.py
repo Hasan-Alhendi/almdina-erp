@@ -29,6 +29,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.approval_queue_service", F, ("approve_order_safely", "get_approval_queue_context", "get_pending_review_orders", "reject_order_safely")),
     ("almdina_erp.almdina_erp.services.archive_service", C, ("archive_approved_plan_pdf", "get_archive_context")),
     ("almdina_erp.almdina_erp.services.backup_restore_service", C, ("create_backup_now", "get_backup_context", "request_restore", "test_ssh_connection")),
+    ("almdina_erp.almdina_erp.services.cnc_operational_file_service", C, ("get_cnc_operational_workspace", "get_cnc_sheet_program", "save_cnc_operational_sheet")),
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
     ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "save_cost_workspace", "update_clipped_corner_edge_price", "update_order_cost_settings")),
     (
@@ -91,7 +92,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.permission_management_service", C, ("export_permission_bundle", "export_role_permissions", "get_permission_audit", "get_permission_console", "get_role_permissions", "import_permission_bundle", "preview_permission_bundle_import", "preview_permission_import", "preview_role_permissions", "search_permission_roles", "update_role_permissions")),
     ("almdina_erp.almdina_erp.services.production_service", D, ("finish_stage", "start_stage")),
     ("almdina_erp.almdina_erp.services.production_service", F, ("pause_stage", "resume_stage")),
-    ("almdina_erp.almdina_erp.services.production_settings_service", C, ("get_factory_settings_audit", "get_print_identity", "get_production_settings", "update_production_settings")),
+    ("almdina_erp.almdina_erp.services.production_settings_service", C, ("delete_cnc_tool_preset", "get_factory_settings_audit", "get_print_identity", "get_production_settings", "save_cnc_tool_preset", "set_cnc_tool_preset_enabled", "update_production_settings")),
     (
         "almdina_erp.almdina_erp.services.whatsapp_service",
         C,

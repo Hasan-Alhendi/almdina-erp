@@ -14,7 +14,9 @@ from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
+    normalize_tool_preset,
     resolve_selected_presets,
+    unused_tool_preset_can_be_deleted,
 )
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
     DEFAULT_OPTIMIZATION_MODE_ID,
@@ -50,6 +52,7 @@ from almdina_erp.almdina_erp.domain.whatsapp.message_templates import (
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     granted_capabilities,
+    require_doctype_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     document_snapshot,
@@ -881,6 +884,7 @@ def get_production_settings() -> dict[str, Any]:
         "machine_options": [item["id"] for item in machines],
         "routing_options": routing_options,
         "whatsapp_stage_message_rows": _whatsapp_stage_message_rows(settings),
+        "cnc_tool_presets": _cnc_tool_preset_catalog(),
     }
 
 
@@ -918,6 +922,162 @@ def update_production_settings(values: str | dict[str, Any]) -> dict[str, Any]:
     return get_production_settings()
 
 
+def _optional_pass_depth(value: Any) -> Any:
+    if value in (None, "", 0, 0.0):
+        return None
+    return value
+
+
+def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
+    rows = frappe.get_all(
+        "CNC Tool Preset",
+        fields=[
+            "name",
+            "preset_name",
+            "tool_name",
+            "tool_number",
+            "tool_diameter_mm",
+            "final_depth_mm",
+            "spindle_speed_rpm",
+            "feed_rate_mm_min",
+            "plunge_rate_mm_min",
+            "pass_depth_mm",
+            "enabled",
+        ],
+        order_by="preset_name asc",
+        limit_page_length=0,
+    )
+    return [
+        {
+            "name": row.name,
+            "preset_name": row.preset_name,
+            "tool_name": row.tool_name,
+            "tool_number": row.tool_number,
+            "tool_diameter_mm": row.tool_diameter_mm,
+            "final_depth_mm": row.final_depth_mm,
+            "spindle_speed_rpm": row.spindle_speed_rpm,
+            "feed_rate_mm_min": row.feed_rate_mm_min,
+            "plunge_rate_mm_min": row.plunge_rate_mm_min,
+            "pass_depth_mm": _optional_pass_depth(row.pass_depth_mm),
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    ]
+
+
+def _require_tool_preset_editor() -> None:
+    require_doctype_capability(
+        Capability.EDIT_FACTORY_CNC_DEFAULTS,
+        message=_("You do not have permission to edit CNC tool presets."),
+    )
+
+
+def _preset_message(code: str) -> str:
+    messages = {
+        "preset_name_required": "Enter a preset name.",
+        "tool_name_required": "Enter a tool name.",
+        "tool_number_invalid": "Tool number must look like T9.",
+        "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
+        "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
+        "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM within the supported range.",
+        "feed_rate_invalid": "Feed rate must be a positive number of millimetres per minute within the supported range.",
+        "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per minute within the supported range.",
+        "pass_depth_invalid": "Pass depth must be a positive number of millimetres within the supported range.",
+        "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
+        "preset_not_found": "The selected CNC tool preset does not exist.",
+    }
+    return _(messages.get(code, "The CNC tool preset is not valid."))
+
+
+def _apply_tool_preset(document: Any, preset: Any, *, keep_name: bool) -> None:
+    if not keep_name:
+        document.preset_name = preset.preset_name
+    document.tool_name = preset.tool_name
+    document.tool_number = preset.tool_number
+    document.tool_diameter_mm = preset.tool_diameter_mm
+    document.final_depth_mm = preset.final_depth_mm
+    document.spindle_speed_rpm = preset.spindle_speed_rpm
+    document.feed_rate_mm_min = preset.feed_rate_mm_min
+    document.plunge_rate_mm_min = preset.plunge_rate_mm_min
+    document.pass_depth_mm = preset.pass_depth_mm
+    document.enabled = 1 if preset.enabled else 0
+
+
+def _tool_preset_use_counts(name: str) -> tuple[int, int, int]:
+    operations = cint(frappe.db.count("CNC Operational Operation", {"tool_preset": name}))
+    paths = cint(frappe.db.count("CNC Operational Path", {"tool_preset": name}))
+    settings = frappe.get_single("Almdina ERP Settings")
+    factory = sum(1 for fieldname in _CNC_PRESET_FIELDS if str(settings.get(fieldname) or "") == name)
+    return operations, paths, factory
+
+
+@frappe.whitelist()
+def save_cnc_tool_preset(values: str | dict[str, Any]) -> dict[str, Any]:
+    """Create or update one tool preset. The caller must manage factory CNC defaults."""
+
+    _require_tool_preset_editor()
+    payload = _payload(values)
+    try:
+        preset = normalize_tool_preset(payload)
+    except ToolPresetError as exc:
+        frappe.throw(_preset_message(exc.code), frappe.ValidationError)
+    name = str(payload.get("name") or "").strip()
+    if name and frappe.db.exists("CNC Tool Preset", name):
+        document = frappe.get_doc("CNC Tool Preset", name)
+        document.check_permission("write")
+        if preset.preset_name != str(document.preset_name or ""):
+            frappe.throw(_("The preset name cannot be changed."), frappe.ValidationError)
+        _apply_tool_preset(document, preset, keep_name=True)
+        document.save()
+    else:
+        if name and name != preset.preset_name:
+            frappe.throw(_("The preset name cannot be changed."), frappe.ValidationError)
+        document = frappe.new_doc("CNC Tool Preset")
+        document.check_permission("create")
+        _apply_tool_preset(document, preset, keep_name=False)
+        document.insert()
+    return get_production_settings()
+
+
+@frappe.whitelist()
+def set_cnc_tool_preset_enabled(name: str, enabled: int | str | bool = 0) -> dict[str, Any]:
+    """Disable or enable a preset without removing the sheets that already use it."""
+
+    _require_tool_preset_editor()
+    preset_name = str(name or "").strip()
+    if not preset_name or not frappe.db.exists("CNC Tool Preset", preset_name):
+        frappe.throw(_preset_message("preset_not_found"), frappe.ValidationError)
+    document = frappe.get_doc("CNC Tool Preset", preset_name)
+    document.check_permission("write")
+    document.enabled = 1 if cint(enabled) else 0
+    document.save()
+    return get_production_settings()
+
+
+@frappe.whitelist()
+def delete_cnc_tool_preset(name: str) -> dict[str, Any]:
+    """Delete a preset only when no sheet, path, or factory default still points at it."""
+
+    _require_tool_preset_editor()
+    preset_name = str(name or "").strip()
+    if not preset_name or not frappe.db.exists("CNC Tool Preset", preset_name):
+        frappe.throw(_preset_message("preset_not_found"), frappe.ValidationError)
+    operations, paths, factory = _tool_preset_use_counts(preset_name)
+    if not unused_tool_preset_can_be_deleted(
+        operation_uses=operations,
+        path_uses=paths,
+        factory_uses=factory,
+    ):
+        frappe.throw(
+            _("This tool preset is still used. Disable it instead of deleting it."),
+            frappe.ValidationError,
+        )
+    document = frappe.get_doc("CNC Tool Preset", preset_name)
+    document.check_permission("delete")
+    document.delete()
+    return get_production_settings()
+
+
 @frappe.whitelist()
 def get_factory_settings_audit(limit: int = 30) -> list[dict[str, Any]]:
     _require_view()
@@ -935,9 +1095,12 @@ __all__ = [
     "LEGACY_PRESERVED_FIELDS",
     "MACHINE_OPTIONS",
     "PRINT_IDENTITY_DEFAULTS",
+    "delete_cnc_tool_preset",
     "get_factory_settings_audit",
     "get_print_identity",
     "get_production_settings",
+    "save_cnc_tool_preset",
+    "set_cnc_tool_preset_enabled",
     "update_production_settings",
     "whatsapp_message_templates",
     "whatsapp_stage_message_template",

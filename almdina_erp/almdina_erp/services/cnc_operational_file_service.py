@@ -27,6 +27,7 @@ from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.authorization_gateway import (
     document_has_capability,
+    doctype_has_capability,
     require_document_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.cutting.cnc_dxf_source import read_operational_dxf
@@ -74,6 +75,7 @@ _MESSAGES = {
     "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
     "operation_order_incomplete": "The operation order does not include every operation on this sheet.",
     "cut_path_early_unconfirmed": "Confirm the warning before saving a cut that comes before the internal operations.",
+    "preset_source_invalid": "The layer preset source is not valid.",
     "units_unknown": "The drawing units are not millimetres, so the path was not prepared.",
     "sheet_frame_unknown": "The sheet frame could not be established, so the path was not prepared.",
     "kerf_unknown": "The kerf is missing, so cutter centers were not calculated.",
@@ -132,6 +134,7 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
     workspace["message"] = _message(workspace["reason_code"]) if workspace["reason_code"] else ""
+    workspace["can_edit_factory_cnc"] = doctype_has_capability(Capability.EDIT_FACTORY_CNC_DEFAULTS)
     try:
         workspace["layout"] = (
             operational_board_layout(approved_plan_snapshot(order))
@@ -168,6 +171,7 @@ def save_cnc_operational_sheet(
     operation_order: str | list[Any] | None = None,
     cut_path_early_confirmed: int | str | bool = 0,
     viewed_plan_token: str | None = None,
+    operation_sources: str | dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -185,9 +189,13 @@ def save_cnc_operational_sheet(
         parsed_order = None
     else:
         parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order)
+    if operation_sources is None:
+        parsed_sources = None
+    else:
+        parsed_sources = frappe.parse_json(operation_sources) if isinstance(operation_sources, str) else dict(operation_sources)
     if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or (
         parsed_order is not None and not isinstance(parsed_order, list)
-    ):
+    ) or (parsed_sources is not None and not isinstance(parsed_sources, dict)):
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
@@ -206,6 +214,10 @@ def save_cnc_operational_sheet(
             cut_path_early_confirmed=(
                 None if parsed_order is None else bool(cint(cut_path_early_confirmed))
             ),
+            operation_sources=None if parsed_sources is None else {
+                str(key): value for key, value in parsed_sources.items()
+            },
+            factory_defaults=factory_operation_defaults(),
         )
     except (OperationalFileError, ToolPresetError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)

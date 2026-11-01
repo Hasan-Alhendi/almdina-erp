@@ -140,6 +140,42 @@
     min-inline-size: 10rem;
     min-block-size: 2.25rem;
 }
+.dco-operational-layers__tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.dco-operational-layers__tools h4,
+.dco-operational-layer__source,
+.dco-operational-layer__facts,
+.dco-operational-sheet__note {
+    margin: 0;
+}
+.dco-operational-layer__choice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 16rem;
+    font-weight: 700;
+}
+.dco-operational-layer__choice select {
+    min-inline-size: 16rem;
+    min-block-size: 2.75rem;
+    font-weight: 700;
+}
+.dco-operational-layer__source {
+    font-size: 12px;
+    font-weight: 800;
+}
+.dco-operational-layer__issue,
+.dco-operational-sheet__note {
+    color: var(--text-muted, #687481);
+}
+.dco-operational-path__effective {
+    color: var(--text-muted, #687481);
+}
 .dco-operational-files__note,
 .dco-operational-sheet__selection,
 .dco-cnc-program__note {

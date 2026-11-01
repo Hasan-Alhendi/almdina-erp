@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from almdina_erp.almdina_erp.domain.security.authorization import Capability
 
 
 _TOOL_NUMBER = re.compile(r"^T[1-9][0-9]{0,2}$")
@@ -137,6 +139,23 @@ def resolve_selected_presets(
     return selected
 
 
+def tool_preset_write_allowed(capabilities: Iterable[str] | None) -> bool:
+    """Return whether these grants may create or change a tool preset."""
+
+    return Capability.EDIT_FACTORY_CNC_DEFAULTS in set(capabilities or ())
+
+
+def unused_tool_preset_can_be_deleted(
+    *,
+    operation_uses: int,
+    path_uses: int,
+    factory_uses: int,
+) -> bool:
+    """A preset that still labels a sheet, a path, or a factory default stays."""
+
+    return int(operation_uses) == 0 and int(path_uses) == 0 and int(factory_uses) == 0
+
+
 def assert_single_tool_for_file(presets: Sequence[ToolPresetValues]) -> None:
     """Reject a board file that would require another physical cutter."""
 
@@ -161,4 +180,6 @@ __all__ = [
     "ToolPresetValues",
     "assert_single_tool_for_file",
     "normalize_tool_preset",
+    "tool_preset_write_allowed",
+    "unused_tool_preset_can_be_deleted",
 ]

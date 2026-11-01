@@ -3050,7 +3050,7 @@ View operational files,عرض الملفات التشغيلية
 Prepare operational files,إعداد الملفات التشغيلية
 Edit CNC defaults,إعدادات التشغيل الافتراضية
 CNC operational defaults,إعدادات التشغيل الافتراضية
-"Default tool presets for the operational DXF layers, plus the sample machine profile. Changing a default does not rewrite operational files that were already saved. This sample is not approved for production and does not generate an NC file.",إعدادات الريش الافتراضية لطبقات التشغيل، مع عينة ملف الماكينة. تغيير الإعداد الافتراضي لا يغيّر الملفات التشغيلية المحفوظة سابقًا. هذه العينة غير معتمدة للإنتاج ولا تولّد ملف NC.
+"Default tool presets for the operational DXF layers, plus the sample machine profile. A sheet that still uses the factory preset inherits a new default. A sheet or path with its own choice keeps that choice. Saved machine files and generation snapshots stay as they were, and a generated file is marked when its effective preset changes. This sample is not approved for production and does not generate an NC file.",إعدادات الريش الافتراضية لطبقات التشغيل، مع عينة ملف الماكينة. اللوح الذي ما زال يستخدم إعداد المصنع يرث الإعداد الجديد. اللوح أو المسار الذي له اختيار خاص يحتفظ به. ملفات الماكينة المحفوظة ولقطات التوليد تبقى كما هي، ويُعلَّم الملف المولَّد عندما يتغير الإعداد الفعلي. هذه العينة غير معتمدة للإنتاج ولا تولّد ملف NC.
 Cut between pieces,القص بين الدرفات
 Liner operation,اللاينر
 Rear groove,فرزة الظهر
@@ -3204,3 +3204,43 @@ A shared cut cannot use a different preset for each piece.,القص المشتر
 The approved drawing does not contain this machining path.,الرسم المعتمد لا يحتوي مسار التشغيل هذا.
 The uploaded cut does not match the approved cutter centers.,القص المرفوع لا يطابق مراكز الريشة المعتمدة.
 The operational drawing could not be read.,تعذر قراءة رسم التشغيل.
+"{0} RPM",{0} دورة/دقيقة
+"Feed {0} mm/min",تغذية {0} مم/دقيقة
+"Plunge {0} mm/min",نزول {0} مم/دقيقة
+Factory default,إعداد المصنع
+Sheet choice,اختيار خاص باللوح
+Restore the factory preset,استعادة إعداد المصنع
+Restore factory presets for this sheet,استعادة إعدادات المصنع للوح
+Customize this path,تخصيص هذا المسار
+Layer presets,إعدادات الطبقات
+Add a tool preset,إضافة إعداد ريشة
+"No CNC tool presets have been created yet.",لم تُنشأ إعدادات ريش CNC بعد.
+"No CNC tool presets have been created yet. A factory settings manager must create them.",لم تُنشأ إعدادات ريش CNC بعد. يجب أن ينشئها مسؤول إعدادات المصنع.
+"Every saved tool preset is disabled. Enable one before preparing new machining.",كل إعدادات الريش المحفوظة معطلة. فعّل إعدادًا قبل تجهيز تشغيل جديد.
+"You can review these settings. Preparing operational files is not available for your current permissions.",يمكنك مراجعة هذه الإعدادات. تجهيز الملفات التشغيلية غير متاح لصلاحياتك الحالية.
+"This tool preset is no longer available. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا لم يعد متاحًا. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
+"This tool preset is disabled. It remains visible for history and cannot be used for new machining.",إعداد الريشة هذا معطّل. يبقى ظاهرًا للسجل ولا يمكن استخدامه لتشغيل جديد.
+CNC tool presets,إعدادات ريش CNC
+Preset name,اسم الإعداد
+Tool name,اسم الريشة
+Tool number,رقم الريشة
+"Tool diameter (mm)",قطر الريشة (مم)
+"Final depth (mm)",العمق النهائي (مم)
+"Spindle speed (RPM)",سرعة دوران الريشة (دورة/دقيقة)
+"Cutting feed (mm/min)",سرعة القطع (مم/دقيقة)
+"Plunge feed (mm/min)",سرعة النزول (مم/دقيقة)
+"Pass depth (mm)",عمق التمريرة (مم)
+"Optional. Leave empty for one pass.",اختياري. اتركه فارغًا لتمريرة واحدة.
+Save tool preset,حفظ إعداد الريشة
+Edit tool preset,تعديل إعداد الريشة
+"Saving tool preset...",جارٍ حفظ إعداد الريشة...
+"Delete the unused tool preset {0}?",حذف إعداد الريشة غير المستخدم {0}؟
+"Deleting tool preset...",جارٍ حذف إعداد الريشة...
+"A factory settings manager must create the tool presets.",يجب أن ينشئ مسؤول إعدادات المصنع إعدادات الريش.
+"You do not have permission to edit CNC tool presets.",ليست لديك صلاحية تعديل إعدادات ريش CNC.
+Enter a preset name.,أدخل اسم الإعداد.
+Enter a tool name.,أدخل اسم الريشة.
+The preset name cannot be changed.,لا يمكن تغيير اسم الإعداد.
+"This tool preset is still used. Disable it instead of deleting it.",إعداد الريشة هذا ما زال مستخدمًا. عطّله بدل حذفه.
+The CNC tool preset is not valid.,إعداد ريشة CNC غير صالح.
+The layer preset source is not valid.,مصدر إعداد الطبقة غير صالح.

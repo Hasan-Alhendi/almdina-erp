@@ -10,7 +10,9 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATIONS_BY_KEY
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
+    FACTORY_PRESET_SOURCE,
     NOT_GENERATED,
+    SHEET_PRESET_SOURCE,
     ApprovedPlanRef,
     OperationalFileError,
     assess_approved_plan,
@@ -19,6 +21,7 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     confirmed_operation_order,
     effective_status,
     merge_operation_order,
+    operation_preset_choice,
     resolve_operation_order,
     settings_fingerprint,
 )
@@ -107,19 +110,40 @@ def _operation_rows(
     catalog,
     presets: Mapping[str, str],
     order: Sequence[str],
+    sources: Mapping[str, str] | None = None,
+    factory_defaults: Mapping[str, str] | None = None,
+    *,
+    persist: bool = False,
 ) -> list[dict[str, Any]]:
     counts: dict[str, int] = {}
     for path in catalog.paths:
         counts[path.operation_key] = counts.get(path.operation_key, 0) + 1
+    source_rows = sources or {}
+    defaults = factory_defaults or {}
     rows = []
     for index, key in enumerate(order, start=1):
         operation = CNC_OPERATIONS_BY_KEY[key]
+        source = source_rows.get(key, FACTORY_PRESET_SOURCE)
+        if persist:
+            rows.append(
+                {
+                    "operation_key": key,
+                    "dxf_layer": operation.dxf_layer,
+                    "sequence": index,
+                    "tool_preset": "" if source == FACTORY_PRESET_SOURCE else presets.get(key, ""),
+                    "preset_source": source,
+                }
+            )
+            continue
+        public_source = "sheet" if source == SHEET_PRESET_SOURCE else "factory"
         rows.append(
             {
                 "operation_key": key,
                 "dxf_layer": operation.dxf_layer,
                 "sequence": index,
                 "tool_preset": presets.get(key, ""),
+                "preset_source": public_source,
+                "factory_preset": str(defaults.get(key) or "").strip(),
                 "path_count": counts.get(key, 0),
             }
         )
@@ -187,27 +211,31 @@ def build_operational_workspace(
         )
         order = merge_operation_order(catalog.operations, _saved_operation_keys(saved))
         confirmed = bool((saved or {}).get("cut_path_early_confirmed"))
+        saved_operations = {
+            str(row.get("operation_key") or ""): row
+            for row in (saved or {}).get("operations") or []
+        }
+        proposed: dict[str, str] = {}
+        sources: dict[str, str] = {}
+        for key in catalog.operations:
+            if saved is None:
+                proposed[key] = str(factory_defaults.get(key) or "").strip()
+                sources[key] = FACTORY_PRESET_SOURCE
+                continue
+            row = saved_operations.get(key) or {}
+            chosen, source = operation_preset_choice(
+                row.get("tool_preset"),
+                row.get("preset_source"),
+                factory_defaults.get(key, ""),
+            )
+            proposed[key] = chosen
+            sources[key] = source
         if saved is None:
-            proposed = {
-                key: str(factory_defaults.get(key) or "").strip()
-                for key in catalog.operations
-            }
             status = NOT_GENERATED
             operational_file = ""
             overrides: dict[str, str] = {}
             fingerprint = ""
         else:
-            proposed = {
-                key: str(factory_defaults.get(key) or "").strip()
-                for key in catalog.operations
-            }
-            proposed.update(
-                {
-                    str(row.get("operation_key") or ""): str(row.get("tool_preset") or "").strip()
-                    for row in saved.get("operations") or []
-                    if str(row.get("operation_key") or "") in catalog.operations
-                }
-            )
             overrides = {
                 str(row.get("path_key") or ""): str(row.get("tool_preset") or "").strip()
                 for row in saved.get("paths") or []
@@ -238,7 +266,13 @@ def build_operational_workspace(
                 "status": status,
                 "settings_fingerprint": fingerprint,
                 "cut_path_early_confirmed": confirmed,
-                "operations": _operation_rows(catalog, proposed, order),
+                "operations": _operation_rows(
+                    catalog,
+                    proposed,
+                    order,
+                    sources,
+                    factory_defaults,
+                ),
                 "paths": _path_rows(catalog, overrides if saved is not None else {}, labels),
                 "generated_file": str((saved or {}).get("generated_file") or ""),
                 "generated_by": str((saved or {}).get("generated_by") or ""),
@@ -280,6 +314,11 @@ def build_operational_workspace(
                 "tool_name": str(values.get("tool_name") or ""),
                 "tool_number": str(values.get("tool_number") or ""),
                 "tool_diameter_mm": values.get("tool_diameter_mm"),
+                "final_depth_mm": values.get("final_depth_mm"),
+                "spindle_speed_rpm": values.get("spindle_speed_rpm"),
+                "feed_rate_mm_min": values.get("feed_rate_mm_min"),
+                "plunge_rate_mm_min": values.get("plunge_rate_mm_min"),
+                "pass_depth_mm": values.get("pass_depth_mm"),
                 "enabled": bool(values.get("enabled", True)),
             }
             for name, values in sorted(known_presets.items())
@@ -303,6 +342,8 @@ def prepare_sheet_settings(
     machine_profile: Mapping[str, Any],
     operation_order: Sequence[str] | None = None,
     cut_path_early_confirmed: bool | None = None,
+    operation_sources: Mapping[str, str] | None = None,
+    factory_defaults: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     plan = assess_approved_plan(approved_plan, current=plan_is_current)
     if int(sheet_no) not in _sheet_numbers(pieces):
@@ -321,16 +362,18 @@ def prepare_sheet_settings(
         resolved_order,
         confirmed=confirmed,
     )
-    resolved_operations, resolved_paths = assign_sheet_presets(
+    assigned = assign_sheet_presets(
         catalog=catalog,
         operation_presets=dict(operation_presets),
         path_overrides=dict(path_overrides),
         known_presets=known_presets,
+        operation_sources=None if operation_sources is None else dict(operation_sources),
+        factory_defaults=dict(factory_defaults or {}),
     )
     profile_payload = dict(machine_profile.get("fingerprint_payload") or {})
     fingerprint = settings_fingerprint(
-        operation_presets=resolved_operations,
-        path_overrides=resolved_paths,
+        operation_presets=assigned.effective_operations,
+        path_overrides=assigned.path_overrides,
         presets=known_presets,
         machine_profile=profile_payload,
         operation_order=resolved_order,
@@ -353,8 +396,15 @@ def prepare_sheet_settings(
         "status": status,
         "settings_fingerprint": fingerprint,
         "cut_path_early_confirmed": confirmed,
-        "operations": _operation_rows(catalog, resolved_operations, resolved_order),
-        "paths": _path_rows(catalog, resolved_paths, _piece_labels(pieces)),
+        "operations": _operation_rows(
+            catalog,
+            assigned.stored_operations,
+            resolved_order,
+            assigned.sources,
+            factory_defaults,
+            persist=True,
+        ),
+        "paths": _path_rows(catalog, assigned.path_overrides, _piece_labels(pieces)),
         "keep_generation_snapshot": bool(generation_fingerprint),
         "generated_file": str((existing or {}).get("generated_file") or ""),
         "generated_by": str((existing or {}).get("generated_by") or ""),

@@ -843,3 +843,37 @@
         transform: none;
     }
 }
+
+.aps-cnc-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-block-start: 1rem;
+}
+
+.aps-cnc-presets h4 {
+    margin: 0;
+}
+
+.aps-cnc-presets__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 0.75rem;
+    padding-block: 0.75rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: var(--aps-radius-sm, 10px);
+}
+
+.aps-cnc-presets__row span,
+.aps-cnc-presets__empty {
+    color: var(--text-muted, #687481);
+}
+
+.aps-cnc-presets__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}

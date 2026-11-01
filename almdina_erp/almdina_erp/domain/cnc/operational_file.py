@@ -32,6 +32,8 @@ NOT_GENERATED = "Not Generated"
 GENERATED = "Generated"
 NEEDS_REGENERATION = "Needs Regeneration"
 OPERATIONAL_FILE_STATUSES = (NOT_GENERATED, GENERATED, NEEDS_REGENERATION)
+FACTORY_PRESET_SOURCE = "Factory"
+SHEET_PRESET_SOURCE = "Sheet"
 
 APPROVED_PLAN_STATUS = "Approved"
 SYSTEM_PLAN_SOURCE = "System"
@@ -325,32 +327,109 @@ def effective_status(
     return GENERATED
 
 
+def _source_token(value: Any) -> str:
+    token = str(value or "").strip().lower()
+    if token in {"factory", "sheet"}:
+        return token
+    if token in {FACTORY_PRESET_SOURCE.lower(), SHEET_PRESET_SOURCE.lower()}:
+        return token
+    if token:
+        raise OperationalFileError("preset_source_invalid")
+    return ""
+
+
+def operation_preset_choice(stored: Any, source: Any, factory_preset: Any) -> tuple[str, str]:
+    """Return the effective preset and whether the sheet inherits the factory.
+
+    A blank stored source keeps older rows compatible: a saved name is a sheet
+    choice, and a blank name still inherits the current factory default.
+    """
+
+    stored_name = str(stored or "").strip()
+    factory_name = str(factory_preset or "").strip()
+    try:
+        token = _source_token(source)
+    except OperationalFileError:
+        token = ""
+    if token == "factory":
+        return factory_name, FACTORY_PRESET_SOURCE
+    if token == "sheet":
+        return stored_name, SHEET_PRESET_SOURCE
+    if stored_name:
+        return stored_name, SHEET_PRESET_SOURCE
+    return factory_name, FACTORY_PRESET_SOURCE
+
+
+@dataclass(frozen=True, slots=True)
+class SheetPresetPlan:
+    stored_operations: dict[str, str]
+    sources: dict[str, str]
+    effective_operations: dict[str, str]
+    path_overrides: dict[str, str]
+
+
 def assign_sheet_presets(
     *,
     catalog: OperationalSheetCatalog,
     operation_presets: Mapping[str, str],
     path_overrides: Mapping[str, str],
     known_presets: Mapping[str, Mapping[str, Any]],
-) -> tuple[dict[str, str], dict[str, str]]:
-    """Validate a sheet setup. Empty preset names mean "not chosen yet"."""
+    operation_sources: Mapping[str, str] | None = None,
+    factory_defaults: Mapping[str, str] | None = None,
+) -> SheetPresetPlan:
+    """Validate a sheet setup.
+
+    A factory source stores no preset name, so a later factory default still
+    applies. A sheet source stores the chosen name, including an explicit
+    blank. Callers that omit sources keep the previous meaning: a name is a
+    sheet choice and a blank inherits the factory default.
+    """
 
     present = set(catalog.operations)
     unknown_operations = set(operation_presets).difference(present)
-    if unknown_operations:
+    if unknown_operations or (
+        operation_sources is not None and set(operation_sources).difference(present)
+    ):
         raise OperationalFileError("unknown_operation")
     path_keys = {path.path_key for path in catalog.paths}
     if set(path_overrides).difference(path_keys):
         raise OperationalFileError("unknown_path")
 
-    resolved_operations = {
-        key: str(operation_presets.get(key) or "").strip()
-        for key in present
-    }
+    defaults = factory_defaults or {}
+    supplied = operation_sources is not None
+    stored_operations: dict[str, str] = {}
+    sources: dict[str, str] = {}
+    effective_operations: dict[str, str] = {}
+    for key in present:
+        requested = str(operation_presets.get(key) or "").strip()
+        token = ""
+        if supplied and key in (operation_sources or {}):
+            token = _source_token((operation_sources or {}).get(key))
+        if token == "factory":
+            source = FACTORY_PRESET_SOURCE
+            stored = ""
+            effective = str(defaults.get(key) or "").strip()
+        elif token == "sheet":
+            source = SHEET_PRESET_SOURCE
+            stored = requested
+            effective = requested
+        elif requested:
+            source = SHEET_PRESET_SOURCE
+            stored = requested
+            effective = requested
+        else:
+            source = FACTORY_PRESET_SOURCE
+            stored = ""
+            effective = str(defaults.get(key) or "").strip()
+        stored_operations[key] = stored
+        sources[key] = source
+        effective_operations[key] = effective
+
     resolved_paths: dict[str, str] = {}
     used: list[ToolPresetValues] = []
     for path in catalog.paths:
         override = str(path_overrides.get(path.path_key) or "").strip()
-        chosen = override or resolved_operations.get(path.operation_key, "")
+        chosen = override or effective_operations.get(path.operation_key, "")
         if override:
             resolved_paths[path.path_key] = override
         if not chosen:
@@ -369,7 +448,12 @@ def assign_sheet_presets(
         assert_single_tool_for_file(used)
     except ToolPresetError as exc:
         raise OperationalFileError(exc.code) from exc
-    return resolved_operations, resolved_paths
+    return SheetPresetPlan(
+        stored_operations=stored_operations,
+        sources=sources,
+        effective_operations=effective_operations,
+        path_overrides=resolved_paths,
+    )
 
 
 __all__ = [
@@ -380,13 +464,17 @@ __all__ = [
     "OPERATIONAL_FILE_STATUSES",
     "SYSTEM_PLAN_SOURCE",
     "UPLOADED_PLAN_SOURCE",
+    "FACTORY_PRESET_SOURCE",
+    "SHEET_PRESET_SOURCE",
     "ApprovedPlanRef",
     "OperationalFileError",
     "OperationalPath",
     "OperationalSheetCatalog",
+    "SheetPresetPlan",
     "assert_viewed_plan_token",
     "assess_approved_plan",
     "assign_sheet_presets",
+    "operation_preset_choice",
     "catalog_sheet",
     "confirmed_operation_order",
     "cut_path_precedes_internal",

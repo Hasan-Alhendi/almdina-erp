@@ -79,7 +79,7 @@
 
         function sections(current = {}) {
             const source = values(current);
-            return [
+            const built = [
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Trimming margin (mm)"), source.default_trim_margin_mm],
@@ -123,7 +123,7 @@
                         true,
                     ]),
                 ], current),
-                section("cnc", t("CNC operational defaults"), t("Default tool presets for the operational DXF layers, plus the sample machine profile. Changing a default does not rewrite operational files that were already saved. This sample is not approved for production and does not generate an NC file."), [
+                section("cnc", t("CNC operational defaults"), t("Default tool presets for the operational DXF layers, plus the sample machine profile. A sheet that still uses the factory preset inherits a new default. A sheet or path with its own choice keeps that choice. Saved machine files and generation snapshots stay as they were, and a generated file is marked when its effective preset changes. This sample is not approved for production and does not generate an NC file."), [
                     [t("Cut between pieces"), source.cnc_default_preset_cut_path || t("Not specified")],
                     [t("Liner operation"), source.cnc_default_preset_liner || t("Not specified")],
                     [t("Rear groove"), source.cnc_default_preset_rear_groove || t("Not specified")],
@@ -154,6 +154,11 @@
                     [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
                 ], current)] : []),
             ];
+            const cnc = built.find(item => item.key === "cnc");
+            if (cnc) {
+                cnc.toolPresets = Array.isArray(current.cnc_tool_presets) ? current.cnc_tool_presets : [];
+            }
+            return built;
         }
 
         function legacy(current = {}) {

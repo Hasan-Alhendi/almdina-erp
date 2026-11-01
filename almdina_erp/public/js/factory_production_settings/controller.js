@@ -80,6 +80,13 @@
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(translate("Change log"), openAudit, null, "history");
         page.add_inner_button(translate("Refresh"), load, null, "refresh");
+        const cncPresetModule = window.AlmdinaFactoryProductionSettingsCncPresets;
+        const cncPresets = cncPresetModule ? cncPresetModule.attach({
+            api, dialogs, translate, freezeOptions,
+            editable: () => viewModel.sectionEditable(state.current, "cnc"),
+            presets: () => (state.current && state.current.cnc_tool_presets) || [],
+            reload: () => load(),
+        }) : null;
         interactionsModule.bind({
             $body,
             lifecycle: store.lifecycle,
@@ -87,9 +94,12 @@
                 onEditSection: openSectionDialog,
                 onCreateWhatsApp: () => whatsapp && whatsapp.create(),
                 onReconnectWhatsApp: () => whatsapp && whatsapp.reconnect(),
+                onAddToolPreset: () => cncPresets && cncPresets.open(),
+                onEditToolPreset: name => cncPresets && cncPresets.open(name),
+                onSetToolPresetEnabled: (name, enabled) => cncPresets && cncPresets.setEnabled(name, enabled),
+                onDeleteToolPreset: name => cncPresets && cncPresets.remove(name),
             },
         });
-
         const instance = Object.freeze({
             load,
             dispose() {
