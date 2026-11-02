@@ -439,3 +439,60 @@ def test_diagnostics_distinguish_candidates_from_eligibility_and_time_budget():
     )
     assert unchanged is plan
     assert expired["reason"] == "deadline"
+
+
+def test_protected_glass_stays_fixed_while_independent_regular_pair_aligns():
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=15, length_cm=15, qty=1, piece_type="Glass"),
+    ])
+    placed = [
+        make_placed_piece(sources[0], 0, 0, 20, 20, False),
+        make_placed_piece(sources[1], .3, 50, 20, 20, False),
+        make_placed_piece(sources[2], 70, 80, 15, 15, False),
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.1025, total_board_area_m2=1, waste_area_m2=.8975)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    original = deepcopy(plan)
+    changed = _run_alignment(plan, sources)
+    assert changed["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        changed["sheets"][0]["pieces"][1]["x"])
+    assert changed["sheets"][0]["pieces"][2] == original["sheets"][0]["pieces"][2]
+    assert not validate_plan(changed, sources, 100, 100, kerf_cm=.5)
+    assert plan == original
+
+
+def test_large_single_sheet_is_bounded_and_diagnosed_without_repacking():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+    sources = expand_piece_groups([dict(width_cm=1, length_cm=1, qty=65)])
+    sheet = dict(sheet_no=1, w=100, h=100, resource_kind="FULL_BOARD", pieces=[
+        make_placed_piece(source, (i % 13) * 2.5, (i // 13) * 2.5, 1, 1, False)
+        for i, source in enumerate(sources)
+    ])
+    plan = dict(method_key="MaxRects Best Short Side", sheets=[sheet], unplaced=[],
+                used_area_m2=.0065, total_board_area_m2=1, waste_area_m2=.9935)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    assert result is plan
+    assert diagnostics["large_sheets_skipped"] == 1
+    assert diagnostics["reason"] == "no_eligible_pair"
+
+
+def test_aligned_projection_is_repeatable_after_second_application_run():
+    sources, plan = _separated_fixture()
+    first = _run_alignment(plan, sources)
+    second = _run_alignment(first, sources)
+    assert second == first
+    assert not validate_plan(second, sources, 100, 100, kerf_cm=.5)
