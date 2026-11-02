@@ -121,6 +121,7 @@
                     { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("Trimming margin (mm)"), default: values.default_trim_margin_mm, reqd: 1 },
                     { fieldname: "max_centerable_edge_gap_cm", fieldtype: "Float", label: t("Maximum centerable edge gap (cm)"), default: values.max_centerable_edge_gap_cm, reqd: 1, description: t("Center an axis only when both edge gaps are within this limit.") },
                     { fieldname: "default_optimization_time_limit_sec", fieldtype: "Float", label: t("Optimization timeout (seconds)"), default: values.default_optimization_time_limit_sec, reqd: 1 },
+                    { fieldname: "alignment_search_budget_sec", fieldtype: "Float", label: t("Final alignment search budget (seconds)"), default: values.alignment_search_budget_sec, reqd: 1, description: t("Zero disables final alignment. The budget is bounded by the optimization timeout.") },
                     { fieldname: "optimal_search_piece_limit", fieldtype: "Int", label: t("Piece limit for optimal search"), default: values.optimal_search_piece_limit, reqd: 1 },
                 ];
             }
