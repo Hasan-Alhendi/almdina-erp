@@ -196,6 +196,11 @@ def _session(order, preview_id):
     current_center_gap = flt(
         getattr(frappe.get_cached_doc("Almdina ERP Settings"), "max_centerable_edge_gap_cm", 5.0)
     )
+    current_alignment_budget = flt(
+        getattr(frappe.get_cached_doc("Almdina ERP Settings"), "alignment_search_budget_sec", 1.0)
+    )
+    if flt(session.settings.get("alignment_search_budget_sec", 1.0)) != current_alignment_budget:
+        frappe.throw(_("The final alignment budget changed. Recalculate the preview before saving."), frappe.ValidationError)
     if flt(session.settings.get("max_centerable_edge_gap_cm", 5.0)) != current_center_gap:
         frappe.throw(_("تغيّرت إعدادات توسيط خطة القص. أعد المعاينة قبل الحفظ."),frappe.ValidationError)
     _settings_authority(order,source,session.settings)
@@ -342,6 +347,9 @@ def preview_cutting_plan(
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
     settings["max_centerable_edge_gap_cm"] = flt(
         getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
+    )
+    settings["alignment_search_budget_sec"] = flt(
+        getattr(factory_settings, "alignment_search_budget_sec", 1.0)
     )
 
     _settings_authority(order,source_plan,settings)
