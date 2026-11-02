@@ -871,3 +871,80 @@ def test_smart_gallery_alignment_deadline_is_shared_fairly(monkeypatch):
     # to subsequent alternatives. The last may use all remaining allowance.
     assert durations[0] < durations[1] < durations[2]
     assert durations[2] <= 1.01
+
+
+def _left_edge_biased_exported_geometry():
+    """New anonymized DXF: top and bottom pushed to X=0, middle is X=6.5mm.
+
+    The target is a real continuous cutter *center* at X=4mm with 5mm Kerf,
+    not a decorative equality of the left sheet-boundary coordinate.
+    """
+    sources, plan = _production_geometry_witness()
+    sheet = plan["sheets"][0]
+    offsets_mm = {
+        1: -33, 2: -33, 3: -33, 4: -33,
+        9: -33, 10: -33,
+        11: -22.5, 12: -22.5,
+        13: -22.5, 14: -22.5, 15: -22.5, 16: -22.5,
+    }
+    for piece in sheet["pieces"]:
+        piece["x"] += offsets_mm.get(int(piece["id"]), 0) / 10
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def _longest_vertical_center(plan, x_mm, kerf_cm=.5):
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+        cutter_center_segments,
+    )
+    sheet = plan["sheets"][0]
+    shapes = []
+    for piece in sheet["pieces"]:
+        x, y, w, h = (piece[k] * 10 for k in ("x", "y", "w", "h"))
+        shapes.append(([(x, y), (x+w, y), (x+w, y+h), (x, y+h)], []))
+    segments = cutter_center_segments(shapes, kerf_cm * 5)
+    return max(
+        (abs(b[1] - a[1]) for a, b in segments
+         if abs(a[0] - x_mm) <= .05 and abs(b[0] - x_mm) <= .05),
+        default=0.0,
+    )
+
+
+def test_actual_dxf_cutting_axis_is_not_the_left_sheet_border():
+    sources, original = _left_edge_biased_exported_geometry()
+    assert original["sheets"][0]["pieces"][0]["x"] == pytest.approx(0.0)
+    assert original["sheets"][0]["pieces"][4]["x"] == pytest.approx(.65)
+    assert _longest_vertical_center(original, 4.0) < 1000
+    aligned = deepcopy(original)
+    for piece in aligned["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16}:
+            piece["x"] += .65
+    assert not validate_plan(aligned, sources, 122, 244, kerf_cm=.5)
+    assert _longest_vertical_center(aligned, 4.0) > 2300
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    assert _rectangles(aligned, .5)[0] <= _rectangles(original, .5)[0]
+    assert _rectangles(aligned, .5)[1] < _rectangles(original, .5)[1]
+
+
+def test_alignment_prefers_shared_cutter_center_over_pushing_to_board_edge():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, original = _left_edge_biased_exported_geometry()
+    diagnostic = {}
+    result = align_regular_cut_lines(
+        original, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostic,
+    )
+    top = result["sheets"][0]["pieces"][0]
+    middle = result["sheets"][0]["pieces"][4]
+    assert top["x"] == pytest.approx(middle["x"]), diagnostic
+    assert middle["x"] == pytest.approx(.65)
+    assert _longest_vertical_center(result, 4.0) >= 2000
+    assert _rectangles(result, .5)[0] <= _rectangles(original, .5)[0] + .05
+    assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
