@@ -774,10 +774,16 @@ def compact_regular_final(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
             continue
         if placement_permission_errors(candidate, pieces, mirroring_allowed=mirroring_allowed):
             continue
-        before = _rectangular_cleanup_geometry(best, changed, kerf_cm)
-        after = _rectangular_cleanup_geometry(candidate, changed, kerf_cm)
-        if (after[0] <= before[0]+1e-6 and after[1] <= before[1]+1e-6
-                and (after[0] < before[0]-1e-6 or after[1] < before[1]-1e-6)):
+        # Compaction and Final Alignment must share one *final* cutter-center
+        # quality contract. Otherwise a border-biased rectangle estimate can
+        # discard a long continuous in-board cutter route, forcing the next
+        # stage to waste its bounded budget undoing the move.
+        from .cut_line_quality import final_cut_quality_key, plan_cut_line_quality
+        before = plan_cut_line_quality(best, kerf_cm)
+        after = plan_cut_line_quality(candidate, kerf_cm)
+        if before is None or after is None:
+            continue  # conservative: never invent a score for unproven shapes
+        if final_cut_quality_key(after) < final_cut_quality_key(before):
             best = candidate
     return best
 
