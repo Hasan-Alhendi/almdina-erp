@@ -121,6 +121,14 @@ flowchart LR
 مؤشراتها، لا نسخة الإحداثيات المرفوضة.
 الأدلة والحدود: [Zero-trim board reformation](../evidence/zero-trim-board-reformation/README.md).
 
+يوجد مسار P3 تجريبي داخلي عبر
+`smart_search(..., experimental_regrouping=True)`، معطّل افتراضيًا ولا تفعّله
+الواجهة أو إعدادات الخطط. يجرب إعادة توزيع مجموعات مستطيلة كاملة بعد انتهاء
+العمل الأصلي، بالوقت المتبقي نفسه، وينشر كل مرشح مكتمل ومتحقق فورًا حتى لا
+تمحوه محاولة لاحقة انتهت مهلتها. المقارنة المعزولة لم تجتز جميع شروط الاعتماد؛
+لا يُعد وجود الكود اعتمادًا للتشغيل العام. الحدود والنتائج غير الناجحة موثقة في
+[P3 adoption gate](../evidence/bounded-regrouping-p3/README.md).
+
 ## 8. Adaptive Trim
 
 Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.py`، وليس Strategy قص مستقلة ولا سلوكًا مخفيًا داخل optimizer.

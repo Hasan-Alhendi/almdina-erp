@@ -1013,6 +1013,7 @@ def smart_search(
     exact_piece_limit: int = 40, mirroring_allowed: bool = False,
     seed_plans: tuple[dict[str, Any], ...] = (), search_round: int = 0,
     discarded_direct_callback: Any = None,
+    experimental_regrouping: bool = False,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     """Finish diverse seeds before selection; retain five distinct valid finals.
@@ -1199,6 +1200,15 @@ def smart_search(
             metric_kwargs=metric_kwargs, deadline=overall_deadline)
         if repaired is not finals[0] and time.monotonic() < overall_deadline:
             offer(repaired)
+    # Opt-in research only: adoption gates have not passed. Run after all
+    # native work and offer each completed winner before trying another.
+    if (experimental_regrouping and finals and machine_type in {"Auto", "CNC Router"}
+            and time.monotonic() < overall_deadline):
+        from .plan_search import improve_board_regrouping
+        improve_board_regrouping(finals[0], pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
+            metric_kwargs=metric_kwargs, deadline=overall_deadline,
+            candidate_callback=offer)
     deadline = overall_deadline
     best = dict(finals[0] if finals else initial)
     from .plan_portfolio import manufacturing_export_rejection

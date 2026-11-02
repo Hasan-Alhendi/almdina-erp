@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
+from itertools import combinations
 from typing import Any
 
 from .primitives import (
@@ -277,6 +278,105 @@ def improve_same_count_layout(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
             if accepted is not None and time.monotonic() < deadline:
                 best = accepted
     return best
+
+
+def improve_board_regrouping(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs, deadline, candidate_callback=None):
+    """Experimental final-tail regrouping of a validated incumbent.
+
+    No extra time is reserved. Completed improvements are published immediately
+    so a later timed-out proposal cannot erase earlier verified work. This is
+    deliberately opt-in at the Smart caller, pending the paired adoption gates.
+    """
+    if (machine_type not in {"Auto", "CNC Router"} or plan.get("unplaced")
+            or time.monotonic() >= deadline):
+        return plan
+    from .evaluation import placement_permission_errors, validate_plan
+    from .optimizer import _candidate_is_better, enrich_plan_metrics
+
+    best = plan
+    for candidate in _regrouped_board_candidates(
+        plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline,
+    ):
+        if time.monotonic() >= deadline:
+            break
+        accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
+            metric_kwargs=metric_kwargs, enrich_plan_metrics=enrich_plan_metrics,
+            validate_plan=validate_plan, permission_errors=placement_permission_errors,
+            is_better=_candidate_is_better, deadline=deadline)
+        if accepted is not None and time.monotonic() < deadline:
+            best = accepted
+            if candidate_callback is not None:
+                candidate_callback(best)
+    return best
+
+
+def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
+    """At most 24 native packs over small, whole regular-board neighborhoods.
+
+    Packing uses the original source objects for identities, machining and
+    transform permissions. Protected sheets stay intact; no partial insertion
+    can escape. Proposals still require whole-plan industrial validation.
+    """
+    from .optimizer import _run_preordered_method, order_pieces
+
+    if time.monotonic() >= deadline:
+        return
+    source = {int(piece["id"]): piece for piece in pieces}
+    locked = _locked_piece_ids(plan)
+    eligible = []
+    for sheet in plan.get("sheets") or []:
+        if ((sheet.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                or not sheet.get("pieces")):
+            continue
+        if all(int(piece["id"]) in source and int(piece["id"]) not in locked
+            and all((item.get("piece_type") or "Regular") == "Regular"
+                and (item.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+                and not item.get("geometry") and not item.get("overlays")
+                and not item.get("placement_outline_cm")
+                and not item.get("special_shape_geometry_json")
+                for item in (piece, source[int(piece["id"])]))
+            for piece in sheet["pieces"]):
+            eligible.append(sheet)
+    eligible.sort(key=lambda sheet: (len(sheet["pieces"]),
+        sum(num(piece.get("area_m2")) for piece in sheet["pieces"]), sheet["sheet_no"]))
+    neighborhoods = [combo for count in (2, 3) for combo in combinations(eligible[:4], count)
+        if sum(len(sheet["pieces"]) for sheet in combo) <= _MAX_REPACK_PIECES]
+    neighborhoods.sort(key=lambda combo: (sum(len(sheet["pieces"]) for sheet in combo), len(combo)))
+    attempts = 0
+    for combo in neighborhoods[:3]:
+        subset = [source[piece_id] for piece_id in sorted(
+            int(piece["id"]) for sheet in combo for piece in sheet["pieces"])]
+        sheet_numbers = {sheet["sheet_no"] for sheet in combo}
+        for ordering in ("long_side_desc", "area_desc", "short_side_desc"):
+            for method in ("MaxRects Bottom Left", "MaxRects Contact Point",
+                           "MaxRects Best Short Side", "MaxRects Best Area"):
+                if attempts >= 24 or time.monotonic() >= deadline:
+                    return
+                attempts += 1
+                packed = _run_preordered_method(order_pieces(subset, ordering), subset,
+                    board_w_cm, board_h_cm, kerf_cm, method, ordering)
+                if (packed.get("unplaced") or not packed.get("sheets")
+                        or len(packed["sheets"]) > len(combo)):
+                    continue
+                candidate = deepcopy(plan)
+                kept = [sheet for sheet in candidate["sheets"] if sheet["sheet_no"] not in sheet_numbers]
+                # Keep full-board metadata while replacing packing caches and
+                # placements. Unselected sheets are copied without alterations.
+                replacements = []
+                for old, new in zip(combo, packed["sheets"]):
+                    replacement = deepcopy(old)
+                    for cache in ("free_rects", "skyline", "shelves"):
+                        replacement.pop(cache, None)
+                    replacement.update(new)
+                    replacements.append(replacement)
+                candidate["sheets"] = kept + replacements
+                for number, sheet in enumerate(candidate["sheets"], 1):
+                    sheet["sheet_no"] = number
+                if time.monotonic() >= deadline:
+                    return
+                yield candidate
 
 
 def _repacked_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
