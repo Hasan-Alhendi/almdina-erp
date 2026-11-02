@@ -36,9 +36,11 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
+    is_board_editor_source,
 )
 from almdina_erp.almdina_erp.domain.orders.lifecycle import LOCKED_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -121,32 +123,78 @@ def _load_plan_for_order(order: Any, plan_name: str) -> Any:
 
 
 def _plan_view_allowed(order: Any, plan: Any, capabilities: dict[str, bool]) -> bool:
+    return _plan_view_denial_code(order, plan, capabilities) is None
+
+
+def _plan_view_denial_code(
+    order: Any, plan: Any, capabilities: dict[str, bool]
+) -> str | None:
+    """Return a stable denial code, or None when the plan may be opened for view.
+
+    Codes distinguish capability gaps from lifecycle/source restrictions so the
+    client can show the real reason instead of a blanket permission message.
+    """
+
     source = str(getattr(plan, "source_type", "") or "").strip()
     status = str(getattr(plan, "status", "") or "").strip()
     approved_name = str(getattr(order, "approved_plan", "") or "").strip()
     plan_name = str(getattr(plan, "name", "") or "").strip()
 
     if plan_name and approved_name and plan_name == approved_name and status == APPROVED:
-        return bool(capabilities["view_approved"])
+        return None if capabilities["view_approved"] else "missing_view_approved_capability"
     if status == APPROVED:
-        return bool(capabilities["view_approved"])
+        return None if capabilities["view_approved"] else "missing_view_approved_capability"
     if source == SYSTEM:
-        return bool(capabilities["view_system"])
+        return None if capabilities["view_system"] else "missing_view_system_capability"
     if source == UPLOADED_DXF:
-        return bool(capabilities["view_uploaded"])
-    return False
+        return None if capabilities["view_uploaded"] else "missing_view_uploaded_capability"
+    if is_board_editor_source(source) or source == BOARD_EDITOR:
+        # Board Editor Draft copies live on the Edited surface (view_system).
+        # Opening them must not require confusing them with System drafts only.
+        if status == DRAFT:
+            return None if capabilities["view_system"] else "missing_view_system_capability"
+        return "board_editor_plan_not_openable"
+    return "unsupported_plan_source"
+
+
+def _plan_view_denial_message(code: str | None) -> str:
+    messages = {
+        "missing_view_approved_capability": _(
+            "You do not have permission to view the approved cutting plan."
+        ),
+        "missing_view_system_capability": _(
+            "You do not have permission to view the system cutting plan."
+        ),
+        "missing_view_uploaded_capability": _(
+            "You do not have permission to view the uploaded cutting plan."
+        ),
+        "board_editor_plan_not_openable": _(
+            "This board-editor cutting plan cannot be opened in its current status."
+        ),
+        "unsupported_plan_source": _(
+            "This cutting plan source cannot be opened in the board editor."
+        ),
+    }
+    return messages.get(
+        str(code or ""),
+        _("You do not have permission to open this cutting plan in the board editor."),
+    )
 
 
 def _edit_layout_allowed(order: Any, plan: Any, capabilities: dict[str, bool]) -> bool:
-    """Existing Cutting Plan edit capability. View alone cannot save a draft."""
+    """Layout draft save capability. View alone cannot save; approved snapshot stays fixed."""
 
     status = str(getattr(order, "status", "") or "").strip()
     if status in LOCKED_ORDER_STATUSES:
         return False
-    return bool(
-        cutting_plan_capability_allowed(order, Capability.EDIT_OPTIMIZER_SETTINGS)
-        and _plan_view_allowed(order, plan, capabilities)
-    )
+    if not cutting_plan_capability_allowed(order, Capability.EDIT_OPTIMIZER_SETTINGS):
+        return False
+    if not _plan_view_allowed(order, plan, capabilities):
+        return False
+    # Saving a Board Editor draft against the selected plan is allowed for Draft
+    # and for the current Approved Board Editor tip (derived edit). The approved
+    # Cutting Plan snapshot itself is never rewritten by draft save.
+    return True
 
 
 def _parse_snapshot(plan: Any) -> dict[str, Any]:
@@ -241,6 +289,8 @@ def _source_kind_for_plan(order: Any, plan: Any) -> str:
         and status == APPROVED
     ):
         return "approved"
+    if is_board_editor_source(source) or source == BOARD_EDITOR:
+        return "board_editor"
     if source == UPLOADED_DXF:
         return "uploaded"
     if source == SYSTEM:
@@ -515,9 +565,10 @@ def get_board_editor_projection(
     order = _authorized_order(order_name)
     capabilities = _capabilities(order)
     plan = _load_plan_for_order(order, plan_name)
-    if not _plan_view_allowed(order, plan, capabilities):
+    denial = _plan_view_denial_code(order, plan, capabilities)
+    if denial is not None:
         frappe.throw(
-            _("You do not have permission to open this cutting plan in the board editor."),
+            _plan_view_denial_message(denial),
             frappe.PermissionError,
         )
 
@@ -578,7 +629,10 @@ def get_board_editor_projection(
             "view_system": capabilities["view_system"],
             "view_uploaded": capabilities["view_uploaded"],
             "view_approved": capabilities["view_approved"],
+            # View opens the selected identity; edit_layout only gates draft save /
+            # derived apply. Neither mutates an Approved Cutting Plan snapshot.
             "edit_layout": _edit_layout_allowed(order, plan, capabilities),
+            "mutate_approved_snapshot": False,
         },
         "editor_draft": read_editor_draft(
             str(order.name),

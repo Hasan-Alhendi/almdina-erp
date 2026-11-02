@@ -279,7 +279,10 @@ class TestA5WorkspaceStateFoundation(unittest.TestCase):
         self.assertIn("activeSettings", source)
         self.assertIn("previews.preview(frm, settings)", source)
         self.assertNotIn("transport.recalculate(frm.doc.name, settings)", source)
-        self.assertIn("transport.approve(frm.doc.name, source)", source)
+        self.assertIn(
+            "transport.approve(frm.doc.name, source, planName || null)",
+            source,
+        )
         self.assertIn("refreshWorkspaceOwners", source)
         self.assertNotIn("frappe.call", source)
         self.assertNotIn("frm.reload_doc", source)

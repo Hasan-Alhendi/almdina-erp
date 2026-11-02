@@ -971,7 +971,20 @@
                     ? regionEngine.ADDONS
                     : [{ kind: "liner" }];
                 const regionEmitted = new Set();
+                // Board Editor free-angle plans bake machining into usable-sheet
+                // overlays. Do not rebuild from unrotated side parameters.
+                const posedOverlayKinds = new Set(
+                    (Array.isArray(piece.overlays) ? piece.overlays : [])
+                        .map(item => item && item.kind)
+                        .filter(Boolean)
+                );
+                const trustPosedOverlays = piece.apply_rotated_to_geometry === false
+                    && posedOverlayKinds.size > 0;
                 regionAddons.forEach(addon => {
+                    if (trustPosedOverlays && posedOverlayKinds.has(addon.kind)) {
+                        regionEmitted.add(addon.kind);
+                        return;
+                    }
                     const specs = addon.kind === "liner"
                         && regionEngine
                         && typeof regionEngine.linerSpecsFrom === "function"

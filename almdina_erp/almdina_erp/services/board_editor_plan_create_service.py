@@ -1,6 +1,7 @@
 """Write path: materialize a Board Editor Draft into a new Cutting Plan Draft.
 
-Does not approve, does not generate CUT_PATH, and never mutates the source plan.
+Does not approve and never mutates the source plan. Manufacturing CUT_PATH is
+generated only after the resulting Cutting Plan is approved and exported.
 """
 
 from __future__ import annotations

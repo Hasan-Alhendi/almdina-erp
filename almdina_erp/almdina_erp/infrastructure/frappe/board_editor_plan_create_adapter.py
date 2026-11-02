@@ -22,6 +22,11 @@ from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_draft_store impo
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_command_repository import (
     FrappeCuttingPlanCommandRepository,
 )
+from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspace import (
+    apply_plan_costs,
+    factory_execution_edge_cost,
+    initialize_draft_plan_cost_snapshot,
+)
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_workspace import (
     apply_board_editor_snapshot,
 )
@@ -107,6 +112,10 @@ class FrappeBoardEditorCuttingPlanPort:
             dict(snapshot),
             method_label=method_label,
         )
+        # Reuse the existing plan-cost path so approve freshness does not fail
+        # on a missing cost_snapshot_version. No new costing formulas.
+        initialize_draft_plan_cost_snapshot(order, plan)
+        apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
         plan.method_key = method_key
         plan.method_label = method_label
         plan.source_type = BOARD_EDITOR

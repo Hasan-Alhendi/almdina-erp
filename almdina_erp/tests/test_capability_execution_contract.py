@@ -231,8 +231,11 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("plan_needs_recalculation", command)
         self.assertNotIn("recalculate_system_plan", approval_command)
         self.assertNotIn("force_cutting_plan_recalculation", approval_command)
-        self.assertIn('translate(source === "Custom" ? "Approve DXF plan" : "Approve cutting plan")', controls)
+        self.assertIn('"Approve DXF plan"', controls)
+        self.assertIn('"Approve cutting plan"', controls)
+        self.assertIn('"Approve the edited plan"', controls)
         self.assertIn('can(frm, "approve_dxf")', controls)
+        self.assertIn('source === "BoardEditor"', controls)
         # Browser staleness comes from the Plan read model, not the DCO
         # compatibility projection. Server approval still revalidates under lock.
         self.assertIn("row.validation && row.validation.needs_recalculation", controls)
@@ -242,7 +245,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             '"almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf"',
             plan_api,
         )
-        self.assertIn("transport.approve(frm.doc.name, source)", controls)
+        self.assertIn("transport.approve(frm.doc.name, source, planName || null)", controls)
         self.assertNotIn("drawing_approval_service.approve_production_dxf", controls)
 
     def test_dxf_upload_and_replacement_are_separate_server_permissions(self) -> None:

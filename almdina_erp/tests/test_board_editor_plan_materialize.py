@@ -415,8 +415,8 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             places=6,
         )
 
-    def test_manufacturing_actions_blocked_for_board_editor(self):
-        self.assertFalse(manufacturing_actions_allowed(BOARD_EDITOR))
+    def test_manufacturing_actions_allowed_for_board_editor(self):
+        self.assertTrue(manufacturing_actions_allowed(BOARD_EDITOR))
         self.assertTrue(manufacturing_actions_allowed("System"))
         self.assertTrue(manufacturing_actions_allowed("Uploaded DXF"))
 
@@ -532,7 +532,7 @@ class BoardEditorPlanCreateApplicationTests(unittest.TestCase):
         self.assertEqual(first["plan_name"], "CP-NEW")
         self.assertEqual(first["source_type"], BOARD_EDITOR)
         self.assertEqual(first["prefer_plan_tab"], "BoardEditor")
-        self.assertTrue(first["manufacturing_blocked"])
+        self.assertFalse(first["manufacturing_blocked"])
         self.assertEqual(port.created[0]["based_on_plan"], "PLAN-SRC")
         self.assertEqual(len([row for row in port.created if isinstance(row, dict)]), 1)
 

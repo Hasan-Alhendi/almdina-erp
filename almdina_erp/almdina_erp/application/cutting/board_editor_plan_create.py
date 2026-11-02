@@ -1,8 +1,8 @@
 """Create one viewable Cutting Plan Draft from a saved board-editor draft.
 
 Review and create share one locked draft version. The client ready flag is
-ignored. Source plans are never mutated. Approval and CUT_PATH generation are
-out of scope for this use case.
+ignored. Source plans are never mutated. Approval and manufacturing CUT_PATH
+use the normal Cutting Plan lifecycle after this draft is created.
 """
 
 from __future__ import annotations
@@ -212,8 +212,10 @@ def execute_create(
         "status": DRAFT,
         "based_on_plan": command.source_plan_name,
         "prefer_plan_tab": "BoardEditor",
-        "manufacturing_blocked": True,
-        "manufacturing_block_reason": "board_editor_geometry_not_exportable",
+        # Materialize already baked posed geometry. Approval/export stay on the
+        # normal Cutting Plan lifecycle; CUT_PATH remains post-approval only.
+        "manufacturing_blocked": False,
+        "manufacturing_block_reason": None,
     }
 
 

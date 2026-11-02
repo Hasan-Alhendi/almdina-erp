@@ -361,6 +361,37 @@
 		return historicalBanner(frm, tab) || (mismatched ? mismatchBanner(frm, tab) : "");
 	}
 
+	function planPaintIdentity(frm, tab) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const row = owner && typeof owner.planForTab === "function"
+			? owner.planForTab(frm, tab)
+			: null;
+		if (!row || !String(row.name || "").trim()) {
+			return `${tab}::empty`;
+		}
+		const content = String(row.content_identity || "").trim();
+		if (content) return `${tab}::${content}`;
+		return [
+			tab,
+			String(row.name || ""),
+			String(row.revision || ""),
+			String(row.modified || ""),
+			String(row.status || ""),
+			String((row.validation && row.validation.freshness_state) || ""),
+		].join("::");
+	}
+
+	function unappliedEditorDraftBanner(row) {
+		const draft = row && row.editor_draft;
+		if (!draft || !draft.present || !draft.unapplied) return "";
+		return `
+			<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+				<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Unapplied board-editor draft"))}</strong>
+				<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(translate("The board editor has saved changes that are not applied to this cutting plan yet. The layout below is the last applied plan, not those unapplied edits."))}</span>
+			</div>
+		`;
+	}
+
 	function renderTabContent(frm, tab) {
 		if (tab === "Custom") {
 			if (!hasCustomPlan(frm)) {
@@ -375,12 +406,26 @@
 			if (!plan || !plan.sheets || !plan.sheets.length) {
 				return emptyState("There is no edited board-editor plan yet.");
 			}
-			const block = `
-				<div class="dco-plan-historical-banner" role="status" aria-live="polite">
-					<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Edited plan (view only)"))}</strong>
-					<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(translate("Approval and DXF export are blocked until free-angle manufacturing support is complete."))}</span>
-				</div>
-			`;
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const row = owner && typeof owner.planForTab === "function"
+				? owner.planForTab(frm, "BoardEditor")
+				: null;
+			let block = "";
+			if (row && row.manufacturing_blocked) {
+				const reason = String(row.manufacturing_block_reason || "").trim();
+				const summary = reason === "board_editor_plan_not_ready"
+					? translate("This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout.")
+					: translate("This edited plan cannot be approved or exported for a specific manufacturing reason.");
+				block = `
+					<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+						<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Edited plan blocked"))}</strong>
+						<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(summary)}</span>
+					</div>
+				`;
+			} else {
+				block = planStatusBanner(frm, "BoardEditor") || "";
+			}
+			block = `${unappliedEditorDraftBanner(row)}${block}`;
 			return `${block}${renderPlanHtml(frm, plan)}`;
 		}
 
@@ -448,15 +493,25 @@
 
 		const selectedTab = activeTab(frm);
 		frm.__almdina_active_plan_tab = selectedTab;
+		const paintKey = planPaintIdentity(frm, selectedTab);
+		const previousPaintKey = String(frm.__almdina_plan_paint_key || "");
 		const content = renderTabContent(frm, selectedTab);
 		const orderName = String(frm.doc.name || "");
 		const escapedOrderName = frappe.utils.escape_html(orderName);
+		const escapedPaintKey = frappe.utils.escape_html(paintKey);
+		// Tab switches never mutate approved_plan. Paint identity includes plan
+		// name + content revision so a retained DOM cannot keep an older layout.
+		frm.__almdina_plan_paint_key = paintKey;
+		if (previousPaintKey && previousPaintKey !== paintKey) {
+			frm.__almdina_plan_paint_generation = Number(frm.__almdina_plan_paint_generation || 0) + 1;
+		}
 		wrapper
 			.attr("data-almdina-order", orderName)
+			.attr("data-almdina-plan-paint-key", paintKey)
 			.html(`
 				${buildTabBar(frm, selectedTab, tabs)}
 				<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
-				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}">${content}</div>
+				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}" data-almdina-plan-paint-key="${escapedPaintKey}">${content}</div>
 			`);
 		renderContextActions(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {

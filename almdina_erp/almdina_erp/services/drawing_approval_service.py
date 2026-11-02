@@ -53,12 +53,15 @@ def _authorized_order(order_name: str) -> Any:
 def approve_production_dxf(
     order_name: str,
     plan_source: str = "System",
+    plan_name: str | None = None,
 ) -> dict[str, Any]:
     """Approve the reviewed canonical Cutting Plan revision.
 
     This boundary never recalculates, snapshots, or saves the Door Cutting Order.
     Missing/stale plans fail closed in the Cutting Plan command; the approver must
     explicitly refresh the plan and review it before trying again.
+    ``plan_name`` pins the exact Draft revision when the UI shows one Board Editor
+    (or other) copy; the server still re-validates order scope, source, and status.
     """
 
     order = _authorized_order(order_name)
@@ -68,7 +71,7 @@ def approve_production_dxf(
         approve_order_plan,
     )
 
-    result = approve_order_plan(order, plan_source)
+    result = approve_order_plan(order, plan_source, plan_name=plan_name)
     approved_source = result.get("approved_plan_source") or "System"
     result.update(
         {

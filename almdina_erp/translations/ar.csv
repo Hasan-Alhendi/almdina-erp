@@ -3055,6 +3055,13 @@ Incomplete board editor link,رابط محرر الألواح غير مكتمل
 Open the board editor from a cutting plan tab on the order.,افتح محرر الألواح من تبويب خطة القص في الطلب.
 Permission denied,رفض الصلاحية
 You do not have permission to open this cutting plan in the board editor.,لا تملك صلاحية فتح خطة القص هذه في محرر الألواح.
+You do not have permission to view the approved cutting plan.,لا تملك صلاحية عرض خطة القص المعتمدة.
+You do not have permission to view the system cutting plan.,لا تملك صلاحية عرض خطة القص النظامية.
+You do not have permission to view the uploaded cutting plan.,لا تملك صلاحية عرض خطة القص المرفوعة.
+This board-editor cutting plan cannot be opened in its current status.,لا يمكن فتح خطة القص من محرر الألواح بهذه الحالة.
+This cutting plan source cannot be opened in the board editor.,مصدر خطة القص هذا لا يمكن فتحه في محرر الألواح.
+Unapplied board-editor draft,مسودة محرر ألواح غير مطبّقة
+The board editor has saved changes that are not applied to this cutting plan yet. The layout below is the last applied plan, not those unapplied edits.,محرر الألواح يحتوي تغييرات محفوظة لم تُطبَّق على خطة القص بعد. التوزيع أدناه هو آخر خطة مطبّقة، وليس تلك التعديلات غير المطبّقة.
 Cutting plan unavailable,خطة القص غير متاحة
 The selected cutting plan is not available for this order.,خطة القص المحددة غير متاحة لهذا الطلب.
 Could not load the board editor,تعذر تحميل محرر الألواح
@@ -3226,8 +3233,39 @@ The cutting plan copy could not be created.,تعذّر إنشاء نسخة خط�
 Creating the cutting plan copy failed. The saved draft is unchanged.,فشل إنشاء نسخة خطة القص. المسودة المحفوظة لم تتغير.
 Edited plan,الخطة المعدّلة
 Edited plan (view only),خطة معدّلة (عرض فقط)
+Edited plan blocked,خطة معدّلة موقوفة
 Approval and DXF export are blocked until free-angle manufacturing support is complete.,الاعتماد وتصدير DXF موقوفان حتى اكتمال دعم التصنيع للزوايا الحرة.
+This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout.,هذه الخطة المعدّلة غير جاهزة للاعتماد أو تصدير DXF بعد. أصلح مشاكل التحقق ثم أعد تطبيق التوزيع.
+This edited plan cannot be approved or exported for a specific manufacturing reason.,لا يمكن اعتماد أو تصدير هذه الخطة المعدّلة لسبب تصنيعي محدد.
+Approve the edited plan,اعتماد الخطة المعدّلة
+Replace the approved plan with the edited plan,استبدال الخطة المعتمدة بالخطة المعدّلة
+There is no edited board-editor plan ready to approve.,لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد.
+Only a draft cutting plan can be approved.,يمكن اعتماد خطة قص في حالة المسودة فقط.
+The cutting plan failed geometric validation and cannot be approved.,فشل التحقق الهندسي لخطة القص ولا يمكن اعتمادها.
+This delivered order can no longer change cutting plan approval.,لا يمكن لهذا الطلب المسلّم تغيير اعتماد خطة القص.
+Approval is unavailable in the current production stage.,الاعتماد غير متاح في مرحلة الإنتاج الحالية.
+خطة القص المحددة غير موجودة.,خطة القص المحددة غير موجودة.
+خطة القص المحددة لا تنتمي إلى هذا الطلب.,خطة القص المحددة لا تنتمي إلى هذا الطلب.
+خطة القص المحددة ليست خطة طلب.,خطة القص المحددة ليست خطة طلب.
+مصدر خطة القص المحددة لا يطابق تبويب الاعتماد.,مصدر خطة القص المحددة لا يطابق تبويب الاعتماد.
+Edited board-editor plan,خطة محرر الألواح المعدّلة
+The order data changed. Re-apply the board-editor layout before approving the edited plan.,تغيّرت بيانات الطلب. أعد تطبيق توزيع محرر الألواح قبل اعتماد الخطة المعدّلة.
+Re-apply the board-editor layout before approving it,أعد تطبيق توزيع محرر الألواح قبل اعتمادها
 There is no edited board-editor plan yet.,لا توجد بعد خطة معدّلة من محرر الألواح.
+مصدر خطة القص المحدد لا يدعم الاعتماد والتصنيع.,مصدر خطة القص المحدد لا يدعم الاعتماد والتصنيع.
+مصدر خطة القص المحدد لا يدعم التصدير التصنيعي.,مصدر خطة القص المحدد لا يدعم التصدير التصنيعي.
+لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد. طبّق التوزيع من المحرر أولًا.,لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد. طبّق التوزيع من المحرر أولًا.
+خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع.,خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع.
+خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها.,خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها.
+زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة.,زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة.
+التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح).,التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح).
+خطة محرر الألواح غير جاهزة للاعتماد.,خطة محرر الألواح غير جاهزة للاعتماد.
+خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير.,خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير.
+خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها.,خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها.
+خطة محرر الألواح غير جاهزة للتصدير.,خطة محرر الألواح غير جاهزة للتصدير.
+خطة القص لم تعد في حالة المسودة. أعد تحميل مساحة العمل ثم حاول الاعتماد مرة أخرى.,خطة القص لم تعد في حالة المسودة. أعد تحميل مساحة العمل ثم حاول الاعتماد مرة أخرى.
+هذه الخطة معتمدة بالفعل لهذا الطلب.,هذه الخطة معتمدة بالفعل لهذا الطلب.
+تعارض اعتماد: تغيّرت حالة الخطة أثناء العملية ولم يُغيَّر مؤشر الاعتماد.,تعارض اعتماد: تغيّرت حالة الخطة أثناء العملية ولم يُغيَّر مؤشر الاعتماد.
 Cutting plan copy created.,تم إنشاء نسخة خطة القص.
 Board editor cutting plan copies cannot be approved yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن اعتماد نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.
 Board editor cutting plan copies cannot be exported yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن تصدير نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.

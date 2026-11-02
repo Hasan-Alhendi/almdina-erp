@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 DRAFT = "Draft"
@@ -10,13 +11,16 @@ CANCELLED = "Cancelled"
 SYSTEM = "System"
 UPLOADED_DXF = "Uploaded DXF"
 # Manual layout copy from Board Editor Draft. Not an optimizer result and not an
-# uploaded DXF file. Approval/export stay blocked until a later manufacturing phase.
+# uploaded DXF file. Approve/export reuse the manufacturing lifecycle after
+# posed geometry is re-validated.
 BOARD_EDITOR = "Board Editor"
 
 EDITABLE_STATUSES = frozenset({DRAFT})
 TERMINAL_STATUSES = frozenset({SUPERSEDED, CANCELLED})
 SUPPORTED_SOURCES = frozenset({SYSTEM, UPLOADED_DXF, BOARD_EDITOR})
-MANUFACTURING_EXPORT_SOURCES = frozenset({SYSTEM, UPLOADED_DXF})
+# Board Editor copies reuse the same approve/export lifecycle after posed
+# geometry is re-validated. CUT_PATH remains manufacturing-only after approval.
+MANUFACTURING_EXPORT_SOURCES = frozenset({SYSTEM, UPLOADED_DXF, BOARD_EDITOR})
 
 
 class CuttingPlanLifecycleError(ValueError):
@@ -42,8 +46,61 @@ def is_board_editor_source(value: str | None) -> bool:
     return str(value or "").strip() == BOARD_EDITOR
 
 
+def select_board_editor_surface_plan(
+    rows: list[Any] | tuple[Any, ...],
+    *,
+    approved_plan_name: str | None,
+) -> Any | None:
+    """Pick the Edited-tab Board Editor copy by explicit revision tracking.
+
+    Candidates are Draft Board Editor copies plus the order's current Approved
+    plan when that approval is itself Board Editor. Highest revision wins so
+    approving the tip does not fall back to an older leftover Draft.
+    """
+
+    approved = str(approved_plan_name or "").strip()
+    candidates: list[Any] = []
+    for row in rows or ():
+        source = (
+            row.get("source_type")
+            if isinstance(row, dict)
+            else getattr(row, "source_type", None)
+        )
+        if str(source or "").strip() != BOARD_EDITOR:
+            continue
+        status = str(
+            (row.get("status") if isinstance(row, dict) else getattr(row, "status", None))
+            or ""
+        ).strip()
+        name = str(
+            (row.get("name") if isinstance(row, dict) else getattr(row, "name", None))
+            or ""
+        ).strip()
+        if status == DRAFT:
+            candidates.append(row)
+        elif status == APPROVED and approved and name == approved:
+            candidates.append(row)
+    if not candidates:
+        return None
+
+    def _sort_key(row: Any) -> tuple[int, str, str]:
+        if isinstance(row, dict):
+            return (
+                int(row.get("revision") or 0),
+                str(row.get("modified") or ""),
+                str(row.get("name") or ""),
+            )
+        return (
+            int(getattr(row, "revision", 0) or 0),
+            str(getattr(row, "modified", "") or ""),
+            str(getattr(row, "name", "") or ""),
+        )
+
+    return max(candidates, key=_sort_key)
+
+
 def manufacturing_actions_allowed(source_type: str | None) -> bool:
-    """Approve/export are closed for Board Editor copies in this phase."""
+    """Whether approve/export are open for this Cutting Plan source type."""
 
     return normalize_source_type(source_type) in MANUFACTURING_EXPORT_SOURCES
 
@@ -144,5 +201,6 @@ __all__ = [
     "next_revision",
     "normalize_source_type",
     "revision_from_approved",
+    "select_board_editor_surface_plan",
     "supersede_transition",
 ]
