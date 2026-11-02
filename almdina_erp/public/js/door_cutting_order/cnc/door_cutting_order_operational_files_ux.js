@@ -4,6 +4,7 @@
     if (window.AlmdinaOperationalFilesUX) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
+    const SHEET_PREVIEW_MAX_WIDTH_PX = 260;
     const OPERATION_LABELS = Object.freeze({
         cut_path: "Cut between pieces",
         liner: "Liner operation",
@@ -236,13 +237,27 @@
         return "";
     }
 
-    function fitBoard(board) {
-        const width = parseFloat(board.style.width) || 560;
-        const height = parseFloat(board.style.height) || 260;
-        board.style.width = "100%";
-        board.style.maxWidth = "100%";
+    function fitBoard(board, options = {}) {
+        if (!board) return board;
+        let width = parseFloat(board.dataset.naturalWidth || "");
+        let height = parseFloat(board.dataset.naturalHeight || "");
+        if (!width || !height) {
+            width = parseFloat(board.style.width) || 560;
+            height = parseFloat(board.style.height) || 260;
+            board.dataset.naturalWidth = String(width);
+            board.dataset.naturalHeight = String(height);
+        }
+        const maxWidthPx = Number(options.maxWidthPx);
+        if (Number.isFinite(maxWidthPx) && maxWidthPx > 0) {
+            board.style.width = `${maxWidthPx}px`;
+            board.style.maxWidth = `${maxWidthPx}px`;
+        } else {
+            board.style.width = "100%";
+            board.style.maxWidth = "100%";
+        }
         board.style.height = "auto";
         board.style.aspectRatio = `${width} / ${height}`;
+        return board;
     }
 
     function boardsBySheet(frm, layout) {
@@ -274,13 +289,17 @@
         return boards;
     }
 
-    function mountBoard(target, board) {
+    function mountBoard(target, board, options = {}) {
         target.replaceChildren();
         if (!board) {
             target.innerHTML = `<p class="dco-operational-files__note">${escapeHtml(translate("Board preview is not available."))}</p>`;
             return;
         }
-        target.appendChild(board.cloneNode(true));
+        const clone = board.cloneNode(true);
+        if (board.dataset.naturalWidth) clone.dataset.naturalWidth = board.dataset.naturalWidth;
+        if (board.dataset.naturalHeight) clone.dataset.naturalHeight = board.dataset.naturalHeight;
+        fitBoard(clone, options);
+        target.appendChild(clone);
     }
 
     function downloadServerNc(frm, operationalFile, fileUrl) {
@@ -564,31 +583,120 @@
         };
     }
 
+    function dialogScrollHost(dialog) {
+        if (!dialog || !dialog.$wrapper || typeof dialog.$wrapper.find !== "function") return null;
+        return dialog.$wrapper.find(".modal-body").get(0) || null;
+    }
+
+    function preserveDialogScroll(dialog, mutate) {
+        const host = dialogScrollHost(dialog);
+        const top = host ? host.scrollTop : 0;
+        const result = typeof mutate === "function" ? mutate() : undefined;
+        const restore = () => {
+            const live = dialogScrollHost(dialog);
+            if (live) live.scrollTop = top;
+        };
+        restore();
+        if (typeof requestAnimationFrame === "function") requestAnimationFrame(restore);
+        return result;
+    }
+
+    function ensureMetaParagraph(article, className, afterSelector) {
+        let node = article.querySelector(`.${className}`);
+        if (node) return node;
+        node = document.createElement("p");
+        node.className = className;
+        const after = afterSelector ? article.querySelector(afterSelector) : null;
+        if (after && after.parentNode === article) {
+            after.insertAdjacentElement("afterend", node);
+        } else {
+            article.appendChild(node);
+        }
+        return node;
+    }
+
+    function paintLayerMeta(body, workspace, sheet, state, layerKey) {
+        if (!body || !layerKey) return;
+        const article = body.querySelector(`.dco-operational-layer[data-layer="${layerKey}"]`);
+        if (!article) return;
+        const selected = state.operations[layerKey] || "";
+        const source = (state.sources && state.sources[layerKey]) === "sheet" ? "sheet" : "factory";
+        const sourceEl = article.querySelector("[data-layer-source]");
+        if (sourceEl) {
+            sourceEl.setAttribute("data-layer-source", source);
+            sourceEl.textContent = translate(source === "sheet" ? "Sheet choice" : "Factory default");
+        }
+        const factsText = presetFacts(workspace, selected);
+        const facts = article.querySelector(".dco-operational-layer__facts");
+        if (factsText) {
+            const node = facts || ensureMetaParagraph(article, "dco-operational-layer__facts", ".dco-operational-layer__head");
+            node.textContent = factsText;
+        } else if (facts) {
+            facts.remove();
+        }
+        const issueText = presetIssue(workspace, selected);
+        const issue = article.querySelector(".dco-operational-layer__issue");
+        if (issueText) {
+            const node = issue || ensureMetaParagraph(article, "dco-operational-layer__issue", ".dco-operational-layer__facts, .dco-operational-layer__head");
+            node.setAttribute("role", "status");
+            node.textContent = issueText;
+        } else if (issue) {
+            issue.remove();
+        }
+        article.querySelectorAll(".dco-operational-path").forEach(row => {
+            const pathKey = row.getAttribute("data-path-key");
+            const operationKey = row.getAttribute("data-path-operation") || layerKey;
+            const custom = Boolean(state.overrides[pathKey]);
+            row.classList.toggle("is-custom", custom);
+            row.setAttribute("data-custom", custom ? "1" : "0");
+            const badge = row.querySelector(".dco-operational-path__badge");
+            if (badge) {
+                badge.textContent = translate(custom ? "Custom preset" : "Uses the layer preset");
+            }
+            const effective = row.querySelector(".dco-operational-path__effective");
+            if (effective) {
+                effective.textContent = presetLabel(
+                    workspace,
+                    effectivePreset(state, { path_key: pathKey, operation_key: operationKey })
+                );
+            }
+        });
+        const selection = body.querySelector(".dco-operational-sheet__selection");
+        const preview = body.querySelector("[data-sheet-preview]");
+        if (selection) selection.textContent = selectionText(workspace, sheet, state);
+        if (preview) highlightCutPreview(preview, state);
+    }
+
     function bindDialog(frm, dialog, workspace, sheet, state, board) {
         const body = dialogRoot(dialog);
         if (!body) return;
         const canPrepare = Boolean(workspace.can_prepare);
         const preview = body.querySelector("[data-sheet-preview]");
-        mountBoard(preview, board);
-        highlightBoard(preview, sheet, state);
         syncSheetFooter(dialog, workspace, sheet, state);
-        preview.addEventListener("click", event => {
-            const overlay = event.target.closest && event.target.closest("[data-overlay-kind]");
-            const piece = event.target.closest && event.target.closest(".dco-piece");
-            if (!piece || !piece.dataset.pieceInstanceId) return;
-            const operationKey = overlay ? overlay.getAttribute("data-overlay-kind") : "cut_path";
-            const match = (sheet.paths || []).find(path => path.piece_instance_id === piece.dataset.pieceInstanceId && path.operation_key === operationKey)
-                || (sheet.paths || []).find(path => path.piece_instance_id === piece.dataset.pieceInstanceId);
-            if (!match) return;
-            state.selectedPathKey = match.path_key;
-            state.expanded[match.operation_key] = true;
-            refreshDialog(frm, dialog, workspace, sheet, state, board);
-        });
+        requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
+        if (preview) {
+            preview.addEventListener("click", event => {
+                const hit = event.target.closest && event.target.closest("[data-execution-path]");
+                if (!hit) return;
+                const pathKey = hit.getAttribute("data-execution-path");
+                if (!pathKey) return;
+                state.selectedPathKey = pathKey;
+                state.expanded.cut_path = true;
+                refreshSelection();
+                const pathsPanel = body.querySelector('.dco-operational-layer[data-layer="cut_path"] .dco-operational-layer__paths');
+                if (pathsPanel) pathsPanel.hidden = false;
+                const toggle = body.querySelector('[data-toggle-layer="cut_path"]');
+                if (toggle) {
+                    toggle.setAttribute("aria-expanded", "true");
+                    toggle.textContent = translate("Hide paths");
+                }
+            });
+        }
 
         function refreshSelection() {
             const selection = body.querySelector(".dco-operational-sheet__selection");
             if (selection) selection.textContent = selectionText(workspace, sheet, state);
-            highlightBoard(preview, sheet, state);
+            highlightCutPreview(preview, state);
             body.querySelectorAll(".dco-operational-path").forEach(row => {
                 row.classList.toggle("is-selected", row.getAttribute("data-path-key") === state.selectedPathKey);
             });
@@ -604,7 +712,11 @@
             button.addEventListener("click", () => {
                 const key = button.getAttribute("data-toggle-layer");
                 state.expanded[key] = !state.expanded[key];
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                const article = body.querySelector(`.dco-operational-layer[data-layer="${key}"]`);
+                const paths = article && article.querySelector(".dco-operational-layer__paths");
+                if (paths) paths.hidden = !state.expanded[key];
+                button.setAttribute("aria-expanded", state.expanded[key] ? "true" : "false");
+                button.textContent = translate(state.expanded[key] ? "Hide paths" : "Show paths");
             });
         });
         mountPresetControls(frm, dialog, workspace, sheet, state, board);
@@ -612,15 +724,22 @@
 
         body.querySelectorAll("[data-restore-layer]").forEach(button => {
             button.addEventListener("click", () => {
-                restoreLayerPreset(state, button.getAttribute("data-restore-layer"));
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                const key = button.getAttribute("data-restore-layer");
+                restoreLayerPreset(state, key);
+                onPresetChosen(frm, dialog, workspace, sheet, state, board, () => {}, state.operations[key] || "", {
+                    layers: [key],
+                    skipApply: true,
+                });
             });
         });
         const restoreSheet = body.querySelector("[data-restore-sheet]");
         if (restoreSheet) {
             restoreSheet.addEventListener("click", () => {
                 restoreFactoryPresets(state);
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                const bodyLive = dialogRoot(dialog);
+                (state.order || []).forEach(key => paintLayerMeta(bodyLive, workspace, sheet, state, key));
+                remountPresetValues(dialog, workspace, sheet, state);
+                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
             });
         }
         body.querySelectorAll("[data-customize-path]").forEach(button => {
@@ -635,7 +754,8 @@
         });
         body.querySelectorAll("[data-reset-path]").forEach(button => {
             button.addEventListener("click", () => {
-                clearPathPreset(state, button.getAttribute("data-reset-path"));
+                const pathKey = button.getAttribute("data-reset-path");
+                clearPathPreset(state, pathKey);
                 refreshDialog(frm, dialog, workspace, sheet, state, board);
             });
         });
@@ -695,7 +815,25 @@
         return wrapper[0] || wrapper;
     }
 
-    function syncWorkspacePresets(frm, dialog, workspace, sheet, state, board, selectedName, applySelected) {
+    function remountPresetValues(dialog, workspace, sheet, state) {
+        const links = dialog && dialog._cncPresetLinks;
+        if (!Array.isArray(links)) return;
+        links.forEach(link => {
+            if (!link || typeof link.setValue !== "function") return;
+            if (link.kind === "operation") {
+                link.setValue(state.operations[link.operationKey] || "");
+                return;
+            }
+            if (link.kind === "path") {
+                link.setValue(effectivePreset(state, {
+                    path_key: link.pathKey,
+                    operation_key: link.operationKey,
+                }));
+            }
+        });
+    }
+
+    function syncWorkspacePresets(frm, dialog, workspace, sheet, state, board, selectedName, applySelected, options = {}) {
         const request = (dialog._cncPresetRequest || 0) + 1;
         dialog._cncPresetRequest = request;
         frappe.call({
@@ -718,24 +856,62 @@
                     });
                 }
                 if (typeof applySelected === "function") applySelected(selectedName || "");
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                onPresetChosen(frm, dialog, workspace, sheet, state, board, () => {}, selectedName || "", {
+                    layers: options.layers,
+                    skipApply: true,
+                    forceRemountLinks: true,
+                });
             },
             error() {
                 if (dialog._cncPresetRequest !== request) return;
                 if (typeof applySelected === "function") applySelected(selectedName || "");
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                onPresetChosen(frm, dialog, workspace, sheet, state, board, () => {}, selectedName || "", {
+                    layers: options.layers,
+                    skipApply: true,
+                });
             },
         });
     }
 
-    function onPresetChosen(frm, dialog, workspace, sheet, state, board, applySelected, name) {
+    function onPresetChosen(frm, dialog, workspace, sheet, state, board, applySelected, name, options = {}) {
         const selected = String(name || "");
-        if (selected && !presetByName(workspace).has(selected)) {
-            syncWorkspacePresets(frm, dialog, workspace, sheet, state, board, selected, applySelected);
+        if (!options.skipApply && selected && !presetByName(workspace).has(selected)) {
+            syncWorkspacePresets(
+                frm,
+                dialog,
+                workspace,
+                sheet,
+                state,
+                board,
+                selected,
+                applySelected,
+                options
+            );
             return;
         }
-        applySelected(selected);
-        refreshDialog(frm, dialog, workspace, sheet, state, board);
+        if (!options.skipApply && typeof applySelected === "function") applySelected(selected);
+        if (options.fullRefresh) {
+            refreshDialog(frm, dialog, workspace, sheet, state, board);
+            return;
+        }
+        const body = dialogRoot(dialog);
+        if (!body) {
+            refreshDialog(frm, dialog, workspace, sheet, state, board);
+            return;
+        }
+        const layers = Array.isArray(options.layers) && options.layers.length
+            ? options.layers
+            : (state.order || []);
+        layers.forEach(key => paintLayerMeta(body, workspace, sheet, state, key));
+        if (options.forceRemountLinks) {
+            preserveDialogScroll(dialog, () => {
+                disposePresetLinks(dialog);
+                mountPresetControls(frm, dialog, workspace, sheet, state, board);
+            });
+        } else {
+            remountPresetValues(dialog, workspace, sheet, state);
+        }
+        requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
     }
 
     function mountPresetControls(frm, dialog, workspace, sheet, state, board) {
@@ -760,11 +936,19 @@
                         state,
                         board,
                         next => applyLayerPreset(state, key, next),
-                        value
+                        value,
+                        { layers: [key] }
                     );
                 },
             });
-            if (link) links.push(link);
+            if (link) {
+                links.push({
+                    kind: "operation",
+                    operationKey: key,
+                    dispose: () => link.dispose(),
+                    setValue: value => link.setValue(value),
+                });
+            }
         });
         body.querySelectorAll("[data-path-preset-host]").forEach(host => {
             const pathKey = host.getAttribute("data-path-preset-host");
@@ -783,11 +967,20 @@
                         state,
                         board,
                         next => customizePath(state, pathKey, next, state.operations[operationKey] || ""),
-                        value
+                        value,
+                        { layers: [operationKey].filter(Boolean) }
                     );
                 },
             });
-            if (link) links.push(link);
+            if (link) {
+                links.push({
+                    kind: "path",
+                    pathKey,
+                    operationKey,
+                    dispose: () => link.dispose(),
+                    setValue: value => link.setValue(value),
+                });
+            }
         });
         dialog._cncPresetLinks = links;
     }
@@ -967,13 +1160,6 @@
         const generate = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="generate" data-cnc-generate-nc title="${escapeHtml(control.reason)}"></button>`);
         generate.text(translate("Generate NC file"));
         generate.prop("disabled", Boolean(control.disabled));
-        if (sheet && sheet.can_download_current && sheet.operational_file) {
-            const download = $(`<button type="button" class="btn btn-default btn-sm" data-cnc-footer-action="download" data-cnc-dialog-download="${escapeHtml(sheet.operational_file)}" data-file-url="${escapeHtml(sheet.generated_file || "")}"></button>`);
-            download.text(translate(
-                sheet.download_is_previous ? "Download previous simulation NC" : "Download NC file"
-            ));
-            actions.prepend(download);
-        }
         actions.prepend(generate);
         const live = dialog._almdinaSheet;
         if (!live) return;
@@ -991,10 +1177,12 @@
     function refreshDialog(frm, dialog, workspace, sheet, state, board) {
         const wrapper = dialogRoot(dialog);
         if (!wrapper) return;
-        disposePresetLinks(dialog);
-        dialog._almdinaSheet = { frm, workspace, sheet, state, board };
-        wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
-        bindDialog(frm, dialog, workspace, sheet, state, board);
+        preserveDialogScroll(dialog, () => {
+            disposePresetLinks(dialog);
+            dialog._almdinaSheet = { frm, workspace, sheet, state, board };
+            wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
+            bindDialog(frm, dialog, workspace, sheet, state, board);
+        });
     }
 
     function openSheetDialog(frm, workspace, sheet, board) {
@@ -1157,6 +1345,231 @@
     function formatPoint(point) {
         if (!Array.isArray(point) || point.length < 2) return "";
         return `${Number(point[0]).toFixed(1)}, ${Number(point[1]).toFixed(1)}`;
+    }
+
+    function collectCutExecutions(program) {
+        const executions = [];
+        let execution = 0;
+        const operations = Array.isArray(program && program.operations) ? program.operations : [];
+        operations.forEach(operation => {
+            if (String(operation.operation_key || "") !== "cut_path") return;
+            (operation.toolpaths || []).forEach(path => {
+                let current = null;
+                (path.motions || []).forEach(motion => {
+                    const kind = String(motion && motion.kind || "");
+                    if (kind === "plunge") {
+                        execution += 1;
+                        const start = [Number(motion.x_mm), Number(motion.y_mm)];
+                        current = {
+                            execution,
+                            path_key: String(path.path_key || ""),
+                            operation_key: "cut_path",
+                            closed: Boolean(path.closed),
+                            depth_mm: motion.depth_mm == null || motion.depth_mm === ""
+                                ? null
+                                : Number(motion.depth_mm),
+                            ready: Boolean(path.ready),
+                            issues: Array.isArray(path.issues) ? path.issues.slice() : [],
+                            points: [start],
+                            start,
+                            end: start,
+                        };
+                        executions.push(current);
+                        return;
+                    }
+                    if (kind === "cut" && current) {
+                        const point = [Number(motion.x_mm), Number(motion.y_mm)];
+                        current.points.push(point);
+                        current.end = point;
+                        return;
+                    }
+                    if (kind === "retract" || kind === "travel") {
+                        current = null;
+                    }
+                });
+            });
+        });
+        return executions;
+    }
+
+    function cutExecutionArrowSegment(points, closed) {
+        if (!Array.isArray(points) || points.length < 2) return null;
+        if (closed && points.length >= 3) {
+            const index = Math.max(1, Math.min(points.length - 2, Math.floor((points.length - 1) * 0.35)));
+            return { from: points[index], to: points[index + 1] };
+        }
+        return { from: points[points.length - 2], to: points[points.length - 1] };
+    }
+
+    function groupCutExecutionLabels(executions) {
+        const groups = [];
+        const indexByKey = new Map();
+        executions.forEach(item => {
+            if (!item || !Array.isArray(item.start) || item.start.length < 2) return;
+            const key = [
+                item.path_key || "",
+                Number(item.start[0]).toFixed(2),
+                Number(item.start[1]).toFixed(2),
+            ].join("|");
+            if (indexByKey.has(key)) {
+                groups[indexByKey.get(key)].items.push(item);
+                return;
+            }
+            indexByKey.set(key, groups.length);
+            groups.push({
+                path_key: String(item.path_key || ""),
+                x: Number(item.start[0]),
+                y: Number(item.start[1]),
+                items: [item],
+            });
+        });
+        return groups;
+    }
+
+    function cutPathPreviewMarkup(program, options = {}) {
+        const drawing = program || {};
+        const width = Number(drawing.sheet_width_mm);
+        const length = Number(drawing.sheet_length_mm);
+        const selectedPathKey = String(options.selectedPathKey || "");
+        const executions = collectCutExecutions(drawing);
+        const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
+        const notes = [];
+        if (!geometryReady) {
+            notes.push(translate("Cutting path preview is incomplete."));
+        }
+        const issueMessages = [];
+        (Array.isArray(drawing.issues) ? drawing.issues : []).forEach(issue => {
+            if (!issue) return;
+            const message = issue.message || issue.code;
+            if (message) issueMessages.push(String(message));
+        });
+        executions.forEach(item => {
+            (item.issues || []).forEach(code => {
+                if (code) issueMessages.push(String(code));
+            });
+        });
+        const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
+        uniqueIssues.forEach(message => notes.push(message));
+
+        if (!(width > 0 && length > 0)) {
+            return `<div class="dco-cnc-cut-preview" role="status">
+                <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
+            </div>`;
+        }
+
+        if (!executions.length) {
+            return `<div class="dco-cnc-cut-preview" role="status" style="max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}">
+                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("No cutting paths are available for this sheet preview."))}">
+                    <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
+                </svg>
+                <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
+                ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
+            </div>`;
+        }
+
+        const color = PROGRAM_COLORS.cut_path || "#a61b1b";
+        const markers = executions.map(item => (
+            `<marker id="cnc-cut-arrow-${item.execution}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+                <path d="M0 0 L8 4 L0 8 Z" fill="${color}"/>
+            </marker>`
+        )).join("");
+        const strokes = executions.map(item => {
+            const selected = selectedPathKey && item.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
+            const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
+            const start = item.start;
+            const arrow = cutExecutionArrowSegment(item.points, item.closed);
+            const arrowLine = arrow
+                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#cnc-cut-arrow-${item.execution})"/>`
+                : "";
+            return `<g class="dco-cnc-cut-preview__execution${selected}" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-depth-mm="${item.depth_mm == null ? "" : escapeHtml(item.depth_mm)}">
+                <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+                ${arrowLine}
+                <circle class="dco-cnc-cut-preview__start" cx="${Number(start[0])}" cy="${Number(start[1])}" r="2.4" fill="${color}"/>
+            </g>`;
+        }).join("");
+        const labels = groupCutExecutionLabels(executions).map(group => {
+            const selected = selectedPathKey && group.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
+            const numbers = group.items.map(item => item.execution).join(",");
+            const title = group.items.map(item => (
+                item.depth_mm == null
+                    ? String(item.execution)
+                    : `${item.execution}: ${translate("Depth {0} mm", [item.depth_mm])}`
+            )).join(" · ");
+            return `<text class="dco-cnc-cut-preview__label${selected}" data-execution-path="${escapeHtml(group.path_key)}" x="${Number(group.x)}" y="${length - Number(group.y)}" title="${escapeHtml(title)}">${escapeHtml(numbers)}</text>`;
+        }).join("");
+
+        return `<div class="dco-cnc-cut-preview" style="max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}">
+            <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Cut between pieces"))}">
+                <defs>${markers}</defs>
+                <g transform="translate(0,${length}) scale(1,-1)">
+                    <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
+                    ${strokes}
+                </g>
+                ${labels}
+            </svg>
+            ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
+        </div>`;
+    }
+
+    function paintCutPathPreview(host, payload = {}) {
+        if (!host) return;
+        const status = String(payload.status || "ready");
+        if (status === "loading") {
+            host.innerHTML = `<div class="dco-cnc-cut-preview" role="status"><p class="dco-operational-files__note">${escapeHtml(translate("Loading cutting paths..."))}</p></div>`;
+            return;
+        }
+        if (status === "error") {
+            host.innerHTML = `<div class="dco-cnc-cut-preview" role="alert"><p class="dco-cnc-program__error">${escapeHtml(translate("Cutting paths could not be loaded."))}</p></div>`;
+            return;
+        }
+        host.innerHTML = cutPathPreviewMarkup(payload.program || {}, {
+            selectedPathKey: payload.selectedPathKey || "",
+        });
+    }
+
+    function highlightCutPreview(preview, state) {
+        if (!preview) return;
+        const selected = state && state.selectedPathKey ? String(state.selectedPathKey) : "";
+        preview.querySelectorAll("[data-execution-path]").forEach(node => {
+            node.classList.toggle("is-cnc-path-selected", Boolean(selected) && node.getAttribute("data-execution-path") === selected);
+        });
+    }
+
+    function requestSheetProgramPreview(frm, dialog, workspace, sheet, state) {
+        const body = dialogRoot(dialog);
+        const preview = body && body.querySelector("[data-sheet-preview]");
+        if (!preview) return;
+        paintCutPathPreview(preview, { status: "loading" });
+        const request = (dialog._cncProgramPreviewRequest || 0) + 1;
+        dialog._cncProgramPreviewRequest = request;
+        if (!window.frappe || typeof frappe.call !== "function") {
+            paintCutPathPreview(preview, { status: "error" });
+            return;
+        }
+        frappe.call({
+            method: `${METHOD}.get_cnc_sheet_program`,
+            args: sheetGenerateArgs(frm, workspace, sheet, state),
+            callback(response) {
+                if (dialog._cncProgramPreviewRequest !== request) return;
+                const liveBody = dialogRoot(dialog);
+                const livePreview = liveBody && liveBody.querySelector("[data-sheet-preview]");
+                if (!livePreview) return;
+                const program = (response && response.message) || {};
+                if (dialog._almdinaSheet) dialog._almdinaSheet.program = program;
+                paintCutPathPreview(livePreview, {
+                    status: "ready",
+                    program,
+                    selectedPathKey: (state && state.selectedPathKey) || "",
+                });
+            },
+            error() {
+                if (dialog._cncProgramPreviewRequest !== request) return;
+                const liveBody = dialogRoot(dialog);
+                const livePreview = liveBody && liveBody.querySelector("[data-sheet-preview]");
+                if (!livePreview) return;
+                paintCutPathPreview(livePreview, { status: "error" });
+            },
+        });
     }
 
     function programMarkup(program) {
@@ -1500,5 +1913,15 @@
         restoreFactoryPresets,
         customizePath,
         clearPathPreset,
+        fitBoard,
+        paintLayerMeta,
+        dialogScrollHost,
+        preserveDialogScroll,
+        SHEET_PREVIEW_MAX_WIDTH_PX,
+        collectCutExecutions,
+        cutPathPreviewMarkup,
+        paintCutPathPreview,
+        groupCutExecutionLabels,
+        cutExecutionArrowSegment,
     });
 })();

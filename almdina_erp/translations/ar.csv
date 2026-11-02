@@ -3173,6 +3173,10 @@ Move later,تأخير
 "Cutting first may let the pieces move after they separate from the board.",تقديم القص قد يؤدي إلى تحرك الدرفات بعد فصلها عن اللوح.
 I understand and want to keep this operation order.,أفهم ذلك وأريد الإبقاء على هذا الترتيب.
 Board preview is not available.,معاينة اللوح غير متاحة.
+Loading cutting paths...,جارٍ تحميل مسارات القص...
+Cutting paths could not be loaded.,تعذر تحميل مسارات القص.
+No cutting paths are available for this sheet preview.,لا توجد مسارات قص متاحة لمعاينة هذا اللوح.
+Cutting path preview is incomplete.,معاينة مسارات القص غير مكتملة.
 Discard the unsaved changes?,هل تريد تجاهل التغييرات غير المحفوظة؟
 Operational files saved.,تم حفظ إعدادات الملف التشغيلي.
 The operation order does not include every operation on this sheet.,ترتيب العمليات لا يشمل كل العمليات الموجودة على هذا اللوح.

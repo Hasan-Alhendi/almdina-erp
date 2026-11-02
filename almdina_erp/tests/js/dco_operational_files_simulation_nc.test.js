@@ -204,13 +204,52 @@ assert.ok(
         .includes("Simulation NC is for review only")
 );
 
-assert.ok(css.includes("grid-template-columns: minmax(9rem, 0.34fr) minmax(16rem, 0.66fr)"));
+assert.ok(css.includes("grid-template-columns: minmax(0, 260px) minmax(16rem, 1fr)"));
 assert.ok(css.includes("direction: ltr"));
+assert.ok(css.includes("max-inline-size: 260px"));
 assert.ok(!css.includes(".dco-operational-layers__scroll"));
 assert.ok(!css.includes(".dco-operational-sheet__nc-actions"));
 assert.ok(css.includes(".dco-operational-sheet-dialog .modal-body"));
-assert.ok(css.includes("overflow: auto"));
+assert.ok(css.includes(".dco-operational-sheet-dialog .modal-content"));
+assert.ok(css.includes("overflow-y: auto"));
 assert.ok(css.includes(".dco-operational-order__move"));
+assert.ok(!/syncSheetFooter[\s\S]*data-cnc-footer-action="download"/.test(panel));
+assert.ok(panel.includes('data-cnc-footer-action="generate"'));
+assert.ok(panel.includes("preserveDialogScroll("));
+assert.ok(panel.includes("paintLayerMeta("));
+assert.ok(panel.includes("SHEET_PREVIEW_MAX_WIDTH_PX = 260"));
+assert.ok(panel.includes("onPresetChosen("));
+assert.ok(panel.includes("options.fullRefresh"));
+assert.ok(panel.includes("layers.forEach(key => paintLayerMeta"));
+assert.equal(ux.SHEET_PREVIEW_MAX_WIDTH_PX, 260);
+
+const fitted = ux.fitBoard(
+    { style: {}, dataset: { naturalWidth: "1220", naturalHeight: "2440" } },
+    { maxWidthPx: ux.SHEET_PREVIEW_MAX_WIDTH_PX }
+);
+assert.equal(fitted.style.width, "260px");
+assert.equal(fitted.style.maxWidth, "260px");
+assert.equal(fitted.style.height, "auto");
+assert.equal(fitted.style.aspectRatio, "1220 / 2440");
+
+const scrollHost = { scrollTop: 240 };
+const scrollDialog = {
+    $wrapper: {
+        find(selector) {
+            assert.equal(selector, ".modal-body");
+            return { get() { return scrollHost; } };
+        },
+    },
+};
+ux.preserveDialogScroll(scrollDialog, () => {
+    scrollHost.scrollTop = 0;
+});
+assert.equal(scrollHost.scrollTop, 240);
+assert.equal(ux.dialogScrollHost(scrollDialog), scrollHost);
+
+assert.ok(typeof ux.paintLayerMeta === "function");
+assert.ok(panel.includes("if (options.forceRemountLinks)"));
+assert.ok(panel.includes("remountPresetValues("));
 
 function fakeHost() {
     const listeners = new Map();
@@ -270,5 +309,9 @@ assert.ok(translations.includes("ماذا أفعل؟"));
 assert.ok(translations.includes("تقديم العملية"));
 assert.ok(translations.includes("تأخير العملية"));
 assert.ok(translations.includes("ملف NC التجريبي للمراجعة فقط"));
+assert.ok(translations.includes("جارٍ تحميل مسارات القص"));
+assert.ok(translations.includes("لا توجد مسارات قص متاحة لمعاينة هذا اللوح"));
+assert.ok(panel.includes("requestSheetProgramPreview("));
+assert.ok(panel.includes("collectCutExecutions("));
 
 console.log("dco_operational_files_simulation_nc.test.js passed");
