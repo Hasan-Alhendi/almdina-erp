@@ -115,7 +115,7 @@ def _run_alignment(plan, sources, *, kerf=0.5, deadline=None):
     )
 
 
-@pytest.mark.parametrize("kerf", [0, 0.5])
+@pytest.mark.parametrize("kerf", [0.3, 0.5])
 def test_exact_center_network_gets_shorter_without_changing_original(kerf):
     from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
     sources, original = _domain_fixture(kerf=kerf)
@@ -222,3 +222,10 @@ def test_repeated_generation_is_deterministic_and_large_shift_is_not_forced():
     assert runs[0] == runs[1] == runs[2]
     sources, distant = _domain_fixture(offset=2.0)
     assert _run_alignment(distant, sources) is distant
+
+
+def test_zero_kerf_does_not_fabricate_common_cuts_across_a_real_gap():
+    sources, baseline = _domain_fixture(kerf=0.5)
+    assert not validate_plan(baseline, sources, 100, 100, kerf_cm=0)
+    # With zero kerf the actual 5 mm gap is still a gap: no false joining.
+    assert _run_alignment(baseline, sources, kerf=0) is baseline
