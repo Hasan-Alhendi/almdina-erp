@@ -439,14 +439,20 @@ def align_regular_cut_lines(
     best = plan
     # A rigid translation affects only one sheet: caching canonical metrics
     # avoids repeatedly rebuilding every other board's cutter-center network.
+    # Only sheets with a movable pair may change. Dense and protected-only
+    # sheets remain fixed, so their (possibly expensive/unproven) network is a
+    # constant in every comparison and must not disable another board's search.
+    active_sheets = {i for i, ids in eligible.items() if len(ids) >= 2}
     sheet_profiles = {
         index: _sheet_center_profile(sheet, kerf_cm, regular_only=True)
         for index, sheet in enumerate(best["sheets"])
+        if index in active_sheets
     }
     sheet_axes = {
         index: _axis_alignment_score({"sheets": [sheet]}, kerf_cm,
                                       {0: eligible[index]})
         for index, sheet in enumerate(best["sheets"])
+        if index in active_sheets
     }
     sheet_remnants: dict[int, float] = {}
     best_profile = (sum(p[0] for p in sheet_profiles.values()),
