@@ -25,29 +25,57 @@ _EPS = 1e-7
 _NETWORK_EPS_MM = 0.05
 
 
+def _sheet_center_profile(
+    sheet: dict[str, Any], kerf_cm: float, *,
+    regular_only: bool = False,
+) -> tuple[float, int, float]:
+    """Real cutter network plus its longest straight *in-board* center.
+
+    In-board continuity is a tie-break, not a new manufacturing constraint.
+    A shared line outside the physical board (zero-Trim is allowed) cannot
+    earn the same continuity credit as an equally good internal cutter route.
+    """
+    shapes = [
+        (
+            [
+                (num(p["x"]) * 10, num(p["y"]) * 10),
+                ((num(p["x"]) + num(p["w"])) * 10, num(p["y"]) * 10),
+                ((num(p["x"]) + num(p["w"])) * 10, (num(p["y"]) + num(p["h"])) * 10),
+                (num(p["x"]) * 10, (num(p["y"]) + num(p["h"])) * 10),
+            ],
+            [],
+        )
+        for p in sheet.get("pieces") or []
+        if not regular_only or _is_movable_regular(p)
+    ]
+    segments = cutter_center_segments(shapes, max(0.0, kerf_cm) * 5)
+    board_w = num(sheet.get("w")) * 10
+    board_h = num(sheet.get("h")) * 10
+    longest_internal = 0.0
+    for start, end in segments:
+        dx, dy = abs(start[0] - end[0]), abs(start[1] - end[1])
+        # Endpoints and the cutter center must lie inside the material board.
+        # No credit for a center outside the board (including X = -Kerf/2).
+        inside = all(
+            _NETWORK_EPS_MM < x < board_w - _NETWORK_EPS_MM
+            and _NETWORK_EPS_MM < y < board_h - _NETWORK_EPS_MM
+            for x, y in (start, end)
+        )
+        if inside and (dx <= _NETWORK_EPS_MM or dy <= _NETWORK_EPS_MM):
+            longest_internal = max(longest_internal, math.dist(start, end))
+    return (
+        sum(math.dist(start, end) for start, end in segments),
+        len(segments),
+        longest_internal,
+    )
+
+
 def _rectangles(plan: dict[str, Any], kerf_cm: float, *,
                 regular_only: bool = False) -> tuple[float, int]:
     """Actual canonical cutter centers, summed per board (millimetres)."""
-    length = 0.0
-    count = 0
-    for sheet in plan["sheets"]:
-        shapes = [
-            (
-                [
-                    (num(p["x"]) * 10, num(p["y"]) * 10),
-                    ((num(p["x"]) + num(p["w"])) * 10, num(p["y"]) * 10),
-                    ((num(p["x"]) + num(p["w"])) * 10, (num(p["y"]) + num(p["h"])) * 10),
-                    (num(p["x"]) * 10, (num(p["y"]) + num(p["h"])) * 10),
-                ],
-                [],
-            )
-            for p in sheet.get("pieces") or []
-            if not regular_only or _is_movable_regular(p)
-        ]
-        segments = cutter_center_segments(shapes, max(0.0, kerf_cm) * 5)
-        length += sum(math.dist(a, b) for a, b in segments)
-        count += len(segments)
-    return length, count
+    profiles = [_sheet_center_profile(sheet, kerf_cm, regular_only=regular_only)
+                for sheet in plan["sheets"]]
+    return sum(p[0] for p in profiles), sum(p[1] for p in profiles)
 
 
 def _is_movable_regular(piece: dict[str, Any]) -> bool:
@@ -442,7 +470,7 @@ def align_regular_cut_lines(
     # A rigid translation affects only one sheet: caching canonical metrics
     # avoids repeatedly rebuilding every other board's cutter-center network.
     sheet_profiles = {
-        index: _rectangles({"sheets": [sheet]}, kerf_cm, regular_only=True)
+        index: _sheet_center_profile(sheet, kerf_cm, regular_only=True)
         for index, sheet in enumerate(best["sheets"])
     }
     sheet_axes = {
@@ -453,6 +481,7 @@ def align_regular_cut_lines(
     sheet_remnants: dict[int, float] = {}
     best_profile = (sum(p[0] for p in sheet_profiles.values()),
                     sum(p[1] for p in sheet_profiles.values()))
+    best_inboard = sum(p[2] for p in sheet_profiles.values())
     best_axis = sum(sheet_axes.values())
     attempts = 0
     for sweep_index in range(_MAX_SWEEPS):
@@ -464,6 +493,7 @@ def align_regular_cut_lines(
         winner_sheet_axis = None
         winner_sheet_remnant = None
         winner_sheet_index = None
+        winner_inboard = best_inboard
         moves = _candidate_moves(best, kerf_cm, eligible, deadline_monotonic)
         diag["candidate_count"] += len(moves)
         # Reserve part of the existing fixed trial allowance for improvements
@@ -499,9 +529,8 @@ def align_regular_cut_lines(
             # Exact cutter-center network of the changed sheet, plus cached
             # unaffected sheets. This is algebraically equivalent to a full
             # plan recalculation, which remains covered by regression tests.
-            candidate_sheet_profile = _rectangles(
-                {"sheets": [candidate["sheets"][sheet_index]]},
-                kerf_cm, regular_only=True,
+            candidate_sheet_profile = _sheet_center_profile(
+                candidate["sheets"][sheet_index], kerf_cm, regular_only=True,
             )
             previous_sheet_profile = sheet_profiles[sheet_index]
             profile = (
@@ -517,7 +546,11 @@ def align_regular_cut_lines(
                 kerf_cm, {0: eligible[sheet_index]},
             )
             alignment = best_axis - sheet_axes[sheet_index] + candidate_sheet_axis
-            if same_length and profile[1] == best_profile[1] and alignment <= best_axis:
+            inboard = (best_inboard - previous_sheet_profile[2]
+                       + candidate_sheet_profile[2])
+            if (same_length and profile[1] == best_profile[1]
+                    and inboard <= best_inboard + _NETWORK_EPS_MM
+                    and alignment <= best_axis):
                 diag["rejected_no_improvement"] = diag.get("rejected_no_improvement", 0) + 1
                 continue
 
@@ -555,8 +588,12 @@ def align_regular_cut_lines(
             if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
                 diag["rejected_rank"] = diag.get("rejected_rank", 0) + 1
                 continue
-            key = (round(profile[0], 5), profile[1], -alignment,
-                   abs(delta), sheet_index, axis, ids, delta)
+            # Equal real cut length: prefer one long *internal* cutter route
+            # over a superficially shorter segment list along the sheet border.
+            # Count still cannot regress against the accepted baseline.
+            key = (round(profile[0], 5), -round(inboard, 3),
+                   profile[1], -alignment, abs(delta),
+                   sheet_index, axis, ids, delta)
             if winner_key is None or key < winner_key:
                 winner, winner_profile, winner_axis, winner_key = (
                     candidate, profile, alignment, key
@@ -565,9 +602,11 @@ def align_regular_cut_lines(
                 winner_sheet_profile = candidate_sheet_profile
                 winner_sheet_axis = candidate_sheet_axis
                 winner_sheet_remnant = after_remnant
+                winner_inboard = inboard
         if winner is None:
             return best
         best, best_profile, best_axis = winner, winner_profile, winner_axis
+        best_inboard = winner_inboard
         sheet_profiles[winner_sheet_index] = winner_sheet_profile
         sheet_axes[winner_sheet_index] = winner_sheet_axis
         sheet_remnants[winner_sheet_index] = winner_sheet_remnant
