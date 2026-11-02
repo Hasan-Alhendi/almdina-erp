@@ -616,3 +616,73 @@ def test_anonymized_board_alignment_search_reaches_proven_six_piece_move():
     assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
     assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
     assert diagnostics["accepted"] >= 1
+
+
+# Remaining two sheet rectangles in the same anonymized DXF. This captures
+# portfolio/multi-sheet budget pressure without storing uploaded file contents.
+_SECOND_BOARD_MM = (
+    (5, 12, 448, 299), (5, 316, 903, 269), (913, 12, 299, 770),
+    (5, 590, 818, 299), (828, 787, 299, 818), (5, 894, 818, 299),
+    (5, 1198, 818, 299), (5, 1502, 818, 139), (828, 1610, 139, 818),
+    (5, 1646, 409, 745), (458, 12, 448, 299),
+    (419, 1646, 400, 119), (419, 1770, 400, 119),
+    (419, 1894, 400, 119), (419, 2018, 400, 119),
+    (419, 2142, 400, 119), (419, 2266, 400, 119),
+    (972, 1610, 119, 400), (1096, 1610, 119, 368),
+    (1096, 1983, 119, 368), (972, 2015, 119, 368),
+)
+_THIRD_BOARD_MM = (
+    (0, 0, 903, 269), (0, 274, 745, 409),
+    (750, 274, 368, 119), (750, 398, 368, 119), (750, 522, 368, 119),
+)
+
+
+def _three_sheet_dxf_geometry_witness():
+    board_sets = (_FIRST_BOARD_MM, _SECOND_BOARD_MM, _THIRD_BOARD_MM)
+    sources = expand_piece_groups([
+        dict(width_cm=w / 10, length_cm=h / 10, qty=1)
+        for board_set in board_sets for x, y, w, h in board_set
+    ])
+    sheets = []
+    index = 0
+    for no, board_set in enumerate(board_sets, 1):
+        pieces = []
+        for x, y, w, h in board_set:
+            pieces.append(make_placed_piece(
+                sources[index], x / 10, y / 10, w / 10, h / 10, False
+            ))
+            index += 1
+        sheets.append(dict(sheet_no=no, resource_kind="FULL_BOARD", w=122, h=244,
+                           pieces=pieces))
+    used = sum(p["w"] * p["h"] for s in sheets for p in s["pieces"]) / 10000
+    total = len(sheets) * 122 * 244 / 10000
+    plan = enrich_plan_metrics(
+        dict(method_key="MaxRects Best Short Side", sheets=sheets, unplaced=[],
+             used_area_m2=used, total_board_area_m2=total,
+             waste_area_m2=total - used), "MaxRects Best Short Side", "CNC Router"
+    )
+    assert len(sources) == 42 and len(plan["sheets"]) == 3
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def test_anonymized_three_board_dxf_can_reach_group_alignment_in_tail_budget():
+    import time
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, plan = _three_sheet_dxf_geometry_witness()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        deadline_monotonic=time.monotonic() + .15,
+        diagnostics=diagnostics,
+    )
+    first = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert first[1]["x"] == pytest.approx(first[5]["x"]), diagnostics
+    assert len(result["sheets"]) == 3
+    assert _rectangles(result, .5)[0] <= _rectangles(plan, .5)[0] + .05
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
