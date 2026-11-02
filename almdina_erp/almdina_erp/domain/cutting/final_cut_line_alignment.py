@@ -132,6 +132,89 @@ def _groups(sheet: dict[str, Any], axis: str) -> list[tuple[int, ...]]:
     return sorted(result, key=lambda ids: (len(ids), ids))
 
 
+def _shares_cutter_center(
+    first: dict[str, Any], second: dict[str, Any], kerf_cm: float,
+) -> bool:
+    """Existing rectangular shared cutter line, not merely matching axes.
+
+    A valid shared cut requires one Kerf gap on the contact axis and strictly
+    overlapping finished spans on the perpendicular axis. Used for candidate
+    grouping and for conservative barriers near unmodelled special shapes.
+    """
+    for axis, size, cross, cross_size in (
+        ("x", "w", "y", "h"), ("y", "h", "x", "w")
+    ):
+        overlap = min(
+            num(first[cross]) + num(first[cross_size]),
+            num(second[cross]) + num(second[cross_size]),
+        ) - max(num(first[cross]), num(second[cross]))
+        if overlap <= _EPS:
+            continue
+        gap_one = num(second[axis]) - num(first[axis]) - num(first[size])
+        gap_two = num(first[axis]) - num(second[axis]) - num(second[size])
+        if abs(gap_one - kerf_cm) <= _EPS or abs(gap_two - kerf_cm) <= _EPS:
+            return True
+    return False
+
+
+def _contact_preserving_groups(
+    sheet: dict[str, Any], kerf_cm: float, eligible: set[int],
+) -> list[tuple[int, ...]]:
+    """Additional rigid groups from genuine shared-cut contacts.
+
+    Retain all singleton moves independently. A connected chain of doors with
+    Kerf-spaced edges may need to shift together even when their projected
+    bounding boxes do not overlap (and _groups therefore splits the chain).
+    """
+    movable = [p for p in sheet.get("pieces") or []
+               if int(p["id"]) in eligible]
+    neighbors: dict[int, set[int]] = {int(p["id"]): set() for p in movable}
+    for index, first in enumerate(movable):
+        for second in movable[index + 1:]:
+            if not _shares_cutter_center(first, second, kerf_cm):
+                continue
+            left, right = int(first["id"]), int(second["id"])
+            neighbors[left].add(right)
+            neighbors[right].add(left)
+    visited: set[int] = set()
+    result: list[tuple[int, ...]] = []
+    for piece_id in sorted(neighbors):
+        if piece_id in visited:
+            continue
+        stack = [piece_id]
+        members: set[int] = set()
+        while stack:
+            current = stack.pop()
+            if current in members:
+                continue
+            members.add(current)
+            stack.extend(sorted(neighbors[current] - members, reverse=True))
+        visited.update(members)
+        if 1 < len(members) <= 16:
+            result.append(tuple(sorted(members)))
+    return result
+
+
+def _touches_protected_cut(
+    original: dict[str, Any], candidate: dict[str, Any],
+    ids: tuple[int, ...], eligible: set[int], kerf_cm: float,
+) -> bool:
+    """Never optimize with a cut touching geometry omitted from our metric.
+
+    Protected Glass/L/Special/hole contours cannot be scored as plain Regular
+    rectangles. Until their actual toolpath can be measured here, do not
+    translate a Regular piece sharing a cutter line with such a contour.
+    """
+    before = {int(p["id"]): p for p in original.get("pieces") or []}
+    after = {int(p["id"]): p for p in candidate.get("pieces") or []}
+    protected = [p for piece_id, p in before.items() if piece_id not in eligible]
+    return any(
+        _shares_cutter_center(before[piece_id], fixed, kerf_cm)
+        or _shares_cutter_center(after[piece_id], fixed, kerf_cm)
+        for piece_id in ids for fixed in protected
+    )
+
+
 def _movement_range(
     group: list[dict[str, Any]],
     fixed: list[dict[str, Any]],
@@ -218,7 +301,11 @@ def _candidate_moves(
         for axis in ("x", "y"):
             size = "w" if axis == "x" else "h"
             cross, cross_size = ("y", "h") if axis == "x" else ("x", "w")
-            for ids in _groups(sheet, axis):
+            candidate_groups = set(_groups(sheet, axis))
+            candidate_groups.update(
+                _contact_preserving_groups(sheet, kerf_cm, eligible)
+            )
+            for ids in sorted(candidate_groups, key=lambda group: (len(group), group)):
                 if deadline is not None and time.monotonic() >= deadline:
                     break
                 if not set(ids).issubset(eligible):
@@ -398,6 +485,12 @@ def align_regular_cut_lines(
             candidate = _translate_if_clear(best, sheet_index, axis, ids, delta, kerf_cm)
             if candidate is None:
                 diag["blocked_geometry"] = diag.get("blocked_geometry", 0) + 1
+                continue
+            if _touches_protected_cut(
+                best["sheets"][sheet_index], candidate["sheets"][sheet_index],
+                ids, eligible[sheet_index], kerf_cm,
+            ):
+                diag["blocked_protected_cut"] = diag.get("blocked_protected_cut", 0) + 1
                 continue
             attempts += 1
             round_attempts += 1
