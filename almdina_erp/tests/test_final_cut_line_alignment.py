@@ -726,3 +726,39 @@ def test_anonymized_three_board_budget_observation_not_flaky_clock_gate():
         # on any CI runner, even where the budget causes a clean no-op.
         assert len(result["sheets"]) == 3
         assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+
+
+def test_factory_budget_zero_disables_alignment_without_changing_raw_seed():
+    engine = TwoRowsEngine()
+    command = OptimizeOrderPlanCommand(
+        engine_version="budget-zero-regression", input_fingerprint="unchanged",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions(
+            "smart", "CNC Router", 10, 40, 30, 30, .09,
+            alignment_search_budget_sec=0,
+        ),
+        piece_rows=({"width_cm": 20, "length_cm": 20, "qty": 2},),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=engine)
+    placed = outcome.snapshot["sheets"][0]["pieces"]
+    assert placed[0]["x"] != pytest.approx(placed[1]["x"])
+    assert engine.original is not None
+    assert outcome.snapshot["validation"]["is_valid"]
+
+
+def test_factory_alignment_budget_metadata_and_security_contract():
+    import json
+    from pathlib import Path
+    from almdina_erp.almdina_erp.domain.security.factory_settings import (
+        FactorySettingsSection, SECTION_FIELDS,
+    )
+    path = (Path(__file__).resolve().parents[1] / "almdina_erp" /
+            "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json")
+    metadata = json.loads(path.read_text())
+    fields = {f["fieldname"]: f for f in metadata["fields"]}
+    budget = fields["alignment_search_budget_sec"]
+    assert budget["fieldtype"] == "Float"
+    assert budget["non_negative"] == 1
+    assert float(budget["default"]) > 0
+    assert "alignment_search_budget_sec" in SECTION_FIELDS[FactorySettingsSection.CUTTING]
