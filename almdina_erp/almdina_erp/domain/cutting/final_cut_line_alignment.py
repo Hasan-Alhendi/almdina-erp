@@ -212,10 +212,18 @@ def _candidate_moves(
                             if _EPS < abs(delta) and lo - _EPS <= delta <= hi + _EPS:
                                 key = (sheet_index, axis, ids, round(delta, 6))
                                 targets[key] = max(priority, targets.get(key, 0))
-    # Favor feasible shared-center events, then nearest meaningful axis shifts.
-    return sorted(targets, key=lambda k: (
-        -targets[k], abs(k[3]), k[0], k[1], k[2], k[3]
-    ))
+    # Reserve search coverage for both genuine shared-center opportunities and
+    # separated-axis opportunities; either class alone can fill the trial cap.
+    key = lambda item: (abs(item[3]), item[0], item[1], item[2], item[3])
+    shared = sorted((move for move, priority in targets.items() if priority == 2), key=key)
+    axes = sorted((move for move, priority in targets.items() if priority == 1), key=key)
+    result = []
+    while shared or axes:
+        if shared:
+            result.append(shared.pop(0))
+        if axes:
+            result.append(axes.pop(0))
+    return result
 
 
 def _translate_if_clear(
