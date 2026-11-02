@@ -164,11 +164,14 @@ def optimize_order_plan(
     plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    # A shared, finite allowance across the gallery; never extend native search.
+    alignment_deadline = time.monotonic() + min(0.15, command.optimizer.time_limit_sec * 0.025)
     raw_seeds = []
     outcome = None
     snapshots = []
     for raw in raw_candidates:
-        result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings)
+        result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings,
+                                   alignment_deadline_monotonic=alignment_deadline)
         if result.snapshot['validation']['is_valid']:
             if outcome is None:
                 outcome = result
@@ -177,7 +180,8 @@ def optimize_order_plan(
     if outcome is None:
         # Smart alternatives already own the result when any is valid. Avoid
         # projecting an unused fallback, while still validating every candidate.
-        outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings)
+        outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings,
+                                    alignment_deadline_monotonic=alignment_deadline)
     if smart:
         ranked = sorted(
             zip(snapshots, raw_seeds),
@@ -211,7 +215,8 @@ def optimize_order_plan(
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
-def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings):
+def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
+                      alignment_deadline_monotonic=None):
     """One manufacturing snapshot projection for the default and every alternative."""
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
@@ -270,6 +275,15 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"})
+        # Post-search placement refinement only; never import/approve uploaded DXF.
+        from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+        plan = align_regular_cut_lines(
+            plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+            machine_type=machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
+            deadline_monotonic=alignment_deadline_monotonic,
+        )
 
     def validate_snapshot_plan() -> list[str]:
         errors = list(
