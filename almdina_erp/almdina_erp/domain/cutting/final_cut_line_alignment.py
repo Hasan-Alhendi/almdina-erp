@@ -204,11 +204,12 @@ def _candidate_moves(
                             num(a[cross]) - num(b[cross]) - num(b[cross_size]),
                             num(b[cross]) - num(a[cross]) - num(a[cross_size]),
                         )
-                        # Distant rows/columns may share an axis, but NOT a cut.
-                        shifts = [(b0 - a0, 1), (b1 - a1, 1)]
-                        if gap <= kerf_cm + _EPS:
-                            shifts += [(b1 + kerf_cm - a0, 2),
-                                       (b0 - kerf_cm - a1, 2)]
+                        # Axis alignment moves *matching* edges only.
+                        # Closing a large inter-row gap merely to create a
+                        # touching cutter path is compaction/repacking, not
+                        # final alignment. Keep it outside this stage.
+                        priority = 2 if gap <= kerf_cm + _EPS else 1
+                        shifts = [(b0 - a0, priority), (b1 - a1, priority)]
                         for delta, priority in shifts:
                             if _EPS < abs(delta) and lo - _EPS <= delta <= hi + _EPS:
                                 key = (sheet_index, axis, ids, round(delta, 6))
