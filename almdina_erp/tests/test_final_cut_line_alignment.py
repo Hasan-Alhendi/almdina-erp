@@ -831,3 +831,39 @@ def test_protected_adjacent_piece_cannot_lose_existing_shared_cutter_center():
     assert positions[1]["x"] == pytest.approx(3)  # cannot break Glass shared contact
     assert positions[3]["x"] == pytest.approx(23.5)
     assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
+
+
+def test_smart_gallery_alignment_deadline_is_shared_fairly(monkeypatch):
+    """Every displayed alternative must get a chance at the shared tail budget."""
+    import time
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+
+    class ThreeCandidates(TwoRowsEngine):
+        def optimize(self, pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs):
+            result = super().optimize(
+                pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs
+            )
+            raw = result["smart_candidates"][0]
+            result["smart_candidates"] = [deepcopy(raw) for _ in range(3)]
+            return result
+
+    durations = []
+    def capture(plan, *args, deadline_monotonic=None, **kwargs):
+        durations.append(deadline_monotonic - time.monotonic())
+        return plan
+    monkeypatch.setattr(align, "align_regular_cut_lines", capture)
+    command = OptimizeOrderPlanCommand(
+        engine_version="gallery-budget-test", input_fingerprint="unchanged",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions(
+            "smart", "CNC Router", 10, 40, 30, 30, .09,
+            alignment_search_budget_sec=1,
+        ),
+        piece_rows=(dict(width_cm=20, length_cm=20, qty=2),),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=ThreeCandidates())
+    assert outcome.snapshot["validation"]["is_valid"]
+    assert len(durations) == 3
+    assert all(0 <= remaining <= .51 for remaining in durations)
+    assert durations[0] > .15  # first of three gets about one third, not all
