@@ -50,6 +50,7 @@ class CuttingPlan(Document):
         self.score = max(-MAX_STORED_SCORE, min(MAX_STORED_SCORE, flt(self.score)))
         self._populate_source_identity_snapshots()
         self._validate_offcut_contract()
+        self._validate_mandatory_trim()
         if self.validation_status in {"Valid", "Invalid"} and not self.validated_on:
             self.validated_on = now_datetime()
         self._enforce_snapshot_immutability()
@@ -206,6 +207,31 @@ class CuttingPlan(Document):
             piece.offcut_execution_party = decision.execution_party.value
         if self.sources:
             self.required_boards = full_board_sources
+
+    def _validate_mandatory_trim(self) -> None:
+        """Recheck new-policy geometry at the canonical save/approval boundary."""
+        try:
+            snapshot = frappe.parse_json(self.snapshot_json or "{}") or {}
+        except Exception:
+            return
+        if (not isinstance(snapshot, dict)
+                or (snapshot.get("trim_policy") or {}).get("policy") != "mandatory_minimum_v1"):
+            return
+        from almdina_erp.almdina_erp.services.export_validation_service import (
+            validate_cutting_plan_issues,
+        )
+        issues = [
+            item for item in validate_cutting_plan_issues(self)
+            if item.code == "APPLIED_TRIM_OVERFLOW"
+        ]
+        if issues:
+            from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import (
+                render_error_cards_html,
+            )
+            frappe.throw(
+                render_error_cards_html(issues, context="save"),
+                frappe.ValidationError,
+            )
 
     def _enforce_snapshot_immutability(self) -> None:
         if self.is_new() or self.flags.get("allow_status_transition"):

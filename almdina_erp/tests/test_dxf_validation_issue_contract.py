@@ -6,7 +6,12 @@ import ast
 from pathlib import Path
 from types import SimpleNamespace
 
+from almdina_erp.tests.frappe_test_stub import install_if_unavailable
+install_if_unavailable()
+
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
+    APPLIED_TRIM_OVERFLOW,
+    CATEGORY_LAYOUT,
     CUT_INVALID_GEOMETRY,
     CUT_OPEN,
     FORBIDDEN_ROTATION,
@@ -158,6 +163,26 @@ def test_presenter_rotation_is_actionable_arabic() -> None:
     assert card.target == "الدرفة 9."
     assert "59.2" in card.action
     assert "28.5" in card.action
+
+
+def test_presenter_trim_overflow_reports_proven_sheet_piece_edge_and_measurements():
+    card = present_issue(issue(
+        APPLIED_TRIM_OVERFLOW,
+        CATEGORY_LAYOUT,
+        target=piece_target(source_piece_no=9, copy_no=2),
+        params={
+            "sheet_no": 4,
+            "edge": "left",
+            "actual_margin_mm": 2.25,
+            "required_trim_mm": 5,
+        },
+    ))
+    assert "الدرفة 9" in card.target
+    assert "نسخة 2" in card.target
+    assert "اللوح 4" in card.problem
+    assert "2.25 مم" in card.problem
+    assert "اليسرى" in card.problem
+    assert "5 مم" in card.action
 
 
 def test_presenter_missing_piece_is_plain_arabic() -> None:
@@ -516,7 +541,7 @@ def test_all_declared_issue_codes_have_safe_three_question_presentations():
         and not name.startswith(("CATEGORY_", "TARGET_"))
         and name.isupper()
     )
-    assert len(catalogue) == 94
+    assert len(catalogue) == 95
 
     for code in catalogue:
         card = present_issue(issue(code, "WORKFLOW"))

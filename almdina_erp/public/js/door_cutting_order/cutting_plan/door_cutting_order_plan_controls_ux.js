@@ -243,9 +243,7 @@
         const previews = previewOwner();
         const transport = api();
         const firstPlan = !hasSystemDraft(frm);
-        const canRun = firstPlan
-            ? Boolean(transport && typeof transport.bootstrapPlan === "function")
-            : Boolean(previews && typeof previews.preview === "function");
+        const canRun = Boolean(transport && previews && typeof previews.preview === "function");
         return Boolean(
             workspaceReady(frm)
             && (firstPlan || workspaceEditing(frm))
@@ -346,15 +344,10 @@
 
         try {
             if (!hasSystemDraft(frm)) {
-                if (typeof transport.bootstrapPlan !== "function") return false;
-                await transport.bootstrapPlan(frm.doc.name, settings);
-                if (previews && typeof previews.reset === "function") previews.reset(frm);
-                await refreshWorkspaceOwners(frm);
-                frappe.show_alert({
-                    message: translate("The first cutting plan was created, saved, and the cost was updated."),
-                    indicator: "green",
-                }, 5);
-                return true;
+                const editor = window.AlmdinaPlanEditSessionUX;
+                if (!editor?.startEditing || !(await editor.startEditing(frm))) return false;
+                if (!previews?.preview) return false;
+                return Boolean(await previews.preview(frm, settings));
             }
 
             if (!previews || typeof previews.preview !== "function") return false;
@@ -526,9 +519,7 @@
             "title",
             translate(
                 recalculationDisabledReason(frm)
-                || (firstPlan
-                    ? "Create and save the first cutting plan and update the cost automatically"
-                    : "Create a temporary preview with these settings before saving the change")
+                || "Create a temporary preview with these settings before saving the change"
             )
         );
         const element = button.get(0);
@@ -569,9 +560,9 @@
                     ? "Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically."
                     : "Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.";
             } else if (can(frm, "edit_optimizer_settings")) {
-                message = "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
+                message = "Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
             } else if (can(frm, "recalculate_plan")) {
-                message = "The engine can be run again with the saved settings. Changing the algorithm, kerf, or trim needs the “Edit cutting algorithm” permission.";
+                message = "The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.";
             } else {
                 message = "You need the “Recalculate plan” permission to run the cutting plan engine.";
             }

@@ -1,0 +1,384 @@
+{
+  "300": {
+    "provenance": "System-generated native Domain baseline at 3d9e35b; reconstructed Regular-only DXF rows, all-rotation/full-board assumption; no designer placements",
+    "width": 122,
+    "height": 244,
+    "kerf": 0.5,
+    "rows": [
+      {
+        "piece_type": "Regular",
+        "width_cm": 14.4,
+        "length_cm": 127.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:1"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 14.4,
+        "length_cm": 127.8,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:2"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 14.4,
+        "length_cm": 90.0,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:3"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 86.4,
+        "length_cm": 14.4,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:4"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 91.4,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:5"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 53.6,
+        "length_cm": 29.9,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:6"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 106.3,
+        "length_cm": 53.6,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:7"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 30.0,
+        "length_cm": 138.8,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:8"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 29.9,
+        "length_cm": 138.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:9"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 29.9,
+        "length_cm": 140.4,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:10"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 29.9,
+        "length_cm": 81.4,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:11"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 29.9,
+        "length_cm": 57.2,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:12"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 48.0,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:13"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 89.9,
+        "length_cm": 29.9,
+        "qty": 6,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:14"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 48.0,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:15"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 86.4,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:16"
+      },
+      {
+        "piece_type": "Regular",
+        "width_cm": 88.1,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_instance_id": "smart:17"
+      }
+    ],
+    "method_key": "MaxRects Contact Point",
+    "complexity": 4,
+    "placements": [
+      [
+        [8, 0.0, 214.1, 53.6, 29.9, false],
+        [22, 54.1, 214.1, 48.0, 29.9, false],
+        [3, 0.0, 123.6, 14.4, 90.0, false],
+        [4, 0.0, 33.099999999999994, 14.4, 90.0, false]
+      ],
+      [
+        [24, 0.0, 214.1, 88.1, 29.9, false],
+        [17, 0.0, 123.69999999999999, 29.9, 89.9, true],
+        [18, 0.0, 33.29999999999998, 29.9, 89.9, true],
+        [19, 30.4, 123.69999999999999, 29.9, 89.9, true],
+        [20, 30.4, 33.29999999999998, 29.9, 89.9, true],
+        [21, 60.8, 123.69999999999999, 29.9, 89.9, true],
+        [23, 60.8, 36.79999999999998, 29.9, 86.4, true],
+        [13, 0.0, 2.8999999999999844, 81.4, 29.9, true],
+        [1, 91.19999999999999, 116.1, 14.4, 127.9, false],
+        [2, 106.1, 116.2, 14.4, 127.8, false],
+        [14, 91.19999999999999, 58.39999999999999, 29.9, 57.2, false],
+        [7, 91.19999999999999, 4.299999999999976, 29.9, 53.6, true]
+      ],
+      [
+        [16, 0.0, 214.1, 89.9, 29.9, false],
+        [6, 0.0, 122.19999999999999, 29.9, 91.4, true],
+        [11, 30.4, 74.69999999999999, 29.9, 138.9, false],
+        [10, 60.8, 74.79999999999998, 30.0, 138.8, false],
+        [12, 91.3, 73.19999999999999, 29.9, 140.4, false],
+        [9, 0.0, 19.099999999999987, 106.3, 53.6, false],
+        [5, 0.0, 4.199999999999994, 86.4, 14.4, false],
+        [15, 0.0, 73.69999999999999, 29.9, 48.0, true]
+      ]
+    ]
+  },
+  "3687": {
+    "provenance": "System-generated native Domain baseline at 3d9e35b; reconstructed Regular-only DXF rows, all-rotation/full-board assumption; no designer placements",
+    "width": 122.0,
+    "height": 244.0,
+    "kerf": 0.5,
+    "rows": [
+      {
+        "width_cm": 29.9,
+        "length_cm": 101.0,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:1"
+      },
+      {
+        "width_cm": 26.9,
+        "length_cm": 101.0,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:2"
+      },
+      {
+        "width_cm": 29.9,
+        "length_cm": 90.3,
+        "qty": 3,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:3"
+      },
+      {
+        "width_cm": 90.3,
+        "length_cm": 29.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:4"
+      },
+      {
+        "width_cm": 26.9,
+        "length_cm": 90.3,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:5"
+      },
+      {
+        "width_cm": 81.8,
+        "length_cm": 13.9,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:6"
+      },
+      {
+        "width_cm": 13.9,
+        "length_cm": 46.1,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:7"
+      },
+      {
+        "width_cm": 26.9,
+        "length_cm": 90.3,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:8"
+      },
+      {
+        "width_cm": 13.9,
+        "length_cm": 81.8,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:9"
+      },
+      {
+        "width_cm": 29.9,
+        "length_cm": 81.8,
+        "qty": 4,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:10"
+      },
+      {
+        "width_cm": 29.9,
+        "length_cm": 77.0,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:11"
+      },
+      {
+        "width_cm": 40.9,
+        "length_cm": 74.5,
+        "qty": 2,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:12"
+      },
+      {
+        "width_cm": 12.9,
+        "length_cm": 46.1,
+        "qty": 3,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:13"
+      },
+      {
+        "width_cm": 29.9,
+        "length_cm": 44.8,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:14"
+      },
+      {
+        "width_cm": 11.9,
+        "length_cm": 36.8,
+        "qty": 3,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:15"
+      },
+      {
+        "width_cm": 29.9,
+        "length_cm": 44.8,
+        "qty": 1,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:16"
+      },
+      {
+        "width_cm": 11.9,
+        "length_cm": 40.0,
+        "qty": 8,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:17"
+      },
+      {
+        "width_cm": 11.9,
+        "length_cm": 36.8,
+        "qty": 5,
+        "allow_rotation": 1,
+        "piece_type": "Regular",
+        "piece_instance_id": "smart:18"
+      }
+    ],
+    "method_key": "MaxRects Best Short Side",
+    "complexity": 3,
+    "placements": [
+      [
+        [13, 0.0, 217.1, 90.3, 26.9, true],
+        [21, 0.0, 175.7, 74.5, 40.9, true],
+        [40, 75.0, 204.7, 36.8, 11.9, true],
+        [41, 75.0, 192.29999999999998, 36.8, 11.9, true],
+        [42, 75.0, 179.9, 36.8, 11.9, true]
+      ],
+      [
+        [25, 0.0, 214.1, 44.8, 29.9, true],
+        [9, 0.0, 186.7, 90.3, 26.9, true],
+        [19, 90.8, 167.0, 29.9, 77.0, false],
+        [18, 0.0, 156.29999999999998, 81.8, 29.9, true],
+        [17, 82.3, 84.7, 29.9, 81.8, false],
+        [16, 0.0, 125.9, 81.8, 29.9, true],
+        [15, 0.0, 95.5, 81.8, 29.9, true],
+        [14, 0.0, 81.1, 81.8, 13.9, true],
+        [10, 82.3, 2.3999999999999915, 13.9, 81.8, true],
+        [20, 0.0, 6.099999999999994, 40.9, 74.5, false],
+        [29, 45.3, 214.1, 44.8, 29.9, true],
+        [31, 41.4, 68.69999999999999, 40.0, 11.9, true],
+        [32, 41.4, 56.29999999999999, 40.0, 11.9, true],
+        [33, 41.4, 43.899999999999984, 40.0, 11.9, true],
+        [34, 41.4, 31.49999999999998, 40.0, 11.9, true],
+        [35, 41.4, 19.099999999999973, 40.0, 11.9, true],
+        [36, 41.4, 6.6999999999999655, 40.0, 11.9, true],
+        [37, 96.7, 44.19999999999999, 11.9, 40.0, false],
+        [28, 109.10000000000001, 47.39999999999999, 11.9, 36.8, false],
+        [38, 109.10000000000001, 10.09999999999998, 11.9, 36.8, false],
+        [39, 96.7, 6.8999999999999915, 11.9, 36.8, false]
+      ],
+      [
+        [1, 0.0, 214.1, 101.0, 29.9, true],
+        [2, 0.0, 183.7, 101.0, 29.9, true],
+        [3, 0.0, 156.29999999999998, 101.0, 26.9, true],
+        [4, 0.0, 128.9, 101.0, 26.9, true],
+        [5, 0.0, 98.5, 90.3, 29.9, true],
+        [6, 90.8, 38.10000000000001, 29.9, 90.3, false],
+        [7, 0.0, 68.1, 90.3, 29.9, true],
+        [8, 0.0, 37.699999999999996, 90.3, 29.9, false],
+        [11, 101.5, 197.9, 13.9, 46.1, false],
+        [12, 101.5, 151.3, 13.9, 46.1, false],
+        [22, 0.0, 24.29999999999999, 46.1, 12.9, true],
+        [23, 0.0, 10.899999999999983, 46.1, 12.9, true],
+        [24, 46.6, 24.29999999999999, 46.1, 12.9, true],
+        [26, 93.2, 0.8000000000000256, 11.9, 36.8, false],
+        [30, 46.6, 11.899999999999983, 40.0, 11.9, true],
+        [27, 105.60000000000001, 0.8000000000000256, 11.9, 36.8, false]
+      ]
+    ]
+  }
+}

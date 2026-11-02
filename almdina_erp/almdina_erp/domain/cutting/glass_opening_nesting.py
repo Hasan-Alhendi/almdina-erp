@@ -299,6 +299,8 @@ def nest_glass_openings(
     min_remnant_width_cm: float,
     min_remnant_length_cm: float,
     min_remnant_area_m2: float,
+    guest_exclusions: frozenset[int] = frozenset(),
+    preserve_existing: bool = False,
 ) -> dict[str, Any]:
     """Compare a few complete, validated opening assignments in one budget."""
     from copy import deepcopy
@@ -320,7 +322,8 @@ def nest_glass_openings(
         candidate = _nest_glass_openings(deepcopy(baseline), pieces, board_w_cm, board_h_cm, kerf_cm,
             machine_type=machine_type, time_limit_sec=time_limit_sec,
             min_remnant_width_cm=min_remnant_width_cm, min_remnant_length_cm=min_remnant_length_cm,
-            min_remnant_area_m2=min_remnant_area_m2, assignment_options=assignment_options,
+            min_remnant_area_m2=min_remnant_area_m2, assignment_options={**assignment_options,
+                "excluded_guest_ids": guest_exclusions, "preserve_existing": preserve_existing},
             deadline=time.monotonic() + remaining / (len(variants) - index))
         if best is None or _candidate_is_better(candidate, best):
             best = candidate
@@ -367,10 +370,11 @@ def _nest_glass_openings(
         return _finish(baseline, outcome="no_budget")
     started = time.monotonic()
     assignment_options = {**assignment_options, "deadline": started + budget}
-    openings = _openings(baseline, kerf_cm)
+    openings = _openings(baseline, kerf_cm, respect_existing=bool(assignment_options.get("preserve_existing")))
     if not openings:
         return _finish(baseline, outcome="no_openings", openings_found=0)
-    selected = _select_guests(pieces, openings, kerf_cm, **assignment_options)
+    assignments: list[dict[str, Any]] = []
+    selected = _select_guests(pieces, openings, kerf_cm, assignment_records=assignments, **assignment_options)
     selected_ids = [int(piece["id"]) for piece in selected]
     if not selected:
         return _finish(
@@ -464,7 +468,7 @@ def _nest_glass_openings(
 
     direct_source = _without_guests(baseline, selected_id_set)
     try:
-        direct_placed = _place_guests(direct_source, selected, kerf_cm, **assignment_options)
+        direct_placed = _place_guests(direct_source, selected, kerf_cm, assignments=assignments, **assignment_options)
     except GlassOpeningError:
         direct_placed = None
     accepted, failure = _prepare(direct_placed)
@@ -476,6 +480,14 @@ def _nest_glass_openings(
     expired = _expired(accepted if failure == "accepted" else None)
     if expired is not None:
         return expired
+    if assignment_options.get("preserve_existing"):
+        # Joint exploration already owns rigid groups. Repacking source pieces
+        # here would silently discard those proven shape/host assignments.
+        return _finish(accepted if accepted is not None else baseline,
+            outcome="accepted" if accepted is not None else failure,
+            candidate_rank=tuple(accepted.get("industrial_rank") or ()) if accepted else None,
+            candidate_nested_count=nested_piece_count(accepted) if accepted else nested_piece_count(baseline),
+            **context)
 
     remainder = [piece for piece in pieces if int(piece["id"]) not in selected_id_set]
     repack_plan: dict[str, Any] | None = None
@@ -528,7 +540,7 @@ def _nest_glass_openings(
     )
 
 
-def _openings(plan: Mapping[str, Any], kerf_cm: float) -> list[dict[str, Any]]:
+def _openings(plan: Mapping[str, Any], kerf_cm: float, *, respect_existing: bool = False) -> list[dict[str, Any]]:
     openings: list[dict[str, Any]] = []
     for sheet in plan.get("sheets") or []:
         for placed in sheet.get("pieces") or []:
@@ -538,12 +550,17 @@ def _openings(plan: Mapping[str, Any], kerf_cm: float) -> list[dict[str, Any]]:
             usable = _inset(hole, _edge_gap(kerf_cm))
             if usable["w"] <= _GEOMETRY_TOLERANCE_CM or usable["h"] <= _GEOMETRY_TOLERANCE_CM:
                 continue
+            sheet_pieces = sheet.get("pieces") or []
+            occupied = [{"x": num(p.get("x"))-usable["x"], "y": num(p.get("y"))-usable["y"],
+                         "w": num(p.get("w")), "h": num(p.get("h"))}
+                        for p in sheet_pieces if _declared_host_id(p) == _piece_id(placed)] if respect_existing else []
             openings.append(
                 {
                     "host_id": int(placed["id"]),
                     "sheet_no": sheet.get("sheet_no"),
                     "usable": usable,
-                    "depth": 0,
+                    "depth": _nesting_depth(placed, sheet_pieces) if respect_existing else 0,
+                    "occupied": occupied,
                 }
             )
     openings.sort(
@@ -559,40 +576,48 @@ def _select_guests(
     pieces: list[dict[str, Any]],
     openings: list[dict[str, Any]],
     kerf_cm: float,
+    assignment_records: list[dict[str, Any]] | None = None,
     **assignment_options: Any,
 ) -> list[dict[str, Any]]:
     eligible = [piece for piece in pieces if guest_is_eligible(piece)]
-    return [
-        assignment["guest"]
-        for assignment in _assign_into_openings(eligible, openings, kerf_cm, **assignment_options)
-    ]
+    assignments = _assign_into_openings(eligible, openings, kerf_cm, **assignment_options)
+    if assignment_records is not None:
+        assignment_records.extend(assignments)
+    return [assignment["guest"] for assignment in assignments]
 
 
 def _place_guests(
     plan: dict[str, Any],
     guests: list[dict[str, Any]],
     kerf_cm: float,
+    assignments: list[dict[str, Any]] | None = None,
     **assignment_options: Any,
 ) -> dict[str, Any] | None:
-    openings = _openings(plan, kerf_cm)
+    openings = _openings(plan, kerf_cm, respect_existing=bool(assignment_options.get("preserve_existing")))
     if not openings:
         return None
-    assignments = _assign_into_openings(guests, openings, kerf_cm, **assignment_options)
+    if assignments is None:
+        assignments = _assign_into_openings(guests, openings, kerf_cm, **assignment_options)
     if len(assignments) != len(guests):
         return None
-    sheets = {
-        sheet.get("sheet_no"): sheet for sheet in plan.get("sheets") or []
-    }
     for assignment in assignments:
         opening = assignment["opening"]
         local = assignment["local"]
-        sheet = sheets.get(opening["sheet_no"])
-        if sheet is None:
+        # Keep the proven guest→host choice. A nested Glass host may itself
+        # have moved; resolve its live opening instead of re-running First Fit.
+        found = next(((sheet, host) for sheet in plan.get("sheets") or []
+                      for host in sheet.get("pieces") or [] if _piece_id(host) == opening["host_id"]), None)
+        if found is None:
             return None
+        sheet, host = found
+        hole = opening_board_rect(host)
+        if hole is None:
+            return None
+        usable = _inset(hole, _edge_gap(kerf_cm))
         placed = make_placed_piece(
             assignment["guest"],
-            opening["usable"]["x"] + local["x"],
-            opening["usable"]["y"] + local["y"],
+            usable["x"] + local["x"],
+            usable["y"] + local["y"],
             local["w"],
             local["h"],
             bool(local["rotated"]),
@@ -611,6 +636,8 @@ def _assign_into_openings(
     small_openings_first: bool = False,
     guest_order: str = "area",
     deadline: float | None = None,
+    excluded_guest_ids: frozenset[int] = frozenset(),
+    preserve_existing: bool = False,
 ) -> list[dict[str, Any]]:
     """Greedy largest-first placement. A nested Glass publishes its opening."""
 
@@ -618,7 +645,7 @@ def _assign_into_openings(
     if small_openings_first:
         working.sort(key=lambda opening: (opening["usable"]["w"] * opening["usable"]["h"], opening["host_id"]))
     occupancy: dict[int, list[dict[str, float]]] = {
-        opening["host_id"]: [] for opening in working
+        opening["host_id"]: list(opening.get("occupied") or []) if preserve_existing else [] for opening in working
     }
     ordered = sorted(
         guests,
@@ -630,6 +657,8 @@ def _assign_into_openings(
     )
     assignments: list[dict[str, Any]] = []
     for guest in ordered:
+        if _piece_id(guest) in excluded_guest_ids:
+            continue
         if deadline is not None and time.monotonic() >= deadline:
             break
         placed_into = None

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, Develop, develop]
   pull_request:
-    branches: [main, Develop, develop]
+    branches: [main, Develop, develop, fix/cutting-best-valid-plan]
 
 permissions:
   contents: read
@@ -241,11 +241,23 @@ jobs:
             almdina_erp/tests/test_deferred_saw_center_paths.py \
             almdina_erp/tests/test_cutter_center_paths.py \
             almdina_erp/tests/test_corner_dxf_edge_binding.py \
+            almdina_erp/tests/test_mixed_corner_dxf_identity.py \
             almdina_erp/tests/test_regular_machining_orientation.py \
             almdina_erp/tests/test_strict_regular_machining_rotation.py \
             almdina_erp/tests/test_arabic_operator_localization.py \
             almdina_erp/tests/test_compact_invoice_print_contract.py \
             almdina_erp/tests/test_advanced_cutting_optimizer.py \
+            almdina_erp/tests/test_smart_cutting_search.py \
+            almdina_erp/tests/test_direct_kerf_research.py \
+            almdina_erp/tests/test_same_count_layout_quality.py \
+            almdina_erp/tests/test_board_regrouping.py \
+            almdina_erp/tests/test_smart_plan_portfolio.py \
+            almdina_erp/tests/test_joint_nesting.py \
+            almdina_erp/tests/test_geometry_first_nesting.py \
+            almdina_erp/tests/test_smart_cutting_manufacturing.py \
+            almdina_erp/tests/test_smart_cutting_lifecycle.py \
+            almdina_erp/tests/test_almadina_136_cutting_catalog_contract.py \
+            almdina_erp/tests/test_almadina_137_plan_settings_contract.py \
             almdina_erp/tests/test_cutting_shape_search.py \
             almdina_erp/tests/test_cutting_industrial_gaps.py \
             almdina_erp/tests/test_liner_geometry.py \
@@ -290,6 +302,8 @@ jobs:
           node almdina_erp/tests/js/cost_workspace_document_version.test.js
           node almdina_erp/tests/js/offcut_cost_preview_projection.test.js
           node almdina_erp/tests/js/plan_preview_cost_reconcile.test.js
+          node almdina_erp/tests/js/plan_edit_session_lifecycle.test.js
+          node almdina_erp/tests/js/plan_candidate_gallery.test.js
           node almdina_erp/tests/js/plan_preview_state_ownership.test.js
           node almdina_erp/tests/js/plan_preview_save_phase_lock.test.js
           node almdina_erp/tests/js/plan_cost_workspace_visual.test.js

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
@@ -132,6 +132,11 @@ def normalize_plan_settings(
         kerf_mm=kerf,
         preferred_trim_mm=preferred_trim,
     )
+
+
+def settings_for_system_search(settings: PlanSettings) -> PlanSettings:
+    """Server-owned policy for new System work; never apply on historical reads."""
+    return replace(settings, optimization_mode="smart")
 
 
 def canonical_default_plan_settings() -> PlanSettings:

@@ -203,18 +203,19 @@ def _fixed_dxf_snapshot(*positions_mm):
     }
 
 
-def test_fixed_dxf_applied_trim_is_independent_by_sheet_and_axis():
+def test_fixed_dxf_applied_trim_uses_the_same_mandatory_minimum_on_each_sheet():
     from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
         apply_adaptive_trim_to_fixed_dxf_layout,
     )
 
-    physical = _fixed_dxf_snapshot((0, 10), (10, 3), (1, 0))
+    physical = _fixed_dxf_snapshot((5, 10), (10, 10), (10, 5))
     result = apply_adaptive_trim_to_fixed_dxf_layout(physical, preferred_trim_mm=5)
     actual = [
         (s["applied_trim_width_cm"], s["applied_trim_length_cm"])
         for s in result["sheets"]
     ]
-    for measured, expected in zip(actual, [(0, 0.5), (0.5, 0.3), (0.1, 0)]):
+    for measured in actual:
+        expected = (0.5, 0.5)
         assert measured == pytest.approx(expected)
     for original, adjusted in zip(physical["sheets"], result["sheets"]):
         p, q = original["pieces"][0], adjusted["pieces"][0]
@@ -222,18 +223,17 @@ def test_fixed_dxf_applied_trim_is_independent_by_sheet_and_axis():
         assert q["y"] + adjusted["applied_trim_length_cm"] == pytest.approx(p["y"])
 
 
-def test_fixed_dxf_trim_refinement_never_shifts_material_outside_usable_frame():
+def test_fixed_dxf_rejects_material_inside_less_than_the_requested_minimum():
     from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import (
         apply_adaptive_trim_to_fixed_dxf_layout,
     )
 
-    # 1.995 mm physically available; 2.0 mm is not geometrically possible.
-    result = apply_adaptive_trim_to_fixed_dxf_layout(
-        _fixed_dxf_snapshot((1.995, 10)), preferred_trim_mm=5,
-    )
-    s = result["sheets"][0]
-    assert s["pieces"][0]["x"] >= -1e-8
-    assert s["applied_trim_width_cm"] <= 0.1995 + 1e-8
+    # The uploaded layout is fixed; 1.995 mm cannot satisfy a 5 mm minimum.
+    from almdina_erp.almdina_erp.domain.cutting.dxf_applied_trim import DxfAppliedTrimError
+    with pytest.raises(DxfAppliedTrimError):
+        apply_adaptive_trim_to_fixed_dxf_layout(
+            _fixed_dxf_snapshot((1.995, 10)), preferred_trim_mm=5,
+        )
 
 
 @pytest.mark.parametrize("usable_mm,x_mm,expected_trim,invalid", [
@@ -434,12 +434,12 @@ def _strict_boundary_import(path, *, count):
 def test_strict_uploaded_dxf_retains_trim_per_sheet_through_real_parser(tmp_path):
     path = tmp_path / "two-physical-boards.dxf"
     _write_adaptive_boundary_dxf(
-        path, sheets_and_pieces=[(0, 0, 0), (1400, 10, 10)],
+        path, sheets_and_pieces=[(0, 5, 5), (1400, 10, 10)],
     )
     snapshot = _strict_boundary_import(path, count=2)
     assert snapshot["saw_center_status"] == "Absent"
-    assert [s["applied_trim_width_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
-    assert [s["applied_trim_length_cm"] for s in snapshot["sheets"]] == pytest.approx([0, 0.5])
+    assert [s["applied_trim_width_cm"] for s in snapshot["sheets"]] == pytest.approx([0.5, 0.5])
+    assert [s["applied_trim_length_cm"] for s in snapshot["sheets"]] == pytest.approx([0.5, 0.5])
 
 
 def test_import_persistence_adapter_reload_and_export_preserve_physical_positions(tmp_path, monkeypatch):
@@ -465,7 +465,7 @@ def test_import_persistence_adapter_reload_and_export_preserve_physical_position
             return None
 
     path = tmp_path / "persisted-frames.dxf"
-    _write_adaptive_boundary_dxf(path, sheets_and_pieces=[(0, 0, 0), (1400, 10, 3)])
+    _write_adaptive_boundary_dxf(path, sheets_and_pieces=[(0, 5, 5), (1400, 10, 10)])
     snapshot = _strict_boundary_import(path, count=2)
     order = order_for([(20, 30, 2)])
     order.pieces = [DefaultFields(**vars(row)) for row in order.pieces]
@@ -494,7 +494,7 @@ def test_import_persistence_adapter_reload_and_export_preserve_physical_position
 
 
 @pytest.mark.parametrize("with_saw_paths", [False, True])
-def test_uploaded_finished_material_at_edge_allows_safe_external_saw_centers(
+def test_uploaded_material_inside_requested_margin_is_rejected_even_with_safe_saw_centers(
     tmp_path, with_saw_paths,
 ):
     path = tmp_path / "near-boundary.dxf"
@@ -504,10 +504,9 @@ def test_uploaded_finished_material_at_edge_allows_safe_external_saw_centers(
     )
     if with_saw_paths:
         assert min(p[0] for segment in centers for p in segment) == pytest.approx(-1.5)
-    snapshot = _strict_boundary_import(path, count=1)
-    assert snapshot["saw_center_status"] == ("Present" if with_saw_paths else "Absent")
-    assert snapshot["sheets"][0]["applied_trim_width_cm"] == pytest.approx(0.1)
-    assert snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(0)
+    with pytest.raises(DxfImportError) as error:
+        _strict_boundary_import(path, count=1)
+    assert "APPLIED_TRIM_OVERFLOW" in error.value.codes
 
 
 

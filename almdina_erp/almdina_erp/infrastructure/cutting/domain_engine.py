@@ -31,6 +31,8 @@ class DomainCuttingEngineAdapter:
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
         mirroring_allowed: bool = False,
+        seed_plans: tuple[dict[str, Any], ...] = (),
+        search_round: int = 0,
     ) -> dict[str, Any]:
         plan = optimize_plan(
             pieces,
@@ -45,6 +47,7 @@ class DomainCuttingEngineAdapter:
             min_remnant_length_cm=min_remnant_length_cm,
             min_remnant_area_m2=min_remnant_area_m2,
             mirroring_allowed=mirroring_allowed,
+            seed_plans=seed_plans, search_round=search_round,
         )
         plan["kerf_cm"] = max(0.0, float(kerf_cm or 0))
         return plan

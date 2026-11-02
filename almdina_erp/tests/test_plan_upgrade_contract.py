@@ -218,8 +218,16 @@ class TestUpgradeContract(unittest.TestCase):
         from almdina_erp.almdina_erp.domain.cutting.catalog import OPTIMIZATION_MODES, LEGACY_ENGINE_MODES
         from almdina_erp.almdina_erp.infrastructure.frappe.historical_plan_piece_reader import historical_plan_settings
         _, _, plan = golden_case()
-        modes = [mode.id for mode in OPTIMIZATION_MODES]
-        modes += [mode.engine_mode for mode in OPTIMIZATION_MODES if mode.engine_mode]
+        # Smart never existed in the frozen v2/v3 historical adapter. Keep all
+        # reviewed modes covered and explicitly prove the new mode fails closed.
+        reviewed = [mode for mode in OPTIMIZATION_MODES if mode.id != "smart"]
+        from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import PlanFingerprintContractError
+        for new_mode in ("smart", "Smart Search"):
+            plan.optimization_mode = new_mode
+            with self.assertRaises(PlanFingerprintContractError):
+                historical_plan_settings(plan)
+        modes = [mode.id for mode in reviewed]
+        modes += [mode.engine_mode for mode in reviewed if mode.engine_mode]
         modes += list(LEGACY_ENGINE_MODES)
         for mode in modes:
             plan.optimization_mode = mode

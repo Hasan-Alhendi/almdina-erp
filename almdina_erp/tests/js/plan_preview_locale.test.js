@@ -52,7 +52,7 @@ const french = {
     "The cutting plan save could not be confirmed. Check the saved plan, then create a new preview.": "Enregistrement non confirmé.",
     "The plan was verified on the server after its save response was lost.": "Plan confirmé sur le serveur.",
     "Recalculate with the current settings": "Recalculer avec les réglages actuels",
-    "Press “Edit” to try algorithms and settings. Recalculation creates a preview, and the change is not saved until you press “Save”.": "Appuyez sur Modifier.",
+    "Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.": "Appuyez sur Modifier.",
     "Auto Pro (recommended)": "Auto Pro recommandé",
     "MaxRects Best Short Side": "MaxRects côté court",
     "Expected plan cost": "Coût prévu du plan",
@@ -226,7 +226,7 @@ context.window.AlmdinaPlanWorkspaceAPI = {
         return { exact_preview_commit: true, committed_preview_id: previewId,
             name, cutting_plan: "CP-1", plan_revision: 1,
             plan_source_type: "System", plan_status: "Draft",
-            packing_mode: "auto_pro", cutting_machine_type: "Panel Saw", kerf_mm: 0,
+            packing_mode: "smart", cutting_machine_type: "Panel Saw", kerf_mm: 0,
             trim_margin_mm: 0, optimization_time_limit_sec: 0 };
     },
 };
@@ -314,7 +314,7 @@ assert.equal(ready.status, "ready");
 assert.equal(ready.previewId, "PV-1");
 assert.equal(apiCalls[0].method, "preview");
 assert.equal(apiCalls[0].name, "DCO-1");
-assert.deepEqual(apiCalls[0].settings, settings);
+assert.deepEqual(apiCalls[0].settings, { ...settings, packing_mode: "smart" });
 assert.equal(session.invalidate(order), true);
 assert.equal(session.snapshot(order).status, "stale");
 assert.equal(session.snapshot(order).previewId, null);
@@ -369,7 +369,7 @@ presenter.renderPreviewPlan(traced, {
         },
     },
 }, true);
-assert.match(summary.html, /Auto Pro recommandé/);
+assert.doesNotMatch(summary.html, /Auto Pro recommandé/, "the requested algorithm is internal");
 assert.match(summary.html, /بيانات عشوائية/);
 assert.match(summary.html, /سبب غير معروف/);
 assert.match(summary.html, /MaxRects côté court/);

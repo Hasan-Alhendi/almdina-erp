@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 from copy import deepcopy
+from itertools import combinations
 from typing import Any
 
 from .primitives import (
@@ -26,6 +27,9 @@ from .primitives import (
 
 
 _MAX_REMNANT_ATTEMPTS = 12
+_MAX_WHOLE_REPACK_ATTEMPTS = 16
+_MAX_REPACK_ATTEMPTS = 64
+_MAX_REPACK_PIECES = 64
 _LOCKED_PIECE_TYPES = frozenset({"Clipped Corner", "L-Shaped Corner", "Glass"})
 _PRESERVED_PLAN_KEYS = (
     "method_key",
@@ -101,6 +105,19 @@ def improve_plan_search(
         for key in _PRESERVED_PLAN_KEYS:
             if key in plan and key not in best:
                 best[key] = plan[key]
+    # A receiving board may have enough material capacity but no current slot.
+    # Re-form a bounded regular-piece neighborhood before optimizing offcuts.
+    for candidate in _repacked_board_candidates(
+        best, pieces, board_w_cm, board_h_cm, kerf_cm, deadline_monotonic,
+    ):
+        accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metric_kwargs,
+            enrich_plan_metrics=enrich_plan_metrics, validate_plan=validate_plan,
+            permission_errors=placement_permission_errors, is_better=_candidate_is_better,
+            deadline=deadline_monotonic)
+        if accepted is not None:
+            best = accepted
+            break
     # Compact a bounded number of loose pieces/rigid nests even on one board.
     # Every accepted shift must improve the existing industrial contract.
     for candidate in _compaction_candidates(best, kerf_cm, board_w_cm, board_h_cm, deadline_monotonic):
@@ -173,6 +190,295 @@ def improve_plan_search(
         permission_errors=placement_permission_errors,
         is_better=_candidate_is_better,
     )
+
+
+def regular_board_floor_proven(plan, pieces, board_w_cm, board_h_cm):
+    """A valid all-full-board rectangular plan cannot lose another board."""
+    sheets = plan.get("sheets") or []
+    return (board_w_cm > 0 and board_h_cm > 0 and len(sheets) > 1
+        and not plan.get("unplaced") and bool(pieces)
+        and all((p.get("piece_type") or "Regular") == "Regular"
+            and (p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD" for p in pieces)
+        and not _locked_piece_ids(plan)
+        and all((s.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+            and all((p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+                    and (p.get("piece_type") or "Regular") == "Regular"
+                    and not p.get("geometry") and not p.get("overlays")
+                    for p in s.get("pieces") or []) for s in sheets)
+        and sum(num(p.get("width_cm"))*num(p.get("length_cm")) for p in pieces)
+            > (len(sheets)-1)*board_w_cm*board_h_cm + 1e-9)
+
+
+def _regular_layout_quality(plan, kerf_cm):
+    """Exact adjacency fraction and repeated-size board splits; no score."""
+    aligned = adjacent = 0
+    sizes = {}
+    for sheet_index, sheet in enumerate(plan.get("sheets") or []):
+        placed = sheet.get("pieces") or []
+        for index, piece in enumerate(placed):
+            size = tuple(sorted((round(num(piece.get("w")), 6), round(num(piece.get("h")), 6))))
+            sizes.setdefault(size, set()).add(sheet_index)
+            for other in placed[index+1:]:
+                dx = max(other["x"]-piece["x"]-piece["w"], piece["x"]-other["x"]-other["w"])
+                dy = max(other["y"]-piece["y"]-piece["h"], piece["y"]-other["y"]-other["h"])
+                if (abs(dx-kerf_cm) <= 1e-6 and dy < 0) or (abs(dy-kerf_cm) <= 1e-6 and dx < 0):
+                    adjacent += 1
+                    axis, extent = ("y", "h") if abs(dx-kerf_cm) <= 1e-6 else ("x", "w")
+                    aligned += int(abs(piece[axis]-other[axis]) <= 1e-6 or
+                        abs(piece[axis]+piece[extent]-other[axis]-other[extent]) <= 1e-6)
+    return aligned, max(1, adjacent), sum(len(boards)-1 for boards in sizes.values())
+
+
+def improve_same_count_layout(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs, deadline):
+    """At most three dense regular-board pairs; no cancellation/shape policy change."""
+    if machine_type not in {"Auto", "CNC Router"} or time.monotonic() >= deadline:
+        return plan
+    if not regular_board_floor_proven(plan, pieces, board_w_cm, board_h_cm):
+        return plan
+    from .evaluation import placement_permission_errors, validate_plan
+    from .optimizer import _run_preordered_method, order_pieces, enrich_plan_metrics, _candidate_is_better
+
+    source = {int(p["id"]): p for p in pieces}
+    locked = _locked_piece_ids(plan)
+    eligible = [(i, s) for i, s in enumerate(plan["sheets"]) if s.get("pieces") and all(
+        int(p["id"]) in source and int(p["id"]) not in locked for p in s["pieces"])]
+    # Preserve the sparse remnant board where possible; organize dense pairs first.
+    eligible.sort(key=lambda item: -sum(num(p.get("w"))*num(p.get("h")) for p in item[1]["pieces"]))
+    best = plan
+    before = _regular_layout_quality(plan, kerf_cm)
+    attempts = 0
+    for left in range(min(3, len(eligible))):
+        for right in range(left+1, min(3, len(eligible))):
+            if attempts >= 3 or time.monotonic() >= deadline:
+                return best
+            i, first = eligible[left]
+            j, second = eligible[right]
+            subset = [source[int(p["id"])] for sheet in (first, second) for p in sheet["pieces"]]
+            if len(subset) > _MAX_REPACK_PIECES:
+                continue
+            attempts += 1
+            packed = _run_preordered_method(order_pieces(subset, "long_side_desc"), subset,
+                board_w_cm, board_h_cm, kerf_cm, "MaxRects Contact Point", "long_side_desc")
+            if packed.get("unplaced") or len(packed.get("sheets") or []) != 2:
+                continue
+            candidate = deepcopy(plan)
+            for index, sheet in zip((i, j), packed["sheets"]):
+                candidate["sheets"][index]["pieces"] = sheet["pieces"]
+                for cache in ("free_rects", "skyline", "shelves"):
+                    candidate["sheets"][index].pop(cache, None)
+            after = _regular_layout_quality(candidate, kerf_cm)
+            alignment_change = after[0]*before[1] - before[0]*after[1]
+            if alignment_change < 0 or after[2] > before[2] or (alignment_change == 0 and after[2] == before[2]):
+                continue
+            accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+                machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metric_kwargs,
+                enrich_plan_metrics=enrich_plan_metrics, validate_plan=validate_plan,
+                permission_errors=placement_permission_errors, is_better=_candidate_is_better, deadline=deadline)
+            if accepted is not None and time.monotonic() < deadline:
+                best = accepted
+    return best
+
+
+def improve_board_regrouping(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs, deadline, candidate_callback=None):
+    """Experimental final-tail regrouping of a validated incumbent.
+
+    No extra time is reserved. Completed improvements are published immediately
+    so a later timed-out proposal cannot erase earlier verified work. This is
+    deliberately opt-in at the Smart caller, pending the paired adoption gates.
+    """
+    if (machine_type not in {"Auto", "CNC Router"} or plan.get("unplaced")
+            or time.monotonic() >= deadline):
+        return plan
+    from .evaluation import placement_permission_errors, validate_plan
+    from .optimizer import _candidate_is_better, enrich_plan_metrics
+
+    best = plan
+    for candidate in _regrouped_board_candidates(
+        plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline,
+    ):
+        if time.monotonic() >= deadline:
+            break
+        accepted = _accept_candidate(candidate, best, pieces, board_w_cm, board_h_cm, kerf_cm,
+            machine_type=machine_type, mirroring_allowed=mirroring_allowed,
+            metric_kwargs=metric_kwargs, enrich_plan_metrics=enrich_plan_metrics,
+            validate_plan=validate_plan, permission_errors=placement_permission_errors,
+            is_better=_candidate_is_better, deadline=deadline)
+        if accepted is not None and time.monotonic() < deadline:
+            best = accepted
+            if candidate_callback is not None:
+                candidate_callback(best)
+    return best
+
+
+def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
+    """At most 24 native packs over small, whole regular-board neighborhoods.
+
+    Packing uses the original source objects for identities, machining and
+    transform permissions. Protected sheets stay intact; no partial insertion
+    can escape. Proposals still require whole-plan industrial validation.
+    """
+    from .optimizer import _run_preordered_method, order_pieces
+
+    if time.monotonic() >= deadline:
+        return
+    source = {int(piece["id"]): piece for piece in pieces}
+    locked = _locked_piece_ids(plan)
+    eligible = []
+    for sheet in plan.get("sheets") or []:
+        if ((sheet.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                or not sheet.get("pieces")):
+            continue
+        if all(int(piece["id"]) in source and int(piece["id"]) not in locked
+            and all((item.get("piece_type") or "Regular") == "Regular"
+                and (item.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+                and not item.get("geometry") and not item.get("overlays")
+                and not item.get("placement_outline_cm")
+                and not item.get("special_shape_geometry_json")
+                for item in (piece, source[int(piece["id"])]))
+            for piece in sheet["pieces"]):
+            eligible.append(sheet)
+    eligible.sort(key=lambda sheet: (len(sheet["pieces"]),
+        sum(num(piece.get("area_m2")) for piece in sheet["pieces"]), sheet["sheet_no"]))
+    neighborhoods = [combo for count in (2, 3) for combo in combinations(eligible[:4], count)
+        if sum(len(sheet["pieces"]) for sheet in combo) <= _MAX_REPACK_PIECES]
+    neighborhoods.sort(key=lambda combo: (sum(len(sheet["pieces"]) for sheet in combo), len(combo)))
+    attempts = 0
+    for combo in neighborhoods[:3]:
+        subset = [source[piece_id] for piece_id in sorted(
+            int(piece["id"]) for sheet in combo for piece in sheet["pieces"])]
+        sheet_numbers = {sheet["sheet_no"] for sheet in combo}
+        for ordering in ("long_side_desc", "area_desc", "short_side_desc"):
+            for method in ("MaxRects Bottom Left", "MaxRects Contact Point",
+                           "MaxRects Best Short Side", "MaxRects Best Area"):
+                if attempts >= 24 or time.monotonic() >= deadline:
+                    return
+                attempts += 1
+                packed = _run_preordered_method(order_pieces(subset, ordering), subset,
+                    board_w_cm, board_h_cm, kerf_cm, method, ordering)
+                if (packed.get("unplaced") or not packed.get("sheets")
+                        or len(packed["sheets"]) > len(combo)):
+                    continue
+                candidate = deepcopy(plan)
+                kept = [sheet for sheet in candidate["sheets"] if sheet["sheet_no"] not in sheet_numbers]
+                # Keep full-board metadata while replacing packing caches and
+                # placements. Unselected sheets are copied without alterations.
+                replacements = []
+                for old, new in zip(combo, packed["sheets"]):
+                    replacement = deepcopy(old)
+                    for cache in ("free_rects", "skyline", "shelves"):
+                        replacement.pop(cache, None)
+                    replacement.update(new)
+                    replacements.append(replacement)
+                candidate["sheets"] = kept + replacements
+                for number, sheet in enumerate(candidate["sheets"], 1):
+                    sheet["sheet_no"] = number
+                if time.monotonic() >= deadline:
+                    return
+                yield candidate
+
+
+def _repacked_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
+    """Try cancelling a board by re-packing one receiving board with its pieces.
+
+    Source objects preserve identity, permissions and machining. Irregular,
+    nested and OFFCUT pieces stay on their existing paths. Every result still
+    passes the normal whole-plan acceptance gate; this only generates proposals.
+    """
+    from .optimizer import _run_preordered_method, order_pieces
+
+    source = {int(p["id"]): p for p in pieces}
+    locked = _locked_piece_ids(plan)
+    sheets = list(plan.get("sheets") or [])
+    if len(sheets) < 2:
+        return
+    if all((p.get("piece_type") or "Regular") == "Regular"
+           and (p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD" for p in pieces) and sum(
+        num(p.get("width_cm"))*num(p.get("length_cm")) for p in pieces
+    ) > (len(sheets)-1)*board_w_cm*board_h_cm + 1e-9:
+        return  # Material area already proves that another board cannot go.
+    eligible = [s for s in sheets if s.get("pieces") and all(
+        int(p["id"]) in source and int(p["id"]) not in locked
+        and (source[int(p["id"])].get("piece_type") or "Regular") == "Regular"
+        and (source[int(p["id"])].get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+        and (p.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+        for p in s["pieces"])]
+    eligible.sort(key=lambda s: (len(s["pieces"]), sum(num(p.get("area_m2")) for p in s["pieces"])))
+    attempts = 0
+
+    def pack_one(subset, orderings):
+        nonlocal attempts
+        if len(subset) > _MAX_REPACK_PIECES or sum(
+            num(p.get("width_cm"))*num(p.get("length_cm")) for p in subset
+        ) > board_w_cm*board_h_cm + 1e-9:
+            return None
+        for ordering in orderings:
+            sequence = order_pieces(subset, ordering)
+            for method in ("MaxRects Contact Point", "MaxRects Best Short Side", "MaxRects Best Area", "MaxRects Bottom Left"):
+                if time.monotonic() >= deadline or attempts >= _MAX_REPACK_ATTEMPTS:
+                    return None
+                attempts += 1
+                packed = _run_preordered_method(sequence, subset, board_w_cm, board_h_cm,
+                    kerf_cm, method, ordering)
+                if not packed.get("unplaced") and len(packed.get("sheets") or []) == 1:
+                    return packed["sheets"][0]
+        return None
+
+    def renumber(candidate):
+        for number, sheet in enumerate(candidate["sheets"], 1):
+            sheet["sheet_no"] = number
+        return candidate
+
+    # Try the whole victim first, reserving work for distributed reinsertion.
+    attempted = set()
+    for victim in eligible[:3]:
+        for target in eligible[:4]:
+            if time.monotonic() >= deadline:
+                return
+            if victim is target or attempts >= _MAX_WHOLE_REPACK_ATTEMPTS:
+                continue
+            pair = frozenset((victim["sheet_no"], target["sheet_no"]))
+            if pair in attempted:
+                continue
+            attempted.add(pair)
+            subset = [source[int(p["id"])] for s in (target, victim) for p in s["pieces"]]
+            packed = pack_one(subset, ("area_desc", "long_side_desc"))
+            if packed is not None:
+                candidate = deepcopy(plan)
+                candidate["sheets"] = [s for s in candidate["sheets"] if s["sheet_no"] not in pair]
+                candidate["sheets"].append(packed)
+                yield renumber(candidate)
+
+    # Several victim pieces can require different receiving boards. Re-pack
+    # only the receiving board of each insertion, committing nothing partially.
+    eligible_numbers = {s["sheet_no"] for s in eligible[:4]}
+    for victim in eligible[:3]:
+        moving = sorted(victim["pieces"], key=lambda p: -num(p.get("area_m2")))
+        for reverse in (False, True):
+            candidate = deepcopy(plan)
+            candidate["sheets"] = [s for s in candidate["sheets"] if s["sheet_no"] != victim["sheet_no"]]
+            targets = sorted(candidate["sheets"], key=lambda s: sum(num(p.get("area_m2")) for p in s["pieces"]),
+                reverse=reverse)
+            for piece in moving:
+                inserted = False
+                for target in targets:
+                    if time.monotonic() >= deadline or attempts >= _MAX_REPACK_ATTEMPTS:
+                        return
+                    if target["sheet_no"] not in eligible_numbers:
+                        continue
+                    subset = [source[int(p["id"])] for p in target["pieces"]]+[source[int(piece["id"])]]
+                    packed = pack_one(subset, ("area_desc", "long_side_desc", "width_desc", "length_desc"))
+                    if packed is not None:
+                        target["pieces"] = packed["pieces"]
+                        for key in ("free_rects", "skyline", "shelves"):
+                            target.pop(key, None)
+                        inserted = True
+                        break
+                if not inserted:
+                    break
+            else:
+                yield renumber(candidate)
 
 
 def _compaction_candidates(plan, kerf_cm, board_w_cm, board_h_cm, deadline):
@@ -371,6 +677,10 @@ def _accept_candidate(
         return None
     if candidate.get("unplaced"):
         return None
+    used_area = sum(num(p.get("area_m2")) for p in pieces)
+    total_area = len(candidate.get("sheets") or [])*board_w_cm*board_h_cm/10000
+    candidate = dict(candidate, used_area_m2=used_area, total_board_area_m2=total_area,
+        waste_area_m2=max(0.0, total_area-used_area))
     enriched = enrich_plan_metrics(
         candidate,
         str(best.get("method_key") or ""),
@@ -400,6 +710,94 @@ def _accept_candidate(
     if permission_errors(enriched, pieces, mirroring_allowed=mirroring_allowed):
         return None
     return enriched
+
+
+def compact_regular_final(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs):
+    """Close gaps in a small zero-remnant final, after native search has ended.
+
+    Four deterministic axis sweeps, without rotation, regrouping or new sheets.
+    Positive reusable remnants and protected shapes keep their existing layout.
+    This never changes the seed or incumbent used by time-limited native search.
+    """
+    if (machine_type not in {"Auto", "CNC Router"} or not pieces
+            or len(pieces) > _MAX_REPACK_PIECES or plan.get("unplaced")
+            or not plan.get("sheets") or not plan.get("industrial_rank") or not plan.get("industrial_metrics")
+            or plan.get("industrial_metrics", {}).get("largest_reusable_free_area_m2", 0) > 1e-9
+            or any((p.get("piece_type") or "Regular") != "Regular"
+                or (p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD" for p in pieces)
+            or _locked_piece_ids(plan)
+            or any((s.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                or any((p.get("piece_type") or "Regular") != "Regular"
+                    or (p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                    or p.get("geometry") or p.get("overlays") or p.get("special_shape_geometry_json")
+                    for p in s.get("pieces") or []) for s in plan["sheets"])):
+        return plan
+    from .evaluation import validate_plan, placement_permission_errors
+    from .optimizer import enrich_plan_metrics
+
+    if validate_plan(plan, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+        return plan
+    best = plan
+    for axis, extent, cross, cross_extent, far in (
+        ("x", "w", "y", "h", False), ("x", "w", "y", "h", True),
+        ("y", "h", "x", "w", False), ("y", "h", "x", "w", True)):
+        candidate = deepcopy(best)
+        changed = []
+        for index, sheet in enumerate(candidate["sheets"]):
+            ordered = sorted(sheet.get("pieces") or [], key=lambda p: (p[axis], p[cross], p["id"]), reverse=far)
+            moved = False
+            for position, piece in enumerate(ordered):
+                bound = (board_w_cm if axis == "x" else board_h_cm)-piece[extent] if far else 0.0
+                for other in ordered[:position]:
+                    gap = max(piece[cross]-other[cross]-other[cross_extent],
+                        other[cross]-piece[cross]-piece[cross_extent])
+                    if gap < kerf_cm-1e-9:
+                        bound = min(bound, other[axis]-kerf_cm-piece[extent]) if far else max(
+                            bound, other[axis]+other[extent]+kerf_cm)
+                if (far and bound > piece[axis]+1e-6) or (not far and bound < piece[axis]-1e-6):
+                    piece[axis] = bound
+                    moved = True
+            if moved:
+                changed.append(index)
+                for cache in ("free_rects", "skyline", "shelves"):
+                    sheet.pop(cache, None)
+        if not changed:
+            continue
+        candidate = enrich_plan_metrics(candidate, str(plan.get("method_key") or ""),
+            machine_type, **metric_kwargs)
+        # The first four rank fields cover completeness, boards, machine and
+        # reusable remnant. Estimated cuts cannot justify spreading the final.
+        if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
+            continue
+        if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+            continue
+        if placement_permission_errors(candidate, pieces, mirroring_allowed=mirroring_allowed):
+            continue
+        before = _rectangular_cleanup_geometry(best, changed, kerf_cm)
+        after = _rectangular_cleanup_geometry(candidate, changed, kerf_cm)
+        if (after[0] <= before[0]+1e-6 and after[1] <= before[1]+1e-6
+                and (after[0] < before[0]-1e-6 or after[1] < before[1]-1e-6)):
+            best = candidate
+    return best
+
+
+def _rectangular_cleanup_geometry(plan, indices, kerf_cm):
+    from math import dist
+    from .cutter_center_paths import cutter_center_segments
+
+    area = length = 0.0
+    for index in indices:
+        pieces = plan["sheets"][index].get("pieces") or []
+        if not pieces:
+            continue
+        area += (max(p["x"]+p["w"] for p in pieces)-min(p["x"] for p in pieces)) * (
+            max(p["y"]+p["h"] for p in pieces)-min(p["y"] for p in pieces))
+        shapes = [([(p["x"]*10, p["y"]*10), ((p["x"]+p["w"])*10, p["y"]*10),
+            ((p["x"]+p["w"])*10, (p["y"]+p["h"])*10), (p["x"]*10, (p["y"]+p["h"])*10)], [])
+            for p in pieces]
+        length += sum(dist(a, b) for a, b in cutter_center_segments(shapes, max(0.0, kerf_cm)*5))/10
+    return area, length
 
 
 def _improve_remnants(

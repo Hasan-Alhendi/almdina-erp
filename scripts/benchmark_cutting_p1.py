@@ -43,6 +43,9 @@ CASES = {
     "L-tight": (40.3, 40.3, 0, [
         corner("L-Shaped Corner", 20, 20, 8, 4), regular(10, 10),
     ]),
+    "Clipped-quad": (40.3, 40.3, 0, [
+        corner("Clipped Corner", 20, 20, 8, 4), regular(8, 3),
+    ]),
     "L-positive-trim": (40.3, 41, 0.1, [
         corner("L-Shaped Corner", 20, 20, 8, 4), regular(10, 10),
     ]),
@@ -73,12 +76,13 @@ CASES = {
     "Boundary-kerf": (10, 8.3, 0, [regular(10, 4, 2)]),
     "Mandatory-gap": (10, 8.29, 0, [regular(10, 4, 2)]),
 }
-MODES = ("Auto", "Auto Pro", "Deep Search", "Optimal Search")
-BASE_FUNCTION = dict(zip(MODES, ("auto_fast", "auto_pro", "deep_search", "optimal_search")))
+MODES = ("Auto", "Auto Pro", "Deep Search", "Optimal Search", "Smart Search")
+BASE_FUNCTION = dict(zip(MODES, ("auto_fast", "auto_pro", "deep_search", "optimal_search", "smart_search")))
 
 
 def summary(plan):
     return {
+        "unique_candidates": len(plan.get("smart_candidates") or []) or int((plan.get("smart_search") or {}).get("unique_candidates") or 1),
         "boards": len(plan.get("sheets") or []),
         "unplaced": len(plan.get("unplaced") or []),
         "offcut_m2": (plan.get("industrial_metrics") or {}).get("largest_reusable_free_area_m2"),
@@ -139,6 +143,7 @@ def main():
     parser.add_argument("--time-limit", type=float, default=2)
     parser.add_argument("--case", choices=CASES)
     parser.add_argument("--mode", choices=MODES)
+    parser.add_argument("--include-smart", action="store_true")
     parser.add_argument("--machine-type", choices=("CNC Router", "Panel Saw"), default="CNC Router")
     parser.add_argument("--exact-piece-limit", type=int, default=20)
     args = parser.parse_args()
@@ -149,7 +154,7 @@ def main():
         for mode in MODES:
             if args.mode and args.mode != mode:
                 continue
-            if mode == "Optimal Search" and sum(row["qty"] for row in rows) > args.exact_piece_limit and not args.mode:
+            if mode == "Smart Search" and not args.include_smart and args.mode != mode:
                 continue
             engine = RecordingEngine()
             command = OptimizeOrderPlanCommand(
@@ -167,6 +172,7 @@ def main():
                 exact_piece_limit=args.exact_piece_limit,
                 rows=rows, runtime_sec=time.perf_counter() - started,
                 probes=engine.probes, snapshot=outcome.snapshot,
+                candidate_snapshots=list(getattr(outcome, "candidate_snapshots", ())),
             )
             results.append(result)
             Path(args.output).write_text(json.dumps(results, ensure_ascii=False, indent=2))

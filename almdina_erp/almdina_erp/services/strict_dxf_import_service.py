@@ -344,7 +344,13 @@ def _find_exact_candidate(
             matches.append(index)
     if len(matches) <= 1 or piece is None:
         return _ExactCandidateMatch(matches[0] if matches else None)
-    if all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches):
+    # An equal-bbox Glass/Regular row must not disable contour identity for a
+    # proven corner. In particular a nonrotatable square otherwise makes the
+    # direct and rotated passes choose different corner rows.
+    if (
+        all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches)
+        or classify_corner_contour_type(_outer_ring_mm(piece) or ()) is not None
+    ):
         return _unique_corner_contour_candidate(unmatched, matches, piece)
     return _ExactCandidateMatch(matches[0])
 
@@ -1874,8 +1880,19 @@ def parse_production_dxf(
             preferred_trim_mm=settings.preferred_trim_mm,
         )
     except DxfAppliedTrimError as exc:
+        details = exc.details
+        target = piece_target(
+            source_piece_no=details.get("source_piece_no"),
+            copy_no=details.get("copy_no"),
+            label=details.get("label"),
+        )
         raise DxfImportError(
-            issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
+            issues=[issue(
+                APPLIED_TRIM_OVERFLOW,
+                CATEGORY_LAYOUT,
+                target=target,
+                params={key: value for key, value in details.items() if key not in {"source_piece_no", "copy_no", "label"}},
+            )]
         ) from exc
 
     exact_issues = _apply_strict_dimension_contract(
