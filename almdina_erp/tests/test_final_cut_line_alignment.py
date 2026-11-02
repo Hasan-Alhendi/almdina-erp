@@ -865,5 +865,9 @@ def test_smart_gallery_alignment_deadline_is_shared_fairly(monkeypatch):
     outcome = optimize_order_plan(command, engine=ThreeCandidates())
     assert outcome.snapshot["validation"]["is_valid"]
     assert len(durations) == 3
-    assert all(0 <= remaining <= .51 for remaining in durations)
+    assert 0 < durations[0] <= .51
     assert durations[0] > .15  # first of three gets about one third, not all
+    # When a fast candidate doesn't consume its slot, unused time is returned
+    # to subsequent alternatives. The last may use all remaining allowance.
+    assert durations[0] < durations[1] < durations[2]
+    assert durations[2] <= 1.01
