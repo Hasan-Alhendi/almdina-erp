@@ -189,6 +189,7 @@ def align_regular_cut_lines(
     for _ in range(_MAX_SWEEPS):
         winner = None
         winner_profile = best_profile
+        winner_key = None
         for sheet_index, axis, ids, delta in _candidate_moves(best, kerf_cm):
             if attempts >= _MAX_TRIALS or (
                 deadline_monotonic is not None and time.monotonic() >= deadline_monotonic
@@ -231,10 +232,10 @@ def align_regular_cut_lines(
             )
             if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
                 continue
-            if (profile[0], profile[1], abs(delta), sheet_index, axis, ids) < (
-                winner_profile[0], winner_profile[1], math.inf, math.inf, "z", (),
-            ):
-                winner, winner_profile = candidate, profile
+            key = (round(profile[0], 5), profile[1], abs(delta),
+                   sheet_index, axis, ids, delta)
+            if winner_key is None or key < winner_key:
+                winner, winner_profile, winner_key = candidate, profile, key
         if winner is None:
             return best
         best, best_profile = winner, winner_profile
