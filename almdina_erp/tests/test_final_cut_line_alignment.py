@@ -1091,3 +1091,23 @@ def test_final_system_gallery_ranks_real_toolpath_above_border_estimate(monkeypa
     assert outcome.snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(.65)
     # The fast native seeds remain available for continue-search, unmodified.
     assert sorted(s["sheets"][0]["pieces"][0]["x"] for s in outcome.search_seeds) == [0, .65]
+
+
+def test_final_cut_quality_uses_glass_hole_as_real_contour_not_bounding_rectangle():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        plan_cut_line_quality,
+    )
+    regular = dict(piece_type="Regular", x=10, y=10, w=50, h=50)
+    glass = dict(regular, piece_type="Glass",
+                 glass_hole_local_mm=[
+                     [100, 100], [400, 100], [400, 400], [100, 400],
+                 ])
+    before = plan_cut_line_quality(
+        dict(sheets=[dict(w=100, h=100, pieces=[regular])]), .5
+    )
+    after = plan_cut_line_quality(
+        dict(sheets=[dict(w=100, h=100, pieces=[glass])]), .5
+    )
+    assert before is not None and after is not None
+    assert after[0] > before[0] + 500  # additional real inner cut perimeter
+    assert after[1] > before[1]
