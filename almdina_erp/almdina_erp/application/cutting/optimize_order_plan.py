@@ -171,7 +171,10 @@ def optimize_order_plan(
     raw_seeds = []
     outcome = None
     snapshots = []
-    for raw in raw_candidates:
+    for candidate_index, raw in enumerate(raw_candidates):
+        # Reserve a fair portion of the shared tail allowance for every
+        # displayed candidate, without extending the total elapsed deadline.
+        alignment_budget["remaining_candidates"] = len(raw_candidates) - candidate_index
         result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings,
                                    alignment_budget=alignment_budget)
         if result.snapshot['validation']['is_valid']:
@@ -290,6 +293,13 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
                 else 0.0
             )
             alignment_budget["deadline"] = time.monotonic() + allowed
+        # Every gallery candidate gets a bounded share of the *remaining*
+        # shared tail; unused capacity automatically returns to later plans.
+        # A lone fallback uses the full remaining allowance.
+        now = time.monotonic()
+        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
+        remaining_seconds = max(0.0, alignment_budget["deadline"] - now)
+        candidate_deadline = now + remaining_seconds / remaining
         # Post-search placement refinement only; never import/approve uploaded DXF.
         from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
         plan = align_regular_cut_lines(
@@ -297,7 +307,7 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
-            deadline_monotonic=alignment_budget["deadline"],
+            deadline_monotonic=candidate_deadline,
         )
 
     def validate_snapshot_plan() -> list[str]:
