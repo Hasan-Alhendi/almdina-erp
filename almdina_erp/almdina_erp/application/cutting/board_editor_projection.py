@@ -169,12 +169,17 @@ def _stable_piece_token(piece: Mapping[str, Any], *, sheet_no: int) -> str:
 def _explicit_allow_rotation(piece: Mapping[str, Any]) -> bool | None:
     """Return True/False when the order flag is proven; None when absent.
 
-    Absence must not be treated as permission by the session editor.
+    ``allow_rotation_proven`` means the value was established from a trusted
+    source. It is not itself permission. Absence must not grant rotation.
     """
 
     if "allow_rotation" not in piece and "allow_rotation_proven" not in piece:
         return None
-    flag = piece.get("allow_rotation_proven", piece.get("allow_rotation"))
+    if "allow_rotation_proven" in piece and piece.get("allow_rotation_proven") is False:
+        return None
+    if "allow_rotation" not in piece:
+        return None
+    flag = piece.get("allow_rotation")
     if flag is True or flag == 1 or flag == "1":
         return True
     if flag is False or flag == 0 or flag == "0":

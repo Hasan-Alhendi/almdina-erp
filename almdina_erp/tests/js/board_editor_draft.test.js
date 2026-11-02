@@ -205,11 +205,48 @@ assert.equal(settled.saveState, "dirty");
 assert.equal(settled.session, store.snapshot().session);
 const failed = SessionDocument.settleDraftSave(store.snapshot(), sent, null);
 assert.equal(failed.saveState, "failed");
+assert.equal(failed.saveConflictCode, null);
 assert.equal(failed.session, store.snapshot().session);
 assert.equal(
     SessionDocument.distributionFingerprint(failed.session),
     SessionDocument.distributionFingerprint(store.snapshot().session)
 );
+
+const versionConflict = SessionDocument.settleDraftSave(
+    store.snapshot(),
+    sent,
+    { ok: false, code: "version_conflict", current_draft_version: 4 }
+);
+assert.equal(versionConflict.saveState, "conflict");
+assert.equal(versionConflict.saveConflictCode, "version_conflict");
+assert.equal(
+    SessionDocument.distributionFingerprint(versionConflict.session),
+    SessionDocument.distributionFingerprint(store.snapshot().session)
+);
+
+const sourceConflict = SessionDocument.settleDraftSave(
+    store.snapshot(),
+    sent,
+    { ok: false, code: "source_conflict", current_draft_version: 4 }
+);
+assert.equal(sourceConflict.saveState, "conflict");
+assert.equal(sourceConflict.saveConflictCode, "source_conflict");
+
+const schemaError = SessionDocument.settleDraftSave(
+    store.snapshot(),
+    sent,
+    { ok: false, code: "invalid_layout", reason: "forbidden_field" }
+);
+assert.equal(schemaError.saveState, "failed");
+assert.equal(schemaError.saveConflictCode, null);
+
+const canvasSource = fs.readFileSync(
+    path.join(root, "public/js/board_editor/canvas_renderer.js"),
+    "utf8"
+);
+assert.match(canvasSource, /A newer draft was saved\. Your local edits are still here\./);
+assert.match(canvasSource, /The source cutting plan data changed\. Your local edits are still here\./);
+assert.match(canvasSource, /saveConflictCode/);
 
 const reviewStore = createStore({ projection: source, capabilities: { edit_layout: true } });
 const reviewSession = sessionFrom(source);

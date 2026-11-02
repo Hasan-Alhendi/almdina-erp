@@ -16,10 +16,12 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SUPERSEDED,
     SYSTEM,
     UPLOADED_DXF,
+    manufacturing_actions_allowed,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     preserve_offcut_classification,
@@ -261,6 +263,16 @@ def _canonical_plan_source(plan_source: str) -> str:
 def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
+    if str(plan.source_type or "") == BOARD_EDITOR or not manufacturing_actions_allowed(
+        getattr(plan, "source_type", None)
+    ):
+        frappe.throw(
+            _(
+                "Board editor cutting plan copies cannot be approved yet. "
+                "Free-angle manufacturing export is not supported in this phase."
+            ),
+            frappe.ValidationError,
+        )
     if str(plan.validation_status or "") != "Valid" or not str(plan.snapshot_json or "").strip():
         frappe.throw(
             _("خطة القص غير موجودة أو لم تنجح في التحقق الهندسي."),

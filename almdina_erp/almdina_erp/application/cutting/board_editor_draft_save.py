@@ -85,9 +85,15 @@ def execute_save(
         request_revision,
     )
     if decision == "source_conflict":
-        return _failure("source_conflict")
+        return _failure(
+            "source_conflict",
+            current_draft_version=None if existing is None else int(existing["draft_version"]),
+        )
     if decision == "version_conflict":
-        return _failure("version_conflict")
+        return _failure(
+            "version_conflict",
+            current_draft_version=None if existing is None else int(existing["draft_version"]),
+        )
     if decision == "idempotent" and existing is not None:
         return _success(existing)
     if decision == "create":
@@ -114,7 +120,10 @@ def execute_save(
             )
             if decision == "idempotent" and existing is not None:
                 return _success(existing)
-            return _failure("version_conflict")
+            return _failure(
+                "version_conflict",
+                current_draft_version=None if existing is None else int(existing["draft_version"]),
+            )
         return _success(stored)
     if decision == "update" and existing is not None:
         changes = {
@@ -126,7 +135,10 @@ def execute_save(
         }
         wrote = store.update_if_version(key, int(existing["draft_version"]), changes)
         if not wrote:
-            return _failure("version_conflict")
+            return _failure(
+                "version_conflict",
+                current_draft_version=int(existing["draft_version"]),
+            )
         updated = dict(existing)
         updated.update(changes)
         return _success(updated)
@@ -171,8 +183,15 @@ def _success(row: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _failure(code: str, reason: str | None = None) -> dict[str, Any]:
-    payload = {"ok": False, "code": code}
+def _failure(
+    code: str,
+    reason: str | None = None,
+    *,
+    current_draft_version: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"ok": False, "code": code}
     if reason:
         payload["reason"] = reason
+    if current_draft_version is not None:
+        payload["current_draft_version"] = int(current_draft_version)
     return payload

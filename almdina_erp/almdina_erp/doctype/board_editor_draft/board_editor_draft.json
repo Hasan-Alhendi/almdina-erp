@@ -13,7 +13,10 @@
     "source_content_revision",
     "draft_version",
     "distribution_fingerprint",
-    "layout_json"
+    "layout_json",
+    "last_create_request_id",
+    "last_created_plan",
+    "last_created_draft_version"
   ],
   "fields": [
     {
@@ -80,6 +83,27 @@
       "label": "Layout JSON",
       "read_only": 1,
       "reqd": 1
+    },
+    {
+      "fieldname": "last_create_request_id",
+      "fieldtype": "Data",
+      "label": "Last Create Request Id",
+      "length": 64,
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_created_plan",
+      "fieldtype": "Link",
+      "label": "Last Created Plan",
+      "options": "Cutting Plan",
+      "read_only": 1
+    },
+    {
+      "fieldname": "last_created_draft_version",
+      "fieldtype": "Int",
+      "label": "Last Created Draft Version",
+      "non_negative": 1,
+      "read_only": 1
     }
   ],
   "index_web_pages_for_search": 0,

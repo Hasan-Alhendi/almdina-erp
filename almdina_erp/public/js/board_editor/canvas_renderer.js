@@ -44,6 +44,13 @@
         if (state === "saved") return __("Layout saved");
         if (state === "failed") return __("Save failed. Your changes are still here.");
         if (state === "conflict") {
+            const code = storeView && storeView.saveConflictCode;
+            if (code === "version_conflict") {
+                return __("A newer draft was saved. Your local edits are still here.");
+            }
+            if (code === "source_conflict") {
+                return __("The source cutting plan data changed. Your local edits are still here.");
+            }
             return __("This layout conflicts with another save or a changed source. Your changes are still here.");
         }
         return __("No unsaved changes");
@@ -1172,18 +1179,23 @@
         const selectedSessionPiece = !multiSelection && selectedKeyList.length === 1
             ? session.pieces[selectedKeyList[0]]
             : null;
-        const angleEditable = Boolean(
-            selectedSessionPiece
-            && window.AlmdinaBoardEditor
-            && window.AlmdinaBoardEditor.RotationGeometry
-            && window.AlmdinaBoardEditor.RotationGeometry.pieceRotationEligibility(
-                session,
-                selectedSessionPiece.piece_key
-            ).rotatable
-        );
+        const RG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.RotationGeometry;
+        const angleEligibility = selectedSessionPiece && RG
+            ? RG.pieceRotationEligibility(session, selectedSessionPiece.piece_key)
+            : { rotatable: false, reason: multiSelection ? "multi_selection" : "no_selection" };
+        const angleEditable = Boolean(selectedSessionPiece && angleEligibility.rotatable);
         const angleValue = selectedSessionPiece
             ? (Number(selectedSessionPiece.rotation_deg) || 0)
             : 0;
+        const angleTitle = multiSelection
+            ? __("Select one piece to set its rotation angle. Group rotation is not available.")
+            : (angleEditable
+                ? __("Rotation angle in degrees")
+                : __(
+                    RG && typeof RG.reasonMessage === "function"
+                        ? RG.reasonMessage(angleEligibility.reason)
+                        : "This piece cannot be rotated."
+                ));
         const canRemovePiece = Boolean(
             !multiSelection
             && selectedSessionPiece
@@ -1227,8 +1239,8 @@
                         attrs: ` data-abe-magnet="1"`,
                         title: __("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."),
                     })}
-                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}">
-                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(__("Rotation angle in degrees"))}" title="${esc(__("Rotation angle in degrees"))}" />
+                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}" title="${esc(angleTitle)}">
+                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
                         <span aria-hidden="true">°</span>
                     </label>
                     ${toolSep}
@@ -1241,6 +1253,18 @@
                     ${toolButton("abe-review", "clipboard-check", __("Review distribution"), {
                         disabled: Boolean(storeView.reviewInFlight),
                         title: __("Review distribution"),
+                    })}
+                    ${toolButton("abe-create-plan", "copy", __("Apply to cutting plan"), {
+                        disabled: Boolean(
+                            storeView.createPlanInFlight
+                            || storeView.distributionDirty
+                            || !(Number(storeView.draftVersion) > 0)
+                            || storeView.sourceOnly
+                            || storeView.canSaveLayout === false
+                        ),
+                        title: storeView.distributionDirty
+                            ? __("Save the current distribution before applying it to the cutting plan.")
+                            : __("Apply this layout as an unapproved edited cutting plan copy."),
                     })}
                     ${toolButton("abe-save", "save", saveTitle(storeView), {
                         disabled: saveDisabled(storeView),
@@ -1309,6 +1333,10 @@
         if (save) save.onclick = () => handlers && handlers.saveDraft && handlers.saveDraft();
         const review = host.querySelector(".abe-review");
         if (review) review.onclick = () => handlers && handlers.reviewDraft && handlers.reviewDraft();
+        const createPlan = host.querySelector(".abe-create-plan");
+        if (createPlan) {
+            createPlan.onclick = () => handlers && handlers.createPlanCopy && handlers.createPlanCopy();
+        }
 
         const suppressed = () => handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression();
 

@@ -176,6 +176,31 @@ def _order_allow_rotation_by_instance(order: Any) -> dict[str, bool]:
     return mapping
 
 
+def _order_allow_rotation_for_plan_instance(
+    flags: dict[str, bool], instance_id: str
+) -> bool | None:
+    """Map plan placement ids onto order row ids.
+
+    Order rows store the base identity (``piece:<uuid>``). Placed plan copies
+    append ``:<copy_no>`` (``piece:<uuid>:1``). Exact match wins; otherwise the
+    copy suffix is stripped when it is a positive integer.
+    """
+
+    key = str(instance_id or "").strip()
+    if not key:
+        return None
+    if key in flags:
+        return bool(flags[key])
+    if ":" not in key:
+        return None
+    base, suffix = key.rsplit(":", 1)
+    if not base or not suffix.isdigit() or int(suffix) <= 0:
+        return None
+    if base not in flags:
+        return None
+    return bool(flags[base])
+
+
 def _enrich_snapshot_allow_rotation(
     snapshot: dict[str, Any], order: Any
 ) -> dict[str, Any]:
@@ -189,13 +214,11 @@ def _enrich_snapshot_allow_rotation(
         if not isinstance(piece, dict):
             return
         instance_id = str(piece.get("piece_instance_id") or "").strip()
-        if not instance_id or instance_id not in flags:
+        allowed = _order_allow_rotation_for_plan_instance(flags, instance_id)
+        if allowed is None:
             return
-        # Do not overwrite an already-proven snapshot value with a weaker signal.
-        if "allow_rotation" in piece:
-            piece["allow_rotation_proven"] = True
-            return
-        piece["allow_rotation"] = flags[instance_id]
+        # Order detail is the authority for the flag once the instance matches.
+        piece["allow_rotation"] = allowed
         piece["allow_rotation_proven"] = True
 
     for sheet in snapshot.get("sheets") or []:
@@ -293,6 +316,9 @@ def _plan_freshness_payload(order: Any, plan: Any) -> dict[str, Any]:
         and not needs_recalculation
         and not job_active
     )
+    # Use a stable active-job bit — not raw job_status. "idle" vs "completed"
+    # must not flip the source revision token and trigger false source_conflict
+    # on an otherwise unchanged cutting plan.
     content_revision_token = "|".join(
         [
             str(plan.name),
@@ -300,7 +326,7 @@ def _plan_freshness_payload(order: Any, plan: Any) -> dict[str, Any]:
             str(revision),
             stored_fingerprint or expected_fingerprint or "",
             "1" if needs_recalculation else "0",
-            job_status,
+            "1" if job_active else "0",
         ]
     )
     return {

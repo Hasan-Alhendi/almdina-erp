@@ -3218,3 +3218,43 @@ The {0} add-on conflicts with neighbouring material.,إضافة {0} تتعارض
 The {0} add-on conflicts with neighbouring material ({1}).,إضافة {0} تتعارض مع مادة مجاورة ({1}).
 The {0} add-on has no proven geometry ({1}), so readiness cannot be declared.,إضافة {0} بلا هندسة مثبتة ({1})، لذلك لا يمكن إعلان الجاهزية.
 This piece has no supported geometry ({0}), so it cannot be marked ready.,هذه القطعة بلا هندسة مدعومة ({0})، لذلك لا يمكن إعلانها جاهزة.
+Create cutting plan copy,إنشاء نسخة خطة قص
+Save the current distribution before creating a cutting plan copy.,احفظ التوزيع الحالي قبل إنشاء نسخة خطة قص.
+Save the board editor distribution before creating a cutting plan copy.,احفظ توزيع محرر الألواح قبل إنشاء نسخة خطة قص.
+Cutting plan copy {0} was created. Open the Edited plan tab in the cutting plan section of order {1}.,تم إنشاء نسخة خطة القص {0}. افتح تبويب الخطة المعدّلة في قسم خطة القص للطلب {1}.
+The cutting plan copy could not be created.,تعذّر إنشاء نسخة خطة القص.
+Creating the cutting plan copy failed. The saved draft is unchanged.,فشل إنشاء نسخة خطة القص. المسودة المحفوظة لم تتغير.
+Edited plan,الخطة المعدّلة
+Edited plan (view only),خطة معدّلة (عرض فقط)
+Approval and DXF export are blocked until free-angle manufacturing support is complete.,الاعتماد وتصدير DXF موقوفان حتى اكتمال دعم التصنيع للزوايا الحرة.
+There is no edited board-editor plan yet.,لا توجد بعد خطة معدّلة من محرر الألواح.
+Cutting plan copy created.,تم إنشاء نسخة خطة القص.
+Board editor cutting plan copies cannot be approved yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن اعتماد نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.
+Board editor cutting plan copies cannot be exported yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن تصدير نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.
+Board editor layout is not ready to save as a cutting plan.,توزيع محرر الألواح غير جاهز للحفظ كخطة قص.
+You do not have permission to create a cutting plan copy from this board editor draft.,ليست لديك صلاحية إنشاء نسخة خطة قص من مسودة محرر الألواح هذه.
+Apply to cutting plan,تطبيق على خطة القص
+Apply this layout as an unapproved edited cutting plan copy.,طبّق هذا التوزيع كنسخة خطة قص معدّلة غير معتمدة.
+Save the current distribution before applying it to the cutting plan.,احفظ التوزيع الحالي قبل تطبيقه على خطة القص.
+Save the board editor distribution before applying it to the cutting plan.,احفظ توزيع محرر الألواح قبل تطبيقه على خطة القص.
+The edited layout was applied as cutting plan {0}. It is not approved.,طُبّق التوزيع المعدّل كخطة قص {0}. وهي غير معتمدة.
+The layout could not be applied to a cutting plan.,تعذّر تطبيق التوزيع على خطة قص.
+Applying the layout to a cutting plan failed. The saved draft is unchanged.,فشل تطبيق التوزيع على خطة القص. المسودة المحفوظة لم تتغير.
+Could not apply layout,تعذّر تطبيق التوزيع
+The draft changed. Save again, then apply it to the cutting plan.,تغيّرت المسودة. احفظ مجدداً ثم طبّقها على خطة القص.
+This apply request was already used with a different draft version.,طُلب هذا التطبيق مسبقاً بإصدار مسودة مختلف.
+This order is locked and cannot receive an applied cutting plan.,هذا الطلب مقفل ولا يمكنه استقبال خطة قص مطبّقة.
+The apply request token is missing or invalid.,رمز طلب التطبيق مفقود أو غير صالح.
+A board editor cutting plan copy must reference a valid source plan.,يجب أن تشير نسخة خطة القص من محرر الألواح إلى خطة مصدر صالحة.
+A newer draft was saved. Your local edits are still here.,حُفظت نسخة أحدث من المسودة. تعديلاتك المحلية ما زالت هنا.
+The source cutting plan data changed. Your local edits are still here.,تغيّرت بيانات خطة المصدر. تعديلاتك المحلية ما زالت هنا.
+This layout conflicts with another save or a changed source. Your changes are still here.,هذا التوزيع يتعارض مع حفظ آخر أو مع تغيّر المصدر. تغييراتك ما زالت هنا.
+Select one piece to set its rotation angle. Group rotation is not available.,حدّد قطعة واحدة لتعيين زاوية دورانها. الدوران الجماعي غير متاح.
+Select a piece to set its rotation angle.,حدّد قطعة لتعيين زاوية دورانها.
+This piece cannot be rotated.,لا يمكن تدوير هذه القطعة.
+Rotation angle in degrees,زاوية الدوران بالدرجات
+A nested piece does not allow rotation.,قطعة متداخلة لا تسمح بالدوران.
+Special geometry unavailable — not rotatable.,الهندسة الخاصة غير متاحة — لا يمكن التدوير.
+Incomplete geometry — not rotatable.,الهندسة غير مكتملة — لا يمكن التدوير.
+This piece cannot be edited.,لا يمكن تعديل هذه القطعة.
+Guest must remain inside the host opening.,يجب أن تبقى القطعة المستضافة داخل فتحة المضيف.

@@ -179,11 +179,14 @@ def test_query_service_requires_explicit_plan_and_capability_contract():
 
 
 def test_query_service_is_read_only_whitelist():
+    import re
+
     source = inspect.getsource(query_service.get_board_editor_projection)
     assert "frappe.whitelist" in Path(query_service.__file__).read_text(encoding="utf-8")
     assert "db.set_value" not in source
     assert "save(" not in source
-    assert "approve" not in source.lower() or "approved_plan" in source
+    # Capability labels may say view_approved; mutating approve* calls must not appear.
+    assert re.search(r"\bapprove(?:_|\()", source.lower()) is None
 
 
 def test_page_and_entry_point_exist():
@@ -234,3 +237,59 @@ def test_historical_snapshot_unchanged_after_phase2_projection():
     projection = project_board_editor(historical)
     assert historical == before
     assert projection["pieces"][0]["piece_instance_id"] is None
+
+
+def test_order_allow_rotation_maps_plan_copy_suffix():
+    flags = {
+        "piece:abc-uuid": True,
+        "piece:locked": False,
+    }
+    map_id = query_service._order_allow_rotation_for_plan_instance
+    assert map_id(flags, "piece:abc-uuid") is True
+    assert map_id(flags, "piece:abc-uuid:1") is True
+    assert map_id(flags, "piece:abc-uuid:2") is True
+    assert map_id(flags, "piece:locked:1") is False
+    assert map_id(flags, "piece:missing:1") is None
+    assert map_id(flags, "piece:abc-uuid:x") is None
+
+
+def test_enrich_snapshot_sets_proven_allow_from_order_base_id():
+    class _Row:
+        def __init__(self, instance_id, allow):
+            self.piece_instance_id = instance_id
+            self.allow_rotation = allow
+
+    class _Order:
+        def get(self, key):
+            if key == "pieces":
+                return [_Row("piece:rotatable", 1), _Row("piece:fixed", 0)]
+            return None
+
+    snapshot = {
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "pieces": [
+                    {"piece_instance_id": "piece:rotatable:1", "label": "A"},
+                    {"piece_instance_id": "piece:fixed:1", "label": "B"},
+                    {"piece_instance_id": "piece:orphan:1", "label": "C"},
+                ],
+            }
+        ],
+        "unplaced": [],
+    }
+    enriched = query_service._enrich_snapshot_allow_rotation(snapshot, _Order())
+    pieces = {row["piece_instance_id"]: row for row in enriched["sheets"][0]["pieces"]}
+    assert pieces["piece:rotatable:1"]["allow_rotation"] is True
+    assert pieces["piece:rotatable:1"]["allow_rotation_proven"] is True
+    assert pieces["piece:fixed:1"]["allow_rotation"] is False
+    assert pieces["piece:fixed:1"]["allow_rotation_proven"] is True
+    assert "allow_rotation" not in pieces["piece:orphan:1"]
+
+
+def test_content_revision_token_stable_across_idle_and_completed():
+    source = (APP / "services" / "board_editor_query_service.py").read_text(encoding="utf-8")
+    assert '"1" if job_active else "0"' in source
+    assert "stable active-job bit" in source
+    token_block = source.split("content_revision_token = ")[1].split("return {", 1)[0]
+    assert "job_status" not in token_block

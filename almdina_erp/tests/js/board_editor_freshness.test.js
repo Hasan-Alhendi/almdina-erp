@@ -50,7 +50,7 @@ assert.match(apiSource, /recalculationStatus/);
 assert.match(apiSource, /get_system_plan_recalculation_status/);
 assert.match(pageSource, /on_page_show/);
 assert.match(pageSource, /active\.open\(context\)/);
-assert.match(pageSource, /plan_display_style\.js\?v=16/);
+assert.match(pageSource, /plan_display_style\.js\?v=18/);
 assert.match(querySource, /_plan_freshness_payload/);
 assert.match(querySource, /content_revision_token/);
 assert.match(querySource, /reflects_current_order/);
@@ -93,24 +93,41 @@ function contentRevisionToken(payload) {
             plan.revision || "",
             plan.input_fingerprint || "",
             freshness.needs_recalculation ? "1" : "0",
+            freshness.job_active ? "1" : "0",
         ].join("|")
     );
 }
 
+assert.match(querySource, /"1" if job_active else "0"/);
+assert.match(querySource, /stable active-job bit/);
+assert.match(controllerSource, /freshness\.job_active \? "1" : "0"/);
+
 const first = contentRevisionToken({
     plan: { name: "CP-1", modified: "2026-01-01", revision: 1, input_fingerprint: "abc" },
-    freshness: { needs_recalculation: false, content_revision_token: "CP-1|2026-01-01|1|abc|0|idle" },
+    freshness: { needs_recalculation: false, content_revision_token: "CP-1|2026-01-01|1|abc|0|0" },
 });
 const sameNameChanged = contentRevisionToken({
     plan: { name: "CP-1", modified: "2026-01-02", revision: 2, input_fingerprint: "def" },
-    freshness: { needs_recalculation: false, content_revision_token: "CP-1|2026-01-02|2|def|0|idle" },
+    freshness: { needs_recalculation: false, content_revision_token: "CP-1|2026-01-02|2|def|0|0" },
 });
 assert.notEqual(first, sameNameChanged);
 
 const stale = contentRevisionToken({
     plan: { name: "CP-1", modified: "2026-01-01", revision: 1 },
-    freshness: { needs_recalculation: true, content_revision_token: "CP-1|2026-01-01|1||1|idle" },
+    freshness: { needs_recalculation: true, content_revision_token: "CP-1|2026-01-01|1||1|0" },
 });
 assert.match(stale, /\|1\|/);
+
+// idle vs completed must not invent distinct tokens when the server bit is stable.
+const idleLike = contentRevisionToken({
+    plan: { name: "CP-1", modified: "2026-01-01", revision: 1, input_fingerprint: "abc" },
+    freshness: { needs_recalculation: false, job_active: false },
+});
+const completedLike = contentRevisionToken({
+    plan: { name: "CP-1", modified: "2026-01-01", revision: 1, input_fingerprint: "abc" },
+    freshness: { needs_recalculation: false, job_active: false },
+});
+assert.equal(idleLike, completedLike);
+assert.equal(idleLike, "CP-1|2026-01-01|1|abc|0|0");
 
 console.log("board editor freshness contract passed");

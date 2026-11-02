@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SYSTEM,
 )
@@ -244,6 +245,12 @@ def _system_plan(rows: list[Any]) -> Any | None:
     )
 
 
+def _board_editor_plan(rows: list[Any]) -> Any | None:
+    """Latest Board Editor Draft copy. Distinct from optimizer and uploaded DXF."""
+
+    return _latest(rows, status=DRAFT, source_type=BOARD_EDITOR)
+
+
 def _approved(rows: list[Any], order: Any) -> Any | None:
     approved_name = str(getattr(order, "approved_plan", None) or "").strip()
     if not approved_name:
@@ -362,6 +369,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         if capabilities["view_uploaded"]
         else None
     )
+    board_editor = _board_editor_plan(rows) if capabilities["view_system"] else None
     approved = _approved(rows, order) if capabilities["view_approved"] else None
     current_approved_name = str((approved or {}).get("name") or "").strip() or None
     calculation_settings = (
@@ -369,11 +377,27 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         if capabilities["recalculate"] or capabilities["edit_settings"]
         else None
     )
-    snapshot_json = _selected_snapshot_json([system, uploaded, approved])
+    snapshot_json = _selected_snapshot_json([system, uploaded, board_editor, approved])
     uploaded_payload = (
         _plan_row_with_freshness(order, uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
         if uploaded else None
     )
+    board_editor_payload = (
+        _plan_row_with_freshness(
+            order,
+            board_editor,
+            snapshot_json.get(str(board_editor.get("name") or ""), ""),
+        )
+        if board_editor
+        else None
+    )
+    if board_editor_payload is not None:
+        board_editor_payload["manufacturing_blocked"] = True
+        board_editor_payload["manufacturing_block_reason"] = (
+            "board_editor_geometry_not_exportable"
+        )
+        board_editor_payload["can_approve"] = False
+        board_editor_payload["can_export"] = False
 
     return {
         "order_name": order.name,
@@ -397,6 +421,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
                 if system else None
             ),
             "uploaded_draft": uploaded_payload,
+            "board_editor_draft": board_editor_payload,
             "approved": (
                 _plan_row_with_freshness(
                     order, approved,

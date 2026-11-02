@@ -5,12 +5,17 @@ from __future__ import annotations
 import math
 import unittest
 
+from almdina_erp.almdina_erp.application.cutting.board_editor_projection import (
+    _explicit_allow_rotation,
+)
 from almdina_erp.almdina_erp.domain.cutting.board_editor_rotation import (
     ROTATE_BLOCK_GUEST_FORBIDDEN,
     ROTATE_BLOCK_NOT_ALLOWED,
     angles_equivalent,
     apply_piece_rotation,
     ensure_base_geometry,
+    explicit_allow_rotation,
+    machine_accepts_rotation,
     normalize_angle_deg,
     piece_rotation_eligibility,
     rotate_point,
@@ -266,6 +271,36 @@ class TestBoardEditorRotation(unittest.TestCase):
             piece_rotation_eligibility(missing)["reason"],
             ROTATE_BLOCK_NOT_ALLOWED,
         )
+
+    def test_proven_flag_is_not_permission(self):
+        # Proven alone must not grant rotation; allow_rotation is the permission.
+        proven_only = {"allow_rotation_proven": True}
+        self.assertIsNone(_explicit_allow_rotation(proven_only))
+        self.assertFalse(explicit_allow_rotation(proven_only))
+
+        denied = {"allow_rotation": False, "allow_rotation_proven": True}
+        self.assertEqual(_explicit_allow_rotation(denied), False)
+        self.assertFalse(explicit_allow_rotation(denied))
+
+        allowed = {"allow_rotation": True, "allow_rotation_proven": True}
+        self.assertEqual(_explicit_allow_rotation(allowed), True)
+        self.assertTrue(explicit_allow_rotation(allowed))
+
+        unproven_true = {"allow_rotation": True, "allow_rotation_proven": False}
+        self.assertIsNone(_explicit_allow_rotation(unproven_true))
+        self.assertFalse(explicit_allow_rotation(unproven_true))
+
+        piece = _piece("instance:ok", piece_id=1, x=40, y=40, w=80, h=40, allow=True)
+        self.assertTrue(piece_rotation_eligibility(piece)["rotatable"])
+        piece["allow_rotation"] = False
+        self.assertEqual(
+            piece_rotation_eligibility(piece)["reason"],
+            ROTATE_BLOCK_NOT_ALLOWED,
+        )
+        # Piece permission and machine free-angle policy are separate gates.
+        self.assertTrue(machine_accepts_rotation("CNC Router", 37))
+        self.assertFalse(machine_accepts_rotation("Panel Saw", 37))
+        self.assertTrue(machine_accepts_rotation("Panel Saw", 90))
 
     def test_reject_partial_board_and_overlap_not_aabb_only(self):
         a = _piece("instance:a", piece_id=1, x=10, y=10, w=100, h=20)

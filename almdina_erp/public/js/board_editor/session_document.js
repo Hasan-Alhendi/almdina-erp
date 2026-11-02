@@ -78,8 +78,12 @@
             const placement = piece.placement_cm || {};
             const outlineElement = related.find((element) => element.geometry && element.geometry.outer);
             const outlineMm = outlineFromGeometry(outlineElement && outlineElement.geometry);
-            // Fail closed: only a proven order flag may enable rotation.
-            const allowProven = piece.allow_rotation_proven === true;
+            // Fail closed: proven means the value is trusted; allow_rotation is permission.
+            const allowProven = (
+                piece.allow_rotation_proven === true
+                || piece.allow_rotation_proven === 1
+                || piece.allow_rotation_proven === "1"
+            );
             const allowRotation = allowProven && (
                 piece.allow_rotation === true
                 || piece.allow_rotation === 1
@@ -432,13 +436,14 @@
         const savedFingerprint = view && view.savedFingerprint;
         const draftVersion = view && view.draftVersion ? Number(view.draftVersion) : 0;
         if (!response || response.ok === false) {
-            const code = response && response.code;
-            const conflict = code === "conflict" || code === "source_conflict" || code === "version_conflict";
+            const code = String((response && response.code) || "failed");
+            const conflict = code === "source_conflict" || code === "version_conflict";
             return {
                 session,
                 draftVersion,
                 savedFingerprint,
                 saveState: conflict ? "conflict" : "failed",
+                saveConflictCode: conflict ? code : null,
                 saveInFlight: false,
             };
         }
@@ -448,6 +453,7 @@
             draftVersion: Number(response.draft_version) || draftVersion,
             savedFingerprint: sentFingerprint,
             saveState: current === sentFingerprint ? "saved" : "dirty",
+            saveConflictCode: null,
             saveInFlight: false,
         };
     }

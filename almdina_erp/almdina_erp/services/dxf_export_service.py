@@ -376,7 +376,32 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
 
 
 def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
+    from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+        BOARD_EDITOR,
+        manufacturing_actions_allowed,
+    )
+
+    normalized_source = str(plan_source or "").strip().lower()
+    if normalized_source in {"board editor", "board_editor", "edited", "manual"}:
+        frappe.throw(
+            _(
+                "Board editor cutting plan copies cannot be exported yet. "
+                "Free-angle manufacturing export is not supported in this phase."
+            ),
+            frappe.ValidationError,
+        )
     plan = _saved_plan_for_source(order, plan_source)
+    if plan and (
+        str(_plan_field(plan, "source_type") or "") == BOARD_EDITOR
+        or not manufacturing_actions_allowed(_plan_field(plan, "source_type"))
+    ):
+        frappe.throw(
+            _(
+                "Board editor cutting plan copies cannot be exported yet. "
+                "Free-angle manufacturing export is not supported in this phase."
+            ),
+            frappe.ValidationError,
+        )
     belongs_to_order = bool(
         plan
         and str(_plan_field(plan, "door_cutting_order") or "") == str(order.name)

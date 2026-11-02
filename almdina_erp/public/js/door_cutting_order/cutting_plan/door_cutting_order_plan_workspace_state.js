@@ -263,6 +263,7 @@
         if (!plans) return null;
         if (tab === "Custom") return plans.uploaded_draft || null;
         if (tab === "Approved") return plans.approved || null;
+        if (tab === "BoardEditor") return plans.board_editor_draft || null;
         return plans.system_draft || null;
     }
 
@@ -287,11 +288,27 @@
         return displayedPlanForTab(frm, displayedTab(frm));
     }
 
+    function consumeWorkspaceReloadFlag(frm) {
+        const orderName = String((frm && frm.doc && frm.doc.name) || "").trim();
+        if (!orderName || typeof window === "undefined" || !window.sessionStorage) {
+            return false;
+        }
+        const key = `almdina.dco.planWorkspaceReload.${orderName}`;
+        try {
+            if (window.sessionStorage.getItem(key) !== "1") return false;
+            window.sessionStorage.removeItem(key);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
     function schedule(frm, force = false) {
         if (!frm || frm.doctype !== "Door Cutting Order") return;
         const context = documentContext();
         const run = () => {
-            load(frm, { force }).catch(() => {
+            const mustReload = force || consumeWorkspaceReloadFlag(frm);
+            load(frm, { force: mustReload }).catch(() => {
                 // Store owns the error state. Presenters own only loading/error UI.
             });
         };

@@ -9,10 +9,14 @@ SUPERSEDED = "Superseded"
 CANCELLED = "Cancelled"
 SYSTEM = "System"
 UPLOADED_DXF = "Uploaded DXF"
+# Manual layout copy from Board Editor Draft. Not an optimizer result and not an
+# uploaded DXF file. Approval/export stay blocked until a later manufacturing phase.
+BOARD_EDITOR = "Board Editor"
 
 EDITABLE_STATUSES = frozenset({DRAFT})
 TERMINAL_STATUSES = frozenset({SUPERSEDED, CANCELLED})
-SUPPORTED_SOURCES = frozenset({SYSTEM, UPLOADED_DXF})
+SUPPORTED_SOURCES = frozenset({SYSTEM, UPLOADED_DXF, BOARD_EDITOR})
+MANUFACTURING_EXPORT_SOURCES = frozenset({SYSTEM, UPLOADED_DXF})
 
 
 class CuttingPlanLifecycleError(ValueError):
@@ -32,6 +36,16 @@ def normalize_source_type(value: str | None) -> str:
     if source not in SUPPORTED_SOURCES:
         raise CuttingPlanLifecycleError(f"unsupported_source_type:{source}")
     return source
+
+
+def is_board_editor_source(value: str | None) -> bool:
+    return str(value or "").strip() == BOARD_EDITOR
+
+
+def manufacturing_actions_allowed(source_type: str | None) -> bool:
+    """Approve/export are closed for Board Editor copies in this phase."""
+
+    return normalize_source_type(source_type) in MANUFACTURING_EXPORT_SOURCES
 
 
 def ensure_draft_editable(status: str | None) -> None:
@@ -109,9 +123,11 @@ def cancel_approval_transition(status: str | None) -> tuple[str, str]:
 
 __all__ = [
     "APPROVED",
+    "BOARD_EDITOR",
     "CANCELLED",
     "DRAFT",
     "EDITABLE_STATUSES",
+    "MANUFACTURING_EXPORT_SOURCES",
     "SYSTEM",
     "SUPERSEDED",
     "SUPPORTED_SOURCES",
@@ -122,7 +138,9 @@ __all__ = [
     "approval_transition",
     "cancel_approval_transition",
     "ensure_draft_editable",
+    "is_board_editor_source",
     "is_current_manufacturing_candidate",
+    "manufacturing_actions_allowed",
     "next_revision",
     "normalize_source_type",
     "revision_from_approved",

@@ -198,6 +198,18 @@ def review_saved_draft(
     return _result(ready, version, fingerprint, issues)
 
 
+def pose_normalized_layout(
+    layout: Mapping[str, Any],
+    trusted: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Apply draft pose once. Used by review and by plan materialization."""
+
+    issues: list[dict[str, Any]] = []
+    sheets = _sheets(trusted, layout, issues)
+    pieces = _posed_pieces(layout, trusted, sheets, issues)
+    return {"sheets": sheets, "pieces": pieces, "issues": issues}
+
+
 def _review_normalized(
     layout: Mapping[str, Any],
     trusted: Mapping[str, Any],

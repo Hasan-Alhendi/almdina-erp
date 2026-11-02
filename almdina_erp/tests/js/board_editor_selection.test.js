@@ -211,7 +211,32 @@ store.selectPiece(null, { pieceKey: null, elementId: null });
 html = draw();
 assert.equal((html.match(/data-abe-selection-chrome="1"/g) || []).length, 0);
 
+// Multi-select disables the angle field; returning to a single allowed piece restores it.
 store.setLayerVisible("GEOMETRY", true);
+store.selectPiece(4, { pieceKey: key, sheetNo: 1, mode: "replace" });
+html = draw();
+assert.match(html, /abe-angle-input[^>]*value=/);
+assert.doesNotMatch(html, /abe-angle-field is-disabled/);
+
+const secondKey = "instance:pi-l-b";
+store.snapshot().session.pieces[secondKey] = {
+    ...store.snapshot().session.pieces[key],
+    piece_key: secondKey,
+    piece_id: 5,
+    piece_instance_id: "pi-l-b",
+};
+store.selectPiece(5, { pieceKey: secondKey, mode: "toggle" });
+assert.equal(store.snapshot().selectedPieceKeys.length, 2);
+html = draw();
+assert.match(html, /abe-angle-field is-disabled/);
+assert.match(html, /Group rotation is not available/);
+
+store.selectPiece(4, { pieceKey: key, mode: "replace" });
+assert.equal(store.snapshot().selectedPieceKeys.length, 1);
+html = draw();
+assert.doesNotMatch(html, /abe-angle-field is-disabled/);
+assert.match(html, /Rotation angle in degrees/);
+
 store.selectPiece(4, { pieceKey: key, sheetNo: 1 });
 const removed = Distribution.excludePiece(store.snapshot().session, key);
 assert.equal(removed.ok, true);

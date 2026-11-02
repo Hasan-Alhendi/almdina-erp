@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import (
     catalog_from_projection,
     decide_draft_write,
     distribution_fingerprint,
+    normalize_content_revision_token,
     normalize_layout,
 )
 
@@ -217,16 +218,110 @@ class BoardEditorDraftTests(unittest.TestCase):
         moved["pieces"][0]["local_x_mm"] = 80
         other = execute_save(request(moved, version=0), context(), store)
         self.assertEqual(other["code"], "version_conflict")
+        self.assertEqual(other.get("current_draft_version"), 1)
         self.assertEqual(len(store.rows), 1)
         self.assertEqual(store.rows[next(iter(store.rows))]["draft_version"], 1)
+        # Local layout from the losing tab must not replace the stored row.
+        self.assertEqual(store.rows[next(iter(store.rows))]["layout_json"]["pieces"][0]["local_x_mm"], 10)
 
         stale = execute_save(request(moved, version=1, revision="rev-b"), context(revision="rev-a"), store)
         self.assertEqual(stale["code"], "source_conflict")
+        self.assertEqual(stale.get("current_draft_version"), 1)
         self.assertEqual(store.rows[next(iter(store.rows))]["draft_version"], 1)
 
         changed_source = execute_save(request(moved, version=1, revision="rev-b"), context(revision="rev-b"), store)
         self.assertEqual(changed_source["code"], "source_conflict")
         self.assertEqual(store.rows[next(iter(store.rows))]["source_content_revision"], "rev-a")
+
+    def test_open_edit_save_twice_then_reopen_save(self):
+        store = MemoryStore()
+        first = execute_save(request(layout(), version=0), context(), store)
+        self.assertTrue(first["ok"])
+        edited = layout()
+        edited["pieces"][0]["local_x_mm"] = 55
+        second = execute_save(request(edited, version=1), context(), store)
+        self.assertTrue(second["ok"])
+        self.assertEqual(second["draft_version"], 2)
+        # Re-open with the saved version and save again without conflict.
+        third = execute_save(request(edited, version=2), context(), store)
+        self.assertTrue(third["ok"])
+        self.assertEqual(third["draft_version"], 2)
+        self.assertEqual(third["code"], "saved")
+        again = layout()
+        again["pieces"][0]["local_x_mm"] = 70
+        fourth = execute_save(request(again, version=2), context(), store)
+        self.assertTrue(fourth["ok"])
+        self.assertEqual(fourth["draft_version"], 3)
+
+    def test_legacy_job_status_token_is_not_a_source_conflict(self):
+        base = "CP-1|2026-01-01|1|fp-a|0"
+        legacy_idle = f"{base}|idle"
+        legacy_done = f"{base}|completed"
+        live = f"{base}|0"
+        self.assertEqual(normalize_content_revision_token(legacy_idle), live)
+        self.assertEqual(normalize_content_revision_token(legacy_done), live)
+        self.assertEqual(normalize_content_revision_token(f"{base}|queued"), f"{base}|1")
+        self.assertEqual(
+            decide_draft_write(
+                stored_version=3,
+                stored_fingerprint="fp-layout",
+                stored_source_revision=legacy_idle,
+                expected_version=3,
+                layout_fingerprint="fp-layout-2",
+                live_source_revision=live,
+                request_source_revision=live,
+            ),
+            "update",
+        )
+        # A real fingerprint/modified change must still conflict.
+        self.assertEqual(
+            decide_draft_write(
+                stored_version=3,
+                stored_fingerprint="fp-layout",
+                stored_source_revision=legacy_idle,
+                expected_version=3,
+                layout_fingerprint="fp-layout-2",
+                live_source_revision=f"CP-1|2026-01-02|1|fp-b|0|0",
+                request_source_revision=f"CP-1|2026-01-02|1|fp-b|0|0",
+            ),
+            "source_conflict",
+        )
+
+        store = MemoryStore()
+        first = execute_save(
+            request(layout(), version=0, revision=legacy_idle),
+            context(revision=legacy_idle),
+            store,
+        )
+        self.assertTrue(first["ok"])
+        moved = layout()
+        moved["pieces"][0]["local_x_mm"] = 42
+        # Client refreshed and now carries the stable bit; stored still has idle.
+        next_save = execute_save(
+            request(moved, version=1, revision=live),
+            context(revision=live),
+            store,
+        )
+        self.assertTrue(next_save["ok"], next_save)
+        self.assertEqual(next_save["draft_version"], 2)
+        self.assertEqual(
+            store.rows[next(iter(store.rows))]["source_content_revision"],
+            live,
+        )
+
+    def test_non_conflict_errors_are_not_version_or_source(self):
+        store = MemoryStore()
+        locked = execute_save(request(layout()), context(status="Delivered"), store)
+        self.assertEqual(locked["code"], "order_locked")
+        self.assertNotEqual(locked["code"], "version_conflict")
+        self.assertNotEqual(locked["code"], "source_conflict")
+        mismatch = execute_save(
+            {**request(layout()), "order_name": "OTHER"},
+            context(),
+            store,
+        )
+        self.assertEqual(mismatch["code"], "order_plan_mismatch")
+        self.assertNotIn(mismatch["code"], {"version_conflict", "source_conflict"})
 
     def test_first_save_is_not_duplicated(self):
         store = MemoryStore()

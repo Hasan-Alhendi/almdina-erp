@@ -169,6 +169,10 @@
 
     function canApprove(frm, tab, row) {
         const caps = workspaceCapabilities(frm);
+        if (tab === "BoardEditor" || String((row && row.source_type) || "") === "Board Editor") {
+            return false;
+        }
+        if (row && row.can_approve === false) return false;
         return Boolean(
             tab !== "Approved"
             && !isEditing(frm)
@@ -209,6 +213,9 @@
     function canOpenBoardEditor(frm, row) {
         const caps = workspaceCapabilities(frm);
         const tab = activeTab(frm);
+        if (tab === "BoardEditor" || String((row && row.source_type) || "") === "Board Editor") {
+            return false;
+        }
         const tabCapability = tab === "Custom"
             ? "view_uploaded_cutting_plan"
             : tab === "Approved"
@@ -241,6 +248,9 @@
 
     function canExport(frm, row) {
         const caps = workspaceCapabilities(frm);
+        if (String((row && row.source_type) || "") === "Board Editor") return false;
+        if (row && row.can_export === false) return false;
+        if (activeTab(frm) === "BoardEditor") return false;
         const archiveOnly = isHistoricalRow(frm, row)
             && String((row && row.source_type) || "") === "Uploaded DXF"
             && hasOriginalDxfFile(row)

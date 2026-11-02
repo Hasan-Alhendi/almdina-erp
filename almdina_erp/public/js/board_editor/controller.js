@@ -205,6 +205,7 @@
                     plan.revision || "",
                     plan.input_fingerprint || "",
                     freshness.needs_recalculation ? "1" : "0",
+                    freshness.job_active ? "1" : "0",
                 ].join("|")
             );
         }
@@ -968,6 +969,7 @@
                 fitAll: () => fitCurrentBoards(),
                 saveDraft: () => saveDraft(),
                 reviewDraft: () => reviewDraft(),
+                createPlanCopy: () => createPlanCopy(),
             });
             syncReviewDialog(view);
             if (!view.viewport.opened && !view.viewport.userAdjusted) scheduleOpeningCamera();
@@ -1205,6 +1207,96 @@
                     frappe.msgprint({
                         title: __("Review distribution"),
                         message: __("Review failed. Your edits and selection are still here."),
+                        indicator: "red",
+                    });
+                }
+            }
+        }
+
+        function rememberPreferEditedPlanTab(orderName) {
+            const key = String(orderName || "").trim();
+            if (!key || typeof window === "undefined" || !window.sessionStorage) return;
+            try {
+                window.sessionStorage.setItem(`almdina.dco.planTab.${key}`, "BoardEditor");
+                // Force the order plan workspace to reload so the new Edited plan
+                // appears without a manual page refresh.
+                window.sessionStorage.setItem(`almdina.dco.planWorkspaceReload.${key}`, "1");
+            } catch (error) {
+                // sessionStorage may be unavailable; returning to the order still works.
+            }
+        }
+
+        async function createPlanCopy() {
+            if (!store || !activeOrderName || !loadedPlanName) return;
+            const view = store.snapshot();
+            if (!view.session || view.createPlanInFlight) return;
+            if (view.distributionDirty) {
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: __("Apply to cutting plan"),
+                        message: __("Save the current distribution before applying it to the cutting plan."),
+                        indicator: "orange",
+                    });
+                }
+                return;
+            }
+            if (!(Number(view.draftVersion) > 0)) {
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: __("Apply to cutting plan"),
+                        message: __("Save the board editor distribution before applying it to the cutting plan."),
+                        indicator: "orange",
+                    });
+                }
+                return;
+            }
+            const request = store.beginCreatePlan();
+            if (!request) return;
+            const draft = (view.payload && view.payload.editor_draft) || {};
+            const planMeta = (view.payload && view.payload.plan) || {};
+            try {
+                const response = await Api.createPlanCopy({
+                    orderName: activeOrderName,
+                    planName: loadedPlanName,
+                    expectedDraftVersion: request.draftVersion,
+                    sourceContentRevision: contentRevisionToken(view.payload || {}),
+                    sourceInputFingerprint: String(planMeta.input_fingerprint || ""),
+                    createRequestId: request.requestId,
+                    draftName: String(draft.name || ""),
+                });
+                if (!store) return;
+                store.settleCreatePlan(response || null);
+                if (response && response.ok && response.plan_name && typeof frappe !== "undefined") {
+                    const planName = String(response.plan_name);
+                    const orderName = String(activeOrderName);
+                    rememberPreferEditedPlanTab(orderName);
+                    frappe.show_alert({
+                        message: __(
+                            "The edited layout was applied as cutting plan {0}. It is not approved."
+                        ).replace("{0}", frappe.utils.escape_html(planName)),
+                        indicator: "green",
+                    }, 8);
+                    leaveConfirmed = true;
+                    backToOrder(orderName);
+                } else if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    const code = String((response && response.code) || "");
+                    const title = (code === "version_conflict" || code === "source_conflict" || code === "source_changed")
+                        ? __("Could not apply layout")
+                        : __("Apply to cutting plan");
+                    frappe.msgprint({
+                        title,
+                        message: (response && response.message)
+                            || __("The layout could not be applied to a cutting plan."),
+                        indicator: "orange",
+                    });
+                }
+            } catch (error) {
+                if (!store) return;
+                store.settleCreatePlan(null);
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: __("Apply to cutting plan"),
+                        message: __("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
                         indicator: "red",
                     });
                 }

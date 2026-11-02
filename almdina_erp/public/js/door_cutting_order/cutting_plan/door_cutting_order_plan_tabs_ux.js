@@ -13,6 +13,11 @@
 			capability: "view_uploaded_cutting_plan",
 		}),
 		Object.freeze({
+			id: "BoardEditor",
+			label: "Edited plan",
+			capability: "view_system_cutting_plan",
+		}),
+		Object.freeze({
 			id: "Approved",
 			label: "Approved plan",
 			capability: "view_approved_cutting_plan",
@@ -77,14 +82,27 @@
 	}
 
 	function isSourceTabLocked(frm, tabId) {
-		return isPlanEditing(frm) && String(tabId || "") !== "System";
+		const tab = String(tabId || "");
+		return isPlanEditing(frm) && tab !== "System" && tab !== "BoardEditor";
+	}
+
+	function hasBoardEditorPlan(frm) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const data = owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
+		const plans = data && data.data && data.data.plans;
+		const row = plans && plans.board_editor_draft;
+		return Boolean(row && String(row.name || "").trim());
 	}
 
 	function visibleTabs(frm) {
 		// The server normalizes legacy umbrella grants into granular tab grants.
 		// The browser must never widen an explicit denial by guessing that the
 		// umbrella permission means all tabs.
-		return PLAN_TABS.filter((tab) => canCapability(frm, tab.capability));
+		return PLAN_TABS.filter((tab) => {
+			if (!canCapability(frm, tab.capability)) return false;
+			if (tab.id === "BoardEditor") return hasBoardEditorPlan(frm);
+			return true;
+		});
 	}
 
 	function parseJsonField(raw) {
@@ -128,6 +146,13 @@
 		if (tab === "Approved") {
 			return getCachedApprovedPlan(frm);
 		}
+		if (tab === "BoardEditor") {
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const row = owner && typeof owner.planForTab === "function"
+				? owner.planForTab(frm, "BoardEditor")
+				: null;
+			return parseJsonField(row && row.snapshot_json);
+		}
 		return (
 			parseJsonField(frm.doc.system_plan_json) ||
 			parseJsonField(frm.doc.cutting_plan_json) ||
@@ -141,7 +166,26 @@
 			const row = preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm);
 			if (row) return parseJsonField(row.snapshot_json);
 		}
+		if (tab === "BoardEditor") {
+			return getPlanForTab(frm, "BoardEditor");
+		}
 		return getPlanForTab(frm, tab);
+	}
+
+	function consumePreferredPlanTab(frm) {
+		const orderName = String((frm && frm.doc && frm.doc.name) || "").trim();
+		if (!orderName || typeof window === "undefined" || !window.sessionStorage) {
+			return "";
+		}
+		const key = `almdina.dco.planTab.${orderName}`;
+		try {
+			const preferred = String(window.sessionStorage.getItem(key) || "").trim();
+			if (!preferred) return "";
+			window.sessionStorage.removeItem(key);
+			return preferred;
+		} catch (error) {
+			return "";
+		}
 	}
 
 	function defaultTab(frm) {
@@ -158,6 +202,15 @@
 		const preferred = frm.__almdina_active_plan_tab;
 		if (preferred && allowed.includes(preferred)) {
 			return preferred;
+		}
+
+		// After applying a board-editor layout, return to the Edited plan tab
+		// without changing approved_plan. Consumed once so later opens keep
+		// the normal Approved/System preference.
+		const remembered = consumePreferredPlanTab(frm);
+		if (remembered && allowed.includes(remembered)) {
+			frm.__almdina_active_plan_tab = remembered;
+			return remembered;
 		}
 
 		if (frm.doc.approved_plan && allowed.includes("Approved")) {
@@ -315,6 +368,20 @@
 			}
 			const banner = planStatusBanner(frm, "Custom");
 			return `${banner}${renderPlanHtml(frm, getPlanForTab(frm, "Custom"))}`;
+		}
+
+		if (tab === "BoardEditor") {
+			const plan = getPlanForTab(frm, "BoardEditor");
+			if (!plan || !plan.sheets || !plan.sheets.length) {
+				return emptyState("There is no edited board-editor plan yet.");
+			}
+			const block = `
+				<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+					<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Edited plan (view only)"))}</strong>
+					<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(translate("Approval and DXF export are blocked until free-angle manufacturing support is complete."))}</span>
+				</div>
+			`;
+			return `${block}${renderPlanHtml(frm, plan)}`;
 		}
 
 		if (tab === "Approved") {

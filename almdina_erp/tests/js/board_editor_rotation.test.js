@@ -220,4 +220,60 @@ assert.equal(RotationGeometry.anglesEquivalent(0, 360), true);
     assert.equal(decision.ok, true);
 }
 
+{
+    // Proven alone is not permission; allow_rotation must be explicit.
+    const unproven = piece("instance:u", { piece_id: 11, x: 40, y: 40, w: 60, h: 40 });
+    unproven.allow_rotation = true;
+    unproven.allow_rotation_proven = false;
+    assert.equal(
+        RotationGeometry.pieceRotationEligibility(
+            baseSession({ "instance:u": unproven }),
+            "instance:u"
+        ).rotatable,
+        false
+    );
+    const provenOnly = piece("instance:p", { piece_id: 12, x: 40, y: 40, w: 60, h: 40 });
+    delete provenOnly.allow_rotation;
+    provenOnly.allow_rotation_proven = true;
+    assert.equal(RotationGeometry.explicitAllowRotation(provenOnly), false);
+}
+
+{
+    // Allowed piece stays rotatable after a saved layout is reapplied (re-open).
+    const { SessionDocument } = editor;
+    let session = baseSession({
+        "instance:a": piece("instance:a", { piece_id: 1, x: 100, y: 100, w: 120, h: 80 }),
+        "instance:b": piece("instance:b", { piece_id: 2, x: 400, y: 100, w: 80, h: 80, allow: false }),
+    });
+    assert.equal(
+        RotationGeometry.pieceRotationEligibility(session, "instance:a").rotatable,
+        true
+    );
+    session = RotationGeometry.applyPieceRotation(session, "instance:a", 18);
+    const layout = SessionDocument.layoutDocument(session);
+    const restored = SessionDocument.applySavedLayout(
+        baseSession({
+            "instance:a": piece("instance:a", { piece_id: 1, x: 100, y: 100, w: 120, h: 80 }),
+            "instance:b": piece("instance:b", { piece_id: 2, x: 400, y: 100, w: 80, h: 80, allow: false }),
+        }),
+        layout
+    );
+    assert.equal(restored.ok, true);
+    assert.equal(
+        RotationGeometry.pieceRotationEligibility(restored.session, "instance:a").rotatable,
+        true
+    );
+    assert.ok(
+        RotationGeometry.anglesEquivalent(restored.session.pieces["instance:a"].rotation_deg, 18)
+    );
+    assert.equal(
+        RotationGeometry.pieceRotationEligibility(restored.session, "instance:b").rotatable,
+        false
+    );
+    assert.equal(
+        RotationGeometry.reasonMessage("multi_selection"),
+        "Select one piece to set its rotation angle. Group rotation is not available."
+    );
+}
+
 console.log("board_editor_rotation.test.js: ok");

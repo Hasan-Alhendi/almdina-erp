@@ -450,6 +450,8 @@
             [ROTATE_BLOCK_INCOMPLETE]: "Incomplete geometry — not rotatable.",
             [ROTATE_BLOCK_NOT_EDITABLE]: "This piece cannot be edited.",
             [ROTATE_BLOCK_HOSTING]: "Guest must remain inside the host opening.",
+            multi_selection: "Select one piece to set its rotation angle. Group rotation is not available.",
+            no_selection: "Select a piece to set its rotation angle.",
             partial_board_overlap: "Piece would leave the usable board area.",
             outside_usable_sheet: "Piece would leave the usable board area.",
             piece_overlap: "Pieces would overlap.",

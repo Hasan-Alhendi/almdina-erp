@@ -81,6 +81,39 @@ def draft_key(order_name: str, plan_name: str) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+# Last token segment used to be the raw background job status ("idle",
+# "completed", "queued", …). That flipped the revision when a finished job
+# moved idle↔completed without any plan content change. The live token now
+# stores a stable active-job bit ("0"|"1"). Normalize both sides so drafts
+# saved under the old label stay comparable when the plan itself is unchanged.
+_JOB_ACTIVE_LABELS = frozenset({"1", "queued", "running", "enqueue"})
+_JOB_IDLE_LABELS = frozenset({"0", "idle", "completed", ""})
+
+
+def normalize_content_revision_token(token: str) -> str:
+    """Canonicalize a content revision token for equality checks.
+
+    Preserves name/modified/revision/fingerprint/needs_recalc. Only rewrites a
+    recognized job-status label into the stable active bit. Unknown shapes are
+    returned unchanged so real mismatches still fail closed.
+    """
+
+    text = str(token or "")
+    if not text:
+        return ""
+    parts = text.split("|")
+    if len(parts) < 6:
+        return text
+    job = str(parts[-1] or "").strip().lower()
+    if job in _JOB_ACTIVE_LABELS:
+        parts[-1] = "1"
+    elif job in _JOB_IDLE_LABELS:
+        parts[-1] = "0"
+    else:
+        return text
+    return "|".join(parts)
+
+
 def catalog_from_projection(projection: Mapping[str, Any]) -> dict[str, Any]:
     """Trusted piece and sheet identities taken from the server projection."""
 
@@ -161,9 +194,12 @@ def decide_draft_write(
     the same layout is idempotent and does not insert another row.
     """
 
-    if request_source_revision != live_source_revision:
+    request_rev = normalize_content_revision_token(request_source_revision)
+    live_rev = normalize_content_revision_token(live_source_revision)
+    stored_rev = normalize_content_revision_token(stored_source_revision or "")
+    if request_rev != live_rev:
         return "source_conflict"
-    if stored_version is not None and stored_source_revision != live_source_revision:
+    if stored_version is not None and stored_rev != live_rev:
         return "source_conflict"
     if stored_version is None:
         if int(expected_version) != 0:

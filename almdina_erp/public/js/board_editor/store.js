@@ -41,6 +41,7 @@
             draftVersion: 0,
             savedFingerprint: "",
             saveState: "clean",
+            saveConflictCode: null,
             saveInFlight: false,
             canSaveLayout: false,
             sourceOnly: false,
@@ -48,6 +49,8 @@
             reviewSerial: 0,
             reviewInFlight: false,
             reviewStale: false,
+            createPlanInFlight: false,
+            lastCreatedPlanName: "",
         };
 
         (projection.sheets || []).forEach((sheet) => {
@@ -94,10 +97,13 @@
                 sourceOnly: state.sourceOnly,
                 distributionDirty: distributionDirty(),
                 saveState: derivedSaveState(),
+                saveConflictCode: state.saveConflictCode,
                 review: state.review,
                 reviewSerial: state.reviewSerial,
                 reviewInFlight: state.reviewInFlight,
                 reviewStale: state.reviewStale,
+                createPlanInFlight: state.createPlanInFlight,
+                lastCreatedPlanName: state.lastCreatedPlanName,
             };
         }
 
@@ -224,6 +230,7 @@
             if (state.saveInFlight || !state.canSaveLayout) return false;
             state.saveInFlight = true;
             state.saveState = "saving";
+            state.saveConflictCode = null;
             emit();
             return true;
         }
@@ -232,10 +239,11 @@
             const api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
             const settled = api
                 ? api.settleDraftSave(snapshot(), sentFingerprint, response)
-                : { saveState: "failed", saveInFlight: false };
+                : { saveState: "failed", saveInFlight: false, saveConflictCode: null };
             state.draftVersion = Number(settled.draftVersion) || 0;
             state.savedFingerprint = String(settled.savedFingerprint || "");
             state.saveState = settled.saveState || "failed";
+            state.saveConflictCode = settled.saveConflictCode || null;
             state.saveInFlight = false;
             emit();
         }
@@ -266,6 +274,32 @@
             }
             emit();
             return settled;
+        }
+
+        function beginCreatePlan() {
+            if (state.createPlanInFlight || !state.session || distributionDirty()) return null;
+            if (!(Number(state.draftVersion) > 0)) return null;
+            state.createPlanInFlight = true;
+            const request = {
+                draftVersion: state.draftVersion,
+                fingerprint: sessionFingerprint(),
+                requestId: (
+                    (typeof crypto !== "undefined" && crypto.randomUUID)
+                        ? crypto.randomUUID()
+                        : `abe-create-${Date.now()}-${Math.random().toString(16).slice(2)}`
+                ).slice(0, 64),
+            };
+            emit();
+            return request;
+        }
+
+        function settleCreatePlan(response) {
+            state.createPlanInFlight = false;
+            if (response && response.ok && response.plan_name) {
+                state.lastCreatedPlanName = String(response.plan_name || "");
+            }
+            emit();
+            return response || null;
         }
 
         function setLayerVisible(matchKey, visible) {
@@ -394,6 +428,8 @@
             settleDraftSave,
             beginReview,
             settleReview,
+            beginCreatePlan,
+            settleCreatePlan,
             setLayerVisible,
             setAllLayersVisible,
             showOnlyLayer,
