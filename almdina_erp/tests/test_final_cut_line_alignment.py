@@ -266,3 +266,68 @@ def test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned(tmp_path):
     assert len(placed) == 2
     assert sorted(p["x"] for p in placed) == pytest.approx([15, 15.3])
     assert path.read_bytes() == original_bytes
+
+
+def test_five_candidate_alignment_runtime_and_memory_evidence():
+    """Measured A/B application projection under identical candidate inputs.
+
+    Intentionally diagnostic: timing is runner-sensitive, so no flaky wall-clock
+    threshold is used as a correctness assertion.
+    """
+    import statistics
+    import time
+    import tracemalloc
+    from unittest.mock import patch
+
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+
+    class FiveCandidates(TwoRowsEngine):
+        def optimize(self, *args, **kwargs):
+            result = super().optimize(*args, **kwargs)
+            result["smart_candidates"] = [
+                deepcopy(result["smart_candidates"][0]) for _ in range(5)
+            ]
+            return result
+
+    command = OptimizeOrderPlanCommand(
+        engine_version="five-plan-benchmark", input_fingerprint="same-input",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions("smart", "CNC Router", 10, 40, 30, 30, .09),
+        piece_rows=({"width_cm": 20, "length_cm": 20, "qty": 2},),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    output = {}
+    for enabled in (False, True):
+        elapsed, memory, shifts = [], [], []
+        for _ in range(3):
+            engine = FiveCandidates()
+            tracemalloc.start()
+            started = time.perf_counter()
+            if enabled:
+                result = optimize_order_plan(command, engine=engine)
+            else:
+                with patch.object(
+                    align, "align_regular_cut_lines",
+                    side_effect=lambda plan, *args, **kwargs: plan,
+                ):
+                    result = optimize_order_plan(command, engine=engine)
+            elapsed.append((time.perf_counter() - started) * 1000)
+            memory.append(tracemalloc.get_traced_memory()[1] / 1024)
+            tracemalloc.stop()
+            assert result.snapshot["validation"]["is_valid"]
+            assert result.required_boards == 1
+            shifts.append(
+                result.snapshot["sheets"][0]["pieces"][1]["x"] -
+                result.snapshot["sheets"][0]["pieces"][0]["x"]
+            )
+        output[enabled] = (statistics.median(elapsed), max(memory), shifts)
+    print(
+        "CUT_ALIGNMENT_5_CANDIDATES "
+        f"baseline_median_ms={output[False][0]:.3f} "
+        f"enabled_median_ms={output[True][0]:.3f} "
+        f"baseline_peak_KiB={output[False][1]:.1f} "
+        f"enabled_peak_KiB={output[True][1]:.1f} "
+        f"baseline_delta_cm={output[False][2][-1]:.3f} "
+        f"enabled_delta_cm={output[True][2][-1]:.3f}",
+        flush=True,
+    )
