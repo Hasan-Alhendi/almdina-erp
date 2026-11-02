@@ -500,3 +500,119 @@ def test_aligned_projection_is_repeatable_after_second_application_run():
     second = _run_alignment(first, sources)
     assert second == first
     assert not validate_plan(second, sources, 100, 100, kerf_cm=.5)
+
+
+# Anonymized manufacturing-geometry witness reconstructed from an exported
+# three-board rectangular DXF. Only one 16-piece board is needed to reproduce
+# the grouped-axis opportunity; no customer/order identifiers are stored.
+_FIRST_BOARD_MM = (
+    (33, 4, 1010, 299),
+    (33, 308, 1010, 299),
+    (33, 612, 1010, 269),
+    (33, 886, 1010, 269),
+    (6.5, 1160, 903, 299),
+    (914.5, 1160, 299, 903),
+    (6.5, 1464, 903, 299),
+    (6.5, 1768, 903, 299),
+    (1048, 4, 139, 461),
+    (1048, 470, 139, 461),
+    (22.5, 2072, 461, 129),
+    (22.5, 2206, 461, 129),
+    (488.5, 2072, 461, 129),
+    (954.5, 2068, 119, 368),
+    (488.5, 2206, 400, 119),
+    (1078.5, 2068, 119, 368),
+)
+_RIGID_SIX_IDS = frozenset((1, 2, 3, 4, 9, 10))
+
+
+def _production_geometry_witness():
+    sources = expand_piece_groups([
+        dict(width_cm=w / 10, length_cm=h / 10, qty=1)
+        for x, y, w, h in _FIRST_BOARD_MM
+    ])
+    pieces = [
+        make_placed_piece(source, x / 10, y / 10, w / 10, h / 10, False)
+        for source, (x, y, w, h) in zip(sources, _FIRST_BOARD_MM)
+    ]
+    used = sum(piece["w"] * piece["h"] for piece in pieces) / 10000
+    plan = dict(
+        method_key="MaxRects Best Short Side",
+        sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                     w=122, h=244, pieces=pieces)],
+        unplaced=[], used_area_m2=used,
+        total_board_area_m2=122 * 244 / 10000,
+        waste_area_m2=122 * 244 / 10000 - used,
+    )
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def _six_piece_group_shift(plan):
+    moved = deepcopy(plan)
+    for piece in moved["sheets"][0]["pieces"]:
+        if piece["id"] in _RIGID_SIX_IDS:
+            piece["x"] -= 2.65
+    return moved
+
+
+def test_anonymized_large_board_real_kerf_prefers_group_six_over_four():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        _rectangles, _groups,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import (
+        _largest_reusable_free_area,
+    )
+    sources, original = _production_geometry_witness()
+    assert _RIGID_SIX_IDS in [
+        frozenset(group) for group in _groups(original["sheets"][0], "x")
+    ]
+    four = deepcopy(original)
+    for piece in four["sheets"][0]["pieces"]:
+        if piece["id"] in {1, 2, 3, 4}:
+            piece["x"] -= 2.65
+    full = _six_piece_group_shift(original)
+    assert not validate_plan(four, sources, 122, 244, kerf_cm=.5)
+    assert not validate_plan(full, sources, 122, 244, kerf_cm=.5)
+    before_length, before_segments = _rectangles(original, .5)
+    four_length, four_segments = _rectangles(four, .5)
+    after_length, after_segments = _rectangles(full, .5)
+    assert four_length > before_length + 900  # mm: breaks existing shared cutters
+    assert four_segments > before_segments
+    assert after_length == pytest.approx(before_length, abs=.05)
+    assert after_segments < before_segments
+    assert full["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        full["sheets"][0]["pieces"][4]["x"]
+    )
+    def reusable(p):
+        return _largest_reusable_free_area(p, 30, 30, .09, machine_type="CNC Router")
+    assert reusable(full) >= reusable(original) - 1e-9
+    assert original["sheets"][0]["pieces"][0]["x"] == pytest.approx(3.3)
+
+
+def test_anonymized_board_alignment_search_reaches_proven_six_piece_move():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, original = _production_geometry_witness()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        original, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    before = {p["id"]: p for p in original["sheets"][0]["pieces"]}
+    after = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert after[1]["x"] == pytest.approx(after[5]["x"])
+    assert after[1]["x"] == pytest.approx(.65)  # 6.5 mm from board origin
+    # Group's vertical and internal geometry must remain unaltered.
+    for piece_id in _RIGID_SIX_IDS:
+        assert after[piece_id]["x"] - before[piece_id]["x"] == pytest.approx(-2.65)
+        assert after[piece_id]["y"] == before[piece_id]["y"]
+    assert _rectangles(result, .5)[0] <= _rectangles(original, .5)[0] + .05
+    assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+    assert diagnostics["accepted"] >= 1
