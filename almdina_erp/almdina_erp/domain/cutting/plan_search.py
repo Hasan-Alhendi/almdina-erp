@@ -712,6 +712,94 @@ def _accept_candidate(
     return enriched
 
 
+def compact_regular_final(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
+        machine_type, mirroring_allowed, metric_kwargs):
+    """Close gaps in a small zero-remnant final, after native search has ended.
+
+    Four deterministic axis sweeps, without rotation, regrouping or new sheets.
+    Positive reusable remnants and protected shapes keep their existing layout.
+    This never changes the seed or incumbent used by time-limited native search.
+    """
+    if (machine_type not in {"Auto", "CNC Router"} or not pieces
+            or len(pieces) > _MAX_REPACK_PIECES or plan.get("unplaced")
+            or not plan.get("sheets") or not plan.get("industrial_rank") or not plan.get("industrial_metrics")
+            or plan.get("industrial_metrics", {}).get("largest_reusable_free_area_m2", 0) > 1e-9
+            or any((p.get("piece_type") or "Regular") != "Regular"
+                or (p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD" for p in pieces)
+            or _locked_piece_ids(plan)
+            or any((s.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                or any((p.get("piece_type") or "Regular") != "Regular"
+                    or (p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                    or p.get("geometry") or p.get("overlays") or p.get("special_shape_geometry_json")
+                    for p in s.get("pieces") or []) for s in plan["sheets"])):
+        return plan
+    from .evaluation import validate_plan, placement_permission_errors
+    from .optimizer import enrich_plan_metrics
+
+    if validate_plan(plan, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+        return plan
+    best = plan
+    for axis, extent, cross, cross_extent, far in (
+        ("x", "w", "y", "h", False), ("x", "w", "y", "h", True),
+        ("y", "h", "x", "w", False), ("y", "h", "x", "w", True)):
+        candidate = deepcopy(best)
+        changed = []
+        for index, sheet in enumerate(candidate["sheets"]):
+            ordered = sorted(sheet.get("pieces") or [], key=lambda p: (p[axis], p[cross], p["id"]), reverse=far)
+            moved = False
+            for position, piece in enumerate(ordered):
+                bound = (board_w_cm if axis == "x" else board_h_cm)-piece[extent] if far else 0.0
+                for other in ordered[:position]:
+                    gap = max(piece[cross]-other[cross]-other[cross_extent],
+                        other[cross]-piece[cross]-piece[cross_extent])
+                    if gap < kerf_cm-1e-9:
+                        bound = min(bound, other[axis]-kerf_cm-piece[extent]) if far else max(
+                            bound, other[axis]+other[extent]+kerf_cm)
+                if (far and bound > piece[axis]+1e-6) or (not far and bound < piece[axis]-1e-6):
+                    piece[axis] = bound
+                    moved = True
+            if moved:
+                changed.append(index)
+                for cache in ("free_rects", "skyline", "shelves"):
+                    sheet.pop(cache, None)
+        if not changed:
+            continue
+        candidate = enrich_plan_metrics(candidate, str(plan.get("method_key") or ""),
+            machine_type, **metric_kwargs)
+        # The first four rank fields cover completeness, boards, machine and
+        # reusable remnant. Estimated cuts cannot justify spreading the final.
+        if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
+            continue
+        if validate_plan(candidate, pieces, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+            continue
+        if placement_permission_errors(candidate, pieces, mirroring_allowed=mirroring_allowed):
+            continue
+        before = _rectangular_cleanup_geometry(best, changed, kerf_cm)
+        after = _rectangular_cleanup_geometry(candidate, changed, kerf_cm)
+        if (after[0] <= before[0]+1e-6 and after[1] <= before[1]+1e-6
+                and (after[0] < before[0]-1e-6 or after[1] < before[1]-1e-6)):
+            best = candidate
+    return best
+
+
+def _rectangular_cleanup_geometry(plan, indices, kerf_cm):
+    from math import dist
+    from .cutter_center_paths import cutter_center_segments
+
+    area = length = 0.0
+    for index in indices:
+        pieces = plan["sheets"][index].get("pieces") or []
+        if not pieces:
+            continue
+        area += (max(p["x"]+p["w"] for p in pieces)-min(p["x"] for p in pieces)) * (
+            max(p["y"]+p["h"] for p in pieces)-min(p["y"] for p in pieces))
+        shapes = [([(p["x"]*10, p["y"]*10), ((p["x"]+p["w"])*10, p["y"]*10),
+            ((p["x"]+p["w"])*10, (p["y"]+p["h"])*10), (p["x"]*10, (p["y"]+p["h"])*10)], [])
+            for p in pieces]
+        length += sum(dist(a, b) for a, b in cutter_center_segments(shapes, max(0.0, kerf_cm)*5))/10
+    return area, length
+
+
 def _improve_remnants(
     plan: dict[str, Any],
     pieces: list[dict[str, Any]],

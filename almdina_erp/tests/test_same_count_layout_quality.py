@@ -196,3 +196,210 @@ def test_repair_survives_snapshot_centering_reload_and_real_strict_roundtrip(tmp
     reloaded = json.loads(saved.read_text())
     assert reloaded == after
     strict_roundtrip(reloaded,rows,122,244,tmp_path)
+
+
+def order_241_before():
+    data = json.loads((Path(__file__).parent/'fixtures/layout_241_before.json').read_text())
+    pieces = expand_piece_groups(data['rows'])
+    source = {p['id']: p for p in pieces}
+    sheets = []
+    for i, placements in enumerate(data['placements'], 1):
+        sheet = create_sheet(i, 120, 242)
+        sheet['pieces'] = [make_placed_piece(source[pid], x, y, w, h, rotated)
+            for pid, x, y, w, h, rotated in placements]
+        sheets.append(sheet)
+    used = sum(p['area_m2'] for p in pieces)
+    plan = dict(sheets=sheets, unplaced=[], method_key='MaxRects Bottom Left', complexity=3,
+        used_area_m2=used, total_board_area_m2=5.808, waste_area_m2=5.808-used)
+    return opt.enrich_plan_metrics(plan, plan['method_key'], 'CNC Router'), pieces, data['rows']
+
+
+def _occupied_area(plan):
+    return sum((max(p['x']+p['w'] for p in s['pieces'])-min(p['x'] for p in s['pieces']))*
+        (max(p['y']+p['h'] for p in s['pieces'])-min(p['y'] for p in s['pieces']))
+        for s in plan['sheets'] if s['pieces'])
+
+
+def _real_rectangular_path_length(plan, kerf_cm=.5):
+    from math import dist
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import cutter_center_segments
+    length = 0
+    for sheet in plan['sheets']:
+        shapes = [([(p['x']*10, p['y']*10), ((p['x']+p['w'])*10, p['y']*10),
+            ((p['x']+p['w'])*10, (p['y']+p['h'])*10), (p['x']*10, (p['y']+p['h'])*10)], [])
+            for p in sheet['pieces']]
+        length += sum(dist(a, b) for a, b in cutter_center_segments(shapes, kerf_cm*5))/10
+    return length
+
+
+def compact_final(plan, pieces, **options):
+    return search.compact_regular_final(plan, pieces, 120, 242, .5, **(OPTIONS | options))
+
+
+@pytest.mark.parametrize('budget', [.2, 2])
+def test_241_cleanup_keeps_tight_layout_despite_better_estimated_cut_count(budget):
+    plan, pieces, _ = order_241_before()
+    original = deepcopy(plan)
+    assert [len(s['pieces']) for s in plan['sheets']] == [7, 15]
+    assert plan['industrial_metrics']['largest_reusable_free_area_m2'] == 0
+    assert not validate_plan(plan, pieces, 120, 242, kerf_cm=.5)
+    result = search.improve_plan_search(plan, pieces, 120, 242, .5,
+        machine_type='CNC Router', time_limit_sec=budget, **OPTIONS['metric_kwargs'])
+    result = compact_final(result, pieces)
+    assert plan == original
+    assert len(result['sheets']) == 2 and not result['unplaced']
+    assert result['industrial_metrics']['largest_reusable_free_area_m2'] == 0
+    assert _occupied_area(result) <= _occupied_area(plan)+1e-6
+    assert _real_rectangular_path_length(result) <= _real_rectangular_path_length(plan)+1e-6
+    assert not validate_plan(result, pieces, 120, 242, kerf_cm=.5)
+    assert not placement_permission_errors(result, pieces, mirroring_allowed=False)
+
+
+@pytest.mark.parametrize('stage', ['compaction', 'remnant'])
+def test_final_compaction_repairs_the_241_move_from_either_cleanup_stage(monkeypatch, stage):
+    plan, pieces, _ = order_241_before()
+    candidate = deepcopy(plan)
+    for piece in candidate['sheets'][0]['pieces']:
+        if piece['id'] in {5, 6}:
+            piece['y'] = 0
+    candidate = opt.enrich_plan_metrics(candidate, candidate['method_key'], 'CNC Router')
+    assert candidate['industrial_rank'] < plan['industrial_rank']
+    assert candidate['industrial_metrics']['estimated_cut_count'] == 46
+    assert plan['industrial_metrics']['estimated_cut_count'] == 47
+    assert not validate_plan(candidate, pieces, 120, 242, kerf_cm=.5)
+    assert _real_rectangular_path_length(candidate) > _real_rectangular_path_length(plan)
+    monkeypatch.setattr(search, '_repacked_board_candidates', lambda *a, **kw: iter(()))
+    monkeypatch.setattr(search, '_compaction_candidates', lambda *a, **kw: iter([candidate] if stage == 'compaction' else []))
+    monkeypatch.setattr(search, '_move_sheet_onto_others', lambda *a, **kw: None)
+    monkeypatch.setattr(search, '_remnant_moves', lambda *a, **kw: [()] if stage == 'remnant' else [])
+    monkeypatch.setattr(search, '_relocate', lambda *a, **kw: candidate)
+    result = search.improve_plan_search(plan, pieces, 120, 242, .5,
+        machine_type='CNC Router', time_limit_sec=2, **OPTIONS['metric_kwargs'])
+    assert result is not plan
+    fixed = compact_final(result, pieces)
+    assert _occupied_area(fixed) <= _occupied_area(plan)+1e-6
+    assert _real_rectangular_path_length(fixed) <= _real_rectangular_path_length(plan)+1e-6
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_cleanup_cannot_trade_a_larger_envelope_for_shorter_paths_or_the_reverse(reverse):
+    pieces = expand_piece_groups([dict(width_cm=10, length_cm=30, qty=2)])
+    def placed(positions):
+        raw = dict(sheets=[dict(sheet_no=1, w=120, h=242,
+            pieces=[make_placed_piece(p, x, y, 10, 30, False)
+            for p, (x, y) in zip(pieces, positions)])], unplaced=[])
+        return opt.enrich_plan_metrics(raw, 'MaxRects Bottom Left', 'CNC Router',
+            min_remnant_width_cm=300, min_remnant_length_cm=300, min_remnant_area_m2=9)
+    narrow = placed([(0, 0), (0, 30.5)])
+    shorter_cut = placed([(0, 0), (10.5, 0)])
+    assert _occupied_area(narrow) < _occupied_area(shorter_cut)
+    assert _real_rectangular_path_length(narrow) > _real_rectangular_path_length(shorter_cut)
+    before, after = (shorter_cut, narrow) if reverse else (narrow, shorter_cut)
+    assert compact_final(before, pieces) is before  # Already tight; no repacking or rotation.
+
+
+@pytest.mark.parametrize('kerf', [0, .3, .5, .7])
+def test_cleanup_measures_the_full_canonical_network_in_centimeters(kerf):
+    pieces = expand_piece_groups([dict(width_cm=10, length_cm=30, qty=2)])
+    plan = dict(sheets=[dict(pieces=[make_placed_piece(p, x, 0, 10, 30, False)
+        for p, x in zip(pieces, [0, 10+kerf])])])
+    area, length = search._rectangular_cleanup_geometry(plan, [0], kerf)
+    # Two offset rectangle perimeters minus one shared 30+Kerf cm side.
+    assert area == pytest.approx((20+kerf)*30)
+    assert length == pytest.approx(130+7*kerf)
+
+
+@pytest.mark.parametrize('skip', ['remnant', 'panel', 'oversize'])
+def test_final_compaction_skips_positive_remnants_panel_saw_and_large_orders(monkeypatch, skip):
+    plan, pieces, _ = order_241_before()
+    options = {}
+    if skip == 'remnant': plan['industrial_metrics']['largest_reusable_free_area_m2'] = .1
+    if skip == 'panel': options['machine_type'] = 'Panel Saw'
+    if skip == 'oversize': pieces = pieces*3
+    monkeypatch.setattr(search, '_rectangular_cleanup_geometry', lambda *a: pytest.fail('primary gain blocked'))
+    assert compact_final(plan, pieces, **options) is plan
+
+
+@pytest.mark.parametrize('marker', ['sheet_offcut', 'piece_offcut', 'glass', 'corner', 'outline',
+    'geometry', 'overlay', 'special_shape', 'guest', 'nest', 'mirror'])
+def test_cleanup_guard_leaves_protected_geometry_to_its_existing_contract(monkeypatch, marker):
+    plan, pieces, _ = order_241_before()
+    first = plan['sheets'][0]['pieces'][0]
+    if marker == 'sheet_offcut': plan['sheets'][0]['resource_kind'] = 'OFFCUT'
+    if marker == 'piece_offcut': first['resource_kind'] = 'OFFCUT'
+    if marker == 'glass': first['piece_type'] = 'Glass'
+    if marker == 'corner': first['piece_type'] = 'Clipped Corner'
+    if marker == 'outline': first['placement_outline_cm'] = [[0,0],[1,0],[1,1]]
+    if marker == 'geometry': first['geometry'] = {'outer': [[0,0],[1,0],[1,1]]}
+    if marker == 'overlay': first['overlays'] = [{'layer': 'Liner'}]
+    if marker == 'special_shape': first['special_shape_geometry_json'] = '{"outer": [[0,0],[1,0],[1,1]]}'
+    if marker == 'guest': first['glass_host_piece_id'] = 5
+    if marker == 'nest': first['placement_quarter_turns'] = 0
+    if marker == 'mirror': first['placement_mirrored'] = True
+    monkeypatch.setattr(search, '_rectangular_cleanup_geometry', lambda *a: pytest.fail('protected geometry measured as rectangles'))
+    assert compact_final(plan, pieces) is plan
+
+
+def test_241_preserved_snapshot_survives_centering_reload_and_actual_js_strict_import(tmp_path):
+    from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+    from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+    from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+        BoardGeometry, OptimizerOptions, OptimizeOrderPlanCommand, optimize_order_plan,
+    )
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+    plan, pieces, rows = order_241_before()
+    result = search.improve_plan_search(plan, pieces, 120, 242, .5,
+        machine_type='CNC Router', time_limit_sec=2, **OPTIONS['metric_kwargs'])
+    class Frozen:
+        expand_pieces = domain_cutting_engine.expand_pieces
+        validate = domain_cutting_engine.validate
+        def optimize(self, *a, **kw): return deepcopy(result)
+    command = OptimizeOrderPlanCommand('regression-241', 'regression-241', BoardGeometry(122, 244, 1, .5),
+        OptimizerOptions('smart', 'CNC Router', 5, 40, 30, 30, .09), tuple(rows))
+    snapshot = optimize_order_plan(command, engine=Frozen()).snapshot
+    assert snapshot['validation']['is_valid']
+    assert snapshot['trim_cm'] == 1
+    assert _occupied_area(snapshot) <= _occupied_area(plan)+1e-6
+    assert _real_rectangular_path_length(snapshot) <= _real_rectangular_path_length(plan)+1e-6
+    saved = tmp_path/'241.json'
+    saved.write_text(json.dumps(snapshot))
+    reloaded = json.loads(saved.read_text())
+    imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, tmp_path))
+    assert len(imported['sheets']) == 2
+    assert sorted(p['piece_instance_id'] for s in imported['sheets'] for p in s['pieces']) == sorted(
+        p['piece_instance_id'] for s in reloaded['sheets'] for p in s['pieces'])
+    for before, after in zip(reloaded['sheets'], imported['sheets'], strict=True):
+        geometry = lambda s: sorted(tuple(p[k] for k in ('x', 'y', 'w', 'h')) for p in s['pieces'])
+        for expected, actual in zip(geometry(before), geometry(after), strict=True):
+            assert actual == pytest.approx(expected, abs=.0001)
+
+
+def test_compacted_duplicate_views_keep_all_unmodified_raw_warm_seeds():
+    from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+        BoardGeometry, OptimizerOptions, OptimizeOrderPlanCommand, optimize_order_plan,
+    )
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import geometry_signature
+    rows = [dict(width_cm=10, length_cm=30, qty=2, allow_rotation=0)]
+    pieces = expand_piece_groups(rows)
+    raw = dict(sheets=[dict(sheet_no=1, w=120, h=242,
+        pieces=[make_placed_piece(p, 0, y, 10, 30, False) for p, y in zip(pieces, [0, 50])])],
+        unplaced=[], method_key='MaxRects Bottom Left')
+    one = opt.enrich_plan_metrics(raw, raw['method_key'], 'CNC Router',
+        min_remnant_width_cm=300, min_remnant_length_cm=300, min_remnant_area_m2=9)
+    two = deepcopy(one)
+    for p in two['sheets'][0]['pieces']: p['y'] += 5
+    original = deepcopy([one, two])
+    class Frozen:
+        expand_pieces = domain_cutting_engine.expand_pieces
+        validate = domain_cutting_engine.validate
+        def optimize(self, *a, **kw):
+            return dict(deepcopy(one), smart_candidates=deepcopy([one, two]))
+    command = OptimizeOrderPlanCommand('duplicate-final', 'duplicate-final', BoardGeometry(122, 244, 1, .5),
+        OptimizerOptions('smart', 'CNC Router', 5, 40, 300, 300, 9), tuple(rows))
+    outcome = optimize_order_plan(command, engine=Frozen())
+    assert len(outcome.candidate_snapshots) == 1
+    assert len(outcome.search_seeds) == 2
+    assert sorted(geometry_signature(p) for p in outcome.search_seeds) == sorted(geometry_signature(p) for p in original)
+    assert [one, two] == original
+    assert outcome.snapshot['validation']['is_valid']

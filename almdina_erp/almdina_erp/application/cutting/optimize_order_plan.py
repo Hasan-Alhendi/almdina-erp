@@ -185,6 +185,17 @@ def optimize_order_plan(
         )
         snapshots = [snapshot for snapshot, _ in ranked]
         raw_seeds = [seed for _, seed in ranked]
+        # Final compaction can make two raw alternatives identical. Keep the
+        # best visible copy while retaining every raw warm seed for continuation.
+        from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import geometry_signature
+        seen = set()
+        unique = []
+        for snapshot in snapshots:
+            signature = geometry_signature(snapshot)
+            if signature not in seen:
+                seen.add(signature)
+                unique.append(snapshot)
+        snapshots = unique
         if snapshots:
             outcome = replace(
                 outcome,
@@ -252,6 +263,13 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     ):
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
+
+    if plan_settings.optimization_mode == "smart":
+        from almdina_erp.almdina_erp.domain.cutting.plan_search import compact_regular_final
+        plan = compact_regular_final(plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+            machine_type=machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"})
 
     def validate_snapshot_plan() -> list[str]:
         errors = list(
