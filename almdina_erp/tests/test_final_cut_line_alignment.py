@@ -948,3 +948,32 @@ def test_alignment_prefers_shared_cutter_center_over_pushing_to_board_edge():
     assert _rectangles(result, .5)[0] <= _rectangles(original, .5)[0] + .05
     assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
     assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+
+
+def test_generic_centerline_continuity_prefers_internal_route_not_left_border():
+    """Equal length/count are not enough: physical cutter axis matters.
+
+    Three Kerf-spaced bands with different widths. Either move the middle door
+    to X=0 (outside cutter center), or move top+bottom to X=6.5mm (in-board
+    continuous cutter center). A zero-Trim upper edge may overhang by radius.
+    """
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        _sheet_center_profile,
+    )
+    def at(x_cm, y_cm, width_cm):
+        return dict(x=x_cm, y=y_cm, w=width_cm, h=20, piece_type="Regular")
+    original = [at(0, 0, 20), at(.65, 20.5, 14), at(0, 41, 20)]
+    at_border = deepcopy(original)
+    at_border[1]["x"] = 0
+    inboard = deepcopy(original)
+    inboard[0]["x"] = inboard[2]["x"] = .65
+    def metrics(placed):
+        return _sheet_center_profile(
+            dict(w=100, h=100, pieces=placed), .5, regular_only=True
+        )
+    edge_length, edge_count, edge_run = metrics(at_border)
+    inside_length, inside_count, inside_run = metrics(inboard)
+    assert edge_length == pytest.approx(inside_length, abs=.05)
+    assert edge_count == inside_count
+    assert edge_run < 300  # left common cutter line has X = -2.5mm
+    assert inside_run > 600  # internal cutter center X = 4mm, clipped at Y=0
