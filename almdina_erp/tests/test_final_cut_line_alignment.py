@@ -1148,5 +1148,7 @@ def test_final_compaction_cannot_undo_internal_shared_center_to_reach_board_edge
     after = plan_cut_line_quality(result, .5)
     assert before is not None and after is not None
     assert final_cut_quality_key(after) <= final_cut_quality_key(before)
+    assert after[0] <= before[0] + .05
+    assert after[1] <= before[1]
     assert result["sheets"][0]["pieces"][1]["x"] == pytest.approx(.65)
     assert plan == baseline  # no mutation of the raw native seed
