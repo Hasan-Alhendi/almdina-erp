@@ -221,14 +221,23 @@ def test_repeated_generation_is_deterministic_and_large_shift_is_not_forced():
     runs = [_run_alignment(deepcopy(plan), sources) for _ in range(3)]
     assert runs[0] == runs[1] == runs[2]
     sources, distant = _domain_fixture(offset=2.0)
-    assert _run_alignment(distant, sources) is distant
+    aligned = _run_alignment(distant, sources)
+    # Geometry, not a 10 mm magic number, now determines legal translations.
+    assert aligned["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        aligned["sheets"][0]["pieces"][1]["x"]
+    )
+    assert not validate_plan(aligned, sources, 100, 100, kerf_cm=.5)
 
 
 def test_zero_kerf_does_not_fabricate_common_cuts_across_a_real_gap():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
     sources, baseline = _domain_fixture(kerf=0.5)
     assert not validate_plan(baseline, sources, 100, 100, kerf_cm=0)
-    # With zero kerf the actual 5 mm gap is still a gap: no false joining.
-    assert _run_alignment(baseline, sources, kerf=0) is baseline
+    result = _run_alignment(baseline, sources, kerf=0)
+    # An optional axis alignment is allowed but must not fabricate shared cuts
+    # where the real 5 mm space remains.
+    assert _rectangles(result, 0) == pytest.approx(_rectangles(baseline, 0))
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=0)
 
 
 def test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned(tmp_path):
