@@ -73,7 +73,8 @@ def _eligible_ids(sheet: dict[str, Any], sources: dict[int, dict[str, Any]],
         for piece in sheet.get("pieces") or []
         if int(piece["id"]) not in locked and _is_movable_regular(piece)
         and int(piece["id"]) in sources
-        and _is_movable_regular(sources[int(piece["id"])])
+        and (sources[int(piece["id"])].get("piece_type") or "Regular") == "Regular"
+        and (sources[int(piece["id"])].get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
     }
 
 
