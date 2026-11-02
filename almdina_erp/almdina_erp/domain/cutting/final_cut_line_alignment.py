@@ -216,7 +216,10 @@ def _candidate_moves(
                                 targets[key] = max(priority, targets.get(key, 0))
     # Reserve search coverage for both genuine shared-center opportunities and
     # separated-axis opportunities; either class alone can fill the trial cap.
-    key = lambda item: (abs(item[3]), item[0], item[1], item[2], item[3])
+    # Whole rigid rows/columns can retain shared centers that single-piece
+    # shifts destroy. Try coherent groups before individual perturbations.
+    key = lambda item: (-len(item[2]), abs(item[3]),
+                        item[0], item[1], item[2], item[3])
     shared = sorted((move for move, priority in targets.items() if priority == 2), key=key)
     axes = sorted((move for move, priority in targets.items() if priority == 1), key=key)
     result = []
@@ -310,14 +313,23 @@ def align_regular_cut_lines(
     best_profile = _rectangles(best, kerf_cm, regular_only=True)
     best_axis = _axis_alignment_score(best, kerf_cm, eligible)
     attempts = 0
-    for _ in range(_MAX_SWEEPS):
+    for sweep_index in range(_MAX_SWEEPS):
         winner = None
         winner_profile = best_profile
         winner_axis = best_axis
         winner_key = None
         moves = _candidate_moves(best, kerf_cm, eligible, deadline_monotonic)
         diag["candidate_count"] += len(moves)
+        # Reserve part of the existing fixed trial allowance for improvements
+        # in subsequent sweeps. If this prefix finds no win, keep examining
+        # candidates up to the existing global cap; never starve discovery.
+        remaining_sweeps = _MAX_SWEEPS - sweep_index
+        round_quota = max(1, math.ceil((_MAX_TRIALS - attempts) / remaining_sweeps))
+        round_attempts = 0
         for sheet_index, axis, ids, delta in moves:
+            if round_attempts >= round_quota and winner is not None:
+                diag["reserved_for_followup"] = diag.get("reserved_for_followup", 0) + 1
+                break
             if attempts >= _MAX_TRIALS:
                 diag["reason"] = "trial_limit"
                 return best
@@ -329,6 +341,7 @@ def align_regular_cut_lines(
                 diag["blocked_geometry"] = diag.get("blocked_geometry", 0) + 1
                 continue
             attempts += 1
+            round_attempts += 1
             diag["tested"] += 1
             before_remnant = _largest_reusable_free_area(
                 {"sheets": [best["sheets"][sheet_index]]},
