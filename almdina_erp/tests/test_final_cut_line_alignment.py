@@ -977,3 +977,117 @@ def test_generic_centerline_continuity_prefers_internal_route_not_left_border():
     assert edge_count == inside_count
     assert edge_run < 300  # left common cutter line has X = -2.5mm
     assert inside_run > 600  # internal cutter center X = 4mm, clipped at Y=0
+
+
+def test_final_system_cutter_quality_matches_dxf_target_not_border_proxy():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        final_cut_quality_key, plan_cut_line_quality,
+    )
+    sources, original = _left_edge_biased_exported_geometry()
+    at_border = deepcopy(original)
+    for piece in at_border["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {5, 7, 8}:
+            piece["x"] -= .65
+    at_reference = deepcopy(original)
+    for piece in at_reference["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16}:
+            piece["x"] += .65
+    assert not validate_plan(at_border, sources, 122, 244, kerf_cm=.5)
+    assert not validate_plan(at_reference, sources, 122, 244, kerf_cm=.5)
+    # The legacy fast optimizer estimate prefers the border because it omits
+    # X=0, even though the actual internal cutter is much more coherent.
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import _cut_metrics
+    assert _cut_metrics(at_border)[0] < _cut_metrics(at_reference)[0]
+    inside_quality = plan_cut_line_quality(at_reference, .5)
+    border_quality = plan_cut_line_quality(at_border, .5)
+    assert inside_quality is not None and border_quality is not None
+    assert final_cut_quality_key(inside_quality) < final_cut_quality_key(border_quality)
+    assert inside_quality[2] > border_quality[2] + 1000
+    assert at_reference["sheets"][0]["pieces"][4]["x"] == pytest.approx(.65)
+
+
+def test_final_system_cutter_quality_fails_closed_for_unproven_shapes():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import plan_cut_line_quality
+    special = dict(x=10, y=10, w=20, h=20, piece_type="Special",
+                   special_shape_geometry_json="")
+    plan = dict(sheets=[dict(w=100, h=100, pieces=[special])])
+    assert plan_cut_line_quality(plan, .5) is None
+    regular = dict(x=10, y=10, w=20, h=20, piece_type="Regular")
+    plan["sheets"][0]["pieces"] = [regular]
+    assert plan_cut_line_quality(plan, .5) is not None
+    # Never fabricate a cutter network by truncating a dense sheet.
+    plan["sheets"][0]["pieces"] = [dict(regular, x=i) for i in range(65)]
+    assert plan_cut_line_quality(plan, .5) is None
+
+
+def test_final_system_gallery_ranks_real_toolpath_above_border_estimate(monkeypatch):
+    """The gallery's displayed first plan must use the final shared metric."""
+    import importlib
+    app = importlib.import_module(
+        "almdina_erp.almdina_erp.application.cutting.optimize_order_plan"
+    )
+    from almdina_erp.almdina_erp.domain.cutting import plan_search, final_cut_line_alignment
+
+    monkeypatch.setattr(app, "realize_sheet_edge_trim", lambda *args, **kwargs: None)
+    monkeypatch.setattr(plan_search, "compact_regular_final",
+                        lambda plan, *args, **kwargs: plan)
+    monkeypatch.setattr(final_cut_line_alignment, "align_regular_cut_lines",
+                        lambda plan, *args, **kwargs: plan)
+
+    class Gallery:
+        @staticmethod
+        def expand_pieces(rows):
+            return expand_piece_groups(rows)
+
+        def optimize(self, sources, *args, **kwargs):
+            top, middle, bottom = sources
+            def variant(x):
+                placed = [
+                    make_placed_piece(top, x, 0, 20, 20, False),
+                    make_placed_piece(middle, x, 20.5, 14, 20, False),
+                    make_placed_piece(bottom, x, 41, 20, 20, False),
+                ]
+                plan = dict(method_key="MaxRects Best Short Side",
+                    sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                                 w=100, h=100, pieces=placed)],
+                    unplaced=[], used_area_m2=.108, total_board_area_m2=1,
+                    waste_area_m2=.892)
+                return enrich_plan_metrics(
+                    plan, plan["method_key"], "CNC Router",
+                    min_remnant_width_cm=200, min_remnant_length_cm=200,
+                    min_remnant_area_m2=1,
+                )
+            border, internal = variant(0), variant(.65)
+            from almdina_erp.almdina_erp.domain.cutting.optimizer import _cut_metrics
+            assert _cut_metrics(border)[0] < _cut_metrics(internal)[0]
+            assert tuple(border["industrial_rank"][:4]) == tuple(internal["industrial_rank"][:4])
+            self.border = deepcopy(border)
+            self.internal = deepcopy(internal)
+            return dict(**border, smart_candidates=[deepcopy(border), deepcopy(internal)])
+
+        @staticmethod
+        def validate(plan, sources, w, h):
+            return validate_plan(plan, sources, w, h, kerf_cm=.5)
+
+    rows = (
+        dict(width_cm=20, length_cm=20, qty=1),
+        dict(width_cm=14, length_cm=20, qty=1),
+        dict(width_cm=20, length_cm=20, qty=1),
+    )
+    engine = Gallery()
+    command = OptimizeOrderPlanCommand(
+        engine_version="final-network-gallery", input_fingerprint="test-fingerprint",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions("smart", "CNC Router", 5, 40,
+            200, 200, 1, max_centerable_edge_gap_cm=0,
+            alignment_search_budget_sec=0),
+        piece_rows=rows,
+        plan_settings=PlanSettings("smart", "CNC Router", 5, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=engine)
+    assert len(outcome.candidate_snapshots) == 2
+    positions = [s["sheets"][0]["pieces"][0]["x"] for s in outcome.candidate_snapshots]
+    assert positions == pytest.approx([.65, 0])
+    assert outcome.snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(.65)
+    # The fast native seeds remain available for continue-search, unmodified.
+    assert sorted(s["sheets"][0]["pieces"][0]["x"] for s in outcome.search_seeds) == [0, .65]
