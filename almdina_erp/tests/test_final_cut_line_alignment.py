@@ -349,3 +349,84 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
         f"enabled_remnant_m2={output[True][4][-1]:.6f}",
         flush=True,
     )
+
+
+# General, non-image-specific witnesses for alignment rather than shared cutting.
+def _separated_fixture(*, axis="x"):
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=2)])
+    points = [(0.0, 0.0), (0.3, 50.0)] if axis == "x" else [(0.0, 0.0), (50.0, 0.3)]
+    placements = [make_placed_piece(p, x, y, 20, 20, False)
+                  for p, (x, y) in zip(sources, points)]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100, pieces=placements)],
+                unplaced=[], used_area_m2=.08, total_board_area_m2=1, waste_area_m2=.92)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    return sources, plan
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_distant_rows_and_columns_gain_axis_alignment_without_fake_shared_cut(axis):
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources, raw = _separated_fixture(axis=axis)
+    before = deepcopy(raw)
+    outcome = _run_alignment(raw, sources)
+    a, b = outcome["sheets"][0]["pieces"]
+    assert a[axis] == pytest.approx(b[axis])
+    assert _rectangles(outcome, .5) == pytest.approx(_rectangles(raw, .5))
+    assert not validate_plan(outcome, sources, 100, 100, kerf_cm=.5)
+    assert raw == before
+
+
+def test_large_multi_board_plan_does_not_disable_small_board_alignment():
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=1, length_cm=1, qty=65),
+    ])
+    first = [make_placed_piece(sources[0], 0, 0, 20, 20, False),
+             make_placed_piece(sources[1], .3, 50, 20, 20, False)]
+    second = [
+        make_placed_piece(p, 2.5 * ((index - 2) % 13),
+                          2.5 * ((index - 2) // 13), 1, 1, False)
+        for index, p in enumerate(sources[2:], 2)
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100, pieces=first),
+                        dict(sheet_no=2, resource_kind="FULL_BOARD", w=100, h=100, pieces=second)],
+                unplaced=[], used_area_m2=.145, total_board_area_m2=2, waste_area_m2=1.855)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    after = _run_alignment(plan, sources)
+    assert after["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        after["sheets"][0]["pieces"][1]["x"])
+    assert after["sheets"][1]["pieces"] == plan["sheets"][1]["pieces"]
+    assert len(after["sheets"]) == 2
+    assert not validate_plan(after, sources, 100, 100, kerf_cm=.5)
+
+
+def test_diagnostics_distinguish_candidates_from_eligibility_and_time_budget():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+    sources, plan = _separated_fixture()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=dict(
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    assert result["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        result["sheets"][0]["pieces"][1]["x"])
+    assert diagnostics.get("candidate_count", 0) > 0
+    assert diagnostics.get("tested", 0) > 0
+    assert diagnostics.get("accepted", 0) > 0
+    expired = {}
+    unchanged = align_regular_cut_lines(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=dict(
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09),
+        deadline_monotonic=0, diagnostics=expired,
+    )
+    assert unchanged is plan
+    assert expired["reason"] == "deadline"
