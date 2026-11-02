@@ -113,6 +113,7 @@ _SETTINGS_FIELDS = (
     "default_optimization_time_limit_sec",
     "optimal_search_piece_limit",
     "max_centerable_edge_gap_cm",
+    "alignment_search_budget_sec",
     "default_cutting_cost_per_board_usd",
     "default_special_design_fee_usd",
     "default_special_cnc_fee_usd",
@@ -306,6 +307,7 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
 
     numeric_non_negative = {
         "max_centerable_edge_gap_cm": _("Maximum centerable edge gap (cm)"),
+        "alignment_search_budget_sec": _("Final Alignment Search Budget (seconds)"),
         "default_cutting_cost_per_board_usd": _("Default Cutting Cost / Board USD"),
         "default_special_design_fee_usd": _("Default Special Design Fee USD"),
         "default_special_cnc_fee_usd": _("Default Special CNC Fee USD"),
