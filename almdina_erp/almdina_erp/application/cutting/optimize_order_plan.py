@@ -99,6 +99,7 @@ class OptimizerOptions:
     min_remnant_length_cm: float
     min_remnant_area_m2: float
     max_centerable_edge_gap_cm: float = 5.0
+    alignment_search_budget_sec: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,9 +281,15 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         if alignment_budget is None:
             alignment_budget = {"deadline": None}
         if alignment_budget["deadline"] is None:
-            alignment_budget["deadline"] = time.monotonic() + min(
-                0.15, command.optimizer.time_limit_sec * 0.025
+            configured = command.optimizer.alignment_search_budget_sec
+            # Invalid direct callers fail closed; authoritative factory
+            # settings already reject NaN/Infinity and negative values.
+            allowed = (
+                max(0.0, min(configured, command.optimizer.time_limit_sec))
+                if math.isfinite(configured) and configured >= 0
+                else 0.0
             )
+            alignment_budget["deadline"] = time.monotonic() + allowed
         # Post-search placement refinement only; never import/approve uploaded DXF.
         from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
         plan = align_regular_cut_lines(
