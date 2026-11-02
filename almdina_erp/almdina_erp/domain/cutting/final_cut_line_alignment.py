@@ -54,15 +54,25 @@ def _sheet_center_profile(
     longest_internal = 0.0
     for start, end in segments:
         dx, dy = abs(start[0] - end[0]), abs(start[1] - end[1])
-        # Endpoints and the cutter center must lie inside the material board.
-        # No credit for a center outside the board (including X = -Kerf/2).
-        inside = all(
-            _NETWORK_EPS_MM < x < board_w - _NETWORK_EPS_MM
-            and _NETWORK_EPS_MM < y < board_h - _NETWORK_EPS_MM
-            for x, y in (start, end)
-        )
-        if inside and (dx <= _NETWORK_EPS_MM or dy <= _NETWORK_EPS_MM):
-            longest_internal = max(longest_internal, math.dist(start, end))
+        # Count only the actual portion of a straight cutter center *inside*
+        # the board. An endpoint may overhang when Trim=0; that must not
+        # erase an otherwise long, safe internal part of the same route.
+        if dx <= _NETWORK_EPS_MM and (
+            _NETWORK_EPS_MM < start[0] < board_w - _NETWORK_EPS_MM
+        ):
+            internal_length = max(
+                0.0, min(max(start[1], end[1]), board_h)
+                     - max(min(start[1], end[1]), 0.0),
+            )
+            longest_internal = max(longest_internal, internal_length)
+        elif dy <= _NETWORK_EPS_MM and (
+            _NETWORK_EPS_MM < start[1] < board_h - _NETWORK_EPS_MM
+        ):
+            internal_length = max(
+                0.0, min(max(start[0], end[0]), board_w)
+                     - max(min(start[0], end[0]), 0.0),
+            )
+            longest_internal = max(longest_internal, internal_length)
     return (
         sum(math.dist(start, end) for start, end in segments),
         len(segments),
