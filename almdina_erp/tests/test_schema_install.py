@@ -122,6 +122,7 @@ class TestAlmdinaSchemaInstall(FrappeTestCase):
         required = {
             "factory-production-settings",
             "factory-plan-archive",
+            "cnc-sheet-settings",
         }
         missing = sorted(name for name in required if not frappe.db.exists("Page", name))
         self.assertEqual(missing, [])

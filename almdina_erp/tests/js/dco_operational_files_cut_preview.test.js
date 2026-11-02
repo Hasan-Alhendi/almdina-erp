@@ -151,16 +151,21 @@ const sharedLabel = labels.find(group => group.path_key === "cut_path:shared");
 assert.ok(sharedLabel);
 assert.equal(sharedLabel.items.length, 2, "depth passes at the same start share one label anchor");
 
-const markup = ux.cutPathPreviewMarkup(program, { selectedPathKey: "cut_path:open-a" });
-assert.ok(markup.includes("dco-cnc-cut-preview__frame"));
-assert.ok(markup.includes("dco-cnc-cut-preview__path"));
-assert.ok(markup.includes("marker-end=\"url(#cnc-cut-arrow-1)\""));
-assert.ok(markup.includes(">1,2<") || markup.includes(">1,2</text>"));
-assert.ok(markup.includes('data-execution-path="cut_path:open-a"'));
-assert.ok(markup.includes("is-cnc-path-selected"));
-assert.ok(!markup.includes("dco-piece"));
-assert.ok(!markup.includes("GEOMETRY"));
-assert.ok(!markup.includes("SHEET_OUTLINE"));
+const scoped = ux.cutPathPreviewMarkup(program, {
+    selectedPathKey: "cut_path:open-a",
+    markerScope: "cnc-cut-test-scope",
+});
+assert.ok(scoped.includes("dco-cnc-cut-preview__frame"));
+assert.ok(scoped.includes("dco-cnc-cut-preview__path"));
+assert.ok(scoped.includes('marker-end="url(#cnc-cut-test-scope-arrow-1)"'));
+assert.ok(scoped.includes("dco-cnc-cut-preview__badge"));
+assert.ok(scoped.includes(">1,2<") || scoped.includes("<span>1,2</span>"));
+assert.ok(scoped.includes('data-execution-path="cut_path:open-a"'));
+assert.ok(scoped.includes("is-cnc-path-selected"));
+assert.ok(!scoped.includes("dco-piece"));
+assert.ok(!scoped.includes("GEOMETRY"));
+assert.ok(!scoped.includes("SHEET_OUTLINE"));
+assert.ok(!scoped.includes('id="cnc-cut-arrow-1"'));
 
 const incomplete = ux.cutPathPreviewMarkup({
     sheet_width_mm: 100,

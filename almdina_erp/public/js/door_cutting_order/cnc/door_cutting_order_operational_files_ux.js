@@ -4,7 +4,34 @@
     if (window.AlmdinaOperationalFilesUX) return;
 
     const METHOD = "almdina_erp.almdina_erp.services.cnc_operational_file_service";
+    const SHEET_PAGE_ROUTE = "cnc-sheet-settings";
     const SHEET_PREVIEW_MAX_WIDTH_PX = 260;
+    const SHEET_PAGE_PREVIEW_MIN_WIDTH_PX = 520;
+    let cutPreviewScopeSeq = 0;
+
+    function nextCutPreviewScope() {
+        cutPreviewScopeSeq += 1;
+        return `cnc-cut-${Date.now().toString(36)}-${cutPreviewScopeSeq}`;
+    }
+
+    function sheetSettingsUrl(orderName, sheetNo) {
+        const order = String(orderName || "").trim();
+        const sheet = String(sheetNo || "").trim();
+        const parts = [SHEET_PAGE_ROUTE, order, sheet];
+        if (window.frappe && frappe.router && typeof frappe.router.make_url === "function") {
+            return frappe.router.make_url(parts);
+        }
+        return `/desk/${SHEET_PAGE_ROUTE}/${encodeURIComponent(order)}/${encodeURIComponent(sheet)}`;
+    }
+
+    function openSheetSettingsTab(orderName, sheetNo) {
+        const url = sheetSettingsUrl(orderName, sheetNo);
+        const popup = window.open(url, "_blank");
+        if (!popup && window.frappe && typeof frappe.set_route === "function") {
+            frappe.set_route(SHEET_PAGE_ROUTE, String(orderName || ""), String(sheetNo || ""));
+        }
+        return url;
+    }
     const OPERATION_LABELS = Object.freeze({
         cut_path: "Cut between pieces",
         liner: "Liner operation",
@@ -387,8 +414,8 @@
         root.querySelectorAll(".dco-operational-files__open").forEach(button => {
             button.addEventListener("click", () => {
                 const sheetNo = Number(button.getAttribute("data-sheet-no"));
-                const sheet = sheets.find(item => Number(item.sheet_no) === sheetNo);
-                if (sheet) openSheetDialog(frm, workspace, sheet, boards.get(sheetNo) || null);
+                if (!frm || !frm.doc || !frm.doc.name || !sheetNo) return;
+                openSheetSettingsTab(frm.doc.name, sheetNo);
             });
         });
         root.querySelectorAll("[data-cnc-card-download], [data-cnc-history-download]").forEach(button => {
@@ -1174,70 +1201,100 @@
         });
     }
 
-    function refreshDialog(frm, dialog, workspace, sheet, state, board) {
-        const wrapper = dialogRoot(dialog);
-        if (!wrapper) return;
-        preserveDialogScroll(dialog, () => {
-            disposePresetLinks(dialog);
-            dialog._almdinaSheet = { frm, workspace, sheet, state, board };
-            wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
-            bindDialog(frm, dialog, workspace, sheet, state, board);
-        });
+    function refreshDialog(frm, dialog, workspace, sheet, state) {
+        refreshSheetUi(frm, dialog, workspace, sheet, state);
     }
 
-    function openSheetDialog(frm, workspace, sheet, board) {
-        const state = sheetState(sheet);
-        const baseline = stateSnapshot(state);
-        let allowHide = false;
-        const dialog = new frappe.ui.Dialog({
-            title: translate("Sheet {0}", [sheet.sheet_no]),
-            size: "extra-large",
-            fields: [{ fieldtype: "HTML", fieldname: "body" }],
-            primary_action_label: translate("Save sheet settings"),
-            primary_action() {
-                saveDialog(frm, dialog, workspace, sheet, state, baselineHolder);
-            },
-        });
-        const baselineHolder = { value: baseline, state };
-        const originalHide = dialog.hide.bind(dialog);
-        dialog.hide = () => {
-            if (allowHide || stateSnapshot(state) === baselineHolder.value) {
-                allowHide = false;
-                originalHide();
-                return;
-            }
-            frappe.confirm(translate("Discard the unsaved changes?"), () => {
-                allowHide = true;
-                originalHide();
-            });
+    function orderFormStub(orderName) {
+        return {
+            doc: { name: String(orderName || "") },
+            doctype: "Door Cutting Order",
+            __almdinaOperationalFilesRequest: 0,
+            is_new() { return false; },
         };
-        dialog.show();
-        dialog.$wrapper.addClass("dco-operational-sheet-dialog");
+    }
+
+    function pageShellMarkup(workspace, sheet) {
         const locale = window.AlmdinaLocale;
         const dir = locale && typeof locale.direction === "function"
             ? locale.direction()
             : (document.documentElement && document.documentElement.getAttribute("dir")) || "rtl";
-        dialog.$wrapper.attr("dir", dir === "ltr" ? "ltr" : "rtl");
-        dialog.$wrapper.on("keydown", event => {
-            const live = dialog._almdinaSheet;
-            const target = event.target;
-            if (!live || !live.workspace.can_prepare) return;
-            if (target && target.matches && target.matches("select, input, textarea")) return;
-            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-            const item = target && target.closest && target.closest("[data-operation-key]");
-            if (!item) return;
-            event.preventDefault();
-            const key = item.getAttribute("data-operation-key");
-            moveOperation(live.state, key, event.key === "ArrowUp" ? -1 : 1);
-            refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
-            const row = dialogRoot(dialog) && dialogRoot(dialog).querySelector(`[data-operation-key="${key}"]`);
-            if (row) row.focus();
-        });
-        if (!workspace.can_prepare) dialog.get_primary_btn().hide();
-        refreshDialog(frm, dialog, workspace, sheet, state, board);
+        const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const canDownload = Boolean(sheet && sheet.can_download_current && sheet.operational_file);
+        const downloadLabel = sheet && sheet.download_is_previous
+            ? translate("Download previous simulation NC")
+            : translate("Download simulation NC");
+        return `<div class="dco-cnc-sheet-page" dir="${dir === "ltr" ? "ltr" : "rtl"}">
+            <header class="dco-cnc-sheet-page__toolbar">
+                <div class="dco-cnc-sheet-page__identity">
+                    <h1>${escapeHtml(translate("Sheet {0}", [sheet.sheet_no]))}</h1>
+                    <p>
+                        ${escapeHtml(workspace.order_name || workspace.order || "")}
+                        · ${escapeHtml(translate("Approved plan"))}: ${escapeHtml(workspace.cutting_plan || "")}
+                        · ${escapeHtml(translate("Plan revision"))} ${escapeHtml(workspace.plan_revision || "")}
+                    </p>
+                    <p class="dco-operational-files__note">${escapeHtml(translate("Simulation NC is for review only. It is not approved for a workshop machine."))}</p>
+                </div>
+                <div class="dco-cnc-sheet-page__actions">
+                    <button type="button" class="btn btn-default btn-sm" data-cnc-back-order>${escapeHtml(translate("Back to the order"))}</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
+                    <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Generate NC file"))}</button>
+                    <button type="button" class="btn btn-default btn-sm" data-cnc-page-download data-operational-file="${escapeHtml((sheet && sheet.operational_file) || "")}" data-file-url="${escapeHtml((sheet && sheet.generated_file) || "")}"${canDownload ? "" : " hidden"}>${escapeHtml(downloadLabel)}</button>
+                </div>
+            </header>
+            <div class="dco-cnc-sheet-page__workspace" data-sheet-body></div>
+        </div>`;
     }
 
-    function saveDialog(frm, dialog, workspace, sheet, state, baselineHolder) {
+    function syncPageToolbar(ui, workspace, sheet, state) {
+        if (!ui || !ui.root) return;
+        const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const save = ui.root.querySelector("[data-cnc-save-sheet]");
+        const generate = ui.root.querySelector("[data-cnc-generate-nc]");
+        const download = ui.root.querySelector("[data-cnc-page-download]");
+        const control = generateNcControlState({ canPrepare });
+        if (save) save.disabled = !canPrepare;
+        if (generate) {
+            generate.disabled = Boolean(control.disabled);
+            generate.setAttribute("title", control.reason || "");
+        }
+        if (download) {
+            const canDownload = Boolean(sheet && sheet.can_download_current && sheet.operational_file);
+            download.hidden = !canDownload;
+            if (canDownload) {
+                download.setAttribute("data-operational-file", sheet.operational_file || "");
+                download.setAttribute("data-file-url", sheet.generated_file || "");
+                download.textContent = translate(
+                    sheet.download_is_previous ? "Download previous simulation NC" : "Download simulation NC"
+                );
+            }
+        }
+        bindGenerateNc(ui, ui.root, {
+            canPrepare,
+            args: sheetGenerateArgs(ui.frm, workspace, sheet, state),
+            sheetNo: sheet.sheet_no,
+            frm: ui.frm,
+            state,
+            sheet,
+            workspace,
+        });
+    }
+
+    function refreshSheetUi(frm, ui, workspace, sheet, state) {
+        const wrapper = dialogRoot(ui);
+        if (!wrapper) return;
+        preserveDialogScroll(ui, () => {
+            disposePresetLinks(ui);
+            ui._almdinaSheet = { frm, workspace, sheet, state, board: null };
+            wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
+            const preview = wrapper.querySelector("[data-sheet-preview]");
+            if (preview && ui.mode === "page") preview.setAttribute("data-preview-layout", "page");
+            bindDialog(frm, ui, workspace, sheet, state, null);
+            if (ui.mode === "page") syncPageToolbar(ui, workspace, sheet, state);
+        });
+    }
+
+    function saveSheetSettings(frm, ui, workspace, sheet, state, baselineHolder) {
         if (cutPathIsEarly(state.order) && !state.confirmed) {
             frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
             return;
@@ -1250,8 +1307,13 @@
         const requestId = (frm.__almdinaOperationalFilesRequest || 0) + 1;
         frm.__almdinaOperationalFilesRequest = requestId;
         const identity = capture(frm);
-        const button = dialog.get_primary_btn();
-        button.prop("disabled", true);
+        const saveButton = ui.mode === "page"
+            ? ui.root && ui.root.querySelector("[data-cnc-save-sheet]")
+            : (ui.get_primary_btn && ui.get_primary_btn());
+        if (saveButton) {
+            if (saveButton.prop) saveButton.prop("disabled", true);
+            else saveButton.disabled = true;
+        }
         const overrides = {};
         Object.keys(state.overrides).forEach(key => {
             if (state.overrides[key]) overrides[key] = state.overrides[key];
@@ -1270,10 +1332,12 @@
             },
             callback(response) {
                 if (frm.__almdinaOperationalFilesRequest !== requestId) return;
-                if (!stillCurrent(frm, identity)) return;
+                if (ui.mode !== "page" && !stillCurrent(frm, identity)) return;
                 const message = (response && response.message) || {};
-                const root = host(frm);
-                if (root) paint(frm, root, message);
+                if (ui.mode !== "page") {
+                    const root = host(frm);
+                    if (root) paint(frm, root, message);
+                }
                 const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
                 if (saved) {
                     const next = sheetState(saved);
@@ -1284,19 +1348,124 @@
                     state.order = next.order;
                     state.confirmed = next.confirmed;
                     baselineHolder.value = stateSnapshot(state);
-                    const boards = boardsBySheet(frm, message.layout);
-                    refreshDialog(frm, dialog, message, saved, state, boards.get(Number(saved.sheet_no)) || null);
+                    refreshSheetUi(frm, ui, message, saved, state);
                 }
-                button.prop("disabled", false);
+                if (saveButton) {
+                    if (saveButton.prop) saveButton.prop("disabled", false);
+                    else saveButton.disabled = false;
+                }
                 if (window.frappe && frappe.show_alert) {
                     frappe.show_alert({ message: translate("Operational files saved."), indicator: "green" });
                 }
             },
             error() {
                 if (frm.__almdinaOperationalFilesRequest !== requestId) return;
-                button.prop("disabled", false);
+                if (saveButton) {
+                    if (saveButton.prop) saveButton.prop("disabled", false);
+                    else saveButton.disabled = false;
+                }
             },
         });
+    }
+
+    function mountSheetSettingsPage(main, options = {}) {
+        if (!main) return null;
+        const orderName = String(options.orderName || "").trim();
+        const sheetNo = Number(options.sheetNo);
+        if (!orderName || !Number.isFinite(sheetNo) || sheetNo <= 0) {
+            main.innerHTML = `<div class="dco-cnc-sheet-page" role="alert"><p>${escapeHtml(translate("The sheet settings link is incomplete."))}</p></div>`;
+            return null;
+        }
+        const request = (main.__cncSheetPageRequest || 0) + 1;
+        main.__cncSheetPageRequest = request;
+        main.innerHTML = `<div class="dco-cnc-sheet-page" role="status"><p>${escapeHtml(translate("Loading sheet settings..."))}</p></div>`;
+        if (!window.frappe || typeof frappe.call !== "function") {
+            main.innerHTML = `<div class="dco-cnc-sheet-page" role="alert"><p>${escapeHtml(translate("Sheet settings could not be loaded."))}</p></div>`;
+            return null;
+        }
+        frappe.call({
+            method: `${METHOD}.get_cnc_operational_workspace`,
+            args: { order_name: orderName },
+            callback(response) {
+                if (main.__cncSheetPageRequest !== request) return;
+                const workspace = (response && response.message) || {};
+                workspace.order_name = workspace.order_name || orderName;
+                if (!workspace.eligible) {
+                    main.innerHTML = `<div class="dco-cnc-sheet-page" role="status"><p>${escapeHtml(workspace.message || translate("This order has no approved cutting plan. Operational files can be prepared only from the current approved plan, whether the system calculated it or it was uploaded and then approved."))}</p></div>`;
+                    return;
+                }
+                const sheet = (workspace.sheets || []).find(item => Number(item.sheet_no) === sheetNo);
+                if (!sheet) {
+                    main.innerHTML = `<div class="dco-cnc-sheet-page" role="alert"><p>${escapeHtml(translate("This sheet is not available on the approved plan."))}</p></div>`;
+                    return;
+                }
+                const frm = orderFormStub(orderName);
+                const state = sheetState(sheet);
+                const baselineHolder = { value: stateSnapshot(state), state };
+                main.innerHTML = pageShellMarkup(workspace, sheet);
+                const pageRoot = main.querySelector(".dco-cnc-sheet-page");
+                const body = pageRoot && pageRoot.querySelector("[data-sheet-body]");
+                if (!pageRoot || !body) return;
+                const ui = {
+                    mode: "page",
+                    root: pageRoot,
+                    frm,
+                    fields_dict: { body: { $wrapper: [body] } },
+                    $wrapper: null,
+                    _cncPresetLinks: [],
+                    _cncProgramPreviewRequest: 0,
+                    _cncNcRequest: 0,
+                    _cncPresetRequest: 0,
+                };
+                const back = pageRoot.querySelector("[data-cnc-back-order]");
+                if (back) {
+                    back.addEventListener("click", () => {
+                        if (typeof frappe.set_route === "function") {
+                            frappe.set_route("Form", "Door Cutting Order", orderName);
+                        }
+                    });
+                }
+                const save = pageRoot.querySelector("[data-cnc-save-sheet]");
+                if (save) {
+                    save.addEventListener("click", () => {
+                        const live = ui._almdinaSheet || { workspace, sheet, state };
+                        saveSheetSettings(frm, ui, live.workspace || workspace, live.sheet || sheet, live.state || state, baselineHolder);
+                    });
+                }
+                const download = pageRoot.querySelector("[data-cnc-page-download]");
+                if (download) {
+                    download.addEventListener("click", () => {
+                        downloadServerNc(
+                            frm,
+                            download.getAttribute("data-operational-file"),
+                            download.getAttribute("data-file-url")
+                        );
+                    });
+                }
+                pageRoot.addEventListener("keydown", event => {
+                    const live = ui._almdinaSheet;
+                    const target = event.target;
+                    if (!live || !live.workspace.can_prepare) return;
+                    if (target && target.matches && target.matches("select, input, textarea")) return;
+                    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                    const item = target && target.closest && target.closest("[data-operation-key]");
+                    if (!item) return;
+                    event.preventDefault();
+                    const key = item.getAttribute("data-operation-key");
+                    moveOperation(live.state, key, event.key === "ArrowUp" ? -1 : 1);
+                    refreshSheetUi(frm, ui, live.workspace, live.sheet, live.state);
+                    const row = dialogRoot(ui) && dialogRoot(ui).querySelector(`[data-operation-key="${key}"]`);
+                    if (row) row.focus();
+                });
+                refreshSheetUi(frm, ui, workspace, sheet, state);
+                main.__cncSheetPageUi = ui;
+            },
+            error() {
+                if (main.__cncSheetPageRequest !== request) return;
+                main.innerHTML = `<div class="dco-cnc-sheet-page" role="alert"><p>${escapeHtml(translate("Sheet settings could not be loaded."))}</p></div>`;
+            },
+        });
+        return main;
     }
 
     function render(frm) {
@@ -1426,11 +1595,20 @@
         return groups;
     }
 
+    function cutPreviewLayoutStyle(width, length, options = {}) {
+        const pageLayout = String(options.layout || "") === "page";
+        if (pageLayout) {
+            return `inline-size:100%;min-inline-size:min(100%,${SHEET_PAGE_PREVIEW_MIN_WIDTH_PX}px);aspect-ratio:${width} / ${length}`;
+        }
+        return `max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}`;
+    }
+
     function cutPathPreviewMarkup(program, options = {}) {
         const drawing = program || {};
         const width = Number(drawing.sheet_width_mm);
         const length = Number(drawing.sheet_length_mm);
         const selectedPathKey = String(options.selectedPathKey || "");
+        const markerScope = String(options.markerScope || nextCutPreviewScope());
         const executions = collectCutExecutions(drawing);
         const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
         const notes = [];
@@ -1450,36 +1628,47 @@
         });
         const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
         uniqueIssues.forEach(message => notes.push(message));
+        const zoomControls = String(options.layout || "") === "page"
+            ? `<div class="dco-cnc-cut-preview__zoom" role="group" aria-label="${escapeHtml(translate("Preview zoom"))}">
+                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" title="${escapeHtml(translate("Zoom out"))}">−</button>
+                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" title="${escapeHtml(translate("Fit to view"))}">${escapeHtml(translate("Fit"))}</button>
+                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" title="${escapeHtml(translate("Zoom in"))}">+</button>
+               </div>`
+            : "";
 
         if (!(width > 0 && length > 0)) {
-            return `<div class="dco-cnc-cut-preview" role="status">
+            return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}">
                 <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
             </div>`;
         }
 
         if (!executions.length) {
-            return `<div class="dco-cnc-cut-preview" role="status" style="max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}">
-                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("No cutting paths are available for this sheet preview."))}">
-                    <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
-                </svg>
+            return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
+                <div class="dco-cnc-cut-preview__stage">
+                    <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("No cutting paths are available for this sheet preview."))}">
+                        <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
+                    </svg>
+                </div>
                 <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
                 ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
             </div>`;
         }
 
         const color = PROGRAM_COLORS.cut_path || "#a61b1b";
-        const markers = executions.map(item => (
-            `<marker id="cnc-cut-arrow-${item.execution}" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+        const markers = executions.map(item => {
+            const markerId = `${markerScope}-arrow-${item.execution}`;
+            return `<marker id="${escapeHtml(markerId)}" markerUnits="strokeWidth" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="4" markerHeight="4" orient="auto">
                 <path d="M0 0 L8 4 L0 8 Z" fill="${color}"/>
-            </marker>`
-        )).join("");
+            </marker>`;
+        }).join("");
         const strokes = executions.map(item => {
             const selected = selectedPathKey && item.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
+            const markerId = `${markerScope}-arrow-${item.execution}`;
             const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
             const start = item.start;
             const arrow = cutExecutionArrowSegment(item.points, item.closed);
             const arrowLine = arrow
-                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#cnc-cut-arrow-${item.execution})"/>`
+                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
             return `<g class="dco-cnc-cut-preview__execution${selected}" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-depth-mm="${item.depth_mm == null ? "" : escapeHtml(item.depth_mm)}">
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
@@ -1495,20 +1684,57 @@
                     ? String(item.execution)
                     : `${item.execution}: ${translate("Depth {0} mm", [item.depth_mm])}`
             )).join(" · ");
-            return `<text class="dco-cnc-cut-preview__label${selected}" data-execution-path="${escapeHtml(group.path_key)}" x="${Number(group.x)}" y="${length - Number(group.y)}" title="${escapeHtml(title)}">${escapeHtml(numbers)}</text>`;
+            const left = width > 0 ? (Number(group.x) / width) * 100 : 0;
+            const top = length > 0 ? ((length - Number(group.y)) / length) * 100 : 0;
+            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-execution-path="${escapeHtml(group.path_key)}" data-label-x="${escapeHtml(group.x)}" data-label-y="${escapeHtml(group.y)}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(numbers)}</span></button>`;
         }).join("");
 
-        return `<div class="dco-cnc-cut-preview" style="max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}">
-            <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Cut between pieces"))}">
-                <defs>${markers}</defs>
-                <g transform="translate(0,${length}) scale(1,-1)">
-                    <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
-                    ${strokes}
-                </g>
-                ${labels}
-            </svg>
+        return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
+            ${zoomControls}
+            <div class="dco-cnc-cut-preview__stage" data-cut-stage style="--cut-zoom:1">
+                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Cut between pieces"))}">
+                    <defs>${markers}</defs>
+                    <g transform="translate(0,${length}) scale(1,-1)">
+                        <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
+                        ${strokes}
+                    </g>
+                </svg>
+                <div class="dco-cnc-cut-preview__labels" aria-hidden="false">${labels}</div>
+            </div>
             ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
+    }
+
+    function bindCutPreviewChrome(host) {
+        if (!host || typeof host.querySelector !== "function") return;
+        const stage = host.querySelector("[data-cut-stage]");
+        if (!stage) return;
+        let zoom = Number(stage.style.getPropertyValue("--cut-zoom")) || 1;
+        const apply = () => {
+            stage.style.setProperty("--cut-zoom", String(zoom));
+            stage.style.transform = `scale(${zoom})`;
+        };
+        host.querySelectorAll("[data-cut-zoom]").forEach(button => {
+            button.addEventListener("click", () => {
+                const action = button.getAttribute("data-cut-zoom");
+                if (action === "in") zoom = Math.min(3, Math.round((zoom + 0.15) * 100) / 100);
+                else if (action === "out") zoom = Math.max(0.6, Math.round((zoom - 0.15) * 100) / 100);
+                else zoom = 1;
+                apply();
+            });
+        });
+        apply();
+    }
+
+    function collectMarkerIdsFromMarkup(markup) {
+        const ids = [];
+        const pattern = /\bid="([^"]+-arrow-\d+)"/g;
+        let match = pattern.exec(markup);
+        while (match) {
+            ids.push(match[1]);
+            match = pattern.exec(markup);
+        }
+        return ids;
     }
 
     function paintCutPathPreview(host, payload = {}) {
@@ -1522,9 +1748,15 @@
             host.innerHTML = `<div class="dco-cnc-cut-preview" role="alert"><p class="dco-cnc-program__error">${escapeHtml(translate("Cutting paths could not be loaded."))}</p></div>`;
             return;
         }
+        const markerScope = nextCutPreviewScope();
         host.innerHTML = cutPathPreviewMarkup(payload.program || {}, {
             selectedPathKey: payload.selectedPathKey || "",
+            markerScope,
+            layout: payload.layout
+                || (typeof host.getAttribute === "function" ? host.getAttribute("data-preview-layout") : "")
+                || "",
         });
+        bindCutPreviewChrome(host);
     }
 
     function highlightCutPreview(preview, state) {
@@ -1556,10 +1788,15 @@
                 if (!livePreview) return;
                 const program = (response && response.message) || {};
                 if (dialog._almdinaSheet) dialog._almdinaSheet.program = program;
+                const selectedPathKey = (state && state.selectedPathKey) || "";
+                const stillSelected = selectedPathKey
+                    && collectCutExecutions(program).some(item => item.path_key === selectedPathKey);
+                if (state && selectedPathKey && !stillSelected) state.selectedPathKey = "";
                 paintCutPathPreview(livePreview, {
                     status: "ready",
                     program,
                     selectedPathKey: (state && state.selectedPathKey) || "",
+                    layout: livePreview.getAttribute("data-preview-layout") || "",
                 });
             },
             error() {
@@ -1868,7 +2105,11 @@
                                 status.setAttribute("data-sheet-nc-status", saved.status || "");
                                 status.textContent = statusLabel(saved.status);
                             }
-                            syncSheetFooter(dialog, live.workspace, saved, live.state);
+                            if (dialog.mode === "page") {
+                                syncPageToolbar(dialog, live.workspace, saved, live.state);
+                            } else {
+                                syncSheetFooter(dialog, live.workspace, saved, live.state);
+                            }
                         }
                     }
                     if (window.frappe && frappe.show_alert) {
@@ -1918,10 +2159,16 @@
         dialogScrollHost,
         preserveDialogScroll,
         SHEET_PREVIEW_MAX_WIDTH_PX,
+        SHEET_PAGE_ROUTE,
         collectCutExecutions,
         cutPathPreviewMarkup,
         paintCutPathPreview,
         groupCutExecutionLabels,
         cutExecutionArrowSegment,
+        collectMarkerIdsFromMarkup,
+        nextCutPreviewScope,
+        sheetSettingsUrl,
+        openSheetSettingsTab,
+        mountSheetSettingsPage,
     });
 })();
