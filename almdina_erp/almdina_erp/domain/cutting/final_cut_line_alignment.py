@@ -167,6 +167,41 @@ def _movement_range(
     return (lo, hi) if lo <= hi + _EPS else None
 
 
+def _projected_axis_gain(
+    sheet: dict[str, Any], axis: str, ids: tuple[int, ...],
+    delta: float, kerf_cm: float, eligible: set[int],
+) -> int:
+    """Cheap, non-authoritative pairwise estimate for candidate ORDER only.
+
+    It never replaces the exact cutter-center/axis/full-plan acceptance gates.
+    Perpendicular gaps must be real; disconnected edges stay disconnected.
+    """
+    members = [p for p in sheet.get("pieces") or [] if int(p["id"]) in ids]
+    fixed = [p for p in sheet.get("pieces") or []
+             if int(p["id"]) not in ids and int(p["id"]) in eligible]
+    span = "w" if axis == "x" else "h"
+    cross, cross_span = ("y", "h") if axis == "x" else ("x", "w")
+    gain = 0
+    for moving in members:
+        m0, m1 = num(moving[axis]), num(moving[axis]) + num(moving[span])
+        for other in fixed:
+            gap = max(
+                num(moving[cross]) - num(other[cross]) - num(other[cross_span]),
+                num(other[cross]) - num(moving[cross]) - num(moving[cross_span]),
+            )
+            if gap <= kerf_cm + _EPS:
+                continue
+            o0, o1 = num(other[axis]), num(other[axis]) + num(other[span])
+            before = int(abs(m0 - o0) <= _EPS) + int(abs(m1 - o1) <= _EPS)
+            after = int(abs(m0 + delta - o0) <= _EPS) + int(
+                abs(m1 + delta - o1) <= _EPS
+            )
+            gain += (after - before) * int(round(
+                min(num(moving[cross_span]), num(other[cross_span])) * 1000
+            ))
+    return gain
+
+
 def _candidate_moves(
     plan: dict[str, Any], kerf_cm: float,
     eligible_by_sheet: dict[int, set[int]],
@@ -214,11 +249,18 @@ def _candidate_moves(
                             if _EPS < abs(delta) and lo - _EPS <= delta <= hi + _EPS:
                                 key = (sheet_index, axis, ids, round(delta, 6))
                                 targets[key] = max(priority, targets.get(key, 0))
-    # Reserve search coverage for both genuine shared-center opportunities and
-    # separated-axis opportunities; either class alone can fill the trial cap.
-    # Whole rigid rows/columns can retain shared centers that single-piece
-    # shifts destroy. Try coherent groups before individual perturbations.
-    key = lambda item: (-len(item[2]), abs(item[3]),
+    # Estimate geometric coherence BEFORE the expensive full-plan validation.
+    # Do not mistake this estimate for CNC savings or use it for acceptance.
+    projected = {
+        move: _projected_axis_gain(
+            plan["sheets"][move[0]], move[1], move[2], move[3],
+            kerf_cm, eligible_by_sheet.get(move[0], set()),
+        )
+        for move in targets
+    }
+    # Reserve exploration for real shared cuts and independent axes. Rank
+    # candidates by expected coherence, not merely the smallest displacement.
+    key = lambda item: (-projected[item], -len(item[2]), abs(item[3]),
                         item[0], item[1], item[2], item[3])
     shared = sorted((move for move, priority in targets.items() if priority == 2), key=key)
     axes = sorted((move for move, priority in targets.items() if priority == 1), key=key)
