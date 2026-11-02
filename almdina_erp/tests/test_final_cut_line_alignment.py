@@ -588,6 +588,17 @@ def test_anonymized_large_board_real_kerf_prefers_group_six_over_four():
     def reusable(p):
         return _largest_reusable_free_area(p, 30, 30, .09, machine_type="CNC Router")
     assert reusable(full) >= reusable(original) - 1e-9
+    # A second independent rigid six-piece group can also align without
+    # destroying any original cut: this proves why two sweeps matter.
+    combined = deepcopy(full)
+    for piece in combined["sheets"][0]["pieces"]:
+        if piece["id"] in {11, 12, 13, 14, 15, 16}:
+            piece["x"] -= 1.6
+    assert not validate_plan(combined, sources, 122, 244, kerf_cm=.5)
+    combined_length, combined_segments = _rectangles(combined, .5)
+    assert combined_length <= after_length + .05
+    assert combined_segments < after_segments
+    assert reusable(combined) >= reusable(original) - 1e-9
     assert original["sheets"][0]["pieces"][0]["x"] == pytest.approx(3.3)
 
 
