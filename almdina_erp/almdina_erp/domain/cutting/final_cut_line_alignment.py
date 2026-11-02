@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import time
 from copy import deepcopy
+from itertools import zip_longest
 from typing import Any
 
 from .cutter_center_paths import cutter_center_segments
@@ -218,11 +219,11 @@ def _candidate_moves(
     shared = sorted((move for move, priority in targets.items() if priority == 2), key=key)
     axes = sorted((move for move, priority in targets.items() if priority == 1), key=key)
     result = []
-    while shared or axes:
-        if shared:
-            result.append(shared.pop(0))
-        if axes:
-            result.append(axes.pop(0))
+    for real_cut, axis_only in zip_longest(shared, axes):
+        if real_cut is not None:
+            result.append(real_cut)
+        if axis_only is not None:
+            result.append(axis_only)
     return result
 
 
