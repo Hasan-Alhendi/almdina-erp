@@ -200,7 +200,7 @@ def optimize_order_plan(
         profiles = (
             [plan_cut_line_quality(snapshot, board.kerf_cm)
              for snapshot in snapshots]
-            if machine_type in {"Auto", "CNC Router"} else []
+            if command.optimizer.machine_type in {"Auto", "CNC Router"} else []
         )
         if snapshots and profiles and all(profile is not None for profile in profiles):
             paired = sorted(
