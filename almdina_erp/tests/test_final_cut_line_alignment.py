@@ -762,3 +762,72 @@ def test_factory_alignment_budget_metadata_and_security_contract():
     assert budget["non_negative"] == 1
     assert float(budget["default"]) > 0
     assert "alignment_search_budget_sec" in SECTION_FIELDS[FactorySettingsSection.CUTTING]
+
+
+def test_contact_chain_moves_together_when_single_piece_cannot_preserve_shared_cuts():
+    """A Kerf-spaced column forms a cut-connected group despite no Y overlap."""
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=10, qty=4)])
+    placements = ((3, 0), (3, 10.5), (3, 21), (1, 50))
+    placed = [make_placed_piece(p, x, y, 20, 10, False)
+              for p, (x, y) in zip(sources, placements)]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.08,
+                total_board_area_m2=1, waste_area_m2=.92)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    before_profile = _rectangles(plan, .5)
+    original = deepcopy(plan)
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+    )
+    changed = result["sheets"][0]["pieces"]
+    # All Kerf-connected regular pieces can be translated as one rigid group
+    # while preserving the two shared cutter centers between stacked doors.
+    assert [p["x"] for p in changed] == pytest.approx([1, 1, 1, 1])
+    assert [p["y"] for p in changed] == pytest.approx([p["y"] for p in placed])
+    after_profile = _rectangles(result, .5)
+    assert after_profile[0] <= before_profile[0] + .05
+    assert after_profile[1] <= before_profile[1]
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
+    assert plan == original
+
+
+def test_protected_adjacent_piece_cannot_lose_existing_shared_cutter_center():
+    """The secondary regular-only score must not erase a cut shared with Glass."""
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines,
+    )
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=20, length_cm=20, qty=1, piece_type="Glass"),
+    ])
+    placed = [
+        make_placed_piece(sources[0], 3, 10, 20, 20, False),
+        make_placed_piece(sources[1], 1, 50, 20, 20, False),
+        make_placed_piece(sources[2], 23.5, 10, 20, 20, False),
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.12,
+                total_board_area_m2=1, waste_area_m2=.88)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+    )
+    positions = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert positions[1]["x"] == pytest.approx(3)  # cannot break Glass shared contact
+    assert positions[3]["x"] == pytest.approx(23.5)
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
