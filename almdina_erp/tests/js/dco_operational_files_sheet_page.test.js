@@ -218,7 +218,9 @@ const hiddenLiner = ux.cutPathPreviewMarkup(program, {
 });
 assert.ok(!hiddenLiner.includes('data-operation-key="liner"') || hiddenLiner.includes('data-cut-layer="liner"'));
 assert.ok(!hiddenLiner.includes('data-execution-path="liner:a"'));
+assert.ok(!hiddenLiner.includes('data-operation-key="liner"') || hiddenLiner.includes('data-cut-layer="liner"'));
 assert.ok(hiddenLiner.includes('data-execution-path="cut_path:a"'));
+assert.ok(hiddenLiner.includes("data-execution-path-id="));
 
 const zoomHost = {
     innerHTML: "",
@@ -298,7 +300,14 @@ for (let index = 0; index < 10; index += 1) {
     });
     assert.ok(markup.includes("dco-cnc-cut-preview__badge"));
     assert.ok(markup.includes("font-size") || css.includes("font-size: 14px"));
-    assert.ok(markup.includes("<span>4,5</span>") || markup.includes("4,5"), "depth passes share a grouped badge");
+    const cutPhysical = ux.collectPhysicalPaths(program).find(item => item.path_key === "cut_path:a");
+    assert.ok(cutPhysical);
+    assert.equal(cutPhysical.pass_count, 2);
+    assert.ok(
+        markup.includes(`<span>${cutPhysical.path_number}</span>`),
+        "depth passes share one physical path number"
+    );
+    assert.ok(!markup.includes("<span>4,5</span>"), "depth passes must not keep dual badge numbers");
 }
 
 const uniqueScopes = new Set(scopes);

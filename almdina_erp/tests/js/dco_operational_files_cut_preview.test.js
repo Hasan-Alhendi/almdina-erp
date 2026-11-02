@@ -149,19 +149,32 @@ assert.ok(executions.some(item => item.operation_key === "cut_path"));
 const pointCount = sharedClosed.points.length + 4 + 2 + 2;
 assert.notEqual(executions.length, pointCount, "execution count must not equal raw point count");
 
-const labels = ux.groupCutExecutionLabels(executions);
+const physical = ux.collectPhysicalPaths(program);
+assert.equal(physical.length, 4, "depth passes collapse to one physical path");
+const sharedPhysical = physical.find(item => item.path_key === "cut_path:shared");
+assert.ok(sharedPhysical);
+assert.equal(sharedPhysical.pass_count, 2);
+assert.equal(sharedPhysical.passes[0].depth_mm, 6);
+assert.equal(sharedPhysical.passes[1].depth_mm, 12);
+const openA = physical.find(item => item.path_key === "cut_path:open-a");
+assert.ok(openA);
+assert.ok(openA.execution_path_id);
+assert.notEqual(openA.execution_path_id, sharedPhysical.execution_path_id);
+
+const labels = ux.groupCutExecutionLabels(physical);
 const sharedLabel = labels.find(group => group.path_key === "cut_path:shared");
 assert.ok(sharedLabel);
-assert.equal(sharedLabel.items.length, 2, "depth passes at the same start share one label anchor");
+assert.equal(sharedLabel.items.length, 1, "one physical path keeps one label anchor");
 
 const scoped = ux.cutPathPreviewMarkup(program, {
-    selectedPathKey: "cut_path:open-a",
+    selectedExecutionPathId: openA.execution_path_id,
     markerScope: "cnc-cut-test-scope",
 });
 assert.ok(scoped.includes("dco-cnc-cut-preview__frame"));
 assert.ok(scoped.includes("dco-cnc-cut-preview__path"));
-assert.ok(scoped.includes('marker-end="url(#cnc-cut-test-scope-arrow-1)"'));
+assert.ok(scoped.includes(`marker-end="url(#cnc-cut-test-scope-arrow-${openA.path_number})"`));
 assert.ok(scoped.includes("dco-cnc-cut-preview__badge"));
+assert.ok(scoped.includes(`data-execution-path-id="${openA.execution_path_id}"`));
 assert.ok(scoped.includes('data-execution-path="cut_path:open-a"'));
 assert.ok(scoped.includes("is-cnc-path-selected"));
 assert.ok(scoped.includes(ux.PROGRAM_COLORS.liner));
@@ -203,9 +216,17 @@ ux.paintCutPathPreview(host, { status: "loading" });
 assert.ok(host.innerHTML.includes("Loading cutting paths..."));
 ux.paintCutPathPreview(host, { status: "error" });
 assert.ok(host.innerHTML.includes("Cutting paths could not be loaded."));
-ux.paintCutPathPreview(host, { status: "ready", program, selectedPathKey: "cut_path:shared" });
+ux.paintCutPathPreview(host, {
+    status: "ready",
+    program,
+    selectedExecutionPathId: sharedPhysical.execution_path_id,
+});
 assert.ok(host.innerHTML.includes("dco-cnc-cut-preview__execution"));
 assert.ok(host.innerHTML.includes('data-execution-path="cut_path:shared"'));
+assert.ok(host.innerHTML.includes(`data-execution-path-id="${sharedPhysical.execution_path_id}"`));
+const selectedNodes = (host.innerHTML.match(/is-cnc-path-selected/g) || []).length;
+assert.ok(selectedNodes >= 2, "badge and stroke share one selected physical identity");
+assert.ok(!host.innerHTML.includes(`>${sharedPhysical.path_number},${sharedPhysical.path_number + 1}<`), "depth passes do not keep dual badge numbers");
 
 const arrow = ux.cutExecutionArrowSegment([[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], true);
 assert.ok(arrow);

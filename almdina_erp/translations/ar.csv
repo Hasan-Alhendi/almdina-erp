@@ -3162,6 +3162,10 @@ Open sheet settings,فتح إعدادات اللوح
 "Piece {0}",الدرفة {0}
 Piece number is not available,رقم الدرفة غير متاح
 "Select a path to see its piece, layer, and preset.",اختر مسارًا لعرض الدرفة والطبقة وإعداد التشغيل.
+"Path {0}",المسار {0}
+Shared path,مسار مشترك
+"Pass {0}",التمريرة {0}
+"Pass {0}: Depth {1} mm",التمريرة {0}: العمق {1} مم
 Uses the layer preset,يستخدم إعداد الطبقة
 Custom preset,إعداد مخصص
 Use the layer preset,استخدم إعداد الطبقة

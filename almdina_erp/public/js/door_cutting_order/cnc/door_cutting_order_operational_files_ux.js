@@ -202,6 +202,8 @@
             expanded: {},
             customizing: {},
             selectedPathKey: "",
+            selectedExecutionPathId: "",
+            program: null,
         };
     }
 
@@ -433,6 +435,25 @@
     }
 
     function selectionText(workspace, sheet, state) {
+        const physical = findPhysicalPath(state && state.program, state && state.selectedExecutionPathId);
+        if (physical) {
+            const piece = physical.piece_label
+                ? translate("Piece {0}", [physical.piece_label])
+                : (physical.shared
+                    ? translate("Shared path")
+                    : translate("Piece number is not available"));
+            const preset = presetLabel(
+                workspace,
+                effectivePreset(state, {
+                    path_key: physical.path_key,
+                    operation_key: physical.operation_key,
+                })
+            );
+            const passes = physical.pass_count > 1
+                ? ` · ${translate("{0} passes", [physical.pass_count])}`
+                : "";
+            return `${translate("Path {0}", [physical.path_number])} · ${piece} · ${operationLabel(physical.operation_key)} · ${preset}${passes}`;
+        }
         const path = (sheet.paths || []).find(item => item.path_key === state.selectedPathKey);
         if (!path) return translate("Select a path to see its piece, layer, and preset.");
         const piece = path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available");
@@ -678,10 +699,16 @@
         }
         article.querySelectorAll(".dco-operational-path").forEach(row => {
             const pathKey = row.getAttribute("data-path-key");
+            const executionId = row.getAttribute("data-execution-path-id");
             const operationKey = row.getAttribute("data-path-operation") || layerKey;
             const custom = Boolean(state.overrides[pathKey]);
             row.classList.toggle("is-custom", custom);
             row.setAttribute("data-custom", custom ? "1" : "0");
+            if (executionId) {
+                row.classList.toggle("is-selected", executionId === state.selectedExecutionPathId);
+            } else {
+                row.classList.toggle("is-selected", pathKey === state.selectedPathKey);
+            }
             const badge = row.querySelector(".dco-operational-path__badge");
             if (badge) {
                 badge.textContent = translate(custom ? "Custom preset" : "Uses the layer preset");
@@ -707,39 +734,68 @@
         const preview = body.querySelector("[data-sheet-preview]");
         syncSheetFooter(dialog, workspace, sheet, state);
         requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
-        if (preview) {
-            preview.addEventListener("click", event => {
-                const hit = event.target.closest && event.target.closest("[data-execution-path]");
-                if (!hit) return;
-                const pathKey = hit.getAttribute("data-execution-path");
-                if (!pathKey) return;
-                state.selectedPathKey = pathKey;
-                state.expanded.cut_path = true;
-                refreshSelection();
-                const pathsPanel = body.querySelector('.dco-operational-layer[data-layer="cut_path"] .dco-operational-layer__paths');
-                if (pathsPanel) pathsPanel.hidden = false;
-                const toggle = body.querySelector('[data-toggle-layer="cut_path"]');
-                if (toggle) {
-                    toggle.setAttribute("aria-expanded", "true");
-                    toggle.textContent = translate("Hide paths");
-                }
-            });
-        }
 
         function refreshSelection() {
             const selection = body.querySelector(".dco-operational-sheet__selection");
             if (selection) selection.textContent = selectionText(workspace, sheet, state);
             highlightCutPreview(preview, state);
             body.querySelectorAll(".dco-operational-path").forEach(row => {
+                const executionId = row.getAttribute("data-execution-path-id");
+                if (executionId) {
+                    row.classList.toggle("is-selected", executionId === state.selectedExecutionPathId);
+                    return;
+                }
                 row.classList.toggle("is-selected", row.getAttribute("data-path-key") === state.selectedPathKey);
             });
         }
 
-        body.querySelectorAll("[data-select-path]").forEach(button => {
-            button.addEventListener("click", () => {
-                state.selectedPathKey = button.getAttribute("data-select-path");
+        body.addEventListener("click", event => {
+            const target = event.target;
+            if (!target || typeof target.closest !== "function") return;
+            const customize = target.closest("[data-customize-path]");
+            if (customize) {
+                const pathKey = customize.getAttribute("data-customize-path");
+                state.customizing[pathKey] = true;
+                const row = customize.closest(".dco-operational-path");
+                const operationKey = row && row.getAttribute("data-path-operation");
+                if (operationKey) state.expanded[operationKey] = true;
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                return;
+            }
+            const reset = target.closest("[data-reset-path]");
+            if (reset) {
+                clearPathPreset(state, reset.getAttribute("data-reset-path"));
+                refreshDialog(frm, dialog, workspace, sheet, state, board);
+                return;
+            }
+            const listHit = target.closest("[data-select-execution]");
+            if (listHit) {
+                applyExecutionSelection(
+                    body,
+                    workspace,
+                    sheet,
+                    state,
+                    listHit.getAttribute("data-select-execution")
+                );
+                return;
+            }
+            const settingsHit = target.closest("[data-select-path]");
+            if (settingsHit && !settingsHit.getAttribute("data-select-execution")) {
+                state.selectedPathKey = settingsHit.getAttribute("data-select-path") || "";
+                state.selectedExecutionPathId = "";
                 refreshSelection();
-            });
+                return;
+            }
+            const previewHit = target.closest("[data-sheet-preview] [data-execution-path-id]");
+            if (previewHit) {
+                applyExecutionSelection(
+                    body,
+                    workspace,
+                    sheet,
+                    state,
+                    previewHit.getAttribute("data-execution-path-id")
+                );
+            }
         });
         body.querySelectorAll("[data-toggle-layer]").forEach(button => {
             button.addEventListener("click", () => {
@@ -775,23 +831,6 @@
                 requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
             });
         }
-        body.querySelectorAll("[data-customize-path]").forEach(button => {
-            button.addEventListener("click", () => {
-                const pathKey = button.getAttribute("data-customize-path");
-                state.customizing[pathKey] = true;
-                const row = button.closest(".dco-operational-path");
-                const operationKey = row && row.getAttribute("data-path-operation");
-                if (operationKey) state.expanded[operationKey] = true;
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
-        body.querySelectorAll("[data-reset-path]").forEach(button => {
-            button.addEventListener("click", () => {
-                const pathKey = button.getAttribute("data-reset-path");
-                clearPathPreset(state, pathKey);
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
         body.querySelectorAll("[data-move]").forEach(button => {
             button.addEventListener("click", () => {
                 const item = button.closest("[data-operation-key]");
@@ -1531,6 +1570,23 @@
         );
     }
 
+    function geometryFingerprint(points, closed) {
+        const parts = (Array.isArray(points) ? points : []).map(point => (
+            `${Number(point[0]).toFixed(3)},${Number(point[1]).toFixed(3)}`
+        ));
+        return `${closed ? "C" : "O"}:${parts.join(";")}`;
+    }
+
+    function buildExecutionPathId(operationKey, pathKey, sequence, fingerprint, groupIndex) {
+        const base = [
+            String(operationKey || ""),
+            String(pathKey || ""),
+            String(sequence == null ? 0 : sequence),
+            String(fingerprint || ""),
+        ].join("::");
+        return groupIndex > 0 ? `${base}::g${groupIndex}` : base;
+    }
+
     function collectCutExecutions(program) {
         const executions = [];
         let execution = 0;
@@ -1540,6 +1596,7 @@
             if (!PROGRAM_COLORS[operationKey]) return;
             (operation.toolpaths || []).forEach(path => {
                 let current = null;
+                const sequence = path.sequence == null ? 0 : Number(path.sequence);
                 (path.motions || []).forEach(motion => {
                     const kind = String(motion && motion.kind || "");
                     if (kind === "plunge") {
@@ -1549,6 +1606,10 @@
                             execution,
                             path_key: String(path.path_key || ""),
                             operation_key: operationKey,
+                            sequence,
+                            piece_instance_id: String(path.piece_instance_id || ""),
+                            piece_label: String(path.piece_label || ""),
+                            preset_name: String(path.preset_name || ""),
                             closed: Boolean(path.closed),
                             depth_mm: motion.depth_mm == null || motion.depth_mm === ""
                                 ? null
@@ -1577,6 +1638,111 @@
         return executions;
     }
 
+    function collectPhysicalPaths(program) {
+        const paths = [];
+        let pathNumber = 0;
+        let passOrdinal = 0;
+        const operations = Array.isArray(program && program.operations) ? program.operations : [];
+        operations.forEach(operation => {
+            const operationKey = String(operation.operation_key || "");
+            if (!PROGRAM_COLORS[operationKey]) return;
+            (operation.toolpaths || []).forEach(toolpath => {
+                const sequence = toolpath.sequence == null ? 0 : Number(toolpath.sequence);
+                const pathKey = String(toolpath.path_key || "");
+                const closed = Boolean(toolpath.closed);
+                const passes = [];
+                let current = null;
+                (toolpath.motions || []).forEach(motion => {
+                    const kind = String(motion && motion.kind || "");
+                    if (kind === "plunge") {
+                        passOrdinal += 1;
+                        const start = [Number(motion.x_mm), Number(motion.y_mm)];
+                        current = {
+                            execution: passOrdinal,
+                            depth_mm: motion.depth_mm == null || motion.depth_mm === ""
+                                ? null
+                                : Number(motion.depth_mm),
+                            points: [start],
+                            start,
+                            end: start,
+                        };
+                        passes.push(current);
+                        return;
+                    }
+                    if (kind === "cut" && current) {
+                        const point = [Number(motion.x_mm), Number(motion.y_mm)];
+                        current.points.push(point);
+                        current.end = point;
+                        return;
+                    }
+                    if (kind === "retract" || kind === "travel") {
+                        current = null;
+                    }
+                });
+                if (!passes.length) return;
+                const groups = [];
+                passes.forEach(pass => {
+                    const fingerprint = geometryFingerprint(pass.points, closed);
+                    const last = groups[groups.length - 1];
+                    if (last && last.fingerprint === fingerprint) {
+                        last.passes.push(pass);
+                        return;
+                    }
+                    groups.push({
+                        fingerprint,
+                        passes: [pass],
+                        points: pass.points,
+                        start: pass.start,
+                        end: pass.end,
+                    });
+                });
+                groups.forEach((group, groupIndex) => {
+                    pathNumber += 1;
+                    const executionPathId = buildExecutionPathId(
+                        operationKey,
+                        pathKey,
+                        sequence,
+                        group.fingerprint,
+                        groups.length > 1 ? groupIndex : 0
+                    );
+                    const pieceLabel = String(toolpath.piece_label || "");
+                    const pieceInstanceId = String(toolpath.piece_instance_id || "");
+                    paths.push({
+                        execution_path_id: executionPathId,
+                        path_number: pathNumber,
+                        path_key: pathKey,
+                        operation_key: operationKey,
+                        sequence,
+                        piece_instance_id: pieceInstanceId,
+                        piece_label: pieceLabel,
+                        shared: !pieceLabel && !pieceInstanceId,
+                        closed,
+                        ready: Boolean(toolpath.ready),
+                        issues: Array.isArray(toolpath.issues) ? toolpath.issues.slice() : [],
+                        preset_name: String(toolpath.preset_name || ""),
+                        geometry_fingerprint: group.fingerprint,
+                        points: group.points,
+                        start: group.start,
+                        end: group.end,
+                        pass_count: group.passes.length,
+                        passes: group.passes.map((pass, index) => ({
+                            pass_index: index + 1,
+                            execution: pass.execution,
+                            depth_mm: pass.depth_mm,
+                        })),
+                    });
+                });
+            });
+        });
+        return paths;
+    }
+
+    function findPhysicalPath(program, executionPathId) {
+        const selected = String(executionPathId || "");
+        if (!selected) return null;
+        return collectPhysicalPaths(program).find(item => item.execution_path_id === selected) || null;
+    }
+
     function cutExecutionArrowSegment(points, closed) {
         if (!Array.isArray(points) || points.length < 2) return null;
         if (closed && points.length >= 3) {
@@ -1586,28 +1752,32 @@
         return { from: points[points.length - 2], to: points[points.length - 1] };
     }
 
-    function groupCutExecutionLabels(executions) {
+    function groupCutExecutionLabels(executionsOrPaths) {
         const groups = [];
         const indexByKey = new Map();
-        executions.forEach(item => {
+        (Array.isArray(executionsOrPaths) ? executionsOrPaths : []).forEach(item => {
             if (!item || !Array.isArray(item.start) || item.start.length < 2) return;
-            const key = [
-                item.operation_key || "",
-                item.path_key || "",
-                Number(item.start[0]).toFixed(2),
-                Number(item.start[1]).toFixed(2),
-            ].join("|");
+            const key = item.execution_path_id
+                || [
+                    item.operation_key || "",
+                    item.path_key || "",
+                    Number(item.start[0]).toFixed(2),
+                    Number(item.start[1]).toFixed(2),
+                ].join("|");
             if (indexByKey.has(key)) {
                 groups[indexByKey.get(key)].items.push(item);
                 return;
             }
             indexByKey.set(key, groups.length);
             groups.push({
+                execution_path_id: String(item.execution_path_id || ""),
+                path_number: item.path_number || null,
                 operation_key: String(item.operation_key || ""),
                 path_key: String(item.path_key || ""),
                 x: Number(item.start[0]),
                 y: Number(item.start[1]),
                 items: [item],
+                passes: Array.isArray(item.passes) ? item.passes.slice() : [],
             });
         });
         return groups;
@@ -1645,12 +1815,12 @@
         const drawing = program || {};
         const width = Number(drawing.sheet_width_mm);
         const length = Number(drawing.sheet_length_mm);
-        const selectedPathKey = String(options.selectedPathKey || "");
+        const selectedExecutionPathId = String(options.selectedExecutionPathId || "");
         const markerScope = String(options.markerScope || nextCutPreviewScope());
         const hiddenOperations = Array.isArray(options.hiddenOperations) ? options.hiddenOperations : [];
         const hidden = new Set(hiddenOperations.map(String));
-        const allExecutions = collectCutExecutions(drawing);
-        const executions = allExecutions.filter(item => !hidden.has(String(item.operation_key || "")));
+        const allPaths = collectPhysicalPaths(drawing);
+        const physicalPaths = allPaths.filter(item => !hidden.has(String(item.operation_key || "")));
         const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
         const notes = [];
         if (!geometryReady) {
@@ -1662,7 +1832,7 @@
             const message = issue.message || issue.code;
             if (message) issueMessages.push(String(message));
         });
-        allExecutions.forEach(item => {
+        allPaths.forEach(item => {
             (item.issues || []).forEach(code => {
                 if (code) issueMessages.push(String(code));
             });
@@ -1690,7 +1860,7 @@
             </div>`;
         }
 
-        if (!executions.length) {
+        if (!physicalPaths.length) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
                 ${legend}
                 ${zoomControls}
@@ -1704,40 +1874,47 @@
             </div>`;
         }
 
-        const markers = executions.map(item => {
-            const markerId = `${markerScope}-arrow-${item.execution}`;
+        const markers = physicalPaths.map(item => {
+            const markerId = `${markerScope}-arrow-${item.path_number}`;
             const color = PROGRAM_COLORS[item.operation_key] || "#333";
             return `<marker id="${escapeHtml(markerId)}" markerUnits="strokeWidth" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="4" markerHeight="4" orient="auto">
                 <path d="M0 0 L8 4 L0 8 Z" fill="${color}"/>
             </marker>`;
         }).join("");
-        const strokes = executions.map(item => {
-            const selected = selectedPathKey && item.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
-            const markerId = `${markerScope}-arrow-${item.execution}`;
+        const strokes = physicalPaths.map(item => {
+            const selected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId
+                ? " is-cnc-path-selected"
+                : "";
+            const markerId = `${markerScope}-arrow-${item.path_number}`;
             const color = PROGRAM_COLORS[item.operation_key] || "#333";
             const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
             const start = item.start;
             const arrow = cutExecutionArrowSegment(item.points, item.closed);
+            const depths = item.passes
+                .map(pass => (pass.depth_mm == null ? "" : String(pass.depth_mm)))
+                .filter(Boolean)
+                .join(",");
             const arrowLine = arrow
-                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
+                ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            return `<g class="dco-cnc-cut-preview__execution${selected}" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-depth-mm="${item.depth_mm == null ? "" : escapeHtml(item.depth_mm)}">
+            return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
                 <circle class="dco-cnc-cut-preview__start" cx="${Number(start[0])}" cy="${Number(start[1])}" r="2.4" fill="${color}"/>
             </g>`;
         }).join("");
-        const labels = groupCutExecutionLabels(executions).map(group => {
-            const selected = selectedPathKey && group.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
-            const numbers = group.items.map(item => item.execution).join(",");
-            const title = group.items.map(item => (
-                item.depth_mm == null
-                    ? String(item.execution)
-                    : `${item.execution}: ${translate("Depth {0} mm", [item.depth_mm])}`
+        const labels = physicalPaths.map(item => {
+            const selected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId
+                ? " is-cnc-path-selected"
+                : "";
+            const title = item.passes.map(pass => (
+                pass.depth_mm == null
+                    ? translate("Pass {0}", [pass.pass_index])
+                    : translate("Pass {0}: Depth {1} mm", [pass.pass_index, pass.depth_mm])
             )).join(" · ");
-            const left = width > 0 ? (Number(group.x) / width) * 100 : 0;
-            const top = length > 0 ? ((length - Number(group.y)) / length) * 100 : 0;
-            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-execution-path="${escapeHtml(group.path_key)}" data-operation-key="${escapeHtml(group.operation_key)}" data-label-x="${escapeHtml(group.x)}" data-label-y="${escapeHtml(group.y)}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(numbers)}</span></button>`;
+            const left = width > 0 ? (Number(item.start[0]) / width) * 100 : 0;
+            const top = length > 0 ? ((length - Number(item.start[1])) / length) * 100 : 0;
+            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-label-x="${escapeHtml(item.start[0])}" data-label-y="${escapeHtml(item.start[1])}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(item.path_number)}</span></button>`;
         }).join("");
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
@@ -1795,6 +1972,7 @@
                 paintCutPathPreview(host, {
                     status: "ready",
                     program: host.__cutPreviewProgram || {},
+                    selectedExecutionPathId: host.__cutPreviewSelectedExecutionPathId || "",
                     selectedPathKey: host.__cutPreviewSelectedPathKey || "",
                     layout: host.__cutPreviewLayout || "",
                     zoom: host.__cutPreviewZoom,
@@ -1841,11 +2019,13 @@
                 : payload.zoom
         );
         host.__cutPreviewProgram = payload.program || {};
+        host.__cutPreviewSelectedExecutionPathId = payload.selectedExecutionPathId || "";
         host.__cutPreviewSelectedPathKey = payload.selectedPathKey || "";
         host.__cutPreviewLayout = layout;
         host.__cutPreviewHidden = hiddenOperations;
         host.__cutPreviewZoom = zoom;
         host.innerHTML = cutPathPreviewMarkup(payload.program || {}, {
+            selectedExecutionPathId: payload.selectedExecutionPathId || "",
             selectedPathKey: payload.selectedPathKey || "",
             markerScope,
             layout,
@@ -1857,10 +2037,131 @@
 
     function highlightCutPreview(preview, state) {
         if (!preview) return;
-        const selected = state && state.selectedPathKey ? String(state.selectedPathKey) : "";
-        preview.querySelectorAll("[data-execution-path]").forEach(node => {
-            node.classList.toggle("is-cnc-path-selected", Boolean(selected) && node.getAttribute("data-execution-path") === selected);
+        const selected = state && state.selectedExecutionPathId ? String(state.selectedExecutionPathId) : "";
+        preview.querySelectorAll("[data-execution-path-id]").forEach(node => {
+            node.classList.toggle(
+                "is-cnc-path-selected",
+                Boolean(selected) && node.getAttribute("data-execution-path-id") === selected
+            );
         });
+    }
+
+    function physicalPathRowMarkup(path, workspace, state, canPrepare, ownsSettings) {
+        const custom = Boolean(state.overrides[path.path_key]);
+        const editing = canPrepare && ownsSettings && (custom || Boolean(state.customizing && state.customizing[path.path_key]));
+        const selected = effectivePreset(state, {
+            path_key: path.path_key,
+            operation_key: path.operation_key,
+        });
+        const piece = path.piece_label
+            ? translate("Piece {0}", [path.piece_label])
+            : (path.shared
+                ? translate("Shared path")
+                : translate("Piece number is not available"));
+        const passDetail = path.pass_count > 1
+            ? `<span class="dco-operational-path__passes">${escapeHtml(translate("{0} passes", [path.pass_count]))}</span>`
+            : "";
+        const control = !ownsSettings
+            ? `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>`
+            : (editing
+                ? `<div class="dco-operational-path__preset">
+                    <div data-path-preset-host="${escapeHtml(path.path_key)}"></div>
+                    <button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>
+                   </div>`
+                : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
+                    ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`);
+        const selectedClass = path.execution_path_id === state.selectedExecutionPathId ? " is-selected" : "";
+        return `<div class="dco-operational-path${custom ? " is-custom" : ""}${selectedClass}" data-path-key="${escapeHtml(path.path_key)}" data-execution-path-id="${escapeHtml(path.execution_path_id)}" data-path-number="${path.path_number}" data-path-operation="${escapeHtml(path.operation_key)}" data-custom="${custom ? "1" : "0"}">
+            <button type="button" class="btn btn-link btn-xs dco-operational-path__pick" data-select-execution="${escapeHtml(path.execution_path_id)}" data-select-path="${escapeHtml(path.path_key)}">
+                <span class="dco-operational-path__number">${escapeHtml(path.path_number)}</span>
+                ${escapeHtml(piece)}
+            </button>
+            <span class="dco-operational-path__badge">${escapeHtml(translate(custom ? "Custom preset" : "Uses the layer preset"))}</span>
+            ${passDetail}
+            ${control}
+        </div>`;
+    }
+
+    function syncPhysicalPathList(body, workspace, sheet, state, program, dialog) {
+        if (!body) return;
+        const physical = collectPhysicalPaths(program);
+        state.program = program;
+        if (state.selectedExecutionPathId
+            && !physical.some(item => item.execution_path_id === state.selectedExecutionPathId)) {
+            state.selectedExecutionPathId = "";
+        }
+        if (state.selectedExecutionPathId) {
+            const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
+            if (selected) state.selectedPathKey = selected.path_key;
+        } else if (state.selectedPathKey
+            && !physical.some(item => item.path_key === state.selectedPathKey)) {
+            state.selectedPathKey = "";
+        }
+        const owned = new Set();
+        (state.order || []).forEach(key => {
+            const article = body.querySelector(`.dco-operational-layer[data-layer="${key}"]`);
+            if (!article) return;
+            const container = article.querySelector(".dco-operational-layer__paths");
+            if (!container) return;
+            const rows = physical.filter(item => item.operation_key === key);
+            container.innerHTML = rows.map(path => {
+                const ownsSettings = Boolean(path.path_key) && !owned.has(path.path_key);
+                if (path.path_key) owned.add(path.path_key);
+                return physicalPathRowMarkup(path, workspace, state, Boolean(workspace.can_prepare), ownsSettings);
+            }).join("");
+            const count = article.querySelector(".dco-operational-layer__head span");
+            if (count) count.textContent = translate("{0} paths", [rows.length]);
+        });
+        const selection = body.querySelector(".dco-operational-sheet__selection");
+        if (selection) selection.textContent = selectionText(workspace, sheet, state);
+        if (dialog) {
+            disposePresetLinks(dialog);
+            mountPresetControls(
+                dialog._almdinaSheet && dialog._almdinaSheet.frm,
+                dialog,
+                workspace,
+                sheet,
+                state,
+                dialog._almdinaSheet && dialog._almdinaSheet.board
+            );
+        }
+    }
+
+    function expandLayerForPath(body, state, operationKey) {
+        if (!body || !operationKey) return;
+        state.expanded[operationKey] = true;
+        const article = body.querySelector(`.dco-operational-layer[data-layer="${operationKey}"]`);
+        const pathsPanel = article && article.querySelector(".dco-operational-layer__paths");
+        if (pathsPanel) pathsPanel.hidden = false;
+        const toggle = body.querySelector(`[data-toggle-layer="${operationKey}"]`);
+        if (toggle) {
+            toggle.setAttribute("aria-expanded", "true");
+            toggle.textContent = translate("Hide paths");
+        }
+    }
+
+    function applyExecutionSelection(body, workspace, sheet, state, executionPathId) {
+        const physical = findPhysicalPath(state.program, executionPathId);
+        if (!physical) return false;
+        state.selectedExecutionPathId = physical.execution_path_id;
+        state.selectedPathKey = physical.path_key;
+        expandLayerForPath(body, state, physical.operation_key);
+        const selection = body.querySelector(".dco-operational-sheet__selection");
+        if (selection) selection.textContent = selectionText(workspace, sheet, state);
+        const preview = body.querySelector("[data-sheet-preview]");
+        highlightCutPreview(preview, state);
+        body.querySelectorAll(".dco-operational-path").forEach(row => {
+            row.classList.toggle(
+                "is-selected",
+                row.getAttribute("data-execution-path-id") === state.selectedExecutionPathId
+            );
+        });
+        const row = Array.from(body.querySelectorAll(".dco-operational-path[data-execution-path-id]"))
+            .find(node => node.getAttribute("data-execution-path-id") === physical.execution_path_id);
+        if (row && typeof row.scrollIntoView === "function") {
+            row.scrollIntoView({ block: "nearest" });
+        }
+        return true;
     }
 
     function requestSheetProgramPreview(frm, dialog, workspace, sheet, state) {
@@ -1884,14 +2185,22 @@
                 if (!livePreview) return;
                 const program = (response && response.message) || {};
                 if (dialog._almdinaSheet) dialog._almdinaSheet.program = program;
-                const selectedPathKey = (state && state.selectedPathKey) || "";
-                const stillSelected = selectedPathKey
-                    && collectCutExecutions(program).some(item => item.path_key === selectedPathKey);
-                if (state && selectedPathKey && !stillSelected) state.selectedPathKey = "";
+                state.program = program;
+                const physical = collectPhysicalPaths(program);
+                if (state.selectedExecutionPathId
+                    && !physical.some(item => item.execution_path_id === state.selectedExecutionPathId)) {
+                    state.selectedExecutionPathId = "";
+                    state.selectedPathKey = "";
+                } else if (state.selectedExecutionPathId) {
+                    const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
+                    if (selected) state.selectedPathKey = selected.path_key;
+                }
+                syncPhysicalPathList(liveBody, workspace, sheet, state, program, dialog);
                 paintCutPathPreview(livePreview, {
                     status: "ready",
                     program,
-                    selectedPathKey: (state && state.selectedPathKey) || "",
+                    selectedExecutionPathId: state.selectedExecutionPathId || "",
+                    selectedPathKey: state.selectedPathKey || "",
                     layout: livePreview.getAttribute("data-preview-layout") || livePreview.__cutPreviewLayout || "",
                     zoom: livePreview.__cutPreviewZoom,
                     hiddenOperations: livePreview.__cutPreviewHidden,
@@ -2261,8 +2570,15 @@
         CUT_PREVIEW_ZOOM,
         PROGRAM_COLORS,
         collectCutExecutions,
+        collectPhysicalPaths,
+        findPhysicalPath,
+        geometryFingerprint,
+        buildExecutionPathId,
         cutPathPreviewMarkup,
         paintCutPathPreview,
+        highlightCutPreview,
+        applyExecutionSelection,
+        syncPhysicalPathList,
         groupCutExecutionLabels,
         cutExecutionArrowSegment,
         collectMarkerIdsFromMarkup,

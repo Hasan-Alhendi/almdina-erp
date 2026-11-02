@@ -187,6 +187,28 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-operational-path {
     flex-wrap: wrap;
 }
+.dco-operational-path__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: 1.5rem;
+    min-block-size: 1.5rem;
+    margin-inline-end: 0.35rem;
+    padding-inline: 0.3rem;
+    border-radius: 999px;
+    background: #e8eef6;
+    color: #0b3a67;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.dco-operational-path.is-selected .dco-operational-path__number {
+    background: #0b6bcb;
+    color: #fff;
+}
+.dco-operational-path__passes {
+    font-size: 0.82rem;
+    color: var(--text-muted, #6c7684);
+}
 .dco-operational-path.is-custom {
     border-inline-start: 3px solid #9a6207;
 }
