@@ -1111,3 +1111,42 @@ def test_final_cut_quality_uses_glass_hole_as_real_contour_not_bounding_rectangl
     assert before is not None and after is not None
     assert after[0] > before[0] + 500  # additional real inner cut perimeter
     assert after[1] > before[1]
+
+
+def test_final_compaction_cannot_undo_internal_shared_center_to_reach_board_edge():
+    """Final compaction and alignment use the same real cutter profile."""
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        final_cut_quality_key, plan_cut_line_quality,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.plan_search import (
+        compact_regular_final,
+    )
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=1),
+        dict(width_cm=14, length_cm=20, qty=1),
+        dict(width_cm=20, length_cm=20, qty=1),
+    ])
+    sheet = dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100,
+                 pieces=[
+                     make_placed_piece(sources[0], .65, 0, 20, 20, False),
+                     make_placed_piece(sources[1], .65, 20.5, 14, 20, False),
+                     make_placed_piece(sources[2], .65, 41, 20, 20, False),
+                 ])
+    plan = dict(method_key="MaxRects Best Short Side", sheets=[sheet],
+                unplaced=[], used_area_m2=.108, total_board_area_m2=1,
+                waste_area_m2=.892)
+    settings = dict(min_remnant_width_cm=200, min_remnant_length_cm=200,
+                    min_remnant_area_m2=1)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router", **settings)
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    baseline = deepcopy(plan)
+    result = compact_regular_final(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=settings,
+    )
+    before = plan_cut_line_quality(baseline, .5)
+    after = plan_cut_line_quality(result, .5)
+    assert before is not None and after is not None
+    assert final_cut_quality_key(after) <= final_cut_quality_key(before)
+    assert result["sheets"][0]["pieces"][1]["x"] == pytest.approx(.65)
+    assert plan == baseline  # no mutation of the raw native seed
