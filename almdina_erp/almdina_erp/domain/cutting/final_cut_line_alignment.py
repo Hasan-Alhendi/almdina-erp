@@ -12,7 +12,7 @@ from copy import deepcopy
 from itertools import zip_longest
 from typing import Any
 
-from .cutter_center_paths import cutter_center_segments
+from .cut_line_quality import sheet_cut_line_quality, final_cut_quality_key
 from .evaluation import placement_permission_errors, validate_plan
 from .optimizer import _largest_reusable_free_area, enrich_plan_metrics
 from .plan_search import _locked_piece_ids
@@ -29,55 +29,15 @@ def _sheet_center_profile(
     sheet: dict[str, Any], kerf_cm: float, *,
     regular_only: bool = False,
 ) -> tuple[float, int, float]:
-    """Real cutter network plus its longest straight *in-board* center.
-
-    In-board continuity is a tie-break, not a new manufacturing constraint.
-    A shared line outside the physical board (zero-Trim is allowed) cannot
-    earn the same continuity credit as an equally good internal cutter route.
-    """
-    shapes = [
-        (
-            [
-                (num(p["x"]) * 10, num(p["y"]) * 10),
-                ((num(p["x"]) + num(p["w"])) * 10, num(p["y"]) * 10),
-                ((num(p["x"]) + num(p["w"])) * 10, (num(p["y"]) + num(p["h"])) * 10),
-                (num(p["x"]) * 10, (num(p["y"]) + num(p["h"])) * 10),
-            ],
-            [],
-        )
-        for p in sheet.get("pieces") or []
-        if not regular_only or _is_movable_regular(p)
-    ]
-    segments = cutter_center_segments(shapes, max(0.0, kerf_cm) * 5)
-    board_w = num(sheet.get("w")) * 10
-    board_h = num(sheet.get("h")) * 10
-    longest_internal = 0.0
-    for start, end in segments:
-        dx, dy = abs(start[0] - end[0]), abs(start[1] - end[1])
-        # Count only the actual portion of a straight cutter center *inside*
-        # the board. An endpoint may overhang when Trim=0; that must not
-        # erase an otherwise long, safe internal part of the same route.
-        if dx <= _NETWORK_EPS_MM and (
-            _NETWORK_EPS_MM < start[0] < board_w - _NETWORK_EPS_MM
-        ):
-            internal_length = max(
-                0.0, min(max(start[1], end[1]), board_h)
-                     - max(min(start[1], end[1]), 0.0),
-            )
-            longest_internal = max(longest_internal, internal_length)
-        elif dy <= _NETWORK_EPS_MM and (
-            _NETWORK_EPS_MM < start[1] < board_h - _NETWORK_EPS_MM
-        ):
-            internal_length = max(
-                0.0, min(max(start[0], end[0]), board_w)
-                     - max(min(start[0], end[0]), 0.0),
-            )
-            longest_internal = max(longest_internal, internal_length)
-    return (
-        sum(math.dist(start, end) for start, end in segments),
-        len(segments),
-        longest_internal,
+    """Shared exact cutter topology, never approximated by finished edges."""
+    value = sheet_cut_line_quality(
+        sheet, kerf_cm,
+        piece_filter=_is_movable_regular if regular_only else None,
     )
+    if value is None:
+        raise ValueError("final cutter network cannot be proven for this sheet")
+    return value
+
 
 
 def _rectangles(plan: dict[str, Any], kerf_cm: float, *,
@@ -601,9 +561,8 @@ def align_regular_cut_lines(
             # Equal real cut length: prefer one long *internal* cutter route
             # over a superficially shorter segment list along the sheet border.
             # Count still cannot regress against the accepted baseline.
-            key = (round(profile[0], 5), -round(inboard, 3),
-                   profile[1], -alignment, abs(delta),
-                   sheet_index, axis, ids, delta)
+            key = (*final_cut_quality_key((profile[0], profile[1], inboard)),
+                   -alignment, abs(delta), sheet_index, axis, ids, delta)
             if winner_key is None or key < winner_key:
                 winner, winner_profile, winner_axis, winner_key = (
                     candidate, profile, alignment, key
