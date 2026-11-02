@@ -296,33 +296,27 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
         piece_rows=({"width_cm": 20, "length_cm": 20, "qty": 2},),
         plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
     )
-    # Warm both branches before memory sampling so one-time imports do not
-    # inflate the first measured baseline peak.
-    with patch.object(
-        align, "align_regular_cut_lines",
-        side_effect=lambda plan, *args, **kwargs: plan,
-    ):
-        optimize_order_plan(command, engine=FiveCandidates())
-    optimize_order_plan(command, engine=FiveCandidates())
+    def run_once(enabled):
+        engine = FiveCandidates()
+        if enabled:
+            return optimize_order_plan(command, engine=engine)
+        with patch.object(
+            align, "align_regular_cut_lines",
+            side_effect=lambda plan, *args, **kwargs: plan,
+        ):
+            return optimize_order_plan(command, engine=engine)
 
+    # First warm imports, then time with tracemalloc OFF (its overhead
+    # distorts short projections). Measure memory peaks in separate runs.
+    run_once(False)
+    run_once(True)
     output = {}
     for enabled in (False, True):
         elapsed, memory, shifts, profiles, remnants = [], [], [], [], []
-        for _ in range(3):
-            engine = FiveCandidates()
-            tracemalloc.start()
+        for _ in range(7):
             started = time.perf_counter()
-            if enabled:
-                result = optimize_order_plan(command, engine=engine)
-            else:
-                with patch.object(
-                    align, "align_regular_cut_lines",
-                    side_effect=lambda plan, *args, **kwargs: plan,
-                ):
-                    result = optimize_order_plan(command, engine=engine)
+            result = run_once(enabled)
             elapsed.append((time.perf_counter() - started) * 1000)
-            memory.append(tracemalloc.get_traced_memory()[1] / 1024)
-            tracemalloc.stop()
             assert result.snapshot["validation"]["is_valid"]
             assert result.required_boards == 1
             shifts.append(
@@ -331,7 +325,14 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
             )
             profiles.append(align._rectangles(result.snapshot, .5))
             remnants.append(result.snapshot["industrial_metrics"]["largest_reusable_free_area_m2"])
-        output[enabled] = (statistics.median(elapsed), statistics.median(memory), shifts, profiles, remnants)
+        for _ in range(3):
+            tracemalloc.start()
+            result = run_once(enabled)
+            memory.append(tracemalloc.get_traced_memory()[1] / 1024)
+            tracemalloc.stop()
+        output[enabled] = (
+            statistics.median(elapsed), statistics.median(memory), shifts, profiles, remnants,
+        )
     print(
         "CUT_ALIGNMENT_5_CANDIDATES "
         f"baseline_median_ms={output[False][0]:.3f} "
