@@ -129,6 +129,12 @@ flowchart LR
 لا يُعد وجود الكود اعتمادًا للتشغيل العام. الحدود والنتائج غير الناجحة موثقة في
 [P3 adoption gate](../evidence/bounded-regrouping-p3/README.md).
 
+عند إنهاء بدائل Smart تُجهّز وتُتحقق كل خطة مرشحة، ثم يُختار الفائز بالمؤشرات
+النهائية الحالية. لا تُجهّز خطة الرجوع الاحتياطية إذا وُجد بديل صحيح؛ عند غياب
+البدائل أو رفضها جميعًا يبقى مسار الرجوع والتحقق نفسه. هذا يزيل حسابًا مهملًا،
+ولا يخفف مدققات التصنيع أو يفعّل P3. القياسات والعقود:
+[Calibrated P5](../evidence/bounded-regrouping-p3/p5-calibrated.md).
+
 ## 8. Adaptive Trim
 
 Adaptive Trim هو Business Rule صريح تحت `domain/cutting/adaptive_trim.py`، وليس Strategy قص مستقلة ولا سلوكًا مخفيًا داخل optimizer.

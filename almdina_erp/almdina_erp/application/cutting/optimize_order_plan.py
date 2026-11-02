@@ -165,13 +165,19 @@ def optimize_order_plan(
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
     raw_seeds = []
-    outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings)
+    outcome = None
     snapshots = []
     for raw in raw_candidates:
         result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings)
         if result.snapshot['validation']['is_valid']:
+            if outcome is None:
+                outcome = result
             snapshots.append(result.snapshot)
             raw_seeds.append(deepcopy(raw))
+    if outcome is None:
+        # Smart alternatives already own the result when any is valid. Avoid
+        # projecting an unused fallback, while still validating every candidate.
+        outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings)
     if smart:
         ranked = sorted(
             zip(snapshots, raw_seeds),

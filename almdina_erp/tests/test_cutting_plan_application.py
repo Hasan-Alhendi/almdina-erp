@@ -704,5 +704,114 @@ def test_snapshot_publishes_the_validated_geometry_after_rejected_centering():
     assert not validate_plan(outcome.snapshot, list(outcome.expanded_pieces), 122, 244, kerf_cm=.5)
 
 
+class TestSmartFallbackProjection(unittest.TestCase):
+    """Project every alternative; build the fallback only when it is needed."""
+
+    def setUp(self):
+        import importlib
+        from almdina_erp.almdina_erp.domain.cutting import optimizer
+        from almdina_erp.almdina_erp.domain.cutting.primitives import create_sheet
+        from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import DomainCuttingEngineAdapter
+
+        self.app = importlib.import_module(
+            "almdina_erp.almdina_erp.application.cutting.optimize_order_plan"
+        )
+        self.adapter = DomainCuttingEngineAdapter()
+        self.rows = ({"width_cm": 6, "length_cm": 3, "qty": 2,
+                      "allow_rotation": 0, "piece_instance_id": "fallback:1"},)
+        pieces = self.adapter.expand_pieces(list(self.rows))
+        self.packed = optimizer.auto_fast(pieces, 10, 10, .5, "CNC Router")
+        self.packed["projection_probe"] = "one-board"
+        self.split = copy.deepcopy(self.packed)
+        self.split["projection_probe"] = "two-boards"
+        self.split["sheets"] = [
+            dict(create_sheet(index+1, 10, 10), pieces=[copy.deepcopy(piece)])
+            for index, piece in enumerate(self.packed["sheets"][0]["pieces"])
+        ]
+        self.split["total_board_area_m2"] = .02
+        self.split["waste_area_m2"] = .02-self.split["used_area_m2"]
+        self.split = optimizer.enrich_plan_metrics(
+            self.split, self.split["method_key"], "CNC Router"
+        )
+        self.invalid = copy.deepcopy(self.packed)
+        self.invalid["projection_probe"] = "invalid"
+        self.invalid["unplaced"] = [pieces[-1]]
+        self.invalid["sheets"][0]["pieces"].pop()
+
+    def run_projection(self, alternatives, *, mode="smart", fallback=None):
+        from unittest.mock import patch
+
+        main = copy.deepcopy(self.split if fallback is None else fallback)
+        main["projection_probe"] = "fallback"
+        adapter = self.adapter
+
+        class Frozen:
+            expand_pieces = adapter.expand_pieces
+            validate = adapter.validate
+
+            def optimize(self, *args, **kwargs):
+                return dict(copy.deepcopy(main), smart_candidates=copy.deepcopy(alternatives))
+
+        calls = []
+        original = self.app._snapshot_outcome
+
+        def project(*args, **kwargs):
+            calls.append(args[2]["projection_probe"])
+            return original(*args, **kwargs)
+
+        command = OptimizeOrderPlanCommand(
+            "deferred-fallback", "deferred-fallback", BoardGeometry(10, 10, 0, .5),
+            OptimizerOptions(mode, "CNC Router", 1, 40, 30, 30, .09), self.rows,
+        )
+        with patch.object(self.app, "_snapshot_outcome", side_effect=project):
+            result = optimize_order_plan(command, engine=Frozen())
+        return result, calls
+
+    def test_all_valid_alternatives_are_projected_and_later_better_plan_wins(self):
+        before = copy.deepcopy((self.split, self.packed))
+        result, calls = self.run_projection([self.split, self.packed])
+        self.assertEqual(calls, ["two-boards", "one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
+        self.assertEqual([len(snapshot["sheets"]) for snapshot in result.candidate_snapshots], [1, 2])
+        self.assertEqual((self.split, self.packed), before)
+        self.assertEqual(len(result.expanded_pieces), 2)
+        self.assertEqual(len(result.search_seeds), 2)
+
+    def test_invalid_alternative_does_not_stop_validation_of_later_valid_plan(self):
+        result, calls = self.run_projection([self.invalid, self.packed])
+        self.assertEqual(calls, ["invalid", "one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(len(result.candidate_snapshots), 1)
+
+    def test_all_invalid_alternatives_still_project_the_valid_fallback(self):
+        result, calls = self.run_projection([self.invalid, self.invalid], fallback=self.packed)
+        self.assertEqual(calls, ["invalid", "invalid", "fallback"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
+        self.assertEqual(result.candidate_snapshots, ())
+
+    def test_missing_portfolio_and_non_smart_modes_keep_the_single_fallback_path(self):
+        for mode, alternatives in [("smart", []), ("auto", [self.packed]), ("auto_pro", [self.packed])]:
+            with self.subTest(mode=mode):
+                result, calls = self.run_projection(alternatives, mode=mode)
+                self.assertEqual(calls, ["fallback"])
+                self.assertTrue(result.snapshot["validation"]["is_valid"])
+                self.assertEqual(result.required_boards, 2)
+
+    def test_invalid_fallback_preserves_the_existing_failure_payload(self):
+        result, calls = self.run_projection([self.invalid], fallback=self.invalid)
+        self.assertEqual(calls, ["invalid", "fallback"])
+        self.assertFalse(result.snapshot["validation"]["is_valid"])
+        self.assertTrue(result.snapshot["validation"]["errors"])
+        self.assertTrue(result.snapshot["unplaced"])
+
+    def test_unused_invalid_fallback_is_not_required_for_a_valid_alternative(self):
+        result, calls = self.run_projection([self.packed], fallback=self.invalid)
+        self.assertEqual(calls, ["one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,11 @@
 not certified.** This is a reviewed implementation for explicit Domain research,
 not automatic activation of P2, P3 or P4.
 
+The subsequent [calibrated P5 follow-up](p5-calibrated.md) separates native
+trajectory, fixed work and wall time, adds three independent Regular cases,
+and verifies a targeted Application fix for discarded fallback projections.
+P3 remains disabled; the earlier failed observations below remain unchanged.
+
 ## Change contract
 
 - Goal: make bounded whole-board regroup proposals testable without displacing
