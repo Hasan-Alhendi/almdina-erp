@@ -193,3 +193,32 @@ def test_non_aligned_regular_geometry_is_not_an_import_validation_error():
     bad = deepcopy(plan)
     bad["sheets"][0]["pieces"][1]["y"] = 20.2  # breaks the actual 5 mm kerf
     assert validate_plan(bad, sources, 100, 100, kerf_cm=.5)
+
+
+def test_vertical_alignment_is_measured_on_the_entire_board():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=2)])
+    plan = dict(
+        method_key="MaxRects Best Short Side",
+        sheets=[dict(sheet_no=1, w=100, h=100, pieces=[
+            make_placed_piece(sources[0], 0, 15, 20, 20, False),
+            make_placed_piece(sources[1], 20.5, 15.3, 20, 20, False),
+        ])],
+        unplaced=[], used_area_m2=.08, total_board_area_m2=1, waste_area_m2=.92,
+    )
+    baseline = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(baseline, sources, 100, 100, kerf_cm=.5)
+    candidate = _run_alignment(baseline, sources)
+    assert candidate["sheets"][0]["pieces"][0]["y"] == pytest.approx(
+        candidate["sheets"][0]["pieces"][1]["y"]
+    )
+    assert _rectangles(candidate, .5)[0] < _rectangles(baseline, .5)[0]
+    assert not validate_plan(candidate, sources, 100, 100, kerf_cm=.5)
+
+
+def test_repeated_generation_is_deterministic_and_large_shift_is_not_forced():
+    sources, plan = _domain_fixture()
+    runs = [_run_alignment(deepcopy(plan), sources) for _ in range(3)]
+    assert runs[0] == runs[1] == runs[2]
+    sources, distant = _domain_fixture(offset=2.0)
+    assert _run_alignment(distant, sources) is distant
