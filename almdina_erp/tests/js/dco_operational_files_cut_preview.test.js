@@ -130,20 +130,23 @@ const program = {
 };
 
 const executions = ux.collectCutExecutions(program);
-assert.equal(executions.length, 4, "each plunge-to-retract cut cycle is one execution");
-assert.equal(executions[0].path_key, "cut_path:shared");
+assert.equal(executions.length, 5, "liner + each plunge-to-retract cut cycle is one execution");
+assert.equal(executions[0].path_key, "liner:a");
+assert.equal(executions[0].operation_key, "liner");
 assert.equal(executions[0].execution, 1);
-assert.equal(executions[0].depth_mm, 6);
-assert.equal(executions[1].execution, 2);
-assert.equal(executions[1].depth_mm, 12);
 assert.equal(executions[1].path_key, "cut_path:shared");
-assert.equal(executions[2].path_key, "cut_path:open-a");
-assert.equal(executions[2].points.length, 4, "connected cuts without raise stay one execution");
-assert.equal(executions[3].path_key, "cut_path:open-b");
-assert.ok(executions.every(item => item.operation_key === "cut_path"));
-assert.ok(!executions.some(item => item.path_key.startsWith("liner:")));
+assert.equal(executions[1].execution, 2);
+assert.equal(executions[1].depth_mm, 6);
+assert.equal(executions[2].execution, 3);
+assert.equal(executions[2].depth_mm, 12);
+assert.equal(executions[2].path_key, "cut_path:shared");
+assert.equal(executions[3].path_key, "cut_path:open-a");
+assert.equal(executions[3].points.length, 4, "connected cuts without raise stay one execution");
+assert.equal(executions[4].path_key, "cut_path:open-b");
+assert.ok(executions.some(item => item.operation_key === "liner"));
+assert.ok(executions.some(item => item.operation_key === "cut_path"));
 
-const pointCount = sharedClosed.points.length + 4 + 2;
+const pointCount = sharedClosed.points.length + 4 + 2 + 2;
 assert.notEqual(executions.length, pointCount, "execution count must not equal raw point count");
 
 const labels = ux.groupCutExecutionLabels(executions);
@@ -159,9 +162,10 @@ assert.ok(scoped.includes("dco-cnc-cut-preview__frame"));
 assert.ok(scoped.includes("dco-cnc-cut-preview__path"));
 assert.ok(scoped.includes('marker-end="url(#cnc-cut-test-scope-arrow-1)"'));
 assert.ok(scoped.includes("dco-cnc-cut-preview__badge"));
-assert.ok(scoped.includes(">1,2<") || scoped.includes("<span>1,2</span>"));
 assert.ok(scoped.includes('data-execution-path="cut_path:open-a"'));
 assert.ok(scoped.includes("is-cnc-path-selected"));
+assert.ok(scoped.includes(ux.PROGRAM_COLORS.liner));
+assert.ok(scoped.includes(ux.PROGRAM_COLORS.cut_path));
 assert.ok(!scoped.includes("dco-piece"));
 assert.ok(!scoped.includes("GEOMETRY"));
 assert.ok(!scoped.includes("SHEET_OUTLINE"));
@@ -191,7 +195,7 @@ const incomplete = ux.cutPathPreviewMarkup({
     ],
 });
 assert.ok(incomplete.includes("Cutting path preview is incomplete."));
-assert.ok(incomplete.includes("No cutting paths are available for this sheet preview."));
+assert.ok(incomplete.includes("No machining paths are available for this sheet preview."));
 assert.ok(!incomplete.includes("0,0 10,0 10,10"), "do not invent strokes from points without motions");
 
 const host = { innerHTML: "" };

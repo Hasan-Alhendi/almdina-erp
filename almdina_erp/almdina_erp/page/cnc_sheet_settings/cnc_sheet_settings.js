@@ -2,7 +2,7 @@
     "use strict";
 
     const PAGE_ROUTE = "cnc-sheet-settings";
-    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=8";
+    const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=9";
     const ASSETS = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js",

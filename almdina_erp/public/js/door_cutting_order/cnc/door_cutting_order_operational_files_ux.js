@@ -7,6 +7,12 @@
     const SHEET_PAGE_ROUTE = "cnc-sheet-settings";
     const SHEET_PREVIEW_MAX_WIDTH_PX = 260;
     const SHEET_PAGE_PREVIEW_MIN_WIDTH_PX = 520;
+    const CUT_PREVIEW_ZOOM = Object.freeze({
+        MIN: 0.4,
+        INITIAL: 0.55,
+        MAX: 2.5,
+        STEP: 0.15,
+    });
     let cutPreviewScopeSeq = 0;
 
     function nextCutPreviewScope() {
@@ -1516,12 +1522,22 @@
         return `${Number(point[0]).toFixed(1)}, ${Number(point[1]).toFixed(1)}`;
     }
 
+    function clampCutPreviewZoom(value) {
+        const zoom = Number(value);
+        if (!Number.isFinite(zoom)) return CUT_PREVIEW_ZOOM.INITIAL;
+        return Math.min(
+            CUT_PREVIEW_ZOOM.MAX,
+            Math.max(CUT_PREVIEW_ZOOM.MIN, Math.round(zoom * 100) / 100)
+        );
+    }
+
     function collectCutExecutions(program) {
         const executions = [];
         let execution = 0;
         const operations = Array.isArray(program && program.operations) ? program.operations : [];
         operations.forEach(operation => {
-            if (String(operation.operation_key || "") !== "cut_path") return;
+            const operationKey = String(operation.operation_key || "");
+            if (!PROGRAM_COLORS[operationKey]) return;
             (operation.toolpaths || []).forEach(path => {
                 let current = null;
                 (path.motions || []).forEach(motion => {
@@ -1532,7 +1548,7 @@
                         current = {
                             execution,
                             path_key: String(path.path_key || ""),
-                            operation_key: "cut_path",
+                            operation_key: operationKey,
                             closed: Boolean(path.closed),
                             depth_mm: motion.depth_mm == null || motion.depth_mm === ""
                                 ? null
@@ -1576,6 +1592,7 @@
         executions.forEach(item => {
             if (!item || !Array.isArray(item.start) || item.start.length < 2) return;
             const key = [
+                item.operation_key || "",
                 item.path_key || "",
                 Number(item.start[0]).toFixed(2),
                 Number(item.start[1]).toFixed(2),
@@ -1586,6 +1603,7 @@
             }
             indexByKey.set(key, groups.length);
             groups.push({
+                operation_key: String(item.operation_key || ""),
                 path_key: String(item.path_key || ""),
                 x: Number(item.start[0]),
                 y: Number(item.start[1]),
@@ -1593,6 +1611,26 @@
             });
         });
         return groups;
+    }
+
+    function previewLegendMarkup(program, hiddenOperations) {
+        const hidden = new Set(hiddenOperations || []);
+        const present = new Set();
+        (Array.isArray(program && program.operations) ? program.operations : []).forEach(operation => {
+            const key = String(operation.operation_key || "");
+            if (PROGRAM_COLORS[key]) present.add(key);
+        });
+        const order = ["cut_path", "liner", "recessed_handle_cutout", "back_groove"];
+        const items = order.filter(key => present.has(key)).map(key => {
+            const checked = hidden.has(key) ? "" : " checked";
+            return `<label class="dco-cnc-cut-preview__legend-item">
+                <input type="checkbox" data-cut-layer="${escapeHtml(key)}"${checked}>
+                <span class="dco-cnc-cut-preview__swatch" style="background:${PROGRAM_COLORS[key]}"></span>
+                <span>${escapeHtml(operationLabel(key))}</span>
+            </label>`;
+        }).join("");
+        if (!items) return "";
+        return `<div class="dco-cnc-cut-preview__legend" role="group" aria-label="${escapeHtml(translate("Operation colors"))}">${items}</div>`;
     }
 
     function cutPreviewLayoutStyle(width, length, options = {}) {
@@ -1609,7 +1647,10 @@
         const length = Number(drawing.sheet_length_mm);
         const selectedPathKey = String(options.selectedPathKey || "");
         const markerScope = String(options.markerScope || nextCutPreviewScope());
-        const executions = collectCutExecutions(drawing);
+        const hiddenOperations = Array.isArray(options.hiddenOperations) ? options.hiddenOperations : [];
+        const hidden = new Set(hiddenOperations.map(String));
+        const allExecutions = collectCutExecutions(drawing);
+        const executions = allExecutions.filter(item => !hidden.has(String(item.operation_key || "")));
         const geometryReady = Boolean(drawing.geometry_ready || drawing.ready);
         const notes = [];
         if (!geometryReady) {
@@ -1621,42 +1662,51 @@
             const message = issue.message || issue.code;
             if (message) issueMessages.push(String(message));
         });
-        executions.forEach(item => {
+        allExecutions.forEach(item => {
             (item.issues || []).forEach(code => {
                 if (code) issueMessages.push(String(code));
             });
         });
         const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
         uniqueIssues.forEach(message => notes.push(message));
-        const zoomControls = String(options.layout || "") === "page"
+        const pageLayout = String(options.layout || "") === "page";
+        const initialZoom = clampCutPreviewZoom(
+            options.zoom == null ? CUT_PREVIEW_ZOOM.INITIAL : options.zoom
+        );
+        const zoomControls = pageLayout
             ? `<div class="dco-cnc-cut-preview__zoom" role="group" aria-label="${escapeHtml(translate("Preview zoom"))}">
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" title="${escapeHtml(translate("Zoom out"))}">−</button>
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" title="${escapeHtml(translate("Fit to view"))}">${escapeHtml(translate("Fit"))}</button>
                 <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" title="${escapeHtml(translate("Zoom in"))}">+</button>
                </div>`
             : "";
+        const legend = pageLayout ? previewLegendMarkup(drawing, hiddenOperations) : "";
+        const emptyMessage = translate("No machining paths are available for this sheet preview.");
 
         if (!(width > 0 && length > 0)) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}">
-                <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
+                ${legend}
+                <p class="dco-operational-files__note">${escapeHtml(emptyMessage)}</p>
             </div>`;
         }
 
         if (!executions.length) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
-                <div class="dco-cnc-cut-preview__stage">
-                    <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("No cutting paths are available for this sheet preview."))}">
+                ${legend}
+                ${zoomControls}
+                <div class="dco-cnc-cut-preview__stage" data-cut-stage style="--cut-zoom:${initialZoom}">
+                    <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(emptyMessage)}">
                         <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
                     </svg>
                 </div>
-                <p class="dco-operational-files__note">${escapeHtml(translate("No cutting paths are available for this sheet preview."))}</p>
+                <p class="dco-operational-files__note">${escapeHtml(emptyMessage)}</p>
                 ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
             </div>`;
         }
 
-        const color = PROGRAM_COLORS.cut_path || "#a61b1b";
         const markers = executions.map(item => {
             const markerId = `${markerScope}-arrow-${item.execution}`;
+            const color = PROGRAM_COLORS[item.operation_key] || "#333";
             return `<marker id="${escapeHtml(markerId)}" markerUnits="strokeWidth" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="4" markerHeight="4" orient="auto">
                 <path d="M0 0 L8 4 L0 8 Z" fill="${color}"/>
             </marker>`;
@@ -1664,13 +1714,14 @@
         const strokes = executions.map(item => {
             const selected = selectedPathKey && item.path_key === selectedPathKey ? " is-cnc-path-selected" : "";
             const markerId = `${markerScope}-arrow-${item.execution}`;
+            const color = PROGRAM_COLORS[item.operation_key] || "#333";
             const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
             const start = item.start;
             const arrow = cutExecutionArrowSegment(item.points, item.closed);
             const arrowLine = arrow
-                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
+                ? `<polyline class="dco-cnc-cut-preview__arrow" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            return `<g class="dco-cnc-cut-preview__execution${selected}" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-depth-mm="${item.depth_mm == null ? "" : escapeHtml(item.depth_mm)}">
+            return `<g class="dco-cnc-cut-preview__execution${selected}" data-execution="${item.execution}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-depth-mm="${item.depth_mm == null ? "" : escapeHtml(item.depth_mm)}">
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
                 <circle class="dco-cnc-cut-preview__start" cx="${Number(start[0])}" cy="${Number(start[1])}" r="2.4" fill="${color}"/>
@@ -1686,13 +1737,14 @@
             )).join(" · ");
             const left = width > 0 ? (Number(group.x) / width) * 100 : 0;
             const top = length > 0 ? ((length - Number(group.y)) / length) * 100 : 0;
-            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-execution-path="${escapeHtml(group.path_key)}" data-label-x="${escapeHtml(group.x)}" data-label-y="${escapeHtml(group.y)}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(numbers)}</span></button>`;
+            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-execution-path="${escapeHtml(group.path_key)}" data-operation-key="${escapeHtml(group.operation_key)}" data-label-x="${escapeHtml(group.x)}" data-label-y="${escapeHtml(group.y)}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(numbers)}</span></button>`;
         }).join("");
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${cutPreviewLayoutStyle(width, length, options)}">
+            ${legend}
             ${zoomControls}
-            <div class="dco-cnc-cut-preview__stage" data-cut-stage style="--cut-zoom:1">
-                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Cut between pieces"))}">
+            <div class="dco-cnc-cut-preview__stage" data-cut-stage style="--cut-zoom:${initialZoom}">
+                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(translate("Machining preview"))}">
                     <defs>${markers}</defs>
                     <g transform="translate(0,${length}) scale(1,-1)">
                         <rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>
@@ -1705,22 +1757,49 @@
         </div>`;
     }
 
-    function bindCutPreviewChrome(host) {
+    function bindCutPreviewChrome(host, options = {}) {
         if (!host || typeof host.querySelector !== "function") return;
         const stage = host.querySelector("[data-cut-stage]");
         if (!stage) return;
-        let zoom = Number(stage.style.getPropertyValue("--cut-zoom")) || 1;
+        let zoom = clampCutPreviewZoom(
+            options.initialZoom == null
+                ? stage.style.getPropertyValue("--cut-zoom")
+                : options.initialZoom
+        );
+        const outButton = host.querySelector('[data-cut-zoom="out"]');
+        const inButton = host.querySelector('[data-cut-zoom="in"]');
         const apply = () => {
+            zoom = clampCutPreviewZoom(zoom);
+            host.__cutPreviewZoom = zoom;
             stage.style.setProperty("--cut-zoom", String(zoom));
             stage.style.transform = `scale(${zoom})`;
+            if (outButton) outButton.disabled = zoom <= CUT_PREVIEW_ZOOM.MIN + 0.0001;
+            if (inButton) inButton.disabled = zoom >= CUT_PREVIEW_ZOOM.MAX - 0.0001;
         };
         host.querySelectorAll("[data-cut-zoom]").forEach(button => {
             button.addEventListener("click", () => {
                 const action = button.getAttribute("data-cut-zoom");
-                if (action === "in") zoom = Math.min(3, Math.round((zoom + 0.15) * 100) / 100);
-                else if (action === "out") zoom = Math.max(0.6, Math.round((zoom - 0.15) * 100) / 100);
-                else zoom = 1;
+                if (action === "in") zoom = clampCutPreviewZoom(zoom + CUT_PREVIEW_ZOOM.STEP);
+                else if (action === "out") zoom = clampCutPreviewZoom(zoom - CUT_PREVIEW_ZOOM.STEP);
+                else zoom = CUT_PREVIEW_ZOOM.INITIAL;
                 apply();
+            });
+        });
+        host.querySelectorAll("[data-cut-layer]").forEach(input => {
+            input.addEventListener("change", () => {
+                const hidden = [];
+                host.querySelectorAll("[data-cut-layer]").forEach(box => {
+                    if (!box.checked) hidden.push(box.getAttribute("data-cut-layer"));
+                });
+                host.__cutPreviewHidden = hidden;
+                paintCutPathPreview(host, {
+                    status: "ready",
+                    program: host.__cutPreviewProgram || {},
+                    selectedPathKey: host.__cutPreviewSelectedPathKey || "",
+                    layout: host.__cutPreviewLayout || "",
+                    zoom: host.__cutPreviewZoom,
+                    hiddenOperations: hidden,
+                });
             });
         });
         apply();
@@ -1749,14 +1828,31 @@
             return;
         }
         const markerScope = nextCutPreviewScope();
+        const layout = payload.layout
+            || (typeof host.getAttribute === "function" ? host.getAttribute("data-preview-layout") : "")
+            || host.__cutPreviewLayout
+            || "";
+        const hiddenOperations = Array.isArray(payload.hiddenOperations)
+            ? payload.hiddenOperations
+            : (Array.isArray(host.__cutPreviewHidden) ? host.__cutPreviewHidden : []);
+        const zoom = clampCutPreviewZoom(
+            payload.zoom == null
+                ? (host.__cutPreviewZoom == null ? CUT_PREVIEW_ZOOM.INITIAL : host.__cutPreviewZoom)
+                : payload.zoom
+        );
+        host.__cutPreviewProgram = payload.program || {};
+        host.__cutPreviewSelectedPathKey = payload.selectedPathKey || "";
+        host.__cutPreviewLayout = layout;
+        host.__cutPreviewHidden = hiddenOperations;
+        host.__cutPreviewZoom = zoom;
         host.innerHTML = cutPathPreviewMarkup(payload.program || {}, {
             selectedPathKey: payload.selectedPathKey || "",
             markerScope,
-            layout: payload.layout
-                || (typeof host.getAttribute === "function" ? host.getAttribute("data-preview-layout") : "")
-                || "",
+            layout,
+            zoom,
+            hiddenOperations,
         });
-        bindCutPreviewChrome(host);
+        bindCutPreviewChrome(host, { initialZoom: zoom });
     }
 
     function highlightCutPreview(preview, state) {
@@ -1796,7 +1892,9 @@
                     status: "ready",
                     program,
                     selectedPathKey: (state && state.selectedPathKey) || "",
-                    layout: livePreview.getAttribute("data-preview-layout") || "",
+                    layout: livePreview.getAttribute("data-preview-layout") || livePreview.__cutPreviewLayout || "",
+                    zoom: livePreview.__cutPreviewZoom,
+                    hiddenOperations: livePreview.__cutPreviewHidden,
                 });
             },
             error() {
@@ -2160,6 +2258,8 @@
         preserveDialogScroll,
         SHEET_PREVIEW_MAX_WIDTH_PX,
         SHEET_PAGE_ROUTE,
+        CUT_PREVIEW_ZOOM,
+        PROGRAM_COLORS,
         collectCutExecutions,
         cutPathPreviewMarkup,
         paintCutPathPreview,
@@ -2167,6 +2267,7 @@
         cutExecutionArrowSegment,
         collectMarkerIdsFromMarkup,
         nextCutPreviewScope,
+        clampCutPreviewZoom,
         sheetSettingsUrl,
         openSheetSettingsTab,
         mountSheetSettingsPage,

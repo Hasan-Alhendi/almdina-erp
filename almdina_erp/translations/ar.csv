@@ -3176,6 +3176,8 @@ Board preview is not available.,معاينة اللوح غير متاحة.
 Loading cutting paths...,جارٍ تحميل مسارات القص...
 Cutting paths could not be loaded.,تعذر تحميل مسارات القص.
 No cutting paths are available for this sheet preview.,لا توجد مسارات قص متاحة لمعاينة هذا اللوح.
+No machining paths are available for this sheet preview.,لا توجد مسارات تشغيل متاحة لمعاينة هذا اللوح.
+Operation colors,ألوان العمليات
 Cutting path preview is incomplete.,معاينة مسارات القص غير مكتملة.
 CNC sheet settings,إعدادات لوح CNC
 CNC Sheet Settings,إعدادات لوح CNC

@@ -56,7 +56,25 @@ assert.equal(opened.length, 1);
 assert.equal(opened[0].target, "_blank");
 assert.equal(opened[0].url, url);
 
+function motionChain(points, depth, closed) {
+    const start = points[0];
+    const motions = [
+        { kind: "travel", x_mm: start[0], y_mm: start[1], depth_mm: null },
+        { kind: "plunge", x_mm: start[0], y_mm: start[1], depth_mm: depth },
+    ];
+    points.slice(1).forEach(point => {
+        motions.push({ kind: "cut", x_mm: point[0], y_mm: point[1], depth_mm: depth });
+    });
+    if (closed) {
+        motions.push({ kind: "cut", x_mm: start[0], y_mm: start[1], depth_mm: depth });
+    }
+    const end = closed ? start : points[points.length - 1];
+    motions.push({ kind: "retract", x_mm: end[0], y_mm: end[1], depth_mm: null });
+    return motions;
+}
+
 function makeProgram() {
+    const cutPoints = [[0, 0], [100, 0], [100, 100], [0, 100]];
     return {
         sheet_width_mm: 2440,
         sheet_length_mm: 1220,
@@ -65,33 +83,55 @@ function makeProgram() {
         issues: [],
         operations: [
             {
+                operation_key: "liner",
+                toolpaths: [{
+                    path_key: "liner:a",
+                    operation_key: "liner",
+                    closed: false,
+                    ready: true,
+                    issues: [],
+                    points: [[10, 10], [40, 10]],
+                    motions: motionChain([[10, 10], [40, 10]], 3, false),
+                }],
+            },
+            {
+                operation_key: "recessed_handle_cutout",
+                toolpaths: [{
+                    path_key: "recessed_handle_cutout:a",
+                    operation_key: "recessed_handle_cutout",
+                    closed: true,
+                    ready: true,
+                    issues: [],
+                    points: [[50, 50], [70, 50], [70, 70], [50, 70]],
+                    motions: motionChain([[50, 50], [70, 50], [70, 70], [50, 70]], 4, true),
+                }],
+            },
+            {
+                operation_key: "back_groove",
+                toolpaths: [{
+                    path_key: "back_groove:a",
+                    operation_key: "back_groove",
+                    closed: false,
+                    ready: true,
+                    issues: [],
+                    points: [[20, 80], [90, 80]],
+                    motions: motionChain([[20, 80], [90, 80]], 2, false),
+                }],
+            },
+            {
                 operation_key: "cut_path",
-                toolpaths: [
-                    {
-                        path_key: "cut_path:a",
-                        operation_key: "cut_path",
-                        closed: true,
-                        ready: true,
-                        issues: [],
-                        points: [[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]],
-                        motions: [
-                            { kind: "travel", x_mm: 0, y_mm: 0, depth_mm: null },
-                            { kind: "plunge", x_mm: 0, y_mm: 0, depth_mm: 6 },
-                            { kind: "cut", x_mm: 100, y_mm: 0, depth_mm: 6 },
-                            { kind: "cut", x_mm: 100, y_mm: 100, depth_mm: 6 },
-                            { kind: "cut", x_mm: 0, y_mm: 100, depth_mm: 6 },
-                            { kind: "cut", x_mm: 0, y_mm: 0, depth_mm: 6 },
-                            { kind: "retract", x_mm: 0, y_mm: 0, depth_mm: null },
-                            { kind: "travel", x_mm: 0, y_mm: 0, depth_mm: null },
-                            { kind: "plunge", x_mm: 0, y_mm: 0, depth_mm: 12 },
-                            { kind: "cut", x_mm: 100, y_mm: 0, depth_mm: 12 },
-                            { kind: "cut", x_mm: 100, y_mm: 100, depth_mm: 12 },
-                            { kind: "cut", x_mm: 0, y_mm: 100, depth_mm: 12 },
-                            { kind: "cut", x_mm: 0, y_mm: 0, depth_mm: 12 },
-                            { kind: "retract", x_mm: 0, y_mm: 0, depth_mm: null },
-                        ],
-                    },
-                ],
+                toolpaths: [{
+                    path_key: "cut_path:a",
+                    operation_key: "cut_path",
+                    closed: true,
+                    ready: true,
+                    issues: [],
+                    points: [...cutPoints, cutPoints[0]],
+                    motions: [
+                        ...motionChain(cutPoints, 6, true),
+                        ...motionChain(cutPoints, 12, true),
+                    ],
+                }],
             },
         ],
     };
@@ -132,7 +172,104 @@ function createDocumentDom() {
     };
 }
 
+assert.equal(ux.CUT_PREVIEW_ZOOM.MIN, 0.4);
+assert.equal(ux.CUT_PREVIEW_ZOOM.INITIAL, 0.55);
+assert.equal(ux.CUT_PREVIEW_ZOOM.MAX, 2.5);
+assert.equal(ux.CUT_PREVIEW_ZOOM.STEP, 0.15);
+assert.equal(ux.clampCutPreviewZoom(0.1), 0.4);
+assert.equal(ux.clampCutPreviewZoom(9), 2.5);
+assert.equal(ux.PROGRAM_COLORS.cut_path, "#a61b1b");
+assert.equal(ux.PROGRAM_COLORS.liner, "#1d4e89");
+assert.equal(ux.PROGRAM_COLORS.recessed_handle_cutout, "#c45c12");
+assert.equal(ux.PROGRAM_COLORS.back_groove, "#5c4d2e");
+assert.ok(css.includes("padding-inline: clamp("));
+assert.ok(css.includes("overflow-x: hidden"));
+assert.ok(!/dco-cnc-sheet-page \.dco-operational-sheet__settings \{\s*max-block-size: calc\(100vh - 11rem\);\s*overflow: auto;/.test(css));
+
 const program = makeProgram();
+const allExecutions = ux.collectCutExecutions(program);
+assert.equal(allExecutions.length, 5);
+assert.deepEqual(
+    allExecutions.map(item => item.operation_key),
+    ["liner", "recessed_handle_cutout", "back_groove", "cut_path", "cut_path"]
+);
+assert.ok(!allExecutions.some(item => !Array.isArray(item.points) || item.points.length < 2));
+
+const colored = ux.cutPathPreviewMarkup(program, {
+    markerScope: "cnc-multi",
+    layout: "page",
+    zoom: ux.CUT_PREVIEW_ZOOM.INITIAL,
+});
+assert.ok(colored.includes("--cut-zoom:0.55"));
+assert.ok(colored.includes("dco-cnc-cut-preview__legend"));
+assert.ok(colored.includes('data-cut-layer="liner"'));
+assert.ok(colored.includes('data-cut-layer="cut_path"'));
+assert.ok(colored.includes(ux.PROGRAM_COLORS.liner));
+assert.ok(colored.includes(ux.PROGRAM_COLORS.recessed_handle_cutout));
+assert.ok(colored.includes(ux.PROGRAM_COLORS.back_groove));
+assert.ok(colored.includes(ux.PROGRAM_COLORS.cut_path));
+assert.ok(colored.includes('data-operation-key="liner"'));
+assert.ok(colored.includes('data-operation-key="back_groove"'));
+
+const hiddenLiner = ux.cutPathPreviewMarkup(program, {
+    markerScope: "cnc-hidden",
+    layout: "page",
+    hiddenOperations: ["liner"],
+});
+assert.ok(!hiddenLiner.includes('data-operation-key="liner"') || hiddenLiner.includes('data-cut-layer="liner"'));
+assert.ok(!hiddenLiner.includes('data-execution-path="liner:a"'));
+assert.ok(hiddenLiner.includes('data-execution-path="cut_path:a"'));
+
+const zoomHost = {
+    innerHTML: "",
+    getAttribute() { return "page"; },
+    querySelector(selector) {
+        if (selector === "[data-cut-stage]") {
+            const match = this.innerHTML.match(/data-cut-stage[^>]*style="([^"]*)"/);
+            const styleText = (match && match[1]) || "";
+            const props = {};
+            styleText.split(";").forEach(part => {
+                const [key, value] = part.split(":");
+                if (key && value) props[key.trim()] = value.trim();
+            });
+            return {
+                style: {
+                    getPropertyValue(name) { return props[name] || ""; },
+                    setProperty(name, value) { props[name] = String(value); },
+                    transform: "",
+                },
+            };
+        }
+        if (selector === '[data-cut-zoom="out"]' || selector === '[data-cut-zoom="in"]') {
+            return { disabled: false, addEventListener() {} };
+        }
+        return null;
+    },
+    querySelectorAll(selector) {
+        if (selector === "[data-cut-zoom]" || selector === "[data-cut-layer]") return [];
+        return [];
+    },
+};
+ux.paintCutPathPreview(zoomHost, { status: "ready", program, layout: "page" });
+assert.equal(zoomHost.__cutPreviewZoom, 0.55);
+ux.paintCutPathPreview(zoomHost, {
+    status: "ready",
+    program,
+    layout: "page",
+    selectedPathKey: "cut_path:a",
+    zoom: 0.85,
+});
+assert.equal(zoomHost.__cutPreviewZoom, 0.85);
+ux.paintCutPathPreview(zoomHost, {
+    status: "ready",
+    program,
+    layout: "page",
+    selectedPathKey: "liner:a",
+});
+assert.equal(zoomHost.__cutPreviewZoom, 0.85, "selection/repaint must keep the current zoom");
+assert.equal(ux.clampCutPreviewZoom(0.4 - ux.CUT_PREVIEW_ZOOM.STEP), 0.4);
+assert.equal(ux.clampCutPreviewZoom(2.5 + ux.CUT_PREVIEW_ZOOM.STEP), 2.5);
+
 const staleDom = createDocumentDom();
 
 // Prove the old fixed-id collision: second paint keeps resolving to the first marker.
@@ -161,7 +298,7 @@ for (let index = 0; index < 10; index += 1) {
     });
     assert.ok(markup.includes("dco-cnc-cut-preview__badge"));
     assert.ok(markup.includes("font-size") || css.includes("font-size: 14px"));
-    assert.ok(markup.includes("1,2") || markup.includes(">1,2<"));
+    assert.ok(markup.includes("<span>4,5</span>") || markup.includes("4,5"), "depth passes share a grouped badge");
 }
 
 const uniqueScopes = new Set(scopes);
