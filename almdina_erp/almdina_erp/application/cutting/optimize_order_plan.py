@@ -188,10 +188,37 @@ def optimize_order_plan(
         outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings,
                                     alignment_budget=alignment_budget)
     if smart:
-        ranked = sorted(
-            zip(snapshots, raw_seeds),
-            key=lambda pair: tuple(pair[0].get("industrial_rank") or ()),
+        # Native search uses a cheap placement estimate to bound exploration.
+        # Final System ranking must instead agree with the authoritative real
+        # cutter-center topology used by Final Alignment. Otherwise a border
+        # placement can outrank an equivalent continuous *internal* cutter
+        # path merely because estimated _cut_metrics ignores sheet edges.
+        # Never mix unproven special geometry with exact scores.
+        from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+            final_cut_quality_key, plan_cut_line_quality,
         )
+        profiles = (
+            [plan_cut_line_quality(snapshot, board.kerf_cm)
+             for snapshot in snapshots]
+            if machine_type in {"Auto", "CNC Router"} else []
+        )
+        if snapshots and profiles and all(profile is not None for profile in profiles):
+            paired = sorted(
+                zip(snapshots, raw_seeds, profiles),
+                key=lambda item: (
+                    tuple((item[0].get("industrial_rank") or ())[:4]),
+                    final_cut_quality_key(item[2]),
+                    tuple((item[0].get("industrial_rank") or ())[4:]),
+                ),
+            )
+            ranked = [(snapshot, seed) for snapshot, seed, _ in paired]
+        else:
+            # Mixed/unsupported outlines or very large sheets retain the
+            # proven legacy priority rather than silently faking toolpaths.
+            ranked = sorted(
+                zip(snapshots, raw_seeds),
+                key=lambda pair: tuple(pair[0].get("industrial_rank") or ()),
+            )
         snapshots = [snapshot for snapshot, _ in ranked]
         raw_seeds = [seed for _, seed in ranked]
         # Final compaction can make two raw alternatives identical. Keep the
