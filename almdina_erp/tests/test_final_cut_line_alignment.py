@@ -382,6 +382,10 @@ def test_distant_rows_and_columns_gain_axis_alignment_without_fake_shared_cut(ax
     outcome = _run_alignment(raw, sources)
     a, b = outcome["sheets"][0]["pieces"]
     assert a[axis] == pytest.approx(b[axis])
+    other_axis = "y" if axis == "x" else "x"
+    assert [p[other_axis] for p in outcome["sheets"][0]["pieces"]] == [
+        p[other_axis] for p in raw["sheets"][0]["pieces"]
+    ]  # no closing the distant perpendicular gap under an alignment pretext
     assert _rectangles(outcome, .5) == pytest.approx(_rectangles(raw, .5))
     assert not validate_plan(outcome, sources, 100, 100, kerf_cm=.5)
     assert raw == before
