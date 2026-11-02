@@ -400,14 +400,31 @@
         Object.keys(next.boards || {}).forEach((key) => {
             if (!kept.has(String(key))) delete next.boards[key];
         });
+        // Defective begin-from-source drafts wrote every board at the same
+        // origin. Keep the grid from buildFromProjection instead of stacking.
+        // Do not touch deliberately user-moved boards or spaced saved layouts.
+        const collapsedDefaults = boardsShareCollapsedDefaultOrigin(layout.boards);
         (layout.boards || []).forEach((board) => {
             const target = next.boards[String(board.sheet_no)];
             if (!target) return;
-            target.origin_x_mm = Number(board.origin_x_mm) || 0;
-            target.origin_y_mm = Number(board.origin_y_mm) || 0;
+            if (!collapsedDefaults) {
+                target.origin_x_mm = Number(board.origin_x_mm) || 0;
+                target.origin_y_mm = Number(board.origin_y_mm) || 0;
+            }
             target.user_moved = board.user_moved === true;
         });
         return { ok: true, session: next };
+    }
+
+    function boardsShareCollapsedDefaultOrigin(boards) {
+        if (!Array.isArray(boards) || boards.length < 2) return false;
+        if (boards.some((board) => board && board.user_moved === true)) return false;
+        const x0 = Number(boards[0].origin_x_mm) || 0;
+        const y0 = Number(boards[0].origin_y_mm) || 0;
+        return boards.every((board) => (
+            Math.abs((Number(board.origin_x_mm) || 0) - x0) < 1e-6
+            && Math.abs((Number(board.origin_y_mm) || 0) - y0) < 1e-6
+        ));
     }
 
     function settleReview(view, request, response) {
@@ -472,6 +489,7 @@
         distributionFingerprint,
         exportLayout,
         applySavedLayout,
+        boardsShareCollapsedDefaultOrigin,
         settleDraftSave,
         settleReview,
         TITLE_BAND_MM,

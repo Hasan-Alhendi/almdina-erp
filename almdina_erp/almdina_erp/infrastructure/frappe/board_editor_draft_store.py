@@ -29,6 +29,8 @@ class FrappeBoardEditorDraftStore:
             "source_input_fingerprint, source_content_revision, "
             "draft_version, distribution_fingerprint, layout_json"
         )
+        if _archive_column_ready():
+            columns += ", prior_draft_archive_json"
         if _create_tracking_ready():
             columns += (
                 ", last_create_request_id, last_created_plan, last_created_draft_version"
@@ -78,20 +80,28 @@ class FrappeBoardEditorDraftStore:
         current = self.lock(key)
         if current is None or int(current["draft_version"]) != int(expected_version):
             return False
+        values = {
+            "draft_version": int(changes["draft_version"]),
+            "distribution_fingerprint": changes["distribution_fingerprint"],
+            "source_input_fingerprint": changes.get("source_input_fingerprint") or "",
+            "source_content_revision": changes.get("source_content_revision") or "",
+            "layout_json": json.dumps(
+                changes["layout_json"],
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        }
+        if _archive_column_ready() and "prior_draft_archive_json" in changes:
+            archive = changes.get("prior_draft_archive_json")
+            values["prior_draft_archive_json"] = (
+                ""
+                if archive in (None, "")
+                else json.dumps(archive, separators=(",", ":"), sort_keys=True)
+            )
         frappe.db.set_value(
             DOCTYPE,
             current["name"],
-            {
-                "draft_version": int(changes["draft_version"]),
-                "distribution_fingerprint": changes["distribution_fingerprint"],
-                "source_input_fingerprint": changes.get("source_input_fingerprint") or "",
-                "source_content_revision": changes.get("source_content_revision") or "",
-                "layout_json": json.dumps(
-                    changes["layout_json"],
-                    separators=(",", ":"),
-                    sort_keys=True,
-                ),
-            },
+            values,
             update_modified=True,
         )
         return True
@@ -157,16 +167,15 @@ def read_editor_draft(
     if not row:
         return empty
     from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import (
-        normalize_content_revision_token,
+        tokens_operationally_equivalent,
     )
 
     stored_revision = str(row.source_content_revision or "")
     live_revision = str(source_content_revision or "")
-    # Job-status label → active bit is a token encoding change, not a source
-    # change. Compare the canonical forms so idle↔0 does not hide the layout.
-    compatible = normalize_content_revision_token(stored_revision) == (
-        normalize_content_revision_token(live_revision)
-    )
+    # Operational equivalence (not raw string equality): legacy empty/datetime
+    # layout slots may match a live saved_layout_sha when fingerprint+revision
+    # already agree. Real fingerprint/layout mismatches stay incompatible.
+    compatible = tokens_operationally_equivalent(stored_revision, live_revision)
     layout = None
     if compatible:
         try:
@@ -196,6 +205,10 @@ def _table_ready() -> bool:
     return bool(frappe.db.table_exists(DOCTYPE))
 
 
+def _archive_column_ready() -> bool:
+    return bool(_table_ready() and frappe.db.has_column(DOCTYPE, "prior_draft_archive_json"))
+
+
 def _create_tracking_ready() -> bool:
     return bool(
         _table_ready()
@@ -213,7 +226,16 @@ def _row_to_record(row: Any) -> dict[str, Any]:
     def value(field: str) -> Any:
         if isinstance(row, Mapping):
             return row.get(field)
-        return getattr(row, field)
+        return getattr(row, field, None)
+
+    archive = value("prior_draft_archive_json")
+    if isinstance(archive, str) and archive.strip():
+        try:
+            archive = json.loads(archive)
+        except (TypeError, ValueError):
+            archive = None
+    elif archive in ("", None):
+        archive = None
 
     return {
         "name": name,
@@ -225,6 +247,7 @@ def _row_to_record(row: Any) -> dict[str, Any]:
         "draft_version": int(value("draft_version") or 0),
         "distribution_fingerprint": value("distribution_fingerprint"),
         "layout_json": layout,
+        "prior_draft_archive_json": archive,
         "last_create_request_id": value("last_create_request_id") or "",
         "last_created_plan": value("last_created_plan") or "",
         "last_created_draft_version": int(value("last_created_draft_version") or 0),

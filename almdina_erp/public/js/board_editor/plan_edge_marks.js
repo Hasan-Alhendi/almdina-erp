@@ -79,12 +79,27 @@
         const geometry = window.AlmdinaClippedCornerGeometry;
         if (!geometry) return null;
         if (geometrySource === "persisted_dxf" && typeof geometry.pieceForQuarterTurns === "function") {
-            const turned = geometry.pieceForQuarterTurns(
-                source,
-                source.corner_rotation_quarter_turns,
-                source.corner_mirrored
+            // Integer quarter-turns rename semantic sides onto an already-drawn DXF
+            // contour. Missing turns are Board Editor posed copies (or unresolved
+            // imports): keep semantic sides — the canvas applies session rotation.
+            const raw = source.corner_rotation_quarter_turns;
+            const turns = Number(raw);
+            const hasImportTurns = (
+                raw !== null
+                && raw !== undefined
+                && raw !== ""
+                && Number.isInteger(turns)
+                && turns >= 0
+                && turns <= 3
             );
-            return turned || null;
+            if (hasImportTurns) {
+                return geometry.pieceForQuarterTurns(
+                    source,
+                    source.corner_rotation_quarter_turns,
+                    source.corner_mirrored
+                ) || null;
+            }
+            return source;
         }
         if (source.rotated) return remapRotatedEdges(source);
         return source;

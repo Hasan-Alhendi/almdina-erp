@@ -196,12 +196,14 @@
         function contentRevisionToken(payload) {
             const plan = (payload && payload.plan) || {};
             const freshness = (payload && payload.freshness) || {};
+            // Prefer the server token. Fallback must not use the DocType row
+            // clock; that field is not operational source identity.
             return String(
                 freshness.content_revision_token
                 || plan.content_revision_token
                 || [
                     plan.name || "",
-                    plan.modified || "",
+                    plan.saved_layout_sha256 || "",
                     plan.revision || "",
                     plan.input_fingerprint || "",
                     freshness.needs_recalculation ? "1" : "0",
@@ -261,12 +263,74 @@
         function draftBannerHtml(payload) {
             const draft = (payload && payload.editor_draft) || {};
             if (draft.conflict === "source") {
-                return `<div class="abe-freshness-banner is-stale" role="status" data-abe-draft="source-conflict">
+                // Red top-of-editor alert (abe-freshness-banner.is-stale). The
+                // begin action must stay inside this banner — not in the sidebar.
+                return `<div class="abe-freshness-banner is-stale abe-draft-source-conflict" role="status" data-abe-draft="source-conflict">
                     <strong>${esc(translate("Saved draft does not match this plan source."))}</strong>
-                    <span>${esc(translate("It was not applied. The cutting plan itself was not changed."))}</span>
+                    <span>${esc(translate("It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start."))}</span>
+                    <div class="abe-freshness-actions">
+                        <button type="button" class="btn alm-btn-primary abe-begin-from-source">${esc(translate("Start draft from current source"))}</button>
+                    </div>
                 </div>`;
             }
             return "";
+        }
+
+        function confirmBeginFromCurrentSource() {
+            return new Promise((resolve) => {
+                if (typeof frappe === "undefined" || !frappe.confirm) {
+                    resolve(window.confirm(translate(
+                        "Start a new draft from the current plan source? The previous saved draft will be archived. Unsaved local moves on this screen will be discarded. The cutting plan itself will not be changed."
+                    )));
+                    return;
+                }
+                frappe.confirm(
+                    translate(
+                        "Start a new draft from the current plan source? The previous saved draft will be archived. Unsaved local moves on this screen will be discarded. The cutting plan itself will not be changed."
+                    ),
+                    () => resolve(true),
+                    () => resolve(false),
+                );
+            });
+        }
+
+        async function beginDraftFromCurrentSource(orderName, context) {
+            if (!store || !activeOrderName || !loadedPlanName) return;
+            const view = store.snapshot();
+            const draft = (view.payload && view.payload.editor_draft) || {};
+            if (draft.conflict !== "source") return;
+            const confirmed = await confirmBeginFromCurrentSource();
+            if (!confirmed) return;
+            try {
+                const response = await Api.beginDraftFromCurrentSource({
+                    orderName: activeOrderName,
+                    planName: loadedPlanName,
+                    expectedDraftVersion: Number(draft.draft_version) || 0,
+                    sourceContentRevision: contentRevisionToken(view.payload || {}),
+                });
+                if (!response || !response.ok) {
+                    if (typeof frappe !== "undefined" && frappe.msgprint) {
+                        const code = String((response && response.code) || "");
+                        frappe.msgprint({
+                            title: translate("Could not start draft"),
+                            message: code === "version_conflict"
+                                ? translate("Another tab updated this draft. Reload and try again.")
+                                : translate("The draft could not be started from the current source. Your previous draft is unchanged."),
+                            indicator: "orange",
+                        });
+                    }
+                    return;
+                }
+                await open(context, { forceReload: true, acceptSourceChange: true });
+            } catch (_error) {
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: translate("Could not start draft"),
+                        message: translate("The draft could not be started from the current source. Your previous draft is unchanged."),
+                        indicator: "red",
+                    });
+                }
+            }
         }
 
         function bindFreshnessActions(orderName, context) {
@@ -276,6 +340,10 @@
             const retry = shell.querySelector(".abe-freshness-retry");
             if (retry) {
                 retry.onclick = () => open(context, { forceReload: true, acceptSourceChange: true });
+            }
+            const begin = shell.querySelector(".abe-begin-from-source");
+            if (begin) {
+                begin.onclick = () => beginDraftFromCurrentSource(orderName, context);
             }
         }
 
@@ -699,18 +767,19 @@
             const draft = payload.editor_draft || {};
             const applySaved = !options || options.applySavedDraft !== false;
             const sourceOnly = applySaved === false && Boolean(draft.present);
-            let appliedOk = false;
             if (applySaved && draft.compatible && draft.layout) {
                 const applied = SessionDocument.applySavedLayout(session, draft.layout);
                 if (applied.ok) {
                     session = applied.session;
-                    appliedOk = true;
                 }
             }
             const history = History.create(session);
             store.attachSession(history.get(), history);
             store.noteDraftBaseline({
-                draftVersion: appliedOk ? (Number(draft.draft_version) || 0) : 0,
+                // Compatible drafts always expose their real version for the next
+                // save — even when layout apply fails. Incompatible drafts stay at 0
+                // so expected=0 cannot silently rebase over a different source.
+                draftVersion: draft.compatible ? (Number(draft.draft_version) || 0) : 0,
                 savedFingerprint: SessionDocument.distributionFingerprint(session),
                 canSaveLayout: Boolean(payload.capabilities && payload.capabilities.edit_layout) && !sourceOnly,
                 sourceOnly,

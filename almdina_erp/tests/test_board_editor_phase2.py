@@ -290,6 +290,9 @@ def test_enrich_snapshot_sets_proven_allow_from_order_base_id():
 def test_content_revision_token_stable_across_idle_and_completed():
     source = (APP / "services" / "board_editor_query_service.py").read_text(encoding="utf-8")
     assert '"1" if job_active else "0"' in source
-    assert "stable active-job bit" in source
+    assert "saved_layout_sha256" in source
+    assert "not Cutting Plan.modified" in source
     token_block = source.split("content_revision_token = ")[1].split("return {", 1)[0]
     assert "job_status" not in token_block
+    assert "modified_text" not in token_block
+    assert "layout_sha" in token_block

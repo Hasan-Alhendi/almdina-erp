@@ -3176,6 +3176,12 @@ This view shows the source plan. The saved draft is unchanged.,هذا العرض
 Board editor changes are not saved. Leave without saving?,تغييرات محرر الألواح غير محفوظة. المغادرة دون حفظ؟
 Saved draft does not match this plan source.,المسودة المحفوظة لا تطابق مصدر هذه الخطة.
 It was not applied. The cutting plan itself was not changed.,لم تُطبَّق. خطة القص نفسها لم تتغير.
+It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start.,لم تُطبَّق. خطة القص نفسها لم تتغير. ابدأ مسودة جديدة من المصدر الحالي لمتابعة التعديل والحفظ. تُؤرشف المسودة السابقة أولاً؛ وتُهمل الحركات المحلية غير المحفوظة على هذه الشاشة عند البدء.
+Start draft from current source,بدء مسودة من المصدر الحالي
+Start a new draft from the current plan source? The previous saved draft will be archived. Unsaved local moves on this screen will be discarded. The cutting plan itself will not be changed.,بدء مسودة جديدة من مصدر الخطة الحالي؟ ستُؤرشف المسودة المحفوظة السابقة. الحركات المحلية غير المحفوظة على هذه الشاشة ستُهمل. خطة القص نفسها لن تتغير.
+Could not start draft,تعذر بدء المسودة
+Another tab updated this draft. Reload and try again.,حدّث تبويب آخر هذه المسودة. أعد التحميل ثم حاول مرة أخرى.
+The draft could not be started from the current source. Your previous draft is unchanged.,تعذر بدء المسودة من المصدر الحالي. مسودتك السابقة لم تتغير.
 This view shows the source plan.,هذا العرض يُظهر خطة المصدر.
 The saved draft is unchanged. Open the editor without the source route to continue that draft.,المسودة المحفوظة لم تتغير. افتح المحرر دون مسار المصدر لمتابعة تلك المسودة.
 Review distribution,فحص التوزيع

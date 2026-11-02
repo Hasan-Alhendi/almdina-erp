@@ -51,6 +51,10 @@ assert.match(apiSource, /get_system_plan_recalculation_status/);
 assert.match(pageSource, /on_page_show/);
 assert.match(pageSource, /active\.open\(context\)/);
 assert.match(pageSource, /plan_display_style\.js\?v=18/);
+assert.match(pageSource, /controller\.js\?v=19/);
+assert.match(pageSource, /api\.js\?v=19/);
+assert.match(pageSource, /session_document\.js\?v=19/);
+assert.match(pageSource, /board_editor\.css\?v=19/);
 assert.match(querySource, /_plan_freshness_payload/);
 assert.match(querySource, /content_revision_token/);
 assert.match(querySource, /reflects_current_order/);
@@ -99,8 +103,43 @@ function contentRevisionToken(payload) {
 }
 
 assert.match(querySource, /"1" if job_active else "0"/);
-assert.match(querySource, /stable active-job bit/);
+assert.match(querySource, /not Cutting Plan\.modified/);
+assert.match(querySource, /saved_layout_sha256/);
 assert.match(controllerSource, /freshness\.job_active \? "1" : "0"/);
+assert.match(controllerSource, /plan\.saved_layout_sha256/);
+assert.match(controllerSource, /draft\.compatible \? \(Number\(draft\.draft_version\)/);
+assert.match(controllerSource, /Start draft from current source/);
+assert.match(controllerSource, /abe-begin-from-source/);
+assert.match(controllerSource, /abe-draft-source-conflict/);
+assert.match(controllerSource, /abe-freshness-actions/);
+assert.match(controllerSource, /data-abe-draft="source-conflict"/);
+assert.match(controllerSource, /beginDraftFromCurrentSource/);
+assert.match(controllerSource, /confirmBeginFromCurrentSource/);
+assert.match(apiSource, /beginDraftFromCurrentSource/);
+assert.match(apiSource, /begin_board_editor_draft_from_current_source/);
+{
+    const cssSource = fs.readFileSync(
+        path.join(root, "public/css/board_editor.css"),
+        "utf8"
+    );
+    assert.match(cssSource, /\.abe-begin-from-source/);
+    assert.match(cssSource, /\.abe-freshness-actions/);
+}
+{
+    const tokenFn = controllerSource.split("function contentRevisionToken")[1].split("function ")[0];
+    assert.doesNotMatch(tokenFn, /plan\.modified\s*\|\|/);
+}
+{
+    const catalog = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
+    for (const messageId of [
+        "Start draft from current source",
+        "Could not start draft",
+        "Start a new draft from the current plan source? The previous saved draft will be archived. Unsaved local moves on this screen will be discarded. The cutting plan itself will not be changed.",
+        "It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start.",
+    ]) {
+        assert.ok(catalog.includes(messageId), `missing ar.csv key: ${messageId}`);
+    }
+}
 
 const first = contentRevisionToken({
     plan: { name: "CP-1", modified: "2026-01-01", revision: 1, input_fingerprint: "abc" },

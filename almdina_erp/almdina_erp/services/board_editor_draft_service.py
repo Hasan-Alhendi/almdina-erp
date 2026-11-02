@@ -14,6 +14,7 @@ from frappe import _
 
 from almdina_erp.almdina_erp.application.cutting.board_editor_draft_save import (
     draft_write_allowed,
+    execute_begin_from_current_source,
     execute_save,
 )
 from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import (
@@ -23,6 +24,7 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import LOCKED_ORDER_STATUSE
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_draft_store import (
     FrappeBoardEditorDraftStore,
+    _archive_column_ready,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     cutting_plan_capability_allowed,
@@ -36,21 +38,12 @@ from almdina_erp.almdina_erp.services.board_editor_query_service import (
 )
 
 
-@frappe.whitelist(methods=["POST"])
-def save_board_editor_draft(
-    order_name: str,
-    plan_name: str,
-    expected_draft_version: int = 0,
-    source_content_revision: str = "",
-    layout: Any = None,
-) -> dict[str, Any]:
-    """Save edit fields for one order and source plan."""
-
+def _authorize_draft_write(order_name: str, plan_name: str):
     order = _authorized_order(order_name)
     plan = _load_plan_for_order(order, plan_name)
     order_status = str(getattr(order, "status", "") or "")
     if order_status in LOCKED_ORDER_STATUSES:
-        return {"ok": False, "code": "order_locked"}
+        return order, plan, order_status, {"ok": False, "code": "order_locked"}
     capabilities = _capabilities(order)
     allowed = draft_write_allowed(
         has_edit_capability=cutting_plan_capability_allowed(
@@ -65,6 +58,22 @@ def save_board_editor_draft(
             _("You do not have permission to save this board editor layout."),
             frappe.PermissionError,
         )
+    return order, plan, order_status, None
+
+
+@frappe.whitelist(methods=["POST"])
+def save_board_editor_draft(
+    order_name: str,
+    plan_name: str,
+    expected_draft_version: int = 0,
+    source_content_revision: str = "",
+    layout: Any = None,
+) -> dict[str, Any]:
+    """Save edit fields for one order and source plan."""
+
+    order, plan, order_status, early = _authorize_draft_write(order_name, plan_name)
+    if early is not None:
+        return early
 
     payload = get_board_editor_projection(order_name, plan_name)
     if str((payload.get("plan") or {}).get("name") or "") != str(plan.name):
@@ -97,6 +106,59 @@ def save_board_editor_draft(
     return result
 
 
+@frappe.whitelist(methods=["POST"])
+def begin_board_editor_draft_from_current_source(
+    order_name: str,
+    plan_name: str,
+    expected_draft_version: int = 0,
+    source_content_revision: str = "",
+) -> dict[str, Any]:
+    """Archive an incompatible draft and start a fresh layout on the live source.
+
+    Does not mutate Approved Cutting Plan rows. Prior poses are archived, not
+    applied onto the new source identity layout.
+    """
+
+    if not _archive_column_ready():
+        frappe.throw(
+            _("Board editor draft archive storage is not installed. Run migrate."),
+            frappe.ValidationError,
+        )
+
+    order, plan, order_status, early = _authorize_draft_write(order_name, plan_name)
+    if early is not None:
+        return early
+
+    payload = get_board_editor_projection(order_name, plan_name)
+    if str((payload.get("plan") or {}).get("name") or "") != str(plan.name):
+        frappe.throw(
+            _("The selected cutting plan does not belong to this order."),
+            frappe.PermissionError,
+        )
+    result = execute_begin_from_current_source(
+        {
+            "order_name": str(order.name),
+            "plan_name": str(plan.name),
+            "expected_draft_version": expected_draft_version,
+            "source_content_revision": str(source_content_revision or ""),
+        },
+        {
+            "order_name": str(order.name),
+            "plan_name": str(plan.name),
+            "order_status": order_status,
+            "source_input_fingerprint": str((payload.get("plan") or {}).get("input_fingerprint") or ""),
+            "source_content_revision": str(
+                (payload.get("plan") or {}).get("content_revision_token") or ""
+            ),
+            "catalog": catalog_from_projection(payload.get("projection") or {}),
+            "projection": payload.get("projection") or {},
+        },
+        FrappeBoardEditorDraftStore(),
+    )
+    result.pop("layout", None)
+    return result
+
+
 def _parse_layout(layout: Any) -> Any:
     if isinstance(layout, str):
         try:
@@ -106,4 +168,7 @@ def _parse_layout(layout: Any) -> Any:
     return layout
 
 
-__all__ = ["save_board_editor_draft"]
+__all__ = [
+    "save_board_editor_draft",
+    "begin_board_editor_draft_from_current_source",
+]

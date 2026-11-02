@@ -236,6 +236,168 @@
         return `<line class="dco-edge-line-svg" vector-effect="non-scaling-stroke" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
     }
 
+    function hasImportedCornerOrientation(piece) {
+        // Uploaded DXF corners persist an integer quarter-turn. `null` / missing must
+        // not coerce through Number(null)===0, or posed Board Editor copies look imported.
+        const raw = piece && piece.corner_rotation_quarter_turns;
+        if (raw === null || raw === undefined || raw === "") return false;
+        const turns = Number(raw);
+        return Number.isInteger(turns) && turns >= 0 && turns <= 3;
+    }
+
+    function isPosedUsableSheetGeometry(piece) {
+        // Board Editor materialize bakes placement into usable-sheet geometry and
+        // marks this false so consumers never rotate the contour a second time.
+        return Boolean(piece && piece.apply_rotated_to_geometry === false);
+    }
+
+    function remapRotatedCornerEdgePiece(piece) {
+        // Remap selection flags and type overrides together so style stays
+        // bound to the same physical side after the 90° clockwise turn.
+        return {
+            ...piece,
+            edge_width_top: piece.edge_long_left,
+            edge_width_bottom: piece.edge_long_right,
+            edge_long_right: piece.edge_width_top,
+            edge_long_left: piece.edge_width_bottom,
+            edge_width_top_type_override: piece.edge_long_left_type_override || "",
+            edge_width_bottom_type_override: piece.edge_long_right_type_override || "",
+            edge_long_right_type_override: piece.edge_width_top_type_override || "",
+            edge_long_left_type_override: piece.edge_width_bottom_type_override || "",
+        };
+    }
+
+    function rotateCornerBandPoint(point, pivot, angleDeg) {
+        // Matches domain board_editor_rotation.rotate_point (SVG Y-down clockwise).
+        const rad = (Number(angleDeg) || 0) * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const x = Number(point[0]) - pivot.x;
+        const y = Number(point[1]) - pivot.y;
+        return [pivot.x + x * cos + y * sin, pivot.y - x * sin + y * cos];
+    }
+
+    function resolveCornerEdgePiece(piece, geometryModel) {
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        const isDxf = Boolean(geometryModel && geometryModel.source === "dxf");
+        const posed = isPosedUsableSheetGeometry(piece);
+
+        // True imported DXF contours are already drawn; remap semantic sides via
+        // the stored quarter-turn instead of rotating the contour again.
+        // Posed Board Editor copies keep semantic sides and transform band geometry.
+        if (isDxf && !posed && hasImportedCornerOrientation(piece)) {
+            if (!geometry || typeof geometry.pieceForQuarterTurns !== "function") return null;
+            return geometry.pieceForQuarterTurns(
+                piece,
+                piece.corner_rotation_quarter_turns,
+                piece.corner_mirrored
+            );
+        }
+        // Unknown import orientation — fail closed (do not guess sides on DXF).
+        if (isDxf && !posed) {
+            return null;
+        }
+        // System plans encode 0°/90° in `rotated`. Posed free-angle copies keep
+        // semantic flags; band polylines are rotated separately when needed.
+        if (piece && piece.rotated && !posed) {
+            return remapRotatedCornerEdgePiece(piece);
+        }
+        return piece;
+    }
+
+    function posedCornerEdgeMarkup(piece, geometry, sideCustom) {
+        // Build bands in the unrotated manufacturing frame, then apply the same
+        // session rotation that posed the usable-sheet outline — never twice.
+        if (!geometry || typeof geometry.clippedEdgePaths !== "function") return "";
+        const widthMm = Math.max(
+            0,
+            (Number(piece.original_w) || Number(piece.w) || 0) * 10,
+        );
+        const heightMm = Math.max(
+            0,
+            (Number(piece.original_h) || Number(piece.h) || 0) * 10,
+        );
+        if (!(widthMm > 0) || !(heightMm > 0)) return "";
+        const angle = Number(piece.rotation_deg) || 0;
+        const localPiece = {
+            ...piece,
+            rotated: false,
+            w: widthMm / 10,
+            h: heightMm / 10,
+            original_w: widthMm / 10,
+            original_h: heightMm / 10,
+        };
+        if (!(Math.abs(angle) > 1e-6)) {
+            return geometry.edgeBandSvgMarkup(localPiece, 100, 100, {
+                inheritStroke: true,
+                sideCustom,
+                customColor: EDGE_BAND_CUSTOM_COLOR,
+                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
+            });
+        }
+        if (typeof geometry.points !== "function") return "";
+        const localOutline = geometry.points(localPiece, widthMm, heightMm);
+        const pivot = { x: widthMm / 2, y: heightMm / 2 };
+        const rotatedOutline = localOutline.map(
+            (point) => rotateCornerBandPoint(point, pivot, angle),
+        );
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        rotatedOutline.forEach((point) => {
+            minX = Math.min(minX, point[0]);
+            minY = Math.min(minY, point[1]);
+            maxX = Math.max(maxX, point[0]);
+            maxY = Math.max(maxY, point[1]);
+        });
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+        if (!(spanX > 1e-6) || !(spanY > 1e-6)) return "";
+        const paths = geometry.clippedEdgePaths(localPiece, widthMm, heightMm);
+        const toView = (path) => (path || []).map((point) => {
+            const rotated = rotateCornerBandPoint(point, pivot, angle);
+            return [
+                ((rotated[0] - minX) / spanX) * 100,
+                ((rotated[1] - minY) / spanY) * 100,
+            ];
+        });
+        const customColor = EDGE_BAND_CUSTOM_COLOR;
+        const customDash = EDGE_BAND_CUSTOM_DASHARRAY;
+        const polyline = (path, extraClass, custom) => {
+            if (!path || path.length < 2) return "";
+            const points = path.map((point) => `${Number(point[0].toFixed(4))},${Number(point[1].toFixed(4))}`).join(" ");
+            if (custom) {
+                return `<polyline class="dco-edge-line-svg ${extraClass} dco-edge-line--custom" fill="none" stroke="${customColor}" stroke-width="3" stroke-dasharray="${customDash}" stroke-linecap="butt" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${points}"/>`;
+            }
+            return `<polyline class="dco-edge-line-svg ${extraClass}" fill="none" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${points}"/>`;
+        };
+        const lines = [];
+        if (localPiece.edge_width_top && paths.top) {
+            lines.push(polyline(toView(paths.top), "", Boolean(sideCustom.top)));
+        }
+        if (localPiece.edge_width_bottom && paths.bottom) {
+            lines.push(polyline(toView(paths.bottom), "", Boolean(sideCustom.bottom)));
+        }
+        if (localPiece.edge_long_left && paths.left) {
+            lines.push(polyline(toView(paths.left), "", Boolean(sideCustom.left)));
+        }
+        if (localPiece.edge_long_right && paths.right) {
+            lines.push(polyline(toView(paths.right), "", Boolean(sideCustom.right)));
+        }
+        if (localPiece.edge_break && paths.break) {
+            lines.push(polyline(toView(paths.break), "dco-edge-break-svg", Boolean(sideCustom.break)));
+        }
+        if (localPiece.edge_break_only && paths.breakOnly) {
+            lines.push(polyline(
+                toView(paths.breakOnly),
+                "dco-edge-break-only-svg",
+                Boolean(sideCustom.breakOnly),
+            ));
+        }
+        return lines.join("");
+    }
+
     function render_clipped_corner_edge_lines(piece, geometryModel, clipId, frm = null) {
         const geometry = window.AlmdinaClippedCornerGeometry;
         if (!geometry || typeof geometry.edgeBandSvgMarkup !== "function") return "";
@@ -245,35 +407,8 @@
         );
         if (!isCorner) return "";
 
-        // System plans encode only 0°/90° in `rotated`, and both the outline and
-        // the bands are generated from that flag. An imported DXF contour is
-        // already in its drawn orientation, so its bands follow the stored
-        // quarter-turn and single reflection instead of transforming it again.
-        let edgePiece = piece;
-        if (geometryModel && geometryModel.source === "dxf") {
-            edgePiece = typeof geometry.pieceForQuarterTurns === "function"
-                ? geometry.pieceForQuarterTurns(
-                    piece,
-                    piece.corner_rotation_quarter_turns,
-                    piece.corner_mirrored
-                )
-                : null;
-            if (!edgePiece) return "";
-        } else if (piece.rotated) {
-            // Remap selection flags and type overrides together so style stays
-            // bound to the same physical side after the 90° clockwise turn.
-            edgePiece = {
-                ...piece,
-                edge_width_top: piece.edge_long_left,
-                edge_width_bottom: piece.edge_long_right,
-                edge_long_right: piece.edge_width_top,
-                edge_long_left: piece.edge_width_bottom,
-                edge_width_top_type_override: piece.edge_long_left_type_override || "",
-                edge_width_bottom_type_override: piece.edge_long_right_type_override || "",
-                edge_long_right_type_override: piece.edge_width_top_type_override || "",
-                edge_long_left_type_override: piece.edge_width_bottom_type_override || "",
-            };
-        }
+        const edgePiece = resolveCornerEdgePiece(piece, geometryModel);
+        if (!edgePiece) return "";
         // Classify after orientation remap so dash-dot follows the drawn path.
         const sideCustom = {
             top: sideEdgeIsNonDefault(frm, edgePiece, "width_top"),
@@ -283,12 +418,14 @@
             break: breakEdgeIsNonDefault(frm, edgePiece),
             breakOnly: breakEdgeIsNonDefault(frm, edgePiece),
         };
-        const markup = geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
-            inheritStroke: true,
-            sideCustom,
-            customColor: EDGE_BAND_CUSTOM_COLOR,
-            customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
-        });
+        const markup = isPosedUsableSheetGeometry(piece)
+            ? posedCornerEdgeMarkup(edgePiece, geometry, sideCustom)
+            : geometry.edgeBandSvgMarkup(edgePiece, 100, 100, {
+                inheritStroke: true,
+                sideCustom,
+                customColor: EDGE_BAND_CUSTOM_COLOR,
+                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
+            });
         if (!markup) return "";
         const pathData = (
             geometryModel
@@ -559,26 +696,16 @@
     }
 
     function orientedCornerPiece(piece, state, geometryModel) {
-        const geometry = window.AlmdinaClippedCornerGeometry;
-        if (geometryModel && geometryModel.source === "dxf") {
-            if (!geometry || typeof geometry.pieceForQuarterTurns !== "function") return null;
-            return geometry.pieceForQuarterTurns(
-                { ...piece, ...state },
-                piece.corner_rotation_quarter_turns,
-                piece.corner_mirrored,
-            );
+        const merged = { ...piece, ...state };
+        const oriented = resolveCornerEdgePiece(merged, geometryModel);
+        if (!oriented) return null;
+        // Keep the caller-selected side mask from `state` after orientation remap
+        // when the remapper already applied those flags (import / quarter-turn).
+        // For identity posed copies, merge ensures double-edge side isolation works.
+        if (oriented === merged || oriented === piece) {
+            return merged;
         }
-        if (piece && piece.rotated) {
-            return {
-                ...piece,
-                ...state,
-                edge_width_top: state.edge_long_left,
-                edge_width_bottom: state.edge_long_right,
-                edge_long_right: state.edge_width_top,
-                edge_long_left: state.edge_width_bottom,
-            };
-        }
-        return { ...piece, ...state };
+        return oriented;
     }
 
     function cornerEdgePieceForSide(edgePiece, fieldname) {

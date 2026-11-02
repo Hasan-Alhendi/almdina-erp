@@ -14,6 +14,7 @@
     "draft_version",
     "distribution_fingerprint",
     "layout_json",
+    "prior_draft_archive_json",
     "last_create_request_id",
     "last_created_plan",
     "last_created_draft_version"
@@ -83,6 +84,12 @@
       "label": "Layout JSON",
       "read_only": 1,
       "reqd": 1
+    },
+    {
+      "fieldname": "prior_draft_archive_json",
+      "fieldtype": "Long Text",
+      "label": "Prior Draft Archive JSON",
+      "read_only": 1
     },
     {
       "fieldname": "last_create_request_id",

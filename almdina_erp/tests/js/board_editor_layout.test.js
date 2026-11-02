@@ -7,8 +7,7 @@ const vm = require("node:vm");
 
 const root = path.resolve(__dirname, "../..");
 
-function load(relativePath) {
-    const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+function load(...relativePaths) {
     const context = {
         frappe: { utils: { escape_html: (value) => String(value) } },
         __: (message) => message,
@@ -16,7 +15,10 @@ function load(relativePath) {
     context.window = context;
     context.globalThis = context;
     vm.createContext(context);
-    vm.runInContext(source, context);
+    relativePaths.forEach((relativePath) => {
+        const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+        vm.runInContext(source, context, { filename: relativePath });
+    });
     return context.window.AlmdinaBoardEditor;
 }
 
@@ -28,9 +30,14 @@ function manySheets(count) {
     }));
 }
 
-const editor = load("public/js/board_editor/canvas_renderer.js");
+const editor = load(
+    "public/js/board_editor/move_geometry.js",
+    "public/js/board_editor/rotation_geometry.js",
+    "public/js/board_editor/canvas_renderer.js"
+);
 const storeApi = load("public/js/board_editor/store.js");
 const renderer = editor.CanvasRenderer;
+const catalog = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 const controllerSource = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");
 const sidebarSource = fs.readFileSync(path.join(root, "public/js/board_editor/sidebar_renderer.js"), "utf8");
 const cssSource = fs.readFileSync(path.join(root, "public/css/board_editor.css"), "utf8");
@@ -196,9 +203,85 @@ assert.match(canvasHost.innerHTML, /#icon-clipboard-check/);
 assert.match(canvasHost.innerHTML, /data-abe-save-state="clean"/);
 assert.match(canvasHost.innerHTML, /No unsaved changes/);
 assert.match(canvasHost.innerHTML, /aria-pressed="true"/);
-assert.match(canvasHost.innerHTML, /aria-label="Rotation angle in degrees"/);
+// Angle field always exposes an accessible name; idle chrome has no selection.
+assert.match(canvasHost.innerHTML, /class="abe-angle-input"[^>]*aria-label="/);
+assert.match(
+    canvasHost.innerHTML,
+    /aria-label="Select a piece to set its rotation angle\."/
+);
 assert.doesNotMatch(canvasHost.innerHTML, />Angle</);
 assert.match(canvasHost.innerHTML, /°/);
+assert.ok(catalog.includes("Select a piece to set its rotation angle."));
+assert.ok(catalog.includes("Rotation angle in degrees"));
+
+// Selected rotatable piece uses the degrees label (not a missing/generic name).
+{
+    const rotatableHost = chromeHost();
+    const pieceKey = "instance:pi-rot";
+    renderer.render(rotatableHost, {
+        projection: {
+            layers: [],
+            sheets: [{ sheet_no: 1, full_width_cm: 100, full_length_cm: 100 }],
+            elements: [],
+        },
+        session: {
+            boards: {
+                1: {
+                    sheet_no: 1,
+                    origin_x_mm: 0,
+                    origin_y_mm: 36,
+                    width_mm: 1000,
+                    height_mm: 1000,
+                    trim_x_mm: 0,
+                    trim_y_mm: 0,
+                    title_band_mm: 36,
+                    user_moved: false,
+                },
+            },
+            pieces: {
+                [pieceKey]: {
+                    piece_key: pieceKey,
+                    piece_id: 7,
+                    piece_instance_id: "pi-rot",
+                    sheet_no: 1,
+                    local_x_mm: 10,
+                    local_y_mm: 20,
+                    rotation_deg: 12.5,
+                    editable: true,
+                    distribution: "active",
+                    allow_rotation: true,
+                    allow_rotation_proven: true,
+                    base_outline_mm: [[0, 0], [100, 0], [100, 40], [0, 40]],
+                    outline_mm: [[0, 0], [100, 0], [100, 40], [0, 40]],
+                },
+            },
+            kerf_mm: 4,
+        },
+        layerVisibility: {},
+        viewport: {
+            scale: 0.4,
+            opened: true,
+            userAdjusted: true,
+            columns: 1,
+            cameraToken: 1,
+            scrollX: 0,
+            scrollY: 0,
+        },
+        magnetEnabled: true,
+        canUndo: false,
+        canRedo: false,
+        selectedPieceKey: pieceKey,
+        selectedPieceKeys: [pieceKey],
+        selectedSheetNo: 1,
+        dropMessage: "",
+    }, {});
+    assert.match(
+        rotatableHost.innerHTML,
+        /class="abe-angle-input"[^>]*aria-label="Rotation angle in degrees"/
+    );
+    assert.doesNotMatch(rotatableHost.innerHTML, /abe-angle-field is-disabled/);
+    assert.match(rotatableHost.innerHTML, /value="12\.5"/);
+}
 const svgHeight = Number((canvasHost.innerHTML.match(/class="abe-svg"[^>]*height="(\d+)"/) || [])[1]);
 assert.ok(svgHeight >= 640 + renderer.FLOAT_CLEARANCE_PX);
 

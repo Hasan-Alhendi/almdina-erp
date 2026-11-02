@@ -42,9 +42,35 @@
   line-height: 1.45;
 }
 
-.abe-freshness-banner .alm-btn-secondary {
+.abe-freshness-banner .alm-btn-secondary,
+.abe-freshness-banner .alm-btn-primary,
+.abe-freshness-banner .abe-freshness-actions {
   justify-self: start;
   margin-top: 4px;
+}
+
+.abe-freshness-banner .abe-freshness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.abe-freshness-banner.is-stale .abe-begin-from-source {
+  min-height: 40px;
+  padding: 0 16px;
+  font-weight: 700;
+  border: 1px solid #9b2f26;
+  background: #9b2f26;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.abe-freshness-banner.is-stale .abe-begin-from-source:hover {
+  background: #7f241d;
+  border-color: #7f241d;
+  color: #fff;
 }
 
 .abe-body {

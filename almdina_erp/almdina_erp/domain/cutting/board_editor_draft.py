@@ -86,16 +86,41 @@ def draft_key(order_name: str, plan_name: str) -> str:
 # moved idle↔completed without any plan content change. The live token now
 # stores a stable active-job bit ("0"|"1"). Normalize both sides so drafts
 # saved under the old label stay comparable when the plan itself is unchanged.
+#
+# Field layout (6 parts):
+#   name | layout_or_clock | revision | input_fingerprint | needs_recalc | job
+# New tokens store saved_layout_sha256 in slot 1 (geometry/distribution of the
+# persisted snapshot). Legacy tokens stored Cutting Plan.modified there; that
+# row-touch clock is blanked on compare so it cannot fake a source change.
+# Input fingerprint covers manufacturing requirements (edges, addons, constraints).
 _JOB_ACTIVE_LABELS = frozenset({"1", "queued", "running", "enqueue"})
 _JOB_IDLE_LABELS = frozenset({"0", "idle", "completed", ""})
+
+
+def _is_legacy_modified_clock(value: str) -> bool:
+    """True when slot 1 looks like a Frappe/ISO datetime, not a layout digest."""
+
+    text = str(value or "").strip()
+    if not text:
+        return False
+    # "YYYY-MM-DD ..." or "YYYY-MM-DDTHH:MM:SS"
+    return len(text) >= 10 and text[4] == "-" and text[7] == "-"
+
+
+def _slot1_is_absent_layout_digest(value: str) -> bool:
+    """Empty or legacy datetime — not a saved_layout_sha256 digest."""
+
+    text = str(value or "").strip()
+    return (not text) or _is_legacy_modified_clock(text)
 
 
 def normalize_content_revision_token(token: str) -> str:
     """Canonicalize a content revision token for equality checks.
 
-    Preserves name/modified/revision/fingerprint/needs_recalc. Only rewrites a
-    recognized job-status label into the stable active bit. Unknown shapes are
-    returned unchanged so real mismatches still fail closed.
+    Keeps name/revision/input fingerprint/needs_recalc and any non-datetime
+    layout digest in slot 1. Rewrites a recognized job-status label into the
+    stable active bit. Blanks a legacy modified clock in slot 1. Unknown shapes
+    are returned unchanged so real mismatches fail closed.
     """
 
     text = str(token or "")
@@ -111,7 +136,41 @@ def normalize_content_revision_token(token: str) -> str:
         parts[-1] = "0"
     else:
         return text
+    if _is_legacy_modified_clock(parts[1]):
+        parts[1] = ""
     return "|".join(parts)
+
+
+def tokens_operationally_equivalent(left: str, right: str) -> bool:
+    """True when two source tokens bind the same operational plan content.
+
+    Exact normalized equality wins. A legacy/empty layout slot versus a live
+    ``saved_layout_sha256`` is accepted only when name, revision, input
+    fingerprint, needs_recalc, and job bits already match — fingerprint+revision
+    are the trusted manufacturing/plan identity; missing digest alone is never
+    treated as proof of equal geometry.
+    """
+
+    a = normalize_content_revision_token(left)
+    b = normalize_content_revision_token(right)
+    if a == b:
+        return True
+    pa = a.split("|")
+    pb = b.split("|")
+    if len(pa) < 6 or len(pb) < 6:
+        return False
+    if (pa[0], pa[2], pa[3], pa[4], pa[5]) != (pb[0], pb[2], pb[3], pb[4], pb[5]):
+        return False
+    sa = pa[1]
+    sb = pb[1]
+    if sa == sb:
+        return True
+    # Format migration only: one side lacks a layout digest, the other has one.
+    if _slot1_is_absent_layout_digest(sa) and sb and not _slot1_is_absent_layout_digest(sb):
+        return True
+    if _slot1_is_absent_layout_digest(sb) and sa and not _slot1_is_absent_layout_digest(sa):
+        return True
+    return False
 
 
 def catalog_from_projection(projection: Mapping[str, Any]) -> dict[str, Any]:
@@ -178,6 +237,156 @@ def distribution_fingerprint(layout: Mapping[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+TITLE_BAND_MM = 36.0
+# Match CanvasRenderer.sheetLayout — editor workspace only, not piece locals.
+BOARD_GAP_MM = 48.0
+DEFAULT_BOARD_COLUMNS = 2
+
+
+def _sheet_size_mm(sheet: Mapping[str, Any]) -> tuple[float, float]:
+    width = float(sheet.get("full_width_cm") or sheet.get("w") or 122) * 10.0
+    height = float(sheet.get("full_length_cm") or sheet.get("h") or 244) * 10.0
+    return max(1.0, width), max(1.0, height)
+
+
+def workspace_board_origins(
+    sheets: Sequence[Mapping[str, Any]],
+    *,
+    columns: int = DEFAULT_BOARD_COLUMNS,
+) -> dict[int, tuple[float, float]]:
+    """2×N workspace origins matching the board-editor sheet grid.
+
+    Piece local coordinates stay in usable-sheet millimetres; these origins only
+    place boards in the editor workspace (including the title band).
+    """
+
+    cols = 1 if int(columns) == 1 else 2
+    ordered: list[tuple[int, Mapping[str, Any]]] = []
+    seen: set[int] = set()
+    for sheet in sheets or []:
+        if not isinstance(sheet, Mapping):
+            continue
+        number = _optional_int(sheet.get("sheet_no"))
+        if number is None or number in seen:
+            continue
+        seen.add(number)
+        ordered.append((number, sheet))
+    if not ordered:
+        return {}
+    sizes = [_sheet_size_mm(sheet) for _number, sheet in ordered]
+    max_width = max(width for width, _height in sizes)
+    stride = max_width + BOARD_GAP_MM
+    row_count = max(1, (len(ordered) + cols - 1) // cols)
+    row_height: list[float] = []
+    for row in range(row_count):
+        height = 1.0
+        for col in range(cols):
+            index = row * cols + col
+            if index < len(sizes):
+                height = max(height, sizes[index][1])
+        row_height.append(height)
+
+    def row_origin_y(row: int) -> float:
+        y = 0.0
+        for index in range(row):
+            y += TITLE_BAND_MM + row_height[index] + BOARD_GAP_MM
+        return y
+
+    origins: dict[int, tuple[float, float]] = {}
+    for index, (number, _sheet) in enumerate(ordered):
+        row = index // cols
+        top = row_origin_y(row)
+        origins[number] = ((index % cols) * stride, top + TITLE_BAND_MM)
+    return origins
+
+
+def boards_share_collapsed_default_origin(boards: Sequence[Mapping[str, Any]]) -> bool:
+    """True when every board shares one origin and none were user-moved.
+
+    That pattern is the defective begin-from-source initializer (all at 0,
+    TITLE_BAND), not a deliberate operator arrangement.
+    """
+
+    rows = [board for board in (boards or []) if isinstance(board, Mapping)]
+    if len(rows) < 2:
+        return False
+    if any(board.get("user_moved") is True for board in rows):
+        return False
+    first_x = float(rows[0].get("origin_x_mm") or 0)
+    first_y = float(rows[0].get("origin_y_mm") or 0)
+    for board in rows[1:]:
+        if abs(float(board.get("origin_x_mm") or 0) - first_x) > 1e-6:
+            return False
+        if abs(float(board.get("origin_y_mm") or 0) - first_y) > 1e-6:
+            return False
+    return True
+
+
+def identity_layout_from_projection(projection: Mapping[str, Any]) -> dict[str, Any]:
+    """Build an edit layout that mirrors the trusted projection poses.
+
+    Rotation starts at 0 (as-loaded). Does not copy a previous draft's poses.
+    Board workspace origins use the same 2×N grid as a normal editor open.
+    """
+
+    pieces: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for piece in projection.get("pieces") or []:
+        if not isinstance(piece, Mapping):
+            continue
+        instance = str(piece.get("piece_instance_id") or "").strip()
+        if not instance or instance in seen:
+            continue
+        seen.add(instance)
+        placement = piece.get("placement_cm")
+        if not isinstance(placement, Mapping):
+            placement = {}
+        sheet_no = _optional_int(piece.get("sheet_no"))
+        host = _optional_int(piece.get("glass_host_piece_id"))
+        pieces.append(
+            {
+                "piece_instance_id": instance,
+                "sheet_no": sheet_no,
+                "local_x_mm": float(placement.get("x") or 0) * 10.0,
+                "local_y_mm": float(placement.get("y") or 0) * 10.0,
+                "rotation_deg": 0.0,
+                "distribution": DISTRIBUTION_ACTIVE,
+                "exclusion_reason": None,
+                "glass_host_piece_id": host,
+            }
+        )
+    sheet_rows = [
+        sheet
+        for sheet in (projection.get("sheets") or [])
+        if isinstance(sheet, Mapping)
+    ]
+    origins = workspace_board_origins(sheet_rows, columns=DEFAULT_BOARD_COLUMNS)
+    boards: list[dict[str, Any]] = []
+    for number, (origin_x, origin_y) in origins.items():
+        boards.append(
+            {
+                "sheet_no": number,
+                "origin_x_mm": float(origin_x),
+                "origin_y_mm": float(origin_y),
+                "user_moved": False,
+            }
+        )
+    return {"schema": SCHEMA, "pieces": pieces, "boards": boards}
+
+
+def build_prior_draft_archive(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Snapshot one superseded draft for retention (not auto-restored)."""
+
+    layout = row.get("layout_json")
+    return {
+        "archived_draft_version": int(row.get("draft_version") or 0),
+        "source_content_revision": str(row.get("source_content_revision") or ""),
+        "source_input_fingerprint": str(row.get("source_input_fingerprint") or ""),
+        "distribution_fingerprint": str(row.get("distribution_fingerprint") or ""),
+        "layout": layout if isinstance(layout, Mapping) else None,
+    }
+
+
 def decide_draft_write(
     *,
     stored_version: int | None,
@@ -192,14 +401,19 @@ def decide_draft_write(
 
     expected_version 0 creates only when no row exists. A second create with
     the same layout is idempotent and does not insert another row.
+
+    A real source mismatch (after normalization) never rebases or replaces the
+    stored draft — neither request==live nor expected==0 is enough. Only the
+    request token being stale relative to live, or the stored row binding a
+    different operational source than live, yields source_conflict.
     """
 
-    request_rev = normalize_content_revision_token(request_source_revision)
-    live_rev = normalize_content_revision_token(live_source_revision)
-    stored_rev = normalize_content_revision_token(stored_source_revision or "")
-    if request_rev != live_rev:
+    if not tokens_operationally_equivalent(request_source_revision, live_source_revision):
         return "source_conflict"
-    if stored_version is not None and stored_rev != live_rev:
+    if stored_version is not None and not tokens_operationally_equivalent(
+        stored_source_revision or "",
+        live_source_revision,
+    ):
         return "source_conflict"
     if stored_version is None:
         if int(expected_version) != 0:

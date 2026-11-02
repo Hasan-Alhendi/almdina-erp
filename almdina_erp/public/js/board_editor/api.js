@@ -11,6 +11,8 @@
         "almdina_erp.almdina_erp.services.board_editor_draft_review_service.validate_board_editor_draft";
     const CREATE_PLAN_METHOD =
         "almdina_erp.almdina_erp.services.board_editor_plan_create_service.create_board_editor_plan_copy";
+    const BEGIN_FROM_SOURCE_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_draft_service.begin_board_editor_draft_from_current_source";
 
     function call(method, args) {
         return new Promise((resolve, reject) => {
@@ -68,6 +70,16 @@
         });
     }
 
+    function beginDraftFromCurrentSource(args) {
+        const payload = args || {};
+        return call(BEGIN_FROM_SOURCE_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            expected_draft_version: Number(payload.expectedDraftVersion) || 0,
+            source_content_revision: String(payload.sourceContentRevision || ""),
+        });
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.Api = Object.freeze({
         load,
@@ -75,10 +87,12 @@
         saveDraft,
         reviewDraft,
         createPlanCopy,
+        beginDraftFromCurrentSource,
         METHOD,
         STATUS_METHOD,
         SAVE_METHOD,
         REVIEW_METHOD,
         CREATE_PLAN_METHOD,
+        BEGIN_FROM_SOURCE_METHOD,
     });
 })();

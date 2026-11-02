@@ -366,13 +366,22 @@ def _plan_freshness_payload(order: Any, plan: Any) -> dict[str, Any]:
         and not needs_recalculation
         and not job_active
     )
-    # Use a stable active-job bit — not raw job_status. "idle" vs "completed"
-    # must not flip the source revision token and trigger false source_conflict
-    # on an otherwise unchanged cutting plan.
+    # Source identity for draft sync. Slot 1 is saved_layout_sha256 (snapshot
+    # geometry/distribution), not Cutting Plan.modified — that clock moves on
+    # unrelated row touches and caused false source_conflict. Input fingerprint
+    # covers manufacturing requirements (edges, addons, constraints). Legacy
+    # tokens that stored a datetime in slot 1 are normalized away on compare.
+    layout_sha = ""
+    try:
+        parsed_snapshot = json.loads(snapshot_json or "") if snapshot_json else {}
+        if isinstance(parsed_snapshot, dict):
+            layout_sha = str(parsed_snapshot.get("saved_layout_sha256") or "")
+    except (TypeError, ValueError):
+        layout_sha = ""
     content_revision_token = "|".join(
         [
             str(plan.name),
-            modified_text,
+            layout_sha,
             str(revision),
             stored_fingerprint or expected_fingerprint or "",
             "1" if needs_recalculation else "0",
@@ -386,6 +395,7 @@ def _plan_freshness_payload(order: Any, plan: Any) -> dict[str, Any]:
         "fingerprint_contract": fingerprint_contract,
         "input_fingerprint": stored_fingerprint,
         "expected_fingerprint": expected_fingerprint,
+        "saved_layout_sha256": layout_sha,
         "background_recalculation": background,
         "job_active": bool(job_active),
         "display_context": display_context,
@@ -611,6 +621,7 @@ def get_board_editor_projection(
             "saw_center_status": str(getattr(plan, "saw_center_status", "") or ""),
             "display_context": freshness["display_context"],
             "input_fingerprint": freshness["input_fingerprint"],
+            "saved_layout_sha256": freshness.get("saved_layout_sha256") or "",
             "content_revision_token": freshness["content_revision_token"],
             "immutable_snapshot": freshness["immutable_snapshot"],
         },
