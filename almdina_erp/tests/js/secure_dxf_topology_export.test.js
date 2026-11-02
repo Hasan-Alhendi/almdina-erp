@@ -241,6 +241,19 @@ function cutPathEntityCount(dxf) {
 }
 
 async function run() {
+    if (process.env.INDUSTRIAL_PLAN_IN) {
+        nextPlan = JSON.parse(fs.readFileSync(process.env.INDUSTRIAL_PLAN_IN, "utf8"));
+        downloadedDxf = "";
+        if (process.env.INDUSTRIAL_EXPECT_REJECT) {
+            await assert.rejects(fakeFrappe.almdina.export_order_dxf("P3-GEOMETRY", "approved"));
+            assert.equal(downloadedDxf, "");
+        } else {
+            await fakeFrappe.almdina.export_order_dxf("P3-GEOMETRY", "approved");
+            assert.ok(cutPathEntityCount(downloadedDxf) > 0);
+            fs.writeFileSync(process.env.INDUSTRIAL_DXF_OUT, downloadedDxf);
+        }
+        return;
+    }
     // Python supplies synthetic cases for independent DXF parity/round-trip checks.
     if (process.env.PERIMETER_CASES) {
         const cases = JSON.parse(fs.readFileSync(process.env.PERIMETER_CASES, "utf8"));

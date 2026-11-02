@@ -326,7 +326,7 @@ def test_l_inner_strap_uses_the_raw_notch_for_the_liner():
 
 def test_l_edge_break_uses_effective_path_for_input_length():
     piece = LinerPiece(
-        "L-Shaped Corner", 60, 60, "Top Right", 30.1, 30.1, 30, 30
+        "L-Shaped Corner", 60, 60, "Top Right", 30.1, 30.1
     )
     _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
     assert effective_length == pytest.approx(602)
@@ -338,7 +338,7 @@ def test_l_edge_break_uses_effective_path_for_input_length():
 
 @pytest.mark.parametrize("position", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"])
 def test_l_inner_reference_length_is_orientation_independent(position):
-    piece = LinerPiece("L-Shaped Corner", 60, 60, position, 30.1, 30.1, 30, 30)
+    piece = LinerPiece("L-Shaped Corner", 60, 60, position, 30.1, 30.1)
     _start, effective_length, error = resolved_liner_span_mm(piece, "edge_break", 0, 60.2)
     assert effective_length == pytest.approx(602)
     assert error == ""
@@ -364,7 +364,9 @@ def test_cutter_centers_cover_width_without_crossing_it():
 def test_centerline_follows_the_middle_of_the_strip():
     piece = _regular()
     line = liner_centerline_mm(piece, "edge_width_top", 2, 1.5)
-    assert line == pytest.approx([(0, 27.5), (400, 27.5)])
+    assert len(line) == 2
+    for actual, expected in zip(line, [(0, 27.5), (400, 27.5)], strict=True):
+        assert actual == pytest.approx(expected)
     shaped = _l_piece("Top Right")
     bent = liner_centerline_mm(shaped, "edge_break", 0, 1.8)
     assert len(bent) == 3
@@ -475,7 +477,9 @@ def test_l_toolpath_follows_the_bend_and_extends_once():
 def test_partial_liner_uses_a_flat_end_and_keeps_the_full_edge():
     piece = LinerPiece("Regular", 50, 50)
     center = liner_centerline_mm(piece, "edge_long_right", 10, 1.8, 10, 30)
-    assert center == pytest.approx([(391.0, 100.0), (391.0, 400.0)])
+    assert len(center) == 2
+    for actual, expected in zip(center, [(391.0, 100.0), (391.0, 400.0)], strict=True):
+        assert actual == pytest.approx(expected)
     path = liner_toolpath_mm(piece, "edge_long_right", 10, 1.8, 5, 10, 30)
     assert min(point[1] for point in path) == pytest.approx(102.5)
     assert max(point[1] for point in path) == pytest.approx(397.5)

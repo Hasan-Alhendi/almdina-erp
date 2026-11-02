@@ -1,0 +1,247 @@
+{
+  "provenance": "Archived SYSTEM order 241, matching the supplied before screenshot. Reconstructed regular sources; all rotations allowed, live DCO grain constraints unavailable.",
+  "full_width_cm": 122,
+  "full_height_cm": 244,
+  "trim_cm": 1,
+  "kerf_cm": 0.5,
+  "rows": [
+    {
+      "piece_type": "Regular",
+      "width_cm": 39.5,
+      "length_cm": 157.8,
+      "qty": 2,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:1"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 39.9,
+      "length_cm": 156.0,
+      "qty": 2,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:2"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 39.9,
+      "length_cm": 79.8,
+      "qty": 3,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:3"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 39.5,
+      "length_cm": 21.8,
+      "qty": 2,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:4"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 34.9,
+      "length_cm": 76.5,
+      "qty": 5,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:5"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 15.9,
+      "length_cm": 31.5,
+      "qty": 4,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:6"
+    },
+    {
+      "piece_type": "Regular",
+      "width_cm": 15.9,
+      "length_cm": 35.0,
+      "qty": 4,
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:7"
+    }
+  ],
+  "placements": [
+    [
+      [
+        3,
+        0.0,
+        86.0,
+        39.9,
+        156.0,
+        false
+      ],
+      [
+        4,
+        40.4,
+        86.0,
+        39.9,
+        156.0,
+        false
+      ],
+      [
+        5,
+        0.0,
+        5.7,
+        39.9,
+        79.8,
+        false
+      ],
+      [
+        6,
+        40.4,
+        5.7,
+        39.9,
+        79.8,
+        false
+      ],
+      [
+        10,
+        80.8,
+        165.5,
+        34.9,
+        76.5,
+        false
+      ],
+      [
+        11,
+        80.8,
+        88.5,
+        34.9,
+        76.5,
+        false
+      ],
+      [
+        12,
+        80.8,
+        11.5,
+        34.9,
+        76.5,
+        false
+      ]
+    ],
+    [
+      [
+        7,
+        0.0,
+        162.2,
+        39.9,
+        79.8,
+        false
+      ],
+      [
+        1,
+        40.4,
+        84.2,
+        39.5,
+        157.8,
+        false
+      ],
+      [
+        2,
+        80.4,
+        84.2,
+        39.5,
+        157.8,
+        false
+      ],
+      [
+        8,
+        0.0,
+        139.9,
+        39.5,
+        21.8,
+        false
+      ],
+      [
+        9,
+        0.0,
+        117.6,
+        39.5,
+        21.8,
+        false
+      ],
+      [
+        13,
+        0.0,
+        40.6,
+        34.9,
+        76.5,
+        false
+      ],
+      [
+        14,
+        35.4,
+        7.199999999999999,
+        34.9,
+        76.5,
+        false
+      ],
+      [
+        15,
+        70.8,
+        52.2,
+        15.9,
+        31.5,
+        false
+      ],
+      [
+        16,
+        87.2,
+        52.2,
+        15.9,
+        31.5,
+        false
+      ],
+      [
+        17,
+        103.6,
+        52.2,
+        15.9,
+        31.5,
+        false
+      ],
+      [
+        18,
+        70.8,
+        20.2,
+        15.9,
+        31.5,
+        false
+      ],
+      [
+        19,
+        87.2,
+        16.7,
+        15.9,
+        35.0,
+        false
+      ],
+      [
+        20,
+        103.6,
+        16.7,
+        15.9,
+        35.0,
+        false
+      ],
+      [
+        21,
+        0.0,
+        5.1,
+        15.9,
+        35.0,
+        false
+      ],
+      [
+        22,
+        16.4,
+        5.1,
+        15.9,
+        35.0,
+        false
+      ]
+    ]
+  ]
+}

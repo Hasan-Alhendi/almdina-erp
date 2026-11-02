@@ -523,7 +523,12 @@ def recalculate_system_plan(
     repository = FrappeCuttingPlanCommandRepository(Capability.RECALCULATE_PLAN)
     plan = repository.ensure_system_draft(order)
     initialize_draft_plan_cost_snapshot(order, plan)
-    changed = _changed_settings(plan, updates or {})
+    # Mode is server-owned for new calculations. Validate legacy API input,
+    # but it must neither select the engine nor require settings-edit authority.
+    updates = dict(updates or {})
+    if "packing_mode" in updates:
+        require_executable_optimization_mode(updates.pop("packing_mode"))
+    changed = _changed_settings(plan, updates)
     if changed:
         require_cutting_plan_capability(
             order,
@@ -543,10 +548,6 @@ def recalculate_system_plan(
         plan = repository.get_document(plan.name)
         initialize_draft_plan_cost_snapshot(order, plan)
 
-    # A historical known-but-unavailable mode remains readable and unchanged,
-    # but recalculation must ask for an executable choice instead of leaking the
-    # domain exception or silently converting the stored algorithm.
-    require_executable_optimization_mode(plan.optimization_mode)
     backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))

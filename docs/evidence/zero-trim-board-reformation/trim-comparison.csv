@@ -1,0 +1,6 @@
+margin_mm,budget_sec,before_boards,after_boards,placed_after,before_snapshot_claims_valid,before_independent_errors,after_independent_errors,before_runtime_sec,after_runtime_sec
+0,5,4,3,50,True,[],[],5.8554,6.004
+0.1,5,4,3,50,True,"[""Pieces 1.7 and 3.1 do not preserve the required 0.5 cm kerf clearance on sheet 1.""]",[],5.7738,5.8769
+1,5,4,3,50,True,[],[],5.6281,5.5512
+2,5,4,3,50,True,"[""Pieces 1.7 and 3.1 do not preserve the required 0.5 cm kerf clearance on sheet 1.""]",[],5.6763,5.5282
+3,5,4,3,50,True,"[""Pieces 1.7 and 3.1 do not preserve the required 0.5 cm kerf clearance on sheet 1.""]",[],5.7262,5.6584

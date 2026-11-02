@@ -33,6 +33,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     PlanSettingsValidationError,
     normalize_plan_settings,
+    settings_for_system_search,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FINGERPRINT_CONTRACT_KEY,
@@ -43,11 +44,13 @@ from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FingerprintCompatibility,
     PlanFingerprintContractError,
     freeze_geometry_piece,
+    freeze_v4_board,
     freeze_v4_execution_settings,
     legacy_omission_is_safe,
     validate_v4_baseline,
 )
 from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     matching_freshness_fingerprint,
 )
@@ -299,10 +302,14 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
     return {
         "version": MANUFACTURING_BASELINE_VERSION,
         "order": str(order.name),
-        "board": {
-            "width_mm": width_mm, "length_mm": length_mm,
-            "material_description": str(getattr(order, "board_description", "") or "").strip(),
-        },
+        "board": freeze_v4_board(
+            width_mm=width_mm,
+            length_mm=length_mm,
+            material_description=str(getattr(order, "board_description", "") or "").strip(),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
+        ),
         "execution_settings": freeze_v4_execution_settings(
             machine_type=_plan_attr(plan, "machine_type"),
             kerf_mm=_plan_attr(plan, "kerf_mm"),
@@ -411,7 +418,7 @@ def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> s
     return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 
 
-def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
+def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=0) -> OptimizationOutcome:
     """Calculate one Draft System plan without mutating Door Cutting Order.
 
     Door Cutting Order is only the source of customer requirements. Optimizer
@@ -420,13 +427,15 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
 
     width_mm, length_mm = _board_dimensions_mm(order)
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
-    plan_settings = _validated_plan_settings(plan)
+    plan_settings = settings_for_system_search(_validated_plan_settings(plan))
+    plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
             input_fingerprint=fingerprint,
             plan_settings=plan_settings,
+            seed_plans=tuple(seed_plans), search_round=int(search_round),
             board=BoardGeometry(
                 full_width_cm=width_mm / 10,
                 full_length_cm=length_mm / 10,
@@ -441,8 +450,14 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
                 min_remnant_width_cm=flt(factory_settings.min_remnant_width_mm) / 10,
                 min_remnant_length_cm=flt(factory_settings.min_remnant_length_mm) / 10,
                 min_remnant_area_m2=flt(factory_settings.min_remnant_area_m2),
+                max_centerable_edge_gap_cm=flt(
+                    getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
+                ),
             ),
             piece_rows=_piece_rows(order),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
         ),
         engine=domain_cutting_engine,
     )

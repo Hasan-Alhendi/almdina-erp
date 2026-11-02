@@ -16,6 +16,7 @@
         "board_width_cm",
         "default_edge_type",
         "edge_color",
+        "allow_piece_mirroring",
     ]);
     const PIECE_FIELDS = Object.freeze([
         "piece_type",

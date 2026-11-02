@@ -19,6 +19,7 @@ def contact_point_score(
     y: float,
     w: float,
     h: float,
+    kerf_cm: float = 0.0,
 ) -> float:
     score = 0.0
     if x == 0 or round_value(x + w, 3) == round_value(sheet["w"], 3):
@@ -27,16 +28,16 @@ def contact_point_score(
         score += w
 
     for placed in sheet["pieces"]:
-        if round_value(placed["x"] + placed["w"], 3) == round_value(
+        if round_value(placed["x"] + placed["w"] + kerf_cm, 3) == round_value(
             x, 3
-        ) or round_value(x + w, 3) == round_value(placed["x"], 3):
+        ) or round_value(x + w + kerf_cm, 3) == round_value(placed["x"], 3):
             score += max(
                 0.0,
                 min(y + h, placed["y"] + placed["h"]) - max(y, placed["y"]),
             )
-        if round_value(placed["y"] + placed["h"], 3) == round_value(
+        if round_value(placed["y"] + placed["h"] + kerf_cm, 3) == round_value(
             y, 3
-        ) or round_value(y + h, 3) == round_value(placed["y"], 3):
+        ) or round_value(y + h + kerf_cm, 3) == round_value(placed["y"], 3):
             score += max(
                 0.0,
                 min(x + w, placed["x"] + placed["w"]) - max(x, placed["x"]),
@@ -49,6 +50,7 @@ def maxrects_score(
     free: dict[str, float],
     orientation: dict[str, Any],
     heuristic: str,
+    kerf_cm: float = 0.0,
 ) -> float:
     leftover_area = (free["w"] * free["h"]) - (
         orientation["w"] * orientation["h"]
@@ -72,6 +74,7 @@ def maxrects_score(
             free["y"],
             orientation["w"],
             orientation["h"],
+            kerf_cm,
         )
         return -contact * 100000 + leftover_area
     return short_side * 100000 + long_side * 100 + leftover_area
@@ -106,7 +109,7 @@ def find_best_position_maxrects(
                 }
                 if not _candidate_preserves_kerf(sheet, candidate, kerf_cm):
                     continue
-                score = maxrects_score(sheet, free, orientation, heuristic)
+                score = maxrects_score(sheet, free, orientation, heuristic, kerf_cm)
                 if best is None or score < best["score"]:
                     best = {
                         **candidate,

@@ -46,13 +46,22 @@ class RegularOrientationMatch:
 
 
 def physical_edge_tokens(
-    bands: Mapping[str, str], quarter_turns: int
+    bands: Mapping[str, str],
+    quarter_turns: int,
+    *,
+    mirrored: bool = False,
 ) -> tuple[str, str, str, str]:
-    """Physical (left, top, right, bottom) bands after clockwise turns."""
+    """Physical (left, top, right, bottom) bands after an in-plane transform.
+
+    ``mirrored`` is a horizontal reflection and swaps left with right before
+    the clockwise turns. It does not exchange the board faces.
+    """
     left = str(bands.get("left", "0"))
     top = str(bands.get("top", "0"))
     right = str(bands.get("right", "0"))
     bottom = str(bands.get("bottom", "0"))
+    if mirrored:
+        left, right = right, left
     for _ in range(int(quarter_turns) % 4):
         left, top, right, bottom = bottom, left, top, right
     return left, top, right, bottom

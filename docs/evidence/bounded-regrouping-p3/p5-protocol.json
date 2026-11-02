@@ -1,0 +1,50 @@
+{
+  "baseline_sha": "3d1f96714be062df6ff67dac8251f4d4dc57384c",
+  "date": "2026-11-02",
+  "production_changes_before_evidence": false,
+  "old_gate": "failed observations remain unchanged in prior report",
+  "required_dependency": "ortools 9.15.6755 enabled, pytest >=9,<10; record actual versions before workers",
+  "known": [
+    "263",
+    "296",
+    "297",
+    "298",
+    "300",
+    "243",
+    "3687",
+    "109",
+    "110",
+    "230",
+    "231"
+  ],
+  "fresh_SYSTEM_ids_before_opening": [
+    "236",
+    "237",
+    "238",
+    "239"
+  ],
+  "fresh_rule": "include every reconstructable Regular-only source; retain exclusions; no outcome replacement",
+  "lanes": {
+    "trajectory": "capture complete native final portfolio immediately before P3; run actual opt-in within its original 5s deadline; replay baseline portfolio through actual Application finalization; compare final winner with same trajectory",
+    "fixed_work": "frozen native portfolio; exact same existing helper, <=24 native packs and <=64 source pieces; infinite cooperative deadline but worker timeout; replay twice and require identical geometry/rank and counts; not a 5s production claim",
+    "runtime": "separate fresh-process off/on observations, order reversed; report total wall, CPU, native search, snapshot projection and measured P3 tail; calibrated statistics do not erase old max-delta failures"
+  },
+  "repeats": 2,
+  "nominal_application_budget_sec": 5,
+  "criteria": {
+    "safety": "all views complete, source identities, physical Kerf, allowed transforms and actual JS/strict import",
+    "quality": "no board or final-rank regression versus captured same-trajectory native portfolio in any actual operational worker",
+    "efficacy": "repeatable gains in >=2 known cases and >=1 newly frozen independent case for default-activation recommendation",
+    "fixed_work": "A/A replay exact rank/material equality; exact bounded packing count; classify timeout separately",
+    "incremental_tail": "every measured P3 tail <=0.50 sec; same absolute threshold measured directly rather than as independent-run noise; no claim old gate passed",
+    "runtime": "median fresh-process enabled/disabled wall ratio <=1.10; retain every individual gap; no hard 5s response guarantee",
+    "activation": "no activation unless all operational safety/quality/efficacy/tail gates pass; fixed-work-only gains do not suffice"
+  },
+  "actual_fresh_SYSTEM_ids_before_opening": [
+    "236",
+    "240",
+    "241",
+    "242"
+  ],
+  "source_selection_amendment": "source-selection-amendment-before-open.json"
+}

@@ -1,0 +1,8 @@
+{
+  "base": "b42a75160d53846849e44c741132dfcc7afd5a3f",
+  "measured_after_production_blobs": {
+    "almdina_erp/almdina_erp/domain/cutting/plan_search.py": "b0512e0183c66b2592bd8559a9e239ba40204470",
+    "almdina_erp/almdina_erp/domain/cutting/primitives.py": "a2f0ed91a2d072f258cb7eecd0b9a19bc420e161",
+    "almdina_erp/almdina_erp/application/cutting/optimize_order_plan.py": "a5e6d82fed2a954805e003a7b3339ee176b60360"
+  }
+}
