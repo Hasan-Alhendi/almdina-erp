@@ -280,6 +280,178 @@
         return roots;
     }
 
+    function round4(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return 0;
+        return Math.round(number * 10000) / 10000;
+    }
+
+    function layoutDocument(session) {
+        const pieces = Object.keys((session && session.pieces) || {}).sort().map((key) => {
+            const piece = session.pieces[key];
+            const excluded = piece.distribution === "excluded";
+            return {
+                piece_instance_id: String(piece.piece_instance_id || ""),
+                sheet_no: piece.sheet_no == null || piece.sheet_no === "" ? null : Number(piece.sheet_no),
+                local_x_mm: round4(piece.local_x_mm),
+                local_y_mm: round4(piece.local_y_mm),
+                rotation_deg: round4(piece.rotation_deg),
+                distribution: excluded ? "excluded" : "active",
+                exclusion_reason: excluded ? (piece.exclusion_reason || null) : null,
+                glass_host_piece_id: piece.glass_host_piece_id == null || piece.glass_host_piece_id === ""
+                    ? null
+                    : Number(piece.glass_host_piece_id),
+            };
+        });
+        const boards = Object.keys((session && session.boards) || {})
+            .sort((left, right) => Number(left) - Number(right))
+            .map((key) => {
+                const board = session.boards[key];
+                return {
+                    sheet_no: Number(board.sheet_no != null ? board.sheet_no : key),
+                    origin_x_mm: round4(board.origin_x_mm),
+                    origin_y_mm: round4(board.origin_y_mm),
+                    user_moved: board.user_moved === true,
+                };
+            });
+        return { schema: 1, pieces, boards };
+    }
+
+    function distributionFingerprint(session) {
+        return JSON.stringify(layoutDocument(session));
+    }
+
+    function exportLayout(session) {
+        return layoutDocument(session);
+    }
+
+    function applySavedLayout(session, layout) {
+        const editor = window.AlmdinaBoardEditor || {};
+        const MoveGeometry = editor.MoveGeometry;
+        const RotationGeometry = editor.RotationGeometry;
+        if (!session || !layout || !Array.isArray(layout.pieces) || !MoveGeometry || !RotationGeometry) {
+            return { ok: false, code: "invalid_layout" };
+        }
+        const next = clone(session);
+        const byInstance = {};
+        Object.keys(next.pieces || {}).forEach((key) => {
+            byInstance[String(next.pieces[key].piece_instance_id || "")] = key;
+        });
+        const rows = layout.pieces;
+        if (rows.length !== Object.keys(next.pieces || {}).length) {
+            return { ok: false, code: "missing_piece" };
+        }
+        const seen = new Set();
+        for (let index = 0; index < rows.length; index += 1) {
+            const instance = String(rows[index].piece_instance_id || "");
+            if (!instance || !byInstance[instance] || seen.has(instance)) {
+                return { ok: false, code: "unknown_piece" };
+            }
+            seen.add(instance);
+        }
+        Object.keys(next.pieces).forEach((key) => {
+            next.pieces[key].glass_host_key = null;
+            next.pieces[key].glass_host_piece_id = null;
+        });
+        rows.forEach((row) => {
+            const key = byInstance[String(row.piece_instance_id)];
+            const angle = Number(row.rotation_deg) || 0;
+            if (Math.abs(angle - Number(next.pieces[key].rotation_deg || 0)) < 1e-4) return;
+            const rotated = RotationGeometry.previewPieceRotation(next, key, angle);
+            next.pieces[key] = rotated.pieces[key];
+        });
+        rows.forEach((row) => {
+            const piece = next.pieces[byInstance[String(row.piece_instance_id)]];
+            const fromSheet = piece.sheet_no;
+            const toSheet = row.sheet_no == null || row.sheet_no === "" ? null : Number(row.sheet_no);
+            const fromOrigin = MoveGeometry.sheetOriginMm(next.boards, fromSheet);
+            const toOrigin = MoveGeometry.sheetOriginMm(next.boards, toSheet);
+            MoveGeometry.reframePieceGeometry(
+                piece,
+                next.boards,
+                fromSheet,
+                toSheet,
+                (Number(row.local_x_mm) + toOrigin.x) - (Number(piece.local_x_mm) + fromOrigin.x),
+                (Number(row.local_y_mm) + toOrigin.y) - (Number(piece.local_y_mm) + fromOrigin.y)
+            );
+            piece.sheet_no = toSheet;
+            piece.local_x_mm = Number(row.local_x_mm);
+            piece.local_y_mm = Number(row.local_y_mm);
+            piece.distribution = row.distribution === "excluded" ? "excluded" : "active";
+            piece.exclusion_reason = piece.distribution === "excluded" ? (row.exclusion_reason || null) : null;
+        });
+        const idToKey = {};
+        Object.keys(next.pieces).forEach((key) => {
+            idToKey[String(next.pieces[key].piece_id)] = key;
+        });
+        rows.forEach((row) => {
+            if (row.glass_host_piece_id == null || row.glass_host_piece_id === "") return;
+            const piece = next.pieces[byInstance[String(row.piece_instance_id)]];
+            const hostKey = idToKey[String(row.glass_host_piece_id)];
+            if (!hostKey) return;
+            piece.glass_host_piece_id = Number(row.glass_host_piece_id);
+            piece.glass_host_key = hostKey;
+        });
+        const kept = new Set((layout.boards || []).map((board) => String(board.sheet_no)));
+        Object.keys(next.boards || {}).forEach((key) => {
+            if (!kept.has(String(key))) delete next.boards[key];
+        });
+        (layout.boards || []).forEach((board) => {
+            const target = next.boards[String(board.sheet_no)];
+            if (!target) return;
+            target.origin_x_mm = Number(board.origin_x_mm) || 0;
+            target.origin_y_mm = Number(board.origin_y_mm) || 0;
+            target.user_moved = board.user_moved === true;
+        });
+        return { ok: true, session: next };
+    }
+
+    function settleReview(view, request, response) {
+        const session = view && view.session;
+        const review = view && view.review;
+        const currentSerial = view ? Number(view.reviewSerial) || 0 : 0;
+        const currentFingerprint = distributionFingerprint(session);
+        const currentVersion = view && view.draftVersion ? Number(view.draftVersion) : 0;
+        if (!request || Number(request.serial) !== currentSerial) {
+            return { ignored: true, failed: false, session, review };
+        }
+        if (
+            request.fingerprint !== currentFingerprint
+            || Number(request.draftVersion) !== currentVersion
+        ) {
+            return { ignored: true, failed: false, session, review };
+        }
+        if (!response || response.exc || (response.ok === false && !Array.isArray(response.issues))) {
+            return { ignored: false, failed: true, session, review };
+        }
+        return { ignored: false, failed: false, session, review: response };
+    }
+
+    function settleDraftSave(view, sentFingerprint, response) {
+        const session = view && view.session;
+        const savedFingerprint = view && view.savedFingerprint;
+        const draftVersion = view && view.draftVersion ? Number(view.draftVersion) : 0;
+        if (!response || response.ok === false) {
+            const code = response && response.code;
+            const conflict = code === "conflict" || code === "source_conflict" || code === "version_conflict";
+            return {
+                session,
+                draftVersion,
+                savedFingerprint,
+                saveState: conflict ? "conflict" : "failed",
+                saveInFlight: false,
+            };
+        }
+        const current = distributionFingerprint(session);
+        return {
+            session,
+            draftVersion: Number(response.draft_version) || draftVersion,
+            savedFingerprint: sentFingerprint,
+            saveState: current === sentFingerprint ? "saved" : "dirty",
+            saveInFlight: false,
+        };
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.SessionDocument = Object.freeze({
         buildFromProjection,
@@ -290,6 +462,12 @@
         excludedRoots,
         isExcluded,
         clone,
+        layoutDocument,
+        distributionFingerprint,
+        exportLayout,
+        applySavedLayout,
+        settleDraftSave,
+        settleReview,
         TITLE_BAND_MM,
     });
 })();

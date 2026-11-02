@@ -183,14 +183,14 @@ def classify_piece_pair(
     return "separate"
 
 
-def host_link_errors(
+def host_link_issue_codes(
     placed_pieces: list[Mapping[str, Any]],
-) -> list[str]:
-    """Reject missing, circular, or cross-sheet host links."""
+) -> list[dict[str, Any]]:
+    """Same host-link failures as ``host_link_errors``, as stable codes."""
 
     by_id: dict[int, Mapping[str, Any]] = {}
     sheet_of: dict[int, Any] = {}
-    errors: list[str] = []
+    issues: list[dict[str, Any]] = []
     for placed in placed_pieces:
         piece_id = _piece_id(placed)
         if piece_id is None:
@@ -203,15 +203,18 @@ def host_link_errors(
         host_id = _declared_host_id(placed)
         if piece_id is None or host_id is None:
             continue
-        label = placed.get("label")
         if host_id == piece_id or host_id not in by_id:
-            errors.append(
-                f"Piece {label} declares a Glass host that is not in the plan."
+            issues.append(
+                {"code": "hosting_missing", "piece_id": piece_id, "host_id": host_id}
             )
             continue
         if sheet_of.get(host_id) != placed.get("_sheet_no"):
-            errors.append(
-                f"Piece {label} declares a Glass host on a different sheet."
+            issues.append(
+                {
+                    "code": "hosting_cross_sheet",
+                    "piece_id": piece_id,
+                    "host_id": host_id,
+                }
             )
         seen = {piece_id}
         cursor = host_id
@@ -219,18 +222,40 @@ def host_link_errors(
         while cursor is not None:
             depth += 1
             if depth > MAX_NESTING_DEPTH:
-                errors.append(
-                    f"Piece {label} exceeds the Glass nesting depth."
+                issues.append(
+                    {"code": "hosting_depth", "piece_id": piece_id, "host_id": host_id}
                 )
                 break
             if cursor in seen:
-                errors.append(
-                    f"Piece {label} is part of a circular Glass host relation."
+                issues.append(
+                    {"code": "hosting_cycle", "piece_id": piece_id, "host_id": host_id}
                 )
                 break
             seen.add(cursor)
             cursor = _declared_host_id(by_id[cursor]) if cursor in by_id else None
-    return errors
+    return issues
+
+
+def host_link_errors(
+    placed_pieces: list[Mapping[str, Any]],
+) -> list[str]:
+    """Reject missing, circular, or cross-sheet host links."""
+
+    labels = {
+        _piece_id(placed): placed.get("label")
+        for placed in placed_pieces
+        if _piece_id(placed) is not None
+    }
+    sentences = {
+        "hosting_missing": "declares a Glass host that is not in the plan.",
+        "hosting_cross_sheet": "declares a Glass host on a different sheet.",
+        "hosting_depth": "exceeds the Glass nesting depth.",
+        "hosting_cycle": "is part of a circular Glass host relation.",
+    }
+    return [
+        f"Piece {labels.get(issue['piece_id'])} {sentences[issue['code']]}"
+        for issue in host_link_issue_codes(placed_pieces)
+    ]
 
 
 def nest_glass_openings(

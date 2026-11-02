@@ -37,6 +37,34 @@
         return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${frappeIcon(iconName)}</button>`;
     }
 
+    function saveStatusText(storeView) {
+        const state = (storeView && storeView.saveState) || "clean";
+        if (state === "dirty") return __("Unsaved changes");
+        if (state === "saving") return __("Saving layout");
+        if (state === "saved") return __("Layout saved");
+        if (state === "failed") return __("Save failed. Your changes are still here.");
+        if (state === "conflict") {
+            return __("This layout conflicts with another save or a changed source. Your changes are still here.");
+        }
+        return __("No unsaved changes");
+    }
+
+    function saveDisabled(storeView) {
+        const state = (storeView && storeView.saveState) || "clean";
+        if (!storeView || storeView.canSaveLayout === false || storeView.sourceOnly) return true;
+        return state === "saving" || state === "saved" || state === "clean";
+    }
+
+    function saveTitle(storeView) {
+        if (storeView && storeView.sourceOnly) {
+            return __("This view shows the source plan. The saved draft is unchanged.");
+        }
+        if (storeView && storeView.canSaveLayout === false) {
+            return __("You do not have permission to save this layout.");
+        }
+        return `${__("Save layout")}. ${saveStatusText(storeView)}`;
+    }
+
     function aciToCss(aci, fallback) {
         const key = Number(aci);
         if (Number.isFinite(key) && ACI[key]) return ACI[key];
@@ -1210,6 +1238,16 @@
                     })}
                     ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}
                     ${toolSep}
+                    ${toolButton("abe-review", "clipboard-check", __("Review distribution"), {
+                        disabled: Boolean(storeView.reviewInFlight),
+                        title: __("Review distribution"),
+                    })}
+                    ${toolButton("abe-save", "save", saveTitle(storeView), {
+                        disabled: saveDisabled(storeView),
+                        attrs: ` data-abe-save-state="${esc(storeView.saveState || "clean")}"`,
+                    })}
+                    <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" role="status">${esc(saveStatusText(storeView))}</span>
+                    ${toolSep}
                     ${toolButton("abe-back", "arrow-left", __("Back to order"))}
                 </div>
             </div>
@@ -1267,6 +1305,10 @@
                 storeView.selectedSheetNo
             );
         }
+        const save = host.querySelector(".abe-save");
+        if (save) save.onclick = () => handlers && handlers.saveDraft && handlers.saveDraft();
+        const review = host.querySelector(".abe-review");
+        if (review) review.onclick = () => handlers && handlers.reviewDraft && handlers.reviewDraft();
 
         const suppressed = () => handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression();
 

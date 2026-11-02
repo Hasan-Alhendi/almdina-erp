@@ -50,7 +50,7 @@ assert.match(apiSource, /recalculationStatus/);
 assert.match(apiSource, /get_system_plan_recalculation_status/);
 assert.match(pageSource, /on_page_show/);
 assert.match(pageSource, /active\.open\(context\)/);
-assert.match(pageSource, /plan_display_style\.js\?v=14/);
+assert.match(pageSource, /plan_display_style\.js\?v=16/);
 assert.match(querySource, /_plan_freshness_payload/);
 assert.match(querySource, /content_revision_token/);
 assert.match(querySource, /reflects_current_order/);

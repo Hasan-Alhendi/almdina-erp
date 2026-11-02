@@ -3157,3 +3157,64 @@ All layers are hidden. Show all.,كل الطبقات مخفية. إظهار ال
 Some layers are hidden. Show all.,بعض الطبقات مخفية. إظهار الكل.
 No content on this layer,لا محتوى في هذه الطبقة
 Content is unavailable for this layer,محتوى هذه الطبقة غير متاح
+Save layout,حفظ التخطيط
+Unsaved changes,تغييرات غير محفوظة
+Saving layout,جارٍ الحفظ
+Layout saved,تم الحفظ
+Save failed. Your changes are still here.,فشل الحفظ. تغييراتك ما زالت هنا.
+This layout conflicts with another save or a changed source. Your changes are still here.,يتعارض هذا التخطيط مع حفظ آخر أو مع مصدر تغيّر. تغييراتك ما زالت هنا.
+No unsaved changes,لا توجد تغييرات غير محفوظة
+You do not have permission to save this layout.,ليست لديك صلاحية حفظ هذا التخطيط.
+This view shows the source plan. The saved draft is unchanged.,هذا العرض يُظهر خطة المصدر. المسودة المحفوظة لم تتغير.
+Board editor changes are not saved. Leave without saving?,تغييرات محرر الألواح غير محفوظة. المغادرة دون حفظ؟
+Saved draft does not match this plan source.,المسودة المحفوظة لا تطابق مصدر هذه الخطة.
+It was not applied. The cutting plan itself was not changed.,لم تُطبَّق. خطة القص نفسها لم تتغير.
+This view shows the source plan.,هذا العرض يُظهر خطة المصدر.
+The saved draft is unchanged. Open the editor without the source route to continue that draft.,المسودة المحفوظة لم تتغير. افتح المحرر دون مسار المصدر لمتابعة تلك المسودة.
+Review distribution,فحص التوزيع
+Save the current distribution before reviewing it. An older saved draft will not be shown as the current layout.,احفظ التوزيع الحالي قبل فحصه. لن تُعرض مسودة محفوظة أقدم باعتبارها التخطيط الحالي.
+Review failed. Your edits and selection are still here.,فشل الفحص. تعديلاتك والتحديد ما زالا هنا.
+Reviewing the saved distribution…,جارٍ فحص التوزيع المحفوظ…
+Distribution ready,التوزيع جاهز
+Distribution not ready,التوزيع غير جاهز
+Draft version,إصدار المسودة
+This review does not approve or export the plan.,هذا الفحص لا يعتمد الخطة ولا يصدّرها.
+Blocking issues,مشاكل تمنع الإنتاج
+Warnings,تحذيرات
+No distribution issues were found.,لم يُعثر على مشاكل في التوزيع.
+The distribution changed. Review it again.,تغيّر التوزيع. افحصه مرة أخرى.
+The distribution is not ready.,التوزيع غير جاهز.
+Save a board editor draft before reviewing it.,احفظ مسودة محرر الألواح قبل فحصها.
+The order or source plan changed after this draft was saved.,تغيّر الطلب أو خطة المصدر بعد حفظ هذه المسودة.
+A required piece is missing from the draft.,قطعة مطلوبة مفقودة من المسودة.
+A piece identity is repeated in the draft.,هوية قطعة مكررة في المسودة.
+The draft contains a piece that is not in the source plan.,المسودة تحتوي قطعة ليست في خطة المصدر.
+A required piece is excluded from the distribution.,قطعة مطلوبة مستبعدة من التوزيع.
+A required piece is outside the boards.,قطعة مطلوبة خارج الألواح.
+A piece crosses the usable edge of its board.,قطعة تتجاوز الحافة الصالحة من لوحها.
+A piece is outside the usable area of its board.,قطعة خارج المساحة الصالحة من لوحها.
+Two pieces overlap.,قطعتان متداخلتان.
+The kerf clearance between two pieces is too small.,مسافة القص بين قطعتين أصغر من المطلوب.
+A piece inside a glass opening is closer to the material than the kerf allows.,قطعة داخل فتحة البلور أقرب إلى المادة مما يسمح به القص.
+A piece declares a glass host that is not in the distribution.,قطعة تعلن مضيفاً زجاجياً غير موجود في التوزيع.
+A piece and its glass host are on different boards.,قطعة ومضيفها الزجاجي على لوحين مختلفين.
+Glass hosting contains a cycle.,علاقات الاستضافة الزجاجية تحتوي دورة.
+Glass hosting is nested deeper than the supported limit.,عمق الاستضافة الزجاجية يتجاوز الحد المدعوم.
+A hosted piece is not inside its glass opening.,قطعة مستضافة ليست داخل فتحة البلور.
+This piece is not allowed to rotate.,هذه القطعة غير مسموح لها بالدوران.
+This rotation is not allowed for the cutting machine.,هذه الزاوية غير مسموحة لماكينة القص.
+The cutting machine does not support a readiness decision for this angle.,الماكينة لا تدعم قرار جاهزية لهذه الزاوية.
+This piece has no supported geometry, so it cannot be marked ready.,هذه القطعة بلا هندسة مدعومة، لذلك لا يمكن إعلانها جاهزة.
+A board resource is not a supported full board or offcut.,مورد اللوح ليس لوحاً كاملاً أو قُصاصة مدعومة.
+An offcut piece has no resolved execution owner.,قطعة القُصاصة بلا مالك تنفيذ محسوم.
+The saved draft is not a valid edit document.,المسودة المحفوظة ليست مستند تعديل صالحاً.
+The saved draft contains a field that cannot be reviewed.,المسودة المحفوظة تحتوي حقلاً لا يمكن فحصه.
+The draft uses a board that is not in the source plan.,المسودة تستخدم لوحاً غير موجود في خطة المصدر.
+The saved draft contains an unsupported distribution state.,المسودة المحفوظة تحتوي حالة توزيع غير مدعومة.
+The saved draft changes a glass host that the source does not declare.,المسودة تغيّر مضيفاً زجاجياً لا يعلنه المصدر.
+You do not have permission to review this board editor draft.,ليست لديك صلاحية فحص مسودة محرر الألواح هذه.
+A machining add-on conflicts with neighbouring material.,إضافة تصنيع تتعارض مع مادة مجاورة.
+The {0} add-on conflicts with neighbouring material.,إضافة {0} تتعارض مع مادة مجاورة.
+The {0} add-on conflicts with neighbouring material ({1}).,إضافة {0} تتعارض مع مادة مجاورة ({1}).
+The {0} add-on has no proven geometry ({1}), so readiness cannot be declared.,إضافة {0} بلا هندسة مثبتة ({1})، لذلك لا يمكن إعلان الجاهزية.
+This piece has no supported geometry ({0}), so it cannot be marked ready.,هذه القطعة بلا هندسة مدعومة ({0})، لذلك لا يمكن إعلانها جاهزة.

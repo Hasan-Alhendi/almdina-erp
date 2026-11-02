@@ -301,6 +301,105 @@
   height: 16px;
 }
 
+.abe-save-state {
+  max-width: 9rem;
+  padding-inline: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--alm-text-muted, #667085);
+}
+
+.abe-save-state[data-abe-save-state="dirty"],
+.abe-save-state[data-abe-save-state="failed"],
+.abe-save-state[data-abe-save-state="conflict"] {
+  color: var(--alm-text, #172033);
+}
+
+.abe-review-dialog {
+  position: absolute;
+  inset-inline-end: 16px;
+  bottom: 72px;
+  z-index: 6;
+  width: min(360px, calc(100% - 32px));
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.abe-review-dialog[hidden] {
+  display: none !important;
+}
+
+.abe-review-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-md, 14px);
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+}
+
+.abe-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.abe-review-close {
+  border: 0;
+  background: transparent;
+  color: var(--alm-text-muted, #667085);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.abe-review-meta,
+.abe-review-note,
+.abe-review-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--alm-text-muted, #667085);
+}
+
+.abe-review-section {
+  display: grid;
+  gap: 6px;
+}
+
+.abe-review-section h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.abe-review-issue {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-button, 10px);
+  background: var(--alm-bg, #f3f5f8);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.abe-review-issue-code {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--alm-text-muted, #667085);
+}
+
+.abe-review-issue-msg {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .abe-tool-sep {
   width: 1px;
   align-self: stretch;

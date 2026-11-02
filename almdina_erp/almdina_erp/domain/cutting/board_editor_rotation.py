@@ -217,6 +217,22 @@ def translate_piece_geometry(piece: dict[str, Any], dx: float, dy: float) -> Non
     rederive_outline(piece)
 
 
+def machine_accepts_rotation(machine_type: str, rotation_deg: float) -> bool:
+    """Panel Saw stays orthogonal. CNC Router and Auto accept a free angle.
+
+    An unknown machine fails closed instead of being treated as a router.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.catalog import is_machine_type
+
+    machine = str(machine_type or "").strip()
+    if not is_machine_type(machine):
+        return False
+    if machine == "Panel Saw":
+        return any(angles_equivalent(rotation_deg, angle) for angle in (0, 90, 180, 270))
+    return True
+
+
 def explicit_allow_rotation(piece: Mapping[str, Any]) -> bool:
     """Fail closed: only an explicit truthy order flag permits rotation."""
 
@@ -533,6 +549,7 @@ __all__ = [
     "rederive_outline",
     "translate_piece_geometry",
     "explicit_allow_rotation",
+    "machine_accepts_rotation",
     "piece_rotation_eligibility",
     "preview_piece_rotation",
     "validate_piece_rotation",

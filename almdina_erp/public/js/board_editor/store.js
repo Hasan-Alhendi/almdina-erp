@@ -38,6 +38,16 @@
             dropMessage: null,
             canUndo: false,
             canRedo: false,
+            draftVersion: 0,
+            savedFingerprint: "",
+            saveState: "clean",
+            saveInFlight: false,
+            canSaveLayout: false,
+            sourceOnly: false,
+            review: null,
+            reviewSerial: 0,
+            reviewInFlight: false,
+            reviewStale: false,
         };
 
         (projection.sheets || []).forEach((sheet) => {
@@ -77,7 +87,36 @@
                 dropMessage: state.dropMessage,
                 canUndo: state.canUndo,
                 canRedo: state.canRedo,
+                draftVersion: state.draftVersion,
+                savedFingerprint: state.savedFingerprint,
+                saveInFlight: state.saveInFlight,
+                canSaveLayout: state.canSaveLayout,
+                sourceOnly: state.sourceOnly,
+                distributionDirty: distributionDirty(),
+                saveState: derivedSaveState(),
+                review: state.review,
+                reviewSerial: state.reviewSerial,
+                reviewInFlight: state.reviewInFlight,
+                reviewStale: state.reviewStale,
             };
+        }
+
+        function sessionFingerprint() {
+            const api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
+            if (!api || !state.session) return "";
+            return api.distributionFingerprint(state.session);
+        }
+
+        function distributionDirty() {
+            if (!state.session || !state.savedFingerprint) return false;
+            return sessionFingerprint() !== state.savedFingerprint;
+        }
+
+        function derivedSaveState() {
+            if (state.saveInFlight) return "saving";
+            if (!distributionDirty()) return state.draftVersion > 0 ? "saved" : "clean";
+            if (state.saveState === "failed" || state.saveState === "conflict") return state.saveState;
+            return "dirty";
         }
 
         function emit() {
@@ -129,11 +168,20 @@
             emit();
         }
 
+        function invalidateReview() {
+            state.reviewSerial += 1;
+            if (state.review || state.reviewInFlight) state.reviewStale = true;
+            state.review = null;
+            state.reviewInFlight = false;
+        }
+
         function commitSession(nextDocument) {
             if (!state.history) return;
+            const before = sessionFingerprint();
             state.history.commit(nextDocument);
             syncHistoryFlags();
             state.dragPreview = null;
+            if (sessionFingerprint() !== before) invalidateReview();
             emit();
         }
 
@@ -141,6 +189,7 @@
             if (!state.history) return;
             state.history.undo();
             syncHistoryFlags();
+            invalidateReview();
             emit();
         }
 
@@ -148,6 +197,7 @@
             if (!state.history) return;
             state.history.redo();
             syncHistoryFlags();
+            invalidateReview();
             emit();
         }
 
@@ -155,7 +205,67 @@
             if (!state.history) return;
             state.history.restoreEntry();
             syncHistoryFlags();
+            invalidateReview();
             emit();
+        }
+
+        function noteDraftBaseline(baseline) {
+            const next = baseline || {};
+            state.draftVersion = Number(next.draftVersion) || 0;
+            state.savedFingerprint = String(next.savedFingerprint || "");
+            state.canSaveLayout = Boolean(next.canSaveLayout);
+            state.sourceOnly = Boolean(next.sourceOnly);
+            state.saveInFlight = false;
+            state.saveState = "clean";
+            emit();
+        }
+
+        function beginDraftSave() {
+            if (state.saveInFlight || !state.canSaveLayout) return false;
+            state.saveInFlight = true;
+            state.saveState = "saving";
+            emit();
+            return true;
+        }
+
+        function settleDraftSave(sentFingerprint, response) {
+            const api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
+            const settled = api
+                ? api.settleDraftSave(snapshot(), sentFingerprint, response)
+                : { saveState: "failed", saveInFlight: false };
+            state.draftVersion = Number(settled.draftVersion) || 0;
+            state.savedFingerprint = String(settled.savedFingerprint || "");
+            state.saveState = settled.saveState || "failed";
+            state.saveInFlight = false;
+            emit();
+        }
+
+        function beginReview() {
+            if (state.reviewInFlight || !state.session) return null;
+            state.reviewSerial += 1;
+            state.reviewInFlight = true;
+            state.reviewStale = false;
+            const request = {
+                serial: state.reviewSerial,
+                fingerprint: sessionFingerprint(),
+                draftVersion: state.draftVersion,
+            };
+            emit();
+            return request;
+        }
+
+        function settleReview(request, response) {
+            const api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
+            const settled = api
+                ? api.settleReview(snapshot(), request, response)
+                : { ignored: true, failed: false, review: state.review };
+            state.reviewInFlight = false;
+            if (!settled.ignored && !settled.failed) {
+                state.review = settled.review;
+                state.reviewStale = false;
+            }
+            emit();
+            return settled;
         }
 
         function setLayerVisible(matchKey, visible) {
@@ -279,6 +389,11 @@
             undo,
             redo,
             restoreEntry,
+            noteDraftBaseline,
+            beginDraftSave,
+            settleDraftSave,
+            beginReview,
+            settleReview,
             setLayerVisible,
             setAllLayersVisible,
             showOnlyLayer,

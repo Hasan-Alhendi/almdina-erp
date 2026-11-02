@@ -482,6 +482,10 @@ def test_l_shaped_break_door_uses_parametric_outline_not_rectangle():
     assert overlays[0]["layer_original_name"] == LINER_LAYER
     path = overlays[0]["geometry"]["path"]
     assert len(path) >= 2
+    # Machining parameters stay on the piece identity even if a client hides the layer.
+    assert piece["extra_liner"] == 1
+    assert piece["liner_reference_side"] == "edge_long_left"
+    assert float(piece["liner_width_cm"]) == 3
 
 
 def test_persisted_dxf_liner_is_not_replaced_by_synthetic_overlay():

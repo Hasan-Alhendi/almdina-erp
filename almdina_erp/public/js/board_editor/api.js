@@ -5,6 +5,10 @@
         "almdina_erp.almdina_erp.services.board_editor_query_service.get_board_editor_projection";
     const STATUS_METHOD =
         "almdina_erp.almdina_erp.services.cutting_plan_recalculation_job_service.get_system_plan_recalculation_status";
+    const SAVE_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_draft_service.save_board_editor_draft";
+    const REVIEW_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_draft_review_service.validate_board_editor_draft";
 
     function call(method, args) {
         return new Promise((resolve, reject) => {
@@ -30,11 +34,34 @@
         });
     }
 
+    function saveDraft(args) {
+        const payload = args || {};
+        return call(SAVE_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            expected_draft_version: Number(payload.expectedDraftVersion) || 0,
+            source_content_revision: String(payload.sourceContentRevision || ""),
+            layout: payload.layout || null,
+        });
+    }
+
+    function reviewDraft(args) {
+        const payload = args || {};
+        return call(REVIEW_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+        });
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.Api = Object.freeze({
         load,
         recalculationStatus,
+        saveDraft,
+        reviewDraft,
         METHOD,
         STATUS_METHOD,
+        SAVE_METHOD,
+        REVIEW_METHOD,
     });
 })();

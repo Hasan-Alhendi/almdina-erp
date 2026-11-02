@@ -57,6 +57,21 @@ def _would_create_cycle(
     return False
 
 
+def hosting_link_creates_cycle(
+    proposed_host_by_guest: Mapping[int, int],
+    *,
+    guest_id: int,
+    host_id: int,
+) -> bool:
+    """True when guest→host would close a cycle. Reuses the editor hosting rule."""
+
+    return _would_create_cycle(
+        proposed_host_by_guest,
+        guest_id=guest_id,
+        host_id=host_id,
+    )
+
+
 def hosting_forest_for_pieces(
     pieces: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -166,5 +181,6 @@ def hosting_forest_for_pieces(
 __all__ = [
     "declared_host_piece_id",
     "hosting_forest_for_pieces",
+    "hosting_link_creates_cycle",
     "piece_placement_id",
 ]

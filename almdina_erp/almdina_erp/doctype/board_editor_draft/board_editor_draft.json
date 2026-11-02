@@ -1,0 +1,95 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "creation": "2026-11-01 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "draft_key",
+    "door_cutting_order",
+    "source_plan",
+    "source_input_fingerprint",
+    "source_content_revision",
+    "draft_version",
+    "distribution_fingerprint",
+    "layout_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "draft_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Draft Key",
+      "length": 64,
+      "read_only": 1,
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "door_cutting_order",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Door Cutting Order",
+      "options": "Door Cutting Order",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_plan",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Source Plan",
+      "options": "Cutting Plan",
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "source_input_fingerprint",
+      "fieldtype": "Data",
+      "label": "Source Input Fingerprint",
+      "length": 140,
+      "read_only": 1
+    },
+    {
+      "fieldname": "source_content_revision",
+      "fieldtype": "Small Text",
+      "label": "Source Content Revision",
+      "read_only": 1
+    },
+    {
+      "fieldname": "draft_version",
+      "fieldtype": "Int",
+      "in_list_view": 1,
+      "label": "Draft Version",
+      "non_negative": 1,
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "distribution_fingerprint",
+      "fieldtype": "Data",
+      "label": "Distribution Fingerprint",
+      "length": 64,
+      "read_only": 1,
+      "reqd": 1
+    },
+    {
+      "fieldname": "layout_json",
+      "fieldtype": "Long Text",
+      "label": "Layout JSON",
+      "read_only": 1,
+      "reqd": 1
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "links": [],
+  "modified": "2026-11-01 00:00:00.000000",
+  "module": "Almdina ERP",
+  "name": "Board Editor Draft",
+  "naming_rule": "Random",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 0
+}

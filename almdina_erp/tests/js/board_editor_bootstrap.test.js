@@ -219,7 +219,7 @@ async function pageBootstrapLoadsVersionedScripts() {
     ]);
     versioned.forEach((src) => {
         const url = new URL(src, "http://almdina.local:8000");
-        assert.equal(url.searchParams.get("v"), "14");
+        assert.equal(url.searchParams.get("v"), "16");
         assert.equal(context.frappe.assets.extn(url.pathname), "js");
     });
 

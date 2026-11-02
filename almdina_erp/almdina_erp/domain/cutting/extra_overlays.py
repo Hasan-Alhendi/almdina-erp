@@ -269,6 +269,11 @@ def _assign_liner_by_cutter_footprint(
     if len(owners) != 1:
         _reject_unbound_overlay(overlay, owners, intruded)
     host = owners[0]
+    # A unique owner is not enough when the cutter disk still enters another door.
+    # Kerf-zone centers may sit outside the owner; invading a neighbour is a span.
+    foreign = [item for item in intruded if item.key != host.key]
+    if foreign:
+        raise ExtraOverlayError("extra_overlay_spans_hosts", layer=overlay.layer)
     if enforce_selection and overlay.kind not in host.selected_codes:
         raise ExtraOverlayError(
             "extra_overlay_addon_not_selected",

@@ -40,7 +40,11 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SYSTEM,
     UPLOADED_DXF,
 )
+from almdina_erp.almdina_erp.domain.orders.lifecycle import LOCKED_ORDER_STATUSES
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_draft_store import (
+    read_editor_draft,
+)
 from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import (
     DxfReadError,
     read_dxf_geometry_bytes,
@@ -131,6 +135,18 @@ def _plan_view_allowed(order: Any, plan: Any, capabilities: dict[str, bool]) -> 
     if source == UPLOADED_DXF:
         return bool(capabilities["view_uploaded"])
     return False
+
+
+def _edit_layout_allowed(order: Any, plan: Any, capabilities: dict[str, bool]) -> bool:
+    """Existing Cutting Plan edit capability. View alone cannot save a draft."""
+
+    status = str(getattr(order, "status", "") or "").strip()
+    if status in LOCKED_ORDER_STATUSES:
+        return False
+    return bool(
+        cutting_plan_capability_allowed(order, Capability.EDIT_OPTIMIZER_SETTINGS)
+        and _plan_view_allowed(order, plan, capabilities)
+    )
 
 
 def _parse_snapshot(plan: Any) -> dict[str, Any]:
@@ -536,7 +552,14 @@ def get_board_editor_projection(
             "view_system": capabilities["view_system"],
             "view_uploaded": capabilities["view_uploaded"],
             "view_approved": capabilities["view_approved"],
+            "edit_layout": _edit_layout_allowed(order, plan, capabilities),
         },
+        "editor_draft": read_editor_draft(
+            str(order.name),
+            str(plan.name),
+            source_content_revision=str(freshness["content_revision_token"] or ""),
+            source_input_fingerprint=str(freshness["input_fingerprint"] or ""),
+        ),
         "mode": "view_select_only",
         "projection": projection,
         "meta": {

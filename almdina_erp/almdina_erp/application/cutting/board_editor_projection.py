@@ -54,6 +54,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     MACHINING_ADDONS,
+    machining_metadata,
     machining_values,
 )
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
@@ -376,6 +377,9 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
         "source_orientation_applied": True,
         "allow_rotation": allow is True,
         "allow_rotation_proven": allow is not None,
+        # Trusted machining parameters for draft review. Layer visibility never
+        # strips these; readiness must not depend on a drawn overlay alone.
+        **machining_metadata(piece),
     }
 
 

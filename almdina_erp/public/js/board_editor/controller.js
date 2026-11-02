@@ -54,6 +54,9 @@
         let moveInteraction = null;
         let rotationInteraction = null;
         let lastCanvasApi = null;
+        let beforeUnloadHandler = null;
+        let routeGuardOriginal = null;
+        let leaveConfirmed = false;
 
         function ensureShell() {
             main = wrapper.querySelector(".layout-main-section");
@@ -75,6 +78,55 @@
         function backToOrder(orderName) {
             if (!orderName) return;
             frappe.set_route("Form", "Door Cutting Order", orderName);
+        }
+
+        function distributionDirty() {
+            if (!store) return false;
+            return Boolean(store.snapshot().distributionDirty);
+        }
+
+        function confirmLeave() {
+            if (leaveConfirmed || !distributionDirty()) return true;
+            const accepted = window.confirm(translate(
+                "Board editor changes are not saved. Leave without saving?"
+            ));
+            if (accepted) leaveConfirmed = true;
+            return accepted;
+        }
+
+        function installLeaveGuards() {
+            removeLeaveGuards();
+            beforeUnloadHandler = (event) => {
+                if (!distributionDirty()) return;
+                event.preventDefault();
+                event.returnValue = "";
+            };
+            window.addEventListener("beforeunload", beforeUnloadHandler);
+            if (window.frappe && typeof frappe.set_route === "function") {
+                routeGuardOriginal = frappe.set_route;
+                const guarded = function abeRouteGuard() {
+                    if (!confirmLeave()) return Promise.resolve(false);
+                    return routeGuardOriginal.apply(this, arguments);
+                };
+                guarded.__abeGuarded = true;
+                frappe.set_route = guarded;
+            }
+        }
+
+        function removeLeaveGuards() {
+            if (beforeUnloadHandler) {
+                window.removeEventListener("beforeunload", beforeUnloadHandler);
+                beforeUnloadHandler = null;
+            }
+            if (
+                window.frappe
+                && routeGuardOriginal
+                && frappe.set_route
+                && frappe.set_route.__abeGuarded
+            ) {
+                frappe.set_route = routeGuardOriginal;
+            }
+            routeGuardOriginal = null;
         }
 
         function bindStateActions(orderName, context) {
@@ -158,9 +210,7 @@
         }
 
         function sessionIsDirty() {
-            if (!store) return false;
-            const view = store.snapshot();
-            return Boolean(view.canUndo);
+            return distributionDirty();
         }
 
         function clearFreshnessRetry() {
@@ -194,6 +244,25 @@
                     <strong>${esc(translate("Cutting plan is out of date"))}</strong>
                     <span>${esc(translate("Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout."))}</span>
                     <button type="button" class="alm-btn-secondary abe-back">${esc(translate("Back to order"))}</button>
+                </div>`;
+            }
+            return "";
+        }
+
+        function sourceViewBanner() {
+            if (!store || !store.snapshot().sourceOnly) return "";
+            return `<div class="abe-freshness-banner is-historical" role="status" data-abe-draft="source-view">
+                <strong>${esc(translate("This view shows the source plan."))}</strong>
+                <span>${esc(translate("The saved draft is unchanged. Open the editor without the source route to continue that draft."))}</span>
+            </div>`;
+        }
+
+        function draftBannerHtml(payload) {
+            const draft = (payload && payload.editor_draft) || {};
+            if (draft.conflict === "source") {
+                return `<div class="abe-freshness-banner is-stale" role="status" data-abe-draft="source-conflict">
+                    <strong>${esc(translate("Saved draft does not match this plan source."))}</strong>
+                    <span>${esc(translate("It was not applied. The cutting plan itself was not changed."))}</span>
                 </div>`;
             }
             return "";
@@ -444,16 +513,207 @@
             });
         }
 
-        function ensureSession(payload) {
+        function revealPiece(pieceKey) {
+            if (!store || !pieceKey) return;
+            const view = store.snapshot();
+            const piece = view.session && view.session.pieces && view.session.pieces[pieceKey];
+            if (!piece) return;
+            if (piece.distribution === "excluded" || piece.sheet_no == null || piece.sheet_no === "") {
+                const root = ensureShell().querySelector(".abe-root");
+                const row = root && root.querySelector(`.abe-excluded [data-piece-key="${pieceKey}"]`);
+                if (row && typeof row.scrollIntoView === "function") {
+                    row.scrollIntoView({ block: "nearest", inline: "nearest" });
+                }
+                return;
+            }
+            const size = stageSize();
+            if (size.width < 40 || size.height < 40) return;
+            const layout = currentLayout(size.width);
+            const board = layout.positions[String(piece.sheet_no)];
+            if (!board) {
+                revealSheet(piece.sheet_no);
+                return;
+            }
+            const scale = Number(view.viewport.scale) || 1;
+            const pad = 12;
+            const ox = board.originX + (Number(board.trimX) || 0);
+            const oy = board.originY + (Number(board.trimY) || 0);
+            const localX = Number(piece.local_x_mm) || 0;
+            const localY = Number(piece.local_y_mm) || 0;
+            const width = Number((piece.placement_cm && piece.placement_cm.w) || 0) * 10 || 40;
+            const height = Number((piece.placement_cm && piece.placement_cm.h) || 0) * 10 || 40;
+            const x0 = CanvasRenderer.SCENE_PAD_PX + (ox + localX) * scale;
+            const y0 = CanvasRenderer.SCENE_PAD_PX + (oy + localY) * scale;
+            const x1 = CanvasRenderer.SCENE_PAD_PX + (ox + localX + width) * scale;
+            const y1 = CanvasRenderer.SCENE_PAD_PX + (oy + localY + height) * scale;
+            let scrollX = liveScroll.x;
+            let scrollY = liveScroll.y;
+            if (x0 < scrollX + pad) scrollX = Math.max(0, x0 - pad);
+            else if (x1 > scrollX + size.width - pad) scrollX = Math.max(0, x1 - size.width + pad);
+            if (y0 < scrollY + pad) scrollY = Math.max(0, y0 - pad);
+            else if (y1 > scrollY + size.height - pad) scrollY = Math.max(0, y1 - size.height + pad);
+            rememberCamera({
+                scale,
+                scrollX,
+                scrollY,
+                columns: layout.columns,
+                opened: true,
+                userAdjusted: true,
+                fitted: false,
+            });
+        }
+
+        function closeReviewDialog() {
+            const root = ensureShell().querySelector(".abe-root");
+            const dialog = root && root.querySelector("[data-abe-review]");
+            if (!dialog) return;
+            dialog.setAttribute("hidden", "hidden");
+            dialog.innerHTML = "";
+        }
+
+        function reviewIssueKey(issue) {
+            const ids = ((issue && issue.piece_instance_ids) || []).slice().sort().join(",");
+            const sheets = ((issue && issue.sheet_nos) || []).slice().sort().join(",");
+            return `${(issue && issue.code) || ""}:${ids}:${sheets}`;
+        }
+
+        function syncReviewDialog(view) {
+            const root = ensureShell().querySelector(".abe-root");
+            if (!root) return;
+            let dialog = root.querySelector("[data-abe-review]");
+            if (!view || (!view.review && !view.reviewInFlight && !view.reviewStale)) {
+                if (dialog) {
+                    dialog.setAttribute("hidden", "hidden");
+                    dialog.innerHTML = "";
+                }
+                return;
+            }
+            if (!dialog) {
+                dialog = document.createElement("div");
+                dialog.className = "abe-review-dialog";
+                dialog.setAttribute("data-abe-review", "1");
+                dialog.setAttribute("role", "dialog");
+                dialog.setAttribute("aria-modal", "false");
+                root.appendChild(dialog);
+            }
+            dialog.removeAttribute("hidden");
+            if (view.reviewStale && !view.reviewInFlight) {
+                dialog.innerHTML = `
+                    <div class="abe-review-card">
+                        <header class="abe-review-header">
+                            <strong>${esc(__("Review distribution"))}</strong>
+                            <button type="button" class="abe-review-close" aria-label="${esc(__("Close"))}">×</button>
+                        </header>
+                        <p class="abe-review-note">${esc(__("The distribution changed. Review it again."))}</p>
+                    </div>
+                `;
+                const close = dialog.querySelector(".abe-review-close");
+                if (close) close.onclick = () => closeReviewDialog();
+                return;
+            }
+            if (view.reviewInFlight) {
+                dialog.innerHTML = `
+                    <div class="abe-review-card">
+                        <header class="abe-review-header">
+                            <strong>${esc(__("Review distribution"))}</strong>
+                            <button type="button" class="abe-review-close" aria-label="${esc(__("Close"))}">×</button>
+                        </header>
+                        <p class="abe-review-note">${esc(__("Reviewing the saved distribution…"))}</p>
+                    </div>
+                `;
+                const close = dialog.querySelector(".abe-review-close");
+                if (close) close.onclick = () => closeReviewDialog();
+                return;
+            }
+            const review = view.review || {};
+            const issues = Array.isArray(review.issues) ? review.issues : [];
+            const seen = new Set();
+            const unique = [];
+            issues.forEach((issue) => {
+                const key = reviewIssueKey(issue);
+                if (seen.has(key)) return;
+                seen.add(key);
+                unique.push(issue);
+            });
+            const errors = unique.filter((issue) => issue.severity !== "warning");
+            const warnings = unique.filter((issue) => issue.severity === "warning");
+            const ready = review.ready === true;
+            const renderIssue = (issue) => {
+                const pieceIds = (issue.piece_instance_ids || []).join(" ");
+                const sheetNos = (issue.sheet_nos || []).join(" ");
+                return `<button type="button" class="abe-review-issue" data-abe-issue-code="${esc(issue.code || "")}" data-abe-piece-instances="${esc(pieceIds)}" data-abe-sheet-nos="${esc(sheetNos)}">
+                    <span class="abe-review-issue-code">${esc(issue.code || "")}</span>
+                    <span class="abe-review-issue-msg">${esc(issue.message || __("The distribution is not ready."))}</span>
+                </button>`;
+            };
+            dialog.innerHTML = `
+                <div class="abe-review-card">
+                    <header class="abe-review-header">
+                        <strong>${esc(ready ? __("Distribution ready") : __("Distribution not ready"))}</strong>
+                        <button type="button" class="abe-review-close" aria-label="${esc(__("Close"))}">×</button>
+                    </header>
+                    <p class="abe-review-meta">${esc(__("Draft version"))}: ${esc(String(review.draft_version || 0))}</p>
+                    <p class="abe-review-note">${esc(__("This review does not approve or export the plan."))}</p>
+                    ${errors.length ? `<section class="abe-review-section"><h3>${esc(__("Blocking issues"))}</h3>${errors.map(renderIssue).join("")}</section>` : ""}
+                    ${warnings.length ? `<section class="abe-review-section"><h3>${esc(__("Warnings"))}</h3>${warnings.map(renderIssue).join("")}</section>` : ""}
+                    ${!errors.length && !warnings.length ? `<p class="abe-review-empty">${esc(__("No distribution issues were found."))}</p>` : ""}
+                </div>
+            `;
+            const close = dialog.querySelector(".abe-review-close");
+            if (close) close.onclick = () => closeReviewDialog();
+            dialog.querySelectorAll(".abe-review-issue").forEach((button) => {
+                button.onclick = () => {
+                    const instances = String(button.getAttribute("data-abe-piece-instances") || "")
+                        .split(/\s+/)
+                        .filter(Boolean);
+                    if (!instances.length || !store) return;
+                    const session = store.snapshot().session;
+                    if (!session) return;
+                    const byInstance = {};
+                    Object.keys(session.pieces || {}).forEach((key) => {
+                        const piece = session.pieces[key];
+                        byInstance[String(piece.piece_instance_id)] = piece;
+                    });
+                    const piece = byInstance[instances[0]];
+                    if (!piece) return;
+                    store.selectPiece(piece.piece_id, {
+                        pieceKey: piece.piece_key,
+                        sheetNo: piece.sheet_no,
+                        expandSheet: true,
+                        elementId: null,
+                    });
+                    revealPiece(piece.piece_key);
+                };
+            });
+        }
+
+        function ensureSession(payload, options) {
             const size = stageSize();
             const sheets = (payload.projection && payload.projection.sheets) || [];
             const widths = sheets.map((sheet) => (Number(sheet.full_width_cm) || Number(sheet.w) || 122) * 10);
             const maxBoard = widths.length ? Math.max(...widths) : 1;
             const columns = CanvasRenderer.columnCount(maxBoard, size.width || 1100);
             const layout = CanvasRenderer.sheetLayout(sheets, columns);
-            const session = SessionDocument.buildFromProjection(payload.projection, layout);
+            let session = SessionDocument.buildFromProjection(payload.projection, layout);
+            const draft = payload.editor_draft || {};
+            const applySaved = !options || options.applySavedDraft !== false;
+            const sourceOnly = applySaved === false && Boolean(draft.present);
+            let appliedOk = false;
+            if (applySaved && draft.compatible && draft.layout) {
+                const applied = SessionDocument.applySavedLayout(session, draft.layout);
+                if (applied.ok) {
+                    session = applied.session;
+                    appliedOk = true;
+                }
+            }
             const history = History.create(session);
             store.attachSession(history.get(), history);
+            store.noteDraftBaseline({
+                draftVersion: appliedOk ? (Number(draft.draft_version) || 0) : 0,
+                savedFingerprint: SessionDocument.distributionFingerprint(session),
+                canSaveLayout: Boolean(payload.capabilities && payload.capabilities.edit_layout) && !sourceOnly,
+                sourceOnly,
+            });
         }
 
         function patchPreview(preview) {
@@ -706,13 +966,16 @@
                 },
                 isPanKey: () => spaceHeld,
                 fitAll: () => fitCurrentBoards(),
+                saveDraft: () => saveDraft(),
+                reviewDraft: () => reviewDraft(),
             });
+            syncReviewDialog(view);
             if (!view.viewport.opened && !view.viewport.userAdjusted) scheduleOpeningCamera();
         }
 
         function renderWorkspace(payload) {
             activeOrderName = payload.order_name || "";
-            const banner = freshnessBannerHtml(payload);
+            const banner = `${freshnessBannerHtml(payload)}${draftBannerHtml(payload)}${sourceViewBanner()}`;
             ensureShell().innerHTML = `
                 <div class="almdina-ui alm-page--workbench abe-page abe-root" dir="${esc(uiDirection())}">
                     ${banner}
@@ -720,6 +983,7 @@
                         <aside data-abe-sidebar class="abe-sidebar-host"></aside>
                         <section data-abe-canvas class="abe-canvas-host"></section>
                     </div>
+                    <div class="abe-review-dialog" data-abe-review hidden></div>
                 </div>
             `;
             paint();
@@ -796,7 +1060,11 @@
                 }
                 if (unsubscribe) unsubscribe();
                 store = createStore(payload);
-                ensureSession(payload);
+                ensureSession(payload, {
+                    applySavedDraft: context.applySavedDraft !== false,
+                });
+                leaveConfirmed = false;
+                installLeaveGuards();
                 bindMoveInteraction();
                 unsubscribe = store.subscribe(() => paint());
                 loadedRevisionToken = nextToken;
@@ -851,6 +1119,7 @@
             requestGate.invalidate();
             clearFreshnessRetry();
             pendingSourceConflict = null;
+            closeReviewDialog();
             if (unsubscribe) {
                 unsubscribe();
                 unsubscribe = null;
@@ -877,7 +1146,69 @@
                     node.style.overflow = "";
                 });
             }
+            removeLeaveGuards();
             lifecycle.dispose();
+        }
+
+        async function saveDraft() {
+            if (!store || !activeOrderName || !loadedPlanName) return;
+            const view = store.snapshot();
+            if (!view.canSaveLayout || view.saveInFlight || !view.distributionDirty || !view.session) return;
+            const sentFingerprint = SessionDocument.distributionFingerprint(view.session);
+            const layout = SessionDocument.exportLayout(view.session);
+            const expectedDraftVersion = view.draftVersion || 0;
+            const sourceContentRevision = contentRevisionToken(view.payload || {});
+            if (!store.beginDraftSave()) return;
+            try {
+                const response = await Api.saveDraft({
+                    orderName: activeOrderName,
+                    planName: loadedPlanName,
+                    expectedDraftVersion,
+                    sourceContentRevision,
+                    layout,
+                });
+                if (!store) return;
+                store.settleDraftSave(sentFingerprint, response || { ok: false, code: "failed" });
+            } catch (error) {
+                if (!store) return;
+                store.settleDraftSave(sentFingerprint, null);
+            }
+        }
+
+        async function reviewDraft() {
+            if (!store || !activeOrderName || !loadedPlanName) return;
+            const view = store.snapshot();
+            if (!view.session || view.reviewInFlight) return;
+            if (view.distributionDirty) {
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: __("Review distribution"),
+                        message: __("Save the current distribution before reviewing it. An older saved draft will not be shown as the current layout."),
+                        indicator: "orange",
+                    });
+                }
+                return;
+            }
+            const request = store.beginReview();
+            if (!request) return;
+            try {
+                const response = await Api.reviewDraft({
+                    orderName: activeOrderName,
+                    planName: loadedPlanName,
+                });
+                if (!store) return;
+                store.settleReview(request, response || null);
+            } catch (error) {
+                if (!store) return;
+                store.settleReview(request, null);
+                if (typeof frappe !== "undefined" && frappe.msgprint) {
+                    frappe.msgprint({
+                        title: __("Review distribution"),
+                        message: __("Review failed. Your edits and selection are still here."),
+                        indicator: "red",
+                    });
+                }
+            }
         }
 
         function onShellGeometryChange() {

@@ -2,30 +2,30 @@
     "use strict";
 
     const PAGE_ROUTE = "board-editor";
-    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=14";
+    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=16";
     const ASSET_ROOT = "/assets/almdina_erp/js/board_editor";
     const PREREQUISITES = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
         "/assets/almdina_erp/js/frontend_foundation.js",
     ]);
     const MODULES = Object.freeze([
-        `${ASSET_ROOT}/api.js?v=14`,
-        `${ASSET_ROOT}/history.js?v=14`,
-        `${ASSET_ROOT}/session_document.js?v=14`,
-        `${ASSET_ROOT}/distribution.js?v=14`,
-        `${ASSET_ROOT}/move_geometry.js?v=14`,
-        `${ASSET_ROOT}/snap_geometry.js?v=14`,
-        `${ASSET_ROOT}/rotation_geometry.js?v=14`,
-        `${ASSET_ROOT}/move_interaction.js?v=14`,
-        `${ASSET_ROOT}/rotation_interaction.js?v=14`,
-        "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js?v=14",
-        "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js?v=14",
-        `${ASSET_ROOT}/plan_display_style.js?v=14`,
-        `${ASSET_ROOT}/plan_edge_marks.js?v=14`,
-        `${ASSET_ROOT}/store.js?v=14`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=14`,
-        `${ASSET_ROOT}/sidebar_renderer.js?v=14`,
-        `${ASSET_ROOT}/controller.js?v=14`,
+        `${ASSET_ROOT}/api.js?v=16`,
+        `${ASSET_ROOT}/history.js?v=16`,
+        `${ASSET_ROOT}/session_document.js?v=16`,
+        `${ASSET_ROOT}/distribution.js?v=16`,
+        `${ASSET_ROOT}/move_geometry.js?v=16`,
+        `${ASSET_ROOT}/snap_geometry.js?v=16`,
+        `${ASSET_ROOT}/rotation_geometry.js?v=16`,
+        `${ASSET_ROOT}/move_interaction.js?v=16`,
+        `${ASSET_ROOT}/rotation_interaction.js?v=16`,
+        "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js?v=16",
+        "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js?v=16",
+        `${ASSET_ROOT}/plan_display_style.js?v=16`,
+        `${ASSET_ROOT}/plan_edge_marks.js?v=16`,
+        `${ASSET_ROOT}/store.js?v=16`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=16`,
+        `${ASSET_ROOT}/sidebar_renderer.js?v=16`,
+        `${ASSET_ROOT}/controller.js?v=16`,
     ]);
 
     function pageModule() {
@@ -153,6 +153,7 @@
         return {
             orderName: String(value[1] || "").trim(),
             planName: String(value[2] || "").trim(),
+            applySavedDraft: String(value[3] || "") !== "source",
         };
     }
 
