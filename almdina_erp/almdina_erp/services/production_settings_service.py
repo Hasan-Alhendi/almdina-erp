@@ -318,6 +318,16 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
         if fieldname in payload:
             settings.set(fieldname, flt(_finite_non_negative(payload[fieldname], label)))
 
+    # Alignment is a separately configurable *tail* allowance, bounded by
+    # the user's own optimization timeout rather than an internal magic cap.
+    if flt(settings.get("alignment_search_budget_sec") or 0) > flt(
+        settings.get("default_optimization_time_limit_sec") or 0
+    ):
+        frappe.throw(
+            _("Final alignment search budget must not exceed optimization timeout."),
+            frappe.ValidationError,
+        )
+
     extra_addon_prices = {
         "default_extra_double_unit_price_usd": _("Double Price USD / Door"),
         "default_extra_full_door_double_unit_price_usd": _(
