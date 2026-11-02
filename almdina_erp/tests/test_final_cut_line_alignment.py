@@ -146,12 +146,12 @@ def test_time_expiry_does_not_change_any_geometry():
     assert _run_alignment(plan, sources, deadline=0) is plan
 
 
-@pytest.mark.parametrize("protected", ["Glass", "OFFCUT", "overlay", "geometry"])
+@pytest.mark.parametrize("protected", ["Glass", "L-Shaped Corner", "Clipped Corner", "Joint", "OFFCUT", "overlay", "geometry"])
 def test_protected_nests_and_offcut_do_not_move(protected):
     sources, plan = _domain_fixture()
     original = deepcopy(plan)
-    if protected == "Glass":
-        sources[0]["piece_type"] = plan["sheets"][0]["pieces"][0]["piece_type"] = "Glass"
+    if protected in {"Glass", "L-Shaped Corner", "Clipped Corner", "Joint"}:
+        sources[0]["piece_type"] = plan["sheets"][0]["pieces"][0]["piece_type"] = protected
     elif protected == "OFFCUT":
         sources[0]["resource_kind"] = plan["sheets"][0]["pieces"][0]["resource_kind"] = "OFFCUT"
     elif protected == "overlay":
@@ -298,7 +298,7 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
     )
     output = {}
     for enabled in (False, True):
-        elapsed, memory, shifts = [], [], []
+        elapsed, memory, shifts, profiles, remnants = [], [], [], [], []
         for _ in range(3):
             engine = FiveCandidates()
             tracemalloc.start()
@@ -320,7 +320,9 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
                 result.snapshot["sheets"][0]["pieces"][1]["x"] -
                 result.snapshot["sheets"][0]["pieces"][0]["x"]
             )
-        output[enabled] = (statistics.median(elapsed), max(memory), shifts)
+            profiles.append(align._rectangles(result.snapshot, .5))
+            remnants.append(result.snapshot["industrial_metrics"]["largest_reusable_free_area_m2"])
+        output[enabled] = (statistics.median(elapsed), max(memory), shifts, profiles, remnants)
     print(
         "CUT_ALIGNMENT_5_CANDIDATES "
         f"baseline_median_ms={output[False][0]:.3f} "
@@ -328,6 +330,12 @@ def test_five_candidate_alignment_runtime_and_memory_evidence():
         f"baseline_peak_KiB={output[False][1]:.1f} "
         f"enabled_peak_KiB={output[True][1]:.1f} "
         f"baseline_delta_cm={output[False][2][-1]:.3f} "
-        f"enabled_delta_cm={output[True][2][-1]:.3f}",
+        f"enabled_delta_cm={output[True][2][-1]:.3f} "
+        f"baseline_network_mm={output[False][3][-1][0]:.3f} "
+        f"enabled_network_mm={output[True][3][-1][0]:.3f} "
+        f"baseline_segments={output[False][3][-1][1]} "
+        f"enabled_segments={output[True][3][-1][1]} "
+        f"baseline_remnant_m2={output[False][4][-1]:.6f} "
+        f"enabled_remnant_m2={output[True][4][-1]:.6f}",
         flush=True,
     )
