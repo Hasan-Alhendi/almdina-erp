@@ -229,3 +229,40 @@ def test_zero_kerf_does_not_fabricate_common_cuts_across_a_real_gap():
     assert not validate_plan(baseline, sources, 100, 100, kerf_cm=0)
     # With zero kerf the actual 5 mm gap is still a gap: no false joining.
     assert _run_alignment(baseline, sources, kerf=0) is baseline
+
+
+def test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned(tmp_path):
+    """Strict importer must not turn optional System alignment into a validation rule."""
+    import ezdxf
+    from almdina_erp.tests.test_cutter_center_paths import (
+        _import, _order, _piece, _rect, _sheet,
+    )
+
+    document = ezdxf.new("R2010")
+    for layer in ("SHEET_OUTLINE", "GEOMETRY", "TEXT"):
+        document.layers.add(layer)
+    model = _sheet(document)
+    for number, x, y in ((1, 150, 100), (2, 153, 305)):
+        model.add_lwpolyline(
+            _rect(x, y, 200, 200), close=True,
+            dxfattribs={"layer": "GEOMETRY"},
+        )
+        model.add_text(
+            str(number), dxfattribs={
+                "layer": "TEXT", "insert": (x + 100, y + 100), "height": 12,
+            },
+        )
+    path = tmp_path / "nonaligned-original.dxf"
+    document.saveas(path)
+    original_bytes = path.read_bytes()
+    order = _order([
+        _piece(piece_instance_id="door-1", width_cm=20, length_cm=20,
+               cut_width_cm=20, cut_length_cm=20),
+        _piece(piece_instance_id="door-2", width_cm=20, length_cm=20,
+               cut_width_cm=20, cut_length_cm=20),
+    ])
+    imported = _import(str(path), order, kerf_mm=5, trim_mm=0)
+    placed = [p for sheet in imported["sheets"] for p in sheet["pieces"]]
+    assert len(placed) == 2
+    assert sorted(p["x"] for p in placed) == pytest.approx([15, 15.3])
+    assert path.read_bytes() == original_bytes
