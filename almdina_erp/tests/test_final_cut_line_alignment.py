@@ -1004,6 +1004,21 @@ def test_final_system_cutter_quality_matches_dxf_target_not_border_proxy():
     assert final_cut_quality_key(inside_quality) < final_cut_quality_key(border_quality)
     assert inside_quality[2] > border_quality[2] + 1000
     assert at_reference["sheets"][0]["pieces"][4]["x"] == pytest.approx(.65)
+    # Full three-board industrial priority: the actual largest reusable
+    # offcut sits on the unchanged third sheet. No material priority excuses
+    # replacing the 29.9x90.3 shared route with the original left border.
+    _, three = _three_sheet_dxf_geometry_witness()
+    def complete(first):
+        full = deepcopy(three)
+        full["sheets"][0] = deepcopy(first["sheets"][0])
+        return enrich_plan_metrics(full, full["method_key"], "CNC Router",
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09)
+    border_full, reference_full = complete(at_border), complete(at_reference)
+    assert tuple(border_full["industrial_rank"][:4]) == tuple(
+        reference_full["industrial_rank"][:4])
+    assert border_full["industrial_metrics"]["largest_reusable_free_area_m2"] == pytest.approx(
+        reference_full["industrial_metrics"]["largest_reusable_free_area_m2"])
 
 
 def test_final_system_cutter_quality_fails_closed_for_unproven_shapes():
