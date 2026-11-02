@@ -783,7 +783,11 @@ def compact_regular_final(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
         after = plan_cut_line_quality(candidate, kerf_cm)
         if before is None or after is None:
             continue  # conservative: never invent a score for unproven shapes
-        if final_cut_quality_key(after) < final_cut_quality_key(before):
+        # Preserve the pre-existing no-regression contract for BOTH network
+        # length and fragments; internal continuity only breaks admissible ties.
+        if (after[0] <= before[0] + 0.05
+                and after[1] <= before[1]
+                and final_cut_quality_key(after) < final_cut_quality_key(before)):
             best = candidate
     return best
 
