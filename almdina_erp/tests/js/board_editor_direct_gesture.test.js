@@ -43,7 +43,7 @@ const {
     MOVE_THRESHOLD_PX,
 } = editor;
 
-assert.equal(LONG_PRESS_MS, 250);
+assert.equal(LONG_PRESS_MS, 0);
 assert.equal(MOVE_THRESHOLD_PX, 5);
 
 const canvasSource = fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8");
@@ -283,7 +283,7 @@ function makeHarness() {
     assert.equal(h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm, 100);
 }
 
-// Long-press then move: successful drag + one history command.
+// Immediate move after press: successful drag + one history command (no hold wait).
 {
     const h = makeHarness();
     const startLocal = h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm;
@@ -291,11 +291,14 @@ function makeHarness() {
         pieceId: 1,
         elementId: "e1",
     });
-    h.advance(LONG_PRESS_MS);
-    assert.equal(h.interaction.getPhase(), "armed");
-    assert.ok(h.stage.classList.contains("is-drag-armed"));
+    assert.equal(h.interaction.getPhase(), "pending");
+    assert.equal(h.stage.classList.contains("is-drag-armed"), false);
+    assert.equal(h.pendingTimers(), 0);
+    // Start drag well before the former 250ms long-press window.
+    h.advance(20);
     h.interaction.onPointerMove(h.pointer("pointermove", 100 + MOVE_THRESHOLD_PX + 1, 100));
     assert.equal(h.interaction.getPhase(), "dragging");
+    assert.ok(h.stage.classList.contains("is-dragging"));
     h.interaction.onPointerMove(h.pointer("pointermove", 160, 100));
     h.interaction.onPointerUp(h.pointer("pointerup", 160, 100));
     assert.equal(h.interaction.getPhase(), "idle");
@@ -306,7 +309,7 @@ function makeHarness() {
     assert.equal(h.interaction.consumeClickSuppression(), true);
 }
 
-// Early movement before long-press: no move, no late arm.
+// Sub-threshold jitter: stays pending; release selects without moving.
 {
     const h = makeHarness();
     const start = h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm;
@@ -314,43 +317,40 @@ function makeHarness() {
         pieceId: 1,
         elementId: "e1",
     });
-    h.interaction.onPointerMove(h.pointer("pointermove", 100 + MOVE_THRESHOLD_PX + 2, 100));
-    assert.equal(h.interaction.getPhase(), "aborted");
-    h.advance(LONG_PRESS_MS + 50);
-    assert.equal(h.interaction.getPhase(), "aborted");
-    h.interaction.onPointerMove(h.pointer("pointermove", 220, 100));
-    h.interaction.onPointerUp(h.pointer("pointerup", 220, 100));
+    h.interaction.onPointerMove(h.pointer("pointermove", 100 + MOVE_THRESHOLD_PX - 1, 100));
+    assert.equal(h.interaction.getPhase(), "pending");
+    h.interaction.onPointerUp(h.pointer("pointerup", 100 + MOVE_THRESHOLD_PX - 1, 100));
     assert.equal(h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm, start);
     assert.equal(h.history.state().canUndo, false);
     assert.equal(h.selections.length, 1);
 }
 
-// Long-press without movement: no history.
+// Press without movement: select only, no history, no armed cursor.
 {
     const h = makeHarness();
     h.interaction.beginPieceGesture("instance:pi-a", h.pointer("pointerdown", 100, 100), {
         pieceId: 1,
         elementId: "e1",
     });
-    h.advance(LONG_PRESS_MS);
-    assert.equal(h.interaction.getPhase(), "armed");
+    assert.equal(h.interaction.getPhase(), "pending");
+    assert.equal(h.stage.classList.contains("is-drag-armed"), false);
     h.interaction.onPointerUp(h.pointer("pointerup", 100, 100));
     assert.equal(h.history.state().canUndo, false);
     assert.equal(h.selections.length, 1);
 }
 
-// Release before long-press completes: timer cannot start a late drag.
+// Release without move: no timer can start a late drag.
 {
     const h = makeHarness();
     h.interaction.beginPieceGesture("instance:pi-a", h.pointer("pointerdown", 100, 100), {
         pieceId: 1,
         elementId: "e1",
     });
-    h.advance(LONG_PRESS_MS - 20);
+    h.advance(40);
     h.interaction.onPointerUp(h.pointer("pointerup", 100, 100));
     assert.equal(h.pendingTimers(), 0);
     assert.equal(h.interaction.getPhase(), "idle");
-    h.advance(LONG_PRESS_MS);
+    h.advance(250);
     assert.equal(h.interaction.getPhase(), "idle");
     assert.equal(h.history.state().canUndo, false);
 }
@@ -362,7 +362,6 @@ function makeHarness() {
         pieceId: 1,
         elementId: "e1",
     });
-    h.advance(LONG_PRESS_MS);
     h.interaction.cancel();
     assert.equal(h.interaction.getPhase(), "idle");
     assert.equal(h.pendingTimers(), 0);
@@ -377,7 +376,7 @@ function makeHarness() {
     assert.equal(h.pendingTimers(), 0);
 }
 
-// Pan intent cancels pending long-press without moving the piece.
+// Pan intent cancels pending gesture without moving the piece.
 {
     const h = makeHarness();
     const start = h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm;
@@ -387,27 +386,27 @@ function makeHarness() {
     });
     h.interaction.onPanIntent();
     assert.equal(h.interaction.getPhase(), "idle");
-    h.advance(LONG_PRESS_MS + 10);
+    h.advance(250);
     assert.equal(h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm, start);
 }
 
-// Locked/special piece: selectable, never arms drag.
+// Locked/special piece: selectable, never starts drag.
 {
     const h = makeHarness();
     h.interaction.beginPieceGesture("instance:pi-locked", h.pointer("pointerdown", 800, 800), {
         pieceId: 4,
         elementId: "e4",
     });
-    h.advance(LONG_PRESS_MS + 10);
     assert.equal(h.interaction.getPhase(), "pending");
     h.interaction.onPointerMove(h.pointer("pointermove", 860, 800));
+    assert.equal(h.interaction.getPhase(), "aborted");
     h.interaction.onPointerUp(h.pointer("pointerup", 860, 800));
     assert.equal(h.history.state().canUndo, false);
     assert.equal(h.selections.length, 1);
     assert.equal(Number(h.selections[0].pieceId), 4);
 }
 
-// Board long-press drag keeps local piece coords; short click selects sheet.
+// Board drag keeps local piece coords; short click selects sheet.
 {
     const h = makeHarness();
     h.interaction.beginBoardGesture(1, h.pointer("pointerdown", 10, 20));
@@ -417,7 +416,6 @@ function makeHarness() {
 
     const localBefore = h.store.snapshot().session.pieces["instance:pi-a"].local_x_mm;
     h.interaction.beginBoardGesture(1, h.pointer("pointerdown", 10, 20));
-    h.advance(LONG_PRESS_MS);
     h.interaction.onPointerMove(h.pointer("pointermove", 10 + MOVE_THRESHOLD_PX + 1, 20));
     // Keep the board clear of sheet 2 (origin 1100) after the world-space delta.
     h.interaction.onPointerMove(h.pointer("pointermove", 40, 20));
@@ -435,7 +433,6 @@ function makeHarness() {
         pieceId: 2,
         elementId: "e2",
     });
-    h.advance(LONG_PRESS_MS);
     h.interaction.onPointerMove(h.pointer("pointermove", 420 + MOVE_THRESHOLD_PX + 1, 420));
     h.interaction.onPointerMove(h.pointer("pointermove", 460, 420));
     h.interaction.onPointerUp(h.pointer("pointerup", 460, 420));

@@ -332,7 +332,6 @@ function pointer(type, x, y, extra) {
 const keysAtDown = dragStore.snapshot().selectedPieceKeys.slice();
 interaction.beginPieceGesture(keyA, pointer("pointerdown", 40, 40), { pieceId: 1 });
 assert.equal(JSON.stringify(dragStore.snapshot().selectedPieceKeys), JSON.stringify(keysAtDown));
-advance(LONG_PRESS_MS);
 interaction.onPointerMove(pointer("pointermove", 48, 40));
 interaction.cancel();
 assert.equal(dragStore.snapshot().dragPreview, null);
@@ -371,7 +370,6 @@ const gestureGap = MoveGeometry.pieceWorldOrigin(sessionBeforeMagnet, keyB).x
     - MoveGeometry.pieceWorldOrigin(sessionBeforeMagnet, keyA).x;
 magnet.beginPieceGesture(keyA, pointer("pointerdown", 100, 160, { pointerId: 2 }), { pieceId: 1 });
 assert.equal(JSON.stringify(dragStore.snapshot().selectedPieceKeys), JSON.stringify([keyA, keyB]));
-advance(LONG_PRESS_MS);
 magnet.onPointerMove(pointer("pointermove", 108, 160, { pointerId: 2 }));
 magnet.onPointerMove(pointer("pointermove", 188, 160, { pointerId: 2 }));
 const magnetPreview = dragStore.snapshot().dragPreview;

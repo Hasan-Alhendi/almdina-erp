@@ -257,7 +257,6 @@ const session = {
     // World metrics map client→world 1:1 with scale in metrics width/height matching svg.
     // piece world origin for a is (110,110). Start drag there, move near usable left.
     interaction.beginPieceGesture("instance:a", pointer(110, 110), { pieceId: 1 });
-    advance(editor.LONG_PRESS_MS);
     interaction.onPointerMove(pointer(110 + 6, 110));
     interaction.onPointerMove(pointer(20, 110));
     assert.equal(interaction.getPhase(), "dragging");
@@ -276,7 +275,6 @@ const session = {
 
     // Cancel clears guides.
     interaction.beginPieceGesture("instance:a", pointer(110, 110), { pieceId: 1 });
-    advance(editor.LONG_PRESS_MS);
     interaction.onPointerMove(pointer(116, 110));
     interaction.onPointerMove(pointer(20, 110));
     assert.equal(lastPreview.snapped, true);

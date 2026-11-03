@@ -1,7 +1,8 @@
 (() => {
     "use strict";
 
-    const LONG_PRESS_MS = 250;
+    // Kept at 0 for API compatibility; drag no longer waits on a hold timer.
+    const LONG_PRESS_MS = 0;
     const MOVE_THRESHOLD_PX = 5;
 
     function createMoveInteraction(options) {
@@ -33,7 +34,8 @@
             return typeof window.__ === "function" ? window.__(msg) : msg;
         }
 
-        // Single interaction owner: idle → pending → armed → dragging | aborted.
+        // Single interaction owner: idle → pending → dragging | aborted.
+        // Drag starts on the first real pointer move past MOVE_THRESHOLD_PX (no hold delay).
         let gesture = null;
         let suppressClick = false;
         let gestureToken = 0;
@@ -107,10 +109,10 @@
             if (onGesturePhase) onGesturePhase(phase, gesture);
             const stage = getStageEl && getStageEl();
             if (!stage) return;
-            stage.classList.toggle("is-drag-armed", phase === "armed");
+            stage.classList.remove("is-drag-armed");
             stage.classList.toggle("is-dragging", phase === "dragging");
-            if (phase === "armed" || phase === "dragging") {
-                stage.style.cursor = phase === "dragging" ? "grabbing" : "grab";
+            if (phase === "dragging") {
+                stage.style.cursor = "grabbing";
             } else if (!stage.classList.contains("is-panning")) {
                 stage.style.cursor = "";
             }
@@ -147,26 +149,45 @@
             }
         }
 
-        function armGesture() {
-            if (!gesture || gesture.phase !== "pending" || !gesture.canDrag) return;
-            gesture.phase = "armed";
-            gesture.timerId = null;
-            if (gesture.target && gesture.target.setPointerCapture) {
-                try {
-                    gesture.target.setPointerCapture(gesture.pointerId);
-                } catch (err) {
-                    /* ignore */
-                }
+        function capturePointer() {
+            if (!gesture || !gesture.target || !gesture.target.setPointerCapture) return;
+            try {
+                gesture.target.setPointerCapture(gesture.pointerId);
+            } catch (err) {
+                /* ignore */
             }
-            emitPhase("armed");
         }
 
-        function abortLongPress() {
-            if (!gesture || (gesture.phase !== "pending" && gesture.phase !== "armed")) return;
+        function abortPendingGesture() {
+            if (!gesture || gesture.phase !== "pending") return;
             clearTimer();
             gesture.phase = "aborted";
             gesture.canDrag = false;
             emitPhase("aborted");
+        }
+
+        function startDragging(event) {
+            if (!gesture || gesture.phase !== "pending" || !gesture.canDrag) return false;
+            if (gesture.blockReason) {
+                store.setDropMessage(__(gesture.blockReason));
+                suppressClick = true;
+                resetGesture();
+                if (event && event.preventDefault) event.preventDefault();
+                return false;
+            }
+            const world = clientToWorld(event.clientX, event.clientY);
+            if (!world) return false;
+            // Re-anchor world delta at first real move so the piece does not jump.
+            gesture.startWorldX = world.x;
+            gesture.startWorldY = world.y;
+            gesture.phase = "dragging";
+            gesture.moved = true;
+            gesture.lastDx = 0;
+            gesture.lastDy = 0;
+            emitPhase("dragging");
+            updatePreview(0, 0);
+            if (event && event.preventDefault) event.preventDefault();
+            return true;
         }
 
         function beginGesture(spec, event) {
@@ -233,15 +254,13 @@
             emitPhase("pending");
             bindWindowTracking();
 
+            // Capture immediately so moves outside the hit target still start a drag.
+            // No hold timer: first real movement past MOVE_THRESHOLD_PX begins dragging.
             if (gesture.canDrag) {
-                gesture.timerId = clock.setTimeout(() => {
-                    if (!gesture || gesture.token !== token) return;
-                    if (gesture.phase !== "pending") return;
-                    armGesture();
-                }, LONG_PRESS_MS);
+                capturePointer();
             }
 
-            // Do not preventDefault while pending: touch scrolling stays natural.
+            // Do not preventDefault while pending: click-to-select and light jitter stay natural.
             event.stopPropagation();
             return true;
         }
@@ -408,33 +427,12 @@
             ) || 0;
 
             if (gesture.phase === "pending") {
-                if (dist >= MOVE_THRESHOLD_PX) {
-                    abortLongPress();
-                }
-                return;
-            }
-
-            if (gesture.phase === "armed") {
                 if (dist < MOVE_THRESHOLD_PX) return;
-                if (gesture.blockReason) {
-                    store.setDropMessage(__(gesture.blockReason));
-                    suppressClick = true;
-                    resetGesture();
-                    event.preventDefault();
+                if (!gesture.canDrag) {
+                    abortPendingGesture();
                     return;
                 }
-                const world = clientToWorld(event.clientX, event.clientY);
-                if (!world) return;
-                // Re-anchor world delta at first real move so the piece does not jump.
-                gesture.startWorldX = world.x;
-                gesture.startWorldY = world.y;
-                gesture.phase = "dragging";
-                gesture.moved = true;
-                gesture.lastDx = 0;
-                gesture.lastDy = 0;
-                emitPhase("dragging");
-                updatePreview(0, 0);
-                event.preventDefault();
+                startDragging(event);
                 return;
             }
 
@@ -533,7 +531,7 @@
                 return;
             }
 
-            // Pending / armed / aborted without a completed drag: select only.
+            // Pending / aborted without a completed drag: select only.
             applySelection();
             resetGesture();
         }

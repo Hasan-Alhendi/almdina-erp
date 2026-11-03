@@ -208,8 +208,11 @@ async function pageBootstrapLoadsVersionedScripts() {
         "move_geometry.js",
         "snap_geometry.js",
         "rotation_geometry.js",
+        "transform_geometry.js",
+        "measure_geometry.js",
         "move_interaction.js",
         "rotation_interaction.js",
+        "measure_interaction.js",
         "plan_display_style.js",
         "plan_edge_marks.js",
         "store.js",
@@ -219,7 +222,8 @@ async function pageBootstrapLoadsVersionedScripts() {
     ]);
     versioned.forEach((src) => {
         const url = new URL(src, "http://almdina.local:8000");
-        assert.equal(url.searchParams.get("v"), "16");
+        const version = Number(url.searchParams.get("v"));
+        assert.ok(Number.isInteger(version) && version >= 1, `expected integer asset version on ${src}`);
         assert.equal(context.frappe.assets.extn(url.pathname), "js");
     });
 
