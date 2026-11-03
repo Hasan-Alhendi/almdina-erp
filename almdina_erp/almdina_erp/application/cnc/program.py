@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cnc.operations import (
 from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     PERIMETER_JOIN_CONNECTED,
     SHEET_PERIMETER_PATH_KEY,
+    connected_cut_path_order_keys,
     extract_connected_perimeter,
     normalize_perimeter_join_mode,
     polyline_segments,
@@ -645,10 +646,9 @@ def compile_sheet_program(
             uploaded=uploaded if isinstance(uploaded, Mapping) else None,
             blocked_path=blocked_path,
         )
-        cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
         try:
             path_execution_order = resolve_cut_path_sequence(
-                cut_keys,
+                connected_cut_path_order_keys(),
                 cut_path_sequence,
                 perimeter_early_confirmed=bool(perimeter_cut_early_confirmed),
             )

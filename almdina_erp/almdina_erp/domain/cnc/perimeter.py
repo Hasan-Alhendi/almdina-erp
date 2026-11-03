@@ -16,9 +16,14 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import OperationalFileE
 
 
 SHEET_PERIMETER_PATH_KEY = "cut_path:sheet_perimeter"
+CUT_PATH_INTERNAL_SEQUENCE_KEY = "cut_path:internals"
 PERIMETER_JOIN_SEPARATE = "separate"
 PERIMETER_JOIN_CONNECTED = "connected"
 POINT_QUANTUM_MM = 0.05
+CONNECTED_CUT_PATH_ORDER_KEYS = (
+    CUT_PATH_INTERNAL_SEQUENCE_KEY,
+    SHEET_PERIMETER_PATH_KEY,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -344,12 +349,46 @@ def remaining_segments_after_perimeter(
     return leftover
 
 
-def default_cut_path_sequence(path_keys: Sequence[str]) -> tuple[str, ...]:
-    keys = [str(key) for key in path_keys]
-    others = [key for key in keys if key != SHEET_PERIMETER_PATH_KEY]
+def connected_cut_path_order_keys() -> tuple[str, ...]:
+    """Stable reorder identities honored by compile/NC for connected perimeter."""
+
+    return CONNECTED_CUT_PATH_ORDER_KEYS
+
+
+def default_cut_path_sequence(path_keys: Sequence[str] | None = None) -> tuple[str, ...]:
+    """Perimeter runs after the internal CUT_PATH bucket by default."""
+
+    _ = path_keys  # retained for call-site compatibility
+    return CONNECTED_CUT_PATH_ORDER_KEYS
+
+
+def coerce_cut_path_sequence_request(
+    requested: Sequence[str] | None,
+) -> tuple[str, ...] | None:
+    """Return None for unset/empty; otherwise a canonical two-key order.
+
+    Legacy saved sequences that listed piece path keys are reduced to the
+    perimeter-early / perimeter-late contract the engine can actually honor.
+    Explicit non-empty sequences that cannot be interpreted are rejected.
+    """
+
+    if requested is None:
+        return None
+    keys = [str(item or "").strip() for item in requested if str(item or "").strip()]
+    if not keys:
+        return None
+    if len(keys) != len(set(keys)):
+        raise OperationalFileError("cut_path_sequence_invalid")
+    canonical = set(CONNECTED_CUT_PATH_ORDER_KEYS)
+    if set(keys) == canonical and len(keys) == 2:
+        if keys[0] not in canonical or keys[1] not in canonical:
+            raise OperationalFileError("cut_path_sequence_invalid")
+        return (keys[0], keys[1])
     if SHEET_PERIMETER_PATH_KEY in keys:
-        return tuple(others + [SHEET_PERIMETER_PATH_KEY])
-    return tuple(others)
+        if keys[0] == SHEET_PERIMETER_PATH_KEY:
+            return (SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY)
+        return CONNECTED_CUT_PATH_ORDER_KEYS
+    raise OperationalFileError("cut_path_sequence_invalid")
 
 
 def resolve_cut_path_sequence(
@@ -360,21 +399,14 @@ def resolve_cut_path_sequence(
 ) -> tuple[str, ...]:
     present_keys = [str(key) for key in present]
     present_set = set(present_keys)
-    if SHEET_PERIMETER_PATH_KEY not in present_set:
+    if SHEET_PERIMETER_PATH_KEY not in present_set and CUT_PATH_INTERNAL_SEQUENCE_KEY not in present_set:
         return tuple(present_keys)
-    if requested is None:
+    ordered = coerce_cut_path_sequence_request(requested)
+    if ordered is None:
         ordered = default_cut_path_sequence(present_keys)
-    else:
-        ordered_list: list[str] = []
-        for raw in requested:
-            key = str(raw or "").strip()
-            if key not in present_set or key in ordered_list:
-                raise OperationalFileError("cut_path_sequence_invalid")
-            ordered_list.append(key)
-        if set(ordered_list) != present_set:
-            raise OperationalFileError("cut_path_sequence_invalid")
-        ordered = tuple(ordered_list)
-    if ordered and ordered[0] == SHEET_PERIMETER_PATH_KEY and not perimeter_early_confirmed:
+    if set(ordered) != set(CONNECTED_CUT_PATH_ORDER_KEYS) or len(ordered) != 2:
+        raise OperationalFileError("cut_path_sequence_invalid")
+    if ordered[0] == SHEET_PERIMETER_PATH_KEY and not perimeter_early_confirmed:
         raise OperationalFileError("perimeter_cut_early_unconfirmed")
     return ordered
 
@@ -414,11 +446,15 @@ def prefer_uploaded_perimeter_polyline(
 
 
 __all__ = [
+    "CONNECTED_CUT_PATH_ORDER_KEYS",
+    "CUT_PATH_INTERNAL_SEQUENCE_KEY",
     "PERIMETER_JOIN_CONNECTED",
     "PERIMETER_JOIN_SEPARATE",
     "POINT_QUANTUM_MM",
     "PerimeterResult",
     "SHEET_PERIMETER_PATH_KEY",
+    "coerce_cut_path_sequence_request",
+    "connected_cut_path_order_keys",
     "default_cut_path_sequence",
     "edge_sets_equal",
     "extract_connected_perimeter",

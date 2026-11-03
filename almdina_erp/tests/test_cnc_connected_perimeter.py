@@ -15,7 +15,9 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     settings_fingerprint,
 )
 from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+    CUT_PATH_INTERNAL_SEQUENCE_KEY,
     SHEET_PERIMETER_PATH_KEY,
+    connected_cut_path_order_keys,
     edge_sets_equal,
     extract_connected_perimeter,
     polyline_segments,
@@ -227,22 +229,33 @@ def test_prefer_uploaded_closed_polyline():
 
 
 def test_sequence_defaults_perimeter_last_and_requires_early_confirm():
-    keys = ["cut_path:a:outer", "cut_path:b:outer", SHEET_PERIMETER_PATH_KEY]
+    keys = connected_cut_path_order_keys()
     ordered = resolve_cut_path_sequence(keys, None)
-    assert ordered[-1] == SHEET_PERIMETER_PATH_KEY
+    assert ordered == (CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY)
+    assert resolve_cut_path_sequence(keys, []) == ordered
     with pytest.raises(OperationalFileError) as exc:
         resolve_cut_path_sequence(
             keys,
-            [SHEET_PERIMETER_PATH_KEY, "cut_path:a:outer", "cut_path:b:outer"],
+            [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY],
             perimeter_early_confirmed=False,
         )
     assert exc.value.code == "perimeter_cut_early_unconfirmed"
     early = resolve_cut_path_sequence(
         keys,
-        [SHEET_PERIMETER_PATH_KEY, "cut_path:a:outer", "cut_path:b:outer"],
+        [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY],
         perimeter_early_confirmed=True,
     )
     assert early[0] == SHEET_PERIMETER_PATH_KEY
+    # Legacy piece-key sequences collapse to the perimeter-position contract.
+    legacy = resolve_cut_path_sequence(
+        keys,
+        ["cut_path:a:outer", SHEET_PERIMETER_PATH_KEY],
+        perimeter_early_confirmed=False,
+    )
+    assert legacy == ordered
+    with pytest.raises(OperationalFileError) as invalid:
+        resolve_cut_path_sequence(keys, ["cut_path:a:outer"], perimeter_early_confirmed=False)
+    assert invalid.value.code == "cut_path_sequence_invalid"
 
 
 def test_compile_separate_unchanged_and_connected_adds_one_perimeter():

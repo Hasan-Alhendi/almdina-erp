@@ -210,6 +210,7 @@ def build_operational_workspace(
     sheets: list[dict[str, Any]] = []
     from almdina_erp.almdina_erp.domain.cnc.perimeter import (
         PERIMETER_JOIN_CONNECTED,
+        connected_cut_path_order_keys,
         normalize_perimeter_join_mode,
         resolve_cut_path_sequence,
     )
@@ -230,22 +231,22 @@ def build_operational_workspace(
         order = merge_operation_order(catalog.operations, _saved_operation_keys(saved))
         confirmed = bool((saved or {}).get("cut_path_early_confirmed"))
         perimeter_early = bool((saved or {}).get("perimeter_cut_early_confirmed"))
-        cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
+        order_keys = connected_cut_path_order_keys()
         sequence = ()
         if join_mode == PERIMETER_JOIN_CONNECTED:
             try:
                 sequence = resolve_cut_path_sequence(
-                    cut_keys,
+                    order_keys,
                     (saved or {}).get("cut_path_sequence"),
                     perimeter_early_confirmed=perimeter_early,
                 )
             except OperationalFileError:
                 sequence = resolve_cut_path_sequence(
-                    cut_keys,
+                    order_keys,
                     None,
-                    perimeter_early_confirmed=True,
+                    perimeter_early_confirmed=False,
                 )
-                perimeter_early = True
+                perimeter_early = False
         saved_operations = {
             str(row.get("operation_key") or ""): row
             for row in (saved or {}).get("operations") or []
@@ -411,6 +412,7 @@ def prepare_sheet_settings(
     from almdina_erp.almdina_erp.domain.cnc.perimeter import (
         PERIMETER_JOIN_CONNECTED,
         PERIMETER_JOIN_SEPARATE,
+        connected_cut_path_order_keys,
         normalize_perimeter_join_mode,
         resolve_cut_path_sequence,
     )
@@ -444,17 +446,17 @@ def prepare_sheet_settings(
         perimeter_early = bool((existing or {}).get("perimeter_cut_early_confirmed"))
     else:
         perimeter_early = bool(perimeter_cut_early_confirmed)
-    cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
+    order_keys = connected_cut_path_order_keys()
     if join_mode == PERIMETER_JOIN_CONNECTED:
         if cut_path_sequence is None and existing is not None:
             sequence = resolve_cut_path_sequence(
-                cut_keys,
+                order_keys,
                 existing.get("cut_path_sequence"),
                 perimeter_early_confirmed=perimeter_early,
             )
         else:
             sequence = resolve_cut_path_sequence(
-                cut_keys,
+                order_keys,
                 cut_path_sequence,
                 perimeter_early_confirmed=perimeter_early,
             )

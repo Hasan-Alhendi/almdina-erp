@@ -270,13 +270,43 @@ def _snapshot_dict(raw: Any) -> dict[str, Any]:
 
 
 def _sequence_list(raw: Any) -> list[str]:
+    """Read a JSON sequence field as list[str]. Never return nested JSON text."""
+
+    if raw is None or raw == "":
+        return []
     if isinstance(raw, list):
-        return [str(item) for item in raw]
-    if isinstance(raw, str) and raw.strip():
-        parsed = json.loads(raw)
+        return [str(item) for item in raw if str(item or "").strip()]
+    if isinstance(raw, tuple):
+        return [str(item) for item in raw if str(item or "").strip()]
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        parsed = json.loads(text)
+        if isinstance(parsed, str):
+            # Guard against historically double-encoded payloads.
+            parsed = json.loads(parsed) if parsed.strip() else []
         if isinstance(parsed, list):
-            return [str(item) for item in parsed]
-    return []
+            return [str(item) for item in parsed if str(item or "").strip()]
+        raise frappe.ValidationError("Cut Path Sequence must be a JSON list.")
+    raise frappe.ValidationError("Cut Path Sequence must be a JSON list.")
+
+
+def _sequence_json(raw: Any) -> str:
+    """Encode a Python sequence as a single JSON list string for a Frappe JSON field."""
+
+    if raw is None or raw == "":
+        return "[]"
+    if isinstance(raw, str):
+        # Accept an already-encoded list; reject other shapes to avoid double encoding.
+        return json.dumps(_sequence_list(raw), ensure_ascii=True, separators=(",", ":"))
+    if isinstance(raw, (list, tuple)):
+        return json.dumps(
+            [str(item) for item in raw if str(item or "").strip()],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        )
+    raise frappe.ValidationError("Cut Path Sequence is not valid.")
 
 
 def read_simulation_nc_bytes(
@@ -526,10 +556,11 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
         "settings_fingerprint",
         "cut_path_early_confirmed",
         "perimeter_join_mode",
-        "cut_path_sequence",
         "perimeter_cut_early_confirmed",
     ):
         document.set(field, payload.get(field))
+    # Frappe JSON fields reject a raw Python list; persist one JSON string.
+    document.set("cut_path_sequence", _sequence_json(payload.get("cut_path_sequence")))
     document.set("operations", [])
     document.set("paths", [])
     for row in payload.get("operations") or []:

@@ -176,15 +176,25 @@
     }
 
     const SHEET_PERIMETER_PATH_KEY = "cut_path:sheet_perimeter";
+    const CUT_PATH_INTERNAL_SEQUENCE_KEY = "cut_path:internals";
 
     function normalizePerimeterJoinMode(value) {
         return String(value || "").trim().toLowerCase() === "connected" ? "connected" : "separate";
     }
 
-    function defaultCutPathSequence(pathKeys) {
-        const keys = (pathKeys || []).map(key => String(key || "")).filter(Boolean);
-        const others = keys.filter(key => key !== SHEET_PERIMETER_PATH_KEY);
-        return keys.includes(SHEET_PERIMETER_PATH_KEY) ? others.concat([SHEET_PERIMETER_PATH_KEY]) : others.slice();
+    function defaultCutPathSequence() {
+        return [CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY];
+    }
+
+    function normalizeCutPathSequence(sequence) {
+        const keys = (Array.isArray(sequence) ? sequence : [])
+            .map(key => String(key || "").trim())
+            .filter(Boolean);
+        if (!keys.length) return defaultCutPathSequence();
+        if (keys[0] === SHEET_PERIMETER_PATH_KEY) {
+            return [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY];
+        }
+        return defaultCutPathSequence();
     }
 
     function perimeterIsEarly(sequence) {
@@ -193,49 +203,88 @@
             && String(sequence[0] || "") === SHEET_PERIMETER_PATH_KEY;
     }
 
-    function syncCutPathSequence(state, physical) {
+    function syncCutPathSequence(state) {
         if (normalizePerimeterJoinMode(state.perimeterJoinMode) !== "connected") {
             state.cutPathSequence = [];
             state.perimeterEarlyConfirmed = false;
             return;
         }
-        const keys = [];
-        (physical || []).forEach(path => {
-            if (String(path.operation_key || "") !== "cut_path") return;
-            const key = String(path.path_key || "");
-            if (!key || keys.includes(key)) return;
-            keys.push(key);
-        });
-        if (!keys.includes(SHEET_PERIMETER_PATH_KEY)
-            && (physical || []).some(path => path.is_sheet_perimeter || path.path_key === SHEET_PERIMETER_PATH_KEY)) {
-            keys.push(SHEET_PERIMETER_PATH_KEY);
-        }
-        const previous = Array.isArray(state.cutPathSequence) ? state.cutPathSequence.slice() : [];
-        if (!previous.length) {
-            state.cutPathSequence = defaultCutPathSequence(keys);
-        } else {
-            const next = previous.filter(key => keys.includes(key));
-            keys.forEach(key => {
-                if (!next.includes(key)) next.push(key);
-            });
-            state.cutPathSequence = next;
-        }
+        state.cutPathSequence = normalizeCutPathSequence(state.cutPathSequence);
         if (!perimeterIsEarly(state.cutPathSequence)) {
             state.perimeterEarlyConfirmed = false;
         }
     }
 
     function moveCutPathSequence(state, pathKey, delta) {
-        const sequence = Array.isArray(state.cutPathSequence) ? state.cutPathSequence.slice() : [];
-        const index = sequence.indexOf(pathKey);
-        if (index < 0) return state;
-        const next = index + Number(delta || 0);
-        if (next < 0 || next >= sequence.length) return state;
-        sequence.splice(index, 1);
-        sequence.splice(next, 0, pathKey);
-        state.cutPathSequence = sequence;
-        if (!perimeterIsEarly(sequence)) state.perimeterEarlyConfirmed = false;
+        if (String(pathKey || "") !== SHEET_PERIMETER_PATH_KEY) return state;
+        syncCutPathSequence(state);
+        const early = Number(delta || 0) < 0;
+        state.cutPathSequence = early
+            ? [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY]
+            : defaultCutPathSequence();
+        if (!perimeterIsEarly(state.cutPathSequence)) {
+            state.perimeterEarlyConfirmed = false;
+        }
         return state;
+    }
+
+    function applyPerimeterJoinMode(frm, dialog, workspace, sheet, state, mode) {
+        state.perimeterJoinMode = normalizePerimeterJoinMode(mode);
+        if (state.perimeterJoinMode === "connected") {
+            state.cutPathSequence = defaultCutPathSequence();
+        } else {
+            state.cutPathSequence = [];
+            state.perimeterEarlyConfirmed = false;
+        }
+        state.expanded.cut_path = true;
+        const body = dialogRoot(dialog);
+        const article = body && body.querySelector('.dco-operational-layer[data-layer="cut_path"]');
+        if (article) {
+            paintPerimeterJoinControls(article, state, Boolean(workspace.can_prepare));
+            const paths = article.querySelector(".dco-operational-layer__paths");
+            if (paths) paths.hidden = false;
+            const toggle = article.querySelector("[data-toggle-layer]");
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "true");
+                toggle.textContent = translate("Hide paths");
+            }
+        }
+        requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
+    }
+
+    function paintPerimeterJoinControls(article, state, canPrepare) {
+        if (!article) return;
+        const markup = perimeterJoinControlsMarkup(state, canPrepare);
+        const existing = article.querySelector("[data-perimeter-join]");
+        if (!existing) {
+            const head = article.querySelector(".dco-operational-layer__head");
+            if (head) head.insertAdjacentHTML("afterend", markup);
+            return;
+        }
+        const joinMode = normalizePerimeterJoinMode(state.perimeterJoinMode);
+        existing.querySelectorAll("[data-perimeter-join-mode]").forEach(input => {
+            input.checked = String(input.value || "") === joinMode;
+            input.disabled = !canPrepare;
+        });
+        const early = joinMode === "connected" && perimeterIsEarly(state.cutPathSequence);
+        let warning = existing.querySelector("[data-perimeter-early-warning]");
+        if (early && !warning) {
+            existing.insertAdjacentHTML(
+                "beforeend",
+                `<div data-perimeter-early-warning>
+                    <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."))}</p>
+                    <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${canPrepare ? "" : " disabled"}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before the other CUT_PATH paths."))}</label>
+                </div>`
+            );
+        } else if (!early && warning) {
+            warning.remove();
+        } else if (warning) {
+            const confirm = warning.querySelector("[data-perimeter-confirm]");
+            if (confirm) {
+                confirm.checked = Boolean(state.perimeterEarlyConfirmed);
+                confirm.disabled = !canPrepare;
+            }
+        }
     }
 
     function sheetState(sheet) {
@@ -258,13 +307,7 @@
         });
         const joinMode = normalizePerimeterJoinMode(sheet.perimeter_join_mode);
         const sequence = joinMode === "connected"
-            ? (Array.isArray(sheet.cut_path_sequence) && sheet.cut_path_sequence.length
-                ? sheet.cut_path_sequence.map(item => String(item || "")).filter(Boolean)
-                : defaultCutPathSequence(
-                    (sheet.paths || [])
-                        .filter(path => path.operation_key === "cut_path")
-                        .map(path => path.path_key)
-                ))
+            ? normalizeCutPathSequence(sheet.cut_path_sequence)
             : [];
         return {
             operations,
@@ -275,7 +318,8 @@
             confirmed: Boolean(sheet.cut_path_early_confirmed),
             perimeterJoinMode: joinMode,
             cutPathSequence: sequence,
-            perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
+            perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed)
+                && perimeterIsEarly(sequence),
             expanded: {},
             customizing: {},
             selectedPathKey: "",
@@ -560,8 +604,10 @@
         const disabled = canPrepare ? "" : " disabled";
         const early = joinMode === "connected" && perimeterIsEarly(state.cutPathSequence);
         const warning = early
-            ? `<p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."))}</p>
-                <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before the other CUT_PATH paths."))}</label>`
+            ? `<div data-perimeter-early-warning>
+                <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."))}</p>
+                <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before the other CUT_PATH paths."))}</label>
+               </div>`
             : "";
         return `<fieldset class="dco-operational-perimeter" data-perimeter-join>
             <legend>${escapeHtml(translate("Sheet perimeter cut method"))}</legend>
@@ -850,169 +896,204 @@
         const body = dialogRoot(dialog);
         if (!body) return;
         const canPrepare = Boolean(workspace.can_prepare);
+        dialog._almdinaSheet = { frm, workspace, sheet, state, board };
         const preview = body.querySelector("[data-sheet-preview]");
         syncSheetFooter(dialog, workspace, sheet, state);
         requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
 
+        function liveContext() {
+            return dialog._almdinaSheet || { frm, workspace, sheet, state, board };
+        }
+
         function refreshSelection() {
+            const live = liveContext();
             const selection = body.querySelector(".dco-operational-sheet__selection");
-            if (selection) selection.textContent = selectionText(workspace, sheet, state);
-            highlightCutPreview(preview, state);
+            if (selection) selection.textContent = selectionText(live.workspace, live.sheet, live.state);
+            const livePreview = body.querySelector("[data-sheet-preview]") || preview;
+            highlightCutPreview(livePreview, live.state);
             body.querySelectorAll(".dco-operational-path").forEach(row => {
                 const executionId = row.getAttribute("data-execution-path-id");
                 if (executionId) {
-                    row.classList.toggle("is-selected", executionId === state.selectedExecutionPathId);
+                    row.classList.toggle("is-selected", executionId === live.state.selectedExecutionPathId);
                     return;
                 }
-                row.classList.toggle("is-selected", row.getAttribute("data-path-key") === state.selectedPathKey);
+                row.classList.toggle("is-selected", row.getAttribute("data-path-key") === live.state.selectedPathKey);
             });
         }
 
-        body.addEventListener("click", event => {
-            const target = event.target;
-            if (!target || typeof target.closest !== "function") return;
-            const customize = target.closest("[data-customize-path]");
-            if (customize) {
-                const pathKey = customize.getAttribute("data-customize-path");
-                state.customizing[pathKey] = true;
-                const row = customize.closest(".dco-operational-path");
-                const operationKey = row && row.getAttribute("data-path-operation");
-                if (operationKey) state.expanded[operationKey] = true;
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-                return;
-            }
-            const reset = target.closest("[data-reset-path]");
-            if (reset) {
-                clearPathPreset(state, reset.getAttribute("data-reset-path"));
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-                return;
-            }
-            const listHit = target.closest("[data-select-execution]");
-            if (listHit) {
-                applyExecutionSelection(
-                    body,
-                    workspace,
-                    sheet,
-                    state,
-                    listHit.getAttribute("data-select-execution")
-                );
-                return;
-            }
-            const settingsHit = target.closest("[data-select-path]");
-            if (settingsHit && !settingsHit.getAttribute("data-select-execution")) {
-                state.selectedPathKey = settingsHit.getAttribute("data-select-path") || "";
-                state.selectedExecutionPathId = "";
-                refreshSelection();
-                return;
-            }
-            const previewHit = target.closest("[data-sheet-preview] [data-execution-path-id]");
-            if (previewHit) {
-                applyExecutionSelection(
-                    body,
-                    workspace,
-                    sheet,
-                    state,
-                    previewHit.getAttribute("data-execution-path-id")
-                );
-            }
-        });
-        body.querySelectorAll("[data-toggle-layer]").forEach(button => {
-            button.addEventListener("click", () => {
-                const key = button.getAttribute("data-toggle-layer");
-                state.expanded[key] = !state.expanded[key];
-                const article = body.querySelector(`.dco-operational-layer[data-layer="${key}"]`);
-                const paths = article && article.querySelector(".dco-operational-layer__paths");
-                if (paths) paths.hidden = !state.expanded[key];
-                button.setAttribute("aria-expanded", state.expanded[key] ? "true" : "false");
-                button.textContent = translate(state.expanded[key] ? "Hide paths" : "Show paths");
+        if (!body._cncSheetInteractionsBound) {
+            body._cncSheetInteractionsBound = true;
+            body.addEventListener("change", event => {
+                const live = liveContext();
+                const target = event.target;
+                if (!live || !live.state || !target || typeof target.getAttribute !== "function") return;
+                const joinMode = target.getAttribute("data-perimeter-join-mode");
+                if (joinMode) {
+                    if (!target.checked) return;
+                    applyPerimeterJoinMode(
+                        live.frm,
+                        dialog,
+                        live.workspace,
+                        live.sheet,
+                        live.state,
+                        joinMode
+                    );
+                    return;
+                }
+                if (target.hasAttribute("data-perimeter-confirm")) {
+                    live.state.perimeterEarlyConfirmed = Boolean(target.checked);
+                    return;
+                }
+                if (target.hasAttribute("data-cut-confirm")) {
+                    live.state.confirmed = Boolean(target.checked);
+                }
             });
-        });
-        mountPresetControls(frm, dialog, workspace, sheet, state, board);
-        if (!canPrepare) return;
-
-        body.querySelectorAll("[data-restore-layer]").forEach(button => {
-            button.addEventListener("click", () => {
-                const key = button.getAttribute("data-restore-layer");
-                restoreLayerPreset(state, key);
-                onPresetChosen(frm, dialog, workspace, sheet, state, board, () => {}, state.operations[key] || "", {
-                    layers: [key],
-                    skipApply: true,
-                });
+            body.addEventListener("click", event => {
+                const live = liveContext();
+                const target = event.target;
+                if (!live || !live.state || !target || typeof target.closest !== "function") return;
+                const moveCut = target.closest("[data-move-cut-path]");
+                if (moveCut) {
+                    const key = moveCut.getAttribute("data-cut-path-key");
+                    const direction = moveCut.getAttribute("data-move-cut-path") === "earlier" ? -1 : 1;
+                    moveCutPathSequence(live.state, key, direction);
+                    const article = body.querySelector('.dco-operational-layer[data-layer="cut_path"]');
+                    if (article) {
+                        paintPerimeterJoinControls(article, live.state, Boolean(live.workspace.can_prepare));
+                        const container = article.querySelector(".dco-operational-layer__paths");
+                        if (container && live.state.program) {
+                            syncPhysicalPathList(body, live.workspace, live.sheet, live.state, live.state.program, dialog);
+                        }
+                    }
+                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
+                    return;
+                }
+                const customize = target.closest("[data-customize-path]");
+                if (customize) {
+                    const pathKey = customize.getAttribute("data-customize-path");
+                    live.state.customizing[pathKey] = true;
+                    const row = customize.closest(".dco-operational-path");
+                    const operationKey = row && row.getAttribute("data-path-operation");
+                    if (operationKey) live.state.expanded[operationKey] = true;
+                    refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
+                    return;
+                }
+                const reset = target.closest("[data-reset-path]");
+                if (reset) {
+                    clearPathPreset(live.state, reset.getAttribute("data-reset-path"));
+                    refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
+                    return;
+                }
+                const listHit = target.closest("[data-select-execution]");
+                if (listHit) {
+                    applyExecutionSelection(
+                        body,
+                        live.workspace,
+                        live.sheet,
+                        live.state,
+                        listHit.getAttribute("data-select-execution")
+                    );
+                    return;
+                }
+                const settingsHit = target.closest("[data-select-path]");
+                if (settingsHit && !settingsHit.getAttribute("data-select-execution")) {
+                    live.state.selectedPathKey = settingsHit.getAttribute("data-select-path") || "";
+                    live.state.selectedExecutionPathId = "";
+                    refreshSelection();
+                    return;
+                }
+                const previewHit = target.closest("[data-sheet-preview] [data-execution-path-id]");
+                if (previewHit) {
+                    applyExecutionSelection(
+                        body,
+                        live.workspace,
+                        live.sheet,
+                        live.state,
+                        previewHit.getAttribute("data-execution-path-id")
+                    );
+                    return;
+                }
+                const toggle = target.closest("[data-toggle-layer]");
+                if (toggle) {
+                    const key = toggle.getAttribute("data-toggle-layer");
+                    live.state.expanded[key] = !live.state.expanded[key];
+                    const article = body.querySelector(`.dco-operational-layer[data-layer="${key}"]`);
+                    const paths = article && article.querySelector(".dco-operational-layer__paths");
+                    if (paths) paths.hidden = !live.state.expanded[key];
+                    toggle.setAttribute("aria-expanded", live.state.expanded[key] ? "true" : "false");
+                    toggle.textContent = translate(live.state.expanded[key] ? "Hide paths" : "Show paths");
+                    return;
+                }
+                const restoreLayer = target.closest("[data-restore-layer]");
+                if (restoreLayer && live.workspace.can_prepare) {
+                    const key = restoreLayer.getAttribute("data-restore-layer");
+                    restoreLayerPreset(live.state, key);
+                    onPresetChosen(
+                        live.frm,
+                        dialog,
+                        live.workspace,
+                        live.sheet,
+                        live.state,
+                        live.board,
+                        () => {},
+                        live.state.operations[key] || "",
+                        { layers: [key], skipApply: true }
+                    );
+                    return;
+                }
+                const restoreSheet = target.closest("[data-restore-sheet]");
+                if (restoreSheet && live.workspace.can_prepare) {
+                    restoreFactoryPresets(live.state);
+                    (live.state.order || []).forEach(key => paintLayerMeta(body, live.workspace, live.sheet, live.state, key));
+                    remountPresetValues(dialog, live.workspace, live.sheet, live.state);
+                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
+                    return;
+                }
+                const moveOp = target.closest("[data-move]");
+                if (moveOp && live.workspace.can_prepare) {
+                    const item = moveOp.closest("[data-operation-key]");
+                    const key = item && item.getAttribute("data-operation-key");
+                    const direction = moveOp.getAttribute("data-move");
+                    if (!key) return;
+                    moveOperation(live.state, key, direction === "earlier" ? -1 : 1);
+                    refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
+                    const current = dialogRoot(dialog);
+                    const moved = current && current.querySelector(`[data-operation-key="${key}"] [data-move="${direction}"]`);
+                    if (moved) moved.focus();
+                }
             });
-        });
-        const restoreSheet = body.querySelector("[data-restore-sheet]");
-        if (restoreSheet) {
-            restoreSheet.addEventListener("click", () => {
-                restoreFactoryPresets(state);
-                const bodyLive = dialogRoot(dialog);
-                (state.order || []).forEach(key => paintLayerMeta(bodyLive, workspace, sheet, state, key));
-                remountPresetValues(dialog, workspace, sheet, state);
-                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
-            });
-        }
-        body.querySelectorAll("[data-move]").forEach(button => {
-            button.addEventListener("click", () => {
-                const item = button.closest("[data-operation-key]");
-                const key = item.getAttribute("data-operation-key");
-                const direction = button.getAttribute("data-move");
-                moveOperation(state, key, direction === "earlier" ? -1 : 1);
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-                const current = dialogRoot(dialog);
-                const moved = current && current.querySelector(`[data-operation-key="${key}"] [data-move="${direction}"]`);
-                if (moved) moved.focus();
-            });
-        });
-        let dragKey = "";
-        body.querySelectorAll(".dco-operational-order__item").forEach(item => {
-            item.addEventListener("dragstart", () => {
-                dragKey = item.getAttribute("data-operation-key");
+            let dragKey = "";
+            body.addEventListener("dragstart", event => {
+                const item = event.target && event.target.closest && event.target.closest(".dco-operational-order__item");
+                if (!item) return;
+                dragKey = item.getAttribute("data-operation-key") || "";
                 item.classList.add("is-dragging");
             });
-            item.addEventListener("dragend", () => item.classList.remove("is-dragging"));
-            item.addEventListener("dragover", event => event.preventDefault());
-            item.addEventListener("drop", event => {
+            body.addEventListener("dragend", event => {
+                const item = event.target && event.target.closest && event.target.closest(".dco-operational-order__item");
+                if (item) item.classList.remove("is-dragging");
+            });
+            body.addEventListener("dragover", event => {
+                if (event.target && event.target.closest && event.target.closest(".dco-operational-order__item")) {
+                    event.preventDefault();
+                }
+            });
+            body.addEventListener("drop", event => {
+                const live = liveContext();
+                const item = event.target && event.target.closest && event.target.closest(".dco-operational-order__item");
+                if (!live || !item) return;
                 event.preventDefault();
                 const target = item.getAttribute("data-operation-key");
                 if (!dragKey || dragKey === target) return;
-                const next = state.order.filter(key => key !== dragKey);
+                const next = live.state.order.filter(key => key !== dragKey);
                 next.splice(next.indexOf(target), 0, dragKey);
-                state.order = next;
-                if (!cutPathIsEarly(next)) state.confirmed = false;
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
-        const confirm = body.querySelector("[data-cut-confirm]");
-        if (confirm) {
-            confirm.addEventListener("change", () => {
-                state.confirmed = confirm.checked;
+                live.state.order = next;
+                if (!cutPathIsEarly(next)) live.state.confirmed = false;
+                refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
             });
         }
-        body.querySelectorAll("[data-perimeter-join-mode]").forEach(input => {
-            input.addEventListener("change", () => {
-                if (!input.checked) return;
-                state.perimeterJoinMode = normalizePerimeterJoinMode(input.value);
-                if (state.perimeterJoinMode !== "connected") {
-                    state.cutPathSequence = [];
-                    state.perimeterEarlyConfirmed = false;
-                }
-                state.expanded.cut_path = true;
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
-        const perimeterConfirm = body.querySelector("[data-perimeter-confirm]");
-        if (perimeterConfirm) {
-            perimeterConfirm.addEventListener("change", () => {
-                state.perimeterEarlyConfirmed = perimeterConfirm.checked;
-            });
-        }
-        body.querySelectorAll("[data-move-cut-path]").forEach(button => {
-            button.addEventListener("click", () => {
-                const key = button.getAttribute("data-cut-path-key");
-                const direction = button.getAttribute("data-move-cut-path") === "earlier" ? -1 : 1;
-                moveCutPathSequence(state, key, direction);
-                refreshDialog(frm, dialog, workspace, sheet, state, board);
-            });
-        });
+        mountPresetControls(frm, dialog, workspace, sheet, state, board);
+        if (!canPrepare) return;
     }
 
     function moveOperation(state, key, direction) {
@@ -1218,7 +1299,9 @@
             viewed_plan_token: `${workspace.cutting_plan}::${workspace.plan_revision}`,
             operation_sources: state.sources || {},
             perimeter_join_mode: joinMode,
-            cut_path_sequence: joinMode === "connected" ? (state.cutPathSequence || []) : [],
+            cut_path_sequence: joinMode === "connected"
+                ? normalizeCutPathSequence(state.cutPathSequence)
+                : null,
             perimeter_cut_early_confirmed: joinMode === "connected" && state.perimeterEarlyConfirmed ? 1 : 0,
         };
     }
@@ -2367,16 +2450,14 @@
                 : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
                     ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`);
         const selectedClass = path.execution_path_id === state.selectedExecutionPathId ? " is-selected" : "";
-        const sequence = Array.isArray(state.cutPathSequence) ? state.cutPathSequence : [];
-        const sequenceIndex = sequence.indexOf(path.path_key);
+        const early = perimeterIsEarly(state.cutPathSequence);
         const showSequence = normalizePerimeterJoinMode(state.perimeterJoinMode) === "connected"
             && isSheetPerimeterPath(path)
-            && sequenceIndex >= 0
             && canPrepare;
         const sequenceControls = showSequence
             ? `<span class="dco-operational-path__sequence">
-                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="earlier" data-cut-path-key="${escapeHtml(path.path_key)}"${sequenceIndex === 0 ? " disabled" : ""} title="${escapeHtml(translate("Move earlier"))}">${orderMoveIcon("up-line")}</button>
-                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="later" data-cut-path-key="${escapeHtml(path.path_key)}"${sequenceIndex >= sequence.length - 1 ? " disabled" : ""} title="${escapeHtml(translate("Move later"))}">${orderMoveIcon("down-line")}</button>
+                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="earlier" data-cut-path-key="${escapeHtml(SHEET_PERIMETER_PATH_KEY)}"${early ? " disabled" : ""} title="${escapeHtml(translate("Move earlier"))}">${orderMoveIcon("up-line")}</button>
+                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="later" data-cut-path-key="${escapeHtml(SHEET_PERIMETER_PATH_KEY)}"${!early ? " disabled" : ""} title="${escapeHtml(translate("Move later"))}">${orderMoveIcon("down-line")}</button>
                </span>`
             : "";
         return `<div class="dco-operational-path${custom ? " is-custom" : ""}${selectedClass}${isSheetPerimeterPath(path) ? " is-sheet-perimeter" : ""}" data-path-key="${escapeHtml(path.path_key)}" data-execution-path-id="${escapeHtml(path.execution_path_id)}" data-path-number="${path.path_number}" data-path-operation="${escapeHtml(path.operation_key)}" data-custom="${custom ? "1" : "0"}" data-sheet-perimeter="${isSheetPerimeterPath(path) ? "1" : "0"}">
@@ -2413,7 +2494,7 @@
             const container = article.querySelector(".dco-operational-layer__paths");
             if (!container) return;
             const rows = physical.filter(item => item.operation_key === key);
-            if (key === "cut_path") syncCutPathSequence(state, physical);
+            if (key === "cut_path") syncCutPathSequence(state);
             container.innerHTML = rows.map(path => {
                 const ownsSettings = Boolean(path.path_key) && !owned.has(path.path_key);
                 if (path.path_key) owned.add(path.path_key);
@@ -2422,13 +2503,7 @@
             const count = article.querySelector(".dco-operational-layer__head span");
             if (count) count.textContent = translate("{0} paths", [rows.length]);
             if (key === "cut_path") {
-                const existing = article.querySelector("[data-perimeter-join]");
-                const markup = perimeterJoinControlsMarkup(state, Boolean(workspace.can_prepare));
-                if (existing) existing.outerHTML = markup;
-                else {
-                    const head = article.querySelector(".dco-operational-layer__head");
-                    if (head) head.insertAdjacentHTML("afterend", markup);
-                }
+                paintPerimeterJoinControls(article, state, Boolean(workspace.can_prepare));
             }
         });
         const selection = body.querySelector(".dco-operational-sheet__selection");
@@ -2886,14 +2961,19 @@
         sheetCardActions,
         sheetState,
         SHEET_PERIMETER_PATH_KEY,
+        CUT_PATH_INTERNAL_SEQUENCE_KEY,
         normalizePerimeterJoinMode,
         defaultCutPathSequence,
+        normalizeCutPathSequence,
         perimeterIsEarly,
         moveCutPathSequence,
         syncCutPathSequence,
+        applyPerimeterJoinMode,
+        paintPerimeterJoinControls,
         pathDisplayLabel,
         isSheetPerimeterPath,
         perimeterJoinControlsMarkup,
+        sheetGenerateArgs,
         applyLayerPreset,
         restoreLayerPreset,
         restoreFactoryPresets,

@@ -615,20 +615,25 @@ def build_board_program(
                 )
             )
 
-    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        CUT_PATH_INTERNAL_SEQUENCE_KEY,
+        SHEET_PERIMETER_PATH_KEY,
+    )
 
     ordered_path_keys = [str(key) for key in (path_execution_order or ())]
     execution_rank = {key: index for index, key in enumerate(ordered_path_keys)}
     perimeter_rank = execution_rank.get(SHEET_PERIMETER_PATH_KEY)
+    internal_rank = execution_rank.get(CUT_PATH_INTERNAL_SEQUENCE_KEY)
 
     def _path_sort_rank(path: CncToolpath) -> int:
-        if perimeter_rank is None:
+        if perimeter_rank is None and internal_rank is None:
             return execution_rank.get(path.path_key, len(execution_rank))
         if path.path_key == SHEET_PERIMETER_PATH_KEY:
-            return perimeter_rank
+            return perimeter_rank if perimeter_rank is not None else len(execution_rank)
         if path.operation_key == "cut_path":
-            # Leftover internal cuts lose catalog path keys after perimeter join.
-            # Honor only whether the perimeter runs first or after the other cuts.
+            # Stable contract: internals share one bucket; only perimeter moves.
+            if internal_rank is not None:
+                return internal_rank
             return 1 if perimeter_rank == 0 else 0
         return execution_rank.get(path.path_key, len(execution_rank) + 1)
 

@@ -216,12 +216,17 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
 
 
 def _parse_optional_sequence(raw: str | list[Any] | None) -> list[str] | None:
+    """None/empty mean 'use default'. A non-empty list is an explicit custom order."""
+
     if raw is None:
+        return None
+    if isinstance(raw, str) and not raw.strip():
         return None
     parsed = frappe.parse_json(raw) if isinstance(raw, str) else list(raw)
     if not isinstance(parsed, list):
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
-    return [str(item) for item in parsed]
+    items = [str(item) for item in parsed if str(item or "").strip()]
+    return items or None
 
 
 @frappe.whitelist()
