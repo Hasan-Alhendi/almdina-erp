@@ -55,6 +55,9 @@
                 usable_length_mm: Math.max(1, heightMm - trimY * 2),
                 title_band_mm: TITLE_BAND_MM,
                 rotation_deg: 0,
+                flip_h: false,
+                flip_v: false,
+                mirrored: false,
                 user_moved: false,
             };
         });
@@ -112,6 +115,9 @@
                         : (geometryOk ? null : "incomplete_geometry")),
                 // Session edit angle from the as-loaded pose (not source grain).
                 rotation_deg: 0,
+                flip_h: false,
+                flip_v: false,
+                mirrored: false,
                 source_rotated_dims: Boolean(piece.source_rotated_dims || placement.rotated),
                 source_orientation_applied: piece.source_orientation_applied !== false,
                 apply_rotated_to_geometry: false,
@@ -300,6 +306,9 @@
                 local_x_mm: round4(piece.local_x_mm),
                 local_y_mm: round4(piece.local_y_mm),
                 rotation_deg: round4(piece.rotation_deg),
+                flip_h: piece.flip_h === true,
+                flip_v: piece.flip_v === true,
+                mirrored: piece.mirrored === true,
                 distribution: excluded ? "excluded" : "active",
                 exclusion_reason: excluded ? (piece.exclusion_reason || null) : null,
                 glass_host_piece_id: piece.glass_host_piece_id == null || piece.glass_host_piece_id === ""
@@ -333,6 +342,7 @@
         const editor = window.AlmdinaBoardEditor || {};
         const MoveGeometry = editor.MoveGeometry;
         const RotationGeometry = editor.RotationGeometry;
+        const TransformGeometry = editor.TransformGeometry;
         if (!session || !layout || !Array.isArray(layout.pieces) || !MoveGeometry || !RotationGeometry) {
             return { ok: false, code: "invalid_layout" };
         }
@@ -356,13 +366,22 @@
         Object.keys(next.pieces).forEach((key) => {
             next.pieces[key].glass_host_key = null;
             next.pieces[key].glass_host_piece_id = null;
+            next.pieces[key].flip_h = false;
+            next.pieces[key].flip_v = false;
+            next.pieces[key].mirrored = false;
         });
         rows.forEach((row) => {
             const key = byInstance[String(row.piece_instance_id)];
+            if (TransformGeometry && typeof TransformGeometry.applyDraftParityToEntry === "function") {
+                TransformGeometry.applyDraftParityToEntry(next.pieces[key], row);
+            }
             const angle = Number(row.rotation_deg) || 0;
             if (Math.abs(angle - Number(next.pieces[key].rotation_deg || 0)) < 1e-4) return;
             const rotated = RotationGeometry.previewPieceRotation(next, key, angle);
             next.pieces[key] = rotated.pieces[key];
+            next.pieces[key].flip_h = row.flip_h === true;
+            next.pieces[key].flip_v = row.flip_v === true;
+            next.pieces[key].mirrored = row.mirrored === true;
         });
         rows.forEach((row) => {
             const piece = next.pieces[byInstance[String(row.piece_instance_id)]];

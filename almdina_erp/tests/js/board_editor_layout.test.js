@@ -197,12 +197,37 @@ assert.match(canvasHost.innerHTML, /#icon-refresh-ccw/);
 assert.match(canvasHost.innerHTML, /#icon-magnet/);
 assert.match(canvasHost.innerHTML, /#icon-trash-2/);
 assert.match(canvasHost.innerHTML, /#icon-square-x/);
-assert.match(canvasHost.innerHTML, /#icon-arrow-left/);
-assert.match(canvasHost.innerHTML, /#icon-save/);
-assert.match(canvasHost.innerHTML, /#icon-clipboard-check/);
-assert.match(canvasHost.innerHTML, /data-abe-save-state="clean"/);
-assert.match(canvasHost.innerHTML, /No unsaved changes/);
+assert.match(canvasHost.innerHTML, /abe-angle-0-180/);
+assert.match(canvasHost.innerHTML, /abe-angle-90-270/);
+assert.match(canvasHost.innerHTML, /abe-rotate-30/);
+assert.match(canvasHost.innerHTML, /abe-angle-mirror/);
+assert.match(canvasHost.innerHTML, /#icon-arrow-left-right/);
+assert.match(canvasHost.innerHTML, /#icon-arrow-up-down/);
+assert.match(canvasHost.innerHTML, /#icon-flip-horizontal-2|flip-horizontal-2/);
+assert.doesNotMatch(canvasHost.innerHTML, /abe-float-tools[\s\S]*abe-save\b/);
+assert.doesNotMatch(canvasHost.innerHTML, /abe-float-tools[\s\S]*abe-back\b/);
+assert.doesNotMatch(canvasHost.innerHTML, /abe-float-tools[\s\S]*abe-create-plan\b/);
+assert.doesNotMatch(canvasHost.innerHTML, /abe-float-tools[\s\S]*abe-review\b/);
 assert.match(canvasHost.innerHTML, /aria-pressed="true"/);
+
+{
+    const pageHost = chromeHost();
+    renderer.renderPageActions(pageHost, {
+        saveState: "clean",
+        createPlanInFlight: false,
+        distributionDirty: false,
+        draftVersion: 1,
+        sourceOnly: false,
+        canSaveLayout: true,
+        reviewInFlight: false,
+    }, {});
+    assert.match(pageHost.innerHTML, /abe-page-actions/);
+    assert.match(pageHost.innerHTML, /#icon-save/);
+    assert.match(pageHost.innerHTML, /#icon-clipboard-check/);
+    assert.match(pageHost.innerHTML, /#icon-arrow-left/);
+    assert.match(pageHost.innerHTML, /data-abe-save-state="clean"/);
+    assert.match(pageHost.innerHTML, /No unsaved changes/);
+}
 // Angle field always exposes an accessible name; idle chrome has no selection.
 assert.match(canvasHost.innerHTML, /class="abe-angle-input"[^>]*aria-label="/);
 assert.match(

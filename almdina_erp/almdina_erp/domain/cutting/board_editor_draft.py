@@ -17,6 +17,7 @@ from typing import Any
 from almdina_erp.almdina_erp.domain.cutting.board_editor_hosting import (
     hosting_link_creates_cycle,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 
 SCHEMA = 1
 MAX_ABS_MM = 1_000_000.0
@@ -34,6 +35,10 @@ PIECE_FIELDS = frozenset(
         "local_x_mm",
         "local_y_mm",
         "rotation_deg",
+        # Transform parity only — geometry is re-derived from the trusted source.
+        "flip_h",
+        "flip_v",
+        "mirrored",
         "distribution",
         "exclusion_reason",
         "glass_host_piece_id",
@@ -52,6 +57,7 @@ FORBIDDEN_FIELDS = frozenset(
         "scale",
         "scale_x",
         "scale_y",
+        # Legacy/ambiguous aliases stay forbidden; use flip_h / flip_v / mirrored.
         "flip",
         "flip_x",
         "flip_y",
@@ -188,6 +194,7 @@ def catalog_from_projection(projection: Mapping[str, Any]) -> dict[str, Any]:
             "allow_rotation": piece.get("allow_rotation") is True
             and piece.get("allow_rotation_proven") is True,
             "glass_host_piece_id": _optional_int(piece.get("glass_host_piece_id")),
+            "piece_type": str(piece.get("piece_type") or ""),
         }
     sheets: list[int] = []
     for sheet in projection.get("sheets") or []:
@@ -350,6 +357,9 @@ def identity_layout_from_projection(projection: Mapping[str, Any]) -> dict[str, 
                 "local_x_mm": float(placement.get("x") or 0) * 10.0,
                 "local_y_mm": float(placement.get("y") or 0) * 10.0,
                 "rotation_deg": 0.0,
+                "flip_h": False,
+                "flip_v": False,
+                "mirrored": False,
                 "distribution": DISTRIBUTION_ACTIVE,
                 "exclusion_reason": None,
                 "glass_host_piece_id": host,
@@ -493,7 +503,16 @@ def _normalize_pieces(
             if reason not in EXCLUSION_REASONS:
                 raise DraftLayoutError("invalid_exclusion")
         rotation = _finite_deg(raw.get("rotation_deg"))
+        flip_h = _optional_bool(raw.get("flip_h"), default=False)
+        flip_v = _optional_bool(raw.get("flip_v"), default=False)
+        mirrored = _optional_bool(raw.get("mirrored"), default=False)
         if abs(rotation) > ANGLE_EPS and not trusted[instance]["allow_rotation"]:
+            raise DraftLayoutError("rotation_forbidden")
+        if (flip_h or flip_v) and not trusted[instance]["allow_rotation"]:
+            raise DraftLayoutError("rotation_forbidden")
+        if mirrored and not is_corner_cut(str(trusted[instance].get("piece_type") or "")):
+            raise DraftLayoutError("mirror_forbidden")
+        if mirrored and not trusted[instance]["allow_rotation"]:
             raise DraftLayoutError("rotation_forbidden")
         row = {
             "piece_instance_id": instance,
@@ -501,6 +520,9 @@ def _normalize_pieces(
             "local_x_mm": _finite_mm(raw.get("local_x_mm")),
             "local_y_mm": _finite_mm(raw.get("local_y_mm")),
             "rotation_deg": rotation,
+            "flip_h": flip_h,
+            "flip_v": flip_v,
+            "mirrored": mirrored,
             "distribution": distribution,
             "exclusion_reason": reason,
             "glass_host_piece_id": None,
@@ -571,6 +593,16 @@ def _reject_forbidden(value: Mapping[str, Any]) -> None:
 
 
 def _required_bool(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise DraftLayoutError("invalid_layout")
+    return value
+
+
+def _optional_bool(value: Any, *, default: bool = False) -> bool:
+    """Absent transform flags default false so legacy drafts stay readable."""
+
+    if value in (None, ""):
+        return bool(default)
     if not isinstance(value, bool):
         raise DraftLayoutError("invalid_layout")
     return value

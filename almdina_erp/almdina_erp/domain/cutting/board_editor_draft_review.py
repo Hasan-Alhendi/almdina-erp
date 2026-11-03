@@ -22,6 +22,9 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_rotation import (
     preview_piece_rotation,
     rotate_points,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_transform import (
+    apply_draft_parity_to_entry,
+)
 from almdina_erp.almdina_erp.domain.cutting.board_editor_session_edit import (
     _reframe_piece_geometry,
     _reframe_points,
@@ -314,8 +317,13 @@ def _posed_pieces(
         piece["machining_paths"] = paths
         key = f"instance:{instance}"
         piece["piece_key"] = key
+        piece["machining_paths"] = list(paths)
         session_pieces[key] = piece
         ensure_base_geometry(piece)
+        # Apply draft transform parity before rotation so preview/validate/plan
+        # materialize share one geometry path derived from the trusted entry.
+        apply_draft_parity_to_entry(piece, row)
+        paths = list(piece.get("machining_paths") or paths)
         entry_pivot = {
             "x": num((piece.get("pivot_mm") or {}).get("x")),
             "y": num((piece.get("pivot_mm") or {}).get("y")),

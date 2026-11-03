@@ -3311,3 +3311,19 @@ Retry loading the plan,إعادة تحميل الخطة
 Newer edited plan available,تتوفر خطة معدلة أحدث
 A newer edited cutting plan is shown.,تُعرض خطة قص معدلة أحدث.
 "A newer edited cutting plan ({0}) is shown. It replaced the applied plan ({1}).",تُعرض خطة قص معدلة أحدث ({0}). وقد حلّت محل الخطة المطبّقة ({1}).
+Flip horizontal,قلب أفقي
+Flip vertical,قلب عمودي
+Rotate +30°,تدوير +30°
+Mirror angle,انعكاس الزاوية
+Add 30 degrees in the positive rotation direction.,أضف 30 درجة باتجاه الدوران الموجب.
+"Toggle rotation 0° ↔ 180°",تبديل الدوران ‎0° ↔ 180°‎
+"Toggle rotation 90° ↔ 270°",تبديل الدوران ‎90° ↔ 270°‎
+Mirror this corner or L piece horizontally in its local axes. Apply twice to restore the original shape.,اعكس درفة الزاوية أو الـL أفقيًا في محاورها المحلية. طبّق مرتين لاستعادة الشكل الأصلي.
+Angle mirror is only available for corner-break and L pieces.,انعكاس الزاوية متاح فقط لدرف زاوية الكسر والـL.
+This piece cannot be flipped.,لا يمكن قلب هذه الدرفة.
+This piece cannot be flipped reliably with the available geometry.,لا يمكن قلب هذه الدرفة بصورة موثوقة بالهندسة المتاحة.
+Host and guest pieces cannot use this transform yet.,قطع المضيف والضيف لا تدعم هذا التحويل بعد.
+This machine does not allow that rotation after the flip.,هذه الآلة لا تسمح بهذا الدوران بعد القلب.
+Board editor page actions,إجراءات صفحة محرر الألواح
+Select one piece to transform it.,حدّد درفة واحدة لتحويلها.
+Select a piece to transform it.,حدّد درفة لتحويلها.

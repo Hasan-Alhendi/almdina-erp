@@ -34,7 +34,8 @@
         const pressed = extra.pressed == null ? "" : ` aria-pressed="${extra.pressed ? "true" : "false"}"`;
         const title = extra.title || label;
         const attrs = extra.attrs || "";
-        return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${frappeIcon(iconName)}</button>`;
+        const icon = extra.iconHtml || frappeIcon(iconName);
+        return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${icon}</button>`;
     }
 
     function saveStatusText(storeView) {
@@ -70,6 +71,58 @@
             return __("You do not have permission to save this layout.");
         }
         return `${__("Save layout")}. ${saveStatusText(storeView)}`;
+    }
+
+    function pageActionsHtml(storeView) {
+        const createDisabled = Boolean(
+            storeView.createPlanInFlight
+            || storeView.distributionDirty
+            || !(Number(storeView.draftVersion) > 0)
+            || storeView.sourceOnly
+            || storeView.canSaveLayout === false
+        );
+        const createTitle = storeView.distributionDirty
+            ? __("Save the current distribution before applying it to the cutting plan.")
+            : __("Apply this layout as an unapproved edited cutting plan copy.");
+        return `
+            <div class="abe-page-actions" role="toolbar" aria-label="${esc(__("Board editor page actions"))}">
+                ${toolButton("abe-save", "save", saveTitle(storeView), {
+                    disabled: saveDisabled(storeView),
+                    attrs: ` data-abe-save-state="${esc(storeView.saveState || "clean")}"`,
+                })}
+                <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" role="status">${esc(saveStatusText(storeView))}</span>
+                ${toolButton("abe-create-plan", "copy", __("Apply to cutting plan"), {
+                    disabled: createDisabled,
+                    title: createTitle,
+                })}
+                ${toolButton("abe-review", "clipboard-check", __("Review distribution"), {
+                    disabled: Boolean(storeView.reviewInFlight),
+                    title: __("Review distribution"),
+                })}
+                ${toolButton("abe-back", "arrow-left", __("Back to order"))}
+            </div>
+        `;
+    }
+
+    function bindPageActions(host, handlers) {
+        if (!host) return;
+        const save = host.querySelector(".abe-save");
+        const review = host.querySelector(".abe-review");
+        const createPlan = host.querySelector(".abe-create-plan");
+        const back = host.querySelector(".abe-back");
+        if (save) save.onclick = () => handlers && handlers.saveDraft && handlers.saveDraft();
+        if (review) review.onclick = () => handlers && handlers.reviewDraft && handlers.reviewDraft();
+        if (createPlan) {
+            createPlan.onclick = () => handlers && handlers.createPlanCopy && handlers.createPlanCopy();
+        }
+        if (back) back.onclick = () => handlers && handlers.onBack && handlers.onBack();
+    }
+
+    function renderPageActions(host, storeView, handlers) {
+        if (!host) return null;
+        host.innerHTML = pageActionsHtml(storeView || {});
+        bindPageActions(host, handlers || {});
+        return host;
     }
 
     function aciToCss(aci, fallback) {
@@ -1196,6 +1249,26 @@
                         ? RG.reasonMessage(angleEligibility.reason)
                         : "This piece cannot be rotated."
                 ));
+        const TG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.TransformGeometry;
+        const transformReason = multiSelection
+            ? "multi_selection"
+            : (!selectedSessionPiece ? "no_selection" : null);
+        const mirrorEligibility = (!transformReason && selectedSessionPiece && TG && session)
+            ? TG.angleMirrorEligibility(session, selectedSessionPiece.piece_key)
+            : { allowed: false, reason: transformReason || "no_selection" };
+        const transformMirrorEnabled = Boolean(mirrorEligibility.allowed);
+        const anglePairTitle = angleEditable
+            ? null
+            : angleTitle;
+        const angle0_180Label = __("Toggle rotation 0° ↔ 180°");
+        const angle90_270Label = __("Toggle rotation 90° ↔ 270°");
+        const transformMirrorTitle = transformMirrorEnabled
+            ? __("Mirror this corner or L piece horizontally in its local axes. Apply twice to restore the original shape.")
+            : __(
+                TG && typeof TG.reasonMessage === "function"
+                    ? TG.reasonMessage(mirrorEligibility.reason)
+                    : "Angle mirror is only available for corner-break and L pieces."
+            );
         const canRemovePiece = Boolean(
             !multiSelection
             && selectedSessionPiece
@@ -1243,36 +1316,30 @@
                         <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
                         <span aria-hidden="true">°</span>
                     </label>
+                    ${toolButton("abe-angle-0-180", "arrow-left-right", angle0_180Label, {
+                        disabled: !angleEditable,
+                        title: anglePairTitle || angle0_180Label,
+                    })}
+                    ${toolButton("abe-angle-90-270", "arrow-up-down", angle90_270Label, {
+                        disabled: !angleEditable,
+                        title: anglePairTitle || angle90_270Label,
+                    })}
+                    ${toolButton("abe-rotate-30", "refresh", __("Rotate +30°"), {
+                        disabled: !angleEditable,
+                        title: angleEditable
+                            ? __("Add 30 degrees in the positive rotation direction.")
+                            : angleTitle,
+                    })}
+                    ${toolButton("abe-angle-mirror", "flip-horizontal-2", __("Mirror angle"), {
+                        disabled: !transformMirrorEnabled,
+                        title: transformMirrorTitle,
+                    })}
                     ${toolSep}
                     ${toolButton("abe-remove-piece", "trash-2", __("Remove from distribution"), {
                         disabled: !canRemovePiece,
                         title: removePieceTitle,
                     })}
                     ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}
-                    ${toolSep}
-                    ${toolButton("abe-review", "clipboard-check", __("Review distribution"), {
-                        disabled: Boolean(storeView.reviewInFlight),
-                        title: __("Review distribution"),
-                    })}
-                    ${toolButton("abe-create-plan", "copy", __("Apply to cutting plan"), {
-                        disabled: Boolean(
-                            storeView.createPlanInFlight
-                            || storeView.distributionDirty
-                            || !(Number(storeView.draftVersion) > 0)
-                            || storeView.sourceOnly
-                            || storeView.canSaveLayout === false
-                        ),
-                        title: storeView.distributionDirty
-                            ? __("Save the current distribution before applying it to the cutting plan.")
-                            : __("Apply this layout as an unapproved edited cutting plan copy."),
-                    })}
-                    ${toolButton("abe-save", "save", saveTitle(storeView), {
-                        disabled: saveDisabled(storeView),
-                        attrs: ` data-abe-save-state="${esc(storeView.saveState || "clean")}"`,
-                    })}
-                    <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" role="status">${esc(saveStatusText(storeView))}</span>
-                    ${toolSep}
-                    ${toolButton("abe-back", "arrow-left", __("Back to order"))}
                 </div>
             </div>
         `;
@@ -1296,8 +1363,6 @@
         host.querySelector(".abe-fit-all").onclick = () => handlers && handlers.fitAll && handlers.fitAll(layout);
         host.querySelector(".abe-zoom-in").onclick = () => handlers && handlers.zoom && handlers.zoom(1.2);
         host.querySelector(".abe-zoom-out").onclick = () => handlers && handlers.zoom && handlers.zoom(1 / 1.2);
-        const back = host.querySelector(".abe-back");
-        if (back) back.onclick = () => handlers && handlers.onBack && handlers.onBack();
         const floatDock = host.querySelector(".abe-float-dock");
         if (floatDock) {
             floatDock.addEventListener("pointerdown", (event) => {
@@ -1329,13 +1394,30 @@
                 storeView.selectedSheetNo
             );
         }
-        const save = host.querySelector(".abe-save");
-        if (save) save.onclick = () => handlers && handlers.saveDraft && handlers.saveDraft();
-        const review = host.querySelector(".abe-review");
-        if (review) review.onclick = () => handlers && handlers.reviewDraft && handlers.reviewDraft();
-        const createPlan = host.querySelector(".abe-create-plan");
-        if (createPlan) {
-            createPlan.onclick = () => handlers && handlers.createPlanCopy && handlers.createPlanCopy();
+        const angle0180 = host.querySelector(".abe-angle-0-180");
+        const angle90270 = host.querySelector(".abe-angle-90-270");
+        const rotate30 = host.querySelector(".abe-rotate-30");
+        const angleMirror = host.querySelector(".abe-angle-mirror");
+        if (angle0180) {
+            angle0180.onclick = () => handlers && handlers.toggleAngle0_180 && handlers.toggleAngle0_180(
+                selectedSessionPiece && selectedSessionPiece.piece_key
+            );
+        }
+        if (angle90270) {
+            angle90270.onclick = () => handlers && handlers.toggleAngle90_270 && handlers.toggleAngle90_270(
+                selectedSessionPiece && selectedSessionPiece.piece_key
+            );
+        }
+        if (rotate30) {
+            rotate30.onclick = () => handlers && handlers.rotateByDegrees && handlers.rotateByDegrees(
+                selectedSessionPiece && selectedSessionPiece.piece_key,
+                30
+            );
+        }
+        if (angleMirror) {
+            angleMirror.onclick = () => handlers && handlers.mirrorAngle && handlers.mirrorAngle(
+                selectedSessionPiece && selectedSessionPiece.piece_key
+            );
         }
 
         const suppressed = () => handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression();
@@ -1479,6 +1561,7 @@
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.CanvasRenderer = Object.freeze({
         render,
+        renderPageActions,
         sheetLayout,
         mergeSessionLayout,
         fitBoards,

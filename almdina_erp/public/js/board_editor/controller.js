@@ -36,6 +36,7 @@
         const createMoveInteraction = window.AlmdinaBoardEditor.createMoveInteraction;
         const createRotationInteraction = window.AlmdinaBoardEditor.createRotationInteraction;
         const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
+        const TransformGeometry = window.AlmdinaBoardEditor.TransformGeometry;
         const MoveGeometry = window.AlmdinaBoardEditor.MoveGeometry;
         const Distribution = window.AlmdinaBoardEditor.Distribution;
         const frontend = window.AlmdinaFrontend;
@@ -804,6 +805,129 @@
             store.commitSession(next);
         }
 
+        function ensurePageActionsHost() {
+            const pageHead = wrapper.querySelector(".page-head");
+            const pageRoot = pageHead || wrapper;
+            let host = pageRoot.querySelector("[data-abe-page-actions]");
+            if (host) return host;
+            host = document.createElement("div");
+            host.className = "abe-page-actions-host";
+            host.setAttribute("data-abe-page-actions", "1");
+            // Prefer .page-actions so the title row can grow full editor width and
+            // pin this group at inline-end. Avoid nesting under the narrow title-area.
+            const actions = pageRoot.querySelector(".page-actions");
+            if (actions) {
+                actions.appendChild(host);
+            } else if (pageHead) {
+                pageHead.appendChild(host);
+            } else {
+                pageRoot.appendChild(host);
+            }
+            return host;
+        }
+
+        function paintPageActions(view) {
+            if (!CanvasRenderer || typeof CanvasRenderer.renderPageActions !== "function") return;
+            const host = ensurePageActionsHost();
+            CanvasRenderer.renderPageActions(host, view, {
+                saveDraft: () => saveDraft(),
+                reviewDraft: () => reviewDraft(),
+                createPlanCopy: () => createPlanCopy(),
+                onBack: () => backToOrder(activeOrderName),
+            });
+        }
+
+        function rejectTransform(code) {
+            if (window.frappe && frappe.show_alert) {
+                frappe.show_alert({
+                    message: translate(
+                        (TransformGeometry && TransformGeometry.reasonMessage(code))
+                        || code
+                        || "Transform rejected."
+                    ),
+                    indicator: "orange",
+                }, 4);
+            }
+        }
+
+        function commitTransform(result, pieceKey) {
+            if (!store || !result || !result.ok) {
+                rejectTransform(result && result.code);
+                return;
+            }
+            const view = store.snapshot();
+            store.commitSession(result.session);
+            const piece = result.session.pieces[pieceKey];
+            if (piece) {
+                store.selectPiece(piece.piece_id, {
+                    pieceKey,
+                    sheetNo: piece.sheet_no,
+                    mode: "replace",
+                });
+            } else {
+                store.selectPiece(view.selectedPieceId, { pieceKey, mode: "replace" });
+            }
+        }
+
+        function nextAnglePairTarget(currentDeg, firstDeg, secondDeg) {
+            const current = RotationGeometry.normalizeAngleDeg(currentDeg);
+            if (RotationGeometry.anglesEquivalent(current, firstDeg)) {
+                return RotationGeometry.normalizeAngleDeg(secondDeg);
+            }
+            if (RotationGeometry.anglesEquivalent(current, secondDeg)) {
+                return RotationGeometry.normalizeAngleDeg(firstDeg);
+            }
+            return RotationGeometry.normalizeAngleDeg(firstDeg);
+        }
+
+        function applyAngleViaField(pieceKey, targetDeg) {
+            if (!store || !RotationGeometry || !pieceKey) return;
+            const view = store.snapshot();
+            if (!view.session || !view.session.pieces[pieceKey]) return;
+            const target = RotationGeometry.normalizeAngleDeg(targetDeg);
+            if (rotationInteraction && typeof rotationInteraction.applyNumericAngle === "function") {
+                rotationInteraction.applyNumericAngle(pieceKey, target);
+                return;
+            }
+            commitRotation(pieceKey, target);
+        }
+
+        function toggleAnglePair(pieceKey, firstDeg, secondDeg) {
+            if (!store || !RotationGeometry || !pieceKey) return;
+            const view = store.snapshot();
+            const piece = view.session && view.session.pieces[pieceKey];
+            if (!piece) return;
+            const target = nextAnglePairTarget(piece.rotation_deg, firstDeg, secondDeg);
+            applyAngleViaField(pieceKey, target);
+        }
+
+        function toggleAngle0_180(pieceKey) {
+            toggleAnglePair(pieceKey, 0, 180);
+        }
+
+        function toggleAngle90_270(pieceKey) {
+            toggleAnglePair(pieceKey, 90, 270);
+        }
+
+        function rotateByDegrees(pieceKey, deltaDeg) {
+            if (!store || !RotationGeometry || !pieceKey) return;
+            const view = store.snapshot();
+            if (!view.session || !view.session.pieces[pieceKey]) return;
+            const current = Number(view.session.pieces[pieceKey].rotation_deg) || 0;
+            const target = RotationGeometry.normalizeAngleDeg(current + Number(deltaDeg || 0));
+            applyAngleViaField(pieceKey, target);
+        }
+
+        function mirrorAngle(pieceKey) {
+            if (!store || !TransformGeometry || !pieceKey) return;
+            const view = store.snapshot();
+            if (!view.session) return;
+            commitTransform(
+                TransformGeometry.applyAngleMirror(view.session, pieceKey),
+                pieceKey
+            );
+        }
+
         function bindMoveInteraction() {
             moveInteraction = createMoveInteraction({
                 store,
@@ -900,6 +1024,7 @@
             if (!store || suspended) return;
             syncEditorHeight();
             const view = store.snapshot();
+            paintPageActions(view);
             const root = ensureShell().querySelector(".abe-root");
             if (!root) return;
             const sidebar = root.querySelector("[data-abe-sidebar]");
@@ -997,6 +1122,10 @@
                 applyAngle: (pieceKey, value) => (
                     rotationInteraction && rotationInteraction.applyNumericAngle(pieceKey, value)
                 ),
+                toggleAngle0_180: (pieceKey) => toggleAngle0_180(pieceKey),
+                toggleAngle90_270: (pieceKey) => toggleAngle90_270(pieceKey),
+                rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
+                mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
                     if (rotationInteraction && rotationInteraction.isActive()) {
                         rotationInteraction.onPointerMove(event);
