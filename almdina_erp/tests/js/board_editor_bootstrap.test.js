@@ -210,6 +210,7 @@ async function pageBootstrapLoadsVersionedScripts() {
         "rotation_geometry.js",
         "transform_geometry.js",
         "measure_geometry.js",
+        "position_geometry.js",
         "move_interaction.js",
         "rotation_interaction.js",
         "measure_interaction.js",

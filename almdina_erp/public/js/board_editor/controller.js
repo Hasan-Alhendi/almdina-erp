@@ -534,7 +534,7 @@
         function onCanvasWheel(event) {
             if (!store || suspended || !CanvasRenderer.shouldZoomWheel(event)) return;
             const target = event.target;
-            if (target && target.closest && target.closest(".abe-float-tools, .abe-angle-field, .abe-angle-input")) {
+            if (target && target.closest && target.closest(".abe-float-tools, .abe-float-stack, .abe-position-bar, .abe-angle-field, .abe-angle-input, .abe-pos-input")) {
                 event.preventDefault();
                 return;
             }
@@ -1180,6 +1180,47 @@
                 applyAngle: (pieceKey, value) => (
                     rotationInteraction && rotationInteraction.applyNumericAngle(pieceKey, value)
                 ),
+                applyPositionEdge: (pieceKey, edge, value) => {
+                    const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+                    const MoveGeometry = window.AlmdinaBoardEditor.MoveGeometry;
+                    if (!store || !PositionGeometry || !MoveGeometry) {
+                        return { ok: false, reason: "Position controls unavailable." };
+                    }
+                    const snap = store.snapshot();
+                    const proposal = PositionGeometry.proposeEdgeMove(snap.session, pieceKey, edge, value);
+                    if (!proposal.ok) {
+                        store.setDropMessage(__(proposal.reason || "Position update rejected."));
+                        return {
+                            ok: false,
+                            reason: proposal.reason,
+                            model: PositionGeometry.boardInsetsForPiece(snap.session, pieceKey),
+                        };
+                    }
+                    if (proposal.unchanged) {
+                        return { ok: true, unchanged: true, model: proposal.current };
+                    }
+                    finishActiveGesture();
+                    let next = snap.session;
+                    (proposal.commands || []).forEach((command) => {
+                        next = MoveGeometry.applyPieceMove(next, command);
+                    });
+                    store.commitSession(next);
+                    store.setDropMessage(null);
+                    return {
+                        ok: true,
+                        unchanged: false,
+                        model: PositionGeometry.boardInsetsForPiece(store.snapshot().session, pieceKey),
+                    };
+                },
+                readPositionModel: (pieceKey) => {
+                    const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+                    if (!store || !PositionGeometry) return null;
+                    return PositionGeometry.boardInsetsForPiece(store.snapshot().session, pieceKey);
+                },
+                onPositionRejected: (message) => {
+                    if (!store) return;
+                    store.setDropMessage(__(message || "Enter a valid millimetre value."));
+                },
                 toggleAngle0_180: (pieceKey) => toggleAngle0_180(pieceKey),
                 toggleAngle90_270: (pieceKey) => toggleAngle90_270(pieceKey),
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),

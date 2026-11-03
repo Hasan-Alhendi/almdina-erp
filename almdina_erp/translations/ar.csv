@@ -3331,3 +3331,14 @@ Measure,قياس
 "Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line.",أداة القياس: اسحب خطًا مستقيمًا على اللوح لقراءة طوله بالمليمتر. Esc يمسح الخط.
 Start the measurement inside a board.,ابدأ القياس داخل لوح.
 Measurement rejected.,رُفض القياس.
+Precision piece position,موضع الدرفة الدقيق
+Top inset,أعلى
+Bottom inset,أسفل
+Left inset,يسار
+Right inset,يمين
+"Decrease {0} by 1 mm",إنقاص {0} بمقدار 1 مم
+"Increase {0} by 1 mm",زيادة {0} بمقدار 1 مم
+Enter a valid millimetre value.,أدخل قيمة مليمتر صالحة.
+Position update rejected.,رُفض تحديث الموضع.
+Select one piece on a board.,حدّد درفة واحدة على لوح.
+Position controls unavailable.,عناصر التحكم بالموضع غير متاحة.
