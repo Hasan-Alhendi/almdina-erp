@@ -101,6 +101,7 @@ def test_default_order_lists_only_operations_present_on_the_sheet():
         "liner",
         "recessed_handle_cutout",
         "back_groove",
+        "sheet_perimeter",
         "cut_path",
     )
     catalog = catalog_sheet(1, [_piece("piece-a", extra_liner=1, extra_recessed_handle_cutout=1)])

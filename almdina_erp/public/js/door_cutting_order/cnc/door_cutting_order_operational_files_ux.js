@@ -40,7 +40,7 @@
     }
     const OPERATION_LABELS = Object.freeze({
         cut_path: "Cut between pieces",
-        sheet_perimeter: "Sheet perimeter — Perimeter Cut",
+        sheet_perimeter: "Sheet Perimeter Cut",
         liner: "Liner operation",
         back_groove: "Rear groove",
         recessed_handle_cutout: "Handle recess",
@@ -176,13 +176,19 @@
     }
 
     const SHEET_PERIMETER_PATH_KEY = "cut_path:sheet_perimeter";
+    const SHEET_PERIMETER_OPERATION_KEY = "sheet_perimeter";
     const CUT_PATH_INTERNAL_SEQUENCE_KEY = "cut_path:internals";
 
     function normalizePerimeterJoinMode(value) {
         return String(value || "").trim().toLowerCase() === "connected" ? "connected" : "separate";
     }
 
-    function defaultCutPathSequence() {
+    function deriveCutPathSequenceFromOrder(order) {
+        const keys = Array.isArray(order) ? order.map(key => String(key)) : [];
+        const peri = keys.indexOf(SHEET_PERIMETER_OPERATION_KEY);
+        const cut = keys.indexOf("cut_path");
+        if (peri < 0 || cut < 0) return [];
+        if (peri < cut) return [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY];
         return [CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY];
     }
 
@@ -190,17 +196,31 @@
         const keys = (Array.isArray(sequence) ? sequence : [])
             .map(key => String(key || "").trim())
             .filter(Boolean);
-        if (!keys.length) return defaultCutPathSequence();
+        if (!keys.length) return [CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY];
         if (keys[0] === SHEET_PERIMETER_PATH_KEY) {
             return [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY];
         }
-        return defaultCutPathSequence();
+        return [CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY];
     }
 
-    function perimeterIsEarly(sequence) {
-        return Array.isArray(sequence)
-            && sequence.length > 0
-            && String(sequence[0] || "") === SHEET_PERIMETER_PATH_KEY;
+    function sheetPerimeterPrecedesMilling(order) {
+        const keys = Array.isArray(order) ? order.map(key => String(key)) : [];
+        const peri = keys.indexOf(SHEET_PERIMETER_OPERATION_KEY);
+        if (peri < 0) return false;
+        return INTERNAL_OPERATIONS.some(key => {
+            const at = keys.indexOf(key);
+            return at >= 0 && at > peri;
+        });
+    }
+
+    function perimeterIsEarly(orderOrSequence) {
+        if (Array.isArray(orderOrSequence) && orderOrSequence.includes(SHEET_PERIMETER_OPERATION_KEY)) {
+            return sheetPerimeterPrecedesMilling(orderOrSequence);
+        }
+        // Legacy sequence helpers still used by older tests/call sites.
+        return Array.isArray(orderOrSequence)
+            && orderOrSequence.length > 0
+            && String(orderOrSequence[0] || "") === SHEET_PERIMETER_PATH_KEY;
     }
 
     function syncCutPathSequence(state) {
@@ -209,44 +229,67 @@
             state.perimeterEarlyConfirmed = false;
             return;
         }
-        state.cutPathSequence = normalizeCutPathSequence(state.cutPathSequence);
-        if (!perimeterIsEarly(state.cutPathSequence)) {
+        state.cutPathSequence = deriveCutPathSequenceFromOrder(state.order);
+        if (!sheetPerimeterPrecedesMilling(state.order)) {
             state.perimeterEarlyConfirmed = false;
         }
     }
 
-    function moveCutPathSequence(state, pathKey, delta) {
-        if (String(pathKey || "") !== SHEET_PERIMETER_PATH_KEY) return state;
-        syncCutPathSequence(state);
-        const early = Number(delta || 0) < 0;
-        state.cutPathSequence = early
-            ? [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY]
-            : defaultCutPathSequence();
-        if (!perimeterIsEarly(state.cutPathSequence)) {
-            state.perimeterEarlyConfirmed = false;
+    function ensureSheetPerimeterOperation(state) {
+        if (!Array.isArray(state.order)) state.order = [];
+        if (!state.order.includes(SHEET_PERIMETER_OPERATION_KEY)) {
+            const cutAt = state.order.indexOf("cut_path");
+            if (cutAt >= 0) state.order.splice(cutAt, 0, SHEET_PERIMETER_OPERATION_KEY);
+            else state.order.push(SHEET_PERIMETER_OPERATION_KEY);
         }
-        return state;
+        if (!state.operations) state.operations = {};
+        if (!state.sources) state.sources = {};
+        if (!state.factoryPresets) state.factoryPresets = {};
+        if (!Object.prototype.hasOwnProperty.call(state.operations, SHEET_PERIMETER_OPERATION_KEY)) {
+            state.operations[SHEET_PERIMETER_OPERATION_KEY] = state.operations.cut_path || "";
+        }
+        if (!state.sources[SHEET_PERIMETER_OPERATION_KEY]) {
+            state.sources[SHEET_PERIMETER_OPERATION_KEY] = "factory";
+        }
+        if (!state.factoryPresets[SHEET_PERIMETER_OPERATION_KEY]) {
+            state.factoryPresets[SHEET_PERIMETER_OPERATION_KEY] = state.factoryPresets.cut_path || "";
+        }
+        state.expanded[SHEET_PERIMETER_OPERATION_KEY] = true;
+        syncCutPathSequence(state);
+    }
+
+    function removeSheetPerimeterOperation(state) {
+        state.order = (state.order || []).filter(key => key !== SHEET_PERIMETER_OPERATION_KEY);
+        if (state.operations) delete state.operations[SHEET_PERIMETER_OPERATION_KEY];
+        if (state.sources) delete state.sources[SHEET_PERIMETER_OPERATION_KEY];
+        if (state.factoryPresets) delete state.factoryPresets[SHEET_PERIMETER_OPERATION_KEY];
+        if (state.expanded) delete state.expanded[SHEET_PERIMETER_OPERATION_KEY];
+        state.cutPathSequence = [];
+        state.perimeterEarlyConfirmed = false;
     }
 
     function applyPerimeterJoinMode(frm, dialog, workspace, sheet, state, mode) {
         state.perimeterJoinMode = normalizePerimeterJoinMode(mode);
         if (state.perimeterJoinMode === "connected") {
-            state.cutPathSequence = defaultCutPathSequence();
+            ensureSheetPerimeterOperation(state);
         } else {
-            state.cutPathSequence = [];
-            state.perimeterEarlyConfirmed = false;
+            removeSheetPerimeterOperation(state);
         }
         state.expanded.cut_path = true;
-        const body = dialogRoot(dialog);
-        const article = body && body.querySelector('.dco-operational-layer[data-layer="cut_path"]');
-        if (article) {
-            paintPerimeterJoinControls(article, state, Boolean(workspace.can_prepare));
-            const paths = article.querySelector(".dco-operational-layer__paths");
-            if (paths) paths.hidden = false;
-            const toggle = article.querySelector("[data-toggle-layer]");
-            if (toggle) {
-                toggle.setAttribute("aria-expanded", "true");
-                toggle.textContent = translate("Hide paths");
+        if (dialog && dialog._almdinaSheet) {
+            refreshDialog(
+                frm,
+                dialog,
+                workspace,
+                sheet,
+                state,
+                dialog._almdinaSheet.board
+            );
+        } else {
+            const body = dialogRoot(dialog);
+            const article = body && body.querySelector('.dco-operational-layer[data-layer="cut_path"]');
+            if (article) {
+                paintPerimeterJoinControls(article, state, Boolean(workspace.can_prepare));
             }
         }
         requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
@@ -266,14 +309,14 @@
             input.checked = String(input.value || "") === joinMode;
             input.disabled = !canPrepare;
         });
-        const early = joinMode === "connected" && perimeterIsEarly(state.cutPathSequence);
+        const early = joinMode === "connected" && sheetPerimeterPrecedesMilling(state.order);
         let warning = existing.querySelector("[data-perimeter-early-warning]");
         if (early && !warning) {
             existing.insertAdjacentHTML(
                 "beforeend",
                 `<div data-perimeter-early-warning>
-                    <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."))}</p>
-                    <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${canPrepare ? "" : " disabled"}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before the other CUT_PATH paths."))}</label>
+                    <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."))}</p>
+                    <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${canPrepare ? "" : " disabled"}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before liner, recessed handle, or rear groove."))}</label>
                 </div>`
             );
         } else if (!early && warning) {
@@ -306,10 +349,7 @@
             if (preset) overrides[path.path_key] = preset;
         });
         const joinMode = normalizePerimeterJoinMode(sheet.perimeter_join_mode);
-        const sequence = joinMode === "connected"
-            ? normalizeCutPathSequence(sheet.cut_path_sequence)
-            : [];
-        return {
+        const state = {
             operations,
             sources,
             factoryPresets,
@@ -317,15 +357,22 @@
             order,
             confirmed: Boolean(sheet.cut_path_early_confirmed),
             perimeterJoinMode: joinMode,
-            cutPathSequence: sequence,
-            perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed)
-                && perimeterIsEarly(sequence),
+            cutPathSequence: [],
+            perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
             expanded: {},
             customizing: {},
             selectedPathKey: "",
             selectedExecutionPathId: "",
             program: null,
         };
+        if (joinMode === "connected") {
+            ensureSheetPerimeterOperation(state);
+            state.perimeterEarlyConfirmed = Boolean(sheet.perimeter_cut_early_confirmed)
+                && sheetPerimeterPrecedesMilling(state.order);
+        } else {
+            removeSheetPerimeterOperation(state);
+        }
+        return state;
     }
 
     function stateSnapshot(state) {
@@ -338,7 +385,7 @@
             perimeterJoinMode: normalizePerimeterJoinMode(state.perimeterJoinMode),
             cutPathSequence: Array.isArray(state.cutPathSequence) ? state.cutPathSequence.slice() : [],
             perimeterEarlyConfirmed: Boolean(state.perimeterEarlyConfirmed)
-                && perimeterIsEarly(state.cutPathSequence),
+                && sheetPerimeterPrecedesMilling(state.order),
         });
     }
 
@@ -350,7 +397,11 @@
 
     function restoreLayerPreset(state, key) {
         state.sources[key] = "factory";
-        state.operations[key] = String((state.factoryPresets && state.factoryPresets[key]) || "");
+        let restored = String((state.factoryPresets && state.factoryPresets[key]) || "");
+        if (key === SHEET_PERIMETER_OPERATION_KEY && !restored) {
+            restored = String(state.operations.cut_path || state.factoryPresets.cut_path || "");
+        }
+        state.operations[key] = restored;
         return state;
     }
 
@@ -376,7 +427,14 @@
     function effectivePreset(state, path) {
         const override = state.overrides[path.path_key];
         if (override) return override;
-        return state.operations[path.operation_key] || "";
+        const key = String(path.operation_key || "");
+        const chosen = state.operations[key] || "";
+        if (chosen) return chosen;
+        if (key === SHEET_PERIMETER_OPERATION_KEY
+            && (state.sources && state.sources[key]) !== "sheet") {
+            return state.operations.cut_path || "";
+        }
+        return "";
     }
 
     function toolConflict(workspace, sheet, state) {
@@ -567,7 +625,7 @@
 
     function pathDisplayLabel(path) {
         if (isSheetPerimeterPath(path)) {
-            return translate("Sheet perimeter — Perimeter Cut");
+            return translate("Sheet Perimeter Cut");
         }
         if (path && path.piece_label) {
             return translate("Piece {0}", [path.piece_label]);
@@ -602,11 +660,11 @@
     function perimeterJoinControlsMarkup(state, canPrepare) {
         const joinMode = normalizePerimeterJoinMode(state.perimeterJoinMode);
         const disabled = canPrepare ? "" : " disabled";
-        const early = joinMode === "connected" && perimeterIsEarly(state.cutPathSequence);
+        const early = joinMode === "connected" && sheetPerimeterPrecedesMilling(state.order);
         const warning = early
             ? `<div data-perimeter-early-warning>
-                <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."))}</p>
-                <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before the other CUT_PATH paths."))}</label>
+                <p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."))}</p>
+                <label class="dco-operational-sheet__confirm"><input type="checkbox" data-perimeter-confirm${state.perimeterEarlyConfirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to cut the sheet perimeter before liner, recessed handle, or rear groove."))}</label>
                </div>`
             : "";
         return `<fieldset class="dco-operational-perimeter" data-perimeter-join>
@@ -735,7 +793,13 @@
                         <code>${escapeHtml(operation.dxf_layer || "")}</code>
                         <span>${escapeHtml(translate("{0} paths", [paths.length || operation.path_count || 0]))}</span>
                     </div>
-                    <p class="dco-operational-layer__source" data-layer-source="${escapeHtml(source)}">${escapeHtml(translate(source === "sheet" ? "Sheet choice" : "Factory default"))}</p>
+                    <p class="dco-operational-layer__source" data-layer-source="${escapeHtml(source)}">${escapeHtml(translate(
+                        source === "sheet"
+                            ? "Sheet choice"
+                            : (key === SHEET_PERIMETER_OPERATION_KEY
+                                ? "Inherited from Cut between pieces"
+                                : "Factory default")
+                    ))}</p>
                     <label class="dco-operational-layer__choice">${escapeHtml(translate("Tool preset"))}
                         <div data-operation-preset-host="${escapeHtml(key)}" data-readonly="${canPrepare ? "0" : "1"}"></div>
                     </label>
@@ -952,22 +1016,6 @@
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.closest !== "function") return;
-                const moveCut = target.closest("[data-move-cut-path]");
-                if (moveCut) {
-                    const key = moveCut.getAttribute("data-cut-path-key");
-                    const direction = moveCut.getAttribute("data-move-cut-path") === "earlier" ? -1 : 1;
-                    moveCutPathSequence(live.state, key, direction);
-                    const article = body.querySelector('.dco-operational-layer[data-layer="cut_path"]');
-                    if (article) {
-                        paintPerimeterJoinControls(article, live.state, Boolean(live.workspace.can_prepare));
-                        const container = article.querySelector(".dco-operational-layer__paths");
-                        if (container && live.state.program) {
-                            syncPhysicalPathList(body, live.workspace, live.sheet, live.state, live.state.program, dialog);
-                        }
-                    }
-                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
-                    return;
-                }
                 const customize = target.closest("[data-customize-path]");
                 if (customize) {
                     const pathKey = customize.getAttribute("data-customize-path");
@@ -1105,6 +1153,7 @@
         next.splice(target, 0, item);
         state.order = next;
         if (!cutPathIsEarly(next)) state.confirmed = false;
+        syncCutPathSequence(state);
     }
 
     function dialogRoot(dialog) {
@@ -1300,9 +1349,11 @@
             operation_sources: state.sources || {},
             perimeter_join_mode: joinMode,
             cut_path_sequence: joinMode === "connected"
-                ? normalizeCutPathSequence(state.cutPathSequence)
+                ? deriveCutPathSequenceFromOrder(state.order)
                 : null,
-            perimeter_cut_early_confirmed: joinMode === "connected" && state.perimeterEarlyConfirmed ? 1 : 0,
+            perimeter_cut_early_confirmed: joinMode === "connected"
+                && sheetPerimeterPrecedesMilling(state.order)
+                && state.perimeterEarlyConfirmed ? 1 : 0,
         };
     }
 
@@ -1325,7 +1376,7 @@
             perimeter_geometry_invalid: translate("Keep the approved cut geometry unchanged, or keep separate cut paths."),
             perimeter_join_mode_invalid: translate("Choose either a separate or a connected sheet perimeter."),
             cut_path_sequence_invalid: translate("Restore a valid CUT_PATH order that includes every cut path on this sheet."),
-            perimeter_cut_early_unconfirmed: translate("Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths."),
+            perimeter_cut_early_unconfirmed: translate("Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove."),
         };
         return actions[code] || translate("Correct the listed issue, then generate the NC file again.");
     }
@@ -1585,9 +1636,9 @@
             return;
         }
         if (normalizePerimeterJoinMode(state.perimeterJoinMode) === "connected"
-            && perimeterIsEarly(state.cutPathSequence)
+            && sheetPerimeterPrecedesMilling(state.order)
             && !state.perimeterEarlyConfirmed) {
-            frappe.msgprint(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."));
+            frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
             return;
         }
         const conflict = toolConflict(workspace, sheet, state);
@@ -1784,6 +1835,7 @@
         liner: "#1d4e89",
         recessed_handle_cutout: "#c45c12",
         back_groove: "#5c4d2e",
+        sheet_perimeter: "#0b7285",
         cut_path: "#a61b1b",
     });
     const DIRECTION_LABELS = Object.freeze({
@@ -2074,7 +2126,13 @@
             const key = String(operation.operation_key || "");
             if (PROGRAM_COLORS[key]) present.add(key);
         });
-        const order = ["cut_path", "liner", "recessed_handle_cutout", "back_groove"];
+        const order = [
+            "liner",
+            "recessed_handle_cutout",
+            "back_groove",
+            "sheet_perimeter",
+            "cut_path",
+        ];
         const items = order.filter(key => present.has(key)).map(key => {
             const checked = hidden.has(key) ? "" : " checked";
             return `<label class="dco-cnc-cut-preview__legend-item">
@@ -2450,22 +2508,11 @@
                 : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
                     ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`);
         const selectedClass = path.execution_path_id === state.selectedExecutionPathId ? " is-selected" : "";
-        const early = perimeterIsEarly(state.cutPathSequence);
-        const showSequence = normalizePerimeterJoinMode(state.perimeterJoinMode) === "connected"
-            && isSheetPerimeterPath(path)
-            && canPrepare;
-        const sequenceControls = showSequence
-            ? `<span class="dco-operational-path__sequence">
-                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="earlier" data-cut-path-key="${escapeHtml(SHEET_PERIMETER_PATH_KEY)}"${early ? " disabled" : ""} title="${escapeHtml(translate("Move earlier"))}">${orderMoveIcon("up-line")}</button>
-                <button type="button" class="btn btn-default btn-xs" data-move-cut-path="later" data-cut-path-key="${escapeHtml(SHEET_PERIMETER_PATH_KEY)}"${!early ? " disabled" : ""} title="${escapeHtml(translate("Move later"))}">${orderMoveIcon("down-line")}</button>
-               </span>`
-            : "";
         return `<div class="dco-operational-path${custom ? " is-custom" : ""}${selectedClass}${isSheetPerimeterPath(path) ? " is-sheet-perimeter" : ""}" data-path-key="${escapeHtml(path.path_key)}" data-execution-path-id="${escapeHtml(path.execution_path_id)}" data-path-number="${path.path_number}" data-path-operation="${escapeHtml(path.operation_key)}" data-custom="${custom ? "1" : "0"}" data-sheet-perimeter="${isSheetPerimeterPath(path) ? "1" : "0"}">
             <button type="button" class="btn btn-link btn-xs dco-operational-path__pick" data-select-execution="${escapeHtml(path.execution_path_id)}" data-select-path="${escapeHtml(path.path_key)}">
                 <span class="dco-operational-path__number">${escapeHtml(path.path_number)}</span>
                 ${escapeHtml(piece)}
             </button>
-            ${sequenceControls}
             <span class="dco-operational-path__badge">${escapeHtml(translate(custom ? "Custom preset" : "Uses the layer preset"))}</span>
             ${passDetail}
             ${control}
@@ -2872,9 +2919,9 @@
                 return;
             }
             if (normalizePerimeterJoinMode(context.state.perimeterJoinMode) === "connected"
-                && perimeterIsEarly(context.state.cutPathSequence)
+                && sheetPerimeterPrecedesMilling(context.state.order)
                 && !context.state.perimeterEarlyConfirmed) {
-                frappe.msgprint(translate("Cutting the sheet perimeter first may let the pieces move after they separate from the board."));
+                frappe.msgprint(translate("Cutting the sheet perimeter before milling may let pieces move after they separate from the board."));
                 return;
             }
             const conflict = toolConflict(context.workspace, context.sheet, context.state);
@@ -2961,12 +3008,15 @@
         sheetCardActions,
         sheetState,
         SHEET_PERIMETER_PATH_KEY,
+        SHEET_PERIMETER_OPERATION_KEY,
         CUT_PATH_INTERNAL_SEQUENCE_KEY,
         normalizePerimeterJoinMode,
-        defaultCutPathSequence,
+        deriveCutPathSequenceFromOrder,
         normalizeCutPathSequence,
         perimeterIsEarly,
-        moveCutPathSequence,
+        sheetPerimeterPrecedesMilling,
+        ensureSheetPerimeterOperation,
+        removeSheetPerimeterOperation,
         syncCutPathSequence,
         applyPerimeterJoinMode,
         paintPerimeterJoinControls,

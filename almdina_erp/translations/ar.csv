@@ -3367,8 +3367,12 @@ Sheet perimeter cut method,طريقة قص محيط اللوح
 Disconnected perimeter,محيط غير متصل
 Connected perimeter,محيط متصل
 Sheet perimeter — Perimeter Cut,محيط اللوح — Perimeter Cut
+Sheet Perimeter Cut,قص محيط اللوح
+Inherited from Cut between pieces,موروث من القص بين الدرفات
 Cutting the sheet perimeter first may let the pieces move after they separate from the board.,قص محيط اللوح أولاً قد يجعل القطع تتحرك بعد انفصالها عن اللوح.
+Cutting the sheet perimeter before milling may let pieces move after they separate from the board.,قص محيط اللوح قبل التفريز قد يجعل القطع تتحرك بعد انفصالها عن اللوح.
 I understand and want to cut the sheet perimeter before the other CUT_PATH paths.,أفهم وأريد قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+I understand and want to cut the sheet perimeter before liner, recessed handle, or rear groove.,أفهم وأريد قص محيط اللوح قبل البطانة أو اليد الغاطسة أو الأخدود الخلفي.
 Move the path earlier,تقديم المسار
 Move the path later,تأخير المسار
 The sheet perimeter join mode is not valid.,طريقة وصل محيط اللوح غير صالحة.
@@ -3379,6 +3383,7 @@ The outer cut network has more than one separate component.,شبكة القص ا
 The connected perimeter would change the approved cut geometry.,المحيط المتصل سيغيّر هندسة القص المعتمدة.
 The CUT_PATH execution order is not valid for this sheet.,ترتيب تنفيذ مسارات CUT_PATH غير صالح لهذا اللوح.
 Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths.,أكّد التحذير قبل قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove.,أكّد التحذير قبل قص محيط اللوح قبل البطانة أو اليد الغاطسة أو الأخدود الخلفي.
 Keep separate cut paths, or fix the outer cut network so one closed perimeter can be formed.,أبقِ مسارات القص منفصلة، أو أصلح شبكة القص الخارجية حتى يمكن تكوين محيط مغلق واحد.
 Close the outer cut network, or keep separate cut paths.,أغلق شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.
 Remove branches from the outer cut network, or keep separate cut paths.,أزل التفرعات من شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.

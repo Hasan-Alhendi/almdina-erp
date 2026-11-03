@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cnc.operations import (
     CNC_OPERATIONS_BY_KEY,
     DEFAULT_MACHINING_ORDER,
     ILLUSTRATIVE_DXF_LAYERS,
+    SHEET_PERIMETER_OPERATION_KEY,
     operation_for_key,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
@@ -197,8 +198,10 @@ def catalog_sheet(
     if include_sheet_perimeter:
         from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
 
-        operation = operation_for_key("cut_path")
-        pending.append((operation.sequence, SHEET_PERIMETER_PATH_KEY, "cut_path", ""))
+        operation = operation_for_key(SHEET_PERIMETER_OPERATION_KEY)
+        pending.append(
+            (operation.sequence, SHEET_PERIMETER_PATH_KEY, SHEET_PERIMETER_OPERATION_KEY, "")
+        )
     pending.sort(key=lambda item: (item[0], item[3], item[1]))
     paths = tuple(
         OperationalPath(
@@ -290,6 +293,71 @@ def cut_path_precedes_internal(order: Sequence[str]) -> bool:
     return any(key in keys and keys.index(key) > cut_at for key in _INTERNAL_OPERATIONS)
 
 
+def sheet_perimeter_precedes_milling(order: Sequence[str]) -> bool:
+    """True when the independent perimeter runs before liner/handle/groove."""
+
+    keys = [str(key) for key in order]
+    if SHEET_PERIMETER_OPERATION_KEY not in keys:
+        return False
+    perimeter_at = keys.index(SHEET_PERIMETER_OPERATION_KEY)
+    return any(
+        key in keys and keys.index(key) > perimeter_at for key in _INTERNAL_OPERATIONS
+    )
+
+
+def apply_legacy_cut_path_sequence_to_order(
+    order: Sequence[str],
+    cut_path_sequence: Sequence[str] | None,
+    *,
+    join_mode: str,
+) -> tuple[str, ...]:
+    """Map a legacy within-CUT_PATH perimeter sequence onto operation_order.
+
+    ``operation_order`` is the source of truth. Saved ``cut_path_sequence`` only
+    nudges ``sheet_perimeter`` relative to ``cut_path`` when connected mode is
+    on and the sequence can be interpreted safely.
+    """
+
+    keys = [str(key) for key in order]
+    if str(join_mode or "").strip() != "connected":
+        return tuple(keys)
+    if SHEET_PERIMETER_OPERATION_KEY not in keys or "cut_path" not in keys:
+        return tuple(keys)
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        SHEET_PERIMETER_PATH_KEY,
+        coerce_cut_path_sequence_request,
+    )
+
+    try:
+        coerced = coerce_cut_path_sequence_request(cut_path_sequence)
+    except OperationalFileError:
+        return tuple(keys)
+    if coerced is None:
+        return tuple(keys)
+    without = [key for key in keys if key != SHEET_PERIMETER_OPERATION_KEY]
+    cut_at = without.index("cut_path")
+    insert_at = cut_at if coerced[0] == SHEET_PERIMETER_PATH_KEY else cut_at + 1
+    without.insert(insert_at, SHEET_PERIMETER_OPERATION_KEY)
+    return tuple(without)
+
+
+def derive_legacy_cut_path_sequence(order: Sequence[str]) -> tuple[str, ...]:
+    """Persist a compatibility sequence derived from operation_order."""
+
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        CONNECTED_CUT_PATH_ORDER_KEYS,
+        CUT_PATH_INTERNAL_SEQUENCE_KEY,
+        SHEET_PERIMETER_PATH_KEY,
+    )
+
+    keys = [str(key) for key in order]
+    if SHEET_PERIMETER_OPERATION_KEY not in keys or "cut_path" not in keys:
+        return ()
+    if keys.index(SHEET_PERIMETER_OPERATION_KEY) < keys.index("cut_path"):
+        return (SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY)
+    return CONNECTED_CUT_PATH_ORDER_KEYS
+
+
 def confirmed_operation_order(
     order: Sequence[str],
     *,
@@ -299,6 +367,8 @@ def confirmed_operation_order(
 
     The stored confirmation does not waive the checks a later generator must
     still run. It only records that this sheet's order was accepted.
+    Placing ``sheet_perimeter`` before ``cut_path`` is the default and is not
+    an early-cut error.
     """
 
     normalized = tuple(str(key) for key in order)
@@ -306,6 +376,20 @@ def confirmed_operation_order(
     if early and not confirmed:
         raise OperationalFileError("cut_path_early_unconfirmed")
     return normalized, bool(early and confirmed)
+
+
+def confirmed_perimeter_operation_order(
+    order: Sequence[str],
+    *,
+    perimeter_early_confirmed: bool,
+) -> tuple[tuple[str, ...], bool]:
+    """Warn when the independent perimeter runs before milling add-ons."""
+
+    normalized = tuple(str(key) for key in order)
+    early = sheet_perimeter_precedes_milling(normalized)
+    if early and not perimeter_early_confirmed:
+        raise OperationalFileError("perimeter_cut_early_unconfirmed")
+    return normalized, bool(early and perimeter_early_confirmed)
 
 
 def assert_viewed_plan_token(plan: ApprovedPlanRef | None, token: str | None) -> None:
@@ -486,6 +570,18 @@ def assign_sheet_presets(
         sources[key] = source
         effective_operations[key] = effective
 
+    # Connected perimeter reuses the CUT_PATH factory preset by inheritance.
+    # A sheet-level choice for sheet_perimeter stays independent.
+    if SHEET_PERIMETER_OPERATION_KEY in present:
+        dedicated = str(defaults.get(SHEET_PERIMETER_OPERATION_KEY) or "").strip()
+        if (
+            sources.get(SHEET_PERIMETER_OPERATION_KEY) == FACTORY_PRESET_SOURCE
+            and not dedicated
+        ):
+            inherited = str(effective_operations.get("cut_path") or "").strip()
+            if inherited:
+                effective_operations[SHEET_PERIMETER_OPERATION_KEY] = inherited
+
     resolved_paths: dict[str, str] = {}
     used: list[ToolPresetValues] = []
     for path in catalog.paths:
@@ -535,12 +631,16 @@ __all__ = [
     "assert_viewed_plan_token",
     "assess_approved_plan",
     "assign_sheet_presets",
+    "apply_legacy_cut_path_sequence_to_order",
     "operation_preset_choice",
     "catalog_sheet",
     "confirmed_operation_order",
+    "confirmed_perimeter_operation_order",
     "cut_path_precedes_internal",
+    "derive_legacy_cut_path_sequence",
     "default_operation_order",
     "effective_status",
+    "sheet_perimeter_precedes_milling",
     "generation_snapshot_is_complete",
     "merge_operation_order",
     "resolve_operation_order",

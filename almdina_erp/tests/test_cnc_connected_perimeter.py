@@ -229,22 +229,15 @@ def test_prefer_uploaded_closed_polyline():
     assert preferred.edge_count == 4
 
 
-def test_sequence_defaults_perimeter_last_and_requires_early_confirm():
+def test_legacy_sequence_helper_no_longer_rejects_perimeter_before_internals():
     keys = connected_cut_path_order_keys()
     ordered = resolve_cut_path_sequence(keys, None)
     assert ordered == (CUT_PATH_INTERNAL_SEQUENCE_KEY, SHEET_PERIMETER_PATH_KEY)
     assert resolve_cut_path_sequence(keys, []) == ordered
-    with pytest.raises(OperationalFileError) as exc:
-        resolve_cut_path_sequence(
-            keys,
-            [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY],
-            perimeter_early_confirmed=False,
-        )
-    assert exc.value.code == "perimeter_cut_early_unconfirmed"
     early = resolve_cut_path_sequence(
         keys,
         [SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY],
-        perimeter_early_confirmed=True,
+        perimeter_early_confirmed=False,
     )
     assert early[0] == SHEET_PERIMETER_PATH_KEY
     # Legacy piece-key sequences collapse to the perimeter-position contract.
@@ -288,24 +281,35 @@ def test_compile_separate_unchanged_and_connected_adds_one_perimeter():
         cut_path_sequence=None,
         perimeter_cut_early_confirmed=False,
     )
+    separate_ops = [operation["operation_key"] for operation in separate["operations"]]
+    connected_ops = [operation["operation_key"] for operation in connected["operations"]]
+    assert "sheet_perimeter" not in separate_ops
+    assert "sheet_perimeter" in connected_ops
     separate_paths = [
         path
         for operation in separate["operations"]
         if operation["operation_key"] == "cut_path"
         for path in operation["toolpaths"]
     ]
-    connected_paths = [
+    connected_cut = [
         path
         for operation in connected["operations"]
         if operation["operation_key"] == "cut_path"
         for path in operation["toolpaths"]
     ]
+    perimeter_paths = [
+        path
+        for operation in connected["operations"]
+        if operation["operation_key"] == "sheet_perimeter"
+        for path in operation["toolpaths"]
+    ]
     assert not any(path["path_key"] == SHEET_PERIMETER_PATH_KEY for path in separate_paths)
-    perimeter_paths = [path for path in connected_paths if path["path_key"] == SHEET_PERIMETER_PATH_KEY]
     assert len(perimeter_paths) == 1
+    assert perimeter_paths[0]["path_key"] == SHEET_PERIMETER_PATH_KEY
     assert perimeter_paths[0]["closed"] is True
     assert perimeter_paths[0]["piece_label"] == ""
-    assert len(connected_paths) < len(separate_paths) or len(connected_paths) <= len(separate_paths)
+    assert not any(path["path_key"] == SHEET_PERIMETER_PATH_KEY for path in connected_cut)
+    assert len(connected_cut) <= len(separate_paths)
 
 
 def test_perimeter_preset_override_accepted():
@@ -314,16 +318,16 @@ def test_perimeter_preset_override_accepted():
         sheet_no=1,
         pieces=pieces,
         snapshot=_snapshot(),
-        operation_presets={"cut_path": "Finish"},
+        operation_presets={"cut_path": "Finish", "sheet_perimeter": "Finish"},
         path_overrides={SHEET_PERIMETER_PATH_KEY: "Finish"},
-        operation_order=["cut_path"],
+        operation_order=["sheet_perimeter", "cut_path"],
         known_presets=PRESETS,
         perimeter_join_mode="connected",
     )
     toolpaths = [
         path
         for operation in payload["operations"]
-        if operation["operation_key"] == "cut_path"
+        if operation["operation_key"] == "sheet_perimeter"
         for path in operation["toolpaths"]
         if path["path_key"] == SHEET_PERIMETER_PATH_KEY
     ]
@@ -350,7 +354,7 @@ def test_prepare_sheet_settings_persists_join_mode_and_sequence():
         path_overrides={},
         known_presets=PRESETS,
         machine_profile={"fingerprint_payload": {}, "production_approved": False},
-        operation_order=["cut_path"],
+        operation_order=["sheet_perimeter", "cut_path"],
         cut_path_early_confirmed=False,
         perimeter_join_mode="connected",
         cut_path_sequence=None,
@@ -359,8 +363,13 @@ def test_prepare_sheet_settings_persists_join_mode_and_sequence():
     )
     assert prepared["perimeter_join_mode"] == "connected"
     assert SHEET_PERIMETER_PATH_KEY in prepared["cut_path_sequence"]
-    assert prepared["cut_path_sequence"][-1] == SHEET_PERIMETER_PATH_KEY
+    # Default independent order places perimeter before cut_path.
+    assert prepared["cut_path_sequence"][0] == SHEET_PERIMETER_PATH_KEY
+    assert any(row["operation_key"] == "sheet_perimeter" for row in prepared["operations"])
     assert any(row["path_key"] == SHEET_PERIMETER_PATH_KEY for row in prepared["paths"])
+    peri = next(row for row in prepared["operations"] if row["operation_key"] == "sheet_perimeter")
+    assert peri["tool_preset"] == ""  # factory/inherited source stores blank
+    assert peri["dxf_layer"] == "CUT_PATH"
 
 
 def test_simulation_nc_contains_single_connected_perimeter_path():
@@ -371,7 +380,7 @@ def test_simulation_nc_contains_single_connected_perimeter_path():
         snapshot=_snapshot(),
         operation_presets={"cut_path": "Finish"},
         path_overrides={},
-        operation_order=["cut_path"],
+        operation_order=["sheet_perimeter", "cut_path"],
         known_presets=PRESETS,
         perimeter_join_mode="connected",
     )
@@ -391,7 +400,7 @@ def test_simulation_nc_contains_single_connected_perimeter_path():
     perimeter = next(
         path
         for operation in program["operations"]
-        if operation["operation_key"] == "cut_path"
+        if operation["operation_key"] == "sheet_perimeter"
         for path in operation["toolpaths"]
         if path["path_key"] == SHEET_PERIMETER_PATH_KEY
     )
@@ -554,15 +563,22 @@ def test_compile_connected_with_hole_geometry_keeps_single_perimeter_path():
         issue.get("code") == "perimeter_components_disconnected"
         for issue in connected.get("issues") or []
     )
+    perimeter_paths = [
+        path
+        for operation in connected["operations"]
+        if operation["operation_key"] == "sheet_perimeter"
+        for path in operation["toolpaths"]
+        if path["path_key"] == SHEET_PERIMETER_PATH_KEY
+    ]
     cut_paths = [
         path
         for operation in connected["operations"]
         if operation["operation_key"] == "cut_path"
         for path in operation["toolpaths"]
     ]
-    perimeter_paths = [path for path in cut_paths if path["path_key"] == SHEET_PERIMETER_PATH_KEY]
     assert len(perimeter_paths) == 1
     assert perimeter_paths[0]["closed"] is True
+    assert all(path["path_key"] != SHEET_PERIMETER_PATH_KEY for path in cut_paths)
     retracts = [motion for motion in perimeter_paths[0]["motions"] if motion["kind"] == "retract"]
     cuts = [motion for motion in perimeter_paths[0]["motions"] if motion["kind"] == "cut"]
     assert len(cuts) >= 4

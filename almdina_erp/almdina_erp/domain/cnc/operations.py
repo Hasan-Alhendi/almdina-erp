@@ -42,10 +42,13 @@ def _addon_layer(kind: str) -> str:
 
 
 # ``sequence`` is the default machining order for a sheet: liner, handle recess,
-# rear groove, then the cut that separates the pieces. The tuple order above
-# the sequence stays the DXF layer contract and is not a machining order.
+# rear groove, connected sheet perimeter (when enabled), then the cut that
+# separates the pieces. ``sheet_perimeter`` reuses the CUT_PATH DXF layer but is
+# a distinct logical operation; layer→operation lookup must not map every
+# CUT_PATH entity to it.
+SHEET_PERIMETER_OPERATION_KEY = "sheet_perimeter"
 CNC_OPERATION_TYPES: tuple[CncOperationType, ...] = (
-    CncOperationType("cut_path", CUT_PATH_LAYER, 4, "cnc_default_preset_cut_path"),
+    CncOperationType("cut_path", CUT_PATH_LAYER, 5, "cnc_default_preset_cut_path"),
     CncOperationType("liner", _addon_layer("liner"), 1, "cnc_default_preset_liner"),
     CncOperationType(
         "back_groove",
@@ -59,6 +62,12 @@ CNC_OPERATION_TYPES: tuple[CncOperationType, ...] = (
         2,
         "cnc_default_preset_handle_recess",
     ),
+    CncOperationType(
+        SHEET_PERIMETER_OPERATION_KEY,
+        CUT_PATH_LAYER,
+        4,
+        "cnc_default_preset_cut_path",
+    ),
 )
 CNC_OPERATIONS_BY_KEY = {operation.key: operation for operation in CNC_OPERATION_TYPES}
 DEFAULT_MACHINING_ORDER = tuple(
@@ -69,6 +78,14 @@ OPERATIONAL_DXF_LAYERS = frozenset(
     operation.dxf_layer for operation in CNC_OPERATION_TYPES
 )
 ILLUSTRATIVE_DXF_LAYERS = _ILLUSTRATIVE_LAYERS
+# One primary operation per DXF layer for geometry that has no path identity.
+# ``sheet_perimeter`` shares CUT_PATH with ``cut_path`` and is resolved only by
+# the logical path key ``cut_path:sheet_perimeter``.
+PRIMARY_OPERATION_BY_LAYER = {
+    operation.dxf_layer.upper(): operation
+    for operation in CNC_OPERATION_TYPES
+    if operation.key != SHEET_PERIMETER_OPERATION_KEY
+}
 
 
 def is_operational_layer(layer: str) -> bool:
@@ -82,6 +99,10 @@ def operation_for_key(key: str) -> CncOperationType:
         raise ValueError(f"Unknown CNC operation: {key}") from exc
 
 
+def primary_operation_for_layer(layer: str) -> CncOperationType | None:
+    return PRIMARY_OPERATION_BY_LAYER.get(str(layer or "").strip().upper())
+
+
 __all__ = [
     "CNC_OPERATIONS_BY_KEY",
     "CNC_OPERATION_TYPES",
@@ -89,7 +110,10 @@ __all__ = [
     "CUT_PATH_LAYER",
     "ILLUSTRATIVE_DXF_LAYERS",
     "OPERATIONAL_DXF_LAYERS",
+    "PRIMARY_OPERATION_BY_LAYER",
+    "SHEET_PERIMETER_OPERATION_KEY",
     "CncOperationType",
     "is_operational_layer",
     "operation_for_key",
+    "primary_operation_for_layer",
 ]

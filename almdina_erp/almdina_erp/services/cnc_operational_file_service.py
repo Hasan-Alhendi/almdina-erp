@@ -134,7 +134,7 @@ _MESSAGES = {
     "perimeter_components_disconnected": "The outer cut network has more than one separate component.",
     "perimeter_geometry_invalid": "The connected perimeter would change the approved cut geometry.",
     "cut_path_sequence_invalid": "The CUT_PATH execution order is not valid for this sheet.",
-    "perimeter_cut_early_unconfirmed": "Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths.",
+    "perimeter_cut_early_unconfirmed": "Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove.",
 }
 
 

@@ -16,7 +16,10 @@ from dataclasses import dataclass
 
 from almdina_erp.almdina_erp.domain.cnc.operations import (
     CNC_OPERATION_TYPES,
+    CNC_OPERATIONS_BY_KEY,
     ILLUSTRATIVE_DXF_LAYERS,
+    SHEET_PERIMETER_OPERATION_KEY,
+    primary_operation_for_layer,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
@@ -46,8 +49,12 @@ _ROLE_ISSUES = {
     "merged_mill_preset_ambiguous": "merged_mill_preset_ambiguous",
 }
 
+# Primary layer map excludes sheet_perimeter so shared CUT_PATH geometry stays
+# on cut_path unless the entity carries the perimeter path identity.
 _OPERATIONS_BY_LAYER = {
-    operation.dxf_layer.upper(): operation for operation in CNC_OPERATION_TYPES
+    operation.dxf_layer.upper(): operation
+    for operation in CNC_OPERATION_TYPES
+    if operation.key != SHEET_PERIMETER_OPERATION_KEY
 }
 _ILLUSTRATIVE = {layer.upper() for layer in ILLUSTRATIVE_DXF_LAYERS}
 
@@ -357,7 +364,17 @@ def _translate(
 
 
 def _layer_operation(layer: str):
-    return _OPERATIONS_BY_LAYER.get(str(layer or "").strip().upper())
+    return primary_operation_for_layer(layer) or _OPERATIONS_BY_LAYER.get(
+        str(layer or "").strip().upper()
+    )
+
+
+def _entity_operation(entity: CncSourceEntity):
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
+    if str(entity.path_key or "").strip() == SHEET_PERIMETER_PATH_KEY:
+        return CNC_OPERATIONS_BY_KEY.get(SHEET_PERIMETER_OPERATION_KEY)
+    return _layer_operation(entity.layer)
 
 
 def _collect_paths(
@@ -368,7 +385,7 @@ def _collect_paths(
     line_groups: dict[tuple[str, str, str, str, str], list[tuple[tuple[float, float], tuple[float, float]]]] = {}
     for entity in entities:
         layer_name = str(entity.layer or "").strip()
-        if layer_name.upper() in _ILLUSTRATIVE or _layer_operation(layer_name) is None:
+        if layer_name.upper() in _ILLUSTRATIVE or _entity_operation(entity) is None:
             continue
         translated = _translate(entity.points, origin)
         if translated is None:
@@ -459,7 +476,7 @@ def build_board_program(
     for item in raw_paths:
         entity = item["entity"]
         assert isinstance(entity, CncSourceEntity)
-        operation = _layer_operation(entity.layer)
+        operation = _entity_operation(entity)
         if operation is None:
             continue
         issue = str(item.get("issue") or "")
@@ -505,7 +522,7 @@ def build_board_program(
         if (
             not issue
             and preset is not None
-            and operation.key == "cut_path"
+            and operation.key in {"cut_path", SHEET_PERIMETER_OPERATION_KEY}
             and entity.role == "tool_center"
             and approved_kerf_mm is not None
             and abs(float(preset.tool_diameter_mm) - float(approved_kerf_mm)) > _DIAMETER_TOLERANCE_MM

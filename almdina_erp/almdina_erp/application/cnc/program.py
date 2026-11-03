@@ -24,13 +24,11 @@ from almdina_erp.almdina_erp.domain.cnc.operations import (
 from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     PERIMETER_JOIN_CONNECTED,
     SHEET_PERIMETER_PATH_KEY,
-    connected_cut_path_order_keys,
     extract_connected_perimeter,
     normalize_perimeter_join_mode,
     polyline_segments,
     prefer_uploaded_perimeter_polyline,
     remaining_segments_after_perimeter,
-    resolve_cut_path_sequence,
 )
 from almdina_erp.almdina_erp.domain.cnc.program import (
     CncSourceEntity,
@@ -253,15 +251,16 @@ def _hole_keys(piece_id: str, holes: Sequence[Any]) -> list[tuple[str, Any]]:
 
 
 def _complete_order(requested: Sequence[str], present: set[str]) -> list[str]:
-    ordered: list[str] = []
-    for raw in requested:
-        key = str(raw or "").strip()
-        if key in CNC_OPERATIONS_BY_KEY and key not in ordered:
-            ordered.append(key)
-    for key in DEFAULT_MACHINING_ORDER:
-        if key in present and key not in ordered:
-            ordered.append(key)
-    return ordered
+    """Keep a requested order and insert newly present operations by default rank."""
+
+    from almdina_erp.almdina_erp.domain.cnc.operational_file import merge_operation_order
+
+    known = [
+        str(raw or "").strip()
+        for raw in requested
+        if str(raw or "").strip() in CNC_OPERATIONS_BY_KEY
+    ]
+    return list(merge_operation_order(sorted(present), known))
 
 
 def _entity(
@@ -636,25 +635,26 @@ def compile_sheet_program(
             continue
         if path.operation_key == "cut_path":
             continue
+        # Filled by the connected-perimeter pass below; do not mark missing yet.
+        if path.operation_key == "sheet_perimeter":
+            continue
         if not any(item["path_key"] == path.path_key for item in blocked):
             blocked_path("toolpath_missing", path.path_key)
 
-    path_execution_order: tuple[str, ...] = ()
     if join_mode == PERIMETER_JOIN_CONNECTED:
         entities = _apply_connected_perimeter(
             entities,
             uploaded=uploaded if isinstance(uploaded, Mapping) else None,
             blocked_path=blocked_path,
         )
-        try:
-            path_execution_order = resolve_cut_path_sequence(
-                connected_cut_path_order_keys(),
-                cut_path_sequence,
-                perimeter_early_confirmed=bool(perimeter_cut_early_confirmed),
-            )
-        except OperationalFileError as exc:
-            blocked_path(exc.code, SHEET_PERIMETER_PATH_KEY)
-            path_execution_order = ()
+        extracted = {entity.path_key for entity in entities if entity.path_key}
+        if SHEET_PERIMETER_PATH_KEY not in extracted and not any(
+            item["path_key"] == SHEET_PERIMETER_PATH_KEY for item in blocked
+        ):
+            blocked_path("perimeter_unavailable", SHEET_PERIMETER_PATH_KEY)
+    # Legacy cut_path_sequence is ignored for execution; operation_order wins.
+    _ = cut_path_sequence
+    _ = perimeter_cut_early_confirmed
 
     layer_cut = str(operation_presets.get("cut_path") or "").strip()
     shared_exists = any(
@@ -669,12 +669,18 @@ def compile_sheet_program(
         for path in catalog.paths
         if path.operation_key == "cut_path" and path.path_key != SHEET_PERIMETER_PATH_KEY
     )
+    # Ensure connected perimeter inherits the cut_path preset when omitted.
+    presets = dict(operation_presets)
+    if join_mode == PERIMETER_JOIN_CONNECTED and not str(presets.get("sheet_perimeter") or "").strip():
+        inherited = str(presets.get("cut_path") or "").strip()
+        if inherited:
+            presets["sheet_perimeter"] = inherited
     overrides = {str(key): value for key, value in path_overrides.items()}
     program = build_board_program(
         sheet_no=int(sheet_no),
         entities=entities,
         operation_order=order,
-        operation_presets=operation_presets,
+        operation_presets=presets,
         path_overrides=overrides,
         known_presets=known_presets,
         cut_path_early_confirmed=cut_path_early_confirmed,
@@ -685,7 +691,7 @@ def compile_sheet_program(
         blocked_catalog_paths=blocked,
         shared_cut_ambiguous=ambiguous,
         approved_kerf_mm=float(kerf) if isinstance(kerf, (int, float)) and not isinstance(kerf, bool) else None,
-        path_execution_order=path_execution_order,
+        path_execution_order=(),
     )
     return program_payload(program)
 

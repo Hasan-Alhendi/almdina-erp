@@ -632,6 +632,14 @@ def resolve_cut_path_sequence(
     *,
     perimeter_early_confirmed: bool = False,
 ) -> tuple[str, ...]:
+    """Compatibility helper for legacy within-CUT_PATH sequence storage.
+
+    Operation order is the authority for connected perimeter placement.
+    ``perimeter_early_confirmed`` is retained for call-site compatibility and
+    no longer rejects perimeter-before-internals here.
+    """
+
+    _ = perimeter_early_confirmed
     present_keys = [str(key) for key in present]
     present_set = set(present_keys)
     if SHEET_PERIMETER_PATH_KEY not in present_set and CUT_PATH_INTERNAL_SEQUENCE_KEY not in present_set:
@@ -641,8 +649,6 @@ def resolve_cut_path_sequence(
         ordered = default_cut_path_sequence(present_keys)
     if set(ordered) != set(CONNECTED_CUT_PATH_ORDER_KEYS) or len(ordered) != 2:
         raise OperationalFileError("cut_path_sequence_invalid")
-    if ordered[0] == SHEET_PERIMETER_PATH_KEY and not perimeter_early_confirmed:
-        raise OperationalFileError("perimeter_cut_early_unconfirmed")
     return ordered
 
 

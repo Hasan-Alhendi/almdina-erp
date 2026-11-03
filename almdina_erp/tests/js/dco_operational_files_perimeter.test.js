@@ -74,10 +74,23 @@ function makeConnectedProgram() {
     return {
         sheet_width_mm: 1220,
         sheet_length_mm: 2440,
-        operations: [{
-            operation_key: "cut_path",
-            toolpaths: [
-                {
+        operations: [
+            {
+                operation_key: "sheet_perimeter",
+                toolpaths: [{
+                    path_key: ux.SHEET_PERIMETER_PATH_KEY,
+                    closed: true,
+                    ready: true,
+                    issues: [],
+                    piece_label: "",
+                    piece_instance_id: "",
+                    sequence: 1,
+                    motions: motionChain([[0, 0], [200, 0], [200, 120], [0, 120]], 6, true),
+                }],
+            },
+            {
+                operation_key: "cut_path",
+                toolpaths: [{
                     path_key: "cut_path:center:internal",
                     closed: false,
                     ready: true,
@@ -86,31 +99,23 @@ function makeConnectedProgram() {
                     piece_instance_id: "",
                     sequence: 1,
                     motions: motionChain([[50, 0], [50, 40]], 6, false),
-                },
-                {
-                    path_key: ux.SHEET_PERIMETER_PATH_KEY,
-                    closed: true,
-                    ready: true,
-                    issues: [],
-                    piece_label: "",
-                    piece_instance_id: "",
-                    sequence: 2,
-                    motions: motionChain([[0, 0], [200, 0], [200, 120], [0, 120]], 6, true),
-                },
-            ],
-        }],
+                }],
+            },
+        ],
     };
 }
 
 assert.equal(ux.SHEET_PERIMETER_PATH_KEY, "cut_path:sheet_perimeter");
+assert.equal(ux.SHEET_PERIMETER_OPERATION_KEY, "sheet_perimeter");
 assert.equal(ux.CUT_PATH_INTERNAL_SEQUENCE_KEY, "cut_path:internals");
 assert.deepEqual(
-    ux.defaultCutPathSequence(),
-    [ux.CUT_PATH_INTERNAL_SEQUENCE_KEY, ux.SHEET_PERIMETER_PATH_KEY]
+    ux.deriveCutPathSequenceFromOrder(["sheet_perimeter", "cut_path"]),
+    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
 );
 assert.ok(panel.includes("_cncSheetInteractionsBound"));
 assert.ok(panel.includes("paintPerimeterJoinControls("));
 assert.ok(panel.includes("applyPerimeterJoinMode("));
+assert.ok(panel.includes("ensureSheetPerimeterOperation("));
 assert.ok(!panel.includes("existing.outerHTML = markup"));
 assert.ok(panel.includes("data-perimeter-join-mode"));
 
@@ -120,17 +125,25 @@ const sheetSeparate = ux.sheetState({
 });
 assert.equal(sheetSeparate.perimeterJoinMode, "separate");
 assert.deepEqual(sheetSeparate.cutPathSequence, []);
+assert.ok(!sheetSeparate.order.includes("sheet_perimeter"));
 
 const sheetConnected = ux.sheetState({
-    operations: [{ operation_key: "cut_path", tool_preset: "Finish", preset_source: "factory", factory_preset: "Finish" }],
+    operations: [
+        { operation_key: "cut_path", tool_preset: "Finish", preset_source: "factory", factory_preset: "Finish" },
+    ],
     paths: [
         { path_key: "cut_path:a:outer", operation_key: "cut_path", tool_preset: "" },
-        { path_key: ux.SHEET_PERIMETER_PATH_KEY, operation_key: "cut_path", is_sheet_perimeter: true },
+        { path_key: ux.SHEET_PERIMETER_PATH_KEY, operation_key: "sheet_perimeter", is_sheet_perimeter: true },
     ],
     perimeter_join_mode: "connected",
-    cut_path_sequence: ["cut_path:a:outer", ux.SHEET_PERIMETER_PATH_KEY],
+    cut_path_sequence: [ux.CUT_PATH_INTERNAL_SEQUENCE_KEY, ux.SHEET_PERIMETER_PATH_KEY],
 });
-assert.deepEqual(sheetConnected.cutPathSequence, ux.defaultCutPathSequence());
+assert.ok(sheetConnected.order.includes("sheet_perimeter"));
+assert.ok(sheetConnected.order.indexOf("sheet_perimeter") < sheetConnected.order.indexOf("cut_path"));
+assert.deepEqual(
+    sheetConnected.cutPathSequence,
+    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
+);
 
 const args = ux.sheetGenerateArgs(
     { doc: { name: "DCO-1" } },
@@ -139,7 +152,11 @@ const args = ux.sheetGenerateArgs(
     sheetConnected
 );
 assert.equal(args.perimeter_join_mode, "connected");
-assert.deepEqual(args.cut_path_sequence, ux.defaultCutPathSequence());
+assert.deepEqual(
+    args.cut_path_sequence,
+    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
+);
+assert.ok(args.operation_order.includes("sheet_perimeter"));
 assert.equal(
     ux.sheetGenerateArgs(
         { doc: { name: "DCO-1" } },
@@ -150,13 +167,14 @@ assert.equal(
     null
 );
 
-ux.moveCutPathSequence(sheetConnected, ux.SHEET_PERIMETER_PATH_KEY, -1);
+const reordered = Object.assign({}, sheetConnected, {
+    order: ["cut_path", "sheet_perimeter"],
+});
+ux.syncCutPathSequence(reordered);
 assert.deepEqual(
-    sheetConnected.cutPathSequence,
-    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
+    reordered.cutPathSequence,
+    [ux.CUT_PATH_INTERNAL_SEQUENCE_KEY, ux.SHEET_PERIMETER_PATH_KEY]
 );
-ux.moveCutPathSequence(sheetConnected, ux.SHEET_PERIMETER_PATH_KEY, 1);
-assert.deepEqual(sheetConnected.cutPathSequence, ux.defaultCutPathSequence());
 
 const separatePaths = ux.collectPhysicalPaths(makeSeparateProgram());
 const connectedPaths = ux.collectPhysicalPaths(makeConnectedProgram());
@@ -164,8 +182,12 @@ assert.equal(separatePaths.length, 1);
 assert.equal(connectedPaths.length, 2);
 assert.ok(connectedPaths.some(item => item.path_key === ux.SHEET_PERIMETER_PATH_KEY));
 assert.equal(
+    connectedPaths.find(item => item.is_sheet_perimeter).operation_key,
+    "sheet_perimeter"
+);
+assert.equal(
     ux.pathDisplayLabel(connectedPaths.find(item => item.is_sheet_perimeter)),
-    "Sheet perimeter — Perimeter Cut"
+    "Sheet Perimeter Cut"
 );
 
 const preview = ux.cutPathPreviewMarkup(makeConnectedProgram(), {
@@ -299,10 +321,18 @@ const sheet = {
 };
 const frm = { doc: { name: "DCO-1" } };
 
+state.order = ["cut_path"];
+state.operations = { cut_path: "Finish" };
+state.sources = { cut_path: "factory" };
+state.factoryPresets = { cut_path: "Finish" };
 const beforeCalls = calls.length;
 ux.applyPerimeterJoinMode(frm, dialog, workspace, sheet, state, "connected");
 assert.equal(state.perimeterJoinMode, "connected");
-assert.deepEqual(state.cutPathSequence, ux.defaultCutPathSequence());
+assert.ok(state.order.includes("sheet_perimeter"));
+assert.deepEqual(
+    state.cutPathSequence,
+    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
+);
 assert.equal(radios.connected.checked, true);
 assert.equal(radios.separate.checked, false);
 assert.equal(fieldset.replaced, 0, "radio host must survive join-mode updates");
@@ -310,7 +340,7 @@ assert.ok(calls.length > beforeCalls);
 assert.equal(calls[calls.length - 1].perimeter_join_mode, "connected");
 assert.deepEqual(
     calls[calls.length - 1].cut_path_sequence,
-    ux.defaultCutPathSequence()
+    [ux.SHEET_PERIMETER_PATH_KEY, ux.CUT_PATH_INTERNAL_SEQUENCE_KEY]
 );
 
 // Second toggle after another in-place paint (async sync equivalent).
@@ -318,10 +348,12 @@ ux.paintPerimeterJoinControls(article, state, true);
 ux.applyPerimeterJoinMode(frm, dialog, workspace, sheet, state, "separate");
 assert.equal(state.perimeterJoinMode, "separate");
 assert.deepEqual(state.cutPathSequence, []);
+assert.ok(!state.order.includes("sheet_perimeter"));
 assert.equal(calls[calls.length - 1].perimeter_join_mode, "separate");
 assert.equal(calls[calls.length - 1].cut_path_sequence, null);
 assert.equal(fieldset.replaced, 0);
 
+const layerRows = {};
 const listBody = {
     rows: [],
     querySelector(selector) {
@@ -329,17 +361,21 @@ const listBody = {
         if (selector === "[data-sheet-preview]") return null;
         const layerMatch = String(selector).match(/data-layer="([^"]+)"/);
         if (!layerMatch) return null;
+        const layerKey = layerMatch[1];
         return {
             querySelector(inner) {
                 if (inner === ".dco-operational-layer__paths") {
                     return {
                         set innerHTML(value) {
                             this._html = value;
-                            listBody.rows = [...String(value).matchAll(/data-path-key="([^"]+)"[^>]*data-path-number="([^"]+)"/g)]
+                            layerRows[layerKey] = [...String(value).matchAll(/data-path-key="([^"]+)"[^>]*data-path-number="([^"]+)"/g)]
                                 .map(match => ({
                                     path_key: match[1],
                                     number: match[2],
                                 }));
+                            listBody.rows = Object.keys(layerRows)
+                                .sort()
+                                .flatMap(key => layerRows[key]);
                         },
                         get innerHTML() { return this._html || ""; },
                     };
@@ -355,19 +391,20 @@ const listBody = {
         return [];
     },
 };
-state.order = ["cut_path"];
+state.order = ["sheet_perimeter", "cut_path"];
 ux.syncPhysicalPathList(listBody, workspace, sheet, state, makeConnectedProgram(), null);
 assert.equal(fieldset.replaced, 0, "syncPhysicalPathList must not replace perimeter radios");
+assert.ok(layerRows.sheet_perimeter.some(row => row.path_key === ux.SHEET_PERIMETER_PATH_KEY));
+assert.ok(layerRows.cut_path.every(row => row.path_key !== ux.SHEET_PERIMETER_PATH_KEY));
 assert.deepEqual(
-    listBody.rows.map(row => row.number),
+    [...(layerRows.sheet_perimeter || []), ...(layerRows.cut_path || [])].map(row => row.number),
     ux.collectPhysicalPaths(makeConnectedProgram()).map(item => String(item.path_number))
 );
-assert.ok(listBody.rows.some(row => row.path_key === ux.SHEET_PERIMETER_PATH_KEY));
 
 assert.ok(css.includes(".dco-operational-perimeter"));
 assert.ok(translations.includes("طريقة قص محيط اللوح"));
 assert.ok(translations.includes("محيط متصل"));
 assert.ok(translations.includes("محيط غير متصل"));
-assert.ok(translations.includes("محيط اللوح — Perimeter Cut"));
+assert.ok(translations.includes("قص محيط اللوح"));
 
 console.log("dco_operational_files_perimeter.test.js: ok");

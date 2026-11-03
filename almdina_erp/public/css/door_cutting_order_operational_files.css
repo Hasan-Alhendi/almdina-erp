@@ -240,7 +240,7 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     margin-inline: 0.25rem;
 }
 .dco-operational-path.is-sheet-perimeter .dco-operational-path__number {
-    background: #5b2c6f;
+    background: #0b7285;
     color: #fff;
 }
 .dco-operational-path.is-selected,
