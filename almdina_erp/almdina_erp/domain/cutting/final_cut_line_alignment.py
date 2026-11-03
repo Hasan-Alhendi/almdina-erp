@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import time
 from copy import deepcopy
+from dataclasses import dataclass
 from itertools import zip_longest
 from typing import Any
 
@@ -23,6 +24,30 @@ _MAX_TRIALS = 24
 _MAX_SWEEPS = 4
 _EPS = 1e-7
 _NETWORK_EPS_MM = 0.05
+
+
+@dataclass(frozen=True, slots=True)
+class _BaselineProof:
+    plan: dict[str, Any]
+    sources: list[dict[str, Any]]
+    context: tuple[float, float, float, bool]
+
+    def matches(self, plan, sources, width, height, kerf, mirroring):
+        return (self.context == (width, height, kerf, mirroring)
+                and self.plan == plan and self.sources == sources)
+
+
+def validate_alignment_baseline(plan, sources, width, height, kerf, *, mirroring_allowed):
+    """An ephemeral full-validation proof, never a snapshot/client trust flag.
+
+    Reuse is restricted to exact complete plan/source/context equality. Any
+    movement, metadata or permission change invalidates it. The final System
+    snapshot still receives its independent full manufacturing validation.
+    """
+    if (validate_plan(plan, sources, width, height, kerf_cm=kerf)
+            or placement_permission_errors(plan, sources, mirroring_allowed=mirroring_allowed)):
+        return None
+    return _BaselineProof(deepcopy(plan), deepcopy(sources), (width, height, kerf, mirroring_allowed))
 
 
 def _sheet_center_profile(
@@ -75,6 +100,16 @@ def _eligible_ids(sheet: dict[str, Any], sources: dict[int, dict[str, Any]],
         and (sources[int(piece["id"])].get("piece_type") or "Regular") == "Regular"
         and (sources[int(piece["id"])].get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
     }
+
+
+def has_regular_alignment_candidates(plan, sources, machine_type):
+    """Cheap scheduling eligibility; no geometry or manufacturing proof."""
+    if (machine_type not in {"Auto", "CNC Router"} or not sources
+            or plan.get("unplaced") or len(plan.get("industrial_rank") or ()) != 8):
+        return False
+    by_id = {int(p["id"]): p for p in sources}
+    locked = _locked_piece_ids(plan)
+    return any(len(_eligible_ids(sheet, by_id, locked)) >= 2 for sheet in plan.get("sheets") or [])
 
 
 def _axis_alignment_score(plan: dict[str, Any], kerf_cm: float,
@@ -390,6 +425,28 @@ def _translate_if_clear(
     return candidate
 
 
+def _translation_validation_scope(candidate, baseline, sources, sheet_index):
+    """Reuse proved sheets only when their complete contents remain identical.
+
+    Sheet geometry is independent. The baseline has already passed full-plan
+    validation, and the changed sheet must retain exactly its original source
+    identities. Thus the unchanged sheets' complete proofs plus a fresh full
+    check of this sheet are equivalent to rechecking the entire candidate.
+    Any unexpected change falls back to the original whole-plan validator.
+    """
+    before, after = baseline.get("sheets") or [], candidate.get("sheets") or []
+    if (len(before) != len(after) or candidate.get("unplaced") != baseline.get("unplaced")
+            or any(a != b for i, (a, b) in enumerate(zip(before, after)) if i != sheet_index)):
+        return candidate, sources, False
+    identities = lambda sheet: sorted((int(p["id"]), str(p.get("piece_instance_id") or ""))
+                                      for p in sheet.get("pieces") or [])
+    if identities(before[sheet_index]) != identities(after[sheet_index]):
+        return candidate, sources, False
+    ids = {int(p["id"]) for p in before[sheet_index].get("pieces") or []}
+    return ({"sheets": [after[sheet_index]], "unplaced": []},
+            [p for p in sources if int(p["id"]) in ids], True)
+
+
 def align_regular_cut_lines(
     plan: dict[str, Any],
     sources: list[dict[str, Any]],
@@ -402,6 +459,7 @@ def align_regular_cut_lines(
     metric_kwargs: dict[str, Any],
     deadline_monotonic: float | None = None,
     diagnostics: dict[str, Any] | None = None,
+    baseline_proof: _BaselineProof | None = None,
 ) -> dict[str, Any]:
     """Bounded post-search improvement; never accept a worse real cut network.
 
@@ -432,7 +490,10 @@ def align_regular_cut_lines(
     if all(len(ids) < 2 for ids in eligible.values()):
         diag["reason"] = "no_eligible_pair"
         return plan
-    if validate_plan(plan, sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+    reusable_proof = (isinstance(baseline_proof, _BaselineProof) and baseline_proof.matches(
+        plan, sources, board_w_cm, board_h_cm, kerf_cm, mirroring_allowed))
+    diag["baseline_validation_reused"] = reusable_proof
+    if not reusable_proof and validate_plan(plan, sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
         diag["reason"] = "invalid_initial"
         return plan
 
@@ -460,16 +521,45 @@ def align_regular_cut_lines(
     best_inboard = sum(p[2] for p in sheet_profiles.values())
     best_axis = sum(sheet_axes.values())
     attempts = 0
+
+    def checked_winner(choices):
+        # Compare bounded exact-geometry contenders first. Only a contender
+        # that can win this round pays for authoritative validation/enrichment.
+        # Every published move still passes all original manufacturing gates.
+        for choice in sorted(choices, key=lambda item: item["key"]):
+            if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+                diag["reason"] = "deadline"
+                return None
+            candidate = choice["candidate"]
+            validation_plan, validation_sources, reused = _translation_validation_scope(
+                candidate, best, sources, choice["sheet_index"])
+            diag["candidate_validations"] = diag.get("candidate_validations", 0) + 1
+            diag["unchanged_sheets_reused"] = diag.get("unchanged_sheets_reused", 0) + int(reused)
+            if validate_plan(validation_plan, validation_sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
+                             deadline_monotonic=deadline_monotonic):
+                diag["rejected_validation"] = diag.get("rejected_validation", 0) + 1
+                continue
+            if placement_permission_errors(candidate, sources, mirroring_allowed=mirroring_allowed):
+                diag["rejected_permission"] = diag.get("rejected_permission", 0) + 1
+                continue
+            candidate = enrich_plan_metrics(
+                candidate, str(best.get("method_key") or ""), machine_type, **metric_kwargs,
+            )
+            if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
+                diag["rejected_rank"] = diag.get("rejected_rank", 0) + 1
+                continue
+            # A completed, validated contender is committed even if its last
+            # metric calculation used the remaining time. Never discard it at
+            # the next deadline check while returning an older incumbent.
+            return {**choice, "candidate": candidate}
+        return None
+
     for sweep_index in range(_MAX_SWEEPS):
+        if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            diag["reason"] = "deadline"
+            return best
         winner = None
-        winner_profile = best_profile
-        winner_axis = best_axis
-        winner_key = None
-        winner_sheet_profile = None
-        winner_sheet_axis = None
-        winner_sheet_remnant = None
-        winner_sheet_index = None
-        winner_inboard = best_inboard
+        choices = []
         moves = _candidate_moves(best, kerf_cm, eligible, deadline_monotonic)
         diag["candidate_count"] += len(moves)
         # Reserve part of the existing fixed trial allowance for improvements
@@ -479,15 +569,19 @@ def align_regular_cut_lines(
         round_quota = max(1, math.ceil((_MAX_TRIALS - attempts) / remaining_sweeps))
         round_attempts = 0
         for sheet_index, axis, ids, delta in moves:
-            if round_attempts >= round_quota and winner is not None:
-                diag["reserved_for_followup"] = diag.get("reserved_for_followup", 0) + 1
-                break
+            if round_attempts >= round_quota and choices:
+                winner = checked_winner(choices)
+                choices = []
+                round_attempts = 0
+                if winner is not None:
+                    diag["reserved_for_followup"] = diag.get("reserved_for_followup", 0) + 1
+                    break
             if attempts >= _MAX_TRIALS:
                 diag["reason"] = "trial_limit"
-                return best
+                break
             if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
                 diag["reason"] = "deadline"
-                return best
+                break
             candidate = _translate_if_clear(best, sheet_index, axis, ids, delta, kerf_cm)
             if candidate is None:
                 diag["blocked_geometry"] = diag.get("blocked_geometry", 0) + 1
@@ -548,43 +642,23 @@ def align_regular_cut_lines(
             if after_remnant + 1e-9 < sheet_remnants[sheet_index]:
                 diag["rejected_remnant"] = diag.get("rejected_remnant", 0) + 1
                 continue
-            # Only promising candidates reach the independent FULL-plan
-            # manufacturing validators; the final gate is not weakened.
-            if validate_plan(candidate, sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
-                             deadline_monotonic=deadline_monotonic):
-                diag["rejected_validation"] = diag.get("rejected_validation", 0) + 1
-                continue
-            if placement_permission_errors(candidate, sources, mirroring_allowed=mirroring_allowed):
-                diag["rejected_permission"] = diag.get("rejected_permission", 0) + 1
-                continue
-            candidate = enrich_plan_metrics(
-                candidate, str(best.get("method_key") or ""), machine_type,
-                **metric_kwargs,
-            )
-            if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
-                diag["rejected_rank"] = diag.get("rejected_rank", 0) + 1
-                continue
             # Equal real cut length: prefer one long *internal* cutter route
             # over a superficially shorter segment list along the sheet border.
             # Count still cannot regress against the accepted baseline.
             key = (*final_cut_quality_key((profile[0], profile[1], inboard)),
                    -alignment, abs(delta), sheet_index, axis, ids, delta)
-            if winner_key is None or key < winner_key:
-                winner, winner_profile, winner_axis, winner_key = (
-                    candidate, profile, alignment, key
-                )
-                winner_sheet_index = sheet_index
-                winner_sheet_profile = candidate_sheet_profile
-                winner_sheet_axis = candidate_sheet_axis
-                winner_sheet_remnant = after_remnant
-                winner_inboard = inboard
+            choices.append(dict(key=key, candidate=candidate, profile=profile,
+                alignment=alignment, sheet_index=sheet_index, sheet_profile=candidate_sheet_profile,
+                sheet_axis=candidate_sheet_axis, sheet_remnant=after_remnant, inboard=inboard))
+        if winner is None and choices:
+            winner = checked_winner(choices)
         if winner is None:
             return best
-        best, best_profile, best_axis = winner, winner_profile, winner_axis
-        best_inboard = winner_inboard
-        sheet_profiles[winner_sheet_index] = winner_sheet_profile
-        sheet_axes[winner_sheet_index] = winner_sheet_axis
-        sheet_remnants[winner_sheet_index] = winner_sheet_remnant
+        best, best_profile, best_axis = winner["candidate"], winner["profile"], winner["alignment"]
+        best_inboard = winner["inboard"]
+        sheet_profiles[winner["sheet_index"]] = winner["sheet_profile"]
+        sheet_axes[winner["sheet_index"]] = winner["sheet_axis"]
+        sheet_remnants[winner["sheet_index"]] = winner["sheet_remnant"]
         diag["accepted"] += 1
         diag["reason"] = "improved"
     return best

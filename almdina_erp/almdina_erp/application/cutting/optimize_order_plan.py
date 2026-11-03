@@ -194,31 +194,10 @@ def optimize_order_plan(
         # placement can outrank an equivalent continuous *internal* cutter
         # path merely because estimated _cut_metrics ignores sheet edges.
         # Never mix unproven special geometry with exact scores.
-        from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
-            final_cut_quality_key, plan_cut_line_quality,
-        )
-        profiles = (
-            [plan_cut_line_quality(snapshot, board.kerf_cm)
-             for snapshot in snapshots]
-            if command.optimizer.machine_type in {"Auto", "CNC Router"} else []
-        )
-        if snapshots and profiles and all(profile is not None for profile in profiles):
-            paired = sorted(
-                zip(snapshots, raw_seeds, profiles),
-                key=lambda item: (
-                    tuple((item[0].get("industrial_rank") or ())[:4]),
-                    final_cut_quality_key(item[2]),
-                    tuple((item[0].get("industrial_rank") or ())[4:]),
-                ),
-            )
-            ranked = [(snapshot, seed) for snapshot, seed, _ in paired]
-        else:
-            # Mixed/unsupported outlines or very large sheets retain the
-            # proven legacy priority rather than silently faking toolpaths.
-            ranked = sorted(
-                zip(snapshots, raw_seeds),
-                key=lambda pair: tuple(pair[0].get("industrial_rank") or ()),
-            )
+        from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+        keys = final_system_sort_keys(snapshots)
+        ranked = [(snapshot, seed) for _, snapshot, seed in
+                  sorted(zip(keys, snapshots, raw_seeds), key=lambda item: item[0])]
         snapshots = [snapshot for snapshot, _ in ranked]
         raw_seeds = [seed for _, seed in ranked]
         # Final compaction can make two raw alternatives identical. Keep the
@@ -302,6 +281,24 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan = _enrich_final_geometry_metrics(plan, metric_options)
 
     if plan_settings.optimization_mode == "smart":
+        # An invalid centering proposal must not make alignment a no-op and
+        # then be rolled back only *after* the refinement opportunity is gone.
+        # Use the same independent geometry/permission gates as the final gate.
+        from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+            align_regular_cut_lines, validate_alignment_baseline, has_regular_alignment_candidates,
+        )
+        configured = command.optimizer.alignment_search_budget_sec
+        allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
+                   if math.isfinite(configured) and configured >= 0 else 0.0)
+        baseline_proof = None
+        if allowed > 0 and has_regular_alignment_candidates(plan, expanded, machine_type):
+            baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
+                board.kerf_cm, mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring))
+            if baseline_proof is None:
+                plan["sheets"] = original_sheets
+                plan = _enrich_final_geometry_metrics(plan, metric_options)
+                baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
+                    board.kerf_cm, mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring))
         from almdina_erp.almdina_erp.domain.cutting.plan_search import compact_regular_final
         plan = compact_regular_final(plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
             machine_type=machine_type,
@@ -311,14 +308,8 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         if alignment_budget is None:
             alignment_budget = {"deadline": None}
         if alignment_budget["deadline"] is None:
-            configured = command.optimizer.alignment_search_budget_sec
             # Invalid direct callers fail closed; authoritative factory
             # settings already reject NaN/Infinity and negative values.
-            allowed = (
-                max(0.0, min(configured, command.optimizer.time_limit_sec))
-                if math.isfinite(configured) and configured >= 0
-                else 0.0
-            )
             alignment_budget["deadline"] = time.monotonic() + allowed
         # Every gallery candidate gets a bounded share of the *remaining*
         # shared tail; unused capacity automatically returns to later plans.
@@ -328,13 +319,13 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         remaining_seconds = max(0.0, alignment_budget["deadline"] - now)
         candidate_deadline = now + remaining_seconds / remaining
         # Post-search placement refinement only; never import/approve uploaded DXF.
-        from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
         plan = align_regular_cut_lines(
             plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
             deadline_monotonic=candidate_deadline,
+            baseline_proof=baseline_proof,
         )
 
     def validate_snapshot_plan() -> list[str]:

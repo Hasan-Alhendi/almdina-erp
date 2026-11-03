@@ -74,3 +74,44 @@ def test_preview_session_candidates_roundtrip_without_changing_v1_settings_hash(
     session=CuttingPlanPreviewSession('token','DCO','user','CP','modified','input','settings',{}, {},'now',
         candidates={'server-id':candidate},search_round=1,source_revision=2,expires_at='later')
     assert CuttingPlanPreviewSession.from_cache_value(session.as_cache_value())==session
+
+
+def test_preview_continuation_keeps_the_real_inboard_route_in_its_top_five():
+    from almdina_erp.almdina_erp.application.cutting.plan_preview_session import merge_preview_candidates
+    from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import plan_cut_line_quality,final_cut_quality_key
+    sources=expand_piece_groups([dict(width_cm=20,length_cm=30,qty=1),dict(width_cm=30,length_cm=30,qty=1)])
+    def candidate(key,x,y):
+        plan=opt.enrich_plan_metrics(dict(sheets=[dict(sheet_no=1,w=40,h=100,
+            pieces=[make_placed_piece(p,x,y+dy,p['width_cm'],30,False) for p,dy in zip(sources,[0,30.5])])],
+            unplaced=[],complexity=3),'MaxRects Bottom Left','CNC Router',
+            min_remnant_width_cm=50,min_remnant_length_cm=50,min_remnant_area_m2=.25)
+        plan.update(kerf_cm=.5,machine_type='CNC Router')
+        assert not validate_plan(plan,sources,40,100,kerf_cm=.5)
+        return dict(candidate_id=key,snapshot=plan,geometry_fingerprint=geometry_signature(plan))
+    borders={str(i):candidate(str(i),0,i) for i in range(5)}
+    route=candidate('route',.65,0)
+    assert all(tuple(c['snapshot']['industrial_rank']) < tuple(route['snapshot']['industrial_rank']) for c in borders.values())
+    assert all(final_cut_quality_key(plan_cut_line_quality(route['snapshot'],.5)) <
+        final_cut_quality_key(plan_cut_line_quality(c['snapshot'],.5)) for c in borders.values())
+    merged=merge_preview_candidates({'route':route},borders)
+    assert list(merged)[0]=='route'
+    assert len(merged)==5
+
+
+@pytest.mark.parametrize('unproven', ['kerf', 'machine', 'shape', 'dense'])
+def test_shared_final_comparison_falls_back_for_every_candidate_when_one_is_unproven(unproven):
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    plan = opt.auto_fast(problem(), 100, 100, .3)
+    plan.update(kerf_cm=.3, machine_type='CNC Router')
+    other = deepcopy(plan)
+    if unproven == 'kerf':
+        other['kerf_cm'] = float('nan')
+    elif unproven == 'machine':
+        other['machine_type'] = 'Panel Saw'
+    elif unproven == 'shape':
+        other['sheets'][0]['pieces'][0]['piece_type'] = 'unsupported contour'
+    else:
+        other['sheets'][0]['pieces'] *= 65
+    plans = [plan, other]
+    assert final_system_sort_keys(plans) == [(tuple(p['industrial_rank']),) for p in plans]

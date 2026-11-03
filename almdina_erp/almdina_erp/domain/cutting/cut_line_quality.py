@@ -16,6 +16,7 @@ from typing import Any
 from .cutter_center_paths import cutter_center_segments
 from .glass_opening_nesting import _part_geometry
 from .primitives import num
+from .sheet_edge_trim import resolved_sheet_trim_cm
 
 _TOL_MM = 0.05
 _MAX_SHEET_PIECES = 64
@@ -87,14 +88,23 @@ def sheet_cut_line_quality(
     if not shapes:
         return (0.0, 0, 0.0)
     segments = cutter_center_segments(shapes, max(0.0, kerf_cm) * 5)
-    w = num(sheet.get("w")) * 10
-    h = num(sheet.get("h")) * 10
-    if w <= 0 or h <= 0:
+    try:
+        trim_x = resolved_sheet_trim_cm(sheet, axis="x") * 10
+        trim_y = resolved_sheet_trim_cm(sheet, axis="y") * 10
+    except ValueError:
+        return None
+    w = (num(sheet["full_width_cm"]) * 10 if sheet.get("full_width_cm") is not None
+         else num(sheet.get("w")) * 10 + 2 * trim_x)
+    h = (num(sheet["full_length_cm"]) * 10 if sheet.get("full_length_cm") is not None
+         else num(sheet.get("h")) * 10 + 2 * trim_y)
+    if w <= 0 or h <= 0 or not all(map(math.isfinite, (w, h, trim_x, trim_y))):
         return None
     return (
         sum(math.dist(a, b) for a, b in segments),
         len(segments),
-        max((_inside_length(a, b, w, h) for a, b in segments), default=0.0),
+        max((_inside_length((a[0]+trim_x, a[1]+trim_y),
+                           (b[0]+trim_x, b[1]+trim_y), w, h)
+             for a, b in segments), default=0.0),
     )
 
 
@@ -127,3 +137,32 @@ def final_cut_quality_key(profile: tuple[float, int, float]) -> tuple[float, flo
     """
     length, count, longest = profile
     return (round(length, 5), -round(longest, 3), count)
+
+
+def final_system_sort_keys(plans: list[Mapping[str, Any]]) -> list[tuple]:
+    """One final comparator for generation and cached preview continuation.
+
+    All plans must have comparable, proven cutter geometry. Legacy/incomplete
+    metadata, other machines or unsupported contours keep legacy order for the
+    entire collection; an estimate is never mixed with a measured network.
+    """
+    legacy = [(tuple(plan.get("industrial_rank") or ()),) for plan in plans]
+    profiles = []
+    for plan in plans:
+        if (plan.get("machine_type") not in {"Auto", "CNC Router"}
+                or len(plan.get("industrial_rank") or ()) != 8
+                or plan.get("kerf_cm") is None):
+            return legacy
+        try:
+            kerf = float(plan["kerf_cm"])
+        except (TypeError, ValueError, OverflowError):
+            return legacy
+        if not math.isfinite(kerf) or kerf < 0:
+            return legacy
+        profile = plan_cut_line_quality(plan, kerf)
+        if profile is None:
+            return legacy
+        profiles.append(profile)
+    return [(tuple(plan["industrial_rank"][:4]), final_cut_quality_key(profile),
+             tuple(plan["industrial_rank"][4:]))
+            for plan, profile in zip(plans, profiles)]
