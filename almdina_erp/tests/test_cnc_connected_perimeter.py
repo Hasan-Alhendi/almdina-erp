@@ -18,6 +18,7 @@ from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     CUT_PATH_INTERNAL_SEQUENCE_KEY,
     SHEET_PERIMETER_PATH_KEY,
     connected_cut_path_order_keys,
+    diagnose_cut_network,
     edge_sets_equal,
     extract_connected_perimeter,
     polyline_segments,
@@ -420,3 +421,157 @@ def test_simulation_nc_contains_single_connected_perimeter_path():
     )
     assert snapshot["perimeter_join_mode"] == "connected"
     assert snapshot["production"] is False
+
+
+def test_outer_perimeter_with_internal_closed_loop_is_accepted():
+    outer = polyline_segments(_rect(0, 0, 100, 80), closed=True)
+    hole = polyline_segments(_rect(25, 20, 30, 25), closed=True)
+    network = outer + hole
+    diagnosis = diagnose_cut_network(
+        network,
+        uploaded_cut_paths=[
+            {"closed": True, "points": _rect(0, 0, 100, 80)},
+            {"closed": True, "points": _rect(25, 20, 30, 25)},
+        ],
+    )
+    assert diagnosis.component_count == 2
+    assert diagnosis.closed_component_count == 2
+    assert diagnosis.uploaded_closed_polyline_count == 2
+    assert diagnosis.reject_code is None
+    roles = {row.role for row in diagnosis.components}
+    assert roles == {"outer", "internal"}
+    perimeter = extract_connected_perimeter(network)
+    assert perimeter.closed
+    assert perimeter.edge_count == 4
+    leftovers = remaining_segments_after_perimeter(network, perimeter)
+    assert edge_sets_equal(
+        network,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+    assert segment_edge_multiset(leftovers) == segment_edge_multiset(hole)
+
+
+def test_outer_perimeter_with_multiple_internal_loops():
+    outer = polyline_segments(_rect(0, 0, 200, 120), closed=True)
+    holes = (
+        polyline_segments(_rect(20, 20, 20, 20), closed=True)
+        + polyline_segments(_rect(80, 40, 25, 30), closed=True)
+        + polyline_segments(_rect(140, 15, 15, 15), closed=True)
+    )
+    network = outer + holes
+    diagnosis = diagnose_cut_network(network)
+    assert diagnosis.component_count == 4
+    assert diagnosis.reject_code is None
+    assert sum(1 for row in diagnosis.components if row.role == "internal") == 3
+    perimeter = extract_connected_perimeter(network)
+    leftovers = remaining_segments_after_perimeter(network, perimeter)
+    assert edge_sets_equal(
+        network,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+
+
+def test_hole_polyline_is_not_chosen_as_uploaded_outer():
+    outer_pts = _rect(0, 0, 120, 90)
+    hole_pts = _rect(30, 25, 20, 20)
+    network = polyline_segments(outer_pts, closed=True) + polyline_segments(hole_pts, closed=True)
+    preferred = prefer_uploaded_perimeter_polyline(
+        [
+            {"closed": True, "points": hole_pts, "entity_id": 1},
+            {"closed": True, "points": outer_pts, "entity_id": 2},
+        ],
+        network,
+    )
+    assert preferred is not None
+    assert preferred.edge_count == 4
+    assert (0.0, 0.0) in preferred.points
+    assert (30.0, 25.0) not in preferred.points or len(preferred.points) == 4
+    # Outer ring points only.
+    assert set(preferred.points) == {(0.0, 0.0), (120.0, 0.0), (120.0, 90.0), (0.0, 90.0)}
+
+
+def test_uploaded_outer_survives_when_listed_before_extract_would_have_seen_internals():
+    outer_pts = [(0, 0), (100, 0), (100, 60), (70, 60), (70, 80), (0, 80)]
+    hole_pts = _rect(20, 20, 15, 15)
+    network = polyline_segments(outer_pts, closed=True) + polyline_segments(hole_pts, closed=True)
+    preferred = prefer_uploaded_perimeter_polyline(
+        [{"closed": True, "points": outer_pts}],
+        network,
+    )
+    assert preferred is not None
+    assert preferred.closed
+    assert len(preferred.points) == 6
+
+
+def test_line_segments_forming_closed_outer_with_interior_path():
+    outer_lines = [
+        ((0, 0), (100, 0)),
+        ((100, 0), (100, 80)),
+        ((100, 80), (0, 80)),
+        ((0, 80), (0, 0)),
+    ]
+    interior = [((40, 20), (60, 20)), ((60, 20), (60, 40))]
+    network = outer_lines + interior
+    perimeter = extract_connected_perimeter(network)
+    leftovers = remaining_segments_after_perimeter(network, perimeter)
+    assert perimeter.closed
+    assert perimeter.edge_count == 4
+    assert edge_sets_equal(
+        network,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+
+
+def test_true_external_components_still_rejected():
+    left = polyline_segments(_rect(0, 0, 40, 40), closed=True)
+    right = polyline_segments(_rect(80, 10, 40, 40), closed=True)
+    diagnosis = diagnose_cut_network(left + right)
+    assert diagnosis.component_count == 2
+    assert diagnosis.reject_code == "perimeter_components_disconnected"
+    with pytest.raises(OperationalFileError) as exc:
+        extract_connected_perimeter(left + right)
+    assert exc.value.code == "perimeter_components_disconnected"
+
+
+def test_compile_connected_with_hole_geometry_keeps_single_perimeter_path():
+    piece = _piece(
+        "A",
+        _rect(40, 40, 400, 500),
+        label="A",
+    )
+    piece["geometry"]["holes"] = [_rect(120, 140, 80, 90)]
+    connected = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["cut_path"],
+        known_presets=PRESETS,
+        perimeter_join_mode="connected",
+    )
+    assert not any(
+        issue.get("code") == "perimeter_components_disconnected"
+        for issue in connected.get("issues") or []
+    )
+    cut_paths = [
+        path
+        for operation in connected["operations"]
+        if operation["operation_key"] == "cut_path"
+        for path in operation["toolpaths"]
+    ]
+    perimeter_paths = [path for path in cut_paths if path["path_key"] == SHEET_PERIMETER_PATH_KEY]
+    assert len(perimeter_paths) == 1
+    assert perimeter_paths[0]["closed"] is True
+    retracts = [motion for motion in perimeter_paths[0]["motions"] if motion["kind"] == "retract"]
+    cuts = [motion for motion in perimeter_paths[0]["motions"] if motion["kind"] == "cut"]
+    assert len(cuts) >= 4
+    assert len(retracts) >= 1
+    package = build_simulation_nc(
+        connected,
+        machine_profile={"production_approved": False, "retract_z_mm": 20, "dialect": "fanuc"},
+        sheet_no=1,
+        settings_fingerprint="fp-hole",
+    )
+    assert package["production"] is False
+    assert int(package.get("path_count") or 0) >= 1
