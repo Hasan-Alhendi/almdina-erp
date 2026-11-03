@@ -185,8 +185,12 @@ def test_repair_survives_snapshot_centering_reload_and_real_strict_roundtrip(tmp
         validate = domain_cutting_engine.validate
         def __init__(self, plan): self.plan = plan
         def optimize(self, *a, **kw): return deepcopy(self.plan)
+    # This test owns the *same-count repair* delta (35/70 -> 39/74).
+    # Freeze the independent Final Alignment stage so its legitimate new
+    # improvements cannot mutate this stage's before/after baseline.
     command = OptimizeOrderPlanCommand('quality-test','quality-test',BoardGeometry(122,244,.3,.5),
-        OptimizerOptions('smart','CNC Router',5,40,30,30,.09),tuple(rows))
+        OptimizerOptions('smart','CNC Router',5,40,30,30,.09,
+                         alignment_search_budget_sec=0),tuple(rows))
     before = optimize_order_plan(command,engine=Frozen(plan)).snapshot
     after = optimize_order_plan(command,engine=Frozen(result)).snapshot
     assert metrics(before)['alignment_ratio'] == pytest.approx(35/70)
@@ -403,3 +407,56 @@ def test_compacted_duplicate_views_keep_all_unmodified_raw_warm_seeds():
     assert sorted(geometry_signature(p) for p in outcome.search_seeds) == sorted(geometry_signature(p) for p in original)
     assert [one, two] == original
     assert outcome.snapshot['validation']['is_valid']
+
+
+@pytest.mark.parametrize('addons', [False, True])
+def test_3687_final_alignment_and_same_count_repair_combined_strict_roundtrip(tmp_path, addons):
+    """Test the new postpass separately from the frozen repair-only regression.
+
+    This exercises the real pipeline including enabled Final Alignment; it must
+    not weaken the repair-only 35/70 => 39/74 golden check above.
+    """
+    from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+        BoardGeometry, OptimizerOptions, OptimizeOrderPlanCommand, optimize_order_plan,
+    )
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+    from scripts.research_direct_kerf import strict_roundtrip
+    plan, pieces, rows = golden()
+    if addons:
+        metadata = dict(extra_liner=1, liner_reference_side='edge_long_left',
+            liner_width_cm=1, liner_offset_cm=1, liner_start_cm=1, liner_length_cm=5,
+            extra_double=1, extra_double_reference_sides='edge_long_right')
+        for row in rows: row.update(metadata)
+        for piece in pieces: piece.update(metadata)
+        source = {p['id']: p for p in pieces}
+        for sheet in plan['sheets']:
+            sheet['pieces'] = [make_placed_piece(source[p['id']], p['x'], p['y'], p['w'], p['h'], p['rotated'])
+                               for p in sheet['pieces']]
+        plan = opt.enrich_plan_metrics(plan, plan['method_key'], 'CNC Router')
+    improved = repair(plan, pieces)
+    class Frozen:
+        expand_pieces = domain_cutting_engine.expand_pieces
+        validate = domain_cutting_engine.validate
+        def __init__(self, value): self.plan = value
+        def optimize(self, *a, **kw): return deepcopy(self.plan)
+    command = OptimizeOrderPlanCommand('alignment-integration','alignment-integration',
+        BoardGeometry(122,244,.3,.5),
+        OptimizerOptions('smart','CNC Router',5,40,30,30,.09,
+                         alignment_search_budget_sec=1),tuple(rows))
+    original = deepcopy(plan)
+    baseline = optimize_order_plan(command, engine=Frozen(plan)).snapshot
+    finished = optimize_order_plan(command, engine=Frozen(improved)).snapshot
+    assert plan == original
+    assert baseline['validation']['is_valid'] and finished['validation']['is_valid']
+    assert len(baseline['sheets']) == len(finished['sheets']) == 3
+    assert sorted(p['piece_instance_id'] for s in baseline['sheets'] for p in s['pieces']) == sorted(
+        p['piece_instance_id'] for s in finished['sheets'] for p in s['pieces'])
+    assert baseline['industrial_rank'][:4] == finished['industrial_rank'][:4]
+    # Persisted final geometry must remain the exact geometry exported to DXF.
+    for name, snapshot in (('baseline', baseline), ('refined', finished)):
+        saved = tmp_path / (name + '.json')
+        saved.write_text(json.dumps(snapshot))
+        assert json.loads(saved.read_text()) == snapshot
+        work = tmp_path / name
+        work.mkdir()
+        strict_roundtrip(snapshot, rows, 122, 244, work)

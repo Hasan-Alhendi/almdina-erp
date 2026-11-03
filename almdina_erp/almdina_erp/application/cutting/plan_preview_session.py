@@ -87,15 +87,19 @@ class CuttingPlanPreviewSession:
 
 
 def merge_preview_candidates(current, previous, *, limit=5):
-    """Retain proven cached snapshots under the existing industrial comparator."""
+    """Keep the same final cutter contract when continuing a trusted preview."""
     from almdina_erp.almdina_erp.domain.cutting.optimizer import _candidate_is_better
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
     by_geometry = {}
     for candidate in [*previous.values(),*current.values()]:
         signature = candidate['geometry_fingerprint']
         existing = by_geometry.get(signature)
         if existing is None or _candidate_is_better(candidate['snapshot'],existing['snapshot']):
             by_geometry[signature] = candidate
-    ranked = sorted(by_geometry.values(),key=lambda c:tuple(c['snapshot']['industrial_rank']))[:limit]
+    candidates = list(by_geometry.values())
+    keys = final_system_sort_keys([c['snapshot'] for c in candidates])
+    ranked = [candidate for _, candidate in
+              sorted(zip(keys, candidates), key=lambda item: item[0])][:limit]
     return {c['candidate_id']:c for c in ranked}
 
 

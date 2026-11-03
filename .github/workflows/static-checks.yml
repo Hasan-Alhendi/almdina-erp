@@ -227,6 +227,12 @@ jobs:
             almdina_erp.tests.test_input_stability_ux_contract \
             almdina_erp.tests.test_page_revisit_refresh_contract
 
+      - name: Measure final alignment on five candidates and three real-size boards
+        run: |
+          python -m pytest -q -s \
+            almdina_erp/tests/test_final_cut_line_alignment.py::test_five_candidate_alignment_runtime_and_memory_evidence \
+            almdina_erp/tests/test_final_cut_line_alignment.py::test_anonymized_three_board_budget_observation_not_flaky_clock_gate
+
       - name: Run UI, DXF, invoice, and optimizer function contracts
         run: |
           python -m pytest -q \
@@ -260,6 +266,7 @@ jobs:
             almdina_erp/tests/test_almadina_137_plan_settings_contract.py \
             almdina_erp/tests/test_cutting_shape_search.py \
             almdina_erp/tests/test_cutting_industrial_gaps.py \
+            almdina_erp/tests/test_final_cut_line_alignment.py \
             almdina_erp/tests/test_liner_geometry.py \
             almdina_erp/tests/test_glass_opening_nesting.py \
             almdina_erp/tests/test_nesting_consolidation.py

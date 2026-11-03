@@ -3058,3 +3058,8 @@ Plans,الخطط
 {0} m² less reusable offcut,فضلة قابلة للاستعمال أقل بمقدار {0} م²
 Maximum centerable edge gap (cm),أقصى فراغ مسموح بتوسيطه (سم)
 Center an axis only when both edge gaps are within this limit.,وسّط المحور فقط إذا كان فراغا الحافتين ضمن هذا الحد.
+Final Alignment Search Budget (seconds),ميزانية بحث المحاذاة النهائية (ثوانٍ)
+Final alignment search budget (seconds),ميزانية بحث المحاذاة النهائية (ثوانٍ)
+Zero disables final alignment. The budget is bounded by the optimization timeout.,القيمة صفر تعطّل المحاذاة النهائية. لا تتجاوز الميزانية مهلة تحسين القص.
+The final alignment budget changed. Recalculate the preview before saving.,تغيّرت ميزانية المحاذاة النهائية. أعد حساب المعاينة قبل الحفظ.
+Final alignment search budget must not exceed optimization timeout.,ميزانية المحاذاة النهائية يجب ألا تتجاوز مهلة تحسين القص.

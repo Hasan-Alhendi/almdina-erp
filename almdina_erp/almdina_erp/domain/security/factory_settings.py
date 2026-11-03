@@ -28,6 +28,7 @@ SECTION_FIELDS = MappingProxyType(
                 "default_optimization_time_limit_sec",
                 "optimal_search_piece_limit",
                 "max_centerable_edge_gap_cm",
+                "alignment_search_budget_sec",
             }
         ),
         FactorySettingsSection.COSTING: frozenset(

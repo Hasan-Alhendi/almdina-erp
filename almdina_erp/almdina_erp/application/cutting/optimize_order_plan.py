@@ -99,6 +99,7 @@ class OptimizerOptions:
     min_remnant_length_cm: float
     min_remnant_area_m2: float
     max_centerable_edge_gap_cm: float = 5.0
+    alignment_search_budget_sec: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,11 +165,18 @@ def optimize_order_plan(
     plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    # A shared, finite allowance across the gallery; never extend native search.
+    # Begin the shared tail allowance when the first alignment actually starts.
+    alignment_budget = {"deadline": None}
     raw_seeds = []
     outcome = None
     snapshots = []
-    for raw in raw_candidates:
-        result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings)
+    for candidate_index, raw in enumerate(raw_candidates):
+        # Reserve a fair portion of the shared tail allowance for every
+        # displayed candidate, without extending the total elapsed deadline.
+        alignment_budget["remaining_candidates"] = len(raw_candidates) - candidate_index
+        result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings,
+                                   alignment_budget=alignment_budget)
         if result.snapshot['validation']['is_valid']:
             if outcome is None:
                 outcome = result
@@ -177,12 +185,19 @@ def optimize_order_plan(
     if outcome is None:
         # Smart alternatives already own the result when any is valid. Avoid
         # projecting an unused fallback, while still validating every candidate.
-        outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings)
+        outcome = _snapshot_outcome(command, engine, deepcopy(plan), expanded, applied_trim, trim_decision, plan_settings,
+                                    alignment_budget=alignment_budget)
     if smart:
-        ranked = sorted(
-            zip(snapshots, raw_seeds),
-            key=lambda pair: tuple(pair[0].get("industrial_rank") or ()),
-        )
+        # Native search uses a cheap placement estimate to bound exploration.
+        # Final System ranking must instead agree with the authoritative real
+        # cutter-center topology used by Final Alignment. Otherwise a border
+        # placement can outrank an equivalent continuous *internal* cutter
+        # path merely because estimated _cut_metrics ignores sheet edges.
+        # Never mix unproven special geometry with exact scores.
+        from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+        keys = final_system_sort_keys(snapshots)
+        ranked = [(snapshot, seed) for _, snapshot, seed in
+                  sorted(zip(keys, snapshots, raw_seeds), key=lambda item: item[0])]
         snapshots = [snapshot for snapshot, _ in ranked]
         raw_seeds = [seed for _, seed in ranked]
         # Final compaction can make two raw alternatives identical. Keep the
@@ -211,7 +226,8 @@ def optimize_order_plan(
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
-def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings):
+def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
+                      alignment_budget=None):
     """One manufacturing snapshot projection for the default and every alternative."""
     board = command.board
     plan["kerf_cm"] = board.kerf_cm
@@ -265,11 +281,52 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
         plan = _enrich_final_geometry_metrics(plan, metric_options)
 
     if plan_settings.optimization_mode == "smart":
+        # An invalid centering proposal must not make alignment a no-op and
+        # then be rolled back only *after* the refinement opportunity is gone.
+        # Use the same independent geometry/permission gates as the final gate.
+        from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+            align_regular_cut_lines, validate_alignment_baseline, has_regular_alignment_candidates,
+        )
+        configured = command.optimizer.alignment_search_budget_sec
+        allowed = (max(0.0, min(configured, command.optimizer.time_limit_sec))
+                   if math.isfinite(configured) and configured >= 0 else 0.0)
+        baseline_proof = None
+        if allowed > 0 and has_regular_alignment_candidates(plan, expanded, machine_type):
+            baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
+                board.kerf_cm, mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring))
+            if baseline_proof is None:
+                plan["sheets"] = original_sheets
+                plan = _enrich_final_geometry_metrics(plan, metric_options)
+                baseline_proof = validate_alignment_baseline(plan, expanded, usable_width_cm, usable_length_cm,
+                    board.kerf_cm, mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring))
         from almdina_erp.almdina_erp.domain.cutting.plan_search import compact_regular_final
         plan = compact_regular_final(plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
             machine_type=machine_type,
             mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
             metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"})
+        # Shared budget is not consumed by unrelated snapshot preparation.
+        if alignment_budget is None:
+            alignment_budget = {"deadline": None}
+        if alignment_budget["deadline"] is None:
+            # Invalid direct callers fail closed; authoritative factory
+            # settings already reject NaN/Infinity and negative values.
+            alignment_budget["deadline"] = time.monotonic() + allowed
+        # Every gallery candidate gets a bounded share of the *remaining*
+        # shared tail; unused capacity automatically returns to later plans.
+        # A lone fallback uses the full remaining allowance.
+        now = time.monotonic()
+        remaining = max(1, int(alignment_budget.get("remaining_candidates") or 1))
+        remaining_seconds = max(0.0, alignment_budget["deadline"] - now)
+        candidate_deadline = now + remaining_seconds / remaining
+        # Post-search placement refinement only; never import/approve uploaded DXF.
+        plan = align_regular_cut_lines(
+            plan, expanded, usable_width_cm, usable_length_cm, board.kerf_cm,
+            machine_type=machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_kwargs={key: value for key, value in metric_options.items() if key != "machine_type"},
+            deadline_monotonic=candidate_deadline,
+            baseline_proof=baseline_proof,
+        )
 
     def validate_snapshot_plan() -> list[str]:
         errors = list(

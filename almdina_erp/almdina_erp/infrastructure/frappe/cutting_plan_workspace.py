@@ -453,6 +453,9 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 max_centerable_edge_gap_cm=flt(
                     getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
                 ),
+                alignment_search_budget_sec=flt(
+                    getattr(factory_settings, "alignment_search_budget_sec", 1.0)
+                ),
             ),
             piece_rows=_piece_rows(order),
             allow_piece_mirroring=piece_mirroring_allowed(
