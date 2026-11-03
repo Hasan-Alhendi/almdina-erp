@@ -829,6 +829,71 @@
         }
     }
 
+    function patchMeasureOverlay(host, lines, scale) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        world.querySelectorAll("[data-abe-measure]").forEach((node) => node.remove());
+        const rows = Array.isArray(lines) ? lines : [];
+        host.__abeMeasureLines = rows;
+        const safeScale = Math.max(0.05, Number(scale) || Number((host.__abeWorldMetrics || {}).scale) || 1);
+        const fontMm = Math.max(10 / safeScale, 2.4);
+        rows.forEach((row) => {
+            if (!row || !row.start || !row.end) return;
+            const color = row.style === "alt" ? "#c026d3" : "#ea580c";
+            const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            group.setAttribute("data-abe-measure", "1");
+            group.setAttribute("pointer-events", "none");
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", String(row.start[0]));
+            line.setAttribute("y1", String(row.start[1]));
+            line.setAttribute("x2", String(row.end[0]));
+            line.setAttribute("y2", String(row.end[1]));
+            line.setAttribute("stroke", color);
+            line.setAttribute("stroke-width", "1.35");
+            line.setAttribute("vector-effect", "non-scaling-stroke");
+            line.setAttribute("pointer-events", "none");
+            if (row.dashed !== false || row.style === "committed" || row.style === "alt") {
+                line.setAttribute("stroke-dasharray", "7 5");
+            }
+            group.appendChild(line);
+            [[row.start, "start"], [row.end, "end"]].forEach((entry) => {
+                const tick = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                tick.setAttribute("cx", String(entry[0][0]));
+                tick.setAttribute("cy", String(entry[0][1]));
+                tick.setAttribute("r", String(2.2 / safeScale));
+                tick.setAttribute("fill", color);
+                tick.setAttribute("pointer-events", "none");
+                group.appendChild(tick);
+            });
+            if (row.label) {
+                const midX = (Number(row.start[0]) + Number(row.end[0])) / 2;
+                const midY = (Number(row.start[1]) + Number(row.end[1])) / 2;
+                const dx = Number(row.end[0]) - Number(row.start[0]);
+                const dy = Number(row.end[1]) - Number(row.start[1]);
+                const len = Math.hypot(dx, dy) || 1;
+                const ox = (-dy / len) * (8 / safeScale);
+                const oy = (dx / len) * (8 / safeScale);
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", String(midX + ox));
+                text.setAttribute("y", String(midY + oy));
+                text.setAttribute("text-anchor", "middle");
+                text.setAttribute("dominant-baseline", "middle");
+                text.setAttribute("font-size", String(fontMm));
+                text.setAttribute("font-family", "Tahoma,Arial,sans-serif");
+                text.setAttribute("font-weight", "700");
+                text.setAttribute("fill", color);
+                text.setAttribute("paint-order", "stroke");
+                text.setAttribute("stroke", "#fff");
+                text.setAttribute("stroke-width", String(3 / safeScale));
+                text.setAttribute("pointer-events", "none");
+                text.setAttribute("direction", "ltr");
+                text.textContent = String(row.label);
+                group.appendChild(text);
+            }
+            world.appendChild(group);
+        });
+    }
+
     function render(host, storeView, handlers) {
         const projection = storeView.projection || {};
         const session = storeView.session || null;
@@ -1286,10 +1351,11 @@
         );
 
         const magnetOn = storeView.magnetEnabled !== false;
+        const measureOn = storeView.measureToolActive === true;
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}" data-abe-stage="1">
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="${metrics.minX * scale} ${metrics.minY * scale} ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${SCENE_PAD_PX - metrics.minX * scale},${SCENE_PAD_PX - metrics.minY * scale}) scale(${scale})">
@@ -1311,6 +1377,11 @@
                         pressed: magnetOn,
                         attrs: ` data-abe-magnet="1"`,
                         title: __("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."),
+                    })}
+                    ${toolButton("abe-measure" + (measureOn ? " is-active" : ""), "ruler", __("Measure"), {
+                        pressed: measureOn,
+                        attrs: ` data-abe-measure-tool="1"`,
+                        title: __("Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line."),
                     })}
                     <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}" title="${esc(angleTitle)}">
                         <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
@@ -1375,6 +1446,10 @@
         const magnet = host.querySelector("[data-abe-magnet]");
         if (magnet) {
             magnet.onclick = () => handlers && handlers.toggleMagnet && handlers.toggleMagnet();
+        }
+        const measure = host.querySelector("[data-abe-measure-tool]");
+        if (measure) {
+            measure.onclick = () => handlers && handlers.toggleMeasureTool && handlers.toggleMeasureTool();
         }
         const undo = host.querySelector(".abe-undo");
         const redo = host.querySelector(".abe-redo");
@@ -1518,16 +1593,24 @@
             if (handlers && handlers.clearSelection) handlers.clearSelection();
         });
         stage.addEventListener("pointerdown", (event) => {
-            if (!panRequested(event)) return;
-            ignoreBackgroundClick = true;
-            // Pan has priority: cancel any pending long-press on a piece/board.
-            if (handlers && handlers.onPanIntent) handlers.onPanIntent();
-            panning = true;
-            lastX = event.clientX;
-            lastY = event.clientY;
-            stage.classList.add("is-panning");
-            event.preventDefault();
-            stage.setPointerCapture(event.pointerId);
+            if (panRequested(event)) {
+                ignoreBackgroundClick = true;
+                // Pan has priority: cancel any pending long-press on a piece/board.
+                if (handlers && handlers.onPanIntent) handlers.onPanIntent();
+                panning = true;
+                lastX = event.clientX;
+                lastY = event.clientY;
+                stage.classList.add("is-panning");
+                event.preventDefault();
+                stage.setPointerCapture(event.pointerId);
+                return;
+            }
+            if (measureOn && event.button === 0 && handlers && handlers.beginMeasureGesture) {
+                ignoreBackgroundClick = true;
+                if (handlers.beginMeasureGesture(event)) {
+                    stage.setPointerCapture(event.pointerId);
+                }
+            }
         });
         stage.addEventListener("pointermove", (event) => {
             if (handlers && handlers.onStagePointerMove) handlers.onStagePointerMove(event);
@@ -1554,8 +1637,16 @@
         });
 
         if (storeView.dragPreview) patchDragPreview(host, storeView.dragPreview);
+        if (Array.isArray(host.__abeMeasureLines) && host.__abeMeasureLines.length) {
+            patchMeasureOverlay(host, host.__abeMeasureLines, scale);
+        }
 
-        return { layout, metrics, patchDragPreview: (preview) => patchDragPreview(host, preview) };
+        return {
+            layout,
+            metrics,
+            patchDragPreview: (preview) => patchDragPreview(host, preview),
+            patchMeasureOverlay: (lines) => patchMeasureOverlay(host, lines, scale),
+        };
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
@@ -1575,6 +1666,7 @@
         SCALE_MIN,
         SCALE_MAX,
         patchDragPreview,
+        patchMeasureOverlay,
         clickTargetKeepsSelection,
         FIT_PADDING_PX,
         SCENE_PAD_PX,

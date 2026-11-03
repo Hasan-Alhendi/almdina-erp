@@ -3327,3 +3327,7 @@ This machine does not allow that rotation after the flip.,هذه الآلة لا
 Board editor page actions,إجراءات صفحة محرر الألواح
 Select one piece to transform it.,حدّد درفة واحدة لتحويلها.
 Select a piece to transform it.,حدّد درفة لتحويلها.
+Measure,قياس
+"Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line.",أداة القياس: اسحب خطًا مستقيمًا على اللوح لقراءة طوله بالمليمتر. Esc يمسح الخط.
+Start the measurement inside a board.,ابدأ القياس داخل لوح.
+Measurement rejected.,رُفض القياس.

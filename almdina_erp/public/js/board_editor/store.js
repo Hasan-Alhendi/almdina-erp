@@ -32,6 +32,7 @@
             },
             sidebarSplit: 0.45,
             magnetEnabled: true,
+            measureToolActive: false,
             session: null,
             history: null,
             dragPreview: null,
@@ -85,6 +86,7 @@
                 viewport: { ...state.viewport },
                 sidebarSplit: state.sidebarSplit,
                 magnetEnabled: state.magnetEnabled !== false,
+                measureToolActive: state.measureToolActive === true,
                 session: state.session,
                 dragPreview: state.dragPreview,
                 dropMessage: state.dropMessage,
@@ -161,6 +163,16 @@
 
         function toggleMagnet() {
             setMagnetEnabled(!state.magnetEnabled);
+        }
+
+        function setMeasureToolActive(enabled) {
+            // Transient UI mode only — never enters History or draft layout.
+            state.measureToolActive = Boolean(enabled);
+            emit();
+        }
+
+        function toggleMeasureTool() {
+            setMeasureToolActive(!state.measureToolActive);
         }
 
         function setDragPreview(preview) {
@@ -417,6 +429,8 @@
             replaceWorkingSession,
             setMagnetEnabled,
             toggleMagnet,
+            setMeasureToolActive,
+            toggleMeasureTool,
             setDragPreview,
             setDropMessage,
             commitSession,

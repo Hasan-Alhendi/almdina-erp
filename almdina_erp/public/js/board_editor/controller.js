@@ -35,6 +35,7 @@
         const History = window.AlmdinaBoardEditor.History;
         const createMoveInteraction = window.AlmdinaBoardEditor.createMoveInteraction;
         const createRotationInteraction = window.AlmdinaBoardEditor.createRotationInteraction;
+        const createMeasureInteraction = window.AlmdinaBoardEditor.createMeasureInteraction;
         const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
         const TransformGeometry = window.AlmdinaBoardEditor.TransformGeometry;
         const MoveGeometry = window.AlmdinaBoardEditor.MoveGeometry;
@@ -54,6 +55,7 @@
         let main = null;
         let moveInteraction = null;
         let rotationInteraction = null;
+        let measureInteraction = null;
         let lastCanvasApi = null;
         let beforeUnloadHandler = null;
         let routeGuardOriginal = null;
@@ -1000,11 +1002,43 @@
                 },
                 onCommitted: commitRotation,
             });
+            measureInteraction = typeof createMeasureInteraction === "function"
+                ? createMeasureInteraction({
+                    store,
+                    getSvgEl: () => ensureShell().querySelector(".abe-svg"),
+                    getWorldMetrics: () => {
+                        const host = ensureShell().querySelector("[data-abe-canvas]");
+                        return (host && host.__abeWorldMetrics) || (lastCanvasApi && lastCanvasApi.metrics) || null;
+                    },
+                    isAltKey: () => altHeld,
+                    isPanKey: () => spaceHeld,
+                    isMeasureToolActive: () => Boolean(store && store.snapshot().measureToolActive),
+                    onOverlay: (lines) => {
+                        const host = ensureShell().querySelector("[data-abe-canvas]");
+                        if (!host) return;
+                        host.__abeMeasureLines = Array.isArray(lines) ? lines : [];
+                        if (lastCanvasApi && typeof lastCanvasApi.patchMeasureOverlay === "function") {
+                            lastCanvasApi.patchMeasureOverlay(host.__abeMeasureLines);
+                        } else if (CanvasRenderer && typeof CanvasRenderer.patchMeasureOverlay === "function") {
+                            CanvasRenderer.patchMeasureOverlay(host, host.__abeMeasureLines);
+                        }
+                    },
+                    onRejected: (reason) => {
+                        if (window.frappe && frappe.show_alert) {
+                            frappe.show_alert({
+                                message: translate(reason || "Measurement rejected."),
+                                indicator: "orange",
+                            }, 4);
+                        }
+                    },
+                })
+                : null;
         }
 
         function finishActiveGesture() {
             if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
             if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
+            if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
             if (store) {
                 store.setDragPreview(null);
                 store.setDropMessage("");
@@ -1108,14 +1142,38 @@
                     const view = store.snapshot();
                     return Distribution.removeBoard(view.session, sheetNo == null ? view.selectedSheetNo : sheetNo);
                 }),
+                toggleMeasureTool: () => {
+                    if (!store) return;
+                    const next = !store.snapshot().measureToolActive;
+                    store.setMeasureToolActive(next);
+                    if (measureInteraction) {
+                        if (next) {
+                            measureInteraction.clearAltOverlay();
+                            if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
+                            if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
+                        } else {
+                            measureInteraction.clearToolLine();
+                        }
+                    }
+                },
+                beginMeasureGesture: (event) => (
+                    measureInteraction && measureInteraction.beginTool(event)
+                ),
                 beginPieceGesture: (pieceKey, event, meta) => {
+                    if (store && store.snapshot().measureToolActive) {
+                        return measureInteraction && measureInteraction.beginTool(event);
+                    }
                     if (rotationInteraction && rotationInteraction.isActive()) return false;
                     return moveInteraction && moveInteraction.beginPieceGesture(pieceKey, event, meta);
                 },
-                beginBoardGesture: (sheetNo, event) => (
-                    moveInteraction && moveInteraction.beginBoardGesture(sheetNo, event)
-                ),
+                beginBoardGesture: (sheetNo, event) => {
+                    if (store && store.snapshot().measureToolActive) {
+                        return measureInteraction && measureInteraction.beginTool(event);
+                    }
+                    return moveInteraction && moveInteraction.beginBoardGesture(sheetNo, event);
+                },
                 beginRotateGesture: (pieceKey, event) => {
+                    if (store && store.snapshot().measureToolActive) return false;
                     if (moveInteraction && moveInteraction.onPanIntent) moveInteraction.onPanIntent();
                     return rotationInteraction && rotationInteraction.beginHandleGesture(pieceKey, event);
                 },
@@ -1127,6 +1185,16 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    if (measureInteraction && (
+                        measureInteraction.isToolGestureActive()
+                        || (store && store.snapshot().measureToolActive)
+                        || altHeld
+                    )) {
+                        measureInteraction.onPointerMove(event);
+                        if (measureInteraction.isToolGestureActive() || (store && store.snapshot().measureToolActive)) {
+                            return;
+                        }
+                    }
                     if (rotationInteraction && rotationInteraction.isActive()) {
                         rotationInteraction.onPointerMove(event);
                         return;
@@ -1134,6 +1202,13 @@
                     if (moveInteraction) moveInteraction.onPointerMove(event);
                 },
                 onStagePointerUp: (event) => {
+                    if (measureInteraction && (
+                        measureInteraction.isToolGestureActive()
+                        || (store && store.snapshot().measureToolActive)
+                    )) {
+                        measureInteraction.onPointerUp(event);
+                        return;
+                    }
                     if (rotationInteraction && rotationInteraction.isActive()) {
                         rotationInteraction.onPointerUp(event);
                         return;
@@ -1141,10 +1216,12 @@
                     if (moveInteraction) moveInteraction.onPointerUp(event);
                 },
                 onStagePointerCancel: (event) => {
+                    if (measureInteraction) measureInteraction.onPointerCancel(event);
                     if (rotationInteraction) rotationInteraction.onPointerCancel(event);
                     if (moveInteraction) moveInteraction.onPointerCancel(event);
                 },
                 onPanIntent: () => {
+                    if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
                     if (rotationInteraction) rotationInteraction.cancel();
                     if (moveInteraction) moveInteraction.onPanIntent();
                 },
@@ -1314,6 +1391,7 @@
 
         function suspend() {
             if (moveInteraction) moveInteraction.cancel();
+            if (measureInteraction) measureInteraction.clearAll();
             suspended = true;
             generation += 1;
             requestGate.invalidate();
@@ -1326,6 +1404,8 @@
             }
             store = null;
             moveInteraction = null;
+            rotationInteraction = null;
+            measureInteraction = null;
             lastCanvasApi = null;
             openPending = false;
             activeOrderName = "";
@@ -1538,11 +1618,20 @@
                 if (moveInteraction && moveInteraction.refreshPreviewFromPointer) {
                     moveInteraction.refreshPreviewFromPointer();
                 }
+                if (measureInteraction && measureInteraction.refreshAltInspection) {
+                    measureInteraction.refreshAltInspection();
+                }
             }
-            if (event.code === "Escape" && moveInteraction && moveInteraction.isActive()) {
-                moveInteraction.cancel();
-                event.preventDefault();
-                return;
+            if (event.code === "Escape") {
+                if (measureInteraction && measureInteraction.cancel && measureInteraction.cancel()) {
+                    event.preventDefault();
+                    return;
+                }
+                if (moveInteraction && moveInteraction.isActive()) {
+                    moveInteraction.cancel();
+                    event.preventDefault();
+                    return;
+                }
             }
             if (isEditableTarget(event.target) || (Distribution && !Distribution.keyboardDeleteApplies(event.target))) return;
             if (event.key === "Delete" && store && Distribution) {
@@ -1572,15 +1661,20 @@
                 if (moveInteraction && moveInteraction.refreshPreviewFromPointer) {
                     moveInteraction.refreshPreviewFromPointer();
                 }
+                if (measureInteraction && measureInteraction.clearAltOverlay) {
+                    measureInteraction.clearAltOverlay();
+                }
             }
         });
         lifecycle.listen(window, "blur", () => {
             altHeld = false;
             if (moveInteraction) moveInteraction.cancel();
+            if (measureInteraction) measureInteraction.clearAll();
         });
         lifecycle.listen(window, "pagehide", () => {
             altHeld = false;
             if (moveInteraction) moveInteraction.cancel();
+            if (measureInteraction) measureInteraction.clearAll();
         });
         if (window.jQuery) {
             const $doc = window.jQuery(document);
