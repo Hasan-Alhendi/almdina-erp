@@ -21,9 +21,20 @@ from almdina_erp.almdina_erp.domain.cnc.operations import (
     CNC_OPERATIONS_BY_KEY,
     DEFAULT_MACHINING_ORDER,
 )
+from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+    PERIMETER_JOIN_CONNECTED,
+    SHEET_PERIMETER_PATH_KEY,
+    extract_connected_perimeter,
+    normalize_perimeter_join_mode,
+    polyline_segments,
+    prefer_uploaded_perimeter_polyline,
+    remaining_segments_after_perimeter,
+    resolve_cut_path_sequence,
+)
 from almdina_erp.almdina_erp.domain.cnc.program import (
     CncSourceEntity,
     build_board_program,
+    chain_line_paths,
     program_payload,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError, normalize_tool_preset
@@ -304,6 +315,80 @@ def _bind_open_path(
     return host["piece_id"], host["label"], "outer", host["outer_key"]
 
 
+def _cut_center_segments(entities: Sequence[CncSourceEntity]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for entity in entities:
+        if entity.layer.upper() != "CUT_PATH" or entity.role != "tool_center":
+            continue
+        segments.extend(polyline_segments(entity.points, closed=entity.closed))
+    return segments
+
+
+def _apply_connected_perimeter(
+    entities: list[CncSourceEntity],
+    *,
+    uploaded: Mapping[str, Any] | None,
+    blocked_path,
+) -> list[CncSourceEntity]:
+    cut_entities = [
+        entity
+        for entity in entities
+        if entity.layer.upper() == "CUT_PATH" and entity.role == "tool_center"
+    ]
+    other_entities = [
+        entity
+        for entity in entities
+        if not (entity.layer.upper() == "CUT_PATH" and entity.role == "tool_center")
+    ]
+    if not cut_entities:
+        blocked_path("perimeter_unavailable", SHEET_PERIMETER_PATH_KEY)
+        return entities
+    network = _cut_center_segments(cut_entities)
+    try:
+        preferred = None
+        if isinstance(uploaded, Mapping):
+            preferred = prefer_uploaded_perimeter_polyline(
+                list(uploaded.get("cut_paths") or []),
+                network,
+            )
+        perimeter = preferred or extract_connected_perimeter(network)
+        leftovers = remaining_segments_after_perimeter(network, perimeter)
+    except OperationalFileError as exc:
+        blocked_path(exc.code, SHEET_PERIMETER_PATH_KEY)
+        return entities
+    rebuilt: list[CncSourceEntity] = list(other_entities)
+    rebuilt.append(
+        _entity(
+            layer="CUT_PATH",
+            points=perimeter.points,
+            closed=True,
+            entity_type="LWPOLYLINE",
+            role="tool_center",
+            ring="outer",
+            path_key=SHEET_PERIMETER_PATH_KEY,
+            piece_id="",
+            piece_label="",
+        )
+    )
+    for points, closed in chain_line_paths(leftovers):
+        if len(points) < 2:
+            continue
+        rebuilt.append(
+            _entity(
+                layer="CUT_PATH",
+                points=points,
+                closed=closed,
+                entity_type="LWPOLYLINE" if len(points) > 2 or closed else "LINE",
+                role="tool_center",
+                ring="outer" if closed else "open",
+                path_key="",
+                piece_id="",
+                piece_label="",
+            )
+        )
+    return rebuilt
+
+
 def compile_sheet_program(
     *,
     sheet_no: int,
@@ -316,6 +401,9 @@ def compile_sheet_program(
     cut_path_early_confirmed: bool = False,
     manufacturing_mode: str = _GENERATED,
     uploaded: Mapping[str, Any] | None = None,
+    perimeter_join_mode: str = "separate",
+    cut_path_sequence: Sequence[str] | None = None,
+    perimeter_cut_early_confirmed: bool = False,
 ) -> dict[str, Any]:
     """Return the JSON program for one sheet. Nothing is stored."""
 
@@ -324,7 +412,12 @@ def compile_sheet_program(
     ]
     if int(sheet_no) <= 0 or not sheet_pieces:
         raise OperationalFileError("sheet_not_in_plan")
-    catalog = catalog_sheet(int(sheet_no), sheet_pieces)
+    join_mode = normalize_perimeter_join_mode(perimeter_join_mode)
+    catalog = catalog_sheet(
+        int(sheet_no),
+        sheet_pieces,
+        include_sheet_perimeter=join_mode == PERIMETER_JOIN_CONNECTED,
+    )
     plan = snapshot if isinstance(snapshot, Mapping) else {}
     sheet = _sheet_record(plan, int(sheet_no))
     width_mm, length_mm = _sheet_size_mm(plan, sheet)
@@ -416,7 +509,14 @@ def compile_sheet_program(
         use_generated = mode == _GENERATED
         if mode == _PRESENT:
             observed = list((uploaded or {}).get("cut_segments") or [])
-            if not isinstance(uploaded, Mapping) or uploaded.get("unreadable") or uploaded.get("origin") is None and not observed:
+            read_error = str(uploaded.get("read_error") or "") if isinstance(uploaded, Mapping) else ""
+            if not isinstance(uploaded, Mapping) or uploaded.get("unreadable"):
+                use_generated = False
+                blocked_path("dxf_unreadable", "")
+            elif read_error:
+                use_generated = False
+                blocked_path(read_error, "")
+            elif uploaded.get("origin") is None and not observed:
                 use_generated = False
                 blocked_path("dxf_unreadable", "")
             elif str(uploaded.get("units") or "mm") != "mm":
@@ -478,12 +578,18 @@ def compile_sheet_program(
                         )
                     )
     elif mode == _LEGACY:
-        if not _uploaded_frame_ready(uploaded):
+        legacy_error = str(uploaded.get("read_error") or "") if isinstance(uploaded, Mapping) else ""
+        if legacy_error:
+            blocked_path(legacy_error, "")
+        elif not _uploaded_frame_ready(uploaded):
             blocked_path("dxf_unreadable", "")
         else:
             _append_uploaded_cuts(entities, uploaded, role="finished_boundary")
     elif mode == _UNKNOWN:
-        if not _uploaded_frame_ready(uploaded):
+        unknown_error = str(uploaded.get("read_error") or "") if isinstance(uploaded, Mapping) else ""
+        if unknown_error:
+            blocked_path(unknown_error, "")
+        elif not _uploaded_frame_ready(uploaded):
             blocked_path("dxf_unreadable", "")
         else:
             _append_uploaded_cuts(entities, uploaded, role="unverified")
@@ -532,15 +638,36 @@ def compile_sheet_program(
         if not any(item["path_key"] == path.path_key for item in blocked):
             blocked_path("toolpath_missing", path.path_key)
 
+    path_execution_order: tuple[str, ...] = ()
+    if join_mode == PERIMETER_JOIN_CONNECTED:
+        entities = _apply_connected_perimeter(
+            entities,
+            uploaded=uploaded if isinstance(uploaded, Mapping) else None,
+            blocked_path=blocked_path,
+        )
+        cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
+        try:
+            path_execution_order = resolve_cut_path_sequence(
+                cut_keys,
+                cut_path_sequence,
+                perimeter_early_confirmed=bool(perimeter_cut_early_confirmed),
+            )
+        except OperationalFileError as exc:
+            blocked_path(exc.code, SHEET_PERIMETER_PATH_KEY)
+            path_execution_order = ()
+
     layer_cut = str(operation_presets.get("cut_path") or "").strip()
     shared_exists = any(
-        entity.layer.upper() == "CUT_PATH" and entity.role == "tool_center" and not entity.piece_instance_id
+        entity.layer.upper() == "CUT_PATH"
+        and entity.role == "tool_center"
+        and not entity.piece_instance_id
+        and entity.path_key != SHEET_PERIMETER_PATH_KEY
         for entity in entities
     )
     ambiguous = shared_exists and any(
         str(path_overrides.get(path.path_key) or "").strip() not in {"", layer_cut}
         for path in catalog.paths
-        if path.operation_key == "cut_path"
+        if path.operation_key == "cut_path" and path.path_key != SHEET_PERIMETER_PATH_KEY
     )
     overrides = {str(key): value for key, value in path_overrides.items()}
     program = build_board_program(
@@ -558,6 +685,7 @@ def compile_sheet_program(
         blocked_catalog_paths=blocked,
         shared_cut_ambiguous=ambiguous,
         approved_kerf_mm=float(kerf) if isinstance(kerf, (int, float)) and not isinstance(kerf, bool) else None,
+        path_execution_order=path_execution_order,
     )
     return program_payload(program)
 

@@ -216,6 +216,9 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "generated_by": document.generated_by,
                 "generated_on": document.generated_on,
                 "cut_path_early_confirmed": bool(cint(document.cut_path_early_confirmed)),
+                "perimeter_join_mode": str(getattr(document, "perimeter_join_mode", None) or "separate"),
+                "cut_path_sequence": _sequence_list(getattr(document, "cut_path_sequence", None)),
+                "perimeter_cut_early_confirmed": bool(cint(getattr(document, "perimeter_cut_early_confirmed", 0))),
                 "operations": _child_rows(
                     document.operations,
                     ("operation_key", "dxf_layer", "sequence", "tool_preset", "preset_source"),
@@ -264,6 +267,16 @@ def _snapshot_dict(raw: Any) -> dict[str, Any]:
         parsed = json.loads(raw)
         return dict(parsed) if isinstance(parsed, Mapping) else {}
     return {}
+
+
+def _sequence_list(raw: Any) -> list[str]:
+    if isinstance(raw, list):
+        return [str(item) for item in raw]
+    if isinstance(raw, str) and raw.strip():
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    return []
 
 
 def read_simulation_nc_bytes(
@@ -512,6 +525,9 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
         "status",
         "settings_fingerprint",
         "cut_path_early_confirmed",
+        "perimeter_join_mode",
+        "cut_path_sequence",
+        "perimeter_cut_early_confirmed",
     ):
         document.set(field, payload.get(field))
     document.set("operations", [])

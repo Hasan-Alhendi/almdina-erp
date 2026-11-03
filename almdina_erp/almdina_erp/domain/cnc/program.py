@@ -434,6 +434,7 @@ def build_board_program(
     blocked_catalog_paths: Sequence[Mapping[str, str]] = (),
     shared_cut_ambiguous: bool = False,
     approved_kerf_mm: float | None = None,
+    path_execution_order: Sequence[str] | None = None,
 ) -> CncBoardProgram:
     """Build one board program. Confirmation never clears a geometric block."""
 
@@ -614,10 +615,34 @@ def build_board_program(
                 )
             )
 
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
+    ordered_path_keys = [str(key) for key in (path_execution_order or ())]
+    execution_rank = {key: index for index, key in enumerate(ordered_path_keys)}
+    perimeter_rank = execution_rank.get(SHEET_PERIMETER_PATH_KEY)
+
+    def _path_sort_rank(path: CncToolpath) -> int:
+        if perimeter_rank is None:
+            return execution_rank.get(path.path_key, len(execution_rank))
+        if path.path_key == SHEET_PERIMETER_PATH_KEY:
+            return perimeter_rank
+        if path.operation_key == "cut_path":
+            # Leftover internal cuts lose catalog path keys after perimeter join.
+            # Honor only whether the perimeter runs first or after the other cuts.
+            return 1 if perimeter_rank == 0 else 0
+        return execution_rank.get(path.path_key, len(execution_rank) + 1)
+
     operations: list[CncOperationProgram] = []
     for key in order:
         paths = grouped.get(key) or []
-        paths.sort(key=lambda path: ((path.start or (0.0, 0.0))[1], (path.start or (0.0, 0.0))[0], path.path_key))
+        paths.sort(
+            key=lambda path: (
+                _path_sort_rank(path),
+                (path.start or (0.0, 0.0))[1],
+                (path.start or (0.0, 0.0))[0],
+                path.path_key,
+            )
+        )
         numbered = [
             CncToolpath(
                 path_key=path.path_key,

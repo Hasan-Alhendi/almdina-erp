@@ -71,6 +71,9 @@ def build_generation_snapshot(
     previous_generated_file: str = "",
     generated_by: str = "",
     generated_on: str = "",
+    perimeter_join_mode: str = "separate",
+    cut_path_sequence: Sequence[str] | None = None,
+    perimeter_cut_early_confirmed: bool = False,
 ) -> dict[str, Any]:
     """Freeze the machining setup that produced a Simulation NC file."""
 
@@ -110,6 +113,9 @@ def build_generation_snapshot(
         "settings_fingerprint": str(settings_fingerprint),
         "operation_order": [str(item) for item in operation_order],
         "cut_path_early_confirmed": bool(cut_path_early_confirmed),
+        "perimeter_join_mode": str(perimeter_join_mode or "separate"),
+        "cut_path_sequence": [str(item) for item in (cut_path_sequence or ())],
+        "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
         "layer_presets": layers,
         "path_overrides": paths,
         "machine_profile": dict(machine_profile or {}),

@@ -155,6 +155,8 @@ def _path_rows(
     overrides: Mapping[str, str],
     labels: Mapping[str, str] | None = None,
 ) -> list[dict[str, Any]]:
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
     labels = labels or {}
     return [
         {
@@ -162,7 +164,12 @@ def _path_rows(
             "operation_key": path.operation_key,
             "dxf_layer": path.dxf_layer,
             "piece_instance_id": path.piece_instance_id,
-            "piece_label": labels.get(path.piece_instance_id, ""),
+            "piece_label": (
+                ""
+                if path.path_key == SHEET_PERIMETER_PATH_KEY
+                else labels.get(path.piece_instance_id, "")
+            ),
+            "is_sheet_perimeter": path.path_key == SHEET_PERIMETER_PATH_KEY,
             "sequence": path.sequence,
             "tool_preset": overrides.get(path.path_key, ""),
         }
@@ -201,16 +208,44 @@ def build_operational_workspace(
     }
     labels = _piece_labels(pieces)
     sheets: list[dict[str, Any]] = []
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        PERIMETER_JOIN_CONNECTED,
+        normalize_perimeter_join_mode,
+        resolve_cut_path_sequence,
+    )
+
     for sheet_no in _sheet_numbers(pieces):
-        catalog = catalog_sheet(sheet_no, pieces)
         saved = _saved_for(
             saved_files,
             plan_name=plan.name,
             revision=plan.revision,
             sheet_no=sheet_no,
         )
+        join_mode = normalize_perimeter_join_mode((saved or {}).get("perimeter_join_mode"))
+        catalog = catalog_sheet(
+            sheet_no,
+            pieces,
+            include_sheet_perimeter=join_mode == PERIMETER_JOIN_CONNECTED,
+        )
         order = merge_operation_order(catalog.operations, _saved_operation_keys(saved))
         confirmed = bool((saved or {}).get("cut_path_early_confirmed"))
+        perimeter_early = bool((saved or {}).get("perimeter_cut_early_confirmed"))
+        cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
+        sequence = ()
+        if join_mode == PERIMETER_JOIN_CONNECTED:
+            try:
+                sequence = resolve_cut_path_sequence(
+                    cut_keys,
+                    (saved or {}).get("cut_path_sequence"),
+                    perimeter_early_confirmed=perimeter_early,
+                )
+            except OperationalFileError:
+                sequence = resolve_cut_path_sequence(
+                    cut_keys,
+                    None,
+                    perimeter_early_confirmed=True,
+                )
+                perimeter_early = True
         saved_operations = {
             str(row.get("operation_key") or ""): row
             for row in (saved or {}).get("operations") or []
@@ -248,6 +283,9 @@ def build_operational_workspace(
                 machine_profile=profile_payload["fingerprint_payload"],
                 operation_order=order,
                 cut_path_early_confirmed=confirmed,
+                perimeter_join_mode=join_mode,
+                cut_path_sequence=sequence,
+                perimeter_cut_early_confirmed=perimeter_early,
             )
             status = effective_status(
                 generation_fingerprint=str(saved.get("generation_fingerprint") or ""),
@@ -269,6 +307,9 @@ def build_operational_workspace(
                 "status": status,
                 "settings_fingerprint": fingerprint,
                 "cut_path_early_confirmed": confirmed,
+                "perimeter_join_mode": join_mode,
+                "cut_path_sequence": list(sequence),
+                "perimeter_cut_early_confirmed": perimeter_early,
                 "operations": _operation_rows(
                     catalog,
                     proposed,
@@ -363,11 +404,29 @@ def prepare_sheet_settings(
     cut_path_early_confirmed: bool | None = None,
     operation_sources: Mapping[str, str] | None = None,
     factory_defaults: Mapping[str, str] | None = None,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: Sequence[str] | None = None,
+    perimeter_cut_early_confirmed: bool | None = None,
 ) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        PERIMETER_JOIN_CONNECTED,
+        PERIMETER_JOIN_SEPARATE,
+        normalize_perimeter_join_mode,
+        resolve_cut_path_sequence,
+    )
+
     plan = assess_approved_plan(approved_plan, current=plan_is_current)
     if int(sheet_no) not in _sheet_numbers(pieces):
         raise OperationalFileError("sheet_not_in_plan")
-    catalog = catalog_sheet(int(sheet_no), pieces)
+    if perimeter_join_mode is None:
+        join_mode = normalize_perimeter_join_mode((existing or {}).get("perimeter_join_mode"))
+    else:
+        join_mode = normalize_perimeter_join_mode(perimeter_join_mode)
+    catalog = catalog_sheet(
+        int(sheet_no),
+        pieces,
+        include_sheet_perimeter=join_mode == PERIMETER_JOIN_CONNECTED,
+    )
     if operation_order is None:
         resolved_order = merge_operation_order(
             catalog.operations,
@@ -381,6 +440,27 @@ def prepare_sheet_settings(
         resolved_order,
         confirmed=confirmed,
     )
+    if perimeter_cut_early_confirmed is None:
+        perimeter_early = bool((existing or {}).get("perimeter_cut_early_confirmed"))
+    else:
+        perimeter_early = bool(perimeter_cut_early_confirmed)
+    cut_keys = [path.path_key for path in catalog.paths if path.operation_key == "cut_path"]
+    if join_mode == PERIMETER_JOIN_CONNECTED:
+        if cut_path_sequence is None and existing is not None:
+            sequence = resolve_cut_path_sequence(
+                cut_keys,
+                existing.get("cut_path_sequence"),
+                perimeter_early_confirmed=perimeter_early,
+            )
+        else:
+            sequence = resolve_cut_path_sequence(
+                cut_keys,
+                cut_path_sequence,
+                perimeter_early_confirmed=perimeter_early,
+            )
+    else:
+        sequence = ()
+        perimeter_early = False
     assigned = assign_sheet_presets(
         catalog=catalog,
         operation_presets=dict(operation_presets),
@@ -397,6 +477,9 @@ def prepare_sheet_settings(
         machine_profile=profile_payload,
         operation_order=resolved_order,
         cut_path_early_confirmed=confirmed,
+        perimeter_join_mode=join_mode,
+        cut_path_sequence=sequence,
+        perimeter_cut_early_confirmed=perimeter_early,
     )
     generation_fingerprint = str((existing or {}).get("generation_fingerprint") or "")
     generated_file = str((existing or {}).get("generated_file") or "")
@@ -419,6 +502,9 @@ def prepare_sheet_settings(
         "status": status,
         "settings_fingerprint": fingerprint,
         "cut_path_early_confirmed": confirmed,
+        "perimeter_join_mode": join_mode if join_mode == PERIMETER_JOIN_CONNECTED else PERIMETER_JOIN_SEPARATE,
+        "cut_path_sequence": list(sequence),
+        "perimeter_cut_early_confirmed": perimeter_early,
         "operations": _operation_rows(
             catalog,
             assigned.stored_operations,

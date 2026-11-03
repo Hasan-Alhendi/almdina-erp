@@ -171,7 +171,12 @@ def _addon_paths(piece: Mapping[str, Any], piece_instance_id: str, kind: str) ->
     return [f"{kind}:{piece_instance_id}:primary"]
 
 
-def catalog_sheet(sheet_no: int, pieces: Sequence[Mapping[str, Any]]) -> OperationalSheetCatalog:
+def catalog_sheet(
+    sheet_no: int,
+    pieces: Sequence[Mapping[str, Any]],
+    *,
+    include_sheet_perimeter: bool = False,
+) -> OperationalSheetCatalog:
     if int(sheet_no) <= 0:
         raise OperationalFileError("sheet_not_in_plan")
     pending: list[tuple[int, str, str, str]] = []
@@ -189,6 +194,11 @@ def catalog_sheet(sheet_no: int, pieces: Sequence[Mapping[str, Any]]) -> Operati
             layer_operation = operation_for_key(kind)
             for key in keys:
                 pending.append((layer_operation.sequence, key, kind, identity))
+    if include_sheet_perimeter:
+        from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
+        operation = operation_for_key("cut_path")
+        pending.append((operation.sequence, SHEET_PERIMETER_PATH_KEY, "cut_path", ""))
     pending.sort(key=lambda item: (item[0], item[3], item[1]))
     paths = tuple(
         OperationalPath(
@@ -211,6 +221,9 @@ def settings_fingerprint(
     machine_profile: Mapping[str, Any] | None = None,
     operation_order: Sequence[str] | None = None,
     cut_path_early_confirmed: bool = False,
+    perimeter_join_mode: str = "separate",
+    cut_path_sequence: Sequence[str] | None = None,
+    perimeter_cut_early_confirmed: bool = False,
 ) -> str:
     resolved = []
     for key in sorted(set(operation_presets) | set(path_overrides)):
@@ -222,6 +235,9 @@ def settings_fingerprint(
             "assignments": resolved,
             "operation_order": [str(key) for key in (operation_order or ())],
             "cut_path_early_confirmed": bool(cut_path_early_confirmed),
+            "perimeter_join_mode": str(perimeter_join_mode or "separate"),
+            "cut_path_sequence": [str(key) for key in (cut_path_sequence or ())],
+            "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
             "machine_profile": dict(machine_profile or {}),
         }
     )

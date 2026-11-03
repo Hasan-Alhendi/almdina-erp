@@ -3191,6 +3191,7 @@ The sheet settings link is incomplete.,رابط إعدادات اللوح غير
 This sheet is not available on the approved plan.,هذا اللوح غير متاح في الخطة المعتمدة.
 Back to the order,العودة إلى الطلب
 Preview zoom,تكبير المعاينة
+Board preview viewport,مساحة عرض اللوح
 Zoom in,تكبير
 Zoom out,تصغير
 Fit to view,ملاءمة العرض
@@ -3214,6 +3215,8 @@ Path end,نهاية المسار
 "This preview uses positive depths in millimetres. The machine origin is not established, so it is not a machine file.",هذه المعاينة تستخدم أعماقًا موجبة بالمليمتر. أصل الماكينة غير محدد، لذا هذه ليست ملف ماكينة.
 "The drawing units are not millimetres, so the path was not prepared.",وحدات الرسم ليست بالمليمتر، لذلك لم يُجهَّز المسار.
 "The sheet frame could not be established, so the path was not prepared.",تعذر تحديد إطار اللوح، لذلك لم يُجهَّز المسار.
+"A machining path overlaps more than one sheet, so it was not assigned.",يتداخل مسار تشغيل مع أكثر من لوح، لذلك لم يُنسب إلى لوح.
+"A machining path is outside the approved sheet outlines.",يوجد مسار تشغيل خارج حدود الألواح المعتمدة.
 "The kerf is missing, so cutter centers were not calculated.",سماكة القص غير موجودة، لذلك لم تُحسب مراكز الريشة.
 The approved plan has no finished geometry for this piece.,الخطة المعتمدة لا تحتوي هندسة نهائية لهذه الدرفة.
 This path geometry cannot be used.,لا يمكن استخدام هندسة هذا المسار.
@@ -3360,3 +3363,26 @@ Cut paths for {0} pieces could not be prepared because finished geometry is miss
 "{0} problems: {1}",{0} مشاكل: {1}
 Geometry is ready. Simulation NC can be generated for review.,الهندسة جاهزة. يمكن توليد NC التجريبي للمراجعة.
 Preparing the simulation NC file...,جاري تجهيز ملف NC التجريبي...
+Sheet perimeter cut method,طريقة قص محيط اللوح
+Disconnected perimeter,محيط غير متصل
+Connected perimeter,محيط متصل
+Sheet perimeter — Perimeter Cut,محيط اللوح — Perimeter Cut
+Cutting the sheet perimeter first may let the pieces move after they separate from the board.,قص محيط اللوح أولاً قد يجعل القطع تتحرك بعد انفصالها عن اللوح.
+I understand and want to cut the sheet perimeter before the other CUT_PATH paths.,أفهم وأريد قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+Move the path earlier,تقديم المسار
+Move the path later,تأخير المسار
+The sheet perimeter join mode is not valid.,طريقة وصل محيط اللوح غير صالحة.
+A connected sheet perimeter could not be formed from the approved cut network.,تعذر تكوين محيط لوح متصل من شبكة القص المعتمدة.
+The outer cut network is not a closed perimeter.,شبكة القص الخارجية ليست محيطًا مغلقًا.
+The outer cut network has branches that prevent one safe perimeter.,شبكة القص الخارجية تحتوي تفرعات تمنع تكوين محيط واحد آمن.
+The outer cut network has more than one separate component.,شبكة القص الخارجية تحتوي على أكثر من مكوّن منفصل.
+The connected perimeter would change the approved cut geometry.,المحيط المتصل سيغيّر هندسة القص المعتمدة.
+The CUT_PATH execution order is not valid for this sheet.,ترتيب تنفيذ مسارات CUT_PATH غير صالح لهذا اللوح.
+Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths.,أكّد التحذير قبل قص محيط اللوح قبل مسارات CUT_PATH الأخرى.
+Keep separate cut paths, or fix the outer cut network so one closed perimeter can be formed.,أبقِ مسارات القص منفصلة، أو أصلح شبكة القص الخارجية حتى يمكن تكوين محيط مغلق واحد.
+Close the outer cut network, or keep separate cut paths.,أغلق شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.
+Remove branches from the outer cut network, or keep separate cut paths.,أزل التفرعات من شبكة القص الخارجية، أو أبقِ مسارات القص منفصلة.
+Join the separate outer cut components, or keep separate cut paths.,اربط مكوّنات القص الخارجية المنفصلة، أو أبقِ مسارات القص منفصلة.
+Keep the approved cut geometry unchanged, or keep separate cut paths.,أبقِ هندسة القص المعتمدة دون تغيير، أو أبقِ مسارات القص منفصلة.
+Choose either a separate or a connected sheet perimeter.,اختر محيط لوح غير متصل أو محيطًا متصلًا.
+Restore a valid CUT_PATH order that includes every cut path on this sheet.,استعد ترتيب CUT_PATH صالحًا يشمل كل مسارات القص على هذا اللوح.

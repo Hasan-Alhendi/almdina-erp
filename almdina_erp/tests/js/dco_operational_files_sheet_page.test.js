@@ -242,6 +242,14 @@ const zoomHost = {
                 },
             };
         }
+        if (selector === "[data-cut-viewport]") {
+            return {
+                classList: { toggle() {}, add() {}, remove() {}, contains() { return false; } },
+                getBoundingClientRect() { return { width: 800, height: 400 }; },
+                addEventListener() {},
+                setPointerCapture() {},
+            };
+        }
         if (selector === '[data-cut-zoom="out"]' || selector === '[data-cut-zoom="in"]') {
             return { disabled: false, addEventListener() {} };
         }

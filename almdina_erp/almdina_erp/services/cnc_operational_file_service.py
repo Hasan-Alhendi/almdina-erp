@@ -8,7 +8,7 @@ post processor and is never treated as a workshop controller approval.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import frappe
@@ -16,7 +16,7 @@ from frappe import _
 from frappe.utils import cint
 
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
-from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
+from almdina_erp.almdina_erp.application.cnc.program import _kerf_mm, compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
     build_generation_snapshot,
     nc_content_sha256,
@@ -93,6 +93,8 @@ _MESSAGES = {
     "units_unknown": "The drawing units are not millimetres, so the path was not prepared.",
     "units_unspecified": "The drawing does not state its units, so millimetres were not assumed and the path was not prepared.",
     "sheet_frame_unknown": "The sheet frame could not be established, so the path was not prepared.",
+    "path_sheet_affiliation_ambiguous": "A machining path overlaps more than one sheet, so it was not assigned.",
+    "path_outside_sheet": "A machining path is outside the approved sheet outlines.",
     "kerf_unknown": "The kerf is missing, so cutter centers were not calculated.",
     "finished_geometry_missing": "The approved plan has no finished geometry for this piece.",
     "geometry_invalid": "This path geometry cannot be used.",
@@ -125,6 +127,14 @@ _MESSAGES = {
     "dxf_unreadable": "The operational drawing could not be read.",
     "file_persist_failed": "The simulation NC file could not be stored.",
     "generation_incomplete": "The simulation NC record could not be completed.",
+    "perimeter_join_mode_invalid": "The sheet perimeter join mode is not valid.",
+    "perimeter_unavailable": "A connected sheet perimeter could not be formed from the approved cut network.",
+    "perimeter_not_closed": "The outer cut network is not a closed perimeter.",
+    "perimeter_geometry_ambiguous": "The outer cut network has branches that prevent one safe perimeter.",
+    "perimeter_components_disconnected": "The outer cut network has more than one separate component.",
+    "perimeter_geometry_invalid": "The connected perimeter would change the approved cut geometry.",
+    "cut_path_sequence_invalid": "The CUT_PATH execution order is not valid for this sheet.",
+    "perimeter_cut_early_unconfirmed": "Confirm the warning before cutting the sheet perimeter before the other CUT_PATH paths.",
 }
 
 
@@ -205,6 +215,15 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
     return _workspace_for(order, can_prepare=can_prepare)
 
 
+def _parse_optional_sequence(raw: str | list[Any] | None) -> list[str] | None:
+    if raw is None:
+        return None
+    parsed = frappe.parse_json(raw) if isinstance(raw, str) else list(raw)
+    if not isinstance(parsed, list):
+        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    return [str(item) for item in parsed]
+
+
 @frappe.whitelist()
 def save_cnc_operational_sheet(
     order_name: str,
@@ -215,6 +234,9 @@ def save_cnc_operational_sheet(
     cut_path_early_confirmed: int | str | bool = 0,
     viewed_plan_token: str | None = None,
     operation_sources: str | dict[str, Any] | None = None,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: str | list[Any] | None = None,
+    perimeter_cut_early_confirmed: int | str | bool | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -236,6 +258,7 @@ def save_cnc_operational_sheet(
         parsed_sources = None
     else:
         parsed_sources = frappe.parse_json(operation_sources) if isinstance(operation_sources, str) else dict(operation_sources)
+    parsed_sequence = _parse_optional_sequence(cut_path_sequence)
     if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or (
         parsed_order is not None and not isinstance(parsed_order, list)
     ) or (parsed_sources is not None and not isinstance(parsed_sources, dict)):
@@ -261,6 +284,13 @@ def save_cnc_operational_sheet(
                 str(key): value for key, value in parsed_sources.items()
             },
             factory_defaults=factory_operation_defaults(),
+            perimeter_join_mode=perimeter_join_mode,
+            cut_path_sequence=parsed_sequence,
+            perimeter_cut_early_confirmed=(
+                None
+                if perimeter_cut_early_confirmed is None
+                else bool(cint(perimeter_cut_early_confirmed))
+            ),
         )
     except (OperationalFileError, ToolPresetError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -281,6 +311,16 @@ def _describe_program(payload: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def _boundary_allowance_mm(order: Any) -> float:
+    """Approved cutter radius. Paths may leave the sheet edge by this much."""
+
+    snapshot = approved_plan_snapshot(order) or {}
+    kerf = _kerf_mm(snapshot)
+    if isinstance(kerf, bool) or not isinstance(kerf, (int, float)) or kerf <= 0:
+        return 0.0
+    return float(kerf) / 2.0
+
+
 def _manufacturing_inputs(order: Any, sheet_no: int) -> tuple[str, dict[str, Any] | None]:
     source = manufacturing_source(order)
     status = source["saw_center_status"]
@@ -292,11 +332,29 @@ def _manufacturing_inputs(order: Any, sheet_no: int) -> tuple[str, dict[str, Any
     }.get(status, "uploaded_unknown")
     path = source["dxf_path"]
     if not path:
-        return mode, {"unreadable": True, "origin": None, "units": "mm", "cut_segments": [], "overlays": []}
+        return mode, {
+            "unreadable": True,
+            "origin": None,
+            "units": "mm",
+            "cut_segments": [],
+            "overlays": [],
+            "read_error": "dxf_unreadable",
+        }
     try:
-        return mode, read_operational_dxf(path, sheet_no=sheet_no)
+        return mode, read_operational_dxf(
+            path,
+            sheet_no=sheet_no,
+            boundary_allowance_mm=_boundary_allowance_mm(order),
+        )
     except DxfReadError:
-        return mode, {"unreadable": True, "origin": None, "units": "mm", "cut_segments": [], "overlays": []}
+        return mode, {
+            "unreadable": True,
+            "origin": None,
+            "units": "mm",
+            "cut_segments": [],
+            "overlays": [],
+            "read_error": "dxf_unreadable",
+        }
 
 
 @frappe.whitelist()
@@ -308,6 +366,9 @@ def get_cnc_sheet_program(
     operation_order: str | list[Any] | None = None,
     cut_path_early_confirmed: int | str | bool = 0,
     viewed_plan_token: str | None = None,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: str | list[Any] | None = None,
+    perimeter_cut_early_confirmed: int | str | bool = 0,
 ) -> dict[str, Any]:
     """Return a computed motion program. This does not save or write NC text."""
 
@@ -318,6 +379,7 @@ def get_cnc_sheet_program(
     parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
     parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
     parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+    parsed_sequence = _parse_optional_sequence(cut_path_sequence)
     if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list):
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
     try:
@@ -334,6 +396,9 @@ def get_cnc_sheet_program(
             cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
             manufacturing_mode=mode,
             uploaded=uploaded,
+            perimeter_join_mode=str(perimeter_join_mode or "separate"),
+            cut_path_sequence=parsed_sequence,
+            perimeter_cut_early_confirmed=bool(cint(perimeter_cut_early_confirmed)),
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -351,6 +416,9 @@ def _compile_authorized_program(
     operation_order: list[Any],
     cut_path_early_confirmed: bool,
     viewed_plan_token: str | None,
+    perimeter_join_mode: str = "separate",
+    cut_path_sequence: Sequence[str] | None = None,
+    perimeter_cut_early_confirmed: bool = False,
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     plan = approved_plan_ref(order)
     if plan is None:
@@ -369,6 +437,9 @@ def _compile_authorized_program(
         cut_path_early_confirmed=bool(cut_path_early_confirmed),
         manufacturing_mode=mode,
         uploaded=uploaded,
+        perimeter_join_mode=str(perimeter_join_mode or "separate"),
+        cut_path_sequence=cut_path_sequence,
+        perimeter_cut_early_confirmed=bool(perimeter_cut_early_confirmed),
     )
     return plan, payload, presets
 
@@ -396,7 +467,7 @@ def _parse_sheet_settings(
 def _settings_from_saved(
     saved: Mapping[str, Any] | None,
     factory_defaults: Mapping[str, Any] | None = None,
-) -> tuple[dict[str, str], dict[str, str], list[str], bool, dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], list[str], bool, dict[str, str], str, list[str], bool]:
     defaults = dict(factory_defaults or {})
     rows = list((saved or {}).get("operations") or [])
     operations: dict[str, str] = {}
@@ -419,7 +490,17 @@ def _settings_from_saved(
         for row in (saved or {}).get("paths") or []
         if str(row.get("tool_preset") or "").strip()
     }
-    return operations, paths, order, bool((saved or {}).get("cut_path_early_confirmed")), sources
+    sequence = [str(item) for item in list((saved or {}).get("cut_path_sequence") or []) if str(item or "").strip()]
+    return (
+        operations,
+        paths,
+        order,
+        bool((saved or {}).get("cut_path_early_confirmed")),
+        sources,
+        str((saved or {}).get("perimeter_join_mode") or "separate"),
+        sequence,
+        bool((saved or {}).get("perimeter_cut_early_confirmed")),
+    )
 
 
 @frappe.whitelist()
@@ -432,6 +513,9 @@ def generate_cnc_sheet_nc(
     cut_path_early_confirmed: int | str | bool = 0,
     viewed_plan_token: str | None = None,
     operation_sources: str | dict[str, Any] | None = None,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: str | list[Any] | None = None,
+    perimeter_cut_early_confirmed: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Save sheet settings, then persist a verified Simulation NC file. Not production-approved."""
 
@@ -442,6 +526,7 @@ def generate_cnc_sheet_nc(
         operation_order,
         operation_sources,
     )
+    parsed_sequence = _parse_optional_sequence(cut_path_sequence)
     plan = approved_plan_ref(order)
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
     try:
@@ -463,6 +548,13 @@ def generate_cnc_sheet_nc(
                 str(key): value for key, value in parsed_sources.items()
             },
             factory_defaults=factory_operation_defaults(),
+            perimeter_join_mode=perimeter_join_mode,
+            cut_path_sequence=parsed_sequence,
+            perimeter_cut_early_confirmed=(
+                None
+                if perimeter_cut_early_confirmed is None
+                else bool(cint(perimeter_cut_early_confirmed))
+            ),
         )
     except (OperationalFileError, ToolPresetError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -470,7 +562,16 @@ def generate_cnc_sheet_nc(
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
     if not saved or str(saved.get("name") or "") != operational_name:
         frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
-    operations, paths, order_keys, confirmed, _sources = _settings_from_saved(
+    (
+        operations,
+        paths,
+        order_keys,
+        confirmed,
+        _sources,
+        join_mode,
+        sequence,
+        perimeter_early,
+    ) = _settings_from_saved(
         saved,
         factory_operation_defaults(),
     )
@@ -483,6 +584,9 @@ def generate_cnc_sheet_nc(
             operation_order=order_keys,
             cut_path_early_confirmed=confirmed,
             viewed_plan_token=viewed_plan_token,
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
         )
         machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])
@@ -544,6 +648,9 @@ def generate_cnc_sheet_nc(
             previous_generated_file=previous_file if previous_file != file_url else "",
             generated_by=str(frappe.session.user or ""),
             generated_on=str(frappe.utils.now_datetime()),
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
         )
         record_nc_generation(operational_name, snapshot, file_url)
     except Exception as exc:

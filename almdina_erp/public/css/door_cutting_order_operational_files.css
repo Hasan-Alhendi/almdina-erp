@@ -212,6 +212,37 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-operational-path.is-custom {
     border-inline-start: 3px solid #9a6207;
 }
+.dco-operational-perimeter {
+    margin: 0.55rem 0 0.35rem;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--border-color, #d5dbe3);
+    border-radius: 6px;
+}
+.dco-operational-perimeter legend {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding-inline: 0.2rem;
+}
+.dco-operational-perimeter__option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0.2rem 0;
+    font-size: 0.84rem;
+    font-weight: 500;
+}
+.dco-operational-perimeter__option input {
+    margin: 0;
+}
+.dco-operational-path__sequence {
+    display: inline-flex;
+    gap: 0.2rem;
+    margin-inline: 0.25rem;
+}
+.dco-operational-path.is-sheet-perimeter .dco-operational-path__number {
+    background: #5b2c6f;
+    color: #fff;
+}
 .dco-operational-path.is-selected,
 .dco-operational-sheet__preview .dco-piece.is-cnc-path-selected {
     outline: 3px solid #0b6bcb;
@@ -307,19 +338,43 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     display: inline-flex;
     gap: 0.25rem;
     align-items: center;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
+}
+.dco-cnc-cut-preview__viewport {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    inline-size: 100%;
+    min-inline-size: 0;
+    background: #f7f9fc;
+    border: 1px solid var(--alm-card-border, #e4e8ee);
+    border-radius: 8px;
+    touch-action: none;
+    overscroll-behavior: contain;
+    user-select: none;
+}
+.dco-cnc-cut-preview__viewport.is-panning-enabled {
+    cursor: grab;
+}
+.dco-cnc-cut-preview__viewport.is-panning {
+    cursor: grabbing;
 }
 .dco-cnc-cut-preview__stage {
     position: relative;
     inline-size: 100%;
+    block-size: 100%;
     transform-origin: center center;
+    will-change: transform;
 }
 .dco-cnc-cut-preview__svg {
     display: block;
     inline-size: 100%;
     block-size: auto;
-    background: #f7f9fc;
-    border: 1px solid var(--alm-card-border, #e4e8ee);
-    border-radius: 8px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
 }
 .dco-cnc-cut-preview__frame {
     stroke: #17202a;
@@ -348,6 +403,9 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     flex-wrap: wrap;
     gap: 0.55rem 0.9rem;
     align-items: center;
+    position: relative;
+    z-index: 2;
+    flex: 0 0 auto;
 }
 .dco-cnc-cut-preview__legend-item {
     display: inline-flex;
@@ -423,8 +481,12 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     position: sticky;
     inset-block-start: 0.5rem;
     max-inline-size: none;
+    min-inline-size: 0;
+    overflow: hidden;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__settings {
+    position: relative;
+    z-index: 3;
     max-block-size: none;
     overflow: visible;
 }
