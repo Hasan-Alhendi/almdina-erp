@@ -25,7 +25,7 @@
         `${ASSET_ROOT}/store.js?v=18`,
         `${ASSET_ROOT}/canvas_renderer.js?v=18`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
-        `${ASSET_ROOT}/controller.js?v=19`,
+        `${ASSET_ROOT}/controller.js?v=20`,
     ]);
 
     function pageModule() {

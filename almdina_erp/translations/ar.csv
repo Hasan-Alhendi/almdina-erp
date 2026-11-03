@@ -3302,3 +3302,12 @@ Special geometry unavailable — not rotatable.,الهندسة الخاصة غي
 Incomplete geometry — not rotatable.,الهندسة غير مكتملة — لا يمكن التدوير.
 This piece cannot be edited.,لا يمكن تعديل هذه القطعة.
 Guest must remain inside the host opening.,يجب أن تبقى القطعة المستضافة داخل فتحة المضيف.
+
+Updating the edited plan,جاري تحديث الخطة المعدلة
+Waiting for the edited cutting plan to appear...,في انتظار ظهور خطة القص المعدلة...
+Could not refresh the edited plan,تعذر تحديث الخطة المعدلة
+The edited cutting plan could not be refreshed after apply. Retry loading the plan.,تعذر تحديث خطة القص المعدلة بعد التطبيق. أعد محاولة تحميل الخطة.
+Retry loading the plan,إعادة تحميل الخطة
+Newer edited plan available,تتوفر خطة معدلة أحدث
+A newer edited cutting plan is shown.,تُعرض خطة قص معدلة أحدث.
+"A newer edited cutting plan ({0}) is shown. It replaced the applied plan ({1}).",تُعرض خطة قص معدلة أحدث ({0}). وقد حلّت محل الخطة المطبّقة ({1}).

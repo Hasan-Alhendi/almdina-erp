@@ -88,10 +88,19 @@
 
 	function hasBoardEditorPlan(frm) {
 		const owner = window.AlmdinaPlanWorkspaceState;
-		const data = owner && typeof owner.snapshot === "function" ? owner.snapshot(frm) : null;
-		const plans = data && data.data && data.data.plans;
-		const row = plans && plans.board_editor_draft;
-		return Boolean(row && String(row.name || "").trim());
+		const row = owner && typeof owner.planForTab === "function"
+			? owner.planForTab(frm, "BoardEditor")
+			: null;
+		if (row && String(row.name || "").trim()) return true;
+		// Keep the Edited tab reachable while an apply-return visit waits for the
+		// authorized board_editor_draft row, including the first-apply race.
+		const pending = owner && typeof owner.ensureApplyReturnState === "function"
+			? owner.ensureApplyReturnState(frm)
+			: (owner && typeof owner.applyReturnState === "function" ? owner.applyReturnState(frm) : null);
+		return Boolean(
+			pending
+			&& ["pending", "waiting_row", "failed", "newer"].includes(String(pending.status || ""))
+		);
 	}
 
 	function visibleTabs(frm) {
@@ -172,7 +181,7 @@
 		return getPlanForTab(frm, tab);
 	}
 
-	function consumePreferredPlanTab(frm) {
+	function consumePreferredPlanTab(frm, allowedTabs) {
 		const orderName = String((frm && frm.doc && frm.doc.name) || "").trim();
 		if (!orderName || typeof window === "undefined" || !window.sessionStorage) {
 			return "";
@@ -181,11 +190,66 @@
 		try {
 			const preferred = String(window.sessionStorage.getItem(key) || "").trim();
 			if (!preferred) return "";
+			// Do not consume the preference before the Edited tab is authorized to
+			// appear (first apply). Leaving it stored keeps the return intent.
+			if (Array.isArray(allowedTabs) && !allowedTabs.includes(preferred)) {
+				return "";
+			}
 			window.sessionStorage.removeItem(key);
 			return preferred;
 		} catch (error) {
 			return "";
 		}
+	}
+
+	function applyReturnBanner(frm) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const pending = owner && typeof owner.applyReturnState === "function"
+			? owner.applyReturnState(frm)
+			: null;
+		// Prefer the in-memory visit state after load() has hydrated it. Do not
+		// create a new visit from sessionStorage during paint-only calls.
+		if (!pending) return "";
+		const status = String(pending.status || "");
+		if (status === "waiting_row" || status === "pending") {
+			return `
+				<div class="dco-plan-apply-return-banner" data-status="${frappe.utils.escape_html(status)}" role="status" aria-live="polite">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Updating the edited plan"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("Waiting for the edited cutting plan to appear..."))}</span>
+				</div>
+			`;
+		}
+		if (status === "failed") {
+			return `
+				<div class="dco-plan-apply-return-banner is-error" data-status="failed" role="alert" aria-live="assertive">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Could not refresh the edited plan"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("The edited cutting plan could not be refreshed after apply. Retry loading the plan."))}</span>
+					<button type="button" class="btn btn-sm btn-default dco-plan-apply-return-retry">${frappe.utils.escape_html(translate("Retry loading the plan"))}</button>
+				</div>
+			`;
+		}
+		if (status === "newer") {
+			return `
+				<div class="dco-plan-apply-return-banner is-warning" data-status="newer" role="status" aria-live="polite">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Newer edited plan available"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("A newer edited cutting plan is shown."))}</span>
+				</div>
+			`;
+		}
+		return "";
+	}
+
+	function bindApplyReturnRetry(frm, wrapper) {
+		if (!wrapper || typeof wrapper.find !== "function") return;
+		const button = wrapper.find(".dco-plan-apply-return-retry");
+		if (!button || !button.length || typeof button.off !== "function") return;
+		button.off("click.almdinaApplyReturn").on("click.almdinaApplyReturn", () => {
+			const owner = window.AlmdinaPlanWorkspaceState;
+			if (!owner || typeof owner.retryApplyReturnRead !== "function") return;
+			Promise.resolve(owner.retryApplyReturnRead(frm)).catch(() => {
+				// Workspace state owns error/retry presentation.
+			});
+		});
 	}
 
 	function defaultTab(frm) {
@@ -205,9 +269,9 @@
 		}
 
 		// After applying a board-editor layout, return to the Edited plan tab
-		// without changing approved_plan. Consumed once so later opens keep
-		// the normal Approved/System preference.
-		const remembered = consumePreferredPlanTab(frm);
+		// without changing approved_plan. Consumed once the tab is visible so
+		// later opens keep the normal Approved/System preference.
+		const remembered = consumePreferredPlanTab(frm, allowed);
 		if (remembered && allowed.includes(remembered)) {
 			frm.__almdina_active_plan_tab = remembered;
 			return remembered;
@@ -402,28 +466,32 @@
 		}
 
 		if (tab === "BoardEditor") {
+			const returnBanner = applyReturnBanner(frm);
 			const plan = getPlanForTab(frm, "BoardEditor");
 			if (!plan || !plan.sheets || !plan.sheets.length) {
+				if (returnBanner) {
+					return `${returnBanner}${emptyState("Waiting for the edited cutting plan to appear...")}`;
+				}
 				return emptyState("There is no edited board-editor plan yet.");
 			}
 			const owner = window.AlmdinaPlanWorkspaceState;
 			const row = owner && typeof owner.planForTab === "function"
 				? owner.planForTab(frm, "BoardEditor")
 				: null;
-			let block = "";
+			let block = returnBanner;
 			if (row && row.manufacturing_blocked) {
 				const reason = String(row.manufacturing_block_reason || "").trim();
 				const summary = reason === "board_editor_plan_not_ready"
 					? translate("This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout.")
 					: translate("This edited plan cannot be approved or exported for a specific manufacturing reason.");
-				block = `
+				block = `${block}
 					<div class="dco-plan-historical-banner" role="status" aria-live="polite">
 						<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Edited plan blocked"))}</strong>
 						<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(summary)}</span>
 					</div>
 				`;
 			} else {
-				block = planStatusBanner(frm, "BoardEditor") || "";
+				block = `${block}${planStatusBanner(frm, "BoardEditor") || ""}`;
 			}
 			block = `${unappliedEditorDraftBanner(row)}${block}`;
 			return `${block}${renderPlanHtml(frm, plan)}`;
@@ -514,6 +582,7 @@
 				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}" data-almdina-plan-paint-key="${escapedPaintKey}">${content}</div>
 			`);
 		renderContextActions(frm, wrapper);
+		bindApplyReturnRetry(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			const nextTab = $(this).attr("data-plan-tab");
 			if (this && this.disabled) return;

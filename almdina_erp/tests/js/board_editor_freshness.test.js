@@ -51,7 +51,7 @@ assert.match(apiSource, /get_system_plan_recalculation_status/);
 assert.match(pageSource, /on_page_show/);
 assert.match(pageSource, /active\.open\(context\)/);
 assert.match(pageSource, /plan_display_style\.js\?v=18/);
-assert.match(pageSource, /controller\.js\?v=19/);
+assert.match(pageSource, /controller\.js\?v=20/);
 assert.match(pageSource, /api\.js\?v=19/);
 assert.match(pageSource, /session_document\.js\?v=19/);
 assert.match(pageSource, /board_editor\.css\?v=19/);

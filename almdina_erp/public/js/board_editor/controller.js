@@ -1282,14 +1282,24 @@
             }
         }
 
-        function rememberPreferEditedPlanTab(orderName) {
+        function rememberApplyReturnContext(orderName, planName) {
             const key = String(orderName || "").trim();
-            if (!key || typeof window === "undefined" || !window.sessionStorage) return;
+            const plan = String(planName || "").trim();
+            if (!key || !plan || typeof window === "undefined" || !window.sessionStorage) return;
             try {
+                // Prefer the Edited plan tab once the matching board_editor_draft row
+                // is authorized for display. The structured apply-return payload carries
+                // the concrete plan_name so the order workspace can invalidate stale
+                // reads instead of trusting a bare reload flag.
                 window.sessionStorage.setItem(`almdina.dco.planTab.${key}`, "BoardEditor");
-                // Force the order plan workspace to reload so the new Edited plan
-                // appears without a manual page refresh.
-                window.sessionStorage.setItem(`almdina.dco.planWorkspaceReload.${key}`, "1");
+                window.sessionStorage.setItem(
+                    `almdina.dco.planApplyReturn.${key}`,
+                    JSON.stringify({
+                        order_name: key,
+                        plan_name: plan,
+                        prefer_tab: "BoardEditor",
+                    })
+                );
             } catch (error) {
                 // sessionStorage may be unavailable; returning to the order still works.
             }
@@ -1337,8 +1347,11 @@
                 store.settleCreatePlan(response || null);
                 if (response && response.ok && response.plan_name && typeof frappe !== "undefined") {
                     const planName = String(response.plan_name);
-                    const orderName = String(activeOrderName);
-                    rememberPreferEditedPlanTab(orderName);
+                    const orderName = String(
+                        (response.order_name && String(response.order_name).trim())
+                        || activeOrderName
+                    );
+                    rememberApplyReturnContext(orderName, planName);
                     frappe.show_alert({
                         message: __(
                             "The edited layout was applied as cutting plan {0}. It is not approved."
