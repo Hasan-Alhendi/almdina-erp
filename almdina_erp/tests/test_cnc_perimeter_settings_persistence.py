@@ -104,8 +104,33 @@ def test_save_sheet_persists_cut_path_sequence_as_json(monkeypatch):
                 SHEET_PERIMETER_PATH_KEY,
             ],
             "perimeter_cut_early_confirmed": 0,
-            "operations": [],
-            "paths": [],
+            "operations": [
+                {
+                    "operation_key": "sheet_perimeter",
+                    "dxf_layer": "CUT_PATH",
+                    "sequence": 1,
+                    "tool_preset": "",
+                    "preset_source": "Factory",
+                }
+            ],
+            "paths": [
+                {
+                    "path_key": SHEET_PERIMETER_PATH_KEY,
+                    "operation_key": "sheet_perimeter",
+                    "piece_instance_id": "",
+                    "dxf_layer": "CUT_PATH",
+                    "sequence": 1,
+                    "tool_preset": "",
+                },
+                {
+                    "path_key": "cut_path:piece-a:outer",
+                    "operation_key": "cut_path",
+                    "piece_instance_id": "piece-a",
+                    "dxf_layer": "CUT_PATH",
+                    "sequence": 2,
+                    "tool_preset": "",
+                },
+            ],
         },
     )
     assert name == "CNC-OF-1"
@@ -120,6 +145,10 @@ def test_save_sheet_persists_cut_path_sequence_as_json(monkeypatch):
         CUT_PATH_INTERNAL_SEQUENCE_KEY,
         SHEET_PERIMETER_PATH_KEY,
     ]
+    paths = document.get("paths") or []
+    peri = next(row for row in paths if row["path_key"] == SHEET_PERIMETER_PATH_KEY)
+    assert peri["piece_instance_id"] == ""
+    assert peri["operation_key"] == "sheet_perimeter"
 
 
 def test_save_sheet_from_generate_payload_keeps_snapshot(monkeypatch):

@@ -219,6 +219,9 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "perimeter_join_mode": str(getattr(document, "perimeter_join_mode", None) or "separate"),
                 "cut_path_sequence": _sequence_list(getattr(document, "cut_path_sequence", None)),
                 "perimeter_cut_early_confirmed": bool(cint(getattr(document, "perimeter_cut_early_confirmed", 0))),
+                "cnc_machine": str(getattr(document, "cnc_machine", None) or ""),
+                "offset_left_cm": float(getattr(document, "offset_left_cm", 0) or 0),
+                "offset_bottom_cm": float(getattr(document, "offset_bottom_cm", 0) or 0),
                 "operations": _child_rows(
                     document.operations,
                     ("operation_key", "dxf_layer", "sequence", "tool_preset", "preset_source"),
@@ -472,6 +475,47 @@ def machine_profile_view() -> dict[str, Any]:
     }
 
 
+def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
+    """Return CNC machines registered for this factory site."""
+
+    if not frappe.db.exists("DocType", "CNC Machine"):
+        return []
+    filters: dict[str, Any] = {}
+    if enabled_only:
+        filters["enabled"] = 1
+    rows = frappe.get_all(
+        "CNC Machine",
+        filters=filters,
+        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
+        order_by="machine_name asc",
+        ignore_permissions=True,
+    )
+    return [
+        {
+            "name": str(row.name),
+            "machine_name": str(row.machine_name or row.name),
+            "width_cm": float(row.width_cm or 0),
+            "length_cm": float(row.length_cm or 0),
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    ]
+
+
+def get_cnc_machine(name: str) -> dict[str, Any] | None:
+    token = str(name or "").strip()
+    if not token or not frappe.db.exists("CNC Machine", token):
+        return None
+    document = _without_permission_check(lambda: frappe.get_doc("CNC Machine", token))
+    return {
+        "name": str(document.name),
+        "machine_name": str(document.machine_name or document.name),
+        "width_cm": float(document.width_cm or 0),
+        "length_cm": float(document.length_cm or 0),
+        "enabled": bool(cint(document.enabled)),
+    }
+
+
 def _dxf_disk_path(file_url: str) -> str | None:
     import os
     from pathlib import Path
@@ -557,21 +601,40 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
         "cut_path_early_confirmed",
         "perimeter_join_mode",
         "perimeter_cut_early_confirmed",
+        "cnc_machine",
+        "offset_left_cm",
+        "offset_bottom_cm",
     ):
         document.set(field, payload.get(field))
     # Frappe JSON fields reject a raw Python list; persist one JSON string.
     document.set("cut_path_sequence", _sequence_json(payload.get("cut_path_sequence")))
+    from almdina_erp.almdina_erp.domain.cnc.operational_file import (
+        validate_operational_path_rows,
+    )
+
     document.set("operations", [])
     document.set("paths", [])
     for row in payload.get("operations") or []:
         document.append("operations", row)
-    for row in payload.get("paths") or []:
-        document.append("paths", row)
+    for row in validate_operational_path_rows(list(payload.get("paths") or [])):
+        document.append(
+            "paths",
+            {
+                "path_key": row.get("path_key"),
+                "operation_key": row.get("operation_key"),
+                "piece_instance_id": row.get("piece_instance_id") or "",
+                "dxf_layer": row.get("dxf_layer"),
+                "sequence": row.get("sequence"),
+                "tool_preset": row.get("tool_preset") or "",
+            },
+        )
     document.generation_snapshot_json = kept_snapshot
     document.generated_file = kept_file
     document.generated_by = kept_by
     document.generated_on = kept_on
     document.flags.ignore_permissions = True
+    # Link targets are validated by the service layer's order/plan authorization.
+    document.flags.ignore_links = True
     document.save()
     return str(document.name)
 
@@ -582,7 +645,9 @@ __all__ = [
     "attach_simulation_nc",
     "discard_orphan_file",
     "factory_operation_defaults",
+    "get_cnc_machine",
     "known_tool_presets",
+    "list_cnc_machines",
     "machine_profile_view",
     "manufacturing_source",
     "placed_piece_views",

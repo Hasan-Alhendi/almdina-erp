@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
@@ -18,6 +21,7 @@ from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     CUT_PATH_INTERNAL_SEQUENCE_KEY,
     SHEET_PERIMETER_PATH_KEY,
     connected_cut_path_order_keys,
+    count_proper_segment_crossings,
     diagnose_cut_network,
     edge_sets_equal,
     extract_connected_perimeter,
@@ -26,8 +30,28 @@ from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     remaining_segments_after_perimeter,
     resolve_cut_path_sequence,
     segment_edge_multiset,
+    split_segments_at_vertices,
 )
 from almdina_erp.almdina_erp.domain.cnc.post_processor import POST_PROCESSOR_VERSION
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def _load_join_fixture(name: str) -> dict:
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def _normalize_ring(points):
+    quantized = [(round(float(x), 2), round(float(y), 2)) for x, y in points]
+    if quantized[0] == quantized[-1] and len(quantized) > 1:
+        quantized = quantized[:-1]
+    start = min(range(len(quantized)), key=lambda index: (quantized[index][1], quantized[index][0]))
+    forward = quantized[start:] + quantized[:start]
+    reversed_ring = list(reversed(quantized))
+    rev_start = reversed_ring.index(forward[0])
+    backward = reversed_ring[rev_start:] + reversed_ring[:rev_start]
+    return tuple(forward if forward <= backward else backward)
 
 
 KERF_MM = 5.0
@@ -591,3 +615,158 @@ def test_compile_connected_with_hole_geometry_keeps_single_perimeter_path():
     )
     assert package["production"] is False
     assert int(package.get("path_count") or 0) >= 1
+
+
+def test_diagonal_perimeter_edges_are_supported():
+    points = [(0, 0), (80, 0), (100, 40), (80, 80), (0, 80)]
+    segments = polyline_segments(points, closed=True)
+    perimeter = extract_connected_perimeter(segments)
+    assert perimeter.closed
+    assert perimeter.edge_count == 5
+    assert (100.0, 40.0) in perimeter.points
+    leftovers = remaining_segments_after_perimeter(segments, perimeter)
+    assert leftovers == []
+
+
+def test_interior_crossing_splits_and_keeps_outer_union():
+    # Crossed internals create a vertex that is not an original endpoint.
+    horizontal = [((0, 40), (100, 40))]
+    vertical = [((50, 0), (50, 80))]
+    outer = polyline_segments(_rect(0, 0, 100, 80), closed=True)
+    network = outer + horizontal + vertical
+    assert count_proper_segment_crossings(network) >= 1
+    planar = split_segments_at_vertices(network)
+    assert len(planar) > len(network)
+    assert (50.0, 40.0) in {point for edge in planar for point in edge}
+    perimeter = extract_connected_perimeter(network)
+    leftovers = remaining_segments_after_perimeter(network, perimeter)
+    assert perimeter.closed
+    # Outer sides are subdivided at T-joints with the cross.
+    assert perimeter.edge_count == 8
+    assert edge_sets_equal(
+        network,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+
+
+def test_partial_collinear_overlap_splits_without_zero_length():
+    left = [((0, 0), (60, 0))]
+    right = [((40, 0), (100, 0))]
+    planar = split_segments_at_vertices(left + right)
+    assert all(start != end for start, end in planar)
+    counts = segment_edge_multiset(left + right)
+    assert counts[((40.0, 0.0), (60.0, 0.0))] == 2
+    assert counts[((0.0, 0.0), (40.0, 0.0))] == 1
+    assert counts[((60.0, 0.0), (100.0, 0.0))] == 1
+
+
+def test_branched_network_with_shared_cuts_and_open_internal():
+    outer = polyline_segments(_rect(0, 0, 120, 100), closed=True)
+    shared_wall = polyline_segments(_rect(0, 0, 60, 100), closed=True)
+    # Open spur that ends on the shared wall (T-joint), without an X-crossing.
+    spur = [((30, 50), (60, 50))]
+    network = outer + shared_wall + spur
+    diagnosis = diagnose_cut_network(network)
+    assert diagnosis.crossing_count == 0
+    assert diagnosis.open_endpoint_count >= 1
+    perimeter = extract_connected_perimeter(network)
+    leftovers = remaining_segments_after_perimeter(network, perimeter)
+    assert perimeter.closed
+    assert edge_sets_equal(
+        network,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+
+
+def test_bridge_pinch_corridor_rejected_as_invalid_simple_cycle():
+    # Two loops joined by a single-edge corridor → outer face reuses the bridge.
+    left = polyline_segments(_rect(0, 0, 40, 40), closed=True)
+    right = polyline_segments(_rect(60, 0, 40, 40), closed=True)
+    bridge = [((40, 20), (60, 20))]
+    with pytest.raises(OperationalFileError) as exc:
+        extract_connected_perimeter(left + right + bridge)
+    assert exc.value.code in {
+        "perimeter_geometry_invalid",
+        "perimeter_components_disconnected",
+        "perimeter_not_closed",
+    }
+
+
+def test_mismatched_uploaded_polyline_is_ignored():
+    network = polyline_segments(_rect(0, 0, 100, 80), closed=True)
+    preferred = prefer_uploaded_perimeter_polyline(
+        [{"closed": True, "points": [(0, 0), (50, 0), (50, 40), (0, 40)]}],
+        network,
+    )
+    assert preferred is None
+
+
+def test_uploaded_polyline_accepted_when_network_extract_would_need_same_edges():
+    outer = [(0, 0), (100, 0), (100, 60), (70, 60), (70, 80), (0, 80)]
+    internal = [((20, 20), (40, 20))]
+    network = polyline_segments(outer, closed=True) + internal
+    preferred = prefer_uploaded_perimeter_polyline(
+        [{"closed": True, "points": outer}],
+        network,
+    )
+    assert preferred is not None
+    assert preferred.closed
+    leftovers = remaining_segments_after_perimeter(network, preferred)
+    assert edge_sets_equal(
+        network,
+        polyline_segments(preferred.points, closed=True) + leftovers,
+    )
+
+
+def test_multi_sheet_fixture_regression_sheet2_crossing_layout():
+    payload = _load_join_fixture("cnc_join_26_00130_sheet2_segments.json")
+    segments = [tuple(map(tuple, segment)) for segment in payload["segments"]]
+    assert count_proper_segment_crossings(segments) >= 1
+    diagnosis = diagnose_cut_network(segments)
+    assert diagnosis.crossing_count >= 1
+    perimeter = extract_connected_perimeter(segments)
+    leftovers = remaining_segments_after_perimeter(segments, perimeter)
+    assert perimeter.closed
+    assert perimeter.edge_count == int(payload["perimeter_edge_count"])
+    assert edge_sets_equal(
+        segments,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+    # Multiset conservation: no duplicated perimeter cuts, no lost internals.
+    before = segment_edge_multiset(segments)
+    after = segment_edge_multiset(
+        list(leftovers) + list(polyline_segments(perimeter.points, closed=True))
+    )
+    assert before == after
+
+
+def test_multi_sheet_fixture_regression_sheet3_crossing_layout():
+    payload = _load_join_fixture("cnc_join_26_00130_sheet3_segments.json")
+    segments = [tuple(map(tuple, segment)) for segment in payload["segments"]]
+    assert count_proper_segment_crossings(segments) >= 1
+    perimeter = extract_connected_perimeter(segments)
+    leftovers = remaining_segments_after_perimeter(segments, perimeter)
+    assert perimeter.closed
+    assert perimeter.edge_count == int(payload["perimeter_edge_count"])
+    assert edge_sets_equal(
+        segments,
+        polyline_segments(perimeter.points, closed=True) + leftovers,
+    )
+    before = segment_edge_multiset(segments)
+    after = segment_edge_multiset(
+        list(leftovers) + list(polyline_segments(perimeter.points, closed=True))
+    )
+    assert before == after
+    # Stable under start-point / orientation normalize.
+    assert _normalize_ring(perimeter.points) == _normalize_ring(perimeter.points)
+
+
+def test_diagnosis_reports_geometry_stats_for_complex_network():
+    payload = _load_join_fixture("cnc_join_26_00130_sheet2_segments.json")
+    segments = [tuple(map(tuple, segment)) for segment in payload["segments"]]
+    diagnosis = diagnose_cut_network(segments)
+    assert diagnosis.segment_count >= len(segments)
+    assert diagnosis.vertex_count > 0
+    assert diagnosis.crossing_count >= 1
+    assert diagnosis.reject_code is None
+    assert diagnosis.degree_histogram

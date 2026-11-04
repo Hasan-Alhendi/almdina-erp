@@ -74,6 +74,7 @@ def build_generation_snapshot(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    sheet_placement: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Freeze the machining setup that produced a Simulation NC file."""
 
@@ -119,6 +120,7 @@ def build_generation_snapshot(
         "layer_presets": layers,
         "path_overrides": paths,
         "machine_profile": dict(machine_profile or {}),
+        "sheet_placement": dict(sheet_placement or package.get("sheet_placement") or {}),
         "post_processor_version": str(package.get("post_processor_version") or ""),
         "dialect": str(package.get("dialect") or ""),
         "file_kind": "simulation",

@@ -115,6 +115,7 @@
         function operationalFilesPanel(model) {
             const panel = model.operationalFiles || {};
             const count = Number(panel.presetCount || 0);
+            const machineCount = Number(panel.machineCount || 0);
             const actions = [
                 uiButton({
                     label: t("Manage tool presets"),
@@ -126,6 +127,20 @@
                         label: t("Add a tool preset"),
                         variant: "secondary",
                         className: "aps-cnc-preset-add",
+                    })
+                    : "",
+            ].filter(Boolean).join("");
+            const machineActions = [
+                uiButton({
+                    label: t("Manage CNC machines"),
+                    variant: "primary",
+                    className: "aps-cnc-machine-manage",
+                }),
+                panel.editable
+                    ? uiButton({
+                        label: t("Add a CNC machine"),
+                        variant: "secondary",
+                        className: "aps-cnc-machine-add",
                     })
                     : "",
             ].filter(Boolean).join("");
@@ -147,6 +162,25 @@
                             ? t("{0} saved tool presets are available in Desk.", [count])
                             : t("No CNC tool presets have been created yet.")}</p>
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
+                    </div>
+                </article>
+                <article class="aps-section is-editable" data-section="cnc_machines">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("CNC Machines")}</h3>
+                                <div class="aps-section-desc">${t("Register each CNC machine bed by name, width (X), and length (Y). Origin is always bottom-left with X to the right and Y upward.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${machineActions}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${machineCount
+                            ? t("{0} CNC machines are available in Desk.", [machineCount])
+                            : t("No CNC machines have been created yet.")}</p>
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the CNC machines.")}</p>`}
                     </div>
                 </article>
             `;

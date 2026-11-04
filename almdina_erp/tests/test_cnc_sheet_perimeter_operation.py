@@ -18,8 +18,10 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     catalog_sheet,
     confirmed_perimeter_operation_order,
     derive_legacy_cut_path_sequence,
+    normalize_path_piece_instance,
     settings_fingerprint,
     sheet_perimeter_precedes_milling,
+    validate_operational_path_rows,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import (
     CNC_OPERATION_TYPES,
@@ -503,6 +505,110 @@ def test_legacy_saved_without_sheet_perimeter_row_is_coerced():
     keys = [row["operation_key"] for row in prepared["operations"]]
     assert keys == ["cut_path", "sheet_perimeter"]
     assert prepared["cut_path_sequence"][0] == CUT_PATH_INTERNAL_SEQUENCE_KEY
+
+
+def test_sheet_perimeter_piece_id_must_stay_empty_and_piece_paths_keep_ids():
+    assert (
+        normalize_path_piece_instance(
+            path_key=SHEET_PERIMETER_PATH_KEY,
+            operation_key="sheet_perimeter",
+            piece_instance_id="",
+        )
+        == ""
+    )
+    with pytest.raises(OperationalFileError) as forbidden:
+        normalize_path_piece_instance(
+            path_key=SHEET_PERIMETER_PATH_KEY,
+            operation_key="sheet_perimeter",
+            piece_instance_id="piece-a",
+        )
+    assert forbidden.value.code == "sheet_perimeter_piece_forbidden"
+    assert (
+        normalize_path_piece_instance(
+            path_key="cut_path:piece-a:outer",
+            operation_key="cut_path",
+            piece_instance_id="piece-a",
+        )
+        == "piece-a"
+    )
+    with pytest.raises(OperationalFileError) as missing:
+        normalize_path_piece_instance(
+            path_key="cut_path:piece-a:outer",
+            operation_key="cut_path",
+            piece_instance_id="",
+        )
+    assert missing.value.code == "missing_piece_instance_id"
+    # Shared anonymous centers may omit a piece id.
+    assert (
+        normalize_path_piece_instance(
+            path_key="cut_path:center:abcd",
+            operation_key="cut_path",
+            piece_instance_id="",
+        )
+        == ""
+    )
+    rows = validate_operational_path_rows(
+        [
+            {
+                "path_key": SHEET_PERIMETER_PATH_KEY,
+                "operation_key": "sheet_perimeter",
+                "piece_instance_id": "",
+                "dxf_layer": "CUT_PATH",
+                "sequence": 1,
+            },
+            {
+                "path_key": "cut_path:piece-a:outer",
+                "operation_key": "cut_path",
+                "piece_instance_id": "piece-a",
+                "dxf_layer": "CUT_PATH",
+                "sequence": 2,
+            },
+        ]
+    )
+    assert rows[0]["piece_instance_id"] == ""
+    assert rows[1]["piece_instance_id"] == "piece-a"
+    with pytest.raises(OperationalFileError) as duplicate:
+        validate_operational_path_rows(
+            [
+                {
+                    "path_key": SHEET_PERIMETER_PATH_KEY,
+                    "operation_key": "sheet_perimeter",
+                    "piece_instance_id": "",
+                },
+                {
+                    "path_key": SHEET_PERIMETER_PATH_KEY,
+                    "operation_key": "sheet_perimeter",
+                    "piece_instance_id": "",
+                },
+            ]
+        )
+    assert duplicate.value.code == "sheet_perimeter_duplicate"
+
+
+def test_prepare_connected_keeps_empty_perimeter_piece_and_piece_ids():
+    pieces = [_piece("A", _rect(40, 40, 300, 400)), _piece("B", _rect(345, 40, 250, 200))]
+    prepared = prepare_sheet_settings(
+        order_name="DCO-1",
+        approved_plan=_plan(),
+        plan_is_current=True,
+        pieces=pieces,
+        sheet_no=1,
+        existing=None,
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        known_presets=PRESETS,
+        machine_profile={"fingerprint_payload": {}, "production_approved": False},
+        operation_order=["sheet_perimeter", "cut_path"],
+        perimeter_join_mode="connected",
+        factory_defaults={"cut_path": "Finish"},
+    )
+    peri = next(row for row in prepared["paths"] if row["path_key"] == SHEET_PERIMETER_PATH_KEY)
+    assert peri["operation_key"] == "sheet_perimeter"
+    assert peri["piece_instance_id"] == ""
+    piece_rows = [row for row in prepared["paths"] if row["path_key"] != SHEET_PERIMETER_PATH_KEY]
+    assert piece_rows
+    assert all(str(row["piece_instance_id"] or "").strip() for row in piece_rows)
+    assert sum(1 for row in prepared["paths"] if row["path_key"] == SHEET_PERIMETER_PATH_KEY) == 1
 
 
 def test_other_sheet_unaffected_by_connected_mode_on_sheet_one():

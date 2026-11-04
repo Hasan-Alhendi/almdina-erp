@@ -176,9 +176,11 @@
 
         function operationalFiles(current = {}) {
             const presets = Array.isArray(current.cnc_tool_presets) ? current.cnc_tool_presets : [];
+            const machines = Array.isArray(current.cnc_machines) ? current.cnc_machines : [];
             return {
                 editable: sectionEditable(current, "cnc"),
                 presetCount: presets.length,
+                machineCount: machines.length,
             };
         }
 

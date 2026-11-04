@@ -1,0 +1,64 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:machine_name",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "machine_name",
+    "width_cm",
+    "length_cm",
+    "enabled"
+  ],
+  "fields": [
+    {
+      "fieldname": "machine_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Machine Name",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "description": "Machine travel on the X axis (positive to the right). Entered in centimetres.",
+      "fieldname": "width_cm",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Machine Width (cm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "description": "Machine travel on the Y axis (positive upward). Entered in centimetres.",
+      "fieldname": "length_cm",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Machine Length (cm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Enabled"
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "CNC Machine",
+  "naming_rule": "By fieldname",
+  "permissions": [],
+  "quick_entry": 1,
+  "search_fields": "machine_name",
+  "show_title_field_in_link": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "machine_name",
+  "track_changes": 1
+}

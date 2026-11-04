@@ -19,6 +19,7 @@ SUPPORTING_DOCTYPES = (
     "Edge Banding Type",
     "Door Cutting Price Approval",
     "CNC Tool Preset",
+    "CNC Machine",
     "CNC Operational File",
 )
 
@@ -100,6 +101,19 @@ def supporting_standard_permission_projection(
         can_read = normalized[Capability.VIEW_EDGE_BANDING_TYPES]
         return {"read": can_read, "select": can_read}
     if doctype == "CNC Tool Preset":
+        can_read = (
+            normalized[Capability.VIEW_CNC_OPERATIONAL_FILES]
+            or normalized[Capability.VIEW_FACTORY_SETTINGS]
+        )
+        can_maintain = normalized[Capability.EDIT_FACTORY_CNC_DEFAULTS]
+        return {
+            "read": can_read,
+            "select": can_read,
+            "create": can_maintain,
+            "write": can_maintain,
+            "delete": can_maintain,
+        }
+    if doctype == "CNC Machine":
         can_read = (
             normalized[Capability.VIEW_CNC_OPERATIONAL_FILES]
             or normalized[Capability.VIEW_FACTORY_SETTINGS]

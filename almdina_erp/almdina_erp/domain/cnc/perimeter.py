@@ -52,6 +52,12 @@ class PerimeterNetworkDiagnosis:
     components: tuple[NetworkComponentDiagnosis, ...]
     outer_index: int | None
     reject_code: str | None
+    segment_count: int = 0
+    vertex_count: int = 0
+    degree_histogram: tuple[tuple[int, int], ...] = ()
+    open_endpoint_count: int = 0
+    crossing_count: int = 0
+    excluded_shared_edge_count: int = 0
 
 
 def normalize_perimeter_join_mode(value: object) -> str:
@@ -102,12 +108,109 @@ def _point_on_segment(
     return -quantum <= dot <= length2 + quantum
 
 
+def _proper_segment_intersection(
+    start_a: tuple[float, float],
+    end_a: tuple[float, float],
+    start_b: tuple[float, float],
+    end_b: tuple[float, float],
+    *,
+    quantum: float = POINT_QUANTUM_MM,
+) -> tuple[float, float] | None:
+    """Return the interior crossing of two non-collinear segments, if any.
+
+    Endpoint touches and collinear overlaps are ignored here; those are handled
+    by vertex-on-segment splitting. Near-misses within a loose tolerance are
+    not promoted to intersections.
+    """
+
+    ax, ay = start_a
+    bx, by = end_a
+    cx, cy = start_b
+    dx, dy = end_b
+    den = (ax - bx) * (cy - dy) - (ay - by) * (cx - dx)
+    if abs(den) <= 1e-12:
+        return None
+    t = ((ax - cx) * (cy - dy) - (ay - cy) * (cx - dx)) / den
+    u = ((ax - cx) * (ay - by) - (ay - cy) * (ax - bx)) / den
+    # Strictly interior on both segments — endpoint joints are already vertices.
+    edge = max(1e-12, float(quantum) * 1e-6)
+    if not (edge < t < 1.0 - edge and edge < u < 1.0 - edge):
+        return None
+    point = (ax + t * (bx - ax), ay + t * (by - ay))
+    quantized = quantize_point(point, quantum=quantum)
+    if quantized in {start_a, end_a, start_b, end_b}:
+        return None
+    return quantized
+
+
+def _split_one_segment(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    mids: Sequence[tuple[float, float]],
+    *,
+    quantum: float = POINT_QUANTUM_MM,
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    if not mids:
+        return [(start, end)] if start != end else []
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    ordered = sorted(
+        {
+            quantize_point(point, quantum=quantum)
+            for point in mids
+            if quantize_point(point, quantum=quantum) not in {start, end}
+        },
+        key=lambda point: (point[0] - start[0]) * dx + (point[1] - start[1]) * dy,
+    )
+    pieces: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    cursor = start
+    for point in ordered:
+        if point == cursor:
+            continue
+        pieces.append((cursor, point))
+        cursor = point
+    if cursor != end:
+        pieces.append((cursor, end))
+    return [(left, right) for left, right in pieces if left != right]
+
+
+def count_proper_segment_crossings(
+    segments: Sequence[Sequence[Sequence[float]]],
+    *,
+    quantum: float = POINT_QUANTUM_MM,
+) -> int:
+    """Count interior crossings before planarization (diagnostic aid)."""
+
+    quantized: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for segment in segments:
+        if not isinstance(segment, Sequence) or len(segment) != 2:
+            continue
+        start = quantize_point(segment[0], quantum=quantum)
+        end = quantize_point(segment[1], quantum=quantum)
+        if start != end:
+            quantized.append((start, end))
+    total = 0
+    for index, left in enumerate(quantized):
+        for right in quantized[index + 1 :]:
+            if _proper_segment_intersection(
+                left[0], left[1], right[0], right[1], quantum=quantum
+            ) is not None:
+                total += 1
+    return total
+
+
 def split_segments_at_vertices(
     segments: Sequence[Sequence[Sequence[float]]],
     *,
     quantum: float = POINT_QUANTUM_MM,
+    extra_vertices: Sequence[Sequence[float]] = (),
 ) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    """Split edges where another network vertex lands mid-segment (T-joints)."""
+    """Planarize the cut network at existing vertices and true interior crossings.
+
+    Splits are analysis-only: the geometric union of returned pieces equals the
+    input segments. No new cutting travel is invented beyond subdivision at
+    contact points that already exist in the approved network.
+    """
 
     quantized: list[tuple[tuple[float, float], tuple[float, float]]] = []
     vertices: set[tuple[float, float]] = set()
@@ -121,30 +224,33 @@ def split_segments_at_vertices(
         quantized.append((start, end))
         vertices.add(start)
         vertices.add(end)
-    split: list[tuple[tuple[float, float], tuple[float, float]]] = []
-    for start, end in quantized:
-        mids = [
-            point
-            for point in vertices
-            if _point_on_segment(point, start, end, quantum=quantum)
-        ]
-        if not mids:
-            split.append((start, end))
+    for point in extra_vertices:
+        if not isinstance(point, Sequence) or len(point) < 2:
             continue
-        dx = end[0] - start[0]
-        dy = end[1] - start[1]
-        ordered = sorted(
-            mids,
-            key=lambda point: (point[0] - start[0]) * dx + (point[1] - start[1]) * dy,
-        )
-        cursor = start
-        for point in ordered:
-            if point == cursor:
+        vertices.add(quantize_point(point, quantum=quantum))
+
+    midpoints: dict[int, set[tuple[float, float]]] = defaultdict(set)
+    for index, (start, end) in enumerate(quantized):
+        for point in vertices:
+            if _point_on_segment(point, start, end, quantum=quantum):
+                midpoints[index].add(point)
+
+    for index, left in enumerate(quantized):
+        for other, right in enumerate(quantized[index + 1 :], start=index + 1):
+            crossing = _proper_segment_intersection(
+                left[0], left[1], right[0], right[1], quantum=quantum
+            )
+            if crossing is None:
                 continue
-            split.append((cursor, point))
-            cursor = point
-        if cursor != end:
-            split.append((cursor, end))
+            midpoints[index].add(crossing)
+            midpoints[other].add(crossing)
+            vertices.add(crossing)
+
+    split: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    for index, (start, end) in enumerate(quantized):
+        split.extend(
+            _split_one_segment(start, end, sorted(midpoints.get(index, ())), quantum=quantum)
+        )
     return split
 
 
@@ -343,10 +449,17 @@ def _walk_outer_face(
     points: list[tuple[float, float]] = [start]
     previous, current = start, first
     visited_directed: set[tuple[tuple[float, float], tuple[float, float]]] = set()
+    visited_undirected: set[tuple[tuple[float, float], tuple[float, float]]] = set()
     while True:
         if (previous, current) in visited_directed:
             raise OperationalFileError("perimeter_geometry_ambiguous")
+        edge = undirected_edge(previous, current)
+        if edge in visited_undirected:
+            # Bridge / pinch corridors walk the same undirected cut twice and
+            # cannot form a single CNC-safe simple outer contour.
+            raise OperationalFileError("perimeter_geometry_invalid")
         visited_directed.add((previous, current))
+        visited_undirected.add(edge)
         points.append(current)
         options = [node for node in graph[current] if node != previous]
         if not options:
@@ -370,6 +483,18 @@ def _walk_outer_face(
     return tuple(points)
 
 
+def _assert_simple_cycle(
+    points: Sequence[tuple[float, float]],
+    *,
+    quantum: float = POINT_QUANTUM_MM,
+) -> None:
+    edges = segment_edge_multiset(polyline_segments(points, closed=True), quantum=quantum)
+    if not edges or any(count != 1 for count in edges.values()):
+        raise OperationalFileError("perimeter_geometry_invalid")
+    if len(edges) != len(points):
+        raise OperationalFileError("perimeter_geometry_invalid")
+
+
 def _cycle_from_component(
     graph: Mapping[tuple[float, float], Sequence[tuple[float, float]]],
 ) -> tuple[tuple[float, float], ...] | None:
@@ -377,9 +502,24 @@ def _cycle_from_component(
     if not pruned:
         return None
     try:
-        return _walk_outer_face(pruned)
+        points = _walk_outer_face(pruned)
+        _assert_simple_cycle(points)
+        return points
     except OperationalFileError:
         return None
+
+
+def _cycle_from_component_strict(
+    graph: Mapping[tuple[float, float], Sequence[tuple[float, float]]],
+) -> tuple[tuple[float, float], ...] | None:
+    """Like ``_cycle_from_component`` but surfaces pinch-corridor invalidity."""
+
+    pruned = _prune_dangling_edges(dict(graph))
+    if not pruned:
+        return None
+    points = _walk_outer_face(pruned)
+    _assert_simple_cycle(points)
+    return points
 
 
 def _boundary_graph_from_segments(
@@ -428,12 +568,27 @@ def diagnose_cut_network(
 ) -> PerimeterNetworkDiagnosis:
     """Explain how CUT_PATH components relate before choosing a perimeter."""
 
+    planar = split_segments_at_vertices(segments, quantum=quantum)
+    crossing_count = count_proper_segment_crossings(segments, quantum=quantum)
+    counts = segment_edge_multiset(segments, quantum=quantum)
+    excluded_shared = sum(1 for count in counts.values() if count >= 2)
+    full_graph = _adjacency(list(counts.elements())) if counts else {}
+    degree_counter: Counter[int] = Counter(len(neighbors) for neighbors in full_graph.values())
+    open_endpoints = sum(1 for degree, amount in degree_counter.items() if degree == 1 for _ in range(amount))
+
     graph = _boundary_graph_from_segments(segments, quantum=quantum)
     components = _split_graph_components(graph) if graph else []
     closed_rings: list[tuple[tuple[float, float], ...]] = []
     rows: list[NetworkComponentDiagnosis] = []
+    invalid_components = 0
     for index, component in enumerate(components):
         cycle = _cycle_from_component(component)
+        if cycle is None:
+            try:
+                _cycle_from_component_strict(component)
+            except OperationalFileError as exc:
+                if exc.code == "perimeter_geometry_invalid":
+                    invalid_components += 1
         points = tuple(sorted(component))
         if cycle is not None:
             closed_rings.append(cycle)
@@ -464,6 +619,7 @@ def diagnose_cut_network(
     try:
         if closed_rings:
             outer = _select_outer_cycle(closed_rings, quantum=quantum)
+            _assert_simple_cycle(outer, quantum=quantum)
             outer_edges = segment_edge_multiset(
                 polyline_segments(outer, closed=True),
                 quantum=quantum,
@@ -496,6 +652,8 @@ def diagnose_cut_network(
                     edge_count=row.edge_count,
                     sample_point=row.sample_point,
                 )
+        elif components and invalid_components == len(components):
+            reject = "perimeter_geometry_invalid"
         elif components:
             reject = "perimeter_not_closed"
         else:
@@ -525,6 +683,12 @@ def diagnose_cut_network(
         components=tuple(rows),
         outer_index=outer_index,
         reject_code=reject,
+        segment_count=len(planar),
+        vertex_count=len({point for edge in planar for point in edge}),
+        degree_histogram=tuple(sorted(degree_counter.items())),
+        open_endpoint_count=open_endpoints,
+        crossing_count=crossing_count,
+        excluded_shared_edge_count=excluded_shared,
     )
 
 
@@ -537,20 +701,41 @@ def extract_connected_perimeter(
 
     Separate internal closed loops (holes / interior cuts) do not force
     ``perimeter_components_disconnected``. Only truly separate external
-    components are rejected.
+    components are rejected. The returned ring is a simple cycle whose
+    undirected edges exist in the approved (planarized) cut network.
     """
 
     graph = _boundary_graph_from_segments(segments, quantum=quantum)
     if not graph:
         raise OperationalFileError("perimeter_unavailable")
+    components = _split_graph_components(graph)
     cycles: list[tuple[tuple[float, float], ...]] = []
-    for component in _split_graph_components(graph):
+    unresolved_samples: list[tuple[float, float]] = []
+    invalid_components = 0
+    for component in components:
         cycle = _cycle_from_component(component)
         if cycle is not None:
             cycles.append(cycle)
+            continue
+        sample_points = tuple(sorted(component))
+        if sample_points:
+            unresolved_samples.append(sample_points[0])
+        try:
+            _cycle_from_component_strict(component)
+        except OperationalFileError as exc:
+            if exc.code == "perimeter_geometry_invalid":
+                invalid_components += 1
     if not cycles:
+        if invalid_components:
+            raise OperationalFileError("perimeter_geometry_invalid")
         raise OperationalFileError("perimeter_not_closed")
     points = _select_outer_cycle(cycles, quantum=quantum)
+    _assert_simple_cycle(points, quantum=quantum)
+    # A pinched/non-simple sibling outside the chosen outer means the sheet
+    # still has a second external body — do not pretend one perimeter exists.
+    for sample in unresolved_samples:
+        if not _point_in_ring(sample, points, quantum=quantum):
+            raise OperationalFileError("perimeter_components_disconnected")
     return PerimeterResult(points=points, closed=True, edge_count=len(points))
 
 
@@ -563,10 +748,15 @@ def remaining_segments_after_perimeter(
     """Return non-perimeter edges without inventing or dropping coverage."""
 
     before = segment_edge_multiset(segments, quantum=quantum)
-    perimeter_edges = segment_edge_multiset(
+    network_vertices = {point for edge in before for point in edge}
+    perimeter_pieces = split_segments_at_vertices(
         polyline_segments(perimeter.points, closed=perimeter.closed),
         quantum=quantum,
+        extra_vertices=tuple(network_vertices),
     )
+    perimeter_edges: Counter[tuple[tuple[float, float], tuple[float, float]]] = Counter()
+    for start, end in perimeter_pieces:
+        perimeter_edges[undirected_edge(start, end, quantum=quantum)] += 1
     if any(before[edge] < count for edge, count in perimeter_edges.items()):
         raise OperationalFileError("perimeter_geometry_invalid")
     remaining = before.copy()
@@ -575,11 +765,10 @@ def remaining_segments_after_perimeter(
     for edge, count in remaining.items():
         for _ in range(count):
             leftover.append(edge)
-    restored = segment_edge_multiset(
-        leftover + list(polyline_segments(perimeter.points, closed=True)),
-        quantum=quantum,
-    )
-    if restored != before:
+    # Conservation: leftover ∪ perimeter_pieces must reproduce the planar network.
+    check = Counter(leftover)
+    check.update(perimeter_edges)
+    if check != before:
         raise OperationalFileError("perimeter_geometry_invalid")
     return leftover
 
@@ -652,6 +841,30 @@ def resolve_cut_path_sequence(
     return ordered
 
 
+def _candidate_edges_covered_by_network(
+    points: Sequence[tuple[float, float]],
+    network_edges: Counter[tuple[tuple[float, float], tuple[float, float]]],
+    *,
+    quantum: float = POINT_QUANTUM_MM,
+) -> Counter[tuple[tuple[float, float], tuple[float, float]]] | None:
+    """Subdivide an uploaded ring onto network vertices and require coverage."""
+
+    network_vertices = {point for edge in network_edges for point in edge}
+    subdivided = split_segments_at_vertices(
+        polyline_segments(points, closed=True),
+        quantum=quantum,
+        extra_vertices=tuple(network_vertices),
+    )
+    candidate_edges: Counter[tuple[tuple[float, float], tuple[float, float]]] = Counter()
+    for start, end in subdivided:
+        candidate_edges[undirected_edge(start, end, quantum=quantum)] += 1
+    if not candidate_edges:
+        return None
+    if any(network_edges[edge] < count for edge, count in candidate_edges.items()):
+        return None
+    return candidate_edges
+
+
 def prefer_uploaded_perimeter_polyline(
     cut_paths: Sequence[Mapping[str, object]],
     expected_outer_segments: Sequence[Sequence[Sequence[float]]],
@@ -661,7 +874,9 @@ def prefer_uploaded_perimeter_polyline(
     """Reuse a closed uploaded polyline when it is the approved outer perimeter.
 
     Closed interior rings are ignored. A valid uploaded outer polyline is
-    accepted even when interior cut components are disconnected from it.
+    accepted even when interior cut components are disconnected from it, and
+    even when alternative network extraction fails, provided every subdivided
+    candidate edge exists in the approved cutter-center network.
     """
 
     network_edges = segment_edge_multiset(expected_outer_segments, quantum=quantum)
@@ -681,13 +896,12 @@ def prefer_uploaded_perimeter_polyline(
             ordered = ordered[:-1]
         if len(ordered) < 3:
             continue
-        candidate_edges = segment_edge_multiset(
-            polyline_segments(ordered, closed=True),
+        candidate_edges = _candidate_edges_covered_by_network(
+            ordered,
+            network_edges,
             quantum=quantum,
         )
-        if any(network_edges[edge] < count for edge, count in candidate_edges.items()):
-            continue
-        if not candidate_edges:
+        if candidate_edges is None:
             continue
         candidates.append((abs(_signed_area(ordered)), ordered, candidate_edges))
     if not candidates:
@@ -723,6 +937,8 @@ def prefer_uploaded_perimeter_polyline(
         for _area, points, edges in candidates:
             if edges == expected_edges:
                 return PerimeterResult(points=points, closed=True, edge_count=len(edges))
+        # Extraction found a different outer ring; do not override it with a
+        # mismatched uploaded polyline even when edges are covered.
         return None
     return PerimeterResult(points=best_points, closed=True, edge_count=len(best_edges))
 
@@ -739,6 +955,7 @@ __all__ = [
     "SHEET_PERIMETER_PATH_KEY",
     "coerce_cut_path_sequence_request",
     "connected_cut_path_order_keys",
+    "count_proper_segment_crossings",
     "default_cut_path_sequence",
     "diagnose_cut_network",
     "edge_sets_equal",

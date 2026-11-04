@@ -80,10 +80,9 @@
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(translate("Change log"), openAudit, null, "history");
         page.add_inner_button(translate("Refresh"), load, null, "refresh");
-        const cncPresetModule = window.AlmdinaFactoryProductionSettingsCncPresets;
-        const cncPresets = cncPresetModule ? cncPresetModule.attach({
-            editable: () => viewModel.sectionEditable(state.current, "cnc"),
-        }) : null;
+        const cncEditable = () => viewModel.sectionEditable(state.current, "cnc");
+        const cncPresets = window.AlmdinaFactoryProductionSettingsCncPresets ? window.AlmdinaFactoryProductionSettingsCncPresets.attach({ editable: cncEditable }) : null;
+        const cncMachines = window.AlmdinaFactoryProductionSettingsCncMachines ? window.AlmdinaFactoryProductionSettingsCncMachines.attach({ editable: cncEditable }) : null;
         interactionsModule.bind({
             $body,
             lifecycle: store.lifecycle,
@@ -94,6 +93,8 @@
                 onReconnectWhatsApp: () => whatsapp && whatsapp.reconnect(),
                 onManageToolPresets: () => cncPresets && cncPresets.manage(),
                 onAddToolPreset: () => cncPresets && cncPresets.create(),
+                onManageCncMachines: () => cncMachines && cncMachines.manage(),
+                onAddCncMachine: () => cncMachines && cncMachines.create(),
             },
         });
         const instance = Object.freeze({
@@ -103,9 +104,7 @@
                 if (backups && typeof backups.dispose === "function") backups.dispose();
                 dialogs.dispose();
                 store.dispose();
-                if (wrapper.__almdinaProductionSettingsController === instance) {
-                    wrapper.__almdinaProductionSettingsController = null;
-                }
+                if (wrapper.__almdinaProductionSettingsController === instance) wrapper.__almdinaProductionSettingsController = null;
             },
         });
         wrapper.__almdinaProductionSettingsController = instance;

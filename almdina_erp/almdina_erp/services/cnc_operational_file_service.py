@@ -23,15 +23,18 @@ from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
     simulation_nc_filename,
 )
 from almdina_erp.almdina_erp.application.cnc.workspace import (
+    approved_sheet_size_cm,
     build_operational_workspace,
     operational_board_layout,
     prepare_sheet_settings,
+    resolve_sheet_placement,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
     assert_viewed_plan_token,
     operation_preset_choice,
 )
+from almdina_erp.almdina_erp.domain.cnc.placement import PlacementError
 from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -48,7 +51,9 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     attach_simulation_nc,
     discard_orphan_file,
     factory_operation_defaults,
+    get_cnc_machine,
     known_tool_presets,
+    list_cnc_machines,
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
@@ -135,6 +140,23 @@ _MESSAGES = {
     "perimeter_geometry_invalid": "The connected perimeter would change the approved cut geometry.",
     "cut_path_sequence_invalid": "The CUT_PATH execution order is not valid for this sheet.",
     "perimeter_cut_early_unconfirmed": "Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove.",
+    "missing_piece_instance_id": "Piece-bound CNC paths must keep a piece instance id.",
+    "sheet_perimeter_piece_forbidden": "The sheet perimeter path must not be tied to a piece instance.",
+    "sheet_perimeter_duplicate": "A sheet may keep only one connected perimeter path.",
+    "cnc_machine_required": "Choose a CNC machine before generating the NC file.",
+    "cnc_machine_not_found": "The selected CNC machine was not found.",
+    "cnc_machine_disabled": "The selected CNC machine is disabled.",
+    "cnc_machine_name_required": "CNC machine name is required.",
+    "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
+    "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
+    "offset_left_invalid": "The distance from the left must be zero or a positive number of centimetres.",
+    "offset_bottom_invalid": "The distance from the bottom must be zero or a positive number of centimetres.",
+    "sheet_width_invalid": "The approved sheet width is not valid.",
+    "sheet_length_invalid": "The approved sheet length is not valid.",
+    "sheet_exceeds_machine_width": "The sheet plus the left offset exceeds the machine width.",
+    "sheet_exceeds_machine_length": "The sheet plus the bottom offset exceeds the machine length.",
+    "toolpath_exceeds_machine": "A cutter path would leave the machine travel area after placement.",
+    "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
 }
 
 
@@ -171,6 +193,7 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
     plan = approved_plan_ref(order)
     try:
         pieces = placed_piece_views(order) if plan is not None else []
+        snapshot = approved_plan_snapshot(order) if plan is not None else None
         workspace = build_operational_workspace(
             order_name=str(order.name),
             approved_plan=plan,
@@ -181,6 +204,8 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
             known_presets=known_tool_presets(),
             machine_profile=machine_profile_view(),
             can_prepare=can_prepare,
+            cnc_machines=list_cnc_machines(),
+            plan_snapshot=snapshot,
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -199,6 +224,16 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
     for sheet in workspace["sheets"]:
         if sheet["operational_file"]:
             sync_status(sheet["operational_file"], sheet["status"])
+        try:
+            width_cm, length_cm = approved_sheet_size_cm(
+                approved_plan_snapshot(order) if plan is not None else None,
+                sheet_no=int(sheet.get("sheet_no") or 0),
+            )
+            sheet["sheet_width_cm"] = width_cm
+            sheet["sheet_length_cm"] = length_cm
+        except (OperationalFileError, json.JSONDecodeError):
+            sheet["sheet_width_cm"] = None
+            sheet["sheet_length_cm"] = None
     for historical in workspace["historical_files"]:
         if historical["name"]:
             sync_status(historical["name"], historical["status"])
@@ -242,6 +277,9 @@ def save_cnc_operational_sheet(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool | None = None,
+    cnc_machine: str | None = None,
+    offset_left_cm: float | int | str | None = None,
+    offset_bottom_cm: float | int | str | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -296,8 +334,14 @@ def save_cnc_operational_sheet(
                 if perimeter_cut_early_confirmed is None
                 else bool(cint(perimeter_cut_early_confirmed))
             ),
+            cnc_machine=cnc_machine,
+            offset_left_cm=offset_left_cm,
+            offset_bottom_cm=offset_bottom_cm,
+            machine_catalog=list_cnc_machines(),
+            plan_snapshot=approved_plan_snapshot(order),
+            require_cnc_machine=False,
         )
-    except (OperationalFileError, ToolPresetError) as exc:
+    except (OperationalFileError, ToolPresetError, PlacementError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
     save_sheet(existing_name, prepared)
@@ -521,6 +565,9 @@ def generate_cnc_sheet_nc(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool | None = None,
+    cnc_machine: str | None = None,
+    offset_left_cm: float | int | str | None = None,
+    offset_bottom_cm: float | int | str | None = None,
 ) -> dict[str, Any]:
     """Save sheet settings, then persist a verified Simulation NC file. Not production-approved."""
 
@@ -560,8 +607,14 @@ def generate_cnc_sheet_nc(
                 if perimeter_cut_early_confirmed is None
                 else bool(cint(perimeter_cut_early_confirmed))
             ),
+            cnc_machine=cnc_machine,
+            offset_left_cm=offset_left_cm,
+            offset_bottom_cm=offset_bottom_cm,
+            machine_catalog=list_cnc_machines(),
+            plan_snapshot=approved_plan_snapshot(order),
+            require_cnc_machine=True,
         )
-    except (OperationalFileError, ToolPresetError) as exc:
+    except (OperationalFileError, ToolPresetError, PlacementError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     operational_name = save_sheet(str((existing or {}).get("name") or ""), prepared)
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
@@ -597,6 +650,19 @@ def generate_cnc_sheet_nc(
         fingerprint = str(prepared["settings_fingerprint"])
         if str(saved.get("settings_fingerprint") or "") != fingerprint:
             frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
+        machine_row = get_cnc_machine(str(saved.get("cnc_machine") or ""))
+        sheet_w, sheet_l = approved_sheet_size_cm(
+            approved_plan_snapshot(order),
+            sheet_no=cint(sheet_no),
+        )
+        placement = resolve_sheet_placement(
+            machine=machine_row,
+            sheet_width_cm=sheet_w,
+            sheet_length_cm=sheet_l,
+            offset_left_cm=saved.get("offset_left_cm"),
+            offset_bottom_cm=saved.get("offset_bottom_cm"),
+            require_machine=True,
+        )
         package = build_simulation_nc(
             program,
             machine_profile={
@@ -606,8 +672,9 @@ def generate_cnc_sheet_nc(
             },
             sheet_no=cint(sheet_no),
             settings_fingerprint=fingerprint,
+            sheet_placement=placement,
         )
-    except (OperationalFileError, ToolPresetError, PostProcessorError) as exc:
+    except (OperationalFileError, ToolPresetError, PostProcessorError, PlacementError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
@@ -656,6 +723,7 @@ def generate_cnc_sheet_nc(
             perimeter_join_mode=join_mode,
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
+            sheet_placement=dict(package.get("sheet_placement") or {}),
         )
         record_nc_generation(operational_name, snapshot, file_url)
     except Exception as exc:

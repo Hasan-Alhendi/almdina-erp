@@ -39,6 +39,14 @@
             event.preventDefault();
             if (callbacks.onAddToolPreset) callbacks.onAddToolPreset();
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-machine-manage", event => {
+            event.preventDefault();
+            if (callbacks.onManageCncMachines) callbacks.onManageCncMachines();
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-machine-add", event => {
+            event.preventDefault();
+            if (callbacks.onAddCncMachine) callbacks.onAddCncMachine();
+        });
         lifecycle.track(() => $body.off(EVENT_NAMESPACE), "production-settings-interactions");
         return true;
     }

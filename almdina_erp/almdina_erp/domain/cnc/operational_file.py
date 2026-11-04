@@ -216,6 +216,93 @@ def catalog_sheet(
     return OperationalSheetCatalog(sheet_no=int(sheet_no), paths=paths)
 
 
+def _path_key_is_sheet_perimeter(path_key: str, operation_key: str) -> bool:
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
+    key = str(path_key or "").strip()
+    operation = str(operation_key or "").strip()
+    return (
+        operation == SHEET_PERIMETER_OPERATION_KEY
+        or key == SHEET_PERIMETER_PATH_KEY
+    )
+
+
+def _path_key_requires_piece_instance(path_key: str) -> bool:
+    """True when a persisted path key is bound to one piece instance.
+
+    Shared/anonymous cutter centers use segments like ``cut_path:center:...``
+    and may omit a piece id. Sheet perimeter is handled separately.
+    """
+
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import (
+        CUT_PATH_INTERNAL_SEQUENCE_KEY,
+        SHEET_PERIMETER_PATH_KEY,
+    )
+
+    key = str(path_key or "").strip()
+    if not key or key in {SHEET_PERIMETER_PATH_KEY, CUT_PATH_INTERNAL_SEQUENCE_KEY}:
+        return False
+    parts = key.split(":")
+    if len(parts) < 2:
+        return False
+    if parts[0] not in CNC_OPERATIONS_BY_KEY:
+        return False
+    marker = str(parts[1] or "").strip()
+    if marker in {"center", "internals", "sheet_perimeter"}:
+        return False
+    return bool(marker)
+
+
+def normalize_path_piece_instance(
+    *,
+    path_key: str,
+    operation_key: str,
+    piece_instance_id: str | None,
+) -> str:
+    """Normalize and enforce piece scope for one operational path row.
+
+    Connected sheet perimeter is sheet-scoped and must keep an empty piece id.
+    Piece-bound catalog paths must keep a non-empty piece instance id. Shared
+    anonymous paths may omit a piece id when their path key does not embed one.
+    """
+
+    identity = str(piece_instance_id or "").strip()
+    if _path_key_is_sheet_perimeter(path_key, operation_key):
+        if identity:
+            raise OperationalFileError("sheet_perimeter_piece_forbidden")
+        return ""
+    if _path_key_requires_piece_instance(path_key) and not identity:
+        raise OperationalFileError("missing_piece_instance_id")
+    return identity
+
+
+def validate_operational_path_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Return normalized path rows or raise when piece scope is invalid."""
+
+    normalized: list[dict[str, Any]] = []
+    seen_perimeter = False
+    from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
+
+    for raw in rows:
+        row = dict(raw)
+        path_key = str(row.get("path_key") or "").strip()
+        operation_key = str(row.get("operation_key") or "").strip()
+        piece_id = normalize_path_piece_instance(
+            path_key=path_key,
+            operation_key=operation_key,
+            piece_instance_id=row.get("piece_instance_id"),
+        )
+        if path_key == SHEET_PERIMETER_PATH_KEY or operation_key == SHEET_PERIMETER_OPERATION_KEY:
+            if seen_perimeter:
+                raise OperationalFileError("sheet_perimeter_duplicate")
+            seen_perimeter = True
+        row["path_key"] = path_key
+        row["operation_key"] = operation_key
+        row["piece_instance_id"] = piece_id
+        normalized.append(row)
+    return normalized
+
+
 def settings_fingerprint(
     *,
     operation_presets: Mapping[str, str],
@@ -227,6 +314,7 @@ def settings_fingerprint(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    sheet_placement: Mapping[str, Any] | None = None,
 ) -> str:
     resolved = []
     for key in sorted(set(operation_presets) | set(path_overrides)):
@@ -242,6 +330,7 @@ def settings_fingerprint(
             "cut_path_sequence": [str(key) for key in (cut_path_sequence or ())],
             "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
             "machine_profile": dict(machine_profile or {}),
+            "sheet_placement": dict(sheet_placement or {}),
         }
     )
 
@@ -643,6 +732,8 @@ __all__ = [
     "sheet_perimeter_precedes_milling",
     "generation_snapshot_is_complete",
     "merge_operation_order",
+    "normalize_path_piece_instance",
     "resolve_operation_order",
     "settings_fingerprint",
+    "validate_operational_path_rows",
 ]

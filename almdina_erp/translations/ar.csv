@@ -3391,3 +3391,33 @@ Join the separate outer cut components, or keep separate cut paths.,اربط م�
 Keep the approved cut geometry unchanged, or keep separate cut paths.,أبقِ هندسة القص المعتمدة دون تغيير، أو أبقِ مسارات القص منفصلة.
 Choose either a separate or a connected sheet perimeter.,اختر محيط لوح غير متصل أو محيطًا متصلًا.
 Restore a valid CUT_PATH order that includes every cut path on this sheet.,استعد ترتيب CUT_PATH صالحًا يشمل كل مسارات القص على هذا اللوح.
+Piece-bound CNC paths must keep a piece instance id.,مسارات CNC المرتبطة بدرفة يجب أن تحتفظ بهوية درفة.
+The sheet perimeter path must not be tied to a piece instance.,مسار محيط اللوح يجب ألا يُربط بهوية درفة.
+A sheet may keep only one connected perimeter path.,اللوح يحتفظ بمسار محيط متصل واحد فقط.
+CNC Machines,ماكينات CNC
+Manage CNC machines,إدارة ماكينات CNC
+Add a CNC machine,إضافة ماكينة CNC
+"{0} CNC machines are available in Desk.",يتوفر {0} من ماكينات CNC في Desk.
+No CNC machines have been created yet.,لم تُنشأ ماكينات CNC بعد.
+A factory settings manager must create the CNC machines.,يجب أن ينشئ مسؤول إعدادات المصنع ماكينات CNC.
+"Register each CNC machine bed by name, width (X), and length (Y). Origin is always bottom-left with X to the right and Y upward.",سجّل كل مساحة عمل لماكينة CNC بالاسم والعرض (X) والطول (Y). نقطة الصفر دائمًا أسفل اليسار وX إلى اليمين وY إلى الأعلى.
+Sheet placement on CNC machine,تموضع اللوح على ماكينة CNC
+CNC machine,ماكينة CNC
+Choose a CNC machine,اختر ماكينة CNC
+"Machine size: {0} cm × {1} cm (width × length)",أبعاد الماكينة: {0} سم × {1} سم (عرض × طول)
+Select a machine to show bed size and placement offsets.,اختر ماكينة لإظهار أبعاد المساحة وإزاحات التموضع.
+Distance from left (cm),البعد عن اليسار (سم)
+Distance from bottom (cm),البعد عن الأسفل (سم)
+"Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.",نقطة صفر الماكينة أسفل اليسار. إزاحة اليسار {0} سم · إزاحة الأسفل {1} سم.
+Choose a CNC machine before generating the NC file.,اختر ماكينة CNC قبل توليد ملف NC.
+The selected CNC machine was not found.,ماكينة CNC المحددة غير موجودة.
+The selected CNC machine is disabled.,ماكينة CNC المحددة معطّلة.
+CNC machine name is required.,اسم ماكينة CNC مطلوب.
+CNC machine width must be a positive number of centimetres.,عرض ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
+CNC machine length must be a positive number of centimetres.,طول ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
+The distance from the left must be zero or a positive number of centimetres.,البعد عن اليسار يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The distance from the bottom must be zero or a positive number of centimetres.,البعد عن الأسفل يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The sheet plus the left offset exceeds the machine width.,اللوح مع البعد عن اليسار يتجاوز عرض الماكينة.
+The sheet plus the bottom offset exceeds the machine length.,اللوح مع البعد عن الأسفل يتجاوز طول الماكينة.
+A cutter path would leave the machine travel area after placement.,مسار الريشة سيخرج من مساحة حركة الماكينة بعد التموضع.
+Sheet placement on the CNC machine is incomplete.,تموضع اللوح على ماكينة CNC غير مكتمل.

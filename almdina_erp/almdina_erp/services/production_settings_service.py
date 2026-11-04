@@ -885,6 +885,7 @@ def get_production_settings() -> dict[str, Any]:
         "routing_options": routing_options,
         "whatsapp_stage_message_rows": _whatsapp_stage_message_rows(settings),
         "cnc_tool_presets": _cnc_tool_preset_catalog(),
+        "cnc_machines": _cnc_machine_catalog(),
     }
 
 
@@ -926,6 +927,27 @@ def _optional_pass_depth(value: Any) -> Any:
     if value in (None, "", 0, 0.0):
         return None
     return value
+
+
+def _cnc_machine_catalog() -> list[dict[str, Any]]:
+    if not frappe.db.exists("DocType", "CNC Machine"):
+        return []
+    rows = frappe.get_all(
+        "CNC Machine",
+        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
+        order_by="machine_name asc",
+        limit_page_length=0,
+    )
+    return [
+        {
+            "name": row.name,
+            "machine_name": row.machine_name,
+            "width_cm": row.width_cm,
+            "length_cm": row.length_cm,
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    ]
 
 
 def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
