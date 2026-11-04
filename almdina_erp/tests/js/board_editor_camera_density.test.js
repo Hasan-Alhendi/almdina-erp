@@ -33,7 +33,8 @@ const rendererSrc = fs.readFileSync(path.join(root, "public/js/board_editor/canv
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 
 assert.equal(CanvasRenderer.OPENING_SCALE_FACTOR, 0.7);
-assert.match(css, /grid-template-columns:\s*224px/);
+assert.match(css, /--abe-sidebar-width:\s*208px/);
+assert.match(css, /grid-template-columns:\s*var\(--abe-sidebar-width\)/);
 assert.match(css, /\.abe-canvas-stage[\s\S]*direction:\s*ltr/);
 assert.match(rendererSrc, /viewBox="0 0 \$\{contentW\} \$\{contentH\}"/);
 assert.doesNotMatch(rendererSrc, /viewBox="\$\{metrics\.minX \* scale\}/);
@@ -147,7 +148,7 @@ function assertAnchorStable(camera, focal, factor) {
 assert.equal(CanvasRenderer.columnCount(1220, 1100), 2);
 assert.match(controller, /metrics\.minX/);
 assert.match(controller, /lastCanvasPointerClient/);
-assert.match(page, /canvas_renderer\.js\?v=32/);
-assert.match(page, /board_editor\.css\?v=30/);
+assert.match(page, /canvas_renderer\.js\?v=33/);
+assert.match(page, /board_editor\.css\?v=33/);
 
 console.log("board_editor_camera_density.test.js: ok");

@@ -40,11 +40,14 @@ const contextActions = fs.readFileSync(
 
 assert.equal(CanvasRenderer.UI_ZOOM, 0.9);
 assert.match(css, /--abe-ui-zoom:\s*0\.9/);
-assert.match(css, /\.abe-page[\s\S]*zoom:\s*var\(--abe-ui-zoom\)/);
+assert.match(css, /\.abe-page[\s\S]*transform:\s*scale\(var\(--abe-ui-zoom\)\)/);
+assert.match(css, /transform-origin:\s*top left/);
 assert.match(css, /width:\s*calc\(100% \/ var\(--abe-ui-zoom\)\)/);
-assert.match(page, /board_editor\.css\?v=30/);
-assert.match(page, /canvas_renderer\.js\?v=32/);
-assert.match(page, /controller\.js\?v=29/);
+assert.match(css, /\.abe-shell-host/);
+assert.doesNotMatch(css, /\.abe-page\s*\{[^}]*zoom:\s*var\(--abe-ui-zoom\)/);
+assert.match(page, /board_editor\.css\?v=33/);
+assert.match(page, /canvas_renderer\.js\?v=33/);
+assert.match(page, /controller\.js\?v=30/);
 assert.match(controller, /clientPointToLocal/);
 assert.match(contextActions, /target="_blank"/);
 assert.match(contextActions, /boardEditorAppPath/);

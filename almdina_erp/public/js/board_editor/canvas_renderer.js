@@ -592,8 +592,8 @@
     }
 
     function elementCssZoom(element) {
-        // CSS zoom (and Browser Zoom) make getBoundingClientRect visual while
-        // clientWidth/scrollLeft stay in element layout units. Ratio bridges them.
+        // UI chrome scale (transform:scale / CSS zoom / Browser Zoom) makes
+        // getBoundingClientRect visual while clientWidth stays in layout units.
         if (!element || typeof element.getBoundingClientRect !== "function") {
             return declaredUiZoom(element);
         }
@@ -2494,6 +2494,7 @@
         GRID_WIDTH_RATIO,
         OPENING_SCALE_FACTOR,
         UI_ZOOM,
+        declaredUiZoom,
         elementCssZoom,
         clientPointToLocal,
         clientDeltaToLocal,

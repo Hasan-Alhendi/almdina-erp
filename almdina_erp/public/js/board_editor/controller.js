@@ -153,10 +153,10 @@
             if (!page) return 0;
             const top = page.getBoundingClientRect().top;
             if (top < 1) return 0;
-            // Remaining viewport is visual; page uses CSS zoom so layout height
-            // must be visual / zoom to fill without leftover gaps or scroll.
-            const uiZoom = CanvasRenderer.elementCssZoom
-                ? CanvasRenderer.elementCssZoom(page)
+            // Remaining viewport is visual; .abe-page uses transform:scale(uiZoom)
+            // with compensated layout size (visual / zoom) so the scaled box fills.
+            const uiZoom = CanvasRenderer.declaredUiZoom
+                ? CanvasRenderer.declaredUiZoom(page)
                 : (Number(CanvasRenderer.UI_ZOOM) || 0.9);
             const visualHeight = Math.max(320, Math.round(window.innerHeight - top));
             const height = Math.max(320, Math.round(visualHeight / Math.max(uiZoom, 1e-6)));
@@ -164,8 +164,11 @@
             page.style.maxHeight = `${height}px`;
             page.style.overflow = "hidden";
             const pageBody = section.closest(".page-body");
+            // RTL Frappe hosts + overflow:hidden clip the physical left of a
+            // width-compensated child. Force LTR on the clip hosts only.
             [section, section.parentElement, pageBody].forEach((node) => {
                 if (!node || node === document.body) return;
+                node.classList.add("abe-shell-host");
                 node.style.minHeight = "0";
                 node.style.overflow = "hidden";
             });
@@ -1642,6 +1645,7 @@
                 const pageBody = section.closest(".page-body");
                 [section, section.parentElement, pageBody].forEach((node) => {
                     if (!node || node === document.body) return;
+                    node.classList.remove("abe-shell-host");
                     node.style.minHeight = "";
                     node.style.height = "";
                     node.style.overflow = "";

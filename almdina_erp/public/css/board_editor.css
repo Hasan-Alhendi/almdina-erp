@@ -1,3 +1,16 @@
+/*
+  Frappe Desk hosts (.page-body / .layout-main-section) are RTL and syncEditorHeight
+  forces overflow:hidden on them. A compensated .abe-page (width > 100%) is then
+  right-aligned by the RTL containing block, so the physical-left sidebar is clipped.
+  Mark those hosts LTR only while the editor is open. Child direction alone is not enough.
+*/
+.abe-shell-host,
+.page-body:has(.abe-page),
+.layout-main-section:has(.abe-page) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .abe-page {
   /* Single control point for the board-editor chrome scale (not Browser Zoom). */
   --abe-ui-zoom: 0.9;
@@ -8,11 +21,28 @@
   overflow: hidden;
   background: var(--alm-bg, #f3f5f8);
   color: var(--alm-text, #172033);
-  /* Visual 90% while layout width compensates so the page still fills the shell. */
-  zoom: var(--abe-ui-zoom);
+  /* Columns: sidebar | canvas. Scale via transform (not CSS zoom): width/height are
+     compensated to 100%/zoom, then scaled from the physical top-left so the visual
+     fills the LTR clip host without RTL left-edge clipping. */
+  direction: ltr;
   width: calc(100% / var(--abe-ui-zoom));
   max-width: none;
   box-sizing: border-box;
+  transform: scale(var(--abe-ui-zoom));
+  transform-origin: top left;
+}
+
+/* Restore Arabic reading direction on content shells; keep .abe-body LTR for columns. */
+.abe-page[dir="rtl"] > .abe-freshness-banner,
+.abe-page[dir="rtl"] > .abe-state,
+.abe-page[dir="rtl"] > .abe-review-dialog,
+.abe-page[dir="rtl"] .abe-sidebar-host,
+.abe-page[dir="rtl"] .abe-sidebar,
+.abe-page[dir="rtl"] .abe-float-dock,
+.abe-page[dir="rtl"] .abe-float-stack,
+.abe-page[dir="rtl"] .abe-position-bar {
+  direction: rtl;
+  unicode-bidi: isolate;
 }
 
 /* Title + page actions span the full editor head (outside Desk sidebar).
@@ -189,11 +219,15 @@
 }
 
 .abe-body {
+  /* Physical left sidebar + right canvas, independent of page dir=rtl. */
+  --abe-sidebar-width: 208px;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: var(--abe-sidebar-width) minmax(0, 1fr);
+  grid-template-areas: "sidebar canvas";
+  direction: ltr;
 }
 
 .abe-sidebar-host,
@@ -201,6 +235,14 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
+}
+
+.abe-sidebar-host {
+  grid-area: sidebar;
+}
+
+.abe-canvas-host {
+  grid-area: canvas;
 }
 
 .abe-sidebar {
@@ -242,6 +284,35 @@
   overflow: auto;
   overflow-x: hidden;
   padding: 3px;
+}
+
+/* Local Board Editor scrollbars only — thin, low-contrast thumb. */
+.abe-section-scroll,
+.abe-canvas-stage {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.abe-section-scroll::-webkit-scrollbar,
+.abe-canvas-stage::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.abe-section-scroll::-webkit-scrollbar-track,
+.abe-canvas-stage::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.abe-section-scroll::-webkit-scrollbar-thumb,
+.abe-canvas-stage::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.abe-section-scroll::-webkit-scrollbar-thumb:hover,
+.abe-canvas-stage::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .abe-split-handle {
@@ -793,10 +864,33 @@
   background-color: #121821;
 }
 
+[data-theme="dark"] .abe-section-scroll,
+[data-theme="dark"] .abe-canvas-stage {
+  scrollbar-color: #64748b #1b2430;
+}
+
+[data-theme="dark"] .abe-section-scroll::-webkit-scrollbar-track,
+[data-theme="dark"] .abe-canvas-stage::-webkit-scrollbar-track {
+  background: #121821;
+}
+
+[data-theme="dark"] .abe-section-scroll::-webkit-scrollbar-thumb,
+[data-theme="dark"] .abe-canvas-stage::-webkit-scrollbar-thumb {
+  background: #64748b;
+}
+
+[data-theme="dark"] .abe-section-scroll::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] .abe-canvas-stage::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 @media (max-width: 960px) {
   .abe-body {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 42%) minmax(0, 1fr);
+    grid-template-areas:
+      "sidebar"
+      "canvas";
   }
 
   .abe-sidebar {

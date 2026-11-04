@@ -2,7 +2,7 @@
     "use strict";
 
     const PAGE_ROUTE = "board-editor";
-    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=30";
+    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=33";
     const ASSET_ROOT = "/assets/almdina_erp/js/board_editor";
     const PREREQUISITES = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
@@ -27,9 +27,9 @@
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/store.js?v=20`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=32`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=33`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
-        `${ASSET_ROOT}/controller.js?v=29`,
+        `${ASSET_ROOT}/controller.js?v=30`,
     ]);
 
     function pageModule() {
