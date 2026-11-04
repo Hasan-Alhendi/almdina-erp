@@ -405,6 +405,22 @@
             store.setViewport({ ...partial, cameraToken: cameraSerial });
         }
 
+        function persistCamera(partial) {
+            // Silent camera geometry sync (trail/min/scroll compensation) — no paint loop.
+            if (!store || !partial) return;
+            if (partial.scrollX != null || partial.scrollY != null) {
+                liveScroll = {
+                    x: partial.scrollX != null ? Number(partial.scrollX) || 0 : liveScroll.x,
+                    y: partial.scrollY != null ? Number(partial.scrollY) || 0 : liveScroll.y,
+                };
+            }
+            if (typeof store.patchViewport === "function") {
+                store.patchViewport(partial);
+            } else {
+                store.setViewport(partial);
+            }
+        }
+
         function currentLayout(viewportWidth) {
             const sheets = store.snapshot().projection.sheets || [];
             const widths = sheets.map((sheet) => (Number(sheet.full_width_cm) || Number(sheet.w) || 122) * 10);
@@ -467,6 +483,10 @@
                 scrollY: camera.scrollY,
                 padX: camera.padX,
                 padY: camera.padY,
+                trailX: CanvasRenderer.SCENE_PAD_PX,
+                trailY: CanvasRenderer.SCENE_PAD_PX,
+                minX: Number(layout.worldMinX) || 0,
+                minY: Number(layout.worldMinY) || 0,
                 columns,
                 opened: true,
                 userAdjusted: false,
@@ -518,6 +538,10 @@
                 scrollY: camera.scrollY,
                 padX: camera.padX,
                 padY: camera.padY,
+                trailX: CanvasRenderer.SCENE_PAD_PX,
+                trailY: CanvasRenderer.SCENE_PAD_PX,
+                minX: Number(layout.worldMinX) || Number(layout.fitBounds && layout.fitBounds.x) || 0,
+                minY: Number(layout.worldMinY) || Number(layout.fitBounds && layout.fitBounds.y) || 0,
                 columns: layout.columns,
                 opened: true,
                 userAdjusted: true,
@@ -562,17 +586,34 @@
             const padY = metrics && metrics.padY != null
                 ? Number(metrics.padY)
                 : (current.padY != null ? Number(current.padY) : CanvasRenderer.SCENE_PAD_PX);
+            const trailX = metrics && metrics.trailX != null
+                ? Number(metrics.trailX)
+                : (current.trailX != null ? Number(current.trailX) : CanvasRenderer.SCENE_PAD_PX);
+            const trailY = metrics && metrics.trailY != null
+                ? Number(metrics.trailY)
+                : (current.trailY != null ? Number(current.trailY) : CanvasRenderer.SCENE_PAD_PX);
             const minX = Number(metrics && metrics.minX) || 0;
             const minY = Number(metrics && metrics.minY) || 0;
+            const worldW = Number(metrics && metrics.width) || 0;
+            const worldH = Number(metrics && metrics.height) || 0;
+            const viewSize = {
+                width: Math.max(1, Number(rect.width) || stageSize().width || 1),
+                height: Math.max(1, Number(rect.height) || stageSize().height || 1),
+            };
             const next = CanvasRenderer.zoomAroundFocal({
                 scale,
                 scrollX,
                 scrollY,
                 padX,
                 padY,
+                trailX,
+                trailY,
                 minX,
                 minY,
-            }, { x: focalX, y: focalY }, factor);
+            }, { x: focalX, y: focalY }, factor, viewSize, {
+                width: worldW,
+                height: worldH,
+            });
             if (next.changed === false) return;
             rememberCamera({
                 scale: next.scale,
@@ -580,6 +621,10 @@
                 scrollY: next.scrollY,
                 padX: next.padX,
                 padY: next.padY,
+                trailX: next.trailX,
+                trailY: next.trailY,
+                minX: next.minX,
+                minY: next.minY,
                 columns: current.columns,
                 opened: true,
                 userAdjusted: true,
@@ -1355,6 +1400,7 @@
                     appliedCamera = token;
                     return true;
                 },
+                persistCamera,
                 isPanKey: () => spaceHeld,
                 fitAll: () => fitCurrentBoards(),
                 saveDraft: () => saveDraft(),

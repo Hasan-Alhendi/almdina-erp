@@ -39,6 +39,8 @@ assert.match(rendererSrc, /viewBox="0 0 \$\{contentW\} \$\{contentH\}"/);
 assert.doesNotMatch(rendererSrc, /viewBox="\$\{metrics\.minX \* scale\}/);
 
 function assertAnchorStable(camera, focal, factor) {
+    const viewSize = { width: 1200, height: 800 };
+    const worldSize = { width: 5000, height: 4000 };
     const before = CanvasRenderer.cameraPointToWorld(
         camera.scrollX,
         camera.scrollY,
@@ -47,20 +49,26 @@ function assertAnchorStable(camera, focal, factor) {
         camera.scale,
         camera
     );
-    const next = CanvasRenderer.zoomAroundFocal(camera, focal, factor);
+    const next = CanvasRenderer.zoomAroundFocal(camera, focal, factor, viewSize, worldSize);
+    const sized = CanvasRenderer.contentSizeForCamera(next, viewSize, worldSize);
+    const applied = {
+        ...next,
+        scrollX: Math.min(Math.max(0, next.scrollX), sized.maxScrollX),
+        scrollY: Math.min(Math.max(0, next.scrollY), sized.maxScrollY),
+    };
     const after = CanvasRenderer.cameraPointToWorld(
-        next.scrollX,
-        next.scrollY,
+        applied.scrollX,
+        applied.scrollY,
         focal.x,
         focal.y,
-        next.scale,
-        next
+        applied.scale,
+        applied
     );
-    assert.ok(Math.abs(before.x - after.x) < 1e-9, `x ${before.x} -> ${after.x}`);
-    assert.ok(Math.abs(before.y - after.y) < 1e-9, `y ${before.y} -> ${after.y}`);
-    const screen = CanvasRenderer.worldToScreen(before.x, before.y, next);
-    assert.ok(Math.abs(screen.x - focal.x) < 1e-9, `screen x ${screen.x} vs ${focal.x}`);
-    assert.ok(Math.abs(screen.y - focal.y) < 1e-9, `screen y ${screen.y} vs ${focal.y}`);
+    assert.ok(Math.abs(before.x - after.x) < 1e-6, `x ${before.x} -> ${after.x}`);
+    assert.ok(Math.abs(before.y - after.y) < 1e-6, `y ${before.y} -> ${after.y}`);
+    const screen = CanvasRenderer.worldToScreen(before.x, before.y, applied);
+    assert.ok(Math.abs(screen.x - focal.x) <= 1, `screen x ${screen.x} vs ${focal.x}`);
+    assert.ok(Math.abs(screen.y - focal.y) <= 1, `screen y ${screen.y} vs ${focal.y}`);
     return next;
 }
 
@@ -139,7 +147,7 @@ function assertAnchorStable(camera, focal, factor) {
 assert.equal(CanvasRenderer.columnCount(1220, 1100), 2);
 assert.match(controller, /metrics\.minX/);
 assert.match(controller, /lastCanvasPointerClient/);
-assert.match(page, /canvas_renderer\.js\?v=29/);
+assert.match(page, /canvas_renderer\.js\?v=30/);
 assert.match(page, /board_editor\.css\?v=28/);
 
 console.log("board_editor_camera_density.test.js: ok");

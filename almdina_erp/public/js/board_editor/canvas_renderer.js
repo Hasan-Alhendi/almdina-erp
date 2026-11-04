@@ -673,7 +673,96 @@
         };
     }
 
-    function zoomAroundFocal(camera, focal, factor) {
+    function contentSizeForCamera(camera, viewSize, worldSize) {
+        const scale = Math.max(Number(camera && camera.scale) || 1, 1e-9);
+        const viewW = Math.max(1, Number(viewSize && viewSize.width) || 1);
+        const viewH = Math.max(1, Number(viewSize && viewSize.height) || 1);
+        const worldW = Math.max(0, Number(worldSize && worldSize.width) || 0);
+        const worldH = Math.max(0, Number(worldSize && worldSize.height) || 0);
+        const pads = cameraPads(camera);
+        const scrollX = Math.max(0, Number(camera && camera.scrollX) || 0);
+        const scrollY = Math.max(0, Number(camera && camera.scrollY) || 0);
+        const worldPxW = worldW * scale;
+        const worldPxH = worldH * scale;
+        // Trail is derived, never an accumulating input: content must cover the
+        // world+default pad and the requested scroll, then trail is the remainder.
+        const contentW = Math.max(
+            viewW,
+            Math.ceil(worldPxW + pads.padX + SCENE_PAD_PX),
+            Math.ceil(scrollX + viewW)
+        );
+        // FLOAT_CLEARANCE is always outside the scrollable world+pad+trail block
+        // (matches historical render: max(stage, worldBlock) + clearance).
+        const contentH = Math.max(
+            viewH,
+            Math.ceil(worldPxH + pads.padY + SCENE_PAD_PX),
+            Math.ceil(scrollY + viewH)
+        ) + FLOAT_CLEARANCE_PX;
+        return {
+            contentW,
+            contentH,
+            maxScrollX: Math.max(0, contentW - viewW),
+            maxScrollY: Math.max(0, contentH - viewH),
+            trailX: Math.max(SCENE_PAD_PX, contentW - worldPxW - pads.padX),
+            trailY: Math.max(SCENE_PAD_PX, contentH - FLOAT_CLEARANCE_PX - worldPxH - pads.padY),
+        };
+    }
+
+    function fitCameraScroll(camera, viewSize, worldSize) {
+        // Make pad/scroll/trail mutually achievable in the browser scrollport.
+        const scale = Math.max(Number(camera && camera.scale) || 1, 1e-9);
+        const pads = cameraPads(camera);
+        let padX = pads.padX;
+        let padY = pads.padY;
+        let scrollX = Number(camera && camera.scrollX) || 0;
+        let scrollY = Number(camera && camera.scrollY) || 0;
+        let adjusted = false;
+        if (scrollX < 0) {
+            padX -= scrollX;
+            scrollX = 0;
+            adjusted = true;
+        }
+        if (scrollY < 0) {
+            padY -= scrollY;
+            scrollY = 0;
+            adjusted = true;
+        }
+        const sized = contentSizeForCamera({
+            scale,
+            scrollX,
+            scrollY,
+            padX,
+            padY,
+            trailX: camera && camera.trailX,
+            trailY: camera && camera.trailY,
+            minX: pads.minX,
+            minY: pads.minY,
+        }, viewSize, worldSize);
+        if (
+            Math.abs(sized.trailX - (Number(camera && camera.trailX) || SCENE_PAD_PX)) > 1e-9
+            || Math.abs(sized.trailY - (Number(camera && camera.trailY) || SCENE_PAD_PX)) > 1e-9
+        ) {
+            adjusted = true;
+        }
+        return {
+            scale,
+            scrollX,
+            scrollY,
+            padX,
+            padY,
+            trailX: sized.trailX,
+            trailY: sized.trailY,
+            minX: pads.minX,
+            minY: pads.minY,
+            contentW: sized.contentW,
+            contentH: sized.contentH,
+            maxScrollX: sized.maxScrollX,
+            maxScrollY: sized.maxScrollY,
+            adjusted,
+        };
+    }
+
+    function zoomAroundFocal(camera, focal, factor, viewSize, worldSize) {
         const previous = Number(camera && camera.scale) || 1;
         const next = Math.min(SCALE_MAX, Math.max(SCALE_MIN, previous * (Number(factor) || 1)));
         const pads = cameraPads(camera);
@@ -694,6 +783,8 @@
                 scrollY,
                 padX: pads.padX,
                 padY: pads.padY,
+                trailX: Number(camera && camera.trailX) || SCENE_PAD_PX,
+                trailY: Number(camera && camera.trailY) || SCENE_PAD_PX,
                 minX: pads.minX,
                 minY: pads.minY,
                 worldX: world.x,
@@ -701,31 +792,94 @@
                 changed: false,
             };
         }
-        // Keep the same world point under the focal. Browser scroll cannot go
-        // negative, so any deficit is absorbed into pad (left/top content inset)
-        // without changing Session geometry.
+        // Keep the same world point under the focal, then expand content/trail so
+        // the required scroll is actually attainable (not browser-clamped).
         let nextPadX = pads.padX;
         let nextPadY = pads.padY;
         let nextScrollX = nextPadX - pads.minX * next + world.x * next - focalX;
         let nextScrollY = nextPadY - pads.minY * next + world.y * next - focalY;
-        if (nextScrollX < 0) {
-            nextPadX -= nextScrollX;
-            nextScrollX = 0;
-        }
-        if (nextScrollY < 0) {
-            nextPadY -= nextScrollY;
-            nextScrollY = 0;
-        }
-        return {
+        const fitted = fitCameraScroll({
             scale: next,
             scrollX: nextScrollX,
             scrollY: nextScrollY,
             padX: nextPadX,
             padY: nextPadY,
+            trailX: camera && camera.trailX,
+            trailY: camera && camera.trailY,
             minX: pads.minX,
             minY: pads.minY,
+        }, viewSize || {}, worldSize || {});
+        return {
+            scale: next,
+            scrollX: fitted.scrollX,
+            scrollY: fitted.scrollY,
+            padX: fitted.padX,
+            padY: fitted.padY,
+            trailX: fitted.trailX,
+            trailY: fitted.trailY,
+            minX: pads.minX,
+            minY: pads.minY,
+            contentW: fitted.contentW,
+            contentH: fitted.contentH,
             worldX: world.x,
             worldY: world.y,
+            changed: true,
+        };
+    }
+
+    function reconcileCameraWorldOrigin(camera, nextMinX, nextMinY, viewSize, worldSize) {
+        const pads = cameraPads(camera);
+        const scale = Number(camera && camera.scale) || 1;
+        const prevMinX = camera && camera.minX != null ? Number(camera.minX) : pads.minX;
+        const prevMinY = camera && camera.minY != null ? Number(camera.minY) : pads.minY;
+        const minX = Number(nextMinX);
+        const minY = Number(nextMinY);
+        const safeMinX = Number.isFinite(minX) ? minX : 0;
+        const safeMinY = Number.isFinite(minY) ? minY : 0;
+        let scrollX = Number(camera && camera.scrollX) || 0;
+        let scrollY = Number(camera && camera.scrollY) || 0;
+        let changed = false;
+        if (Number.isFinite(prevMinX) && Math.abs(prevMinX - safeMinX) > 1e-9) {
+            // translate(pad - min*scale) shifts by (prevMin - nextMin)*scale; compensate via scroll.
+            scrollX += (prevMinX - safeMinX) * scale;
+            changed = true;
+        }
+        if (Number.isFinite(prevMinY) && Math.abs(prevMinY - safeMinY) > 1e-9) {
+            scrollY += (prevMinY - safeMinY) * scale;
+            changed = true;
+        }
+        const fitted = fitCameraScroll({
+            scale,
+            scrollX,
+            scrollY,
+            padX: pads.padX,
+            padY: pads.padY,
+            trailX: camera && camera.trailX,
+            trailY: camera && camera.trailY,
+            minX: safeMinX,
+            minY: safeMinY,
+        }, viewSize || {}, worldSize || {});
+        if (
+            !changed
+            && !fitted.adjusted
+            && camera
+            && camera.minX != null
+            && camera.minY != null
+            && Math.abs(Number(camera.minX) - safeMinX) <= 1e-9
+            && Math.abs(Number(camera.minY) - safeMinY) <= 1e-9
+        ) {
+            return null;
+        }
+        return {
+            scale,
+            scrollX: fitted.scrollX,
+            scrollY: fitted.scrollY,
+            padX: fitted.padX,
+            padY: fitted.padY,
+            trailX: fitted.trailX,
+            trailY: fitted.trailY,
+            minX: safeMinX,
+            minY: safeMinY,
             changed: true,
         };
     }
@@ -1282,23 +1436,104 @@
         const openingFrame = (!storeView.viewport.opened && !storeView.viewport.userAdjusted)
             ? contentFrame(metrics, layout.fitBounds, scale, stageW, stageH)
             : null;
-        const padX = openingFrame
+        let padX = openingFrame
             ? openingFrame.padX
             : (storeView.viewport.padX != null ? viewportPads.padX : SCENE_PAD_PX);
-        const padY = openingFrame
+        let padY = openingFrame
             ? openingFrame.padY
             : (storeView.viewport.padY != null ? viewportPads.padY : SCENE_PAD_PX);
+        let scrollX = openingFrame
+            ? openingFrame.scrollX
+            : (Number(storeView.viewport.scrollX) || 0);
+        let scrollY = openingFrame
+            ? openingFrame.scrollY
+            : (Number(storeView.viewport.scrollY) || 0);
+        let trailX = Number(storeView.viewport.trailX);
+        let trailY = Number(storeView.viewport.trailY);
+        if (!(trailX >= 0)) trailX = SCENE_PAD_PX;
+        if (!(trailY >= 0)) trailY = SCENE_PAD_PX;
+
+        // Keep on-screen world stable when mergeSessionLayout expands/shrinks mins.
+        if (storeView.viewport.opened || storeView.viewport.userAdjusted) {
+            const originFix = reconcileCameraWorldOrigin({
+                scale,
+                scrollX,
+                scrollY,
+                padX,
+                padY,
+                trailX,
+                trailY,
+                minX: storeView.viewport.minX != null ? storeView.viewport.minX : metrics.minX,
+                minY: storeView.viewport.minY != null ? storeView.viewport.minY : metrics.minY,
+            }, metrics.minX, metrics.minY, { width: stageW, height: stageH }, {
+                width: metrics.width,
+                height: metrics.height,
+            });
+            if (originFix) {
+                scrollX = originFix.scrollX;
+                scrollY = originFix.scrollY;
+                padX = originFix.padX;
+                padY = originFix.padY;
+                trailX = originFix.trailX;
+                trailY = originFix.trailY;
+                if (handlers && handlers.persistCamera) {
+                    handlers.persistCamera({
+                        scrollX,
+                        scrollY,
+                        padX,
+                        padY,
+                        trailX,
+                        trailY,
+                        minX: metrics.minX,
+                        minY: metrics.minY,
+                    });
+                }
+            }
+        }
+
+        const sized = contentSizeForCamera({
+            scale,
+            scrollX,
+            scrollY,
+            padX,
+            padY,
+            trailX,
+            trailY,
+            minX: metrics.minX,
+            minY: metrics.minY,
+        }, { width: stageW, height: stageH }, {
+            width: metrics.width,
+            height: metrics.height,
+        });
+        trailX = sized.trailX;
+        trailY = sized.trailY;
+        const contentW = sized.contentW;
+        const contentH = sized.contentH;
         metrics.pad = padX;
         metrics.padX = padX;
         metrics.padY = padY;
-        const contentW = Math.max(
-            stageW,
-            Math.ceil(metrics.width * scale + Math.max(padX, SCENE_PAD_PX) + SCENE_PAD_PX)
-        );
-        const contentH = Math.max(
-            stageH,
-            Math.ceil(metrics.height * scale + Math.max(padY, SCENE_PAD_PX) + SCENE_PAD_PX)
-        ) + FLOAT_CLEARANCE_PX;
+        metrics.trailX = trailX;
+        metrics.trailY = trailY;
+        metrics.scrollX = scrollX;
+        metrics.scrollY = scrollY;
+        if (
+            handlers && handlers.persistCamera
+            && (
+                Math.abs(trailX - (Number(storeView.viewport.trailX) || SCENE_PAD_PX)) > 1e-9
+                || Math.abs(trailY - (Number(storeView.viewport.trailY) || SCENE_PAD_PX)) > 1e-9
+                || storeView.viewport.minX == null
+                || storeView.viewport.minY == null
+                || Math.abs(Number(storeView.viewport.minX) - metrics.minX) > 1e-9
+                || Math.abs(Number(storeView.viewport.minY) - metrics.minY) > 1e-9
+            )
+        ) {
+            handlers.persistCamera({
+                trailX,
+                trailY,
+                minX: metrics.minX,
+                minY: metrics.minY,
+            });
+        }
 
         const selectedKeys = new Set(selectedPieceKeys(storeView, session));
         const multiSelection = selectedKeys.size > 1;
@@ -1798,13 +2033,67 @@
         host.__abeWorldMetrics = metrics;
         host.__abeLayout = layout;
         const cameraToken = Number(storeView.viewport.cameraToken) || 0;
-        if (handlers && handlers.takeCamera && handlers.takeCamera(cameraToken)) {
-            stage.scrollLeft = Number(storeView.viewport.scrollX) || 0;
-            stage.scrollTop = Number(storeView.viewport.scrollY) || 0;
-        } else if (handlers && handlers.readScroll) {
-            const saved = handlers.readScroll() || { x: 0, y: 0 };
-            stage.scrollLeft = Number(saved.x) || 0;
-            stage.scrollTop = Number(saved.y) || 0;
+        const takeOwned = handlers && handlers.takeCamera && handlers.takeCamera(cameraToken);
+        let targetScrollX = takeOwned
+            ? scrollX
+            : (handlers && handlers.readScroll
+                ? Number((handlers.readScroll() || {}).x) || 0
+                : scrollX);
+        let targetScrollY = takeOwned
+            ? scrollY
+            : (handlers && handlers.readScroll
+                ? Number((handlers.readScroll() || {}).y) || 0
+                : scrollY);
+        // Content was sized for the camera scroll; still verify browser acceptance once.
+        stage.scrollLeft = targetScrollX;
+        stage.scrollTop = targetScrollY;
+        const appliedX = Number(stage.scrollLeft) || 0;
+        const appliedY = Number(stage.scrollTop) || 0;
+        if (
+            takeOwned
+            && handlers
+            && handlers.persistCamera
+            && (
+                Math.abs(appliedX - targetScrollX) > 0.5
+                || Math.abs(appliedY - targetScrollY) > 0.5
+            )
+        ) {
+            // Expand trail so the intended scroll becomes attainable on next paint.
+            const rescue = fitCameraScroll({
+                scale,
+                scrollX: targetScrollX,
+                scrollY: targetScrollY,
+                padX,
+                padY,
+                trailX: Math.max(trailX, targetScrollX + stageW - metrics.width * scale - padX),
+                trailY: Math.max(trailY, targetScrollY + stageH - FLOAT_CLEARANCE_PX - metrics.height * scale - padY),
+                minX: metrics.minX,
+                minY: metrics.minY,
+            }, { width: stageW, height: stageH }, {
+                width: metrics.width,
+                height: metrics.height,
+            });
+            handlers.persistCamera({
+                scrollX: rescue.scrollX,
+                scrollY: rescue.scrollY,
+                padX: rescue.padX,
+                padY: rescue.padY,
+                trailX: rescue.trailX,
+                trailY: rescue.trailY,
+                minX: metrics.minX,
+                minY: metrics.minY,
+            });
+            svg.setAttribute("width", String(rescue.contentW));
+            svg.setAttribute("height", String(rescue.contentH));
+            svg.setAttribute("viewBox", `0 0 ${rescue.contentW} ${rescue.contentH}`);
+            stage.scrollLeft = rescue.scrollX;
+            stage.scrollTop = rescue.scrollY;
+            metrics.contentWidth = rescue.contentW;
+            metrics.contentHeight = rescue.contentH;
+            metrics.trailX = rescue.trailX;
+            metrics.trailY = rescue.trailY;
+        } else if (takeOwned && handlers && handlers.onScroll) {
+            handlers.onScroll(appliedX, appliedY);
         }
         stage.addEventListener("scroll", () => {
             handlers && handlers.onScroll && handlers.onScroll(stage.scrollLeft, stage.scrollTop);
@@ -2140,7 +2429,10 @@
         wheelZoomFactor,
         cameraPointToWorld,
         worldToScreen,
+        contentSizeForCamera,
+        fitCameraScroll,
         zoomAroundFocal,
+        reconcileCameraWorldOrigin,
         clientToWorld,
         clientToWorldViaCtm,
         clientToWorldViaMetrics,

@@ -26,10 +26,10 @@
         "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js?v=18",
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
-        `${ASSET_ROOT}/store.js?v=19`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=29`,
+        `${ASSET_ROOT}/store.js?v=20`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=30`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
-        `${ASSET_ROOT}/controller.js?v=26`,
+        `${ASSET_ROOT}/controller.js?v=27`,
     ]);
 
     function pageModule() {

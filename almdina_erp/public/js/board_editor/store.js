@@ -400,6 +400,11 @@
             emit();
         }
 
+        function patchViewport(next) {
+            // Camera bookkeeping (min/trail/scroll compensation) without a paint cycle.
+            state.viewport = { ...state.viewport, ...next };
+        }
+
         function setSidebarSplit(ratio, sidebarHeight) {
             const value = Number(ratio);
             if (!Number.isFinite(value)) return;
@@ -451,6 +456,7 @@
             selectSheet,
             toggleSheetExpanded,
             setViewport,
+            patchViewport,
             setSidebarSplit,
             isLayerVisible,
         };
