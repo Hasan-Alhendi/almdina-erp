@@ -3123,6 +3123,8 @@ Rotation rejected.,رُفض الدوران.
 "Guest must remain inside the host opening.",يجب أن يبقى الضيف داخل فتحة المضيف.
 "Enter a valid angle in degrees.",أدخل زاوية صالحة بالدرجات.
 "Piece would leave the usable board area.",القطعة ستخرج من المساحة الصالحة للوح.
+"Pieces would overlap.",القطع ستتداخل.
+"Kerf clearance is insufficient.",مسافة القص (Kerf) غير كافية.
 Cutting plan recalculation in progress,إعادة حساب خطة القص جارية
 "This editor still shows the previous plan snapshot. It will refresh when the calculation finishes — without running the optimizer from here.",ما زال المحرر يعرض لقطة الخطة السابقة. سيُحدَّث عند انتهاء الحساب — دون تشغيل المحسّن من هنا.
 Check again,تحقق مجددًا

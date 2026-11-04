@@ -243,34 +243,14 @@
                 if (other.glass_host_key === key || moved.glass_host_key === otherKey) continue;
                 if (affected.has(other.glass_host_key)) continue;
                 const otherLocal = MG.footprint(other);
-                const a = movedLocal.bounds;
-                const b = otherLocal.bounds;
-                const overlaps = !(
-                    a.x + a.w <= b.x
-                    || b.x + b.w <= a.x
-                    || a.y + a.h <= b.y
-                    || b.y + b.h <= a.y
-                );
-                if (overlaps) {
+                const conflict = typeof MG.pairConflict === "function"
+                    ? MG.pairConflict(movedLocal, otherLocal, kerfMm)
+                    : null;
+                if (conflict) {
                     return {
                         ok: false,
-                        code: "piece_overlap",
-                        message: "piece_overlap",
-                        piece_key: key,
-                    };
-                }
-                const gap = Math.max(0, kerfMm);
-                const cleared = (
-                    a.x + a.w + gap <= b.x
-                    || b.x + b.w + gap <= a.x
-                    || a.y + a.h + gap <= b.y
-                    || b.y + b.h + gap <= a.y
-                );
-                if (!cleared) {
-                    return {
-                        ok: false,
-                        code: "kerf_clearance",
-                        message: "kerf_clearance",
+                        code: conflict,
+                        message: conflict,
                         piece_key: key,
                     };
                 }

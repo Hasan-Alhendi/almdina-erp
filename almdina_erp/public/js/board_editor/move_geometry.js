@@ -455,15 +455,60 @@
         return pointInPolygon(a[0], b) || pointInPolygon(b[0], a);
     }
 
+    function pointSegmentDistance(point, a, b) {
+        const dx = num(b[0]) - num(a[0]);
+        const dy = num(b[1]) - num(a[1]);
+        const denom = (dx * dx) + (dy * dy);
+        if (denom <= 1e-18) {
+            return Math.hypot(num(point[0]) - num(a[0]), num(point[1]) - num(a[1]));
+        }
+        let t = (
+            ((num(point[0]) - num(a[0])) * dx) + ((num(point[1]) - num(a[1])) * dy)
+        ) / denom;
+        t = Math.max(0, Math.min(1, t));
+        return Math.hypot(
+            num(point[0]) - (num(a[0]) + (t * dx)),
+            num(point[1]) - (num(a[1]) + (t * dy))
+        );
+    }
+
+    function segmentDistance(a1, a2, b1, b2) {
+        if (segmentsIntersect(a1, a2, b1, b2)) return 0;
+        return Math.min(
+            pointSegmentDistance(a1, b1, b2),
+            pointSegmentDistance(a2, b1, b2),
+            pointSegmentDistance(b1, a1, a2),
+            pointSegmentDistance(b2, a1, a2)
+        );
+    }
+
+    function polygonDistance(a, b) {
+        if (!Array.isArray(a) || !Array.isArray(b) || a.length < 2 || b.length < 2) {
+            return Number.POSITIVE_INFINITY;
+        }
+        let min = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < a.length; i += 1) {
+            const a1 = a[i];
+            const a2 = a[(i + 1) % a.length];
+            for (let j = 0; j < b.length; j += 1) {
+                const distance = segmentDistance(a1, a2, b[j], b[(j + 1) % b.length]);
+                if (distance < min) min = distance;
+            }
+        }
+        return min;
+    }
+
     function pairConflict(a, b, kerfMm) {
-        // Precise material check when both footprints are polygons; AABB is only a kerf filter.
+        // Material overlap via polygons; AABB only early-accepts far pairs for kerf.
+        const gap = Math.max(0, num(kerfMm));
         if (a.kind === "polygon" && b.kind === "polygon" && a.points && b.points) {
             if (polygonsOverlap(a.points, b.points)) return DROP_OVERLAP;
-            if (!rectsHaveClearance(a.bounds, b.bounds, kerfMm)) return DROP_KERF;
+            if (rectsHaveClearance(a.bounds, b.bounds, gap)) return null;
+            if (polygonDistance(a.points, b.points) + 1e-9 < gap) return DROP_KERF;
             return null;
         }
         if (rectIntersects(a.bounds, b.bounds)) return DROP_OVERLAP;
-        if (!rectsHaveClearance(a.bounds, b.bounds, kerfMm)) return DROP_KERF;
+        if (!rectsHaveClearance(a.bounds, b.bounds, gap)) return DROP_KERF;
         return null;
     }
 
@@ -695,6 +740,8 @@
         applyPieceMove,
         applyBoardMove,
         boardsOverlap,
+        pairConflict,
+        polygonDistance,
         resolvePieceKey,
         pieceKeyFromInstance,
     });

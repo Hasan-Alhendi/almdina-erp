@@ -15,6 +15,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_transform import (
     apply_piece_board_flip,
     draft_flip_h,
     draft_mirrored,
+    validate_piece_angle_mirror,
 )
 
 
@@ -162,6 +163,75 @@ class BoardEditorTransformTests(unittest.TestCase):
         session = _session(piece)
         once = apply_piece_angle_mirror(session, piece_key="instance:a")
         self.assertFalse(once["pieces"]["instance:a"]["mirrored"])
+
+    def test_l_angle_mirror_rejects_when_trial_hits_cutout_guest(self):
+        # Cutout is on the right; guest sits inside it. Horizontal mirror swings
+        # the solid arm into the guest → reject. A far guest still allows mirror.
+        l_outline = [[0, 0], [1000, 0], [1000, 400], [400, 400], [400, 1000], [0, 1000]]
+        l_piece = _rect_piece(
+            piece_key="instance:l",
+            piece_instance_id="l",
+            piece_id=10,
+            piece_type="L-Shaped Corner",
+            local_x_mm=0,
+            local_y_mm=0,
+            base_outline_mm=[list(p) for p in l_outline],
+            outline_mm=[list(p) for p in l_outline],
+            pivot_mm={"x": 500, "y": 500},
+        )
+        guest = _rect_piece(
+            piece_key="instance:g",
+            piece_instance_id="g",
+            piece_id=11,
+            piece_type="Regular",
+            local_x_mm=450,
+            local_y_mm=450,
+            base_outline_mm=[[450, 450], [750, 450], [750, 750], [450, 750]],
+            outline_mm=[[450, 450], [750, 450], [750, 750], [450, 750]],
+            pivot_mm={"x": 600, "y": 600},
+            allow_rotation=False,
+            allow_rotation_proven=False,
+        )
+        session = _session(l_piece, machine_type="CNC Router")
+        session["kerf_mm"] = 4
+        session["pieces"]["instance:g"] = guest
+        decision = validate_piece_angle_mirror(session, piece_key="instance:l")
+        self.assertFalse(decision["ok"], decision)
+        self.assertIn(decision["code"], {"piece_overlap", "kerf_clearance"})
+        unchanged = apply_piece_angle_mirror(session, piece_key="instance:l")
+        self.assertFalse(unchanged["pieces"]["instance:l"]["mirrored"])
+
+        far = _rect_piece(
+            piece_key="instance:g",
+            piece_instance_id="g",
+            piece_id=11,
+            piece_type="Regular",
+            local_x_mm=1600,
+            local_y_mm=100,
+            base_outline_mm=[[1600, 100], [1700, 100], [1700, 200], [1600, 200]],
+            outline_mm=[[1600, 100], [1700, 100], [1700, 200], [1600, 200]],
+            pivot_mm={"x": 1650, "y": 150},
+            allow_rotation=False,
+            allow_rotation_proven=False,
+        )
+        session_ok = _session(
+            _rect_piece(
+                piece_key="instance:l",
+                piece_instance_id="l",
+                piece_id=10,
+                piece_type="L-Shaped Corner",
+                local_x_mm=0,
+                local_y_mm=0,
+                base_outline_mm=[list(p) for p in l_outline],
+                outline_mm=[list(p) for p in l_outline],
+                pivot_mm={"x": 500, "y": 500},
+            ),
+            machine_type="CNC Router",
+        )
+        session_ok["kerf_mm"] = 4
+        session_ok["pieces"]["instance:g"] = far
+        allowed = validate_piece_angle_mirror(session_ok, piece_key="instance:l")
+        self.assertTrue(allowed["ok"], allowed)
 
 
 if __name__ == "__main__":

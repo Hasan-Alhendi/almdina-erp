@@ -2,7 +2,7 @@
     "use strict";
 
     const PAGE_ROUTE = "board-editor";
-    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=24";
+    const STYLE = "/assets/almdina_erp/css/board_editor.css?v=25";
     const ASSET_ROOT = "/assets/almdina_erp/js/board_editor";
     const PREREQUISITES = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
@@ -13,10 +13,10 @@
         `${ASSET_ROOT}/history.js?v=18`,
         `${ASSET_ROOT}/session_document.js?v=21`,
         `${ASSET_ROOT}/distribution.js?v=18`,
-        `${ASSET_ROOT}/move_geometry.js?v=18`,
+        `${ASSET_ROOT}/move_geometry.js?v=19`,
         `${ASSET_ROOT}/snap_geometry.js?v=18`,
-        `${ASSET_ROOT}/rotation_geometry.js?v=18`,
-        `${ASSET_ROOT}/transform_geometry.js?v=1`,
+        `${ASSET_ROOT}/rotation_geometry.js?v=19`,
+        `${ASSET_ROOT}/transform_geometry.js?v=2`,
         `${ASSET_ROOT}/measure_geometry.js?v=1`,
         `${ASSET_ROOT}/position_geometry.js?v=1`,
         `${ASSET_ROOT}/move_interaction.js?v=19`,
@@ -27,7 +27,7 @@
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/store.js?v=19`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=25`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=26`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
         `${ASSET_ROOT}/controller.js?v=24`,
     ]);

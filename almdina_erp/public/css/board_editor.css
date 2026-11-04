@@ -708,6 +708,21 @@
   cursor: grabbing;
 }
 
+.abe-l-mirror-btn {
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(23, 32, 51, 0.16));
+}
+
+.abe-l-mirror-btn:hover .abe-l-mirror-hit,
+.abe-l-mirror-btn:focus-visible .abe-l-mirror-hit {
+  fill: #f5f8ff;
+  stroke: #0b5fff;
+}
+
+.abe-canvas-stage.is-measuring .abe-l-mirror-btn {
+  pointer-events: none;
+}
+
 .abe-drop-message {
   position: absolute;
   top: 8px;

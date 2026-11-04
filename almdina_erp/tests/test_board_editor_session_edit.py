@@ -234,6 +234,107 @@ class TestBoardEditorSessionEdit(unittest.TestCase):
         )
         self.assertIsNone(next_session["pieces"]["instance:b"]["glass_host_key"])
 
+    def test_l_cutout_accepts_nested_piece_with_kerf(self):
+        # L 1000×1000 with free cutout from (400,400) to (1000,1000).
+        l_outline = [[0, 0], [1000, 0], [1000, 400], [400, 400], [400, 1000], [0, 1000]]
+        guest = [[430, 430], [730, 430], [730, 730], [430, 730]]
+        pieces = {
+            "instance:l": {
+                "piece_key": "instance:l",
+                "piece_id": 10,
+                "piece_instance_id": "l",
+                "piece_type": "L-Shaped Corner",
+                "sheet_no": 1,
+                "local_x_mm": 0,
+                "local_y_mm": 0,
+                "placement_cm": {"x": 0, "y": 0, "w": 100, "h": 100},
+                "outline_mm": l_outline,
+                "editable": True,
+                "glass_host_key": None,
+            },
+            "instance:g": {
+                "piece_key": "instance:g",
+                "piece_id": 11,
+                "piece_instance_id": "g",
+                "piece_type": "Regular",
+                "sheet_no": None,
+                "local_x_mm": 2000,
+                "local_y_mm": 2000,
+                "placement_cm": {"x": 200, "y": 200, "w": 30, "h": 30},
+                "outline_mm": [[2000, 2000], [2300, 2000], [2300, 2300], [2000, 2300]],
+                "editable": True,
+                "glass_host_key": None,
+            },
+        }
+        boards = {
+            "1": {
+                "sheet_no": 1,
+                "origin_x_mm": 0,
+                "origin_y_mm": 36,
+                "width_mm": 2000,
+                "height_mm": 2000,
+                "trim_x_mm": 0,
+                "trim_y_mm": 0,
+                "usable_width_mm": 2000,
+                "usable_length_mm": 2000,
+                "title_band_mm": 36,
+                "user_moved": False,
+            }
+        }
+        # world_x/y are top-left of the proposed guest AABB (matches FE drop origin).
+        ok = validate_piece_drop(
+            piece=pieces["instance:g"],
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=430,
+            world_y_mm=36 + 430,
+            kerf_mm=4,
+        )
+        self.assertTrue(ok["ok"], ok)
+        self.assertEqual(ok["sheet_no"], 1)
+
+        kerf_fail = validate_piece_drop(
+            piece=pieces["instance:g"],
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=402,
+            world_y_mm=36 + 402,
+            kerf_mm=4,
+        )
+        self.assertFalse(kerf_fail["ok"])
+        self.assertEqual(kerf_fail["code"], DROP_KERF)
+
+        overlap = validate_piece_drop(
+            piece=pieces["instance:g"],
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=200,
+            world_y_mm=36 + 200,
+            kerf_mm=4,
+        )
+        self.assertFalse(overlap["ok"])
+        self.assertEqual(overlap["code"], DROP_OVERLAP)
+
+        # Place guest in cutout, then shift L so solid material occupies the guest.
+        pieces["instance:g"].update(
+            {
+                "sheet_no": 1,
+                "local_x_mm": 430,
+                "local_y_mm": 430,
+                "outline_mm": guest,
+            }
+        )
+        l_over = validate_piece_drop(
+            piece=pieces["instance:l"],
+            pieces=pieces,
+            boards=boards,
+            world_x_mm=200,
+            world_y_mm=36 + 200,
+            kerf_mm=4,
+        )
+        self.assertFalse(l_over["ok"])
+        self.assertIn(l_over["code"], {DROP_OVERLAP, DROP_KERF})
+
 
 if __name__ == "__main__":
     unittest.main()

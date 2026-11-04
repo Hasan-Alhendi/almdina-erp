@@ -277,8 +277,66 @@
     function clickTargetKeepsSelection(target) {
         if (!target || typeof target.closest !== "function") return false;
         return Boolean(target.closest(
-            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-board-drag], [data-sheet]"
+            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], [data-sheet]"
         ));
+    }
+
+    function leftOuterEdgeMidpoint(points) {
+        if (!Array.isArray(points) || points.length < 2) return null;
+        let best = null;
+        for (let index = 0; index < points.length; index += 1) {
+            const a = points[index];
+            const b = points[(index + 1) % points.length];
+            const ax = Number(a[0]);
+            const ay = Number(a[1]);
+            const bx = Number(b[0]);
+            const by = Number(b[1]);
+            if (![ax, ay, bx, by].every(Number.isFinite)) continue;
+            const dx = bx - ax;
+            const dy = by - ay;
+            const length = Math.hypot(dx, dy);
+            if (length < 1e-6) continue;
+            const midX = (ax + bx) * 0.5;
+            const midY = (ay + by) * 0.5;
+            const verticalness = Math.abs(dy) / length;
+            const score = midX - (verticalness * 0.01);
+            if (
+                !best
+                || score < best.score - 1e-9
+                || (Math.abs(score - best.score) < 1e-9 && length > best.length)
+            ) {
+                best = { x: midX, y: midY, score, length };
+            }
+        }
+        return best;
+    }
+
+    function lCornerMirrorControlSvg(session, sessionPiece, framePoints, scale) {
+        if (!sessionPiece || String(sessionPiece.piece_type || "") !== "L-Shaped Corner") return "";
+        if (sessionPiece.distribution === "excluded" || !sessionPiece.editable) return "";
+        const TG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.TransformGeometry;
+        if (!TG || typeof TG.angleMirrorEligibility !== "function") return "";
+        const eligibility = TG.angleMirrorEligibility(session, sessionPiece.piece_key);
+        if (!eligibility || !eligibility.allowed) return "";
+        const anchor = leftOuterEdgeMidpoint(framePoints);
+        if (!anchor) return "";
+        const safeScale = Math.max(Number(scale) || 1, 0.05);
+        const half = Math.max(10, 12 / safeScale);
+        const offset = Math.max(14, 16 / safeScale);
+        const cx = anchor.x - offset;
+        const cy = anchor.y;
+        const iconScale = (half * 1.15) / 12;
+        const title = __("Mirror angle");
+        return `<g class="abe-l-mirror-btn" data-abe-angle-mirror="${esc(sessionPiece.piece_key)}" transform="translate(${cx},${cy})" style="pointer-events:all;cursor:pointer">
+            <title>${esc(title)}</title>
+            <rect class="abe-l-mirror-hit" x="${-half}" y="${-half}" width="${half * 2}" height="${half * 2}" rx="${Math.max(3, 4 / safeScale)}" ry="${Math.max(3, 4 / safeScale)}" fill="#ffffff" stroke="#c9d2e3" stroke-width="${1.5 / safeScale}" vector-effect="non-scaling-stroke"/>
+            <g transform="translate(${-12 * iconScale},${-12 * iconScale}) scale(${iconScale})" fill="none" stroke="#172033" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none">
+                <path d="m3 7 5 5-5 5"/>
+                <path d="M21 12H8"/>
+                <path d="M21 19V5a2 2 0 0 0-2-2H8"/>
+                <path d="M8 5v14"/>
+            </g>
+        </g>`;
     }
 
     function selectedPieceKeys(storeView, session) {
@@ -323,6 +381,9 @@
         if (showHandle && eligibility.rotatable) {
             chrome += `<line x1="${handle.pivotWorld.x}" y1="${handle.pivotWorld.y}" x2="${handle.handleWorld.x}" y2="${handle.handleWorld.y}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}" pointer-events="none"/>
             <circle class="abe-rotate-handle" data-abe-rotate-handle="${esc(sessionPiece.piece_key)}" cx="${handle.handleWorld.x}" cy="${handle.handleWorld.y}" r="${handleRadius}" fill="#fff" stroke="#0b5fff" stroke-width="2" style="pointer-events:all;cursor:grab"/>`;
+        }
+        if (showHandle) {
+            chrome += lCornerMirrorControlSvg(session, sessionPiece, framePoints, safeScale);
         }
         chrome += `</g>`;
         return chrome;
@@ -1679,6 +1740,20 @@
             });
         });
 
+        svg.querySelectorAll("[data-abe-angle-mirror]").forEach((node) => {
+            const stopGesture = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+            };
+            node.addEventListener("pointerdown", stopGesture);
+            node.addEventListener("click", (event) => {
+                stopGesture(event);
+                if (suppressed()) return;
+                const pieceKey = node.getAttribute("data-abe-angle-mirror");
+                if (handlers && handlers.mirrorAngle) handlers.mirrorAngle(pieceKey);
+            });
+        });
+
         svg.querySelectorAll("[data-piece-id], [data-piece-key]").forEach((node) => {
             node.addEventListener("pointerdown", (event) => {
                 if (handlers && handlers.isPanKey && handlers.isPanKey()) return;
@@ -1814,6 +1889,7 @@
         patchDragPreview,
         patchMeasureOverlay,
         clickTargetKeepsSelection,
+        leftOuterEdgeMidpoint,
         FIT_PADDING_PX,
         SCENE_PAD_PX,
         FLOAT_CLEARANCE_PX,

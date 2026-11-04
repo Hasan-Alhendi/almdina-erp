@@ -15,6 +15,8 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_hosting import (
     piece_placement_id,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    EPSILON,
+    polygon_distance,
     polygon_inside_rect,
     polygons_overlap,
 )
@@ -258,16 +260,22 @@ def _pair_conflict(
     *,
     kerf_mm: float,
 ) -> str | None:
+    """Material overlap + true edge kerf. AABB is only an early-accept filter."""
+
+    gap = max(0.0, num(kerf_mm))
     if first.get("kind") == "polygon" and second.get("kind") == "polygon":
         if polygons_overlap(first["points"], second["points"]):
             return DROP_OVERLAP
-        # Approximate kerf with expanded AABB clearance when polygon distance is heavy.
-        if not rects_have_clearance(first["bounds"], second["bounds"], kerf_mm):
+        # Far AABB ⇒ kerf is already satisfied; skip segment distance.
+        if rects_have_clearance(first["bounds"], second["bounds"], gap):
+            return None
+        # Close/overlapping AABB with no material overlap (e.g. L cutout): real edge distance.
+        if polygon_distance(first["points"], second["points"]) + EPSILON < gap:
             return DROP_KERF
         return None
     if rect_intersects(first["bounds"], second["bounds"]):
         return DROP_OVERLAP
-    if not rects_have_clearance(first["bounds"], second["bounds"], kerf_mm):
+    if not rects_have_clearance(first["bounds"], second["bounds"], gap):
         return DROP_KERF
     return None
 

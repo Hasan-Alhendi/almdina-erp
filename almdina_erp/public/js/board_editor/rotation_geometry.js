@@ -312,10 +312,16 @@
     }
 
     function pairConflict(a, b, kerfMm) {
+        const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
+        if (MoveGeometry && typeof MoveGeometry.pairConflict === "function") {
+            return MoveGeometry.pairConflict(a, b, kerfMm);
+        }
+        // Fallback mirrors MoveGeometry when the module order is incomplete in tests.
+        const gap = Math.max(0, num(kerfMm));
         if (a.kind === "polygon" && b.kind === "polygon" && a.points && b.points) {
             if (polygonsOverlap(a.points, b.points)) return "piece_overlap";
-            if (!rectsHaveClearance(a.bounds, b.bounds, kerfMm)) return "kerf_clearance";
-            return null;
+            if (rectsHaveClearance(a.bounds, b.bounds, gap)) return null;
+            return "kerf_clearance";
         }
         const ax2 = a.bounds.x + a.bounds.w;
         const ay2 = a.bounds.y + a.bounds.h;
@@ -324,7 +330,7 @@
         if (!(ax2 <= b.bounds.x || bx2 <= a.bounds.x || ay2 <= b.bounds.y || by2 <= a.bounds.y)) {
             return "piece_overlap";
         }
-        if (!rectsHaveClearance(a.bounds, b.bounds, kerfMm)) return "kerf_clearance";
+        if (!rectsHaveClearance(a.bounds, b.bounds, gap)) return "kerf_clearance";
         return null;
     }
 
