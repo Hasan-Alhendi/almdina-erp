@@ -83,9 +83,10 @@
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Trimming margin (mm)"), source.default_trim_margin_mm],
-                    [t("Algorithm"), catalogLabel(current, "optimization_catalog", source.default_packing_mode)],
+                    [t("Maximum centerable edge gap (cm)"), source.max_centerable_edge_gap_cm],
                     [t("Cutting machine type"), catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type)],
                     [t("Optimization timeout (s)"), source.default_optimization_time_limit_sec],
+                    [t("Final alignment search budget (seconds)"), source.alignment_search_budget_sec],
                     [t("Piece limit for optimal search"), source.optimal_search_piece_limit],
                 ], current),
                 section("costing", t("Default cost"), t("Cutting fee, special door leaf charges, and their default margins."), [

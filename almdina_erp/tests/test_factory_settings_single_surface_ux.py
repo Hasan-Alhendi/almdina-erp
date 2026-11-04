@@ -14,7 +14,8 @@ SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_serv
 SHARED_SHELL = ROOT / "public" / "js" / "shared_shell.js"
 MAIN_WORKSPACE = ROOT / "almdina_erp" / "workspace" / "almdina_erp" / "almdina_erp.json"
 
-OPERATIONAL_HIDDEN_FIELDS = {"whatsapp_session_id", "whatsapp_session_name"}
+OPERATIONAL_HIDDEN_FIELDS = {
+    "default_packing_mode","whatsapp_session_id", "whatsapp_session_name"}
 LEGACY_PRESERVED_FIELDS = {
     "enforce_stock_control",
     "default_warehouse",
@@ -63,6 +64,26 @@ def test_every_active_factory_setting_is_present_in_the_unified_console() -> Non
 
     missing = sorted(fieldname for fieldname in active_fields if fieldname not in console_source)
     assert not missing, f"Active factory settings missing from unified console: {missing}"
+
+
+def test_centering_limit_is_a_server_backed_nonnegative_factory_setting() -> None:
+    field = next(
+        row for row in _settings_fields()
+        if row.get("fieldname") == "max_centerable_edge_gap_cm"
+    )
+    service_source = SETTINGS_SERVICE.read_text(encoding="utf-8")
+    view_model_source = SETTINGS_VIEW_MODEL.read_text(encoding="utf-8")
+    dialogs_source = SETTINGS_DIALOGS.read_text(encoding="utf-8")
+    settings_domain = (ROOT / "almdina_erp" / "domain" / "security" / "factory_settings.py").read_text(encoding="utf-8")
+
+    assert field["fieldtype"] == "Float"
+    assert float(field["default"]) == 5
+    assert int(field["non_negative"]) == 1
+    assert '"max_centerable_edge_gap_cm"' in service_source
+    assert '"max_centerable_edge_gap_cm": _(' in service_source
+    assert '"max_centerable_edge_gap_cm"' in settings_domain
+    assert 'values.max_centerable_edge_gap_cm' in dialogs_source
+    assert 'source.max_centerable_edge_gap_cm' in view_model_source
 
 
 def test_hidden_legacy_values_are_preserved_and_visible_read_only() -> None:

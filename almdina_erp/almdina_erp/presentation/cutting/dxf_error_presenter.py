@@ -1200,13 +1200,28 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         )
     if code == codes.TRIM_EXCEEDS_BOARD:
         return PresentedDxfError(
-            "هامش التشذيب أكبر من أبعاد اللوح ولا توجد مساحة صالحة للقص.",
+            "الهامش الأدنى المطلوب لا يترك مساحة صالحة على أبعاد اللوح المحدد.",
             "اللوح.",
-            "قلّل التشذيب أو زد أبعاد اللوح ثم أعد المحاولة.",
+            "اختر لوحًا أكبر، أو صحح قيمة الحد الأدنى إذا أُدخلت خطأً، ثم أعد الحساب.",
             code,
             issue.category,
         )
     if code == codes.APPLIED_TRIM_OVERFLOW:
+        actual = format_mm(params.get("actual_margin_mm") or 0)
+        required = format_mm(params.get("required_trim_mm") or 0)
+        edge_ar = {
+            "left": "اليسرى", "right": "اليمنى",
+            "top": "العليا", "bottom": "السفلى",
+        }.get(str(params.get("edge") or ""), "")
+        if edge_ar:
+            sheet_no = params.get("sheet_no")
+            return PresentedDxfError(
+                f"{_piece_noun(issue)} على اللوح {sheet_no} تبعد {actual} مم فقط عن الحافة {edge_ar}.",
+                target_text,
+                f"الحد الأدنى المطلوب {required} مم. أعد توزيع الدرفة داخل اللوح ثم أعد المحاولة.",
+                code,
+                issue.category,
+            )
         return PresentedDxfError(
             "القطع تتجاوز حدود اللوح حتى بعد التشذيب.",
             "اللوح.",
@@ -1403,6 +1418,15 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
         labels = ", ".join(str(value) for value in (params.get("labels") or []))
         return PresentedDxfError("خطة القص تحتوي قطعًا غير موجودة في الطلب.", labels or target_text, "أزل القطع غير المطلوبة وأعد حساب الخطة.", code, issue.category)
 
+    if code == codes.FORBIDDEN_MIRRORING:
+        return PresentedDxfError(
+            _("This board type does not allow piece mirroring."),
+            target_text,
+            _("Turn mirroring off in the DXF or allow it on the order and upload the file again."),
+            code,
+            issue.category,
+        )
+
     # Unknown and obsolete codes must fail safely: do not expose arbitrary
     # legacy text, internal code names, or untrusted target details.
     return PresentedDxfError(
@@ -1534,6 +1558,7 @@ def group_issues(issues: Sequence[DxfValidationIssue]) -> list[list[DxfValidatio
         piece_group = (
             item.code in {
                 codes.FORBIDDEN_ROTATION,
+                codes.FORBIDDEN_MIRRORING,
                 codes.CUT_SIZE_MISMATCH,
                 codes.SPECIAL_SIZE_MISMATCH,
                 codes.PIECE_MISSING,

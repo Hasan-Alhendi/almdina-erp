@@ -163,6 +163,8 @@ _SETTINGS_FIELDS = (
     "default_cutting_machine_type",
     "default_optimization_time_limit_sec",
     "optimal_search_piece_limit",
+    "max_centerable_edge_gap_cm",
+    "alignment_search_budget_sec",
     "default_cutting_cost_per_board_usd",
     "default_special_design_fee_usd",
     "default_special_cnc_fee_usd",
@@ -357,6 +359,8 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     _apply_plan_default_values(settings, payload)
 
     numeric_non_negative = {
+        "max_centerable_edge_gap_cm": _("Maximum centerable edge gap (cm)"),
+        "alignment_search_budget_sec": _("Final Alignment Search Budget (seconds)"),
         "default_cutting_cost_per_board_usd": _("Default Cutting Cost / Board USD"),
         "default_special_design_fee_usd": _("Default Special Design Fee USD"),
         "default_special_cnc_fee_usd": _("Default Special CNC Fee USD"),
@@ -366,6 +370,16 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     for fieldname, label in numeric_non_negative.items():
         if fieldname in payload:
             settings.set(fieldname, flt(_finite_non_negative(payload[fieldname], label)))
+
+    # Alignment is a separately configurable *tail* allowance, bounded by
+    # the user's own optimization timeout rather than an internal magic cap.
+    if flt(settings.get("alignment_search_budget_sec") or 0) > flt(
+        settings.get("default_optimization_time_limit_sec") or 0
+    ):
+        frappe.throw(
+            _("Final alignment search budget must not exceed optimization timeout."),
+            frappe.ValidationError,
+        )
 
     extra_addon_prices = {
         "default_extra_double_unit_price_usd": _("Double Price USD / Door"),

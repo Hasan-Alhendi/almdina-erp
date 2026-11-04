@@ -1,0 +1,50 @@
+label,case,mode,machine,valid,boards,reusable_offcut_m2,budget_sec,runtime_sec,unique_candidates,strict_import_valid,strict_import_error,roundtrip_candidates,expected_rejection,source_base_sha
+after,243-trim-0,Smart Search,CNC Router,True,3,0.0,5,6.004,5,True,,5,False,working-tree
+after,243-trim-0.1,Smart Search,CNC Router,True,3,0.0,5,5.8769,5,True,,5,False,working-tree
+after,243-trim-1,Smart Search,CNC Router,True,3,0.0,5,5.5512,5,True,,5,False,working-tree
+after,243-trim-2,Smart Search,CNC Router,True,3,0.0,5,5.5282,5,True,,5,False,working-tree
+after,243-trim-3,Smart Search,CNC Router,True,3,0.0,5,5.6584,5,True,,5,False,working-tree
+after-trim-fix,L-tight,Smart Search,CNC Router,True,1,0.0,10.0,1.6374,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Clipped-quad,Smart Search,CNC Router,True,1,0.0,10.0,1.3318,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-positive-trim,Smart Search,CNC Router,True,2,0.0,10.0,1.9607,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Rectangular,Smart Search,CNC Router,True,2,0.193725,10.0,1.1753,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-mixed,Smart Search,CNC Router,True,2,0.9528199999999999,10.0,6.7789,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Glass-clipped,Smart Search,CNC Router,True,3,0.6,10.0,3.0521,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Large-120,Smart Search,CNC Router,True,11,0.8500380000000001,10.0,11.5064,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Adaptive-trim,Smart Search,CNC Router,False,0,0.0,10.0,0.0235,0,,Rejected before export by the manufacturing gate,0,True,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Glass-assignment-gap,Smart Search,CNC Router,True,1,0.0,10.0,0.4147,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-pair-offcut,Smart Search,CNC Router,True,2,0.2,10.0,2.168,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Boundary-kerf,Smart Search,CNC Router,True,1,0.0,10.0,0.064,2,True,,2,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Mandatory-gap,Smart Search,CNC Router,True,2,0.0,10.0,0.3154,1,True,,1,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-tight,Smart Search,Panel Saw,True,2,0.12210899999999997,10.0,0.55,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Clipped-quad,Smart Search,Panel Saw,True,2,0.15031899999999998,10.0,0.4711,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-positive-trim,Smart Search,Panel Saw,True,2,0.0,10.0,0.4811,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Rectangular,Smart Search,Panel Saw,True,2,0.0,10.0,0.6476,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-mixed,Smart Search,Panel Saw,True,2,0.9564800000000001,10.0,3.0628,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Glass-clipped,Smart Search,Panel Saw,True,3,0.3,10.0,1.3658,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Large-120,Smart Search,Panel Saw,True,12,1.96908,10.0,10.7461,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Adaptive-trim,Smart Search,Panel Saw,False,0,0.0,10.0,0.0165,0,,Rejected before export by the manufacturing gate,0,True,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Glass-assignment-gap,Smart Search,Panel Saw,True,2,0.0,10.0,0.1751,4,True,,4,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-pair-offcut,Smart Search,Panel Saw,True,2,0.2,10.0,0.8014,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Boundary-kerf,Smart Search,Panel Saw,True,1,0.0,10.0,0.0596,2,True,,2,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,Mandatory-gap,Smart Search,Panel Saw,True,2,0.0,10.0,0.0425,1,True,,1,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-independent,Smart Search,CNC Router,True,1,0.0,10.0,3.9507,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-competing,Smart Search,CNC Router,True,1,0.12210899999999997,10.0,3.2794,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-clipped,Smart Search,CNC Router,True,1,0.0,10.0,3.4691,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-addon-guard,Smart Search,CNC Router,True,2,0.30466799999999994,10.0,2.7367,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-dependent,Smart Search,CNC Router,True,1,0.0,10.0,2.4964,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-joint-not-best,Smart Search,CNC Router,True,1,0.0,10.0,2.9484,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-mixed,Smart Search,CNC Router,True,1,0.0,10.0,9.3319,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P4-regular,Smart Search,CNC Router,True,1,0.6,10.0,0.1528,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-L-different,Smart Search,CNC Router,True,1,0.0,10.0,0.1581,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-L-incompatible,Smart Search,CNC Router,True,2,0.0,10.0,0.1085,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-clip-different,Smart Search,CNC Router,True,1,0.0,10.0,0.1521,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-single-guest,Smart Search,CNC Router,True,1,0.0,10.0,0.0845,4,True,,4,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-two-guests,Smart Search,CNC Router,True,1,0.0,10.0,0.1856,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-many-guests,Smart Search,CNC Router,True,1,0.0,10.0,0.7613,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-four-choices,Smart Search,CNC Router,True,1,0.0,10.0,2.2141,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-joint-different,Smart Search,CNC Router,True,1,0.0,10.0,2.4645,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-realistic-mixed,Smart Search,CNC Router,True,2,2.6108,10.0,6.4079,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-L-addon,Smart Search,CNC Router,True,1,0.0,10.0,0.2168,5,True,,5,False,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,P5-addon-ambiguous,Smart Search,CNC Router,False,0,0.0,10.0,0.137,0,,Rejected before export by the manufacturing gate,0,True,b42a75160d53846849e44c741132dfcc7afd5a3f
+after-trim-fix,L-mixed,Deep Search,CNC Router,True,2,0.9059800000000001,10.0,1.9289,1,True,,1,False,b42a75160d53846849e44c741132dfcc7afd5a3f

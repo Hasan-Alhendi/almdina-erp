@@ -1,0 +1,6 @@
+path,measured_blob
+almdina_erp/almdina_erp/domain/cutting/geometry_nesting.py,65b1b1e48ad80a4d6236e3e1013445ffdc0e35f4
+almdina_erp/almdina_erp/domain/cutting/joint_nesting.py,0dd696f34284eb599b9b6e73256670c0e203bde2
+almdina_erp/almdina_erp/domain/cutting/optimizer.py,f27e824c9b28eb4d9b49ebbe503f2c1315211641
+almdina_erp/almdina_erp/domain/cutting/plan_portfolio.py,82e045cc9edc76027e8c4131fc0ae6159138e57f
+almdina_erp/almdina_erp/domain/cutting/shape_aware_nesting.py,5cf82dda0e32c720d097ab0b49ddf8bf892376b4

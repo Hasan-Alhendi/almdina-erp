@@ -1413,6 +1413,10 @@ Enter the edge color,أدخل لون القشاط
 Custom for this order,معدل لهذا الطلب
 Taken automatically from the edge type,مأخوذ تلقائيًا من نوع القشاط
 Select the cutting machine type,يجب اختيار نوع آلة القص
+Mirrorable,قابل للانعكاس
+Piece mirroring permission is invalid.,إذن عكس الدرفات غير صالح.
+This board type does not allow piece mirroring.,نوع اللوح هذا لا يسمح بعكس الدرفات.
+Turn mirroring off in the DXF or allow it on the order and upload the file again.,أوقف الانعكاس في ملف DXF أو اسمح به في الطلب ثم أعد رفع الملف.
 Send the measurements file to the customer?,هل تريد إرسال ملف القياسات للزبون؟
 Send the measurement changes to the customer?,هل تريد إرسال تعديلات القياسات للزبون؟
 A WhatsApp message will not be sent because the session is disconnected.,لن يتم إرسال رسالة واتساب لأن الجلسة غير متصلة.
@@ -3421,3 +3425,37 @@ The sheet plus the left offset exceeds the machine width.,اللوح مع الب
 The sheet plus the bottom offset exceeds the machine length.,اللوح مع البعد عن الأسفل يتجاوز طول الماكينة.
 A cutter path would leave the machine travel area after placement.,مسار الريشة سيخرج من مساحة حركة الماكينة بعد التموضع.
 Sheet placement on the CNC machine is incomplete.,تموضع اللوح على ماكينة CNC غير مكتمل.
+"Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة إعدادات أخرى. تنشئ إعادة الحساب معاينة، ولا يُحفظ التغيير حتى تضغط «حفظ».
+"The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.",يمكن إعادة الحساب بالإعدادات المحفوظة. تغيير الشفرة أو الهامش أو المكنة أو مدة البحث يحتاج صلاحية تعديل إعدادات المحسن.
+Press “Edit” to try other settings. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
+Smart Search,بحث ذكي
+"Default geometry, cutting machine, and search limits.",إعدادات الأبعاد الافتراضية ومكنة القص وحدود البحث.
+The cutting plan preview expired. Create a new preview.,انتهت صلاحية معاينة خطة القص. أنشئ معاينة جديدة.
+Invalid cutting plan candidate.,الخطة البديلة المحددة غير صالحة.
+No manufacturing-valid cutting plan was found.,لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+The search batch limit was reached. Create a new preview.,وصلت إلى الحد المسموح لدفعات البحث. أنشئ معاينة جديدة.
+Plan {0},الخطة {0}
+{0} boards,{0} ألواح
+Reusable offcut: {0} m²,أكبر فضلة قابلة للاستعمال: {0} م²
+Manufacturing checks passed,اجتازت فحوص التصنيع
+Alternative layout,توزيع بديل
+Show plan gallery,إظهار معرض الخطط
+Collapse plan gallery,طي معرض الخطط
+Continue search (+{0} seconds),متابعة البحث (+{0} ثانية)
+Plan alternatives,بدائل خطة القص
+Only one manufacturing-valid plan was found.,توفرت خطة واحدة فقط تجتاز فحوص التصنيع.
+Choose a layout to preview. Nothing is saved until you press Save.,اختر توزيعًا لمعاينته. لا يُحفظ شيء حتى تضغط «حفظ».
+Searching or loading a plan…,جارٍ البحث أو تحميل الخطة…
+Search is limited to three batches per preview.,البحث محدود بثلاث دفعات لكل معاينة.
+Could not load the plan alternative. Create a new preview if it expired.,تعذر تحميل الخطة البديلة. أنشئ معاينة جديدة إذا انتهت صلاحيتها.
+Recommended,موصى بها
+Plans,الخطط
+{0} additional boards,{0} ألواح إضافية
+{0} m² less reusable offcut,فضلة قابلة للاستعمال أقل بمقدار {0} م²
+Maximum centerable edge gap (cm),أقصى فراغ مسموح بتوسيطه (سم)
+Center an axis only when both edge gaps are within this limit.,وسّط المحور فقط إذا كان فراغا الحافتين ضمن هذا الحد.
+Final Alignment Search Budget (seconds),ميزانية بحث المحاذاة النهائية (ثوانٍ)
+Final alignment search budget (seconds),ميزانية بحث المحاذاة النهائية (ثوانٍ)
+Zero disables final alignment. The budget is bounded by the optimization timeout.,القيمة صفر تعطّل المحاذاة النهائية. لا تتجاوز الميزانية مهلة تحسين القص.
+The final alignment budget changed. Recalculate the preview before saving.,تغيّرت ميزانية المحاذاة النهائية. أعد حساب المعاينة قبل الحفظ.
+Final alignment search budget must not exceed optimization timeout.,ميزانية المحاذاة النهائية يجب ألا تتجاوز مهلة تحسين القص.

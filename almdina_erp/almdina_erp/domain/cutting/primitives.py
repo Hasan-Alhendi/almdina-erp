@@ -279,11 +279,14 @@ def rects_have_clearance(
 
 
 def is_contained(a: dict[str, float], b: dict[str, float]) -> bool:
+    # Arithmetic noise in split rectangles must not change the search topology.
+    # This is smaller than the independent manufacturing validator's tolerance.
+    tolerance = 1e-9
     return (
-        a["x"] >= b["x"]
-        and a["y"] >= b["y"]
-        and a["x"] + a["w"] <= b["x"] + b["w"]
-        and a["y"] + a["h"] <= b["y"] + b["h"]
+        a["x"] >= b["x"] - tolerance
+        and a["y"] >= b["y"] - tolerance
+        and a["x"] + a["w"] <= b["x"] + b["w"] + tolerance
+        and a["y"] + a["h"] <= b["y"] + b["h"] + tolerance
     )
 
 
@@ -343,6 +346,7 @@ def prune_free_rects(
     for index, rect in enumerate(free_rects):
         if any(
             index != other_index and is_contained(rect, other)
+            and (other_index < index or not is_contained(other, rect))
             for other_index, other in enumerate(free_rects)
         ):
             continue

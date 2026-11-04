@@ -145,6 +145,18 @@
     // Cutting plan rendering
     // =====================================================
 
+    function explicitCornerOrientation(piece) {
+        if (!piece) return null;
+        const hasTurns = Number.isInteger(piece.corner_rotation_quarter_turns);
+        const mirrored = Boolean(piece.corner_mirrored || piece.mirrored);
+        if (!hasTurns && !mirrored) return null;
+        const recorded = hasTurns ? piece.corner_rotation_quarter_turns : 0;
+        return {
+            turns: ((recorded % 4) + 4) % 4,
+            mirrored,
+        };
+    }
+
     const EDGE_BAND_DEFAULT_COLOR = "#d00000";
     const EDGE_BAND_CUSTOM_COLOR = "#1d4ed8";
     // CSS px dash-dot so zoom/print scale keeps the pattern readable.
@@ -230,8 +242,24 @@
         let right = semantic.long_right ? 1 : 0;
         let top = semantic.width_top ? 1 : 0;
         let bottom = semantic.width_bottom ? 1 : 0;
+        const recorded = !(geometryModel && geometryModel.source === "dxf")
+            ? explicitCornerOrientation(piece)
+            : null;
 
-        if (geometryModel && geometryModel.source === "dxf"
+        if (recorded) {
+            if (recorded.mirrored) {
+                const swap = left;
+                left = right;
+                right = swap;
+            }
+            for (let turn = 0; turn < recorded.turns; turn += 1) {
+                const previous = { left, top, right, bottom };
+                left = previous.bottom;
+                top = previous.left;
+                right = previous.top;
+                bottom = previous.right;
+            }
+        } else if (geometryModel && geometryModel.source === "dxf"
             && Number.isInteger(piece.rotation_quarter_turns)) {
             // Imported DXF geometry is already physically oriented. Rotate
             // the original semantic bands only, never its stored contour.
@@ -299,11 +327,13 @@
         );
         if (!isCorner) return "";
 
-        // System plans encode only 0°/90° in `rotated`, and both the outline and
-        // the bands are generated from that flag. An imported DXF contour is
-        // already in its drawn orientation, so its bands follow the stored
-        // quarter-turn and single reflection instead of transforming it again.
+        // A stored quarter-turn or mirror is applied once, through the same
+        // corner transform as the outline. Historical system pieces that only
+        // have `rotated` keep that single 90° swap. An imported DXF contour
+        // is already drawn, so its bands follow the stored turn instead of
+        // transforming the contour again.
         let edgePiece = piece;
+        const recorded = explicitCornerOrientation(piece);
         if (geometryModel && geometryModel.source === "dxf") {
             edgePiece = typeof geometry.pieceForQuarterTurns === "function"
                 ? geometry.pieceForQuarterTurns(
@@ -313,6 +343,8 @@
                 )
                 : null;
             if (!edgePiece) return "";
+        } else if (recorded && typeof geometry.pieceForQuarterTurns === "function") {
+            edgePiece = geometry.pieceForQuarterTurns(piece, recorded.turns, recorded.mirrored) || piece;
         } else if (piece.rotated) {
             // Remap selection flags and type overrides together so style stays
             // bound to the same physical side after the 90° clockwise turn.
@@ -614,12 +646,20 @@
 
     function orientedCornerPiece(piece, state, geometryModel) {
         const geometry = window.AlmdinaClippedCornerGeometry;
+        const recorded = explicitCornerOrientation(piece);
         if (geometryModel && geometryModel.source === "dxf") {
             if (!geometry || typeof geometry.pieceForQuarterTurns !== "function") return null;
             return geometry.pieceForQuarterTurns(
                 { ...piece, ...state },
                 piece.corner_rotation_quarter_turns,
                 piece.corner_mirrored,
+            );
+        }
+        if (recorded && geometry && typeof geometry.pieceForQuarterTurns === "function") {
+            return geometry.pieceForQuarterTurns(
+                { ...piece, ...state },
+                recorded.turns,
+                recorded.mirrored,
             );
         }
         if (piece && piece.rotated) {

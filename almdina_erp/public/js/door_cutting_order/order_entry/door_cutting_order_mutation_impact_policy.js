@@ -253,6 +253,9 @@
     ORDER_PLAN_COST_FIELDS.forEach((fieldname) => {
         orderHandlers[fieldname] = onOrderInputChanged;
     });
+    orderHandlers.allow_piece_mirroring = (frm) => {
+        recordImpact(frm, ["plan"], "allow_piece_mirroring_changed");
+    };
     frappe.ui.form.on("Door Cutting Order", orderHandlers);
 
     const pieceHandlers = {

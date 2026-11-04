@@ -32,6 +32,9 @@ from almdina_erp.almdina_erp.domain.orders.numeric_input import (
     default_if_missing,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import physical_cut_quantity
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import (
+    piece_mirroring_allowed,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import (
     canonical_glass_margin_mm,
 )
@@ -394,6 +397,9 @@ class FrappeOrderPlanAdapter:
                 piece_rows=tuple(
                     self.piece_row_as_dict(row)
                     for row in (self.document.pieces or [])
+                ),
+                allow_piece_mirroring=piece_mirroring_allowed(
+                    getattr(self.document, "allow_piece_mirroring", None)
                 ),
             ),
             engine=domain_cutting_engine,

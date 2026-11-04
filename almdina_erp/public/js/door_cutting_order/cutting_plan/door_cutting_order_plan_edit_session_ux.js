@@ -30,13 +30,6 @@
             suffix: "mm",
         }),
         Object.freeze({
-            fieldname: "packing_mode",
-            label: "Piece packing algorithm",
-            shortLabel: "Algorithm",
-            fieldtype: "Select",
-            catalog: "optimization_catalog",
-        }),
-        Object.freeze({
             fieldname: "cutting_machine_type",
             label: "Cutting machine type",
             shortLabel: "Cutting machine",

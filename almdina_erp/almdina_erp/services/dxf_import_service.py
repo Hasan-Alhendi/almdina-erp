@@ -1427,6 +1427,15 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "finished_length_cm": _num(finished_length_cm),
                     "allow_rotation": cint(row.allow_rotation),
                     "piece_type": row.piece_type or "Regular",
+                    "clipped_corner_position": str(
+                        getattr(row, "clipped_corner_position", "") or ""
+                    ),
+                    "clipped_corner_width_cm": _num(
+                        getattr(row, "clipped_corner_width_cm", 0)
+                    ),
+                    "clipped_corner_length_cm": _num(
+                        getattr(row, "clipped_corner_length_cm", 0)
+                    ),
                     "glass_margin_mm": glass_margin_mm,
                     "margin_state": margin_state,
                     "edge_long_left": cint(getattr(row, "edge_long_left", 0)),
@@ -1472,6 +1481,9 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
                 piece, "edge_width_bottom", "edge_width_thickness_mm"
             ),
             width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
+            clipped_cut_width_mm=_num(piece.get("clipped_corner_width_cm")) * 10.0,
+            clipped_cut_length_mm=_num(piece.get("clipped_corner_length_cm")) * 10.0,
+            clipped_corner_position=str(piece.get("clipped_corner_position") or ""),
         )
         for piece in _expected_order_pieces(order)
     )
