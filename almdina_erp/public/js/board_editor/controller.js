@@ -182,6 +182,7 @@
         let cameraSerial = 0;
         let appliedCamera = 0;
         let liveScroll = { x: 0, y: 0 };
+        let lastCanvasPointerClient = null;
         let spaceHeld = false;
         let altHeld = false;
         let activeOrderName = "";
@@ -435,16 +436,37 @@
         function applyOpeningCamera() {
             if (!store) return false;
             const size = stageSize();
-            if (size.width < 40) return false;
-            const sheets = store.snapshot().projection.sheets || [];
+            if (size.width < 40 || size.height < 40) return false;
+            const view = store.snapshot();
+            const sheets = view.projection.sheets || [];
             const widths = sheets.map((sheet) => (Number(sheet.full_width_cm) || Number(sheet.w) || 122) * 10);
             const maxBoard = widths.length ? Math.max(...widths) : 1;
             const columns = CanvasRenderer.columnCount(maxBoard, size.width);
             const scale = CanvasRenderer.openingScale(maxBoard, columns, size.width);
-            rememberCamera({
+            let layout = CanvasRenderer.sheetLayout(sheets, columns);
+            if (view.session) layout = CanvasRenderer.mergeSessionLayout(layout, view.session);
+            const camera = CanvasRenderer.frameCamera(
+                layout.fitBounds,
                 scale,
-                scrollX: 0,
-                scrollY: 0,
+                size.width,
+                size.height,
+                {
+                    minX: Number(layout.worldMinX) || 0,
+                    minY: Number(layout.worldMinY) || 0,
+                    width: Math.max(
+                        layout.fitBounds.width + ((layout.staging && layout.staging.width) || 0),
+                        1
+                    ),
+                    height: Math.max(layout.fitBounds.height, 1),
+                }
+            );
+            if (!camera) return false;
+            rememberCamera({
+                scale: camera.scale,
+                scrollX: camera.scrollX,
+                scrollY: camera.scrollY,
+                padX: camera.padX,
+                padY: camera.padY,
                 columns,
                 opened: true,
                 userAdjusted: false,
@@ -492,14 +514,28 @@
             if (!camera) return false;
             rememberCamera({
                 scale: camera.scale,
-                scrollX: 0,
-                scrollY: 0,
+                scrollX: camera.scrollX,
+                scrollY: camera.scrollY,
+                padX: camera.padX,
+                padY: camera.padY,
                 columns: layout.columns,
                 opened: true,
                 userAdjusted: true,
                 fitted: true,
             });
             return true;
+        }
+
+        function zoomFocalClient(client) {
+            if (client && Number.isFinite(client.x) && Number.isFinite(client.y)) return client;
+            if (
+                lastCanvasPointerClient
+                && Number.isFinite(lastCanvasPointerClient.x)
+                && Number.isFinite(lastCanvasPointerClient.y)
+            ) {
+                return lastCanvasPointerClient;
+            }
+            return null;
         }
 
         function zoomByFactor(factor, client) {
@@ -511,19 +547,39 @@
             const rect = stage && stage.getBoundingClientRect
                 ? stage.getBoundingClientRect()
                 : { left: 0, top: 0, width: stageSize().width, height: stageSize().height };
-            const focalX = client ? client.x - rect.left : rect.width / 2;
-            const focalY = client ? client.y - rect.top : rect.height / 2;
-            const rendered = lastCanvasApi && lastCanvasApi.metrics && lastCanvasApi.metrics.scale;
+            const pointer = zoomFocalClient(client);
+            if (pointer) {
+                lastCanvasPointerClient = { x: pointer.x, y: pointer.y };
+            }
+            const focalX = pointer ? pointer.x - rect.left : rect.width / 2;
+            const focalY = pointer ? pointer.y - rect.top : rect.height / 2;
+            const metrics = lastCanvasApi && lastCanvasApi.metrics;
+            // Prefer live rendered metrics so pad/min match the SVG currently on screen.
+            const scale = Number(metrics && metrics.scale) || Number(current.scale) || 1;
+            const padX = metrics && metrics.padX != null
+                ? Number(metrics.padX)
+                : (current.padX != null ? Number(current.padX) : CanvasRenderer.SCENE_PAD_PX);
+            const padY = metrics && metrics.padY != null
+                ? Number(metrics.padY)
+                : (current.padY != null ? Number(current.padY) : CanvasRenderer.SCENE_PAD_PX);
+            const minX = Number(metrics && metrics.minX) || 0;
+            const minY = Number(metrics && metrics.minY) || 0;
             const next = CanvasRenderer.zoomAroundFocal({
-                scale: Number(current.scale) || rendered || 1,
+                scale,
                 scrollX,
                 scrollY,
-                pad: CanvasRenderer.SCENE_PAD_PX,
+                padX,
+                padY,
+                minX,
+                minY,
             }, { x: focalX, y: focalY }, factor);
+            if (next.changed === false) return;
             rememberCamera({
                 scale: next.scale,
                 scrollX: next.scrollX,
                 scrollY: next.scrollY,
+                padX: next.padX,
+                padY: next.padY,
                 columns: current.columns,
                 opened: true,
                 userAdjusted: true,
@@ -546,12 +602,13 @@
             }
             if (!stage || !event.target || typeof stage.contains !== "function" || !stage.contains(event.target)) return;
             event.preventDefault();
+            lastCanvasPointerClient = { x: event.clientX, y: event.clientY };
             const factor = CanvasRenderer.wheelZoomFactor(
                 event.deltaY,
                 event.deltaMode,
                 stage.clientHeight || stageSize().height
             );
-            zoomByFactor(factor, { x: event.clientX, y: event.clientY });
+            zoomByFactor(factor, lastCanvasPointerClient);
         }
 
         function revealSheet(sheetNo) {
@@ -1282,12 +1339,16 @@
                 consumeClickSuppression: () => (
                     moveInteraction ? moveInteraction.consumeClickSuppression() : false
                 ),
-                zoom: (factor) => zoomByFactor(factor, null),
+                zoom: (factor) => zoomByFactor(factor, zoomFocalClient(null)),
                 onBack: () => backToOrder(activeOrderName),
                 readScroll: () => liveScroll,
                 onScroll: (x, y) => {
                     liveScroll = { x: Number(x) || 0, y: Number(y) || 0 };
                     if (liveScroll.x > 1 || liveScroll.y > 1) scrollOwned = true;
+                },
+                onCanvasPointerMove: (event) => {
+                    if (!event) return;
+                    lastCanvasPointerClient = { x: event.clientX, y: event.clientY };
                 },
                 takeCamera: (token) => {
                     if (token === appliedCamera) return false;

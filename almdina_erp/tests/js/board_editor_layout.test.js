@@ -76,17 +76,34 @@ const openFour = renderer.openingScale(1220, 2, 1100);
 const openTen = renderer.openingScale(1220, 2, 1100);
 assert.equal(openFour, openTen);
 const boardPx = 1220 * openFour;
-assert.ok(boardPx >= renderer.BOARD_SCREEN_MIN_PX - 1);
-assert.ok(boardPx <= renderer.BOARD_SCREEN_MAX_PX + 1);
-assert.equal(openFour, (1100 * renderer.GRID_WIDTH_RATIO) / (1220 * 2 + 48));
+const baseOpen = (1100 * renderer.GRID_WIDTH_RATIO) / (1220 * 2 + 48);
+assert.equal(openFour, baseOpen * renderer.OPENING_SCALE_FACTOR);
+assert.ok(Math.abs(renderer.OPENING_SCALE_FACTOR - 0.7) < 1e-9);
+assert.ok(boardPx < 1220 * baseOpen * 0.8);
+assert.ok(boardPx <= renderer.BOARD_SCREEN_MAX_PX * renderer.OPENING_SCALE_FACTOR + 1);
 
 const fitted = renderer.fitBoards(ten.fitBounds, 1100, 700);
 assert.ok(fitted);
 assert.ok(fitted.scale < openTen);
-assert.equal(fitted.scrollX, 0);
-assert.equal(fitted.scrollY, 0);
+assert.ok(Number.isFinite(fitted.scrollX));
+assert.ok(Number.isFinite(fitted.scrollY));
+assert.ok(Number.isFinite(fitted.padX));
+assert.ok(Number.isFinite(fitted.padY));
 assert.equal(fitted.fitted, true);
 assert.equal(renderer.fitBoards(ten.fitBounds, 0, 0), null);
+
+const four = renderer.sheetLayout(manySheets(4), 2);
+assert.equal(four.columns, 2);
+assert.equal(Object.keys(four.positions).length, 4);
+assert.equal(four.positions["1"].originY, four.positions["2"].originY);
+assert.equal(four.positions["3"].originY, four.positions["4"].originY);
+assert.ok(four.positions["3"].originY > four.positions["1"].originY);
+
+const centered = renderer.frameCamera(four.fitBounds, openFour, 1100, 700);
+assert.ok(centered);
+assert.ok(centered.padX >= renderer.SCENE_PAD_PX - 1e-6);
+assert.ok(centered.scrollX >= 0);
+assert.ok(centered.scrollY >= 0);
 
 assert.equal(renderer.columnCount(1220, 1100), 2);
 assert.equal(renderer.columnCount(1220, 420), 1);
@@ -122,7 +139,16 @@ assert.match(controllerSource, /Space/);
 assert.doesNotMatch(cssSource, /min-height:\s*calc\(100vh/);
 assert.match(cssSource, /\.abe-canvas-stage[\s\S]*overflow:\s*auto/);
 assert.match(cssSource, /\.abe-canvas-tools/);
-assert.match(cssSource, /grid-template-columns:\s*270px/);
+assert.match(cssSource, /grid-template-columns:\s*224px/);
+assert.match(cssSource, /\.abe-canvas-stage[\s\S]*direction:\s*ltr/);
+assert.match(controllerSource, /frameCamera/);
+assert.match(controllerSource, /lastCanvasPointerClient/);
+assert.match(controllerSource, /zoomFocalClient/);
+assert.match(controllerSource, /metrics\.minX/);
+assert.match(
+    fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8"),
+    /viewBox="0 0 \$\{contentW\} \$\{contentH\}"/
+);
 assert.match(cssSource, /\.abe-float-dock[\s\S]*pointer-events:\s*none/);
 assert.match(cssSource, /\.abe-float-tools[\s\S]*pointer-events:\s*auto/);
 assert.match(cssSource, /overflow-x:\s*hidden/);

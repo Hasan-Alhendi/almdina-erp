@@ -24,6 +24,10 @@
         function clientToWorld(clientX, clientY) {
             const svg = getSvgEl && getSvgEl();
             const metrics = getWorldMetrics && getWorldMetrics();
+            const CanvasRenderer = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.CanvasRenderer;
+            if (CanvasRenderer && typeof CanvasRenderer.clientToWorld === "function") {
+                return CanvasRenderer.clientToWorld(svg, metrics, clientX, clientY);
+            }
             if (!svg || !metrics || !metrics.width || !metrics.height) return null;
             const rect = svg.getBoundingClientRect();
             if (!rect.width || !rect.height) return null;

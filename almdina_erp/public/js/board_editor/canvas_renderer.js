@@ -572,10 +572,12 @@
     const BOARD_TITLE_MM = 36;
     const FIT_PADDING_PX = 28;
     const SCENE_PAD_PX = 16;
-    const FLOAT_CLEARANCE_PX = 72;
+    const FLOAT_CLEARANCE_PX = 56;
     const SCALE_MIN = 0.02;
     const SCALE_MAX = 8;
     const GRID_WIDTH_RATIO = 0.625;
+    // Opening boards render denser than the old fit-to-grid scale (~30% smaller).
+    const OPENING_SCALE_FACTOR = 0.7;
     const BOARD_SCREEN_MIN_PX = 300;
     const BOARD_SCREEN_MAX_PX = 380;
 
@@ -614,30 +616,117 @@
         return Math.exp(-pixels * 0.0016);
     }
 
-    function cameraPointToWorld(scrollX, scrollY, focalX, focalY, scale, pad) {
-        const safeScale = Number(scale) || 1;
-        const origin = pad == null ? SCENE_PAD_PX : Number(pad) || 0;
+    function cameraPads(camera) {
+        const fallback = SCENE_PAD_PX;
+        if (!camera || typeof camera !== "object") {
+            return { padX: fallback, padY: fallback, minX: 0, minY: 0 };
+        }
+        const shared = camera.pad != null ? Number(camera.pad) : null;
+        const padX = camera.padX != null ? Number(camera.padX) : (shared != null ? shared : fallback);
+        const padY = camera.padY != null ? Number(camera.padY) : (shared != null ? shared : fallback);
+        const minX = Number(camera.minX);
+        const minY = Number(camera.minY);
         return {
-            x: ((Number(scrollX) || 0) + Number(focalX) - origin) / safeScale,
-            y: ((Number(scrollY) || 0) + Number(focalY) - origin) / safeScale,
+            padX: Number.isFinite(padX) ? padX : fallback,
+            padY: Number.isFinite(padY) ? padY : fallback,
+            minX: Number.isFinite(minX) ? minX : 0,
+            minY: Number.isFinite(minY) ? minY : 0,
+        };
+    }
+
+    function cameraPointToWorld(scrollX, scrollY, focalX, focalY, scale, padOrCamera) {
+        // SVG contract (must stay in sync with render()):
+        //   viewBox = "0 0 contentW contentH"
+        //   .abe-world = translate(padX - minX*scale, padY - minY*scale) scale(scale)
+        //   stage.scrollLeft/Top shifts the SVG inside the viewport
+        // screen = pad - min*scale + world*scale - scroll
+        // world  = (scroll + screen - pad) / scale + min
+        const safeScale = Number(scale) || 1;
+        let padX = SCENE_PAD_PX;
+        let padY = SCENE_PAD_PX;
+        let minX = 0;
+        let minY = 0;
+        if (padOrCamera && typeof padOrCamera === "object") {
+            const pads = cameraPads(padOrCamera);
+            padX = pads.padX;
+            padY = pads.padY;
+            minX = pads.minX;
+            minY = pads.minY;
+        } else if (padOrCamera != null) {
+            padX = Number(padOrCamera) || 0;
+            padY = padX;
+        }
+        return {
+            x: ((Number(scrollX) || 0) + Number(focalX) - padX) / safeScale + minX,
+            y: ((Number(scrollY) || 0) + Number(focalY) - padY) / safeScale + minY,
+        };
+    }
+
+    function worldToScreen(worldX, worldY, camera) {
+        const scale = Number(camera && camera.scale) || 1;
+        const pads = cameraPads(camera);
+        const scrollX = Number(camera && camera.scrollX) || 0;
+        const scrollY = Number(camera && camera.scrollY) || 0;
+        return {
+            x: pads.padX - pads.minX * scale + Number(worldX) * scale - scrollX,
+            y: pads.padY - pads.minY * scale + Number(worldY) * scale - scrollY,
         };
     }
 
     function zoomAroundFocal(camera, focal, factor) {
         const previous = Number(camera && camera.scale) || 1;
         const next = Math.min(SCALE_MAX, Math.max(SCALE_MIN, previous * (Number(factor) || 1)));
-        const pad = camera && camera.pad != null ? Number(camera.pad) || 0 : SCENE_PAD_PX;
+        const pads = cameraPads(camera);
         const scrollX = Number(camera && camera.scrollX) || 0;
         const scrollY = Number(camera && camera.scrollY) || 0;
         const focalX = Number(focal && focal.x) || 0;
         const focalY = Number(focal && focal.y) || 0;
-        const world = cameraPointToWorld(scrollX, scrollY, focalX, focalY, previous, pad);
+        const world = cameraPointToWorld(scrollX, scrollY, focalX, focalY, previous, {
+            padX: pads.padX,
+            padY: pads.padY,
+            minX: pads.minX,
+            minY: pads.minY,
+        });
+        if (!(Math.abs(next - previous) > 1e-12)) {
+            return {
+                scale: previous,
+                scrollX,
+                scrollY,
+                padX: pads.padX,
+                padY: pads.padY,
+                minX: pads.minX,
+                minY: pads.minY,
+                worldX: world.x,
+                worldY: world.y,
+                changed: false,
+            };
+        }
+        // Keep the same world point under the focal. Browser scroll cannot go
+        // negative, so any deficit is absorbed into pad (left/top content inset)
+        // without changing Session geometry.
+        let nextPadX = pads.padX;
+        let nextPadY = pads.padY;
+        let nextScrollX = nextPadX - pads.minX * next + world.x * next - focalX;
+        let nextScrollY = nextPadY - pads.minY * next + world.y * next - focalY;
+        if (nextScrollX < 0) {
+            nextPadX -= nextScrollX;
+            nextScrollX = 0;
+        }
+        if (nextScrollY < 0) {
+            nextPadY -= nextScrollY;
+            nextScrollY = 0;
+        }
         return {
             scale: next,
-            scrollX: Math.max(0, world.x * next + pad - focalX),
-            scrollY: Math.max(0, world.y * next + pad - focalY),
+            scrollX: nextScrollX,
+            scrollY: nextScrollY,
+            padX: nextPadX,
+            padY: nextPadY,
+            minX: pads.minX,
+            minY: pads.minY,
             worldX: world.x,
             worldY: world.y,
+            changed: true,
         };
     }
 
@@ -648,7 +737,77 @@
         const gridMm = boardMm * cols + BOARD_GAP_MM * (cols - 1);
         let scale = (width * GRID_WIDTH_RATIO) / gridMm;
         if (boardMm * scale > BOARD_SCREEN_MAX_PX) scale = BOARD_SCREEN_MAX_PX / boardMm;
-        return scale;
+        return scale * OPENING_SCALE_FACTOR;
+    }
+
+    function contentFrame(metrics, fitBounds, scale, stageW, stageH) {
+        const safeScale = Math.max(Number(scale) || 1, 1e-9);
+        const minX = Number(metrics && metrics.minX) || 0;
+        const minY = Number(metrics && metrics.minY) || 0;
+        const worldPxW = Math.max(1, (Number(metrics && metrics.width) || 1) * safeScale);
+        const worldPxH = Math.max(1, (Number(metrics && metrics.height) || 1) * safeScale);
+        const bounds = fitBounds || { x: 0, y: 0, width: 1, height: 1 };
+        const boardPxW = Math.max(1, Number(bounds.width) || 1) * safeScale;
+        const boardPxH = Math.max(1, Number(bounds.height) || 1) * safeScale;
+        const boardOffsetX = (Number(bounds.x) - minX) * safeScale;
+        const boardOffsetY = (Number(bounds.y) - minY) * safeScale;
+        const viewW = Math.max(1, Number(stageW) || 1);
+        const viewH = Math.max(1, Number(stageH) || 1);
+        const minContentW = Math.ceil(worldPxW + SCENE_PAD_PX * 2);
+        const minContentH = Math.ceil(worldPxH + SCENE_PAD_PX * 2) + FLOAT_CLEARANCE_PX;
+        const contentW = Math.max(viewW, minContentW);
+        const contentH = Math.max(viewH, minContentH);
+        let padX = SCENE_PAD_PX;
+        let padY = SCENE_PAD_PX;
+        if (contentW <= viewW + 0.5) {
+            padX = Math.max(SCENE_PAD_PX, (viewW - boardPxW) / 2 - boardOffsetX);
+        }
+        if (contentH <= viewH + 0.5) {
+            padY = Math.max(
+                SCENE_PAD_PX,
+                (viewH - FLOAT_CLEARANCE_PX - boardPxH) / 2 - boardOffsetY
+            );
+        }
+        let scrollX = 0;
+        let scrollY = 0;
+        if (contentW > viewW) {
+            const boardCenterX = padX + boardOffsetX + boardPxW / 2;
+            scrollX = Math.max(0, Math.min(contentW - viewW, boardCenterX - viewW / 2));
+        }
+        if (contentH > viewH) {
+            const boardCenterY = padY + boardOffsetY + boardPxH / 2;
+            scrollY = Math.max(0, Math.min(contentH - viewH, boardCenterY - viewH / 2));
+        }
+        return {
+            contentW,
+            contentH,
+            padX,
+            padY,
+            scrollX,
+            scrollY,
+        };
+    }
+
+    function frameCamera(fitBounds, scale, viewportWidth, viewportHeight, metrics) {
+        const viewW = Number(viewportWidth) || 0;
+        const viewH = Number(viewportHeight) || 0;
+        if (viewW < 40 || viewH < 40) return null;
+        const bounds = fitBounds || { x: 0, y: 0, width: 1, height: 1 };
+        const frameMetrics = metrics || {
+            minX: Number(bounds.x) || 0,
+            minY: Number(bounds.y) || 0,
+            width: Math.max(1, Number(bounds.width) || 1),
+            height: Math.max(1, Number(bounds.height) || 1),
+        };
+        const frame = contentFrame(frameMetrics, bounds, scale, viewW, viewH);
+        return {
+            scale: Number(scale) || 1,
+            scrollX: frame.scrollX,
+            scrollY: frame.scrollY,
+            padX: frame.padX,
+            padY: frame.padY,
+            fitted: true,
+        };
     }
 
     function sheetLayout(sheets, columns) {
@@ -785,9 +944,9 @@
         if (viewW < 40 || viewH < 40) return null;
         const bounds = fitBounds || { x: 0, y: 0, width: 1, height: 1 };
         const innerW = Math.max(1, viewW - FIT_PADDING_PX * 2);
-        const innerH = Math.max(1, viewH - FIT_PADDING_PX * 2);
+        const innerH = Math.max(1, viewH - FIT_PADDING_PX * 2 - FLOAT_CLEARANCE_PX);
         const scale = Math.min(innerW / Math.max(bounds.width, 1), innerH / Math.max(bounds.height, 1));
-        return { scale, scrollX: 0, scrollY: 0, fitted: true };
+        return frameCamera(bounds, scale, viewW, viewH);
     }
 
     function sessionPieceForElement(session, element) {
@@ -1119,13 +1278,26 @@
         }
         if (!(scale > 0)) scale = openingScale(layout.maxBoardMm, columns, stageW);
         const metrics = worldMetricsFor(layout, scale);
+        const viewportPads = cameraPads(storeView.viewport);
+        const openingFrame = (!storeView.viewport.opened && !storeView.viewport.userAdjusted)
+            ? contentFrame(metrics, layout.fitBounds, scale, stageW, stageH)
+            : null;
+        const padX = openingFrame
+            ? openingFrame.padX
+            : (storeView.viewport.padX != null ? viewportPads.padX : SCENE_PAD_PX);
+        const padY = openingFrame
+            ? openingFrame.padY
+            : (storeView.viewport.padY != null ? viewportPads.padY : SCENE_PAD_PX);
+        metrics.pad = padX;
+        metrics.padX = padX;
+        metrics.padY = padY;
         const contentW = Math.max(
             stageW,
-            Math.ceil(metrics.width * scale + SCENE_PAD_PX * 2)
+            Math.ceil(metrics.width * scale + Math.max(padX, SCENE_PAD_PX) + SCENE_PAD_PX)
         );
         const contentH = Math.max(
             stageH,
-            Math.ceil(metrics.height * scale + SCENE_PAD_PX * 2)
+            Math.ceil(metrics.height * scale + Math.max(padY, SCENE_PAD_PX) + SCENE_PAD_PX)
         ) + FLOAT_CLEARANCE_PX;
 
         const selectedKeys = new Set(selectedPieceKeys(storeView, session));
@@ -1559,9 +1731,9 @@
         host.innerHTML = `
             ${dropNote}
             <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}" data-abe-stage="1">
-                <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="${metrics.minX * scale} ${metrics.minY * scale} ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
+                <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
-                    <g class="abe-world" transform="translate(${SCENE_PAD_PX - metrics.minX * scale},${SCENE_PAD_PX - metrics.minY * scale}) scale(${scale})">
+                    <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
                         ${body.join("")}
                     </g>
                 </svg>
@@ -1834,6 +2006,7 @@
             }
         });
         stage.addEventListener("pointermove", (event) => {
+            if (handlers && handlers.onCanvasPointerMove) handlers.onCanvasPointerMove(event);
             if (handlers && handlers.onStagePointerMove) handlers.onStagePointerMove(event);
             if (!panning) return;
             const dx = event.clientX - lastX;
@@ -1862,12 +2035,93 @@
             patchMeasureOverlay(host, host.__abeMeasureLines, scale);
         }
 
+        metrics.contentWidth = contentW;
+        metrics.contentHeight = contentH;
+
         return {
             layout,
             metrics,
             patchDragPreview: (preview) => patchDragPreview(host, preview),
             patchMeasureOverlay: (lines) => patchMeasureOverlay(host, lines, scale),
         };
+    }
+
+    function matrixTransformPoint(matrix, x, y) {
+        return {
+            x: matrix.a * x + matrix.c * y + matrix.e,
+            y: matrix.b * x + matrix.d * y + matrix.f,
+        };
+    }
+
+    function clientToWorldViaCtm(svg, clientX, clientY) {
+        if (!svg) return null;
+        const worldGroup = typeof svg.querySelector === "function"
+            ? svg.querySelector(".abe-world")
+            : null;
+        const target = worldGroup || svg;
+        if (!target || typeof target.getScreenCTM !== "function") return null;
+        const ctm = target.getScreenCTM();
+        if (!ctm || typeof ctm.inverse !== "function") return null;
+        let inverse = null;
+        try {
+            inverse = ctm.inverse();
+        } catch (err) {
+            return null;
+        }
+        if (!inverse) return null;
+        const root = (svg.ownerSVGElement && svg.ownerSVGElement.createSVGPoint)
+            ? svg.ownerSVGElement
+            : (typeof svg.createSVGPoint === "function" ? svg : null);
+        if (root) {
+            try {
+                const point = root.createSVGPoint();
+                point.x = clientX;
+                point.y = clientY;
+                const local = point.matrixTransform(inverse);
+                if (local && Number.isFinite(local.x) && Number.isFinite(local.y)) {
+                    return { x: local.x, y: local.y };
+                }
+            } catch (err) {
+                /* fall through */
+            }
+        }
+        const local = matrixTransformPoint(inverse, clientX, clientY);
+        if (!Number.isFinite(local.x) || !Number.isFinite(local.y)) return null;
+        return local;
+    }
+
+    function clientToWorldViaMetrics(svg, metrics, clientX, clientY) {
+        if (!svg || !metrics || !(metrics.width > 0) || !(metrics.height > 0)) return null;
+        if (typeof svg.getBoundingClientRect !== "function") return null;
+        const rect = svg.getBoundingClientRect();
+        if (!(rect.width > 0) || !(rect.height > 0)) return null;
+        const scale = Math.max(Number(metrics.scale) || 1, 1e-9);
+        const pads = cameraPads(metrics);
+        const minX = Number(metrics.minX) || 0;
+        const minY = Number(metrics.minY) || 0;
+        const attrW = Number(svg.getAttribute && svg.getAttribute("width"));
+        const attrH = Number(svg.getAttribute && svg.getAttribute("height"));
+        const contentW = Number(metrics.contentWidth) > 0
+            ? Number(metrics.contentWidth)
+            : (attrW > 0 ? attrW : rect.width);
+        const contentH = Number(metrics.contentHeight) > 0
+            ? Number(metrics.contentHeight)
+            : (attrH > 0 ? attrH : rect.height);
+        // viewBox is "0 0 contentW contentH" — map client → SVG local → world.
+        const nx = (clientX - rect.left) / rect.width;
+        const ny = (clientY - rect.top) / rect.height;
+        const svgX = nx * contentW;
+        const svgY = ny * contentH;
+        return {
+            x: (svgX - pads.padX) / scale + minX,
+            y: (svgY - pads.padY) / scale + minY,
+        };
+    }
+
+    function clientToWorld(svg, metrics, clientX, clientY) {
+        const viaCtm = clientToWorldViaCtm(svg, clientX, clientY);
+        if (viaCtm) return viaCtm;
+        return clientToWorldViaMetrics(svg, metrics, clientX, clientY);
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
@@ -1877,13 +2131,19 @@
         sheetLayout,
         mergeSessionLayout,
         fitBoards,
+        frameCamera,
+        contentFrame,
         columnCount,
         openingScale,
         shouldZoomWheel,
         normalizedWheelPixels,
         wheelZoomFactor,
         cameraPointToWorld,
+        worldToScreen,
         zoomAroundFocal,
+        clientToWorld,
+        clientToWorldViaCtm,
+        clientToWorldViaMetrics,
         SCALE_MIN,
         SCALE_MAX,
         patchDragPreview,
@@ -1894,6 +2154,7 @@
         SCENE_PAD_PX,
         FLOAT_CLEARANCE_PX,
         GRID_WIDTH_RATIO,
+        OPENING_SCALE_FACTOR,
         BOARD_SCREEN_MIN_PX,
         BOARD_SCREEN_MAX_PX,
         BOARD_TITLE_MM,

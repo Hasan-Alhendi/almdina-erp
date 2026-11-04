@@ -62,9 +62,9 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
   max-width: 100%;
-  padding: 6px 8px;
+  padding: 3px 5px;
   border: 0;
   border-radius: var(--alm-radius-md, 14px);
   background: var(--alm-surface, #fff);
@@ -73,10 +73,10 @@
 }
 
 .abe-page-actions .abe-tool-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -101,8 +101,8 @@
 }
 
 .abe-page-actions .abe-tool-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .abe-page-actions .abe-save-state {
@@ -186,7 +186,7 @@
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
 }
 
 .abe-sidebar-host,
@@ -217,16 +217,16 @@
   flex: 0 0 auto;
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 5px 6px;
   border-bottom: 1px solid var(--alm-border, #e5e9f1);
   background: var(--alm-surface, #fff);
 }
 
 .abe-section-head h2 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.86rem;
 }
 
 .abe-section-scroll {
@@ -234,7 +234,7 @@
   min-height: 0;
   overflow: auto;
   overflow-x: hidden;
-  padding: 6px;
+  padding: 3px;
 }
 
 .abe-split-handle {
@@ -246,7 +246,7 @@
 .abe-layer-row,
 .abe-sheet-head {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -262,8 +262,8 @@
 }
 
 .abe-layer-visibility {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -279,8 +279,8 @@
 
 .abe-layer-row {
   width: 100%;
-  min-height: 32px;
-  padding: 4px 2px;
+  min-height: 26px;
+  padding: 1px 2px;
   border-radius: 8px;
   min-width: 0;
 }
@@ -319,14 +319,14 @@
 
 .abe-sheet-block {
   border: 1px solid var(--alm-border, #e5e9f1);
-  border-radius: 10px;
-  margin-bottom: 6px;
+  border-radius: 8px;
+  margin-bottom: 3px;
   overflow: hidden;
   min-width: 0;
 }
 
 .abe-sheet-head {
-  padding: 6px 8px;
+  padding: 3px 5px;
   width: 100%;
   min-width: 0;
 }
@@ -344,10 +344,11 @@
   display: flex;
   width: 100%;
   justify-content: space-between;
-  gap: 8px;
-  min-height: 32px;
+  gap: 4px;
+  min-height: 26px;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 3px 5px;
+  font-size: 0.88rem;
 }
 
 .abe-host-hint {
@@ -407,8 +408,8 @@
 
 .abe-float-dock {
   position: absolute;
-  inset-inline: 12px;
-  bottom: 14px;
+  inset-inline: 8px;
+  bottom: 8px;
   z-index: 5;
   display: flex;
   justify-content: center;
@@ -420,7 +421,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   max-width: 100%;
 }
 
@@ -432,9 +433,9 @@
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
   max-width: 100%;
-  padding: 6px 8px;
+  padding: 3px 5px;
   border: 1px solid var(--alm-border, #e5e9f1);
   border-radius: var(--alm-radius-md, 14px);
   background: var(--alm-surface, #fff);
@@ -507,10 +508,10 @@
 }
 
 .abe-float-tools .abe-tool-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -525,8 +526,8 @@
 
 .abe-float-tools .abe-tool-btn svg,
 .abe-layer-visibility svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .abe-save-state {
@@ -644,6 +645,8 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  /* Physical scroll origin must stay LTR; RTL scrollLeft inverts zoom anchors. */
+  direction: ltr;
   cursor: default;
   touch-action: auto;
   overscroll-behavior: contain;

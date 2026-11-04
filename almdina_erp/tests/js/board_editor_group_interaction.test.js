@@ -51,39 +51,51 @@ const {
 const { cameraPointToWorld, zoomAroundFocal, wheelZoomFactor, shouldZoomWheel, SCALE_MIN, SCALE_MAX } = CanvasRenderer;
 
 function worldAt(camera, focal) {
-    return cameraPointToWorld(camera.scrollX, camera.scrollY, focal.x, focal.y, camera.scale, 16);
+    return cameraPointToWorld(
+        camera.scrollX,
+        camera.scrollY,
+        focal.x,
+        focal.y,
+        camera.scale,
+        camera
+    );
 }
 
-const scrolled = { scale: 0.4, scrollX: 240, scrollY: 180, pad: 16 };
+function worldAfterZoom(result, focal) {
+    return cameraPointToWorld(
+        result.scrollX,
+        result.scrollY,
+        focal.x,
+        focal.y,
+        result.scale,
+        result
+    );
+}
+
+const scrolled = { scale: 0.4, scrollX: 240, scrollY: 180, pad: 16, minX: 0, minY: 0 };
 const focal = { x: 90, y: 70 };
 const before = worldAt(scrolled, focal);
 const zoomed = zoomAroundFocal(scrolled, focal, 1.25);
-const after = cameraPointToWorld(zoomed.scrollX, zoomed.scrollY, focal.x, focal.y, zoomed.scale, 16);
+const after = worldAfterZoom(zoomed, focal);
 assert.ok(Math.abs(before.x - after.x) < 1e-6, `world x ${before.x} -> ${after.x}`);
 assert.ok(Math.abs(before.y - after.y) < 1e-6, `world y ${before.y} -> ${after.y}`);
 assert.ok(zoomed.scrollX > 0 && zoomed.scrollY > 0);
-function viewportOf(camera, world, minX, minY) {
-    return {
-        x: camera.pad + world.x * camera.scale - 2 * minX * camera.scale - camera.scrollX,
-        y: camera.pad + world.y * camera.scale - 2 * minY * camera.scale - camera.scrollY,
-    };
-}
-const shiftedMin = { x: -120, y: -40 };
-const shiftedWorld = {
-    x: before.x + 2 * shiftedMin.x,
-    y: before.y + 2 * shiftedMin.y,
+
+// Non-zero world min (moved boards / negative origins) must keep the same anchor.
+const shiftedCam = {
+    scale: 0.4,
+    scrollX: 240,
+    scrollY: 180,
+    padX: 28,
+    padY: 20,
+    minX: -120,
+    minY: -40,
 };
-const shiftedBefore = viewportOf(scrolled, shiftedWorld, shiftedMin.x, shiftedMin.y);
-const shiftedAfter = viewportOf(
-    { scale: zoomed.scale, scrollX: zoomed.scrollX, scrollY: zoomed.scrollY, pad: 16 },
-    shiftedWorld,
-    shiftedMin.x,
-    shiftedMin.y
-);
-assert.ok(Math.abs(shiftedBefore.x - focal.x) < 1e-6);
-assert.ok(Math.abs(shiftedBefore.y - focal.y) < 1e-6);
-assert.ok(Math.abs(shiftedAfter.x - focal.x) < 1e-6);
-assert.ok(Math.abs(shiftedAfter.y - focal.y) < 1e-6);
+const shiftedBefore = worldAt(shiftedCam, focal);
+const shiftedZoom = zoomAroundFocal(shiftedCam, focal, 1.25);
+const shiftedAfter = worldAfterZoom(shiftedZoom, focal);
+assert.ok(Math.abs(shiftedBefore.x - shiftedAfter.x) < 1e-6);
+assert.ok(Math.abs(shiftedBefore.y - shiftedAfter.y) < 1e-6);
 
 const widened = { left: 280, top: 40 };
 const collapsed = { left: 48, top: 40 };
@@ -93,10 +105,10 @@ function focalFor(stage) {
 }
 [widened, collapsed].forEach((stage) => {
     const point = focalFor(stage);
-    const camera = { scale: 0.35, scrollX: 160, scrollY: 90, pad: 16 };
+    const camera = { scale: 0.35, scrollX: 160, scrollY: 90, pad: 16, minX: -80, minY: 30 };
     const held = worldAt(camera, point);
     const next = zoomAroundFocal(camera, point, 0.8);
-    const kept = cameraPointToWorld(next.scrollX, next.scrollY, point.x, point.y, next.scale, 16);
+    const kept = worldAfterZoom(next, point);
     assert.ok(Math.abs(held.x - kept.x) < 1e-6);
     assert.ok(Math.abs(held.y - kept.y) < 1e-6);
 });
@@ -104,8 +116,8 @@ assert.notEqual(focalFor(widened).x, focalFor(collapsed).x);
 
 const capped = zoomAroundFocal({ scale: 7.5, scrollX: 100, scrollY: 80, pad: 16 }, { x: 40, y: 30 }, 3);
 assert.equal(capped.scale, SCALE_MAX);
-const cappedWorld = cameraPointToWorld(capped.scrollX, capped.scrollY, 40, 30, capped.scale, 16);
-const cappedBefore = worldAt({ scale: 7.5, scrollX: 100, scrollY: 80 }, { x: 40, y: 30 });
+const cappedBefore = worldAt({ scale: 7.5, scrollX: 100, scrollY: 80, pad: 16 }, { x: 40, y: 30 });
+const cappedWorld = worldAfterZoom(capped, { x: 40, y: 30 });
 assert.ok(Math.abs(cappedWorld.x - cappedBefore.x) < 1e-6);
 const floored = zoomAroundFocal({ scale: 0.03, scrollX: 40, scrollY: 20, pad: 16 }, { x: 20, y: 10 }, 0.2);
 assert.equal(floored.scale, SCALE_MIN);
