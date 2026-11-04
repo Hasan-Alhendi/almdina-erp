@@ -29,7 +29,127 @@ function load() {
     return context.window.AlmdinaBoardEditor;
 }
 
-const { MeasureGeometry, createMeasureInteraction, createStore, History } = load();
+const BoardEditor = load();
+const {
+    MeasureGeometry,
+    createMeasureInteraction,
+    createStore,
+    History,
+} = BoardEditor;
+
+function aabbGap(boundsA, boundsB) {
+    const ax1 = boundsA.x + boundsA.w;
+    const ay1 = boundsA.y + boundsA.h;
+    const bx1 = boundsB.x + boundsB.w;
+    const by1 = boundsB.y + boundsB.h;
+    const gapX = Math.max(0, Math.max(boundsA.x - bx1, boundsB.x - ax1));
+    const gapY = Math.max(0, Math.max(boundsA.y - by1, boundsB.y - ay1));
+    if (gapX > 0 && gapY === 0) {
+        const y = Math.min(ay1, by1) - Math.max(boundsA.y, boundsB.y);
+        const midY = Math.max(boundsA.y, boundsB.y) + Math.max(y, 0) / 2;
+        if (ax1 <= boundsB.x) {
+            return {
+                kind: "piece",
+                start: [ax1, midY],
+                end: [boundsB.x, midY],
+                distance: gapX,
+            };
+        }
+        return {
+            kind: "piece",
+            start: [bx1, midY],
+            end: [boundsA.x, midY],
+            distance: gapX,
+        };
+    }
+    if (gapY > 0 && gapX === 0) {
+        const x = Math.min(ax1, bx1) - Math.max(boundsA.x, boundsB.x);
+        const midX = Math.max(boundsA.x, boundsB.x) + Math.max(x, 0) / 2;
+        if (ay1 <= boundsB.y) {
+            return {
+                kind: "piece",
+                start: [midX, ay1],
+                end: [midX, boundsB.y],
+                distance: gapY,
+            };
+        }
+        return {
+            kind: "piece",
+            start: [midX, by1],
+            end: [midX, boundsA.y],
+            distance: gapY,
+        };
+    }
+    const distance = Math.hypot(gapX, gapY);
+    return {
+        kind: "piece",
+        start: [boundsA.x + boundsA.w / 2, boundsA.y + boundsA.h / 2],
+        end: [boundsB.x + boundsB.w / 2, boundsB.y + boundsB.h / 2],
+        distance,
+    };
+}
+
+function installFastClearanceGeometry() {
+    const real = BoardEditor.MeasureGeometry;
+    BoardEditor.MeasureGeometry = Object.freeze({
+        ...real,
+        edgeClearances(session, pieceKey) {
+            const piece = session.pieces[pieceKey];
+            const board = session.boards[String(piece.sheet_no)];
+            const outer = real.boardOuterWorld(board);
+            const material = real.pieceMaterial(piece, session.boards);
+            if (!outer || !material) return [];
+            const b = material.bounds;
+            return [
+                {
+                    kind: "edge",
+                    direction: "left",
+                    start: [b.x, b.y + b.h / 2],
+                    end: [outer.x, b.y + b.h / 2],
+                    distance: b.x - outer.x,
+                },
+                {
+                    kind: "edge",
+                    direction: "right",
+                    start: [b.x + b.w, b.y + b.h / 2],
+                    end: [outer.right, b.y + b.h / 2],
+                    distance: outer.right - (b.x + b.w),
+                },
+                {
+                    kind: "edge",
+                    direction: "top",
+                    start: [b.x + b.w / 2, b.y],
+                    end: [b.x + b.w / 2, outer.y],
+                    distance: b.y - outer.y,
+                },
+                {
+                    kind: "edge",
+                    direction: "bottom",
+                    start: [b.x + b.w / 2, b.y + b.h],
+                    end: [b.x + b.w / 2, outer.bottom],
+                    distance: outer.bottom - (b.y + b.h),
+                },
+            ].filter((row) => row.distance >= 0);
+        },
+        shortestClearanceBetweenPieces(session, pieceKeyA, pieceKeyB) {
+            const pieceA = session.pieces[pieceKeyA];
+            const pieceB = session.pieces[pieceKeyB];
+            if (!pieceA || !pieceB) return null;
+            const matA = real.pieceMaterial(pieceA, session.boards);
+            const matB = real.pieceMaterial(pieceB, session.boards);
+            if (!matA || !matB) return null;
+            const gap = aabbGap(matA.bounds, matB.bounds);
+            return {
+                ...gap,
+                pieceKeyA,
+                pieceKeyB,
+            };
+        },
+    });
+    return () => {
+        BoardEditor.MeasureGeometry = real;
+    };
+}
 
 function rectPiece(key, x, y, w, h, sheetNo = 1) {
     return {
@@ -85,26 +205,58 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.equal(MeasureGeometry.measureLine([0, 0], [0, 0]), null);
 }
 
-// 4-5: zoom-independent world length + screen/world conversion via metrics math.
+// 4-5: zoom-independent world length + padded SVG client→world conversion.
 {
-    const metrics = { minX: 0, minY: 0, width: 1000, height: 2000, scale: 0.5 };
-    function clientToWorld(clientX, clientY, rect) {
-        const nx = (clientX - rect.left) / rect.width;
-        const ny = (clientY - rect.top) / rect.height;
-        return {
-            x: metrics.minX + nx * metrics.width,
-            y: metrics.minY + ny * metrics.height,
-        };
-    }
-    const a = clientToWorld(100, 100, { left: 0, top: 0, width: 500, height: 1000 });
-    const b = clientToWorld(250, 300, { left: 0, top: 0, width: 500, height: 1000 });
-    assert.equal(a.x, 200);
-    assert.equal(a.y, 200);
-    assert.equal(b.x, 500);
-    assert.equal(b.y, 600);
+    const history = History.create(sessionWith([]));
+    const store = createStore({ projection: { layers: [], sheets: [], elements: [], pieces: [] } });
+    store.attachSession(history.get(), history);
+    const pad = 16;
+    const scale = 0.5;
+    const metrics = {
+        minX: 0,
+        minY: 0,
+        width: 1000,
+        height: 2000,
+        scale,
+        pad,
+        contentWidth: 1000 * scale + pad * 2,
+        contentHeight: 2000 * scale + pad * 2 + 72,
+    };
+    const svg = {
+        getAttribute: (name) => (name === "width"
+            ? String(metrics.contentWidth)
+            : name === "height" ? String(metrics.contentHeight) : null),
+        getBoundingClientRect: () => ({
+            left: 0,
+            top: 0,
+            width: metrics.contentWidth,
+            height: metrics.contentHeight,
+        }),
+    };
+    const interaction = createMeasureInteraction({
+        store,
+        getSvgEl: () => svg,
+        getWorldMetrics: () => metrics,
+        isAltKey: () => false,
+        isPanKey: () => false,
+        isMeasureToolActive: () => false,
+        onOverlay: () => {},
+    });
+    // World (0,0) sits at SVG user (pad, pad) after the .abe-world transform.
+    const origin = interaction.clientToWorld(pad, pad);
+    assert.ok(origin);
+    assert.ok(Math.abs(origin.x) < 1e-9);
+    assert.ok(Math.abs(origin.y) < 1e-9);
+    const a = interaction.clientToWorld(pad + 200 * scale, pad + 200 * scale);
+    const b = interaction.clientToWorld(pad + 500 * scale, pad + 600 * scale);
+    assert.ok(Math.abs(a.x - 200) < 1e-9);
+    assert.ok(Math.abs(a.y - 200) < 1e-9);
+    assert.ok(Math.abs(b.x - 500) < 1e-9);
+    assert.ok(Math.abs(b.y - 600) < 1e-9);
     assert.equal(MeasureGeometry.distance([a.x, a.y], [b.x, b.y]), 500);
-    metrics.scale = 2;
-    assert.equal(MeasureGeometry.distance([a.x, a.y], [b.x, b.y]), 500);
+    // Naive full-rect mapping (legacy) is wrong once pad/float clearance exist.
+    const naiveX = ((pad + 200 * scale) / metrics.contentWidth) * metrics.width;
+    assert.notEqual(Math.round(naiveX), 200);
 }
 
 // 6-7: edge clearance blocked vs open.
@@ -265,10 +417,272 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.match(controller, /refreshAltInspection/);
     assert.match(controller, /clearAltOverlay/);
     assert.match(page, /measure_geometry\.js\?v=1/);
-    assert.match(page, /measure_interaction\.js\?v=1/);
+    assert.match(page, /measure_interaction\.js\?v=2/);
     assert.doesNotMatch(sessionDoc, /measureToolActive|measure_lines|abe-measure/);
     assert.doesNotMatch(draft, /measure_line|measureTool/);
     assert.match(arCsv, /^Measure,/m);
+}
+
+function makeAltHarness(pieces) {
+    const restoreGeometry = installFastClearanceGeometry();
+    const session = sessionWith(pieces);
+    const history = History.create(session);
+    const store = createStore({ projection: { layers: [], sheets: [], elements: [], pieces: [] } });
+    store.attachSession(history.get(), history);
+    let overlay = null;
+    let altHeld = true;
+    const scale = 1;
+    const pad = 16;
+    const metrics = {
+        minX: 0,
+        minY: 0,
+        width: 1220,
+        height: 2440,
+        scale,
+        pad,
+        contentWidth: 1220 * scale + pad * 2,
+        contentHeight: 2440 * scale + pad * 2 + 72,
+    };
+    const svg = {
+        getAttribute: (name) => (name === "width"
+            ? String(metrics.contentWidth)
+            : name === "height" ? String(metrics.contentHeight) : null),
+        getBoundingClientRect: () => ({
+            left: 0,
+            top: 0,
+            width: metrics.contentWidth,
+            height: metrics.contentHeight,
+        }),
+    };
+    const interaction = createMeasureInteraction({
+        store,
+        getSvgEl: () => svg,
+        getWorldMetrics: () => metrics,
+        isAltKey: () => altHeld,
+        isPanKey: () => false,
+        isMeasureToolActive: () => false,
+        onOverlay: (lines) => { overlay = lines; },
+    });
+    function toClient(worldX, worldY) {
+        return {
+            x: pad + worldX * scale,
+            y: pad + worldY * scale,
+        };
+    }
+    function moveTo(worldX, worldY, eventExtras = {}) {
+        const client = toClient(worldX, worldY);
+        interaction.onPointerMove({
+            clientX: client.x,
+            clientY: client.y,
+            altKey: altHeld,
+            ...eventExtras,
+        });
+        return overlay;
+    }
+    return {
+        store,
+        history,
+        interaction,
+        moveTo,
+        setAlt(value) { altHeld = Boolean(value); },
+        getOverlay: () => overlay,
+        metrics,
+        toClient,
+        dispose: restoreGeometry,
+    };
+}
+
+function overlayMode(overlay) {
+    if (!Array.isArray(overlay) || !overlay.length) return "none";
+    if (overlay.some((row) => row && (row.kind === "edge" || row.direction))) return "edge";
+    return "piece";
+}
+
+// 18: Alt hover transitions Empty → B → Empty → C → B → Empty without reselection.
+{
+    const harness = makeAltHarness([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+        rectPiece("instance:c", 100, 300, 50, 50),
+    ]);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    const sequence = [
+        { point: [40, 40], expect: "edge" },
+        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150 },
+        { point: [40, 40], expect: "edge" },
+        { point: [125, 325], expect: "piece", other: "instance:c", distance: 150 },
+        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150 },
+        { point: [40, 40], expect: "edge" },
+    ];
+    sequence.forEach((step, index) => {
+        const overlay = harness.moveTo(step.point[0], step.point[1]);
+        assert.equal(
+            overlayMode(overlay),
+            step.expect,
+            `step ${index} expected ${step.expect}`
+        );
+        assert.ok(overlay.length > 0, `step ${index} must publish lines`);
+        if (step.other) {
+            assert.equal(overlay[0].pieceKeyB, step.other, `step ${index} target`);
+            assert.ok(Math.abs(overlay[0].distance - step.distance) < 1e-6);
+        }
+        assert.equal(harness.store.snapshot().selectedPieceKey, "instance:a");
+    });
+    harness.dispose();
+}
+
+// 19: CTM inverse path preferred when available (zoom/scroll/transform safe).
+{
+    const harness = makeAltHarness([rectPiece("instance:a", 100, 100, 50, 50)]);
+    const scale = 2;
+    const pad = 16;
+    const worldGroup = {
+        getScreenCTM: () => ({
+            a: scale, b: 0, c: 0, d: scale, e: pad, f: pad,
+            inverse() {
+                const det = scale * scale;
+                return {
+                    a: scale / det,
+                    b: 0,
+                    c: 0,
+                    d: scale / det,
+                    e: -pad / scale,
+                    f: -pad / scale,
+                };
+            },
+        }),
+    };
+    const svg = {
+        querySelector: (sel) => (sel === ".abe-world" ? worldGroup : null),
+        getBoundingClientRect: () => ({ left: 10, top: 20, width: 400, height: 800 }),
+        getAttribute: () => null,
+    };
+    const interaction = createMeasureInteraction({
+        store: harness.store,
+        getSvgEl: () => svg,
+        getWorldMetrics: () => ({ minX: 0, minY: 0, width: 1000, height: 2000, scale: 0.1, pad: 99 }),
+        isAltKey: () => false,
+        isPanKey: () => false,
+        isMeasureToolActive: () => false,
+        onOverlay: () => {},
+    });
+    // Screen (pad + 120*scale, pad + 80*scale) → world (120, 80) via CTM, ignoring stale metrics.
+    const world = interaction.clientToWorld(pad + 120 * scale, pad + 80 * scale);
+    assert.ok(world);
+    assert.ok(Math.abs(world.x - 120) < 1e-9);
+    assert.ok(Math.abs(world.y - 80) < 1e-9);
+    harness.dispose();
+}
+
+// 20: geometry cache skips repeats over same target; recomputes on hover change / geometry edit.
+{
+    const harness = makeAltHarness([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+    ]);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    harness.interaction.resetGeometryComputeCount();
+    harness.moveTo(40, 40);
+    harness.moveTo(42, 41);
+    harness.moveTo(45, 44);
+    const edgeComputes = harness.interaction.getGeometryComputeCount();
+    assert.equal(edgeComputes, 1, "empty hover must compute once while target stays empty");
+    harness.moveTo(325, 125);
+    assert.equal(harness.interaction.getGeometryComputeCount(), 2);
+    harness.moveTo(330, 128);
+    harness.moveTo(320, 122);
+    assert.equal(
+        harness.interaction.getGeometryComputeCount(),
+        2,
+        "same piece hover must not recompute clearance"
+    );
+    const moved = JSON.parse(JSON.stringify(harness.store.snapshot().session));
+    moved.pieces["instance:b"].local_x_mm = 340;
+    moved.pieces["instance:b"].outline_mm = [[340, 100], [390, 100], [390, 150], [340, 150]];
+    moved.pieces["instance:b"].base_outline_mm = moved.pieces["instance:b"].outline_mm;
+    harness.history.commit(moved);
+    harness.store.attachSession(harness.history.get(), harness.history);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    const before = harness.interaction.getGeometryComputeCount();
+    const overlayAfterMove = harness.moveTo(360, 125);
+    assert.equal(harness.interaction.getGeometryComputeCount(), before + 1);
+    assert.equal(overlayMode(overlayAfterMove), "piece");
+    assert.ok(Math.abs(overlayAfterMove[0].distance - 190) < 1e-6);
+    harness.dispose();
+}
+
+// 21: clear selection and Alt release drop stale overlay; Alt re-press restores.
+{
+    const harness = makeAltHarness([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+    ]);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    assert.equal(overlayMode(harness.moveTo(325, 125)), "piece");
+    harness.store.selectPiece(null, { mode: "replace" });
+    harness.moveTo(325, 125);
+    assert.equal(overlayMode(harness.getOverlay()), "none");
+
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    assert.equal(overlayMode(harness.moveTo(325, 125)), "piece");
+    harness.setAlt(false);
+    harness.interaction.onPointerMove({
+        clientX: harness.toClient(325, 125).x,
+        clientY: harness.toClient(325, 125).y,
+        altKey: false,
+    });
+    assert.equal(overlayMode(harness.getOverlay()), "none");
+    harness.setAlt(true);
+    harness.interaction.onPointerMove({
+        clientX: harness.toClient(325, 125).x,
+        clientY: harness.toClient(325, 125).y,
+        altKey: true,
+    });
+    assert.equal(overlayMode(harness.getOverlay()), "piece");
+    harness.dispose();
+}
+
+// 22: multi-select keeps Alt overlay suppressed.
+{
+    const harness = makeAltHarness([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+    ]);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    harness.store.selectPiece(1, { pieceKey: "instance:b", sheetNo: 1, mode: "toggle" });
+    assert.ok(harness.store.snapshot().selectedPieceKeys.length > 1);
+    harness.moveTo(40, 40);
+    assert.equal(overlayMode(harness.getOverlay()), "none");
+    harness.dispose();
+}
+
+// 23: hovering the selected piece itself uses edge clearances (not self-gap).
+{
+    const harness = makeAltHarness([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+    ]);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    assert.equal(overlayMode(harness.moveTo(125, 125)), "edge");
+    harness.dispose();
+}
+
+// 24: third-piece blocking still comes from real geometry (not the fast harness stub).
+{
+    const session = sessionWith([
+        rectPiece("instance:a", 100, 100, 40, 40),
+        rectPiece("instance:mid", 160, 100, 40, 40),
+        rectPiece("instance:b", 220, 100, 40, 40),
+    ]);
+    assert.equal(
+        MeasureGeometry.segmentBlockedByMaterials(
+            [140, 120],
+            [220, 120],
+            [MeasureGeometry.pieceMaterial(session.pieces["instance:mid"], session.boards)],
+            ["instance:a", "instance:b"]
+        ),
+        true
+    );
 }
 
 console.log("board_editor_measure.test.js: ok");

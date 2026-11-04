@@ -1226,10 +1226,16 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    // Keep Alt latch aligned with live modifier state (keyup can be lost
+                    // after focus changes). Drag snap-bypass still reads the same flag.
+                    if (event && typeof event.altKey === "boolean") {
+                        altHeld = Boolean(event.altKey);
+                    }
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
                         || (store && store.snapshot().measureToolActive)
                         || altHeld
+                        || (event && event.altKey)
                     )) {
                         measureInteraction.onPointerMove(event);
                         if (measureInteraction.isToolGestureActive() || (store && store.snapshot().measureToolActive)) {
