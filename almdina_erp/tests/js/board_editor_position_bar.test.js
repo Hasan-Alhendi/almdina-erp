@@ -47,6 +47,9 @@ const {
 
 assert.ok(PositionGeometry);
 assert.equal(PositionGeometry.STEP_MM, 1);
+assert.equal(PositionGeometry.AXES[0], "x");
+assert.equal(PositionGeometry.AXES[1], "y");
+assert.equal(PositionGeometry.AXES.length, 2);
 assert.equal(PositionGeometry.formatMm(12), "12");
 assert.equal(PositionGeometry.formatMm(2.5), "2.5");
 assert.equal(PositionGeometry.formatMm(2.500), "2.5");
@@ -165,22 +168,20 @@ assert.equal(modelA.pieceKey, keyA);
 assert.equal(modelA.label, "A");
 assert.equal(modelA.widthMm, 200);
 assert.equal(modelA.lengthMm, 100);
-// trim 10mm + local min (10,20) against full board 1000×1000
-assert.equal(PositionGeometry.formatMm(modelA.left), "20");
-assert.equal(PositionGeometry.formatMm(modelA.top), "30");
-assert.equal(PositionGeometry.formatMm(modelA.right), "780");
-assert.equal(PositionGeometry.formatMm(modelA.bottom), "870");
+// Usable-origin AABB: placement 10×20 mm inside usable area (trim is NOT added).
+assert.equal(PositionGeometry.formatMm(modelA.x), "10");
+assert.equal(PositionGeometry.formatMm(modelA.y), "20");
+assert.equal(modelA.left, undefined);
+assert.equal(modelA.top, undefined);
 
-// Non-rect polygon uses transformed outline AABB.
-const modelPoly = PositionGeometry.boardInsetsForPiece(session, keyPoly);
+// Non-rect polygon uses transformed outline AABB in usable coords.
+const modelPoly = PositionGeometry.boardPositionForPiece(session, keyPoly);
 assert.ok(modelPoly);
-assert.equal(PositionGeometry.formatMm(modelPoly.left), "610");
-assert.equal(PositionGeometry.formatMm(modelPoly.top), "710");
-assert.equal(PositionGeometry.formatMm(modelPoly.right), "90");
-assert.equal(PositionGeometry.formatMm(modelPoly.bottom), "90");
+assert.equal(PositionGeometry.formatMm(modelPoly.x), "600");
+assert.equal(PositionGeometry.formatMm(modelPoly.y), "700");
 
-function applyEdge(activeStore, pieceKey, edge, value) {
-    const proposal = PositionGeometry.proposeEdgeMove(activeStore.snapshot().session, pieceKey, edge, value);
+function applyAxis(activeStore, pieceKey, axis, value) {
+    const proposal = PositionGeometry.proposeAxisMove(activeStore.snapshot().session, pieceKey, axis, value);
     if (!proposal.ok) {
         activeStore.setDropMessage(proposal.reason || "rejected");
         return proposal;
@@ -194,50 +195,85 @@ function applyEdge(activeStore, pieceKey, edge, value) {
     activeStore.setDropMessage(null);
     return {
         ok: true,
-        model: PositionGeometry.boardInsetsForPiece(activeStore.snapshot().session, pieceKey),
+        model: PositionGeometry.boardPositionForPiece(activeStore.snapshot().session, pieceKey),
     };
 }
 
-// Left 20→22 moves piece +2 mm; Right decreases; Top/Bottom unchanged.
+function applyNudge(activeStore, pieceKey, key) {
+    const proposal = PositionGeometry.proposeKeyboardNudge(activeStore.snapshot().session, pieceKey, key);
+    if (!proposal.ok) {
+        activeStore.setDropMessage(proposal.reason || "rejected");
+        return proposal;
+    }
+    if (proposal.unchanged) return proposal;
+    let next = activeStore.snapshot().session;
+    proposal.commands.forEach((command) => {
+        next = MoveGeometry.applyPieceMove(next, command);
+    });
+    activeStore.commitSession(next);
+    activeStore.setDropMessage(null);
+    return {
+        ok: true,
+        model: PositionGeometry.boardPositionForPiece(activeStore.snapshot().session, pieceKey),
+    };
+}
+
+// X 10→12 moves piece +2 mm; Y unchanged.
 {
     store.selectPiece(1, { pieceKey: keyA, sheetNo: 1, mode: "replace" });
-    const before = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    assert.equal(PositionGeometry.formatMm(before.left), "20");
-    const result = applyEdge(store, keyA, "left", 22);
+    const before = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(before.x), "10");
+    const result = applyAxis(store, keyA, "x", 12);
     assert.equal(result.ok, true);
-    const after = result.model;
-    assert.equal(PositionGeometry.formatMm(after.left), "22");
-    assert.equal(PositionGeometry.formatMm(after.right), PositionGeometry.formatMm(before.right - 2));
-    assert.equal(PositionGeometry.formatMm(after.top), PositionGeometry.formatMm(before.top));
-    assert.equal(PositionGeometry.formatMm(after.bottom), PositionGeometry.formatMm(before.bottom));
+    assert.equal(PositionGeometry.formatMm(result.model.x), "12");
+    assert.equal(PositionGeometry.formatMm(result.model.y), PositionGeometry.formatMm(before.y));
     assert.equal(store.snapshot().canUndo, true);
 }
 
 // Unchanged value does not create history.
 {
     const undoBefore = store.snapshot().canUndo;
-    const historySizeBefore = history.state().canUndo;
-    const result = applyEdge(store, keyA, "left", 22);
+    const result = applyAxis(store, keyA, "x", 12);
     assert.equal(result.ok, true);
     assert.equal(result.unchanged, true);
     assert.equal(store.snapshot().canUndo, undoBefore);
-    assert.equal(history.state().canUndo, historySizeBefore);
 }
 
-// Right +1 moves leftward.
+// Y +1 moves downward; X unchanged.
 {
-    const before = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    const result = applyEdge(store, keyA, "right", before.right + 1);
+    const before = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    const result = applyAxis(store, keyA, "y", before.y + 1);
     assert.equal(result.ok, true);
-    assert.equal(PositionGeometry.formatMm(result.model.right), PositionGeometry.formatMm(before.right + 1));
-    assert.equal(PositionGeometry.formatMm(result.model.left), PositionGeometry.formatMm(before.left - 1));
+    assert.equal(PositionGeometry.formatMm(result.model.y), PositionGeometry.formatMm(before.y + 1));
+    assert.equal(PositionGeometry.formatMm(result.model.x), PositionGeometry.formatMm(before.x));
+}
+
+// Decimal step via axis target.
+{
+    const before = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    const result = applyAxis(store, keyA, "x", before.x + 0.5);
+    assert.equal(result.ok, true);
+    assert.equal(PositionGeometry.formatMm(result.model.x), PositionGeometry.formatMm(before.x + 0.5));
+}
+
+// Keyboard nudge: Right Right Down Up Left → net +1 X.
+{
+    const start = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(applyNudge(store, keyA, "ArrowRight").ok, true);
+    assert.equal(applyNudge(store, keyA, "ArrowRight").ok, true);
+    assert.equal(applyNudge(store, keyA, "ArrowDown").ok, true);
+    assert.equal(applyNudge(store, keyA, "ArrowUp").ok, true);
+    assert.equal(applyNudge(store, keyA, "ArrowLeft").ok, true);
+    const end = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(end.x), PositionGeometry.formatMm(start.x + 1));
+    assert.equal(PositionGeometry.formatMm(end.y), PositionGeometry.formatMm(start.y));
 }
 
 // Reject move that leaves usable board; no partial change / no history entry.
 {
     const before = JSON.stringify(store.snapshot().session.pieces[keyA]);
     const undoBefore = store.snapshot().canUndo;
-    const result = applyEdge(store, keyA, "left", 900);
+    const result = applyAxis(store, keyA, "x", 900);
     assert.equal(result.ok, false);
     assert.equal(JSON.stringify(store.snapshot().session.pieces[keyA]), before);
     assert.equal(store.snapshot().canUndo, undoBefore);
@@ -250,78 +286,74 @@ function applyEdge(activeStore, pieceKey, edge, value) {
     const hist = History.create(fresh);
     const local = createStore({ projection, order_name: "O", plan_name: "P" });
     local.attachSession(hist.get(), hist);
-    assert.equal(applyEdge(local, keyA, "left", 400).ok, true);
+    assert.equal(applyAxis(local, keyA, "x", 400).ok, true);
     const before = JSON.stringify(local.snapshot().session.pieces[keyA]);
     const undoBefore = local.snapshot().canUndo;
-    // B occupies ~400..500 local on both axes; matching top drives A into B.
-    const collide = applyEdge(local, keyA, "top", 410);
+    const collide = applyAxis(local, keyA, "y", 410);
     assert.equal(collide.ok, false, collide.reason || "expected overlap rejection");
     assert.equal(JSON.stringify(local.snapshot().session.pieces[keyA]), before);
     assert.equal(local.snapshot().canUndo, undoBefore);
     assert.ok(local.snapshot().dropMessage);
 }
 
-// Undo / redo restores insets.
+// Undo / redo restores X/Y.
 {
     store.selectPiece(1, { pieceKey: keyA, sheetNo: 1, mode: "replace" });
-    const start = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    applyEdge(store, keyA, "top", start.top + 3);
-    const moved = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    assert.equal(PositionGeometry.formatMm(moved.top), PositionGeometry.formatMm(start.top + 3));
+    const start = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    applyAxis(store, keyA, "y", start.y + 3);
+    const moved = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(moved.y), PositionGeometry.formatMm(start.y + 3));
     store.undo();
-    const undone = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    assert.equal(PositionGeometry.formatMm(undone.top), PositionGeometry.formatMm(start.top));
+    const undone = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(undone.y), PositionGeometry.formatMm(start.y));
     store.redo();
-    const redone = PositionGeometry.boardInsetsForPiece(store.snapshot().session, keyA);
-    assert.equal(PositionGeometry.formatMm(redone.top), PositionGeometry.formatMm(moved.top));
+    const redone = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(redone.y), PositionGeometry.formatMm(moved.y));
 }
 
-// Rotation 45° recalculates insets from transformed outline AABB.
+// Rotation 45° recalculates X/Y from transformed outline AABB.
 {
     const fresh = SessionDocument.buildFromProjection(projection, layout);
     const piece = fresh.pieces[keyA];
-    const before = PositionGeometry.boardInsetsForPiece(fresh, keyA);
+    const before = PositionGeometry.boardPositionForPiece(fresh, keyA);
     RotationGeometry.ensureBaseGeometry(piece);
     piece.rotation_deg = 45;
     RotationGeometry.rederiveOutline(piece);
     assert.equal(piece.rotation_deg, 45);
-    const after = PositionGeometry.boardInsetsForPiece(fresh, keyA);
+    const after = PositionGeometry.boardPositionForPiece(fresh, keyA);
     assert.ok(after);
-    assert.notEqual(PositionGeometry.formatMm(after.left), PositionGeometry.formatMm(before.left));
-    assert.notEqual(PositionGeometry.formatMm(after.right), PositionGeometry.formatMm(before.right));
-    // Original placement length/width stay as source dims.
+    assert.notEqual(PositionGeometry.formatMm(after.x), PositionGeometry.formatMm(before.x));
+    assert.notEqual(PositionGeometry.formatMm(after.y), PositionGeometry.formatMm(before.y));
     assert.equal(after.widthMm, 200);
     assert.equal(after.lengthMm, 100);
 }
 
-// Reflection of outline preserves source dims; AABB can stay while vertices flip.
+// Mirror + translate updates X while keeping source dims.
 {
     const fresh = SessionDocument.buildFromProjection(projection, layout);
-    const before = PositionGeometry.boardInsetsForPiece(fresh, keyPoly);
+    const before = PositionGeometry.boardPositionForPiece(fresh, keyPoly);
     const piece = fresh.pieces[keyPoly];
     const outlineBefore = JSON.stringify(piece.outline_mm);
     const xs = (piece.outline_mm || []).map((point) => Number(point[0]) || 0);
     const mid = (Math.min(...xs) + Math.max(...xs)) * 0.5;
     piece.outline_mm = piece.outline_mm.map((point) => [2 * mid - Number(point[0]), Number(point[1])]);
     piece.base_outline_mm = (piece.base_outline_mm || []).map((point) => [2 * mid - Number(point[0]), Number(point[1])]);
-    // Translate after mirror so the board insets must change.
     piece.outline_mm = piece.outline_mm.map((point) => [Number(point[0]) - 25, Number(point[1])]);
     piece.base_outline_mm = piece.base_outline_mm.map((point) => [Number(point[0]) - 25, Number(point[1])]);
-    const after = PositionGeometry.boardInsetsForPiece(fresh, keyPoly);
+    const after = PositionGeometry.boardPositionForPiece(fresh, keyPoly);
     assert.ok(after);
     assert.notEqual(JSON.stringify(piece.outline_mm), outlineBefore);
     assert.equal(after.widthMm, before.widthMm);
     assert.equal(after.lengthMm, before.lengthMm);
-    assert.equal(PositionGeometry.formatMm(after.left), PositionGeometry.formatMm(before.left - 25));
-    assert.equal(PositionGeometry.formatMm(after.right), PositionGeometry.formatMm(before.right + 25));
+    assert.equal(PositionGeometry.formatMm(after.x), PositionGeometry.formatMm(before.x - 25));
 }
 
 // Delta helpers: typing alone does not mutate until propose/apply.
 {
     const snap = store.snapshot().session;
     const pieceBefore = JSON.stringify(snap.pieces[keyA]);
-    const current = PositionGeometry.boardInsetsForPiece(snap, keyA);
-    const delta = PositionGeometry.worldDeltaForEdge(current, "left", current.left + 5);
+    const current = PositionGeometry.boardPositionForPiece(snap, keyA);
+    const delta = PositionGeometry.worldDeltaForAxis(current, "x", current.x + 5);
     assert.equal(delta.ok, true);
     assert.equal(delta.dx, 5);
     assert.equal(delta.dy, 0);
@@ -338,20 +370,22 @@ const arCsv = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 assert.match(canvasSource, /data-abe-position-bar/);
 assert.match(canvasSource, /bindPositionBar/);
 assert.match(canvasSource, /abe-pos-input/);
-assert.match(controllerSource, /applyPositionEdge/);
-assert.match(controllerSource, /proposeEdgeMove/);
+assert.match(canvasSource, /data-abe-pos-axis/);
+assert.doesNotMatch(canvasSource, /data-abe-pos-edge/);
+assert.doesNotMatch(canvasSource, /Top inset|Bottom inset|Left inset|Right inset/);
+assert.match(controllerSource, /applyPositionAxis/);
+assert.match(controllerSource, /proposeAxisMove|proposeKeyboardNudge/);
+assert.match(controllerSource, /nudgeSelectedPieceByArrow/);
 assert.match(controllerSource, /PositionGeometry/);
-assert.doesNotMatch(controllerSource, /top_mm|left_mm|right_mm|bottom_mm/);
-assert.match(pageSource, /position_geometry\.js\?v=1/);
+assert.doesNotMatch(controllerSource, /applyPositionEdge|proposeEdgeMove/);
+assert.match(pageSource, /position_geometry\.js\?v=2/);
 assert.match(cssSource, /\.abe-position-bar/);
-assert.match(cssSource, /\.abe-float-stack/);
+assert.match(cssSource, /\.abe-pos-axis-label/);
 
 [
     "Precision piece position",
-    "Top inset",
-    "Bottom inset",
-    "Left inset",
-    "Right inset",
+    "X (mm)",
+    "Y (mm)",
     "Decrease {0} by 1 mm",
     "Increase {0} by 1 mm",
     "Enter a valid millimetre value.",
@@ -360,7 +394,7 @@ assert.match(cssSource, /\.abe-float-stack/);
     assert.ok(arCsv.includes(messageId), `missing ar.csv key: ${messageId}`);
 });
 
-// Render shows / hides bar with selection.
+// Render shows / hides bar with selection and only X/Y fields.
 function hostStub() {
     return {
         __html: "",
@@ -424,10 +458,13 @@ function renderWithSelection(keys) {
 {
     assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyA, keyB]), null);
     assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyOut]), null);
-    assert.match(renderWithSelection([keyA]), /data-abe-position-bar/);
-    assert.match(renderWithSelection([keyA]), /abe-pos-input/);
+    const html = renderWithSelection([keyA]);
+    assert.match(html, /data-abe-position-bar/);
+    assert.match(html, /abe-pos-input/);
+    assert.match(html, /data-abe-pos-axis="x"/);
+    assert.match(html, /data-abe-pos-axis="y"/);
+    assert.doesNotMatch(html, /data-abe-pos-edge/);
     assert.doesNotMatch(renderWithSelection([]), /data-abe-position-bar/);
-    // Outside piece: clear single-key fallback ids so the bar stays hidden.
     const outsideHtml = (() => {
         const view = store.snapshot();
         view.selectedPieceKeys = [keyOut];

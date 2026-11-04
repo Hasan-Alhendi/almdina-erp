@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const EDGES = Object.freeze(["left", "top", "right", "bottom"]);
+    const AXES = Object.freeze(["x", "y"]);
     const STEP_MM = 1;
 
     function num(value) {
@@ -39,7 +39,11 @@
         };
     }
 
-    function boardInsetsForPiece(session, pieceKeyOrInstance) {
+    function boardPositionForPiece(session, pieceKeyOrInstance) {
+        // X/Y are editor UI coords in usable-sheet millimetres:
+        //   (0,0) = top-left of usable area (after trim)
+        //   X+ right, Y+ down
+        // Values are the AABB min corner after rotation/mirror (outline_mm).
         const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
         if (!MoveGeometry || !session || !session.pieces) return null;
         const pieceKey = MoveGeometry.resolvePieceKey(session, pieceKeyOrInstance);
@@ -53,16 +57,7 @@
         const bounds = local && local.bounds;
         if (!bounds) return null;
 
-        const trimX = num(board.trim_x_mm);
-        const trimY = num(board.trim_y_mm);
-        const widthMm = Math.max(1, num(board.width_mm) || (num(board.usable_width_mm) + 2 * trimX));
-        const heightMm = Math.max(1, num(board.height_mm) || (num(board.usable_length_mm) + 2 * trimY));
-        const minX = num(bounds.x);
-        const minY = num(bounds.y);
-        const maxX = minX + num(bounds.w);
-        const maxY = minY + num(bounds.h);
         const dims = pieceDimensionsMm(piece);
-
         return {
             pieceKey,
             sheetNo: Number(piece.sheet_no),
@@ -70,22 +65,18 @@
             editable: Boolean(piece.editable),
             widthMm: dims.widthMm,
             lengthMm: dims.lengthMm,
-            left: trimX + minX,
-            top: trimY + minY,
-            right: widthMm - (trimX + maxX),
-            bottom: heightMm - (trimY + maxY),
-            boardWidthMm: widthMm,
-            boardHeightMm: heightMm,
+            x: num(bounds.x),
+            y: num(bounds.y),
         };
     }
 
     function selectionPositionModel(session, selectedPieceKeys) {
         const keys = Array.isArray(selectedPieceKeys) ? selectedPieceKeys.filter(Boolean) : [];
         if (keys.length !== 1) return null;
-        return boardInsetsForPiece(session, keys[0]);
+        return boardPositionForPiece(session, keys[0]);
     }
 
-    function worldDeltaForEdge(current, edge, nextValue) {
+    function worldDeltaForAxis(current, axis, nextValue) {
         if (!current) {
             return { ok: false, code: "no_selection", dx: 0, dy: 0 };
         }
@@ -93,14 +84,12 @@
         if (!Number.isFinite(target)) {
             return { ok: false, code: "invalid_value", dx: 0, dy: 0 };
         }
-        const name = String(edge || "").toLowerCase();
+        const name = String(axis || "").toLowerCase();
         let dx = 0;
         let dy = 0;
-        if (name === "left") dx = target - num(current.left);
-        else if (name === "right") dx = num(current.right) - target;
-        else if (name === "top") dy = target - num(current.top);
-        else if (name === "bottom") dy = num(current.bottom) - target;
-        else return { ok: false, code: "invalid_edge", dx: 0, dy: 0 };
+        if (name === "x") dx = target - num(current.x);
+        else if (name === "y") dy = target - num(current.y);
+        else return { ok: false, code: "invalid_axis", dx: 0, dy: 0 };
 
         if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
             return { ok: true, code: "unchanged", dx: 0, dy: 0, unchanged: true };
@@ -108,12 +97,13 @@
         return { ok: true, code: "ok", dx, dy, unchanged: false };
     }
 
-    function proposeEdgeMove(session, pieceKeyOrInstance, edge, nextValue) {
+    function proposeDeltaMove(session, pieceKeyOrInstance, dx, dy) {
+        // Exact millimetre delta through MoveGeometry — no magnet/snap.
         const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
         if (!MoveGeometry) {
             return { ok: false, code: "missing_geometry", reason: "Move geometry unavailable." };
         }
-        const current = boardInsetsForPiece(session, pieceKeyOrInstance);
+        const current = boardPositionForPiece(session, pieceKeyOrInstance);
         if (!current) {
             return { ok: false, code: "no_board_piece", reason: "Select one piece on a board." };
         }
@@ -124,7 +114,38 @@
                 reason: MoveGeometry.reasonMessage(MoveGeometry.DROP_NOT_EDITABLE),
             };
         }
-        const delta = worldDeltaForEdge(current, edge, nextValue);
+        const shiftX = num(dx);
+        const shiftY = num(dy);
+        if (!(Math.abs(shiftX) > 1e-9 || Math.abs(shiftY) > 1e-9)) {
+            return { ok: true, unchanged: true, current, commands: [], dx: 0, dy: 0 };
+        }
+        const proposal = MoveGeometry.proposeGroupMove(session, [current.pieceKey], shiftX, shiftY);
+        if (!proposal.ok) {
+            return {
+                ok: false,
+                code: proposal.code,
+                reason: proposal.reason || "Drop rejected.",
+                current,
+                dx: shiftX,
+                dy: shiftY,
+            };
+        }
+        return {
+            ok: true,
+            unchanged: false,
+            current,
+            dx: shiftX,
+            dy: shiftY,
+            commands: proposal.commands || [],
+        };
+    }
+
+    function proposeAxisMove(session, pieceKeyOrInstance, axis, nextValue) {
+        const current = boardPositionForPiece(session, pieceKeyOrInstance);
+        if (!current) {
+            return { ok: false, code: "no_board_piece", reason: "Select one piece on a board." };
+        }
+        const delta = worldDeltaForAxis(current, axis, nextValue);
         if (!delta.ok) {
             return {
                 ok: false,
@@ -137,37 +158,35 @@
         if (delta.unchanged) {
             return { ok: true, unchanged: true, current, commands: [], dx: 0, dy: 0 };
         }
-        const proposal = MoveGeometry.proposeGroupMove(session, [current.pieceKey], delta.dx, delta.dy);
-        if (!proposal.ok) {
-            return {
-                ok: false,
-                code: proposal.code,
-                reason: proposal.reason || "Drop rejected.",
-                current,
-                dx: delta.dx,
-                dy: delta.dy,
-            };
-        }
-        return {
-            ok: true,
-            unchanged: false,
-            current,
-            dx: delta.dx,
-            dy: delta.dy,
-            commands: proposal.commands || [],
-        };
+        return proposeDeltaMove(session, current.pieceKey, delta.dx, delta.dy);
+    }
+
+    function proposeKeyboardNudge(session, pieceKeyOrInstance, key) {
+        const code = String(key || "");
+        let dx = 0;
+        let dy = 0;
+        if (code === "ArrowRight") dx = STEP_MM;
+        else if (code === "ArrowLeft") dx = -STEP_MM;
+        else if (code === "ArrowDown") dy = STEP_MM;
+        else if (code === "ArrowUp") dy = -STEP_MM;
+        else return { ok: false, code: "invalid_key", reason: "Position update rejected." };
+        return proposeDeltaMove(session, pieceKeyOrInstance, dx, dy);
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.PositionGeometry = Object.freeze({
-        EDGES,
+        AXES,
         STEP_MM,
         formatMm,
         parseMm,
         pieceDimensionsMm,
-        boardInsetsForPiece,
+        boardPositionForPiece,
+        // Alias kept for callers/tests that still name the helper generically.
+        boardInsetsForPiece: boardPositionForPiece,
         selectionPositionModel,
-        worldDeltaForEdge,
-        proposeEdgeMove,
+        worldDeltaForAxis,
+        proposeAxisMove,
+        proposeDeltaMove,
+        proposeKeyboardNudge,
     });
 })();

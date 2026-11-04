@@ -38,14 +38,14 @@
         return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${icon}</button>`;
     }
 
-    function positionEdgeField(edge, label, valueText, editable) {
+    function positionAxisField(axis, label, valueText, editable) {
         const disabled = editable ? "" : " disabled";
         const stepMinus = __("Decrease {0} by 1 mm", [label]);
         const stepPlus = __("Increase {0} by 1 mm", [label]);
-        return `<div class="abe-pos-field" data-abe-pos-edge="${esc(edge)}">
-            <span class="abe-pos-edge-label">${esc(label)}</span>
+        return `<div class="abe-pos-field" data-abe-pos-axis="${esc(axis)}">
+            <span class="abe-pos-axis-label" dir="ltr">${esc(label)}</span>
             <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="-1"${disabled} title="${esc(stepMinus)}" aria-label="${esc(stepMinus)}">−</button>
-            <input type="text" inputmode="decimal" class="abe-pos-input" data-abe-pos-input="1" value="${esc(valueText)}"${disabled} aria-label="${esc(label)}" title="${esc(label)}" />
+            <input type="text" inputmode="decimal" class="abe-pos-input" data-abe-pos-input="1" value="${esc(valueText)}"${disabled} aria-label="${esc(label)}" title="${esc(label)}" dir="ltr" />
             <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="1"${disabled} title="${esc(stepPlus)}" aria-label="${esc(stepPlus)}">+</button>
         </div>`;
     }
@@ -62,10 +62,8 @@
                 <span class="abe-pos-dims" dir="ltr">${esc(dims)}</span>
             </div>
             <span class="abe-tool-sep" aria-hidden="true"></span>
-            ${positionEdgeField("top", __("Top inset"), format(model.top), editable)}
-            ${positionEdgeField("bottom", __("Bottom inset"), format(model.bottom), editable)}
-            ${positionEdgeField("left", __("Left inset"), format(model.left), editable)}
-            ${positionEdgeField("right", __("Right inset"), format(model.right), editable)}
+            ${positionAxisField("x", __("X (mm)"), format(model.x), editable)}
+            ${positionAxisField("y", __("Y (mm)"), format(model.y), editable)}
         </div>`;
     }
 
@@ -79,11 +77,11 @@
 
         function syncInputsFromModel(nextModel) {
             if (!nextModel) return;
-            bar.querySelectorAll("[data-abe-pos-edge]").forEach((field) => {
-                const edge = field.getAttribute("data-abe-pos-edge");
+            bar.querySelectorAll("[data-abe-pos-axis]").forEach((field) => {
+                const axis = field.getAttribute("data-abe-pos-axis");
                 const input = field.querySelector("[data-abe-pos-input]");
-                if (!input || !edge) return;
-                input.value = format(nextModel[edge]);
+                if (!input || !axis) return;
+                input.value = format(nextModel[axis]);
                 input.dataset.abePosCommitted = input.value;
             });
         }
@@ -91,25 +89,25 @@
         syncInputsFromModel(model);
 
         bar.querySelectorAll("[data-abe-pos-input]").forEach((input) => {
-            const field = input.closest("[data-abe-pos-edge]");
-            const edge = field && field.getAttribute("data-abe-pos-edge");
-            if (!edge) return;
+            const field = input.closest("[data-abe-pos-axis]");
+            const axis = field && field.getAttribute("data-abe-pos-axis");
+            if (!axis) return;
             input.dataset.abePosCommitted = input.value;
 
             const commit = () => {
-                if (!(handlers && handlers.applyPositionEdge)) return;
+                if (!(handlers && handlers.applyPositionAxis)) return;
                 const raw = input.value;
                 const parsed = parse(raw);
                 if (parsed == null) {
                     if (handlers.onPositionRejected) {
                         handlers.onPositionRejected(__("Enter a valid millimetre value."));
                     }
-                    input.value = input.dataset.abePosCommitted || format(model[edge]);
+                    input.value = input.dataset.abePosCommitted || format(model[axis]);
                     return;
                 }
-                const result = handlers.applyPositionEdge(pieceKey, edge, parsed);
+                const result = handlers.applyPositionAxis(pieceKey, axis, parsed);
                 if (!result || result.ok === false) {
-                    input.value = input.dataset.abePosCommitted || format(model[edge]);
+                    input.value = input.dataset.abePosCommitted || format(model[axis]);
                     return;
                 }
                 if (result.model) syncInputsFromModel(result.model);
@@ -123,7 +121,7 @@
                 if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
-                    input.value = input.dataset.abePosCommitted || format(model[edge]);
+                    input.value = input.dataset.abePosCommitted || format(model[axis]);
                     input.blur();
                     return;
                 }
@@ -147,27 +145,25 @@
         });
 
         bar.querySelectorAll("[data-abe-pos-step]").forEach((button) => {
-            const field = button.closest("[data-abe-pos-edge]");
-            const edge = field && field.getAttribute("data-abe-pos-edge");
+            const field = button.closest("[data-abe-pos-axis]");
+            const axis = field && field.getAttribute("data-abe-pos-axis");
             const input = field && field.querySelector("[data-abe-pos-input]");
             const step = Number(button.getAttribute("data-abe-pos-step")) || 0;
-            if (!edge || !input || !step) return;
+            if (!axis || !input || !step) return;
             button.addEventListener("mousedown", (event) => {
                 // Keep focus/text in the input; avoid blur+click double commits.
                 event.preventDefault();
             });
             button.addEventListener("click", () => {
-                if (!(handlers && handlers.applyPositionEdge)) return;
+                if (!(handlers && handlers.applyPositionAxis)) return;
                 const parsed = parse(input.value);
+                const liveModel = handlers.readPositionModel && handlers.readPositionModel(pieceKey);
                 const base = parsed == null
-                    ? Number((handlers.readPositionModel
-                        && handlers.readPositionModel(pieceKey)
-                        && handlers.readPositionModel(pieceKey)[edge]) || model[edge]) || 0
+                    ? Number((liveModel && liveModel[axis]) || model[axis]) || 0
                     : parsed;
-                const result = handlers.applyPositionEdge(pieceKey, edge, base + step);
+                const result = handlers.applyPositionAxis(pieceKey, axis, base + step);
                 if (!result || result.ok === false) {
-                    const live = handlers.readPositionModel && handlers.readPositionModel(pieceKey);
-                    syncInputsFromModel(live || model);
+                    syncInputsFromModel(liveModel || model);
                     return;
                 }
                 if (result.model) syncInputsFromModel(result.model);

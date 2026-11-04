@@ -1175,6 +1175,74 @@
             store.selectSheet(null);
         }
 
+        let lastPositionRejectAt = 0;
+
+        function applyPrecisionPosition(proposeFn, pieceKey) {
+            // Shared path for X/Y fields, +/−, and keyboard nudges — validation only,
+            // no magnet/snap (proposeGroupMove is exact millimetre deltas).
+            const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+            const MoveGeometryLocal = window.AlmdinaBoardEditor.MoveGeometry;
+            if (!store || !PositionGeometry || !MoveGeometryLocal || typeof proposeFn !== "function") {
+                return { ok: false, reason: "Position controls unavailable." };
+            }
+            const snap = store.snapshot();
+            const proposal = proposeFn();
+            const readModel = () => PositionGeometry.boardPositionForPiece(
+                store.snapshot().session,
+                pieceKey
+            );
+            if (!proposal || !proposal.ok) {
+                const now = Date.now();
+                if (now - lastPositionRejectAt > 500) {
+                    store.setDropMessage(__((proposal && proposal.reason) || "Position update rejected."));
+                    lastPositionRejectAt = now;
+                }
+                return {
+                    ok: false,
+                    reason: proposal && proposal.reason,
+                    model: readModel(),
+                };
+            }
+            if (proposal.unchanged) {
+                return { ok: true, unchanged: true, model: proposal.current || readModel() };
+            }
+            finishActiveGesture();
+            let next = snap.session;
+            (proposal.commands || []).forEach((command) => {
+                next = MoveGeometryLocal.applyPieceMove(next, command);
+            });
+            store.commitSession(next);
+            store.setDropMessage(null);
+            return { ok: true, unchanged: false, model: readModel() };
+        }
+
+        function nudgeSelectedPieceByArrow(event) {
+            if (!store || suspended || !event) return false;
+            if (isEditableTarget(event.target)) return false;
+            if (event.metaKey || event.ctrlKey || event.altKey) return false;
+            const key = event.key;
+            if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "ArrowLeft" && key !== "ArrowRight") {
+                return false;
+            }
+            const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+            if (!PositionGeometry || typeof PositionGeometry.proposeKeyboardNudge !== "function") {
+                return false;
+            }
+            const view = store.snapshot();
+            const keys = Array.isArray(view.selectedPieceKeys)
+                ? view.selectedPieceKeys.filter(Boolean)
+                : [];
+            if (keys.length !== 1) return false;
+            const model = PositionGeometry.boardPositionForPiece(view.session, keys[0]);
+            if (!model || !model.editable) return false;
+            event.preventDefault();
+            applyPrecisionPosition(
+                () => PositionGeometry.proposeKeyboardNudge(store.snapshot().session, keys[0], key),
+                keys[0]
+            );
+            return true;
+        }
+
         function paint() {
             if (!store || suspended) return;
             syncEditorHeight();
@@ -1301,42 +1369,19 @@
                 applyAngle: (pieceKey, value) => (
                     rotationInteraction && rotationInteraction.applyNumericAngle(pieceKey, value)
                 ),
-                applyPositionEdge: (pieceKey, edge, value) => {
-                    const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
-                    const MoveGeometry = window.AlmdinaBoardEditor.MoveGeometry;
-                    if (!store || !PositionGeometry || !MoveGeometry) {
-                        return { ok: false, reason: "Position controls unavailable." };
-                    }
-                    const snap = store.snapshot();
-                    const proposal = PositionGeometry.proposeEdgeMove(snap.session, pieceKey, edge, value);
-                    if (!proposal.ok) {
-                        store.setDropMessage(__(proposal.reason || "Position update rejected."));
-                        return {
-                            ok: false,
-                            reason: proposal.reason,
-                            model: PositionGeometry.boardInsetsForPiece(snap.session, pieceKey),
-                        };
-                    }
-                    if (proposal.unchanged) {
-                        return { ok: true, unchanged: true, model: proposal.current };
-                    }
-                    finishActiveGesture();
-                    let next = snap.session;
-                    (proposal.commands || []).forEach((command) => {
-                        next = MoveGeometry.applyPieceMove(next, command);
-                    });
-                    store.commitSession(next);
-                    store.setDropMessage(null);
-                    return {
-                        ok: true,
-                        unchanged: false,
-                        model: PositionGeometry.boardInsetsForPiece(store.snapshot().session, pieceKey),
-                    };
-                },
+                applyPositionAxis: (pieceKey, axis, value) => applyPrecisionPosition(
+                    () => window.AlmdinaBoardEditor.PositionGeometry.proposeAxisMove(
+                        store.snapshot().session,
+                        pieceKey,
+                        axis,
+                        value
+                    ),
+                    pieceKey
+                ),
                 readPositionModel: (pieceKey) => {
                     const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
                     if (!store || !PositionGeometry) return null;
-                    return PositionGeometry.boardInsetsForPiece(store.snapshot().session, pieceKey);
+                    return PositionGeometry.boardPositionForPiece(store.snapshot().session, pieceKey);
                 },
                 onPositionRejected: (message) => {
                     if (!store) return;
@@ -1809,6 +1854,7 @@
                     return;
                 }
             }
+            if (nudgeSelectedPieceByArrow(event)) return;
             if (isEditableTarget(event.target) || (Distribution && !Distribution.keyboardDeleteApplies(event.target))) return;
             if (event.key === "Delete" && store && Distribution) {
                 const view = store.snapshot();

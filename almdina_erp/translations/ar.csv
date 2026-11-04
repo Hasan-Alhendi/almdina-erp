@@ -3334,6 +3334,8 @@ Measure,قياس
 Start the measurement inside a board.,ابدأ القياس داخل لوح.
 Measurement rejected.,رُفض القياس.
 Precision piece position,موضع الدرفة الدقيق
+X (mm),X (mm)
+Y (mm),Y (mm)
 Top inset,أعلى
 Bottom inset,أسفل
 Left inset,يسار

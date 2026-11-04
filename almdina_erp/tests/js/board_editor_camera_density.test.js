@@ -147,7 +147,7 @@ function assertAnchorStable(camera, focal, factor) {
 assert.equal(CanvasRenderer.columnCount(1220, 1100), 2);
 assert.match(controller, /metrics\.minX/);
 assert.match(controller, /lastCanvasPointerClient/);
-assert.match(page, /canvas_renderer\.js\?v=31/);
-assert.match(page, /board_editor\.css\?v=29/);
+assert.match(page, /canvas_renderer\.js\?v=32/);
+assert.match(page, /board_editor\.css\?v=30/);
 
 console.log("board_editor_camera_density.test.js: ok");

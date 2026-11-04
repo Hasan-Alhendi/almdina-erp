@@ -487,11 +487,13 @@
   gap: 2px;
 }
 
-.abe-pos-edge-label {
-  min-width: 2.4rem;
+.abe-pos-edge-label,
+.abe-pos-axis-label {
+  min-width: 2.8rem;
   font-size: 11px;
   color: var(--alm-text-muted, #667085);
   text-align: end;
+  white-space: nowrap;
 }
 
 .abe-pos-input {
