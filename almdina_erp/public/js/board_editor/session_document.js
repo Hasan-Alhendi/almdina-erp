@@ -92,6 +92,20 @@
                 || piece.allow_rotation === 1
                 || piece.allow_rotation === "1"
             );
+            // Prefer finished_outline geometry; fall back to trusted CNC-raw placement rect.
+            let resolvedOutline = outlineMm;
+            if (
+                (!resolvedOutline || resolvedOutline.length < 3)
+                && String(piece.geometry_source || "") === "cnc_raw_rect"
+            ) {
+                const w = (Number(placement.w) || 0) * 10;
+                const h = (Number(placement.h) || 0) * 10;
+                const x = (Number(placement.x) || 0) * 10;
+                const y = (Number(placement.y) || 0) * 10;
+                if (w > 0 && h > 0) {
+                    resolvedOutline = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+                }
+            }
             const sessionPiece = {
                 piece_key: key,
                 piece_id: pieceId,
@@ -101,8 +115,8 @@
                 local_x_mm: (Number(placement.x) || 0) * 10,
                 local_y_mm: (Number(placement.y) || 0) * 10,
                 placement_cm: clone(placement),
-                outline_mm: outlineMm,
-                base_outline_mm: outlineMm ? clone(outlineMm) : null,
+                outline_mm: resolvedOutline,
+                base_outline_mm: resolvedOutline ? clone(resolvedOutline) : null,
                 glass_host_piece_id: piece.glass_host_piece_id == null ? null : Number(piece.glass_host_piece_id),
                 glass_host_key: null,
                 glass_hole_local_mm: clone(piece.glass_hole_local_mm),
@@ -124,6 +138,9 @@
                 allow_rotation: allowProven ? allowRotation : false,
                 allow_rotation_proven: Boolean(allowProven),
                 piece_type: piece.piece_type || "",
+                geometry_source: piece.geometry_source || "",
+                exact_geometry: Boolean(piece.exact_geometry),
+                special_representation: piece.special_representation || null,
             };
             if (Array.isArray(sessionPiece.base_outline_mm) && sessionPiece.base_outline_mm.length >= 3) {
                 const xs = sessionPiece.base_outline_mm.map((point) => Number(point[0]) || 0);

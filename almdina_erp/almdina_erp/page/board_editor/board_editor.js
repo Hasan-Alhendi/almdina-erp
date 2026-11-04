@@ -11,7 +11,7 @@
     const MODULES = Object.freeze([
         `${ASSET_ROOT}/api.js?v=19`,
         `${ASSET_ROOT}/history.js?v=18`,
-        `${ASSET_ROOT}/session_document.js?v=20`,
+        `${ASSET_ROOT}/session_document.js?v=21`,
         `${ASSET_ROOT}/distribution.js?v=18`,
         `${ASSET_ROOT}/move_geometry.js?v=18`,
         `${ASSET_ROOT}/snap_geometry.js?v=18`,
@@ -27,7 +27,7 @@
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/store.js?v=19`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=24`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=25`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
         `${ASSET_ROOT}/controller.js?v=24`,
     ]);

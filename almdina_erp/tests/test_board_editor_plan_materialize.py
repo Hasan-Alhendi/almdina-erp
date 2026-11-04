@@ -420,6 +420,59 @@ class BoardEditorMaterializeTests(unittest.TestCase):
         self.assertTrue(manufacturing_actions_allowed("System"))
         self.assertTrue(manufacturing_actions_allowed("Uploaded DXF"))
 
+    def test_special_cnc_raw_keeps_type_and_does_not_promote_stock_rect(self):
+        pieces = [
+            projection_piece(
+                "RAW",
+                7,
+                100,
+                200,
+                220,
+                210,
+                piece_type="Special",
+                original_w=22,
+                original_h=21,
+            )
+        ]
+        pieces[0]["geometry_source"] = "cnc_raw_rect"
+        pieces[0]["exact_geometry"] = False
+        pieces[0]["special_representation"] = "cnc_raw"
+        elements = [
+            {
+                "kind": "finished_outline",
+                "piece_instance_id": "RAW",
+                "geometry": {"outer": rect(100, 200, 220, 210)},
+                "payload": {
+                    "geometry_source": "cnc_raw_rect",
+                    "special_representation": "cnc_raw",
+                },
+            }
+        ]
+        proj = projection(pieces, elements=elements)
+        source = source_snapshot(pieces)
+        source["sheets"][0]["pieces"][0]["piece_type"] = "Special"
+        source["sheets"][0]["pieces"][0].pop("geometry", None)
+        layout = layout_rows(pieces, RAW={"x": 150, "y": 180})
+        draft = draft_payload(layout)
+        snapshot = materialize_plan_snapshot(
+            draft=draft,
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        piece = snapshot["sheets"][0]["pieces"][0]
+        self.assertEqual(piece["piece_type"], "Special")
+        self.assertEqual(piece["piece_instance_id"], "RAW")
+        self.assertAlmostEqual(piece["x"], 15.0)
+        self.assertAlmostEqual(piece["y"], 18.0)
+        self.assertAlmostEqual(piece["w"], 22.0)
+        self.assertAlmostEqual(piece["h"], 21.0)
+        self.assertNotIn("geometry", piece)
+
 
 class BoardEditorPlanCreateApplicationTests(unittest.TestCase):
     def test_write_gate_and_idempotent_create(self):

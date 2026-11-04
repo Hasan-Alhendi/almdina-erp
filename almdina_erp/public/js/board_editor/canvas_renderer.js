@@ -1258,8 +1258,9 @@
                 ));
                 const d = pointsToPath(corners, true);
                 const role = fillRoleOf(element, sessionPiece, storeView);
-                const paint = materialPaint(role, false, role === "special");
                 const piece = pieceRecord(element, sessionPiece, storeView);
+                const exact = role === "special" && Boolean(piece && piece.exact_geometry);
+                const paint = materialPaint(role, false, exact);
                 const edges = edgeMarkSvg(
                     piece,
                     (element.payload && element.payload.display_edges) || (piece && piece.display_edges) || null,

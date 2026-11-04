@@ -691,6 +691,59 @@ class BoardEditorDraftReviewTests(unittest.TestCase):
         self.assertNotIn("snapshot_json", source)
         self.assertEqual(source.count("approves_plan"), 1)
 
+    def test_special_cnc_raw_outline_is_accepted_for_layout_review(self):
+        trusted = model(
+            [
+                piece(
+                    "pi-raw",
+                    9,
+                    100,
+                    100,
+                    220,
+                    210,
+                    piece_type="Special",
+                    outline=rect(100, 100, 220, 210),
+                )
+            ]
+        )
+        trusted["pieces"]["pi-raw"]["geometry_source"] = "cnc_raw_rect"
+        trusted["pieces"]["pi-raw"]["exact_geometry"] = False
+        trusted["pieces"]["pi-raw"]["special_representation"] = "cnc_raw"
+        layout = {
+            "schema": 1,
+            "pieces": [row("pi-raw", 120, 130)],
+            "boards": boards(1),
+        }
+        result = review_saved_draft(draft(layout), trusted)
+        self.assertTrue(result["ready"], result["issues"])
+        self.assertNotIn("geometry_unproven", codes(result))
+
+    def test_special_without_outline_stays_unproven(self):
+        trusted = model(
+            [
+                piece(
+                    "pi-miss",
+                    8,
+                    0,
+                    0,
+                    0,
+                    0,
+                    piece_type="Special",
+                    outline=None,
+                )
+            ]
+        )
+        trusted["pieces"]["pi-miss"]["outline_mm"] = None
+        trusted["pieces"]["pi-miss"]["geometry_source"] = "unavailable"
+        layout = {
+            "schema": 1,
+            "pieces": [row("pi-miss", 10, 10)],
+            "boards": boards(1),
+        }
+        result = review_saved_draft(draft(layout), trusted)
+        self.assertFalse(result["ready"])
+        self.assertIn("geometry_unproven", codes(result))
+
 
 if __name__ == "__main__":
     unittest.main()

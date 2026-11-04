@@ -44,6 +44,9 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_layer_catalog import (
     layer_match_key,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import PartGeometry
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    material_outline_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerGeometryError,
     LinerPiece,
@@ -107,8 +110,16 @@ SUPPORT_LIMIT_HISTORICAL_SNAPSHOT = (
     "Historical snapshots are consumed as-is; missing piece_instance_id is preserved."
 )
 SUPPORT_LIMIT_SPECIAL_WITHOUT_GEOMETRY = (
-    "Special pieces without persisted DXF geometry are not replaced by a precise rectangle."
+    "Special pieces without persisted DXF geometry, exact special-shape JSON, "
+    "or trusted CNC-raw placement dimensions stay non-editable."
 )
+SUPPORT_LIMIT_SPECIAL_CNC_RAW = (
+    "Special CNC-raw stock uses the trusted placement rectangle for layout only; "
+    "it is not a final CNC cut contour."
+)
+GEOMETRY_SOURCE_CNC_RAW = "cnc_raw_rect"
+GEOMETRY_SOURCE_SPECIAL_JSON = "special_shape_geometry_json"
+GEOMETRY_SOURCE_UNAVAILABLE = "unavailable"
 
 MAX_REFERENCE_ENTITIES = 5_000
 
@@ -313,12 +324,77 @@ def _parametric_material_geometry(
     return geometry, source
 
 
+def _finite_dim(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number != number:  # NaN
+        return None
+    return number
+
+
+def _special_exact_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Exact Special contour from trusted special_shape_geometry_json (usable-sheet mm)."""
+
+    outline_cm = material_outline_cm(piece)
+    if outline_cm is None or len(outline_cm) < 3:
+        return None
+    return serialize_geometry_mm(
+        PartGeometry(
+            outer=tuple((float(point[0]) * 10.0, float(point[1]) * 10.0) for point in outline_cm),
+            holes=(),
+        )
+    )
+
+
+def _cnc_raw_dims_trusted(piece: Mapping[str, Any]) -> bool:
+    """True when the plan supplies a trusted Special CNC-raw stock rectangle."""
+
+    width = _finite_dim(piece.get("w"))
+    height = _finite_dim(piece.get("h"))
+    if width is None or height is None or width <= 0 or height <= 0:
+        return False
+    # Origin may be zero; reject only non-finite coordinates.
+    if _finite_dim(piece.get("x")) is None or _finite_dim(piece.get("y")) is None:
+        return False
+    return True
+
+
+def _cnc_raw_rect_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Axis-aligned CNC-raw stock rectangle in usable-sheet millimetres."""
+
+    if not _cnc_raw_dims_trusted(piece):
+        return None
+    x = float(piece.get("x") or 0) * 10.0
+    y = float(piece.get("y") or 0) * 10.0
+    width = float(piece.get("w")) * 10.0
+    height = float(piece.get("h")) * 10.0
+    if bool(piece.get("rotated")):
+        width, height = height, width
+    return serialize_geometry_mm(
+        PartGeometry(
+            outer=(
+                (x, y),
+                (x + width, y),
+                (x + width, y + height),
+                (x, y + height),
+            ),
+            holes=(),
+        )
+    )
+
+
 def _geometry_source_for_piece(piece: Mapping[str, Any]) -> str:
     if isinstance(piece.get("geometry"), Mapping):
         return "persisted_dxf"
     piece_type = str(piece.get("piece_type") or "")
     if piece_type == "Special":
-        return "unavailable"
+        if _special_exact_geometry_mm(piece) is not None:
+            return GEOMETRY_SOURCE_SPECIAL_JSON
+        if _cnc_raw_dims_trusted(piece):
+            return GEOMETRY_SOURCE_CNC_RAW
+        return GEOMETRY_SOURCE_UNAVAILABLE
     parametric = _parametric_material_geometry(piece)
     if parametric is None:
         return "placement_rect"
@@ -372,8 +448,24 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
         "area_m2": piece.get("area_m2"),
         "exact_geometry": bool(
             isinstance(piece.get("geometry"), Mapping)
-            or str(piece.get("piece_type") or "") == "Special"
-            and piece.get("special_shape_geometry_json")
+            or (
+                str(piece.get("piece_type") or "") == "Special"
+                and geometry_source == GEOMETRY_SOURCE_SPECIAL_JSON
+            )
+        ),
+        "special_representation": (
+            "exact_geometry"
+            if geometry_source in {"persisted_dxf", GEOMETRY_SOURCE_SPECIAL_JSON}
+            and str(piece.get("piece_type") or "") == "Special"
+            else (
+                "cnc_raw"
+                if geometry_source == GEOMETRY_SOURCE_CNC_RAW
+                else (
+                    "unavailable"
+                    if str(piece.get("piece_type") or "") == "Special"
+                    else None
+                )
+            )
         ),
         # Geometry in the projection is already in usable-sheet orientation.
         # Never re-apply ``placement_cm.rotated`` to DXF points.
@@ -472,8 +564,20 @@ def _append_outline_elements(
     piece_id: int | None,
     instance_id: str | None,
     sheet_resource_kind: str,
+    extra_payload: Mapping[str, Any] | None = None,
+    support_note: str | None = None,
 ) -> None:
     fill_role = _fill_role_for_piece(piece, sheet_resource_kind=sheet_resource_kind)
+    payload = {
+        "ring": "outer",
+        "apply_rotated": False,
+        "geometry_source": geometry_source,
+        "fill_role": fill_role,
+        "display_edges": _display_edges(piece),
+        "piece_type": str(piece.get("piece_type") or ""),
+    }
+    if extra_payload:
+        payload.update(dict(extra_payload))
     elements.append(
         _element(
             element_id=f"{token}:geometry:outer",
@@ -484,14 +588,8 @@ def _append_outline_elements(
             piece_id=piece_id,
             piece_instance_id=instance_id,
             geometry=geometry,
-            payload={
-                "ring": "outer",
-                "apply_rotated": False,
-                "geometry_source": geometry_source,
-                "fill_role": fill_role,
-                "display_edges": _display_edges(piece),
-                "piece_type": str(piece.get("piece_type") or ""),
-            },
+            payload=payload,
+            support_note=support_note,
         )
     )
     holes = geometry.get("holes") or []
@@ -688,29 +786,63 @@ def _elements_for_piece(
             sheet_resource_kind=sheet_resource_kind,
         )
     elif piece_type == "Special":
-        elements.append(
-            _element(
-                element_id=f"{token}:geometry:unavailable",
-                kind=ELEMENT_KIND_UNRESOLVED,
-                layer_original_name=GEOMETRY_LAYER,
-                affiliation_status=AFFILIATION_BOUND if piece_id is not None else AFFILIATION_UNRESOLVED,
+        exact_special = _special_exact_geometry_mm(piece)
+        raw_special = None if exact_special is not None else _cnc_raw_rect_geometry_mm(piece)
+        if exact_special is not None:
+            _append_outline_elements(
+                elements,
+                token=token,
+                piece=piece,
+                geometry=exact_special,
+                geometry_source=GEOMETRY_SOURCE_SPECIAL_JSON,
                 sheet_no=sheet_no,
                 piece_id=piece_id,
-                piece_instance_id=instance_id,
-                payload={
-                    "reason": "special_geometry_unavailable",
-                    "placement_cm": {
-                        "x": piece.get("x"),
-                        "y": piece.get("y"),
-                        "w": piece.get("w"),
-                        "h": piece.get("h"),
-                        "rotated": bool(piece.get("rotated")),
-                    },
-                    "fill_role": "special",
-                },
-                support_note=SUPPORT_LIMIT_SPECIAL_WITHOUT_GEOMETRY,
+                instance_id=instance_id,
+                sheet_resource_kind=sheet_resource_kind,
+                extra_payload={"special_representation": "exact_geometry"},
             )
-        )
+        elif raw_special is not None:
+            _append_outline_elements(
+                elements,
+                token=token,
+                piece=piece,
+                geometry=raw_special,
+                geometry_source=GEOMETRY_SOURCE_CNC_RAW,
+                sheet_no=sheet_no,
+                piece_id=piece_id,
+                instance_id=instance_id,
+                sheet_resource_kind=sheet_resource_kind,
+                extra_payload={
+                    "special_representation": "cnc_raw",
+                    "note": SUPPORT_LIMIT_SPECIAL_CNC_RAW,
+                },
+                support_note=SUPPORT_LIMIT_SPECIAL_CNC_RAW,
+            )
+        else:
+            elements.append(
+                _element(
+                    element_id=f"{token}:geometry:unavailable",
+                    kind=ELEMENT_KIND_UNRESOLVED,
+                    layer_original_name=GEOMETRY_LAYER,
+                    affiliation_status=AFFILIATION_BOUND if piece_id is not None else AFFILIATION_UNRESOLVED,
+                    sheet_no=sheet_no,
+                    piece_id=piece_id,
+                    piece_instance_id=instance_id,
+                    payload={
+                        "reason": "special_geometry_unavailable",
+                        "special_representation": "unavailable",
+                        "placement_cm": {
+                            "x": piece.get("x"),
+                            "y": piece.get("y"),
+                            "w": piece.get("w"),
+                            "h": piece.get("h"),
+                            "rotated": bool(piece.get("rotated")),
+                        },
+                        "fill_role": "special",
+                    },
+                    support_note=SUPPORT_LIMIT_SPECIAL_WITHOUT_GEOMETRY,
+                )
+            )
     else:
         parametric = _parametric_material_geometry(piece)
         if parametric is not None:

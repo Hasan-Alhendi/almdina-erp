@@ -88,7 +88,21 @@ const projection = {
             piece_instance_id: "pi-special",
             label: "SPECIAL",
             sheet_no: 2,
+            piece_type: "Special",
             placement_cm: { x: 20, y: 20, w: 10, h: 10 },
+        },
+        {
+            piece_id: 6,
+            piece_instance_id: "pi-cnc-raw",
+            label: "CNC-RAW",
+            sheet_no: 2,
+            piece_type: "Special",
+            geometry_source: "cnc_raw_rect",
+            exact_geometry: false,
+            special_representation: "cnc_raw",
+            placement_cm: { x: 40, y: 40, w: 22, h: 21 },
+            original_w: 22,
+            original_h: 21,
         },
     ],
     elements: [
@@ -146,6 +160,27 @@ const projection = {
             },
         },
         {
+            element_id: "e6",
+            kind: "finished_outline",
+            piece_id: 6,
+            piece_instance_id: "pi-cnc-raw",
+            sheet_no: 2,
+            layer_match_key: "GEOMETRY",
+            geometry: {
+                outer: [
+                    [400, 400],
+                    [620, 400],
+                    [620, 610],
+                    [400, 610],
+                ],
+            },
+            payload: {
+                geometry_source: "cnc_raw_rect",
+                special_representation: "cnc_raw",
+                fill_role: "special",
+            },
+        },
+        {
             element_id: "t1",
             kind: "text_label",
             piece_id: 1,
@@ -175,6 +210,11 @@ const session = SessionDocument.buildFromProjection(projection, layout);
 assert.equal(session.pieces["instance:pi-host"].editable, true);
 assert.equal(session.pieces["instance:pi-special"].editable, false);
 assert.equal(session.pieces["instance:pi-special"].block_reason, "special_geometry_unavailable");
+assert.equal(session.pieces["instance:pi-cnc-raw"].editable, true);
+assert.equal(session.pieces["instance:pi-cnc-raw"].block_reason, null);
+assert.equal(session.pieces["instance:pi-cnc-raw"].geometry_source, "cnc_raw_rect");
+assert.equal(session.pieces["instance:pi-cnc-raw"].exact_geometry, false);
+assert.equal(session.pieces["instance:pi-cnc-raw"].outline_mm.length, 4);
 assert.equal(Object.prototype.hasOwnProperty.call(session.pieces, "instance:"), false);
 assert.ok(!Object.values(session.pieces).some((piece) => piece.label === "LEGACY"));
 
@@ -182,6 +222,29 @@ const history = History.create(session);
 const hostKey = "instance:pi-host";
 const guestKey = "instance:pi-guest";
 const otherKey = "instance:pi-other";
+
+// CNC-raw stock rectangle can move on its board with kerf/collision rules.
+{
+    const rawKey = "instance:pi-cnc-raw";
+    const moved = MoveGeometry.proposePieceDrop(history.get(), rawKey, 1048 + 450, 36 + 450);
+    assert.equal(moved.ok, true, moved.code || "cnc raw move");
+    assert.equal(moved.target_sheet_no, 2);
+    const after = MoveGeometry.applyPieceMove(history.get(), {
+        piece_key: rawKey,
+        target_sheet_no: moved.target_sheet_no,
+        local_x_mm: moved.local_x_mm,
+        local_y_mm: moved.local_y_mm,
+        delta_x_mm: moved.delta_x_mm,
+        delta_y_mm: moved.delta_y_mm,
+    });
+    history.commit(after);
+    assert.equal(history.get().pieces[rawKey].local_x_mm, moved.local_x_mm);
+    history.undo();
+    assert.equal(history.get().pieces[rawKey].local_x_mm, 400);
+    history.redo();
+    assert.equal(history.get().pieces[rawKey].local_x_mm, moved.local_x_mm);
+    history.undo();
+}
 
 // Move host inside same board; guest follows once; identity stable.
 const inside = MoveGeometry.proposePieceDrop(history.get(), hostKey, 120, 120);

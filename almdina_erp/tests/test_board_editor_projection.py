@@ -551,3 +551,138 @@ def test_clipped_corner_and_offcut_fill_roles():
     classified = project_board_editor(snapshot, default_edge_type="PVC Default")
     assert classified["edge_display"]["default_edge_type"] == "PVC Default"
     assert classified["pieces"][0]["display_edges"]["edge_long_left_type_override"] == "Blue"
+
+
+def test_special_cnc_raw_gets_finished_outline_not_unresolved():
+    snapshot = {
+        "physical_execution_contract": 1,
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "w": 122,
+                "h": 244,
+                "pieces": [
+                    {
+                        "id": 101,
+                        "label": "S22",
+                        "piece_instance_id": "pi-raw-22",
+                        "piece_type": "Special",
+                        "x": 10,
+                        "y": 20,
+                        "w": 22,
+                        "h": 22,
+                        "original_w": 22,
+                        "original_h": 22,
+                        "allow_rotation": 0,
+                    },
+                    {
+                        "id": 102,
+                        "label": "S21",
+                        "piece_instance_id": "pi-raw-21",
+                        "piece_type": "Special",
+                        "x": 80,
+                        "y": 180,
+                        "w": 22,
+                        "h": 21,
+                        "original_w": 22,
+                        "original_h": 21,
+                        "allow_rotation": 0,
+                    },
+                    {
+                        "id": 103,
+                        "label": "S-miss",
+                        "piece_instance_id": "pi-special-miss",
+                        "piece_type": "Special",
+                        "x": 0,
+                        "y": 0,
+                        "w": 0,
+                        "h": 0,
+                    },
+                ],
+            }
+        ],
+    }
+    projection = project_board_editor(snapshot)
+    by_instance = {row["piece_instance_id"]: row for row in projection["pieces"]}
+    assert by_instance["pi-raw-22"]["geometry_source"] == "cnc_raw_rect"
+    assert by_instance["pi-raw-22"]["exact_geometry"] is False
+    assert by_instance["pi-raw-22"]["special_representation"] == "cnc_raw"
+    assert by_instance["pi-raw-21"]["geometry_source"] == "cnc_raw_rect"
+    assert by_instance["pi-special-miss"]["geometry_source"] == "unavailable"
+    assert by_instance["pi-special-miss"]["special_representation"] == "unavailable"
+
+    outlines = {
+        element["piece_instance_id"]: element
+        for element in projection["elements"]
+        if element["kind"] == ELEMENT_KIND_FINISHED_OUTLINE
+        and element.get("piece_instance_id")
+    }
+    assert "pi-raw-22" in outlines
+    assert outlines["pi-raw-22"]["payload"]["geometry_source"] == "cnc_raw_rect"
+    assert outlines["pi-raw-22"]["payload"]["special_representation"] == "cnc_raw"
+    outer = outlines["pi-raw-22"]["geometry"]["outer"]
+    assert len(outer) == 4
+    assert outer[0] == [100.0, 200.0]
+    assert outer[2] == [320.0, 420.0]
+
+    unresolved = [
+        element
+        for element in projection["elements"]
+        if element["kind"] == "unresolved"
+        and (element.get("payload") or {}).get("reason") == "special_geometry_unavailable"
+    ]
+    assert len(unresolved) == 1
+    assert unresolved[0]["piece_instance_id"] == "pi-special-miss"
+
+
+def test_special_exact_json_uses_real_contour():
+    import json
+
+    geometry_json = json.dumps(
+        {
+            "version": 1,
+            "kind": "polygon",
+            "units": "cm",
+            "blank_width_cm": 30,
+            "blank_length_cm": 40,
+            "points": [[0, 0], [30, 0], [30, 40], [10, 40], [10, 20], [0, 20]],
+        }
+    )
+    snapshot = {
+        "physical_execution_contract": 1,
+        "sheets": [
+            {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "pieces": [
+                    {
+                        "id": 201,
+                        "label": "SX",
+                        "piece_instance_id": "pi-exact-special",
+                        "piece_type": "Special",
+                        "x": 5,
+                        "y": 6,
+                        "w": 30,
+                        "h": 40,
+                        "original_w": 30,
+                        "original_h": 40,
+                        "special_shape_geometry_json": geometry_json,
+                    }
+                ],
+            }
+        ],
+    }
+    projection = project_board_editor(snapshot)
+    piece = projection["pieces"][0]
+    assert piece["geometry_source"] == "special_shape_geometry_json"
+    assert piece["exact_geometry"] is True
+    assert piece["special_representation"] == "exact_geometry"
+    outline = next(
+        element
+        for element in projection["elements"]
+        if element["kind"] == ELEMENT_KIND_FINISHED_OUTLINE
+        and element["piece_instance_id"] == "pi-exact-special"
+    )
+    assert len(outline["geometry"]["outer"]) == 6
+    assert outline["payload"]["geometry_source"] == "special_shape_geometry_json"

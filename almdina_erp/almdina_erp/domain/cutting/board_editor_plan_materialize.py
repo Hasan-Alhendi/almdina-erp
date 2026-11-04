@@ -357,8 +357,26 @@ def _materialize_piece(
     hole = posed.get("glass_hole_local_mm")
     if isinstance(hole, list) and len(hole) >= 3:
         holes.append(hole)
+    piece_type = str(trusted.get("piece_type") or source.get("piece_type") or "")
+    geometry_source = str(
+        trusted.get("geometry_source") or source.get("geometry_source") or ""
+    )
+    exact_geometry = bool(trusted.get("exact_geometry") or source.get("exact_geometry"))
+    source_geometry = (
+        source.get("geometry") if isinstance(source.get("geometry"), Mapping) else None
+    )
+    # Never promote CNC-raw stock rectangles (or blank Special JSON) into a
+    # persisted DXF ``geometry`` contour. Exact DXF source keeps posed outline.
+    promote_outline = False
+    if source_geometry is not None and isinstance(outline, list) and len(outline) >= 3:
+        promote_outline = True
+    elif piece_type == "Special":
+        promote_outline = False
+    elif isinstance(outline, list) and len(outline) >= 3:
+        promote_outline = True
+
     geometry = None
-    if isinstance(outline, list) and len(outline) >= 3:
+    if promote_outline:
         geometry = serialize_geometry_mm(
             PartGeometry(
                 outer=tuple((num(p[0]), num(p[1])) for p in outline),
@@ -394,11 +412,20 @@ def _materialize_piece(
         "offcut_execution_party": posed.get("offcut_execution_party")
         or source.get("offcut_execution_party"),
         "overlays": _overlays_from_machining(posed.get("machining_paths") or []),
+        "piece_type": piece_type or source.get("piece_type") or "Regular",
     }
     if geometry is not None:
         piece["geometry"] = geometry
     else:
         piece.pop("geometry", None)
+    # Preserve manufacturing Special contracts from source; layout pose is x/y/w/h.
+    if piece_type == "Special":
+        if source.get("special_shape_geometry_json") not in (None, ""):
+            piece["special_shape_geometry_json"] = source.get("special_shape_geometry_json")
+        if geometry_source == "cnc_raw_rect" or (
+            not exact_geometry and not source_geometry and not source.get("special_shape_geometry_json")
+        ):
+            piece.pop("geometry", None)
     return piece
 
 
@@ -431,12 +458,23 @@ def _labels_for_pieces(pieces: Sequence[Mapping[str, Any]]) -> list[dict[str, An
     labels: list[dict[str, Any]] = []
     for piece in pieces:
         text = str(piece.get("label") or "").strip()
+        if not text:
+            continue
         geometry = piece.get("geometry") if isinstance(piece.get("geometry"), Mapping) else None
         outer = geometry.get("outer") if geometry else None
-        if not text or not isinstance(outer, list) or len(outer) < 3:
-            continue
-        xs = [num(point[0]) for point in outer]
-        ys = [num(point[1]) for point in outer]
+        if isinstance(outer, list) and len(outer) >= 3:
+            xs = [num(point[0]) for point in outer]
+            ys = [num(point[1]) for point in outer]
+        else:
+            # CNC-raw Special has no persisted DXF geometry; label from placement.
+            x = num(piece.get("x")) * 10.0
+            y = num(piece.get("y")) * 10.0
+            w = num(piece.get("w")) * 10.0
+            h = num(piece.get("h")) * 10.0
+            if not (w > 0 and h > 0):
+                continue
+            xs = [x, x + w]
+            ys = [y, y + h]
         try:
             labels.append(
                 serialize_text_label(

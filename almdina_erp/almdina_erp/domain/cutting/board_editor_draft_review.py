@@ -98,13 +98,20 @@ def trusted_model_from_projection(
         length = num(placement.get("h")) * 10.0
         outline = outlines.get(instance)
         piece_type = str(piece.get("piece_type") or "Regular")
-        if outline is None and width > 0 and length > 0 and piece_type != "Special":
-            outline = [
-                [local_x, local_y],
-                [local_x + width, local_y],
-                [local_x + width, local_y + length],
-                [local_x, local_y + length],
-            ]
+        geometry_source = str(piece.get("geometry_source") or "")
+        exact_geometry = bool(piece.get("exact_geometry"))
+        special_representation = piece.get("special_representation")
+        # CNC-raw Special stock uses the trusted placement rectangle for layout
+        # collision; exact Special without an outline stays unproven.
+        if outline is None and width > 0 and length > 0:
+            allow_rect = piece_type != "Special" or geometry_source == "cnc_raw_rect"
+            if allow_rect:
+                outline = [
+                    [local_x, local_y],
+                    [local_x + width, local_y],
+                    [local_x + width, local_y + length],
+                    [local_x, local_y + length],
+                ]
         pieces[instance] = {
             "piece_instance_id": instance,
             "piece_id": piece.get("piece_id"),
@@ -123,6 +130,9 @@ def trusted_model_from_projection(
             "offcut_source_party": piece.get("offcut_source_party"),
             "offcut_execution_party": piece.get("offcut_execution_party"),
             "piece_type": piece_type,
+            "geometry_source": geometry_source,
+            "exact_geometry": exact_geometry,
+            "special_representation": special_representation,
             "clipped_corner_position": piece.get("clipped_corner_position"),
             "clipped_corner_width_cm": piece.get("clipped_corner_width_cm"),
             "clipped_corner_length_cm": piece.get("clipped_corner_length_cm"),

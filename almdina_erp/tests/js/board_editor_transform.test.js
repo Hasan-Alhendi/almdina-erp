@@ -218,7 +218,7 @@ function nextAnglePairTarget(currentDeg, firstDeg, secondDeg) {
     assert.match(page, /transform_geometry\.js\?v=1/);
     assert.match(page, /position_geometry\.js\?v=1/);
     assert.match(page, /controller\.js\?v=24/);
-    assert.match(page, /canvas_renderer\.js\?v=24/);
+    assert.match(page, /canvas_renderer\.js\?v=25/);
     assert.match(page, /board_editor\.css\?v=24/);
     assert.match(arCsv, /Toggle rotation 0° ↔ 180°/);
     assert.match(arCsv, /Toggle rotation 90° ↔ 270°/);
