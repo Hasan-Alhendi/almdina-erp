@@ -153,7 +153,13 @@
             if (!page) return 0;
             const top = page.getBoundingClientRect().top;
             if (top < 1) return 0;
-            const height = Math.max(320, Math.round(window.innerHeight - top));
+            // Remaining viewport is visual; page uses CSS zoom so layout height
+            // must be visual / zoom to fill without leftover gaps or scroll.
+            const uiZoom = CanvasRenderer.elementCssZoom
+                ? CanvasRenderer.elementCssZoom(page)
+                : (Number(CanvasRenderer.UI_ZOOM) || 0.9);
+            const visualHeight = Math.max(320, Math.round(window.innerHeight - top));
+            const height = Math.max(320, Math.round(visualHeight / Math.max(uiZoom, 1e-6)));
             page.style.height = `${height}px`;
             page.style.maxHeight = `${height}px`;
             page.style.overflow = "hidden";
@@ -568,15 +574,24 @@
             const current = store.snapshot().viewport;
             const scrollX = stage ? Number(stage.scrollLeft) || 0 : liveScroll.x;
             const scrollY = stage ? Number(stage.scrollTop) || 0 : liveScroll.y;
-            const rect = stage && stage.getBoundingClientRect
-                ? stage.getBoundingClientRect()
-                : { left: 0, top: 0, width: stageSize().width, height: stageSize().height };
+            const layoutSize = stageSize();
             const pointer = zoomFocalClient(client);
             if (pointer) {
                 lastCanvasPointerClient = { x: pointer.x, y: pointer.y };
             }
-            const focalX = pointer ? pointer.x - rect.left : rect.width / 2;
-            const focalY = pointer ? pointer.y - rect.top : rect.height / 2;
+            // Focal must be in stage layout units (same as scrollLeft), not visual
+            // getBoundingClientRect space under CSS zoom.
+            let focalX = layoutSize.width / 2;
+            let focalY = layoutSize.height / 2;
+            if (pointer && stage && CanvasRenderer.clientPointToLocal) {
+                const local = CanvasRenderer.clientPointToLocal(stage, pointer.x, pointer.y);
+                focalX = local.x;
+                focalY = local.y;
+            } else if (pointer && stage && stage.getBoundingClientRect) {
+                const rect = stage.getBoundingClientRect();
+                focalX = pointer.x - rect.left;
+                focalY = pointer.y - rect.top;
+            }
             const metrics = lastCanvasApi && lastCanvasApi.metrics;
             // Prefer live rendered metrics so pad/min match the SVG currently on screen.
             const scale = Number(metrics && metrics.scale) || Number(current.scale) || 1;
@@ -597,8 +612,8 @@
             const worldW = Number(metrics && metrics.width) || 0;
             const worldH = Number(metrics && metrics.height) || 0;
             const viewSize = {
-                width: Math.max(1, Number(rect.width) || stageSize().width || 1),
-                height: Math.max(1, Number(rect.height) || stageSize().height || 1),
+                width: Math.max(1, layoutSize.width || 1),
+                height: Math.max(1, layoutSize.height || 1),
             };
             const next = CanvasRenderer.zoomAroundFocal({
                 scale,

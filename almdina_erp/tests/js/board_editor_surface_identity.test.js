@@ -52,8 +52,14 @@ function loadContext(workspacePayload, permissions = {
         },
     };
     const routes = [];
+    const opened = [];
     const windowObj = {
         addEventListener() {},
+        location: { origin: "https://erp.example.test" },
+        open(url, target, features) {
+            opened.push({ url, target, features });
+            return { opener: windowObj };
+        },
         AlmdinaLocale: {
             translate: (message) => message,
             direction: () => "rtl",
@@ -106,7 +112,7 @@ function loadContext(workspacePayload, permissions = {
     windowObj.$ = context.$;
     vm.createContext(context);
     vm.runInContext(fs.readFileSync(CONTEXT_PATH, "utf8"), context);
-    return { owner: context.window.AlmdinaPlanContextActionsUX, host, context, routes };
+    return { owner: context.window.AlmdinaPlanContextActionsUX, host, context, routes, opened };
 }
 
 const planA = {
@@ -154,7 +160,7 @@ const afterApproveA = {
 };
 
 {
-    const { owner, host, routes } = loadContext(afterApproveA);
+    const { owner, host, routes, opened } = loadContext(afterApproveA);
     const frm = {
         doctype: "Door Cutting Order",
         doc: { name: "26-00021", status: "Draft", production_path: "" },
@@ -169,8 +175,18 @@ const afterApproveA = {
     owner.render(frm, host);
     assert.doesNotMatch(host.html(), /Approve the edited plan/);
     assert.match(host.html(), /Open board editor/);
+    assert.match(host.html(), /class="[^"]*dco-open-board-editor[^"]*"/);
+    assert.match(host.html(), /target="_blank"/);
+    assert.match(host.html(), /rel="noopener noreferrer"/);
+    assert.match(
+        host.html(),
+        /href="\/app\/board-editor\/26-00021\/CP-A"/
+    );
     owner.runOpenBoardEditor(frm);
-    assert.deepEqual(routes[0], ["board-editor", "26-00021", "CP-A"]);
+    assert.equal(routes.length, 0, "order tab must not navigate via set_route");
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0].target, "_blank");
+    assert.match(opened[0].url, /\/app\/board-editor\/26-00021\/CP-A$/);
 }
 
 {
@@ -191,7 +207,7 @@ const afterApproveA = {
     };
     assert.equal(withB.approved_plan, "CP-A");
     assert.equal(withB.plans.approved.name, "CP-A");
-    const { owner, routes } = loadContext(withB);
+    const { owner, routes, opened } = loadContext(withB);
     const frm = {
         doctype: "Door Cutting Order",
         doc: { name: "26-00021", status: "Draft", production_path: "" },
@@ -202,7 +218,9 @@ const afterApproveA = {
     assert.equal(owner.rowForTab(frm, "Approved").name, "CP-A");
     assert.equal(owner.canApprove(frm, "BoardEditor", owner.rowForTab(frm)), true);
     owner.runOpenBoardEditor(frm);
-    assert.deepEqual(routes[0], ["board-editor", "26-00021", "CP-B"]);
+    assert.equal(routes.length, 0);
+    assert.equal(opened.length, 1);
+    assert.match(opened[0].url, /\/app\/board-editor\/26-00021\/CP-B$/);
 }
 
 {

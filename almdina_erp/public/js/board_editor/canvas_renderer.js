@@ -578,8 +578,59 @@
     const GRID_WIDTH_RATIO = 0.625;
     // Opening boards render denser than the old fit-to-grid scale (~30% smaller).
     const OPENING_SCALE_FACTOR = 0.7;
+    // Must match --abe-ui-zoom in board_editor.css (visual chrome only).
+    const UI_ZOOM = 0.9;
     const BOARD_SCREEN_MIN_PX = 300;
     const BOARD_SCREEN_MAX_PX = 380;
+
+    function declaredUiZoom(element) {
+        const page = element && element.closest
+            ? element.closest(".abe-page")
+            : null;
+        if (page && typeof window.getComputedStyle === "function") {
+            const raw = String(window.getComputedStyle(page).getPropertyValue("--abe-ui-zoom") || "").trim();
+            const parsed = Number(raw);
+            if (Number.isFinite(parsed) && parsed > 0.05 && parsed < 8) return parsed;
+        }
+        return UI_ZOOM;
+    }
+
+    function elementCssZoom(element) {
+        // CSS zoom (and Browser Zoom) make getBoundingClientRect visual while
+        // clientWidth/scrollLeft stay in element layout units. Ratio bridges them.
+        if (!element || typeof element.getBoundingClientRect !== "function") {
+            return declaredUiZoom(element);
+        }
+        const layout = Math.max(0, Number(element.clientWidth) || 0);
+        if (!(layout > 0)) return declaredUiZoom(element);
+        const visual = Number(element.getBoundingClientRect().width) || 0;
+        if (!(visual > 0)) return declaredUiZoom(element);
+        const ratio = visual / layout;
+        if (!(ratio > 0.05) || !(ratio < 8)) return declaredUiZoom(element);
+        return ratio;
+    }
+
+    function clientPointToLocal(element, clientX, clientY) {
+        const rect = element && typeof element.getBoundingClientRect === "function"
+            ? element.getBoundingClientRect()
+            : { left: 0, top: 0, width: 1, height: 1 };
+        const zoom = elementCssZoom(element);
+        return {
+            x: (Number(clientX) - Number(rect.left)) / zoom,
+            y: (Number(clientY) - Number(rect.top)) / zoom,
+            zoom,
+            rect,
+        };
+    }
+
+    function clientDeltaToLocal(element, deltaX, deltaY) {
+        const zoom = elementCssZoom(element);
+        return {
+            x: Number(deltaX) / zoom,
+            y: Number(deltaY) / zoom,
+            zoom,
+        };
+    }
 
     function sheetSize(sheet) {
         return {
@@ -2298,12 +2349,11 @@
             if (handlers && handlers.onCanvasPointerMove) handlers.onCanvasPointerMove(event);
             if (handlers && handlers.onStagePointerMove) handlers.onStagePointerMove(event);
             if (!panning) return;
-            const dx = event.clientX - lastX;
-            const dy = event.clientY - lastY;
+            const delta = clientDeltaToLocal(stage, event.clientX - lastX, event.clientY - lastY);
             lastX = event.clientX;
             lastY = event.clientY;
-            stage.scrollLeft -= dx;
-            stage.scrollTop -= dy;
+            stage.scrollLeft -= delta.x;
+            stage.scrollTop -= delta.y;
         });
         stage.addEventListener("pointerup", (event) => {
             if (panning) {
@@ -2447,6 +2497,10 @@
         FLOAT_CLEARANCE_PX,
         GRID_WIDTH_RATIO,
         OPENING_SCALE_FACTOR,
+        UI_ZOOM,
+        elementCssZoom,
+        clientPointToLocal,
+        clientDeltaToLocal,
         BOARD_SCREEN_MIN_PX,
         BOARD_SCREEN_MAX_PX,
         BOARD_TITLE_MM,

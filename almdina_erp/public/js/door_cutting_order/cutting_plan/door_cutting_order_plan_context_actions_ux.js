@@ -297,15 +297,56 @@
         );
     }
 
-    function runOpenBoardEditor(frm) {
+    let openBoardEditorGuardUntil = 0;
+
+    function boardEditorAppPath(orderName, planName, options) {
+        const segments = ["board-editor", String(orderName || "").trim(), String(planName || "").trim()];
+        if (options && options.sourceOnly) segments.push("source");
+        return `/app/${segments.map((part) => encodeURIComponent(part)).join("/")}`;
+    }
+
+    function boardEditorHref(orderName, planName, options) {
+        const path = boardEditorAppPath(orderName, planName, options);
+        if (window.frappe && frappe.urllib && typeof frappe.urllib.get_full_url === "function") {
+            return frappe.urllib.get_full_url(path);
+        }
+        const origin = String((window.location && window.location.origin) || "").replace(/\/$/, "");
+        return origin ? `${origin}${path}` : path;
+    }
+
+    function runOpenBoardEditor(frm, event) {
         const row = rowForTab(frm);
-        if (!canOpenBoardEditor(frm, row)) return;
+        if (!canOpenBoardEditor(frm, row)) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
         const orderName = String((frm.doc && frm.doc.name) || "").trim();
         // Prefer the selected row identity. For Edited plans that is the Board
         // Editor Cutting Plan itself; otherwise the visible source plan.
         const planName = String((row && row.name) || "").trim();
-        if (!orderName || !planName) return;
-        frappe.set_route("board-editor", orderName, planName);
+        if (!orderName || !planName) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
+        const now = Date.now();
+        if (now < openBoardEditorGuardUntil) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
+        openBoardEditorGuardUntil = now + 500;
+        const href = boardEditorHref(orderName, planName);
+        // Keep the order form tab untouched: never frappe.set_route here.
+        if (event && event.currentTarget && event.currentTarget.tagName === "A") {
+            event.currentTarget.setAttribute("href", href);
+            return true;
+        }
+        if (typeof window.open === "function") {
+            const opened = window.open(href, "_blank", "noopener,noreferrer");
+            if (opened) {
+                try { opened.opener = null; } catch (err) { /* ignore */ }
+            }
+        }
+        return true;
     }
 
     function canExport(frm, row) {
@@ -660,8 +701,10 @@
 
     function toolsHtml(frm, row) {
         const tab = activeTab(frm);
-        const boardEditor = canOpenBoardEditor(frm, row)
-            ? `<button type="button" class="btn btn-default btn-sm dco-open-board-editor"><span aria-hidden="true">▦</span>${esc(translate("Open board editor"))}</button>`
+        const orderName = String((frm.doc && frm.doc.name) || "").trim();
+        const planName = String((row && row.name) || "").trim();
+        const boardEditor = canOpenBoardEditor(frm, row) && orderName && planName
+            ? `<a class="btn btn-default btn-sm dco-open-board-editor" href="${esc(boardEditorAppPath(orderName, planName))}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">▦</span>${esc(translate("Open board editor"))}</a>`
             : "";
         const print = canPrint(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(translate("Print"))}</button>`
@@ -715,7 +758,9 @@
 
         target.find(".dco-plan-context-approve").off("click").on("click", () => runApproval(frm));
         target.find(".dco-plan-context-cancel").off("click").on("click", () => runCancelApproval(frm));
-        target.find(".dco-open-board-editor").off("click").on("click", () => runOpenBoardEditor(frm));
+        target.find(".dco-open-board-editor").off("click").on("click", (event) => {
+            runOpenBoardEditor(frm, event);
+        });
         target.find(".dco-print-cutting-plan").off("click").on("click", () => runPrint(frm));
         target.find(".dco-export-dxf").off("click").on("click", () => runExport(frm));
         target.find(".dco-upload-dxf-plan").off("click").on("click", () => runUpload(frm));
@@ -770,6 +815,8 @@
         canApprove,
         canOpenBoardEditor,
         approveDenialReason,
+        boardEditorAppPath,
+        boardEditorHref,
         render,
         refresh,
         runApproval,

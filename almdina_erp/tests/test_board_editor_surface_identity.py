@@ -176,8 +176,12 @@ class WorkspaceSurfaceContractTests(unittest.TestCase):
         self.assertIn("content_identity", tabs)
         self.assertIn("Unapplied board-editor draft", tabs)
         self.assertIn("rowForTab(frm)", context)
-        self.assertIn("frappe.set_route(\"board-editor\", orderName, planName)", context)
-        self.assertIn('if (tab === "BoardEditor") return plans.board_editor_draft || null;', state)
+        self.assertIn("boardEditorAppPath", context)
+        self.assertIn('target="_blank"', context)
+        self.assertIn("noopener noreferrer", context)
+        self.assertNotIn("frappe.set_route(\"board-editor\", orderName, planName)", context)
+        self.assertIn('if (tab === "BoardEditor") {', state)
+        self.assertIn("plans.board_editor_draft", state)
         # Tab switch must not rewrite approved_plan.
         self.assertNotIn("approved_plan =", tabs.split("function onTabClick", 1)[1][:400])
 

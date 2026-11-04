@@ -1,4 +1,6 @@
 .abe-page {
+  /* Single control point for the board-editor chrome scale (not Browser Zoom). */
+  --abe-ui-zoom: 0.9;
   /* Height is the measured space under the Frappe page head, not another viewport. */
   display: flex;
   flex-direction: column;
@@ -6,6 +8,11 @@
   overflow: hidden;
   background: var(--alm-bg, #f3f5f8);
   color: var(--alm-text, #172033);
+  /* Visual 90% while layout width compensates so the page still fills the shell. */
+  zoom: var(--abe-ui-zoom);
+  width: calc(100% / var(--abe-ui-zoom));
+  max-width: none;
+  box-sizing: border-box;
 }
 
 /* Title + page actions span the full editor head (outside Desk sidebar).
