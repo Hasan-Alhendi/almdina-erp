@@ -21,7 +21,7 @@
         `${ASSET_ROOT}/position_geometry.js?v=1`,
         `${ASSET_ROOT}/move_interaction.js?v=19`,
         `${ASSET_ROOT}/rotation_interaction.js?v=18`,
-        `${ASSET_ROOT}/measure_interaction.js?v=2`,
+        `${ASSET_ROOT}/measure_interaction.js?v=3`,
         "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js?v=18",
         "/assets/almdina_erp/js/door_cutting_order/drawing/door_cutting_order_clipped_corner_ux.js?v=18",
         `${ASSET_ROOT}/plan_display_style.js?v=18`,

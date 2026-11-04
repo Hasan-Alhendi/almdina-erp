@@ -1013,6 +1013,10 @@
                     isAltKey: () => altHeld,
                     isPanKey: () => spaceHeld,
                     isMeasureToolActive: () => Boolean(store && store.snapshot().measureToolActive),
+                    isDragActive: () => Boolean(
+                        (moveInteraction && moveInteraction.isActive && moveInteraction.isActive())
+                        || (rotationInteraction && rotationInteraction.isActive && rotationInteraction.isActive())
+                    ),
                     onOverlay: (lines) => {
                         const host = ensureShell().querySelector("[data-abe-canvas]");
                         if (!host) return;
@@ -1228,6 +1232,7 @@
                 onStagePointerMove: (event) => {
                     // Keep Alt latch aligned with live modifier state (keyup can be lost
                     // after focus changes). Drag snap-bypass still reads the same flag.
+                    const wasAltHeld = altHeld;
                     if (event && typeof event.altKey === "boolean") {
                         altHeld = Boolean(event.altKey);
                     }
@@ -1235,7 +1240,9 @@
                         measureInteraction.isToolGestureActive()
                         || (store && store.snapshot().measureToolActive)
                         || altHeld
+                        || wasAltHeld
                         || (event && event.altKey)
+                        || (measureInteraction.hasAltOverlay && measureInteraction.hasAltOverlay())
                     )) {
                         measureInteraction.onPointerMove(event);
                         if (measureInteraction.isToolGestureActive() || (store && store.snapshot().measureToolActive)) {

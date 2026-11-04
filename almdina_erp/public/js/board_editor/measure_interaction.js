@@ -1,6 +1,8 @@
 (() => {
     "use strict";
 
+    const ALT_CACHE_MAX_ENTRIES = 32;
+
     function createMeasureInteraction(options) {
         const {
             store,
@@ -9,6 +11,7 @@
             isAltKey,
             isPanKey,
             isMeasureToolActive,
+            isDragActive,
             onOverlay,
             onRejected,
         } = options || {};
@@ -17,7 +20,9 @@
         let committedLine = null;
         let altOverlay = [];
         let lastPointer = null;
-        let altCache = null;
+        let altCacheSession = null;
+        let altCacheEntries = new Map();
+        let publishedCacheKey = null;
         let geometryComputeCount = 0;
 
         function geometry() {
@@ -127,13 +132,23 @@
         }
 
         function invalidateAltCache() {
-            altCache = null;
+            altCacheSession = null;
+            altCacheEntries = new Map();
+            publishedCacheKey = null;
+        }
+
+        function hideAltOverlay() {
+            if (!(altOverlay && altOverlay.length) && publishedCacheKey == null) {
+                return;
+            }
+            altOverlay = [];
+            publishedCacheKey = null;
+            publish();
         }
 
         function clearAltOverlay() {
-            altOverlay = [];
-            invalidateAltCache();
-            publish();
+            // Hide displayed Alt lines; keep multi-target cache for the current session.
+            hideAltOverlay();
         }
 
         function clearToolLine() {
@@ -146,73 +161,74 @@
             toolGesture = null;
             committedLine = null;
             altOverlay = [];
+            publishedCacheKey = null;
             invalidateAltCache();
             publish();
         }
 
-        function geometryRevision(session, selectedKey) {
-            if (!session) return "";
-            const pieces = session.pieces || {};
-            const boards = session.boards || {};
-            const selected = pieces[selectedKey];
-            const sheetNo = selected ? selected.sheet_no : null;
-            const parts = [
-                `k:${selectedKey}`,
-                `kerf:${session.kerf_mm}`,
-            ];
-            Object.keys(boards).forEach((key) => {
-                const board = boards[key];
-                if (!board) return;
-                if (sheetNo != null && Number(board.sheet_no) !== Number(sheetNo)) return;
-                parts.push([
-                    "b",
-                    key,
-                    board.origin_x_mm,
-                    board.origin_y_mm,
-                    board.trim_x_mm,
-                    board.trim_y_mm,
-                    board.width_mm,
-                    board.height_mm,
-                    board.usable_width_mm,
-                    board.usable_length_mm,
-                ].join(":"));
-            });
-            Object.keys(pieces).forEach((key) => {
-                const piece = pieces[key];
-                if (!piece) return;
-                if (sheetNo != null && Number(piece.sheet_no) !== Number(sheetNo)) return;
-                const outlineLen = Array.isArray(piece.outline_mm) ? piece.outline_mm.length : 0;
-                parts.push([
-                    "p",
-                    key,
-                    piece.distribution,
-                    piece.local_x_mm,
-                    piece.local_y_mm,
-                    piece.rotation_deg,
-                    piece.flip_h ? 1 : 0,
-                    piece.flip_v ? 1 : 0,
-                    outlineLen,
-                    piece.outline_mm && piece.outline_mm[0] ? piece.outline_mm[0][0] : "",
-                    piece.outline_mm && piece.outline_mm[0] ? piece.outline_mm[0][1] : "",
-                ].join(":"));
-            });
-            return parts.join("|");
+        function hasAltOverlay() {
+            return Boolean(altOverlay && altOverlay.length);
+        }
+
+        function ensureCacheScope(session) {
+            // History/store replace the session document object on every geometry
+            // commit, undo, redo, replace, and reload — object identity is the revision.
+            if (altCacheSession !== session) {
+                altCacheEntries = new Map();
+                altCacheSession = session;
+                publishedCacheKey = null;
+            }
+        }
+
+        function cacheEntryKey(selectedKey, hoverKey) {
+            if (hoverKey) return `${selectedKey}::piece::${hoverKey}`;
+            return `${selectedKey}::edge`;
+        }
+
+        function readCache(entryKey) {
+            if (!altCacheEntries.has(entryKey)) return null;
+            const lines = altCacheEntries.get(entryKey);
+            // Refresh LRU order.
+            altCacheEntries.delete(entryKey);
+            altCacheEntries.set(entryKey, lines);
+            return lines;
+        }
+
+        function writeCache(entryKey, lines) {
+            if (altCacheEntries.has(entryKey)) altCacheEntries.delete(entryKey);
+            altCacheEntries.set(entryKey, lines.slice());
+            while (altCacheEntries.size > ALT_CACHE_MAX_ENTRIES) {
+                const oldest = altCacheEntries.keys().next().value;
+                altCacheEntries.delete(oldest);
+            }
+        }
+
+        function publishCached(entryKey, lines) {
+            altOverlay = lines.slice();
+            publishedCacheKey = entryKey;
+            publish();
         }
 
         function refreshAltInspection(clientX, clientY, event) {
             const MG = geometry();
             const snap = store && store.snapshot();
             if (!MG || !snap || !snap.session) {
-                clearAltOverlay();
+                hideAltOverlay();
+                invalidateAltCache();
                 return;
             }
-            // While dragging with Alt, snap-bypass owns Alt — do not show spacing.
+            // Measure tool mode owns the pointer; Alt spacing stays off.
             if (isMeasureToolActive && isMeasureToolActive()) {
-                clearAltOverlay();
+                hideAltOverlay();
+                return;
+            }
+            // Drag/rotate owns Alt for snap-bypass — do not compete with spacing overlay.
+            if (isDragActive && isDragActive()) {
+                hideAltOverlay();
                 return;
             }
             if (!altActive(event)) {
-                clearAltOverlay();
+                hideAltOverlay();
                 return;
             }
             const selectedKey = snap.selectedPieceKey
@@ -220,14 +236,16 @@
                     ? snap.selectedPieceKeys[0]
                     : null);
             if (!selectedKey || (Array.isArray(snap.selectedPieceKeys) && snap.selectedPieceKeys.length > 1)) {
-                clearAltOverlay();
+                hideAltOverlay();
                 return;
             }
             const selected = snap.session.pieces[selectedKey];
             if (!selected || selected.distribution === "excluded") {
-                clearAltOverlay();
+                hideAltOverlay();
                 return;
             }
+
+            ensureCacheScope(snap.session);
 
             const world = clientX != null
                 ? clientToWorld(clientX, clientY)
@@ -239,10 +257,13 @@
                 if (hoverKey === selectedKey) hoverKey = null;
             }
 
-            const revision = geometryRevision(snap.session, selectedKey);
-            const cacheKey = `${selectedKey}::${hoverKey || ""}::${revision}`;
-            if (altCache && altCache.key === cacheKey) {
-                // Same hover target and geometry: keep the published overlay as-is.
+            const entryKey = cacheEntryKey(selectedKey, hoverKey);
+            if (publishedCacheKey === entryKey) {
+                return;
+            }
+            const cached = readCache(entryKey);
+            if (cached) {
+                publishCached(entryKey, cached);
                 return;
             }
 
@@ -263,7 +284,8 @@
                     style: "alt",
                 }));
             }
-            altCache = { key: cacheKey, lines: altOverlay.slice() };
+            writeCache(entryKey, altOverlay);
+            publishedCacheKey = entryKey;
             publish();
         }
 
@@ -289,7 +311,7 @@
             };
             committedLine = null;
             altOverlay = [];
-            invalidateAltCache();
+            publishedCacheKey = null;
             publish();
             if (event.preventDefault) event.preventDefault();
             return true;
@@ -369,6 +391,10 @@
             geometryComputeCount = 0;
         }
 
+        function getAltCacheSize() {
+            return altCacheEntries.size;
+        }
+
         return Object.freeze({
             beginTool,
             onPointerMove,
@@ -378,11 +404,14 @@
             clearAll,
             clearToolLine,
             clearAltOverlay,
+            hideAltOverlay,
+            hasAltOverlay,
             refreshAltInspection,
             isToolGestureActive,
             clientToWorld,
             getGeometryComputeCount,
             resetGeometryComputeCount,
+            getAltCacheSize,
         });
     }
 

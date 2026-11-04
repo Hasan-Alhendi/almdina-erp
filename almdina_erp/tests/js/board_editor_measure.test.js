@@ -417,7 +417,9 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.match(controller, /refreshAltInspection/);
     assert.match(controller, /clearAltOverlay/);
     assert.match(page, /measure_geometry\.js\?v=1/);
-    assert.match(page, /measure_interaction\.js\?v=2/);
+    assert.match(page, /measure_interaction\.js\?v=3/);
+    assert.match(controller, /isDragActive/);
+    assert.match(controller, /wasAltHeld/);
     assert.doesNotMatch(sessionDoc, /measureToolActive|measure_lines|abe-measure/);
     assert.doesNotMatch(draft, /measure_line|measureTool/);
     assert.match(arCsv, /^Measure,/m);
@@ -498,7 +500,7 @@ function overlayMode(overlay) {
     return "piece";
 }
 
-// 18: Alt hover transitions Empty → B → Empty → C → B → Empty without reselection.
+// 18: multi-target cache — Empty → B → C → B → Empty computes once per target.
 {
     const harness = makeAltHarness([
         rectPiece("instance:a", 100, 100, 50, 50),
@@ -506,13 +508,13 @@ function overlayMode(overlay) {
         rectPiece("instance:c", 100, 300, 50, 50),
     ]);
     harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    harness.interaction.resetGeometryComputeCount();
     const sequence = [
-        { point: [40, 40], expect: "edge" },
-        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150 },
-        { point: [40, 40], expect: "edge" },
-        { point: [125, 325], expect: "piece", other: "instance:c", distance: 150 },
-        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150 },
-        { point: [40, 40], expect: "edge" },
+        { point: [40, 40], expect: "edge", computes: 1 },
+        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150, computes: 2 },
+        { point: [125, 325], expect: "piece", other: "instance:c", distance: 150, computes: 3 },
+        { point: [325, 125], expect: "piece", other: "instance:b", distance: 150, computes: 3 },
+        { point: [40, 40], expect: "edge", computes: 3 },
     ];
     sequence.forEach((step, index) => {
         const overlay = harness.moveTo(step.point[0], step.point[1]);
@@ -526,8 +528,14 @@ function overlayMode(overlay) {
             assert.equal(overlay[0].pieceKeyB, step.other, `step ${index} target`);
             assert.ok(Math.abs(overlay[0].distance - step.distance) < 1e-6);
         }
+        assert.equal(
+            harness.interaction.getGeometryComputeCount(),
+            step.computes,
+            `step ${index} compute count`
+        );
         assert.equal(harness.store.snapshot().selectedPieceKey, "instance:a");
     });
+    assert.equal(harness.interaction.getAltCacheSize(), 3);
     harness.dispose();
 }
 
@@ -574,7 +582,7 @@ function overlayMode(overlay) {
     harness.dispose();
 }
 
-// 20: geometry cache skips repeats over same target; recomputes on hover change / geometry edit.
+// 20: same-target pointer moves do not recompute; geometry/session change invalidates cache.
 {
     const harness = makeAltHarness([
         rectPiece("instance:a", 100, 100, 50, 50),
@@ -585,60 +593,90 @@ function overlayMode(overlay) {
     harness.moveTo(40, 40);
     harness.moveTo(42, 41);
     harness.moveTo(45, 44);
-    const edgeComputes = harness.interaction.getGeometryComputeCount();
-    assert.equal(edgeComputes, 1, "empty hover must compute once while target stays empty");
+    assert.equal(harness.interaction.getGeometryComputeCount(), 1);
     harness.moveTo(325, 125);
     assert.equal(harness.interaction.getGeometryComputeCount(), 2);
     harness.moveTo(330, 128);
     harness.moveTo(320, 122);
-    assert.equal(
-        harness.interaction.getGeometryComputeCount(),
-        2,
-        "same piece hover must not recompute clearance"
-    );
+    assert.equal(harness.interaction.getGeometryComputeCount(), 2);
+
     const moved = JSON.parse(JSON.stringify(harness.store.snapshot().session));
     moved.pieces["instance:b"].local_x_mm = 340;
     moved.pieces["instance:b"].outline_mm = [[340, 100], [390, 100], [390, 150], [340, 150]];
     moved.pieces["instance:b"].base_outline_mm = moved.pieces["instance:b"].outline_mm;
-    harness.history.commit(moved);
-    harness.store.attachSession(harness.history.get(), harness.history);
+    harness.store.commitSession(moved);
     harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
     const before = harness.interaction.getGeometryComputeCount();
     const overlayAfterMove = harness.moveTo(360, 125);
     assert.equal(harness.interaction.getGeometryComputeCount(), before + 1);
     assert.equal(overlayMode(overlayAfterMove), "piece");
     assert.ok(Math.abs(overlayAfterMove[0].distance - 190) < 1e-6);
+
+    // Outline vertex change that keeps length and first point — session identity still changes.
+    const reshaped = JSON.parse(JSON.stringify(harness.store.snapshot().session));
+    reshaped.pieces["instance:b"].outline_mm = [[340, 100], [400, 100], [390, 150], [340, 150]];
+    reshaped.pieces["instance:b"].base_outline_mm = reshaped.pieces["instance:b"].outline_mm;
+    harness.store.commitSession(reshaped);
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    const beforeReshape = harness.interaction.getGeometryComputeCount();
+    harness.moveTo(360, 125);
+    assert.equal(harness.interaction.getGeometryComputeCount(), beforeReshape + 1);
+
+    harness.store.undo();
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    const beforeUndo = harness.interaction.getGeometryComputeCount();
+    const afterUndo = harness.moveTo(360, 125);
+    assert.equal(harness.interaction.getGeometryComputeCount(), beforeUndo + 1);
+    assert.ok(Math.abs(afterUndo[0].distance - 190) < 1e-6);
+
+    harness.store.redo();
+    harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    const beforeRedo = harness.interaction.getGeometryComputeCount();
+    harness.moveTo(360, 125);
+    assert.equal(harness.interaction.getGeometryComputeCount(), beforeRedo + 1);
     harness.dispose();
 }
 
-// 21: clear selection and Alt release drop stale overlay; Alt re-press restores.
+// 21: Alt release / lost keyup hides overlay; cache survives for Alt re-press.
 {
     const harness = makeAltHarness([
         rectPiece("instance:a", 100, 100, 50, 50),
         rectPiece("instance:b", 300, 100, 50, 50),
     ]);
     harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    harness.interaction.resetGeometryComputeCount();
     assert.equal(overlayMode(harness.moveTo(325, 125)), "piece");
+    assert.equal(harness.interaction.getGeometryComputeCount(), 1);
+    assert.equal(harness.interaction.getAltCacheSize(), 1);
+
     harness.store.selectPiece(null, { mode: "replace" });
     harness.moveTo(325, 125);
     assert.equal(overlayMode(harness.getOverlay()), "none");
 
     harness.store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
     assert.equal(overlayMode(harness.moveTo(325, 125)), "piece");
-    harness.setAlt(false);
+    // Cache hit for B after reselection within the same session.
+    assert.equal(harness.interaction.getGeometryComputeCount(), 1);
+
+    // Lost keyup: isAltKey latch may still be true, but pointer reports altKey=false.
     harness.interaction.onPointerMove({
         clientX: harness.toClient(325, 125).x,
         clientY: harness.toClient(325, 125).y,
         altKey: false,
     });
     assert.equal(overlayMode(harness.getOverlay()), "none");
+    assert.equal(harness.interaction.hasAltOverlay(), false);
+    assert.equal(harness.interaction.getAltCacheSize(), 1, "hide must keep cached targets");
+
     harness.setAlt(true);
+    harness.interaction.resetGeometryComputeCount();
     harness.interaction.onPointerMove({
         clientX: harness.toClient(325, 125).x,
         clientY: harness.toClient(325, 125).y,
         altKey: true,
     });
     assert.equal(overlayMode(harness.getOverlay()), "piece");
+    assert.equal(harness.interaction.getGeometryComputeCount(), 0, "Alt re-press reuses cache");
     harness.dispose();
 }
 
@@ -683,6 +721,52 @@ function overlayMode(overlay) {
         ),
         true
     );
+}
+
+// 25: during drag, Alt measure overlay stays suppressed (snap-bypass owns Alt).
+{
+    let dragActive = false;
+    const restoreGeometry = installFastClearanceGeometry();
+    const session = sessionWith([
+        rectPiece("instance:a", 100, 100, 50, 50),
+        rectPiece("instance:b", 300, 100, 50, 50),
+    ]);
+    const history = History.create(session);
+    const store = createStore({ projection: { layers: [], sheets: [], elements: [], pieces: [] } });
+    store.attachSession(history.get(), history);
+    store.selectPiece(1, { pieceKey: "instance:a", sheetNo: 1, mode: "replace" });
+    let overlay = null;
+    const pad = 16;
+    const metrics = {
+        minX: 0, minY: 0, width: 1220, height: 2440, scale: 1, pad,
+        contentWidth: 1220 + 32, contentHeight: 2440 + 32 + 72,
+    };
+    const interaction = createMeasureInteraction({
+        store,
+        getSvgEl: () => ({
+            getAttribute: (name) => (name === "width"
+                ? String(metrics.contentWidth)
+                : name === "height" ? String(metrics.contentHeight) : null),
+            getBoundingClientRect: () => ({
+                left: 0, top: 0, width: metrics.contentWidth, height: metrics.contentHeight,
+            }),
+        }),
+        getWorldMetrics: () => metrics,
+        isAltKey: () => true,
+        isPanKey: () => false,
+        isMeasureToolActive: () => false,
+        isDragActive: () => dragActive,
+        onOverlay: (lines) => { overlay = lines; },
+    });
+    interaction.onPointerMove({ clientX: pad + 325, clientY: pad + 125, altKey: true });
+    assert.equal(overlayMode(overlay), "piece");
+    dragActive = true;
+    interaction.onPointerMove({ clientX: pad + 325, clientY: pad + 125, altKey: true });
+    assert.equal(overlayMode(overlay), "none");
+    dragActive = false;
+    interaction.onPointerMove({ clientX: pad + 325, clientY: pad + 125, altKey: true });
+    assert.equal(overlayMode(overlay), "piece");
+    restoreGeometry();
 }
 
 console.log("board_editor_measure.test.js: ok");
