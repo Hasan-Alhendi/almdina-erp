@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
 from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
+from almdina_erp.almdina_erp.domain.cutting.abc_search import ABCSearchPolicy
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
@@ -51,6 +52,7 @@ class CuttingPlanEngine(Protocol):
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
         mirroring_allowed: bool = False,
+        research_abc: ABCSearchPolicy | None = None,
     ) -> dict[str, Any]: ...
 
     def validate(
@@ -100,6 +102,7 @@ class OptimizerOptions:
     min_remnant_area_m2: float
     max_centerable_edge_gap_cm: float = 5.0
     alignment_search_budget_sec: float = 1.0
+    research_abc: ABCSearchPolicy | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +168,12 @@ def optimize_order_plan(
     plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    # Internal research nominees never replace native warm finalists before
+    # real Application projection. No RPC/settings surface enables this path.
+    research_candidates = plan.pop('smart_research_candidates', []) if smart else []
+    native_count = len(raw_candidates)
+    if command.optimizer.research_abc is not None and command.optimizer.research_abc.retention:
+        raw_candidates = [*raw_candidates, *research_candidates[:1]]
     # A shared, finite allowance across the gallery; never extend native search.
     # Begin the shared tail allowance when the first alignment actually starts.
     alignment_budget = {"deadline": None}
@@ -174,7 +183,7 @@ def optimize_order_plan(
     for candidate_index, raw in enumerate(raw_candidates):
         # Reserve a fair portion of the shared tail allowance for every
         # displayed candidate, without extending the total elapsed deadline.
-        alignment_budget["remaining_candidates"] = len(raw_candidates) - candidate_index
+        alignment_budget["remaining_candidates"] = max(1, native_count - candidate_index)
         result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings,
                                    alignment_budget=alignment_budget)
         if result.snapshot['validation']['is_valid']:
@@ -210,7 +219,7 @@ def optimize_order_plan(
             if signature not in seen:
                 seen.add(signature)
                 unique.append(snapshot)
-        snapshots = unique
+        snapshots = unique[:5]
         if snapshots:
             outcome = replace(
                 outcome,
@@ -529,6 +538,8 @@ def _run_engine(
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
         mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        **({'research_abc': command.optimizer.research_abc}
+           if command.optimizer.research_abc is not None else {}),
         **({'seed_plans':command.seed_plans,'search_round':command.search_round}
            if command.seed_plans or command.search_round else {}),
     )

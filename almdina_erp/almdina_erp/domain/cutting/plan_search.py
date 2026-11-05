@@ -312,7 +312,7 @@ def improve_board_regrouping(plan, pieces, board_w_cm, board_h_cm, kerf_cm, *,
     return best
 
 
-def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline):
+def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, deadline, *, attempt_budget=None, yield_attempts=False):
     """At most 24 native packs over small, whole regular-board neighborhoods.
 
     Packing uses the original source objects for identities, machining and
@@ -354,11 +354,15 @@ def _regrouped_board_candidates(plan, pieces, board_w_cm, board_h_cm, kerf_cm, d
                            "MaxRects Best Short Side", "MaxRects Best Area"):
                 if attempts >= 24 or time.monotonic() >= deadline:
                     return
+                if attempt_budget is not None and not attempt_budget.take("regroup"):
+                    return
                 attempts += 1
                 packed = _run_preordered_method(order_pieces(subset, ordering), subset,
                     board_w_cm, board_h_cm, kerf_cm, method, ordering)
                 if (packed.get("unplaced") or not packed.get("sheets")
                         or len(packed["sheets"]) > len(combo)):
+                    if yield_attempts:
+                        yield None
                     continue
                 candidate = deepcopy(plan)
                 kept = [sheet for sheet in candidate["sheets"] if sheet["sheet_no"] not in sheet_numbers]

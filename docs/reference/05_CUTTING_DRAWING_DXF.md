@@ -135,6 +135,17 @@ flowchart LR
 ولا يخفف مدققات التصنيع أو يفعّل P3. القياسات والعقود:
 [Calibrated P5](../evidence/bounded-regrouping-p3/p5-calibrated.md).
 
+### Opt-in ABC search research
+
+Smart يملك مسار Python تجريبيًا معطلًا افتراضيًا لتجربة إعادة التجميع المبكرة
+وحفظ بديل هندسي وقوالب Regular من القطع الأصلية. يعمل توليد المقترحات في Domain
+قبل Final Alignment؛ لا يوسّع عقد التحريك النهائي إلى النقل بين الألواح.
+Application يتحقق من المقترح ويختار بالمقارن النهائي الحالي، مع معرض لا يتجاوز
+خمس خطط. ليس للمسار إعداد مصنع أو RPC أو تفعيل من المتصفح، ولا يغيّر Uploaded
+أو Approved أو الخطط التاريخية أو Stable Kerf. أدلة التطبيق والقيود والأوامر في
+[ABC research](../evidence/abc-search/README.md)؛ اجتياز unit tests وحده لا يجيز
+تفعيله افتراضيًا أو ادعاء خفض الألواح أو زمن CNC.
+
 ### System-Generated Final Cut-Line Alignment Contract
 
 هذا عقد إلزامي عند تعديل Packing/Nesting/Centering/Final Geometry/Cutter Center Paths/DXF:
