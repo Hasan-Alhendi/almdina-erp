@@ -74,8 +74,7 @@ python scripts/benchmark_abc.py --cases regular-48 3687 --budget 5 --repeats 2 \
 On Windows, use a workspace-owned `--basetemp` for pytest when the shared user
 temp pytest directory is inaccessible. The harness records child failures and
 returns failure if any child fails or returns invalid geometry. Each arm is a
-fresh sequential process; arm order reverses between repeats. Arm bits are A/B/C:
-000, 001, 010, 011, 100, 101, 110, 111. It records wall/CPU/peak RSS, dependency
+fresh sequential process; arm order reverses between repeats. It records wall/CPU/peak RSS, dependency
 versions, source SHA/dirty status, raw/final metrics, actual canonical topology,
 identity signatures, local work counts and optional actual JS/strict import.
 RSS is the Python worker's own peak, not child Node memory.
@@ -98,3 +97,9 @@ The 2026-11-05 real-order DXF audit is recorded in
 directed that the designer's `OFFCUT` be treated as required part #17. It remains
 excluded from ABC performance claims until the original manufacturing settings
 and source piece order are known.
+
+The decision study for a remnant-directed Large Neighborhood Search is in
+`remnant-search-study-ar.md`. It documents the existing remnant rank, the current
+12-move local neighborhood, the gap a new search should address, and the
+measurement gates. The values 92.64 and 66.25 remain user-reported pending their
+unit and source metric.
