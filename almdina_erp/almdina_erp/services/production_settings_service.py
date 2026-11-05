@@ -107,6 +107,9 @@ _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
 )
 _SETTINGS_FIELDS = (
     "default_kerf_mm",
+    "default_liner_tool_diameter_mm",
+    "default_handle_recess_tool_diameter_mm",
+    "default_rear_groove_tool_diameter_mm",
     "default_trim_margin_mm",
     "default_packing_mode",
     "default_cutting_machine_type",
@@ -302,8 +305,30 @@ def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
         settings.set(fieldname, canonical[fieldname])
 
 
+def _apply_tool_diameter_defaults(settings: Any, payload: dict[str, Any]) -> None:
+    """Blank keeps the factory field empty so new orders copy the cutting tool."""
+
+    labels = {
+        "default_liner_tool_diameter_mm": _("Default liner tool diameter (mm)"),
+        "default_handle_recess_tool_diameter_mm": _("Default handle recess tool diameter (mm)"),
+        "default_rear_groove_tool_diameter_mm": _("Default rear groove tool diameter (mm)"),
+    }
+    for fieldname, label in labels.items():
+        if fieldname not in payload:
+            continue
+        raw = payload[fieldname]
+        if raw in (None, ""):
+            settings.set(fieldname, None)
+            continue
+        resolved = _finite_non_negative(raw, label)
+        # Zero is not a tool. An empty dialog float arrives as zero and means
+        # "copy the cutting tool onto the next new order".
+        settings.set(fieldname, None if resolved == 0 else flt(resolved))
+
+
 def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     _apply_plan_default_values(settings, payload)
+    _apply_tool_diameter_defaults(settings, payload)
 
     numeric_non_negative = {
         "max_centerable_edge_gap_cm": _("Maximum centerable edge gap (cm)"),

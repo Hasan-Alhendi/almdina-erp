@@ -69,6 +69,9 @@
         "cutting_machine_type",
         "optimization_time_limit_sec",
         "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
     ]);
     const COST_DRAFT_FIELDS = Object.freeze([

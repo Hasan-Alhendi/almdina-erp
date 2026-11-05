@@ -3063,3 +3063,18 @@ Final alignment search budget (seconds),ميزانية بحث المحاذاة �
 Zero disables final alignment. The budget is bounded by the optimization timeout.,القيمة صفر تعطّل المحاذاة النهائية. لا تتجاوز الميزانية مهلة تحسين القص.
 The final alignment budget changed. Recalculate the preview before saving.,تغيّرت ميزانية المحاذاة النهائية. أعد حساب المعاينة قبل الحفظ.
 Final alignment search budget must not exceed optimization timeout.,ميزانية المحاذاة النهائية يجب ألا تتجاوز مهلة تحسين القص.
+Default liner tool diameter (mm),عرض ريشة اللاينر الافتراضي (مم)
+Default handle recess tool diameter (mm),عرض ريشة مسكة الغطس الافتراضي (مم)
+Default rear groove tool diameter (mm),عرض ريشة فرزة الظهر الافتراضي (مم)
+Blank copies the cutting tool diameter onto each new order.,الحقل الفارغ ينسخ عرض ريشة القص إلى كل طلب جديد.
+Same as cutting tool,نفس ريشة القص
+Handle recess,مسكة الغطس
+Rear groove,فرزة الظهر
+Liner tool diameter (mm),عرض ريشة اللاينر (مم)
+Handle recess tool diameter (mm),عرض ريشة مسكة الغطس (مم)
+Rear groove tool diameter (mm),عرض ريشة فرزة الظهر (مم)
+Specify a tool diameter above zero before exporting {0} toolpaths.,حدّد عرض ريشة أكبر من صفر قبل تصدير مسارات {0}.
+The width of {0} is less than its tool diameter.,عرض {0} أصغر من قطر ريشته.
+Specify a tool diameter above zero for {0} toolpaths,حدّد عرض ريشة أكبر من صفر لمسارات {0}
+The width of {0} is less than its tool diameter,عرض {0} أصغر من قطر ريشته
+"Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order.",الهندسة الافتراضية وماكينة القص وحدود البحث. العروض الافتراضية لريش القص: الحقل الفارغ ينسخ عرض ريشة القص إلى كل طلب جديد.

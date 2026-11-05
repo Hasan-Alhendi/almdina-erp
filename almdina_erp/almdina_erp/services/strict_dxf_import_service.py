@@ -220,6 +220,7 @@ def _proxy_order(
     order: Any,
     specs: list[OrderPieceCutSpec],
     settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None = None,
 ) -> Any:
     pieces = []
     for spec in specs:
@@ -283,6 +284,9 @@ def _proxy_order(
         full_board_width_mm=getattr(order, "full_board_width_mm", 0),
         full_board_length_mm=getattr(order, "full_board_length_mm", 0),
         kerf_mm=settings.kerf_mm,
+        liner_tool_diameter_mm=(tool_diameters or {}).get("liner_tool_diameter_mm"),
+        handle_recess_tool_diameter_mm=(tool_diameters or {}).get("handle_recess_tool_diameter_mm"),
+        rear_groove_tool_diameter_mm=(tool_diameters or {}).get("rear_groove_tool_diameter_mm"),
     )
 
 
@@ -1836,6 +1840,7 @@ def parse_production_dxf(
     order: Any,
     *,
     settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate DXF against order pieces and canonical Cutting Plan settings.
 
@@ -1865,7 +1870,7 @@ def parse_production_dxf(
     try:
         snapshot = _legacy_parse_production_dxf(
             file_url,
-            _proxy_order(order, specs, settings),
+            _proxy_order(order, specs, settings, tool_diameters=tool_diameters),
             validate_regular_machining=False,
         )
     except DxfImportError as exc:

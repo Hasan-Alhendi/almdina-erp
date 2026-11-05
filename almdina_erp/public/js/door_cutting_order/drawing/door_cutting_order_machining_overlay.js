@@ -170,6 +170,68 @@
         return api.buildMachiningOverlay(piece, spec, mode);
     }
 
+    function toolDiameterMm(piece, kind) {
+        const map = piece && piece.tool_diameters;
+        const raw = map && map[kind];
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        return num(piece && piece.kerf_mm);
+    }
+
+    function overlayPathPresent(overlay) {
+        const geometry = overlay && overlay.geometry;
+        if (!geometry || typeof geometry !== "object") return false;
+        const path = geometry.path || geometry.outer;
+        return Array.isArray(path) && path.length >= 2;
+    }
+
+    function planBody(plan) {
+        if (!plan || typeof plan !== "object") return null;
+        if (Array.isArray(plan.sheets)) return plan;
+        const raw = plan.snapshot_json != null ? plan.snapshot_json : plan.snapshot;
+        if (raw && typeof raw === "object" && Array.isArray(raw.sheets)) return raw;
+        if (typeof raw === "string" && raw.trim()) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === "object" && Array.isArray(parsed.sheets)) return parsed;
+            } catch (error) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    function layersInPlan(plan) {
+        const present = {
+            readable: false,
+            cut: false,
+            liner: false,
+            recessed_handle_cutout: false,
+            back_groove: false,
+        };
+        const body = planBody(plan);
+        if (!body) return present;
+        present.readable = true;
+        (body.sheets || []).forEach(sheet => {
+            (sheet && sheet.pieces || []).forEach(piece => {
+                if (!piece || typeof piece !== "object") return;
+                const outer = piece.geometry && (piece.geometry.outer || piece.geometry.path);
+                if ((Array.isArray(outer) && outer.length >= 2) || (num(piece.w) > 0 && num(piece.h) > 0)) {
+                    present.cut = true;
+                }
+                ADDONS.forEach(spec => {
+                    if (present[spec.kind]) return;
+                    if (requested(piece, spec.kind)) present[spec.kind] = true;
+                    const overlays = Array.isArray(piece.overlays) ? piece.overlays : [];
+                    if (overlays.some(item => item && item.kind === spec.kind && overlayPathPresent(item))) {
+                        present[spec.kind] = true;
+                    }
+                });
+            });
+        });
+        return present;
+    }
+
     function linerOverlays(piece, mode) {
         const api = geometry();
         const specs = linerSpecsFrom(piece);
@@ -182,7 +244,7 @@
             const host = linerViewHost(piece, specs[0]);
             const geomPiece = typeof api.pieceFromRow === "function" ? api.pieceFromRow(host) : host;
             try {
-                const diameter = num(piece && piece.kerf_mm);
+                const diameter = toolDiameterMm(piece, "liner");
                 if (!(diameter > 0)) {
                     return [{ kind: "liner", layer: "Liner", synthetic: true, error: "cutter_diameter_invalid" }];
                 }
@@ -275,11 +337,12 @@
         return overlays;
     }
 
-    function completeToolpaths(piece, existing, kerfMm, board) {
+    function completeToolpaths(piece, existing, kerfMm, board, diameters) {
         const next = Array.isArray(existing) ? existing.slice() : [];
         if (isSpecialPiece(piece)) return { overlays: next };
         const host = Object.assign({}, piece, {
             kerf_mm: num(kerfMm),
+            tool_diameters: diameters || (piece && piece.tool_diameters) || null,
             board: board || null,
         });
         for (let index = 0; index < ADDONS.length; index += 1) {
@@ -324,6 +387,8 @@
         addon,
         kindForField,
         requested,
+        toolDiameterMm,
+        layersInPlan,
         specFrom,
         linerSpecsFrom,
         applySpecs,

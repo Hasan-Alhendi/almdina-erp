@@ -118,6 +118,9 @@
                 return [
                     { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("Cutting machine type"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
                     { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Default kerf (mm)"), default: values.default_kerf_mm, reqd: 1 },
+                    { fieldname: "default_liner_tool_diameter_mm", fieldtype: "Float", label: t("Default liner tool diameter (mm)"), default: values.default_liner_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },
+                    { fieldname: "default_handle_recess_tool_diameter_mm", fieldtype: "Float", label: t("Default handle recess tool diameter (mm)"), default: values.default_handle_recess_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },
+                    { fieldname: "default_rear_groove_tool_diameter_mm", fieldtype: "Float", label: t("Default rear groove tool diameter (mm)"), default: values.default_rear_groove_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },
                     { fieldname: "default_trim_margin_mm", fieldtype: "Float", label: t("Trimming margin (mm)"), default: values.default_trim_margin_mm, reqd: 1 },
                     { fieldname: "max_centerable_edge_gap_cm", fieldtype: "Float", label: t("Maximum centerable edge gap (cm)"), default: values.max_centerable_edge_gap_cm, reqd: 1, description: t("Center an axis only when both edge gaps are within this limit.") },
                     { fieldname: "default_optimization_time_limit_sec", fieldtype: "Float", label: t("Optimization timeout (seconds)"), default: values.default_optimization_time_limit_sec, reqd: 1 },

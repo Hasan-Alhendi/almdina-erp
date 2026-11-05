@@ -135,6 +135,15 @@ def seed_plan_settings(order_name: str) -> PlanSettings:
     return plan_settings(existing) if existing else factory_default_plan_settings()
 
 
+def manufacturing_plan_document(order_name: str) -> Any | None:
+    """The plan whose kerf a system-plan DXF is measured against."""
+
+    system = latest_plan(order_name, source_type=SYSTEM, status=DRAFT)
+    if system is not None:
+        return system
+    return latest_plan(order_name)
+
+
 def manufacturing_plan_settings(order_name: str) -> PlanSettings:
     """Settings the operator edits, which a system-plan DXF export cuts with.
 

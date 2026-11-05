@@ -66,9 +66,19 @@
     }
 
     function saveSettings(orderName, settings) {
+        const values = settings || {};
+        const args = settingsArgs(orderName, settings);
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             SAVE_SETTINGS_METHOD,
-            settingsArgs(orderName, settings),
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_SAVE_SETTINGS),

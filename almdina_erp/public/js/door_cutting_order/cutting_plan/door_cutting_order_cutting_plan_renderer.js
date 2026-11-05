@@ -1057,6 +1057,31 @@
         return num(frm && frm.doc && frm.doc.kerf_mm);
     }
 
+    function diameterSource(plan, frm) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const store = owner && typeof owner.storeFor === "function" ? owner.storeFor(frm) : null;
+        const state = store && typeof store.snapshot === "function" ? store.snapshot() : null;
+        if (state && state.editing && state.draft) return state.draft;
+        const row = owner && typeof owner.displayedPlan === "function" ? owner.displayedPlan(frm) : null;
+        if (row && row.settings) return row.settings;
+        return plan || {};
+    }
+
+    function layerToolDiameters(plan, frm, cutterMm) {
+        const source = diameterSource(plan, frm);
+        const fields = {
+            liner: "liner_tool_diameter_mm",
+            recessed_handle_cutout: "handle_recess_tool_diameter_mm",
+            back_groove: "rear_groove_tool_diameter_mm",
+        };
+        const map = {};
+        Object.keys(fields).forEach(kind => {
+            const explicit = num(source && source[fields[kind]]);
+            map[kind] = explicit > 0 ? explicit : cutterMm;
+        });
+        return map;
+    }
+
     function drawingOverlays(piece) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         const engine = window.AlmdinaMachiningOverlay;
@@ -1076,8 +1101,8 @@
     }
 
     const LINER_TOOLPATH_MESSAGES = Object.freeze({
-        cutter_diameter_invalid: "Specify a saw blade thickness above zero for {0} toolpaths",
-        liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness",
+        cutter_diameter_invalid: "Specify a tool diameter above zero for {0} toolpaths",
+        liner_narrower_than_cutter: "The width of {0} is less than its tool diameter",
         liner_extension_hits_piece: "The {0} extension overlaps another piece",
         liner_extension_unsafe: "Could not extend the {0} toolpath safely",
         strip_outside: "The {0} strip extends beyond the door",
@@ -1153,6 +1178,13 @@
         });
     }
 
+    function overlayToolDiameter(frame, piece, kind) {
+        const mapped = frame && frame.toolDiameters && frame.toolDiameters[kind];
+        const parsed = num(mapped);
+        if (parsed > 0) return parsed;
+        return num(frame && frame.cutterMm) || num(piece && piece.kerf_mm);
+    }
+
     function guardLinerToolpath(frm, piece, sheet, frame, overlays) {
         const liner = window.AlmdinaLinerGeometry;
         const cutterMm = num(frame && frame.cutterMm) || num(piece && piece.kerf_mm);
@@ -1169,6 +1201,7 @@
             const tools = engine.syntheticOverlays(Object.assign({}, piece, {
                 board,
                 kerf_mm: cutterMm,
+                tool_diameters: (frame && frame.toolDiameters) || null,
             }));
             const obstacles = overlayObstacles(sheet, piece);
             const result = kept.slice();
@@ -1182,7 +1215,7 @@
                     let conflictDetails = null;
                     const conflict = liner.extensionConflict(
                         tool.geometry.path,
-                        cutterMm,
+                        overlayToolDiameter(frame, piece, tool.kind),
                         board,
                         obstacles,
                         details => { conflictDetails = details; }
@@ -1217,7 +1250,7 @@
         let conflictDetails = null;
         const conflict = liner.extensionConflict(
             tool.geometry.path,
-            cutterMm,
+            overlayToolDiameter(frame, piece, "liner"),
             board,
             obstacles,
             details => { conflictDetails = details; }
@@ -1494,6 +1527,7 @@
             innerW: innerW > 0 ? innerW : usableW,
             innerH: innerH > 0 ? innerH : usableH,
             cutterMm: planCutterDiameterMm(plan, frm),
+            toolDiameters: layerToolDiameters(plan, frm, planCutterDiameterMm(plan, frm)),
         };
     }
 

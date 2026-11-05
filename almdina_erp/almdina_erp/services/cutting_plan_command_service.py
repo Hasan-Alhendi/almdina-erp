@@ -485,6 +485,27 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     }
 
 
+def _apply_tool_diameters(plan: Any, updates: dict[str, Any]) -> list[str]:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        TOOL_DIAMETER_FIELDS,
+        explicit_diameter,
+    )
+
+    changed: list[str] = []
+    for fieldname in TOOL_DIAMETER_FIELDS:
+        if fieldname not in updates or updates[fieldname] is None:
+            continue
+        explicit = explicit_diameter(updates[fieldname], fieldname)
+        if explicit is None:
+            continue
+        current = getattr(plan, fieldname, None)
+        if current is not None and abs(flt(current) - explicit) < 0.000001:
+            continue
+        setattr(plan, fieldname, explicit)
+        changed.append(fieldname)
+    return changed
+
+
 def save_system_plan_settings(
     order: Any,
     updates: dict[str, Any],
@@ -506,8 +527,14 @@ def save_system_plan_settings(
             repository,
         )
         plan = repository.get_document(plan.name)
+    # Layer diameters do not move doors. Persist them without marking the
+    # nesting plan stale and without rewriting an approved snapshot.
+    diameter_changed = _apply_tool_diameters(plan, updates)
+    if diameter_changed:
+        repository.save_document(plan)
+        plan = repository.get_document(plan.name)
     result = plan_payload(plan, order)
-    result["changed_fields"] = changed
+    result["changed_fields"] = [*changed, *diameter_changed]
     return result
 
 

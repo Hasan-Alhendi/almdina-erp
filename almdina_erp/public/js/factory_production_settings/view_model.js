@@ -80,8 +80,11 @@
         function sections(current = {}) {
             const source = values(current);
             return [
-                section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits."), [
+                section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
+                    [t("Default liner tool diameter (mm)"), source.default_liner_tool_diameter_mm == null || source.default_liner_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_liner_tool_diameter_mm],
+                    [t("Default handle recess tool diameter (mm)"), source.default_handle_recess_tool_diameter_mm == null || source.default_handle_recess_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_handle_recess_tool_diameter_mm],
+                    [t("Default rear groove tool diameter (mm)"), source.default_rear_groove_tool_diameter_mm == null || source.default_rear_groove_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_rear_groove_tool_diameter_mm],
                     [t("Trimming margin (mm)"), source.default_trim_margin_mm],
                     [t("Maximum centerable edge gap (cm)"), source.max_centerable_edge_gap_cm],
                     [t("Cutting machine type"), catalogLabel(current, "machine_type_catalog", source.default_cutting_machine_type)],

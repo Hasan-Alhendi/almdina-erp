@@ -141,6 +141,11 @@ class FrappeCuttingPlanCommandRepository:
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
         plan.trim_margin_mm = settings.preferred_trim_mm
+        self._assign_tool_diameters(
+            plan,
+            kerf_mm=settings.kerf_mm,
+            based_on_plan=based_on_plan,
+        )
         for fieldname, value in initial_plan_cost_values(
             order_name,
             based_on_plan=based_on_plan,
@@ -149,6 +154,21 @@ class FrappeCuttingPlanCommandRepository:
         plan.plan_needs_recalculation = 1
         self._run_persist(plan, "insert")
         return self._record(plan)
+
+    def _assign_tool_diameters(self, plan: Any, *, kerf_mm: float, based_on_plan: str | None) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.tool_diameters import initial_diameters
+
+        lineage = None
+        if based_on_plan and frappe.db.exists("Cutting Plan", based_on_plan):
+            lineage = frappe.get_doc("Cutting Plan", based_on_plan)
+        factory = None if lineage is not None else frappe.get_cached_doc("Almdina ERP Settings")
+        for fieldname, value in initial_diameters(
+            kerf_mm=kerf_mm,
+            lineage=lineage,
+            factory=factory,
+        ).items():
+            if value is not None:
+                setattr(plan, fieldname, value)
 
     def save_settings(self, plan_name: str, settings: PlanSettings) -> PlanRecord:
         plan = self.get_document(plan_name)

@@ -1816,6 +1816,7 @@ def _regular_addon_candidates(
     sheets: Sequence[dict[str, Any]],
     trim_mm: float,
     cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> frozenset[int]:
     """Constrain the existing group matcher using the existing machining matcher."""
     sheet = next(sheet for sheet in sheets if sheet["sheet_no"] == piece["_sheet_no"])
@@ -1849,6 +1850,7 @@ def _regular_addon_candidates(
             # still owns the physical orientation and edge binding.
             edge_bands={},
             cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
             origin_mm=(piece["x"] * 10.0, piece["y"] * 10.0),
             board_mm=(
                 -trim_mm, -trim_mm,
@@ -1870,6 +1872,7 @@ def _reconcile_addon_groups(
     piece_type: str = "Special",
     sheets: Sequence[dict[str, Any]] = (),
     trim_mm: float = 0.0,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> None:
     """Reassign interchangeable doors as a group before enforcing selection."""
 
@@ -1929,6 +1932,7 @@ def _reconcile_addon_groups(
             compatible_expected_indexes=(
                 _regular_addon_candidates(
                     piece, group_expected, assigned, sheets, trim_mm, cutter_diameter_mm,
+                    cutter_diameters_mm,
                 )
                 if piece_type == "Regular" else None
             ),
@@ -2697,21 +2701,43 @@ def _regular_liner_issue(
     )
 
 
+def _import_tool_diameters(order: Any) -> tuple[float | None, dict[str, float | None]]:
+    """Assignment uses the largest tool. Each layer is measured with its own."""
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        LAYER_FIELDS,
+        diameters_for_record,
+    )
+
+    resolved = diameters_for_record(order, kerf_mm=flt(getattr(order, "kerf_mm", 0)))
+    largest = max(resolved["kerf_mm"], *(resolved[field] for _kind, field in LAYER_FIELDS))
+    kind_diameters = {
+        kind: resolved[kind] if resolved[kind] > 0 else None
+        for kind, _field in LAYER_FIELDS
+    }
+    return (largest if largest > 0 else None), kind_diameters
+
+
 def _regular_machining_issues(
     piece: dict[str, Any],
     items,
     sheet: dict[str, Any],
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ):
     issues = []
     for addon in MACHINING_ADDONS:
+        if cutter_diameters_mm is not None:
+            diameter = cutter_diameters_mm.get(addon.kind)
+        else:
+            diameter = cutter_diameter_mm
         found = _regular_liner_issue(
             piece,
             items,
             sheet,
             trim_mm,
-            cutter_diameter_mm,
+            diameter,
             addon.kind,
         )
         if found is not None:
@@ -2727,6 +2753,7 @@ def _attach_extra_overlays(
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
     validate_regular_machining: bool = True,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -2775,6 +2802,7 @@ def _attach_extra_overlays(
                     sheet,
                     trim_mm,
                     cutter_diameter_mm,
+                    cutter_diameters_mm,
                 )
             )
         if liner_issues:
@@ -3133,28 +3161,31 @@ def _identify_imported_pieces(
 ):
     """Canonical identity/add-on pipeline, shared by import and read-only diagnosis."""
     labeled = _match_pieces_to_order(pieces, order)
-    cutter_diameter_mm = flt(order.kerf_mm)
+    cutter_diameter_mm, kind_diameters = _import_tool_diameters(order)
     _reconcile_addon_groups(
         labeled,
         order,
         overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=kind_diameters,
     )
     _reconcile_addon_groups(
         labeled,
         order,
         overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
         piece_type="Regular",
         sheets=sheets,
         trim_mm=trim_mm,
+        cutter_diameters_mm=kind_diameters,
     )
     _attach_extra_overlays(
         labeled,
         overlays=overlays,
         sheets=sheets,
         trim_mm=trim_mm,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=kind_diameters,
         validate_regular_machining=validate_regular_machining,
     )
     return labeled

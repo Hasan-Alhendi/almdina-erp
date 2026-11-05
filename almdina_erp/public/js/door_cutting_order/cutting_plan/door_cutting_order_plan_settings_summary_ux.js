@@ -5,8 +5,8 @@
 
     const SUMMARY_CLASS = "dco-plan-settings-readonly";
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
-    const STYLE_ID = "dco-plan-settings-summary-owner-css-v2";
-    const LEGACY_STYLE_IDS = ["dco-plan-settings-summary-owner-css"];
+    const STYLE_ID = "dco-plan-settings-summary-owner-css-v3";
+    const LEGACY_STYLE_IDS = ["dco-plan-settings-summary-owner-css", "dco-plan-settings-summary-owner-css-v2"];
     const TIME_LIMIT_HELP = "The maximum time the optimizer may spend searching for a better layout. The search may finish sooner. Increasing it can improve some complex plans, but it makes the preview slower.";
     const FALLBACK_SPECS = Object.freeze([
         Object.freeze({ fieldname: "kerf_mm", shortLabel: "Blade", fieldtype: "Float", suffix: "mm" }),
@@ -77,6 +77,25 @@
             && typeof editor.isEditing === "function"
             && editor.isEditing(frm)
         );
+    }
+
+    function displayedSettings(frm) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const row = owner && typeof owner.displayedPlan === "function" ? owner.displayedPlan(frm) : null;
+        const settings = row && row.settings ? { ...row.settings } : null;
+        if (!settings) return activeSettings(frm);
+        const system = owner && typeof owner.planForTab === "function" ? owner.planForTab(frm, "System") : null;
+        const systemSettings = system && system.settings;
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            if ((settings[fieldname] == null || settings[fieldname] === "") && systemSettings && systemSettings[fieldname] != null) {
+                settings[fieldname] = systemSettings[fieldname];
+            }
+        });
+        return settings;
     }
 
     function activeSettings(frm) {
@@ -156,12 +175,12 @@
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
                 display:flex !important;
-                flex-wrap:nowrap !important;
+                flex-wrap:wrap !important;
                 align-items:center !important;
                 gap:6px !important;
                 width:100% !important;
                 min-width:0 !important;
-                overflow-x:auto !important;
+                overflow:visible !important;
                 font-size:11px;
                 line-height:1.2;
                 color:var(--text-color,#1f272e);
@@ -192,6 +211,16 @@
                 position:relative;
                 flex:0 1 auto;
                 min-width:0;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__field[data-tool-diameter="1"] .form-control {
+                width:4.8em !important;
+                min-width:3.6em !important;
+                max-width:5.4em !important;
+                padding-inline:6px !important;
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__field[data-tool-diameter="1"] .has-suffix .form-control {
+                padding-inline-start:22px !important;
+                padding-inline-end:4px !important;
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__input-wrap .form-control {
                 width:auto !important;
@@ -275,8 +304,9 @@
                 ? "dco-plan-settings-readonly__input-wrap has-suffix"
                 : "dco-plan-settings-readonly__input-wrap";
             const fieldname = frappe.utils.escape_html(spec.fieldname);
+            const compact = spec.compact ? ' data-tool-diameter="1"' : "";
             return `
-                <div class="dco-plan-settings-readonly__field" data-fieldname="${fieldname}" data-fieldtype="${frappe.utils.escape_html(spec.fieldtype || "Data")}">
+                <div class="dco-plan-settings-readonly__field"${compact} data-fieldname="${fieldname}" data-fieldtype="${frappe.utils.escape_html(spec.fieldtype || "Data")}">
                     <label for="dco-plan-settings-ro-${fieldname}">${label}${help}:</label>
                     <div class="${wrapClass}">
                         <input
@@ -308,7 +338,7 @@
             return false;
         }
 
-        const settings = activeSettings(frm);
+        const settings = displayedSettings(frm);
         const anchor = anchorNode(frm);
         if (!settings || !anchor || !anchor.parentNode) {
             removeOwnedSummary(frm);
@@ -351,6 +381,7 @@
         "almdina:permissions-updated",
         "almdina:surfaces-settled",
         "almdina:plan-workspace-updated",
+        "almdina:plan-selection-changed",
     ].forEach((eventName) => {
         window.addEventListener(eventName, () => {
             const frm = window.cur_frm;

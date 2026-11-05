@@ -91,6 +91,7 @@ flowchart LR
 - `optimization_time_limit_sec` يجب أن يكون رقمًا finite وأكبر من `0`.
 - لا يجوز استخدام falsy fallback من نوع `value or default` لاستبدال صفر صحيح بقيمة افتراضية.
 - Factory Production Settings هي **defaults لأول Cutting Plan بلا lineage فقط**. بعد وجود Plan تصبح إعداداتها وإعدادات revisions اللاحقة مملوكة للـPlan lineage ولا تتغير عند تعديل defaults المصنع.
+- عرض ريشة القص يبقى `kerf_mm`: فجوة التعشيش وإزاحة مركز `CUT_PATH` مرة واحدة بنصف القطر. اللاينر ومسكة الغطس وفرزة الظهر تخزن أقطارها على خطة القص (`liner_tool_diameter_mm` و`handle_recess_tool_diameter_mm` و`rear_groove_tool_diameter_mm`). القيمة الفارغة في المصنع تعني أن الطلب الجديد ينسخ قطر القص. القيمة المخزنة على الخطة لا تتغير عند تعديل المصنع لاحقًا، وتعديلها لا يعيد توزيع الألواح. مسار محفوظ مسبقًا هو مركز ريشة ولا يُزاح مرة ثانية. ملف DXF المرفوع الأصلي لا يُعاد كتابته. لا يوجد محرك NC على هذا الفرع يطبّق تعويضًا ثانيًا.
 - Preview والحساب النهائي يستهلكان نفس `PlanSettings` validated contract؛ لا يملك أي منهما قواعد normalization مستقلة.
 - Frappe metadata ليست سلطة Business Validation. حقل التخزين التاريخي `trim_margin_mm` يمثل `preferred_trim_mm` عند حدود Frappe فقط ولا يغيّر معنى العقد في Domain.
 

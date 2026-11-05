@@ -30,8 +30,15 @@ def get_order_defaults() -> dict[str, Any]:
         message=_("لا تملك صلاحية الوصول إلى إعدادات الطلب الافتراضية."),
     )
     settings = frappe.get_single("Almdina ERP Settings")
+    kerf_mm = flt(settings.default_kerf_mm)
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import initial_diameters
+
+    seeded = initial_diameters(kerf_mm=kerf_mm, factory=settings)
     payload: dict[str, Any] = {
-        "kerf_mm": flt(settings.default_kerf_mm),
+        "kerf_mm": kerf_mm,
+        "liner_tool_diameter_mm": seeded["liner_tool_diameter_mm"] if seeded["liner_tool_diameter_mm"] is not None else kerf_mm,
+        "handle_recess_tool_diameter_mm": seeded["handle_recess_tool_diameter_mm"] if seeded["handle_recess_tool_diameter_mm"] is not None else kerf_mm,
+        "rear_groove_tool_diameter_mm": seeded["rear_groove_tool_diameter_mm"] if seeded["rear_groove_tool_diameter_mm"] is not None else kerf_mm,
         "trim_margin_mm": flt(settings.default_trim_margin_mm),
         "packing_mode": settings.default_packing_mode or "Auto Pro",
         "cutting_machine_type": settings.default_cutting_machine_type or "Auto",
