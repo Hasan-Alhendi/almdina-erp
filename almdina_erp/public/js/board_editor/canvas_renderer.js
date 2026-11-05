@@ -1223,6 +1223,9 @@
         } else if (preview.kind === "board") {
             const sheet = String(preview.sheetNo);
             world.querySelectorAll(`[data-sheet-group="${attrSel(sheet)}"]`).forEach((node) => {
+                // Outer host only: nested matches would inherit this translate and
+                // receive a second one if also selected.
+                if (node.parentNode !== world) return;
                 if (node.getAttribute("data-abe-base-transform") == null) {
                     node.setAttribute("data-abe-base-transform", node.getAttribute("transform") || "");
                 }
@@ -1588,7 +1591,10 @@
                 const titleLift = screenFontMm(edgeOrder.length ? 16 : 4, scale);
                 const titleY = pos.originY - titleLift;
                 const edgeY = pos.originY - screenFontMm(3, scale);
-                const html = `<g data-sheet="${esc(String(element.sheet_no))}" data-sheet-group="${esc(String(element.sheet_no))}" data-element-id="${esc(element.element_id)}" class="abe-sheet${selected ? " is-selected" : ""}${isOffcut ? " is-offcut" : ""}" style="pointer-events:${pointer};opacity:${opacity}">
+                // data-sheet identifies the frame for selection. data-sheet-group
+                // belongs only on the outer host that wraps frame + pieces so
+                // board-drag preview translate applies once (never double-shift).
+                const html = `<g data-sheet="${esc(String(element.sheet_no))}" data-element-id="${esc(element.element_id)}" class="abe-sheet${selected ? " is-selected" : ""}${isOffcut ? " is-offcut" : ""}" style="pointer-events:${pointer};opacity:${opacity}">
                     <text class="abe-board-title" data-screen-px="${titlePx}" data-board-drag="${esc(String(element.sheet_no))}" x="${pos.originX}" y="${titleY}" font-size="${screenFontMm(titlePx, scale)}" font-weight="900" fill="#101828" style="pointer-events:all;cursor:default">${esc(title)}</text>
                     <text class="abe-board-stats" data-screen-px="${statsPx}" x="${pos.originX + fullW}" y="${titleY}" text-anchor="end" font-size="${screenFontMm(statsPx, scale)}" fill="#667085" pointer-events="none">${esc(stats)}</text>
                     ${edgeText ? `<text class="abe-board-original-edges" data-screen-px="${edgePx}" x="${pos.originX}" y="${edgeY}" font-size="${screenFontMm(edgePx, scale)}" font-weight="700" fill="#8a5a00" pointer-events="none">${esc(edgeText)}</text>` : ""}

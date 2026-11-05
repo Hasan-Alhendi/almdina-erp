@@ -28,7 +28,7 @@
         `${ASSET_ROOT}/plan_display_style.js?v=18`,
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/store.js?v=21`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=35`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=36`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=19`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=4`,
         `${ASSET_ROOT}/controller.js?v=33`,

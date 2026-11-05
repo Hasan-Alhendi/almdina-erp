@@ -46,7 +46,7 @@ assert.match(css, /width:\s*calc\(100% \/ var\(--abe-ui-zoom\)\)/);
 assert.match(css, /\.abe-shell-host/);
 assert.doesNotMatch(css, /\.abe-page\s*\{[^}]*zoom:\s*var\(--abe-ui-zoom\)/);
 assert.match(page, /board_editor\.css\?v=36/);
-assert.match(page, /canvas_renderer\.js\?v=35/);
+assert.match(page, /canvas_renderer\.js\?v=36/);
 assert.match(page, /controller\.js\?v=33/);
 assert.match(controller, /clientPointToLocal/);
 assert.match(contextActions, /target="_blank"/);
