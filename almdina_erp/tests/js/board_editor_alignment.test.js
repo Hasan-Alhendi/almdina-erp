@@ -329,6 +329,336 @@ function applyAlign(store, keys, mode) {
     ) < 50);
 }
 
+function setPieceRect(piece, x, y, w, h) {
+    piece.local_x_mm = x;
+    piece.local_y_mm = y;
+    piece.outline_mm = [
+        [x, y],
+        [x + w, y],
+        [x + w, y + h],
+        [x, y + h],
+    ];
+}
+
+// 1) Unrelated stale board overflow on another sheet must not reject alignment.
+{
+    const store = freshStore();
+    const session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyS2 = keyByInstance(session, "pi-s2");
+    setPieceRect(session.pieces[keyS2], 950, 10, 100, 100);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    const live = store.snapshot().session;
+    const proposal = AlignmentGeometry.proposeAlignment(
+        live,
+        [keyA, keyB],
+        "align_left"
+    );
+    assert.equal(proposal.ok, true, proposal.reason || "stale overflow must not block");
+    assert.equal(proposal.unchanged, false);
+    assert.equal(applyAlign(store, [keyA, keyB], "align_left").ok, true);
+}
+
+// 2) Unrelated stale collision on another sheet must not reject alignment.
+{
+    const store = freshStore();
+    const session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyS2 = keyByInstance(session, "pi-s2");
+    // Clone S2 into a second overlapping piece on sheet 2.
+    const staleA = JSON.parse(JSON.stringify(session.pieces[keyS2]));
+    const staleB = JSON.parse(JSON.stringify(session.pieces[keyS2]));
+    staleA.piece_instance_id = "pi-stale-a";
+    staleB.piece_instance_id = "pi-stale-b";
+    setPieceRect(staleA, 20, 20, 80, 80);
+    setPieceRect(staleB, 40, 40, 80, 80);
+    session.pieces["instance:pi-stale-a"] = staleA;
+    session.pieces["instance:pi-stale-b"] = staleB;
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    const proposal = AlignmentGeometry.proposeAlignment(
+        store.snapshot().session,
+        [keyA, keyB],
+        "align_left"
+    );
+    assert.equal(proposal.ok, true, proposal.reason || "stale collision must not block");
+}
+
+// 3) New board overflow caused by alignment must reject atomically.
+// Pure AABB alignment of on-board roots cannot leave the usable area; a hosted
+// guest that extends past its host is the manufacturable overflow case.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    setPieceRect(session.pieces[keyA], 100, 40, 100, 100);
+    setPieceRect(session.pieces[keyC], 150, 60, 100, 100); // extends past host
+    session.pieces[keyC].glass_host_key = keyA;
+    setPieceRect(session.pieces[keyB], 950, 40, 50, 50); // right edge at usable limit
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const before = JSON.stringify(session.pieces);
+    const undoBefore = store.snapshot().canUndo;
+    const rejected = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyA, keyC, keyB],
+        "align_right"
+    );
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, MoveGeometry.DROP_PARTIAL_BOARD);
+    assert.equal(rejected.stage, "final_validation");
+    assert.equal(rejected.piece_key, keyC);
+    assert.equal(rejected.sheet_no, 1);
+    assert.equal(JSON.stringify(store.snapshot().session.pieces), before);
+    assert.equal(store.snapshot().canUndo, undoBefore);
+}
+
+// 4) New collision with an unselected piece must reject.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    // Aligning B left to A would land on C which sits on A's left edge.
+    setPieceRect(session.pieces[keyA], 200, 10, 80, 80);
+    setPieceRect(session.pieces[keyB], 400, 10, 80, 80);
+    setPieceRect(session.pieces[keyC], 200, 10, 80, 80);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const before = JSON.stringify(session.pieces);
+    const rejected = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyA, keyB],
+        "align_left"
+    );
+    assert.equal(rejected.ok, false);
+    assert.ok(
+        rejected.code === MoveGeometry.DROP_OVERLAP || rejected.code === MoveGeometry.DROP_KERF,
+        rejected.code
+    );
+    assert.equal(JSON.stringify(store.snapshot().session.pieces), before);
+}
+
+// 5) Kerf clearance violation must reject.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    const kerf = Number(session.kerf_mm) || 4;
+    setPieceRect(session.pieces[keyA], 100, 10, 80, 80);
+    setPieceRect(session.pieces[keyB], 300, 10, 80, 80);
+    // Unselected C sits just left of A's left edge with gap < kerf after B aligns left.
+    setPieceRect(session.pieces[keyC], 100 - 80 - (kerf / 2), 10, 80, 80);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const rejected = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyA, keyB],
+        "align_left"
+    );
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, MoveGeometry.DROP_KERF, rejected.code);
+}
+
+// 6) Exact usable edge remains accepted; tiny real overflow rejects.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const usableW = Number(session.boards["1"].usable_width_mm);
+    setPieceRect(session.pieces[keyA], usableW - 80, 20, 80, 60);
+    setPieceRect(session.pieces[keyB], 40, 200, 80, 60);
+    let hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    const exact = AlignmentGeometry.proposeAlignment(
+        store.snapshot().session,
+        [keyA, keyB],
+        "align_right"
+    );
+    assert.equal(exact.ok, true, exact.reason || "exact edge must accept");
+
+    session = store.snapshot().session;
+    setPieceRect(session.pieces[keyA], usableW - 80 + 0.02, 20, 80, 60);
+    setPieceRect(session.pieces[keyB], 40, 200, 80, 60);
+    hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    const overflow = AlignmentGeometry.proposeAlignment(
+        store.snapshot().session,
+        [keyA, keyB],
+        "align_right"
+    );
+    assert.equal(overflow.ok, false);
+    assert.equal(overflow.code, MoveGeometry.DROP_PARTIAL_BOARD);
+}
+
+// 7) Special L polygons: AABB may overlap while material stays clear → accept.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    // L pocket; unselected so alignment of B/C only collides via final/drop checks.
+    session.pieces[keyA].outline_mm = [
+        [10, 10], [210, 10], [210, 90], [90, 90], [90, 210], [10, 210],
+    ];
+    session.pieces[keyA].local_x_mm = 10;
+    session.pieces[keyA].local_y_mm = 10;
+    setPieceRect(session.pieces[keyB], 94, 400, 80, 80);
+    setPieceRect(session.pieces[keyC], 300, 94, 20, 20);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const nested = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyB, keyC],
+        "align_top"
+    );
+    assert.equal(nested.ok, true, nested.reason || "L nesting alignment must accept");
+    let trial = session;
+    nested.commands.forEach((command) => {
+        trial = MoveGeometry.applyPieceMove(trial, command);
+    });
+    const fpL = MoveGeometry.footprint(trial.pieces[keyA]);
+    const fpB = MoveGeometry.footprint(trial.pieces[keyB]);
+    const aabbOverlap = !(
+        fpB.bounds.x + fpB.bounds.w <= fpL.bounds.x
+        || fpL.bounds.x + fpL.bounds.w <= fpB.bounds.x
+        || fpB.bounds.y + fpB.bounds.h <= fpL.bounds.y
+        || fpL.bounds.y + fpL.bounds.h <= fpB.bounds.y
+    );
+    assert.equal(aabbOverlap, true, "nested piece AABB overlaps L bounds");
+    assert.equal(
+        MoveGeometry.pairConflict(fpL, fpB, trial.kerf_mm || 0),
+        null,
+        "material polygons must stay clear"
+    );
+
+    // Same axis move into the L solid body must still reject.
+    setPieceRect(session.pieces[keyB], 20, 400, 60, 60);
+    setPieceRect(session.pieces[keyC], 300, 20, 20, 20);
+    const solid = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyB, keyC],
+        "align_top"
+    );
+    assert.equal(solid.ok, false);
+    assert.equal(solid.code, MoveGeometry.DROP_OVERLAP);
+}
+
+// 8) Host/guest: guest rides with host; link preserved; no double move.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    setPieceRect(session.pieces[keyA], 40, 40, 120, 120);
+    setPieceRect(session.pieces[keyC], 60, 60, 40, 40);
+    session.pieces[keyC].glass_host_key = keyA;
+    // Keep B on a clear Y band so align-left does not collide with the guest.
+    setPieceRect(session.pieces[keyB], 300, 220, 80, 80);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const guestBefore = MoveGeometry.footprint(session.pieces[keyC]).bounds;
+    const hostBefore = MoveGeometry.footprint(session.pieces[keyA]).bounds;
+    const relative = {
+        x: guestBefore.x - hostBefore.x,
+        y: guestBefore.y - hostBefore.y,
+    };
+    const proposal = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyA, keyC, keyB],
+        "align_left"
+    );
+    assert.equal(proposal.ok, true, proposal.reason || "host/guest align");
+    assert.ok(!proposal.commands.some((c) => c.piece_key === keyC), "guest is not a root command");
+    proposal.commands.forEach((command) => {
+        session = MoveGeometry.applyPieceMove(session, command);
+    });
+    assert.equal(session.pieces[keyC].glass_host_key, keyA);
+    const guestAfter = MoveGeometry.footprint(session.pieces[keyC]).bounds;
+    const hostAfter = MoveGeometry.footprint(session.pieces[keyA]).bounds;
+    assert.ok(Math.abs((guestAfter.x - hostAfter.x) - relative.x) < 1e-6);
+    assert.ok(Math.abs((guestAfter.y - hostAfter.y) - relative.y) < 1e-6);
+}
+
+// 9) Outside alignment ignores unrelated on-board overflow and stays outside.
+{
+    const store = freshStore();
+    const session = store.snapshot().session;
+    const outA = keyByInstance(session, "pi-out-a");
+    const outB = keyByInstance(session, "pi-out-b");
+    const keyS2 = keyByInstance(session, "pi-s2");
+    setPieceRect(session.pieces[keyS2], 950, 10, 100, 100);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    const live = store.snapshot().session;
+    assert.equal(applyAlign(store, [outA, outB], "align_left").ok, true);
+    const after = store.snapshot().session;
+    assert.equal(after.pieces[outA].sheet_no, null);
+    assert.equal(after.pieces[outB].sheet_no, null);
+    // Prove final validation itself ignores the stale overflow for outside scope.
+    const finalOk = AlignmentGeometry.validateFinalSession(
+        after,
+        new Set([outA, outB]),
+        "outside"
+    );
+    assert.equal(finalOk.ok, true);
+}
+
+// 10) Atomicity: reject leaves session/history/selection untouched; success is one undo step.
+{
+    const store = freshStore();
+    let session = store.snapshot().session;
+    const keyA = keyByInstance(session, "pi-a");
+    const keyB = keyByInstance(session, "pi-b");
+    const keyC = keyByInstance(session, "pi-c");
+    setPieceRect(session.pieces[keyA], 100, 40, 100, 100);
+    setPieceRect(session.pieces[keyC], 150, 60, 100, 100);
+    session.pieces[keyC].glass_host_key = keyA;
+    setPieceRect(session.pieces[keyB], 950, 40, 50, 50);
+    const hist = History.create(session);
+    store.attachSession(hist.get(), hist);
+    session = store.snapshot().session;
+    const fingerprint = JSON.stringify(session);
+    const undoBefore = store.snapshot().canUndo;
+    const rejected = AlignmentGeometry.proposeAlignment(
+        session,
+        [keyA, keyC, keyB],
+        "align_right"
+    );
+    assert.equal(rejected.ok, false);
+    assert.equal(JSON.stringify(store.snapshot().session), fingerprint);
+    assert.equal(store.snapshot().canUndo, undoBefore);
+
+    const okStore = freshStore();
+    const okSession = okStore.snapshot().session;
+    const okA = keyByInstance(okSession, "pi-a");
+    const okB = keyByInstance(okSession, "pi-b");
+    const applied = applyAlign(okStore, [okA, okB], "align_left");
+    assert.equal(applied.ok, true);
+    assert.equal(okStore.snapshot().canUndo, true);
+    const afterAlign = JSON.stringify(okStore.snapshot().session.pieces[okB]);
+    okStore.undo();
+    assert.notEqual(JSON.stringify(okStore.snapshot().session.pieces[okB]), afterAlign);
+    okStore.redo();
+    assert.equal(JSON.stringify(okStore.snapshot().session.pieces[okB]), afterAlign);
+}
+
 const css = fs.readFileSync(path.join(root, "public/css/board_editor.css"), "utf8");
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
 const controller = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");
@@ -339,7 +669,7 @@ const arCsv = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 assert.match(css, /--abe-right-sidebar-width:\s*240px/);
 assert.match(css, /grid-template-areas:\s*"sidebar canvas inspector"/);
 assert.doesNotMatch(css, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/);
-assert.match(page, /alignment_geometry\.js\?v=1/);
+assert.match(page, /alignment_geometry\.js\?v=2/);
 assert.match(page, /right_sidebar_renderer\.js\?v=4/);
 assert.match(page, /board_editor\.css\?v=36/);
 assert.match(controller, /RightSidebarRenderer/);

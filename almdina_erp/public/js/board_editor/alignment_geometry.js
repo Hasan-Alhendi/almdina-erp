@@ -206,17 +206,34 @@
         return a != null && b != null && Number(a) === Number(b);
     }
 
+    function failFinal(code, pieceKey, sheetNo) {
+        return {
+            ok: false,
+            code,
+            stage: "final_validation",
+            piece_key: pieceKey || null,
+            sheet_no: sheetNo == null || sheetNo === "" ? null : Number(sheetNo),
+        };
+    }
+
     function validateFinalSession(session, movingKeys, scope) {
+        // Scope final checks to pieces that actually moved for this alignment.
+        // Pre-existing violations on unrelated (non-moved) pieces must not reject
+        // an otherwise manufacturable alignment; new violations caused by the
+        // move still fail closed.
         const MG = moveGeometry();
         const kerf = session.kerf_mm || 0;
+        const moved = movingKeys instanceof Set ? movingKeys : new Set(movingKeys || []);
         const keys = Object.keys(session.pieces || {});
+
         for (let i = 0; i < keys.length; i += 1) {
             const key = keys[i];
+            if (!moved.has(key)) continue;
             const piece = session.pieces[key];
             if (!piece || piece.distribution === "excluded") continue;
             if (piece.sheet_no == null || piece.sheet_no === "") continue;
             const board = session.boards && session.boards[String(piece.sheet_no)];
-            if (!board) return { ok: false, code: CODE.FINAL_CONFLICT };
+            if (!board) return failFinal(CODE.FINAL_CONFLICT, key, piece.sheet_no);
             const local = MG.footprint(piece);
             const usable = {
                 x: 0,
@@ -230,7 +247,11 @@
                 || local.bounds.x + local.bounds.w > usable.x + usable.w + 1e-9
                 || local.bounds.y + local.bounds.h > usable.y + usable.h + 1e-9
             ) {
-                return { ok: false, code: MG.DROP_PARTIAL_BOARD || CODE.FINAL_CONFLICT };
+                return failFinal(
+                    MG.DROP_PARTIAL_BOARD || CODE.FINAL_CONFLICT,
+                    key,
+                    piece.sheet_no
+                );
             }
         }
 
@@ -242,27 +263,37 @@
             const a = session.pieces[keyA];
             if (!a || a.distribution === "excluded") continue;
             if (a.sheet_no == null || a.sheet_no === "") continue;
+            const aMoved = moved.has(keyA);
             const fpA = MG.footprint(a);
             for (let j = i + 1; j < keys.length; j += 1) {
                 const keyB = keys[j];
                 const b = session.pieces[keyB];
                 if (!b || b.distribution === "excluded") continue;
                 if (Number(b.sheet_no) !== Number(a.sheet_no)) continue;
+                // Skip stale pairs where neither piece moved for this alignment.
+                if (!aMoved && !moved.has(keyB)) continue;
                 if (a.glass_host_key === keyB || b.glass_host_key === keyA) continue;
                 const conflict = MG.pairConflict(fpA, MG.footprint(b), kerf);
-                if (conflict) return { ok: false, code: conflict };
+                if (conflict) {
+                    return failFinal(
+                        conflict,
+                        aMoved ? keyA : keyB,
+                        a.sheet_no
+                    );
+                }
             }
         }
 
-        // Hosted guests must remain inside their host after independent root moves.
+        // Hosted guests must remain linked after independent root moves.
         for (let i = 0; i < keys.length; i += 1) {
             const key = keys[i];
+            if (!moved.has(key)) continue;
             const piece = session.pieces[key];
-            if (!piece || !piece.glass_host_key || !movingKeys.has(key)) continue;
+            if (!piece || !piece.glass_host_key) continue;
             const host = session.pieces[piece.glass_host_key];
-            if (!host) return { ok: false, code: CODE.DETACH_HOST };
+            if (!host) return failFinal(CODE.DETACH_HOST, key, piece.sheet_no);
             if (Number(piece.sheet_no) !== Number(host.sheet_no)) {
-                return { ok: false, code: CODE.DETACH_HOST };
+                return failFinal(CODE.DETACH_HOST, key, piece.sheet_no);
             }
         }
         return { ok: true, code: CODE.OK };
@@ -326,6 +357,11 @@
                     code: decision.code,
                     reason: MG.reasonMessage(decision.code),
                     commands: [],
+                    stage: "piece_drop",
+                    piece_key: box.key,
+                    sheet_no: session.pieces[box.key]
+                        ? session.pieces[box.key].sheet_no
+                        : null,
                 };
             }
             const piece = session.pieces[box.key];
@@ -341,6 +377,9 @@
                     code: CODE.SHEET_CHANGED,
                     reason: reasonMessage(CODE.SHEET_CHANGED),
                     commands: [],
+                    stage: "piece_drop",
+                    piece_key: box.key,
+                    sheet_no: piece.sheet_no,
                 };
             }
             let detachHost = false;
@@ -358,6 +397,9 @@
                     code: CODE.DETACH_HOST,
                     reason: reasonMessage(CODE.DETACH_HOST),
                     commands: [],
+                    stage: "piece_drop",
+                    piece_key: box.key,
+                    sheet_no: piece.sheet_no,
                 };
             }
             commands.push({
@@ -390,8 +432,11 @@
         });
 
         let trial = session;
+        const changedKeys = new Set();
         for (let index = 0; index < commands.length; index += 1) {
-            trial = MG.applyPieceMove(trial, commands[index]);
+            const command = commands[index];
+            MG.draggedPieceIds(session, command.piece_key).forEach((id) => changedKeys.add(id));
+            trial = MG.applyPieceMove(trial, command);
         }
 
         for (const [guestKey, hostKey] of Object.entries(hostLinksBefore)) {
@@ -402,11 +447,18 @@
                     code: CODE.DETACH_HOST,
                     reason: reasonMessage(CODE.DETACH_HOST),
                     commands: [],
+                    stage: "final_validation",
+                    piece_key: guestKey,
+                    sheet_no: guest ? guest.sheet_no : null,
                 };
             }
         }
 
-        const finalCheck = validateFinalSession(trial, moving, eligibility.selection.scope);
+        const finalCheck = validateFinalSession(
+            trial,
+            changedKeys,
+            eligibility.selection.scope
+        );
         if (!finalCheck.ok) {
             const code = finalCheck.code;
             const dropReason = typeof MG.reasonMessage === "function" ? MG.reasonMessage(code) : "";
@@ -418,6 +470,9 @@
                 code,
                 reason: reason || reasonMessage(CODE.FINAL_CONFLICT),
                 commands: [],
+                stage: finalCheck.stage || "final_validation",
+                piece_key: finalCheck.piece_key || null,
+                sheet_no: finalCheck.sheet_no == null ? null : finalCheck.sheet_no,
             };
         }
 

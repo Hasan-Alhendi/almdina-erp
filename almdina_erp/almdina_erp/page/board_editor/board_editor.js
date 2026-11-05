@@ -19,7 +19,7 @@
         `${ASSET_ROOT}/transform_geometry.js?v=2`,
         `${ASSET_ROOT}/measure_geometry.js?v=2`,
         `${ASSET_ROOT}/position_geometry.js?v=3`,
-        `${ASSET_ROOT}/alignment_geometry.js?v=1`,
+        `${ASSET_ROOT}/alignment_geometry.js?v=2`,
         `${ASSET_ROOT}/move_interaction.js?v=20`,
         `${ASSET_ROOT}/rotation_interaction.js?v=19`,
         `${ASSET_ROOT}/measure_interaction.js?v=5`,
