@@ -148,6 +148,7 @@ def main():
         return
     records = []
     artifact = dict(source_sha=subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
+        source_tree=subprocess.check_output(["git","rev-parse","HEAD^{tree}"],cwd=ROOT,text=True).strip(),
         source_digest=source_digest(),
         working_tree_dirty=bool(subprocess.check_output(["git","status","--porcelain"],cwd=ROOT,text=True).strip()),
         platform=platform.platform(), python=sys.version, versions={p:importlib.metadata.version(p)
