@@ -107,7 +107,7 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("PREVIEW_METHOD", source)
         self.assertIn("COMMIT_PREVIEW_METHOD", source)
         self.assertIn("function preview(orderName, settings)", source)
-        self.assertIn("function commitPreview(orderName, previewId, candidateId)", source)
+        self.assertIn("function commitPreview(orderName, previewId, candidateId, toolSettings)", source)
         self.assertNotIn("querySelector", source)
         self.assertNotIn("fields_dict", source)
 
@@ -118,7 +118,10 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("__almdinaPlanPreviewSession", source)
         self.assertIn("almdina:plan-preview-updated", source)
         self.assertIn("api.preview(orderName", source)
-        self.assertIn("api.commitPreview(orderName, previewId, state.payload?.candidate_id)", source)
+        self.assertIn(
+            "api.commitPreview(orderName, previewId, state.payload?.candidate_id, state.pendingToolSettings)",
+            source,
+        )
         self.assertIn("function isCommittable(frm)", source)
         self.assertIn('String(validation.status || "") === "Valid"', source)
         self.assertNotIn("AlmdinaWorkspaceStore", source)
@@ -131,7 +134,8 @@ class TestPlanPreviewSessionExactCommit(unittest.TestCase):
         self.assertIn("owner.isCommittable(frm)", source)
         self.assertIn("button.disabled = !allowed", source)
         self.assertIn("owner.invalidate(frm)", source)
-        self.assertIn("await owner.commit(frm)", source)
+        self.assertIn("await owner.commit(frm, diameterUpdates)", source)
+        self.assertIn("api.saveSettings", source)
         self.assertNotIn("legacy.saveEditing(frm)", source)
         message_id = "The current preview did not pass the engineering check. Try other settings, then recalculate."
         self.assertIn(message_id, source)

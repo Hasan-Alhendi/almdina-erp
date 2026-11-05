@@ -339,7 +339,7 @@
         }
     }
 
-    async function commit(frm) {
+    async function commit(frm, toolSettings) {
         if (!frm || !frm.doc || !isCommittable(frm) || isBusy(frm)) return false;
         const api = window.AlmdinaPlanWorkspaceAPI;
         if (!api || typeof api.commitPreview !== "function") return false;
@@ -356,6 +356,7 @@
             && state.status === "saving"
             && identity(frm) === requestIdentity
             && ownsVisit(frm, requestToken);
+        state.pendingToolSettings = toolSettings && typeof toolSettings === "object" ? toolSettings : null;
         state.status = "saving";
         state.error = null;
         dispatch(frm);
@@ -377,7 +378,7 @@
             return false;
         }
         try {
-            const result = await api.commitPreview(orderName, previewId, state.payload?.candidate_id);
+            const result = await api.commitPreview(orderName, previewId, state.payload?.candidate_id, state.pendingToolSettings);
             if (!current()) return false;
             if (!exactCommitReceipt(result, state, orderName)) {
                 // A contradictory receipt is never promoted to a success by a

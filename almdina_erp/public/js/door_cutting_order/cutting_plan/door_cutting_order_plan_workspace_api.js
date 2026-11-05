@@ -119,14 +119,27 @@
         );
     }
 
-    function commitPreview(orderName, previewId, candidateId) {
+    function commitPreview(orderName, previewId, candidateId, toolSettings) {
+        const args = {
+            order_name: orderName,
+            preview_id: previewId,
+            candidate_id: candidateId,
+        };
+        // Layer diameters travel with the commit so one save writes the nesting
+        // snapshot and the bits. They are not optimizer settings and are omitted
+        // from preview fingerprints.
+        const values = toolSettings || {};
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             COMMIT_PREVIEW_METHOD,
-            {
-                order_name: orderName,
-                preview_id: previewId,
-                candidate_id: candidateId,
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_COMMIT),

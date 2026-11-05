@@ -45,7 +45,69 @@
             : { status: "idle", payload: null };
     }
 
-    function canSaveEditing(frm) {
+    const OPTIMIZER_FIELDS = Object.freeze([
+        "packing_mode",
+        "cutting_machine_type",
+        "kerf_mm",
+        "trim_margin_mm",
+        "optimization_time_limit_sec",
+    ]);
+    const DIAMETER_FIELDS = Object.freeze([
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
+    ]);
+
+    function editDraft(frm) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const store = owner && typeof owner.storeFor === "function" ? owner.storeFor(frm) : null;
+        const state = store && typeof store.snapshot === "function" ? store.snapshot() : null;
+        return state && state.draft ? state.draft : null;
+    }
+
+    function persistedEditableSettings(frm) {
+        const adapter = window.AlmdinaPlanWorkspacePresenterAdapter;
+        return adapter && typeof adapter.activeSettings === "function"
+            ? adapter.activeSettings(frm)
+            : null;
+    }
+
+    function sameSetting(fieldname, left, right) {
+        if (fieldname === "packing_mode" || fieldname === "cutting_machine_type") {
+            return String(left ?? "").trim() === String(right ?? "").trim();
+        }
+        const leftNumber = Number(left);
+        const rightNumber = Number(right);
+        if (!Number.isFinite(leftNumber) && !Number.isFinite(rightNumber)) return true;
+        if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) return false;
+        return Math.abs(leftNumber - rightNumber) < 0.000001;
+    }
+
+    function optimizerDirty(draft, persisted) {
+        return OPTIMIZER_FIELDS.some((fieldname) => !sameSetting(fieldname, draft[fieldname], persisted[fieldname]));
+    }
+
+    function changedDiameters(draft, persisted) {
+        const updates = {};
+        DIAMETER_FIELDS.forEach((fieldname) => {
+            if (!sameSetting(fieldname, draft[fieldname], persisted ? persisted[fieldname] : undefined)) {
+                updates[fieldname] = draft[fieldname];
+            }
+        });
+        return updates;
+    }
+
+    function sessionStillCurrent(frm, sessionContext) {
+        if (!sessionContext) return window.cur_frm === frm;
+        const coordinator = editSessionCoordinator();
+        return Boolean(
+            coordinator
+            && typeof coordinator.isSessionCurrent === "function"
+            && coordinator.isSessionCurrent(frm, sessionContext)
+        );
+    }
+
+    function nestingCommitAllowed(frm) {
         const owner = previewOwner();
         return Boolean(
             editing(frm)
@@ -54,6 +116,18 @@
             && owner.isCommittable(frm)
             && !owner.isBusy(frm)
         );
+    }
+
+    function canSaveEditing(frm) {
+        if (!editing(frm)) return false;
+        const owner = previewOwner();
+        if (owner && typeof owner.isBusy === "function" && owner.isBusy(frm)) return false;
+        const draft = editDraft(frm);
+        const persisted = persistedEditableSettings(frm);
+        if (draft && persisted && !optimizerDirty(draft, persisted) && Object.keys(changedDiameters(draft, persisted)).length) {
+            return true;
+        }
+        return nestingCommitAllowed(frm);
     }
 
     function translate(message, replacements) {
@@ -101,8 +175,20 @@
             .on(
                 "input.almdinaPreviewInvalidation change.almdinaPreviewInvalidation",
                 "[data-almdina-plan-setting]",
-                () => {
+                function onDraftSettingChanged() {
                     if (legacy.draftCanChange && !legacy.draftCanChange(frm)) return;
+                    const node = this;
+                    const fieldname = String(
+                        (node && typeof node.getAttribute === "function" && node.getAttribute("data-almdina-plan-setting"))
+                        || (node && typeof node.attr === "function" && node.attr("data-almdina-plan-setting"))
+                        || ""
+                    );
+                    // A layer bit does not move doors. Leave the current nesting
+                    // preview valid so Save can persist the bit without a new layout.
+                    if (DIAMETER_FIELDS.includes(fieldname)) {
+                        syncSaveButton(frm);
+                        return;
+                    }
                     const owner = previewOwner();
                     const changed = Boolean(owner && owner.invalidate(frm));
                     if (changed) {
@@ -255,8 +341,58 @@
         }, reconciled || !workspacesRefreshed ? 7 : 5);
     }
 
+    async function persistToolDiameters(frm, updates) {
+        const api = window.AlmdinaPlanWorkspaceAPI;
+        if (!api || typeof api.saveSettings !== "function") {
+            throw new Error("Could not persist tool diameters");
+        }
+        await api.saveSettings(frm.doc.name, updates || {});
+    }
+
+    async function finishToolDiameterSave(frm, sessionContext) {
+        const owner = previewOwner();
+        if (owner && typeof owner.reset === "function") owner.reset(frm);
+        if (legacy.isEditing(frm)) {
+            await Promise.resolve(runBaseCommand("cancel", frm, sessionContext));
+        }
+        const workspace = window.AlmdinaPlanWorkspaceState;
+        if (workspace && typeof workspace.load === "function") {
+            await workspace.load(frm, { force: true });
+        }
+        const view = presenter();
+        if (view && typeof view.restorePersistedPresentation === "function") {
+            view.restorePersistedPresentation(frm);
+        }
+        frappe.show_alert({
+            message: translate("The cutting plan settings were saved. Recalculate to update the result."),
+            indicator: "green",
+        }, 5);
+        schedule(frm);
+        return true;
+    }
+
     async function saveEditingCommand(frm, sessionContext = null) {
         if (legacy.syncPhaseLocks) legacy.syncPhaseLocks(frm);
+        const draft = editDraft(frm);
+        const persisted = persistedEditableSettings(frm);
+        const nestingChanged = Boolean(draft && persisted && optimizerDirty(draft, persisted));
+        const diameterUpdates = draft && persisted ? changedDiameters(draft, persisted) : {};
+        const orderName = frm && frm.doc ? frm.doc.name : null;
+
+        // A bit-only edit must not commit a nesting preview. The settings command
+        // writes the System Draft and leaves the saved layout untouched.
+        if (!nestingChanged && Object.keys(diameterUpdates).length) {
+            try {
+                await persistToolDiameters(frm, diameterUpdates);
+            } catch (error) {
+                console.error("Cutting plan tool diameter save failed", error);
+                schedule(frm);
+                return false;
+            }
+            if (!sessionStillCurrent(frm, sessionContext) || (frm.doc && frm.doc.name) !== orderName) return false;
+            return finishToolDiameterSave(frm, sessionContext);
+        }
+
         const owner = previewOwner();
         if (!owner || !owner.isCommittable(frm)) {
             frappe.msgprint(translate(saveBlockedReason(frm)));
@@ -266,7 +402,7 @@
 
         let committed = false;
         try {
-            committed = await owner.commit(frm);
+            committed = await owner.commit(frm, diameterUpdates);
         } catch (error) {
             console.error("Cutting plan preview commit failed", error);
             schedule(frm);

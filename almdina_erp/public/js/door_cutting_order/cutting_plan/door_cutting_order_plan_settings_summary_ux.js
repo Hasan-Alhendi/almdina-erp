@@ -392,6 +392,7 @@
     window.AlmdinaPlanSettingsSummaryUX = Object.freeze({
         TIME_LIMIT_HELP,
         activeSettings,
+        displayedSettings,
         attachPlanToolbar,
         restorePlanToolbar,
         render,
