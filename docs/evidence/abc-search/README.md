@@ -98,3 +98,9 @@ The 2026-11-05 real-order DXF audit is recorded in
 directed that the designer's `OFFCUT` be treated as required part #17. It remains
 excluded from ABC performance claims until the original manufacturing settings
 and source piece order are known.
+
+The decision study for a remnant-directed Large Neighborhood Search is in
+`remnant-search-study-ar.md`. It documents the existing remnant rank, the current
+12-move local neighborhood, the gap a new search should address, and the
+measurement gates. The values 92.64 and 66.25 remain user-reported pending their
+unit and source metric.
