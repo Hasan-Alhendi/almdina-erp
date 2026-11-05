@@ -242,6 +242,7 @@ def _proxy_order(
             "cut_length_cm": float(spec.cut_length_cm),
             "finished_width_cm": float(spec.finished_width_cm),
             "finished_length_cm": float(spec.finished_length_cm),
+            "deduct_edge_thickness": bool(spec.deduct_edge_thickness),
             "allow_rotation": spec.allow_rotation,
             "piece_type": spec.piece_type,
             "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
@@ -743,6 +744,7 @@ def _l_corner_cut(spec: OrderPieceCutSpec):
         side_thickness_mm=_side_thickness_mm(spec),
         edge_break=bool(spec.edge_break),
         edge_break_thickness_mm=spec.edge_break_thickness_mm,
+        deduct_edge_thickness=spec.deduct_edge_thickness,
     )
 
 
@@ -759,6 +761,7 @@ def _contour_notch_cm(spec: OrderPieceCutSpec) -> tuple[float, float]:
         side_thickness_mm=_side_thickness_mm(spec),
         edge_break=bool(spec.edge_break),
         edge_break_thickness_mm=spec.edge_break_thickness_mm,
+        deduct_edge_thickness=spec.deduct_edge_thickness,
     )
 
 
@@ -1853,7 +1856,10 @@ def parse_production_dxf(
     shape-free.
     """
     try:
-        specs = build_order_piece_cut_specs(order)
+        specs = build_order_piece_cut_specs(
+            order,
+            deduct_edge_thickness=settings.deduct_edge_thickness,
+        )
     except CutDimensionError as exc:
         raise DxfImportError(
             issues=[

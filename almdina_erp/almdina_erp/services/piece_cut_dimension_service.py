@@ -58,6 +58,7 @@ class OrderPieceCutSpec:
     clipped_corner_width_cm: Decimal = Decimal("0")
     clipped_corner_length_cm: Decimal = Decimal("0")
     edge_break_thickness_mm: Decimal | None = None
+    deduct_edge_thickness: bool = True
 
 
 def _optional_cm(value: Any) -> Decimal:
@@ -145,6 +146,7 @@ def build_order_piece_cut_specs(
     order: Any,
     *,
     profile_loader: Callable[[Iterable[str]], dict[str, dict[str, Any]]] | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> list[OrderPieceCutSpec]:
     loader = profile_loader or _default_profile_loader
     rows = list(getattr(order, "pieces", None) or [])
@@ -230,6 +232,7 @@ def build_order_piece_cut_specs(
                 finished_width_cm=getattr(row, "width_cm", 0),
                 finished_length_cm=getattr(row, "length_cm", 0),
                 side_thickness_mm=side_thickness,
+                deduct_edge_thickness=deduct_edge_thickness,
             )
         except CutDimensionError as exc:
             errors.append(f"الدرفة رقم {row_index}: {exc}")
@@ -270,6 +273,7 @@ def build_order_piece_cut_specs(
                 clipped_corner_width_cm=_optional_cm(getattr(row, "clipped_corner_width_cm", 0)),
                 clipped_corner_length_cm=_optional_cm(getattr(row, "clipped_corner_length_cm", 0)),
                 edge_break_thickness_mm=_l_break_thickness_mm(order, row, profiles),
+                deduct_edge_thickness=deduct_edge_thickness,
             )
         )
 

@@ -1543,6 +1543,7 @@ def contour_notch_cm(
     side_thickness_mm: dict | None = None,
     edge_break: bool = False,
     edge_break_thickness_mm: float | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> tuple[float, float]:
     """Notch used by the liner and by the L cut contour.
 
@@ -1564,6 +1565,7 @@ def contour_notch_cm(
             side_thickness_mm=side_thickness_mm or {},
             edge_break=edge_break,
             edge_break_thickness_mm=edge_break_thickness_mm,
+            deduct_edge_thickness=deduct_edge_thickness,
         )
     except CutDimensionError:
         return finished

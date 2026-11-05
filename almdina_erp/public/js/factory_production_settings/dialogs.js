@@ -118,6 +118,7 @@
                 return [
                     { fieldname: "default_cutting_machine_type", fieldtype: "Select", label: t("Cutting machine type"), options: machines.map(entry => entry.label).join("\n"), default: catalogLabel(machines, values.default_cutting_machine_type), reqd: 1 },
                     { fieldname: "default_kerf_mm", fieldtype: "Float", label: t("Default kerf (mm)"), default: values.default_kerf_mm, reqd: 1 },
+                    { fieldname: "default_deduct_edge_thickness", fieldtype: "Check", label: t("Deduct edge banding thickness by default"), default: values.default_deduct_edge_thickness == null || values.default_deduct_edge_thickness === "" ? 1 : (Number(values.default_deduct_edge_thickness) === 0 ? 0 : 1) },
                     { fieldname: "default_liner_tool_diameter_mm", fieldtype: "Float", label: t("Default liner tool diameter (mm)"), default: values.default_liner_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },
                     { fieldname: "default_handle_recess_tool_diameter_mm", fieldtype: "Float", label: t("Default handle recess tool diameter (mm)"), default: values.default_handle_recess_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },
                     { fieldname: "default_rear_groove_tool_diameter_mm", fieldtype: "Float", label: t("Default rear groove tool diameter (mm)"), default: values.default_rear_groove_tool_diameter_mm, description: t("Blank copies the cutting tool diameter onto each new order.") },

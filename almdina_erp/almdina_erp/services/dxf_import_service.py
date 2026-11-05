@@ -1444,6 +1444,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "edge_width_bottom": cint(getattr(row, "edge_width_bottom", 0)),
                     "edge_long_thickness_mm": _num(getattr(row, "edge_long_thickness_mm", 0)),
                     "edge_width_thickness_mm": _num(getattr(row, "edge_width_thickness_mm", 0)),
+                    "deduct_edge_thickness": bool(getattr(row, "deduct_edge_thickness", True)),
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
@@ -1481,6 +1482,7 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
                 piece, "edge_width_bottom", "edge_width_thickness_mm"
             ),
             width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
+            deduct_edge_thickness=bool(piece.get("deduct_edge_thickness", True)),
             clipped_cut_width_mm=_num(piece.get("clipped_corner_width_cm")) * 10.0,
             clipped_cut_length_mm=_num(piece.get("clipped_corner_length_cm")) * 10.0,
             clipped_corner_position=str(piece.get("clipped_corner_position") or ""),
@@ -1710,6 +1712,7 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
             tolerance=GEOMETRY_TOLERANCE_MM,
             finished_width_mm=spec.get("finished_width_mm"),
             finished_length_mm=spec.get("finished_length_mm"),
+            deduct_edge_thickness=bool(spec.get("deduct_edge_thickness", True)),
         )
         if decision.ok:
             continue
@@ -1757,6 +1760,7 @@ def _apply_expected_identity(
         "allow_rotation": bool(candidate.get("allow_rotation")),
         "finished_width_mm": _num(candidate.get("finished_width_cm")) * 10.0,
         "finished_length_mm": _num(candidate.get("finished_length_cm")) * 10.0,
+        "deduct_edge_thickness": bool(candidate.get("deduct_edge_thickness", True)),
     }
     piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
     piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")

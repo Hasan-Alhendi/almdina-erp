@@ -66,6 +66,7 @@ _SETTING_TO_PLAN_FIELD = {
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 
 
@@ -93,6 +94,14 @@ def _apply_settings(plan: Any, settings: dict[str, Any]) -> None:
         setattr(plan, plan_field, settings[setting_name])
 
 
+def _preview_deducts_edge_thickness(plan: Any) -> bool:
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    return coerce_deduct_edge_thickness(getattr(plan, "deduct_edge_thickness", None))
+
+
 def _preview_cost_summary(plan: Any) -> dict[str, float]:
     return {
         "board_rate_usd": flt(plan.board_rate_usd),
@@ -116,6 +125,7 @@ def _preview_summary(
             "kerf_mm": plan.kerf_mm,
             "trim_margin_mm": plan.trim_margin_mm,
             "optimization_time_limit_sec": plan.optimization_time_limit_sec,
+            "deduct_edge_thickness": 1 if _preview_deducts_edge_thickness(plan) else 0,
         },
         "engine": {
             "method_key": str(plan.method_key or ""),
@@ -312,6 +322,7 @@ def preview_cutting_plan(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Calculate a disposable System-plan preview without any DB mutation."""
 
@@ -327,12 +338,21 @@ def preview_cutting_plan(
     _assert_recalculation_state(order)
 
     source_plan = _system_draft(order, Capability.RECALCULATE_PLAN)
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    if deduct_edge_thickness is None:
+        deduct_edge_thickness = 1 if coerce_deduct_edge_thickness(
+            getattr(source_plan, "deduct_edge_thickness", None)
+        ) else 0
     requested_settings = {
         "packing_mode": packing_mode,
         "cutting_machine_type": cutting_machine_type,
         "kerf_mm": kerf_mm,
         "trim_margin_mm": trim_margin_mm,
         "optimization_time_limit_sec": optimization_time_limit_sec,
+        "deduct_edge_thickness": deduct_edge_thickness,
     }
     # Validate any explicit historical API mode, then apply the same trusted
     # server policy used by calculation before creating the preview fingerprint.
@@ -446,6 +466,13 @@ def commit_cutting_plan_preview(
     _assert_recalculation_state(order)
 
     session,source = _session(order,token)
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    previous_deduct = coerce_deduct_edge_thickness(
+        getattr(source, "deduct_edge_thickness", None)
+    )
     candidate = _candidate(session,candidate_id)
     consumed = FrappeCuttingPlanPreviewStore().consume(token)
     if not consumed:
@@ -473,6 +500,15 @@ def commit_cutting_plan_preview(
         rear_groove_tool_diameter_mm=rear_groove_tool_diameter_mm,
     )
     repository.save_document(plan)
+    committed_deduct = coerce_deduct_edge_thickness(
+        getattr(plan, "deduct_edge_thickness", None)
+    )
+    if committed_deduct != previous_deduct:
+        from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+            sync_order_cut_dimensions,
+        )
+
+        sync_order_cut_dimensions(order, deduct_edge_thickness=committed_deduct)
     refresh_order_commercial_totals(order, plan)
     from almdina_erp.almdina_erp.services.final_price_approval_service import (
         maybe_invalidate_final_price_approval,

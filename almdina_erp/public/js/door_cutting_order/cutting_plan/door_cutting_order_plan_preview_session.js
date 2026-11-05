@@ -4,7 +4,19 @@
     if (window.AlmdinaPlanPreviewSession) return;
 
     const STATE_KEY = "__almdinaPlanPreviewSession";
-    const SETTINGS = ["packing_mode", "cutting_machine_type", "kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"];
+    const SETTINGS = ["packing_mode", "cutting_machine_type", "kerf_mm", "trim_margin_mm", "optimization_time_limit_sec", "deduct_edge_thickness"];
+    const NUMERIC_SETTINGS = ["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"];
+
+    function deductEdgeThicknessOn(value) {
+        if (value === undefined || value === null || value === "") return true;
+        return !(value === false || value === 0 || value === "0" || String(value).toLowerCase() === "false");
+    }
+
+    function settingEqual(key, left, right) {
+        if (key === "deduct_edge_thickness") return deductEdgeThicknessOn(left) === deductEdgeThicknessOn(right);
+        if (NUMERIC_SETTINGS.includes(key)) return Number(left) === Number(right);
+        return String(left ?? "") === String(right ?? "");
+    }
 
     function identity(frm) {
         const context = window.AlmdinaDocumentContext;
@@ -25,12 +37,7 @@
 
     function matchesSettings(payload, requested) {
         const actual = payload && payload.summary && payload.summary.settings;
-        return Boolean(actual && SETTINGS.every(key =>
-            actual[key] !== undefined && requested[key] !== undefined
-            && (["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"].includes(key)
-                ? Number(actual[key]) === Number(requested[key])
-                : String(actual[key]) === String(requested[key]))
-        ));
+        return Boolean(actual && SETTINGS.every(key => settingEqual(key, actual[key], requested && requested[key])));
     }
 
     function validPortfolio(payload) {
@@ -80,11 +87,9 @@
             && Number(result.plan_revision) > 0
             && result.plan_source_type === "System"
             && result.plan_status === "Draft"
-            && SETTINGS.every(key => result[key] != null
-                && (["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"].includes(key)
-                    ? Number.isFinite(Number(result[key]))
-                        && Number(result[key]) === Number(state.requestedSettings?.[key])
-                    : String(result[key]) === String(state.requestedSettings?.[key]))));
+            && SETTINGS.every(key => key === "deduct_edge_thickness"
+                ? settingEqual(key, result[key], state.requestedSettings?.[key])
+                : result[key] != null && settingEqual(key, result[key], state.requestedSettings?.[key])));
     }
 
     function canonicalJson(value) {
@@ -109,10 +114,9 @@
                 || row.source_type !== "System" || row.status !== "Draft"
                 || row.validation?.status !== "Valid" || row.validation?.needs_recalculation) return false;
             const settings = row.settings || {};
-            if (!SETTINGS.every(key => key in settings
-                && (["kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"].includes(key)
-                    ? Number(settings[key]) === Number(state.requestedSettings[key])
-                    : String(settings[key]) === String(state.requestedSettings[key])))) return false;
+            if (!SETTINGS.every(key => key === "deduct_edge_thickness"
+                ? settingEqual(key, settings[key], state.requestedSettings[key])
+                : key in settings && settingEqual(key, settings[key], state.requestedSettings[key]))) return false;
             const saved = typeof row.snapshot_json === "string"
                 ? JSON.parse(row.snapshot_json) : row.snapshot_json;
             return Boolean(saved && JSON.stringify(canonicalJson(saved))

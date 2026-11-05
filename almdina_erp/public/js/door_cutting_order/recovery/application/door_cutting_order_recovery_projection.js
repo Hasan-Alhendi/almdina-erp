@@ -73,6 +73,7 @@
         "handle_recess_tool_diameter_mm",
         "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
+        "deduct_edge_thickness",
     ]);
     const COST_DRAFT_FIELDS = Object.freeze([
         "board_rate_usd",

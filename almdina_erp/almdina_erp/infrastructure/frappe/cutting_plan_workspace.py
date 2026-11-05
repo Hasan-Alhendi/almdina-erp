@@ -25,6 +25,10 @@ from almdina_erp.almdina_erp.domain.cutting.offcut_policy import decision_from_v
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
     with_physical_execution_contract,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+    persisted_cut_matches_policy,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -76,11 +80,60 @@ def _board_dimensions_mm(order: Any) -> tuple[float, float]:
     return width, length
 
 
-def _piece_rows(order: Any) -> tuple[dict[str, Any], ...]:
-    return tuple(
-        FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
-        for row in (order.pieces or [])
+_EDGE_SELECTION_FIELDS = (
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+)
+
+
+def _edge_selected(row: Any) -> bool:
+    return any(cint(getattr(row, fieldname, 0)) for fieldname in _EDGE_SELECTION_FIELDS)
+
+
+def _policy_cut_row(order: Any, row: Any, data: dict[str, Any], *, deduct: bool) -> dict[str, Any]:
+    """Use the saved cut size when it already expresses the plan policy.
+
+    Enabled deduction keeps the historical persisted size bit-for-bit. The
+    finished size replaces it only while deduction is off, or the enabled
+    policy is asked to leave a previously disabled cache.
+    """
+
+    if persisted_cut_matches_policy(
+        finished_width_cm=getattr(row, "width_cm", 0),
+        finished_length_cm=getattr(row, "length_cm", 0),
+        persisted_width_cm=data["width_cm"],
+        persisted_length_cm=data["length_cm"],
+        deduct_edge_thickness=deduct,
+        edge_selected=_edge_selected(row),
+    ):
+        return data
+    from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+        expected_policy_cut_cm,
     )
+
+    width_cm, length_cm = expected_policy_cut_cm(
+        order,
+        row,
+        deduct_edge_thickness=deduct,
+    )
+    data["width_cm"] = width_cm
+    data["length_cm"] = length_cm
+    return data
+
+
+def _piece_rows(order: Any, plan: Any | None = None) -> tuple[dict[str, Any], ...]:
+    deduct = True if plan is None else coerce_deduct_edge_thickness(
+        _plan_attr(plan, "deduct_edge_thickness", None)
+    )
+    rows = []
+    for row in (order.pieces or []):
+        data = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        if plan is not None:
+            data = _policy_cut_row(order, row, data, deduct=deduct)
+        rows.append(data)
+    return tuple(rows)
 
 
 def _manufacturing_requirements(order: Any) -> dict[str, Any]:
@@ -199,6 +252,9 @@ def _validated_plan_settings(plan: Any) -> PlanSettings:
                 _plan_attr(plan, "trim_margin_mm"),
                 DEFAULT_PREFERRED_TRIM_MM,
             ),
+            deduct_edge_thickness=coerce_deduct_edge_thickness(
+                _plan_attr(plan, "deduct_edge_thickness", None)
+            ),
         )
     except PlanSettingsValidationError:
         frappe.throw(_("إعدادات خطة القص الحالية غير صالحة."), frappe.ValidationError)
@@ -216,11 +272,16 @@ def _plan_settings_payload(plan: Any) -> dict[str, Any]:
     }
 
 
-def _geometry_piece_rows(order: Any, *, historical: bool = False) -> list[dict[str, Any]]:
+def _geometry_piece_rows(
+    order: Any,
+    *,
+    historical: bool = False,
+    plan: Any | None = None,
+) -> list[dict[str, Any]]:
     rows = []
     if historical:
         return [historical_geometry_piece(row) for row in (order.pieces or [])]
-    for row in _piece_rows(order):
+    for row in _piece_rows(order, plan):
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
             piece.pop(key, None)
@@ -274,7 +335,7 @@ def plan_input_fingerprint(
     if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
         raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
-    pieces = _geometry_piece_rows(order, historical=historical)
+    pieces = _geometry_piece_rows(order, historical=historical, plan=plan)
     pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
@@ -315,7 +376,7 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
             kerf_mm=_plan_attr(plan, "kerf_mm"),
             trim_margin_mm=_plan_attr(plan, "trim_margin_mm"),
         ),
-        "pieces": _geometry_piece_rows(order, historical=historical),
+        "pieces": _geometry_piece_rows(order, historical=historical, plan=plan),
     }
 
 
@@ -457,7 +518,10 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                     getattr(factory_settings, "alignment_search_budget_sec", 1.0)
                 ),
             ),
-            piece_rows=_piece_rows(order),
+            piece_rows=tuple(
+                {**row, "deduct_edge_thickness": plan_settings.deduct_edge_thickness}
+                for row in _piece_rows(order, plan)
+            ),
             allow_piece_mirroring=piece_mirroring_allowed(
                 getattr(order, "allow_piece_mirroring", None)
             ),

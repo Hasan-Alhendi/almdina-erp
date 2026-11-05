@@ -25,6 +25,14 @@ def optimizer_settings_fingerprint(settings: Mapping[str, Any]) -> str:
             ),
         },
     }
+    if "deduct_edge_thickness" in settings:
+        from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+            coerce_deduct_edge_thickness,
+        )
+
+        payload["settings"]["deduct_edge_thickness"] = (
+            1 if coerce_deduct_edge_thickness(settings.get("deduct_edge_thickness")) else 0
+        )
     # Preserve hashes for already-issued v1 preview tokens. New sessions carry
     # the factory-owned centering policy and therefore use an explicit v2 hash.
     if "max_centerable_edge_gap_cm" in settings:

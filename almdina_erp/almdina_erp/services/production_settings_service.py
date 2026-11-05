@@ -107,6 +107,7 @@ _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
 )
 _SETTINGS_FIELDS = (
     "default_kerf_mm",
+    "default_deduct_edge_thickness",
     "default_liner_tool_diameter_mm",
     "default_handle_recess_tool_diameter_mm",
     "default_rear_groove_tool_diameter_mm",
@@ -381,6 +382,15 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     for fieldname in ("allow_stage_override", "allow_unplaced_approval"):
         if fieldname in payload:
             settings.set(fieldname, cint(payload[fieldname]) and 1 or 0)
+    if "default_deduct_edge_thickness" in payload:
+        from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+            coerce_deduct_edge_thickness,
+        )
+
+        settings.set(
+            "default_deduct_edge_thickness",
+            1 if coerce_deduct_edge_thickness(payload["default_deduct_edge_thickness"]) else 0,
+        )
 
     print_labels = {
         "print_factory_name": _("Factory Name"),
@@ -695,7 +705,13 @@ def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str
             values[fieldname] = _stage_messages_dict(settings)
             continue
         value = settings.get(fieldname)
-        if fieldname in {"allow_stage_override", "allow_unplaced_approval", *_BACKUP_BOOLEAN_FIELDS}:
+        if fieldname == "default_deduct_edge_thickness":
+            from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+                coerce_deduct_edge_thickness,
+            )
+
+            value = 1 if coerce_deduct_edge_thickness(value) else 0
+        elif fieldname in {"allow_stage_override", "allow_unplaced_approval", *_BACKUP_BOOLEAN_FIELDS}:
             value = int(value or 0)
         elif fieldname in _BACKUP_INTEGER_FIELDS:
             value = cint(value)

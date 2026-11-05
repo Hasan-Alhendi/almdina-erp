@@ -118,8 +118,15 @@
         return FALLBACK_SPECS;
     }
 
+    function edgeDeductionOff(value) {
+        return value === false || value === 0 || value === "0" || String(value || "").toLowerCase() === "false";
+    }
+
     function displayValue(spec, settings) {
         const raw = settings ? settings[spec.fieldname] : null;
+        if (spec.fieldtype === "Check") {
+            return translate(edgeDeductionOff(raw) ? "Disabled" : "Enabled");
+        }
         if (spec.fieldtype === "Select") {
             const normalized = String(raw ?? "").trim();
             const option = (spec.options || []).find((entry) => String(entry.value) === normalized);

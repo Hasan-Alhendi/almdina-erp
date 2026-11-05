@@ -10,6 +10,10 @@ from almdina_erp.almdina_erp.domain.cutting.catalog import (
     is_machine_type,
     persisted_mode_value,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    CutDimensionError,
+    coerce_deduct_edge_thickness,
+)
 
 
 DEFAULT_MACHINE_TYPE = "Auto"
@@ -37,6 +41,7 @@ class PlanSettings:
     optimization_time_limit_sec: float
     kerf_mm: float
     preferred_trim_mm: float
+    deduct_edge_thickness: bool
 
     def __init__(
         self,
@@ -47,6 +52,7 @@ class PlanSettings:
         preferred_trim_mm: float | None = None,
         *,
         trim_margin_mm: float | None = None,
+        deduct_edge_thickness: bool = True,
     ) -> None:
         resolved_trim = preferred_trim_mm
         if resolved_trim is None:
@@ -56,6 +62,7 @@ class PlanSettings:
         object.__setattr__(self, "optimization_time_limit_sec", optimization_time_limit_sec)
         object.__setattr__(self, "kerf_mm", kerf_mm)
         object.__setattr__(self, "preferred_trim_mm", resolved_trim)  # type: ignore[arg-type]
+        object.__setattr__(self, "deduct_edge_thickness", bool(deduct_edge_thickness))
 
     @property
     def trim_margin_mm(self) -> float:
@@ -83,6 +90,7 @@ def normalize_plan_settings(
     optimization_time_limit_sec: Any,
     kerf_mm: Any,
     preferred_trim_mm: Any,
+    deduct_edge_thickness: Any = True,
 ) -> PlanSettings:
     """Validate one complete settings value without silently replacing zero.
 
@@ -125,12 +133,20 @@ def normalize_plan_settings(
             "plan_setting_cannot_be_negative:preferred_trim_mm"
         )
 
+    try:
+        deduct_edges = coerce_deduct_edge_thickness(deduct_edge_thickness)
+    except CutDimensionError as error:
+        raise PlanSettingsValidationError(
+            "invalid_plan_setting:deduct_edge_thickness"
+        ) from error
+
     return PlanSettings(
         optimization_mode=canonical_mode,
         machine_type=canonical_machine,
         optimization_time_limit_sec=time_limit,
         kerf_mm=kerf,
         preferred_trim_mm=preferred_trim,
+        deduct_edge_thickness=deduct_edges,
     )
 
 
@@ -148,6 +164,7 @@ def canonical_default_plan_settings() -> PlanSettings:
         optimization_time_limit_sec=DEFAULT_OPTIMIZATION_TIME_LIMIT_SEC,
         kerf_mm=DEFAULT_KERF_MM,
         preferred_trim_mm=DEFAULT_PREFERRED_TRIM_MM,
+        deduct_edge_thickness=True,
     )
 
 
@@ -159,5 +176,6 @@ __all__ = [
     "PlanSettings",
     "PlanSettingsValidationError",
     "canonical_default_plan_settings",
+    "coerce_deduct_edge_thickness",
     "normalize_plan_settings",
 ]

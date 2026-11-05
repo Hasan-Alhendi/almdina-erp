@@ -3078,3 +3078,5 @@ The width of {0} is less than its tool diameter.,عرض {0} أصغر من قطر
 Specify a tool diameter above zero for {0} toolpaths,حدّد عرض ريشة أكبر من صفر لمسارات {0}
 The width of {0} is less than its tool diameter,عرض {0} أصغر من قطر ريشته
 "Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order.",الهندسة الافتراضية وماكينة القص وحدود البحث. العروض الافتراضية لريش القص: الحقل الفارغ ينسخ عرض ريشة القص إلى كل طلب جديد.
+Deduct edge banding thickness by default,خصم سماكة القشاط افتراضياً
+Deduct edge banding thickness automatically,خصم سماكة القشاط تلقائياً

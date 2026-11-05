@@ -17,6 +17,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     UPLOADED_DXF,
     is_current_manufacturing_candidate,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -98,6 +101,9 @@ def factory_default_plan_settings() -> PlanSettings:
             settings.default_trim_margin_mm,
             DEFAULT_PREFERRED_TRIM_MM,
         ),
+        deduct_edge_thickness=coerce_deduct_edge_thickness(
+            getattr(settings, "default_deduct_edge_thickness", None)
+        ),
     )
 
 
@@ -124,6 +130,9 @@ def plan_settings(plan: Any) -> PlanSettings:
         preferred_trim_mm=_numeric_or_default(
             getattr(plan, "trim_margin_mm", None),
             DEFAULT_PREFERRED_TRIM_MM,
+        ),
+        deduct_edge_thickness=coerce_deduct_edge_thickness(
+            getattr(plan, "deduct_edge_thickness", None)
         ),
     )
 

@@ -12,6 +12,7 @@
         "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
         "optimization_time_limit_sec",
+        "deduct_edge_thickness",
     ]);
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
@@ -84,6 +85,12 @@
             min: 0,
             step: "1",
             suffix: "seconds",
+        }),
+        Object.freeze({
+            fieldname: "deduct_edge_thickness",
+            label: "Deduct edge banding thickness automatically",
+            shortLabel: "Deduct edge banding thickness automatically",
+            fieldtype: "Check",
         }),
     ]);
     // Legacy catalog rows still send Arabic labels. Resolve only known stable IDs.
@@ -481,7 +488,18 @@
                 min-width: 0;
                 padding: 0;
             }
-            .dco-plan-settings-editor__field {
+                .dco-plan-settings-editor__field--check label {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-height: 28px;
+                }
+                .dco-plan-settings-editor__field--check input {
+                    width: 16px;
+                    height: 16px;
+                    margin: 0;
+                }
+                .dco-plan-settings-editor__field {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
@@ -660,10 +678,30 @@
         }).join("");
     }
 
+    function edgeDeductionOff(value) {
+        return value === false || value === 0 || value === "0" || String(value || "").toLowerCase() === "false";
+    }
+
     function fieldMarkup(spec, value) {
         const fieldname = escapeHtml(spec.fieldname);
         const label = escapeHtml(translate(spec.shortLabel || spec.label));
         const compact = spec.compact ? ' data-tool-diameter="1"' : "";
+        if (spec.fieldtype === "Check") {
+            const checked = !edgeDeductionOff(value);
+            return `
+                <div class="dco-plan-settings-editor__field dco-plan-settings-editor__field--check" data-fieldname="${fieldname}">
+                    <label for="dco-plan-setting-${fieldname}">
+                        <input
+                            id="dco-plan-setting-${fieldname}"
+                            type="checkbox"
+                            ${checked ? "checked" : ""}
+                            data-almdina-plan-setting="${fieldname}"
+                        >
+                        <span>${label}</span>
+                    </label>
+                </div>
+            `;
+        }
         if (spec.fieldtype === "Select") {
             return `
                 <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
@@ -716,8 +754,10 @@
         const spec = planSettingSpecs(frm, state && state.draft || {})
             .find((entry) => entry.fieldname === fieldname);
         if (!spec) return;
-        const raw = input.val();
-        const value = spec.fieldtype === "Float"
+        const raw = spec.fieldtype === "Check" ? input.prop("checked") : input.val();
+        const value = spec.fieldtype === "Check"
+            ? (raw ? 1 : 0)
+            : spec.fieldtype === "Float"
             ? (String(raw ?? "").trim() === "" ? null : Number(raw))
             : String(raw ?? "");
         store.patchDraft({ [fieldname]: value });
@@ -830,6 +870,7 @@
         const values = draft || {};
         for (const spec of planSettingSpecs(frm, values)) {
             const value = values[spec.fieldname];
+            if (spec.fieldtype === "Check") continue;
             if (spec.fieldtype === "Select") {
                 const normalized = String(value ?? "").trim();
                 const selected = (spec.options || []).find((option) => option.value === normalized);
@@ -956,6 +997,7 @@
                 frm,
                 specs.find((spec) => {
                     const value = (state.draft || {})[spec.fieldname];
+                    if (spec.fieldtype === "Check") return false;
                     if (spec.fieldtype === "Select") {
                         const selected = (spec.options || []).find(
                             (option) => option.value === String(value ?? "").trim()
