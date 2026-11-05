@@ -92,3 +92,8 @@ Linux/Frappe CI remain gates before considering default activation. A smoke run
 with one repetition does not pass those gates. Record every regression rather
 than averaging away extra boards or validation failures. Actual DXF validation
 does not certify CNC motion, clamping, tool depth or execution time.
+
+The 2026-11-05 real-order DXF structural audit is recorded in
+`298-real-dxf-comparability-ar.md`. It is intentionally excluded from the ABC
+performance corpus until the designer's `OFFCUT` classification and the
+matching manufacturing settings are confirmed.
