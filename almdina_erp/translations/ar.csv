@@ -3362,6 +3362,11 @@ Precise group moves are available for pieces on the same board only, or pieces o
 Precise moves must keep each piece on its current board.,يجب أن تُبقي الحركات الدقيقة كل قطعة على لوحها الحالي.
 Group move would break a glass host relationship.,تحريك المجموعة سيكسر علاقة المضيف الزجاجي.
 Move geometry unavailable.,هندسة التحريك غير متاحة.
+Display options,خيارات العرض
+Show edge banding,إظهار التقشيطات
+Show edge banding marks on pieces,إظهار علامات التقشيط على الدرف
+Show edge banding for this piece,إظهار تقشيطات هذه الدرفة
+Show edge banding marks for this piece only,إظهار علامات التقشيط لهذه الدرفة فقط
 Align left,محاذاة لليسار
 Align right,محاذاة لليمين
 Align top,محاذاة للأعلى

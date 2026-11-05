@@ -1320,6 +1320,10 @@
                     store.setDropMessage(__(message || "Enter a valid millimetre value."));
                 },
                 applyAlignment: (mode) => applyAlignment(mode),
+                setPieceEdgeBandVisible: (pieceKey, visible) => {
+                    if (!store) return;
+                    store.setPieceEdgeBandVisible(pieceKey, visible);
+                },
             };
         }
 
@@ -1391,6 +1395,8 @@
                 setLayerVisible: (key, visible) => store.setLayerVisible(key, visible),
                 setAllLayersVisible: (visible) => store.setAllLayersVisible(visible),
                 showOnlyLayer: (key) => store.showOnlyLayer(key),
+                setShowEdgeBands: (visible) => store.setShowEdgeBands(visible),
+                edgeBandGlobalUiState: () => store.edgeBandGlobalUiState(),
                 toggleSheet: (sheetNo) => store.toggleSheetExpanded(sheetNo),
                 selectSheet: (sheetNo) => {
                     store.selectSheet(sheetNo);

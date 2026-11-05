@@ -152,6 +152,18 @@
         const locked = piece.editable === false
             ? `<span class="abe-host-hint">${esc(__("Not editable"))}</span>`
             : "";
+        const edgeVisible = window.AlmdinaBoardEditor
+            && typeof window.AlmdinaBoardEditor.isPieceEdgeBandVisibleInView === "function"
+            ? window.AlmdinaBoardEditor.isPieceEdgeBandVisibleInView(storeView, pieceKey)
+            : Boolean(storeView.showEdgeBands);
+        const edgeChecked = edgeVisible ? "checked" : "";
+        const displayHtml = `<div class="abe-inspector-display" data-abe-piece-display="1">
+            <div class="abe-inspector-block-title">${esc(__("Display options"))}</div>
+            <label class="abe-inspector-check-row" title="${esc(__("Show edge banding marks for this piece only"))}">
+                <input type="checkbox" data-abe-piece-edge-bands="1" data-abe-piece-key="${esc(pieceKey)}" ${edgeChecked}/>
+                <span>${esc(__("Show edge banding for this piece"))}</span>
+            </label>
+        </div>`;
         return `<section class="abe-inspector-block abe-inspector-props-block">
             ${positionHtml}
             <div class="abe-inspector-piece">
@@ -162,6 +174,7 @@
                     ${locked}
                 </div>
             </div>
+            ${displayHtml}
         </section>`;
     }
 
@@ -329,6 +342,18 @@
         });
     }
 
+    function bindPieceEdgeBandControl(host, handlers) {
+        const input = host && host.querySelector("input[data-abe-piece-edge-bands]");
+        if (!input) return;
+        input.addEventListener("change", () => {
+            const pieceKey = input.getAttribute("data-abe-piece-key");
+            if (!pieceKey) return;
+            if (handlers && handlers.setPieceEdgeBandVisible) {
+                handlers.setPieceEdgeBandVisible(pieceKey, input.checked);
+            }
+        });
+    }
+
     function render(host, storeView, handlers) {
         if (!host) return;
         const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
@@ -349,6 +374,7 @@
 
         bindPositionControls(host, handlers || {}, positionModel);
         bindAlignmentControls(host, handlers || {});
+        bindPieceEdgeBandControl(host, handlers || {});
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};

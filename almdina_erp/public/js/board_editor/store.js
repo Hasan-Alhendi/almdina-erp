@@ -33,6 +33,10 @@
             sidebarSplit: 0.45,
             magnetEnabled: true,
             measureToolActive: false,
+            // Visual-only edge-band preference for this open editor session.
+            // Never enters History / draft fingerprint / manufacturing data.
+            showEdgeBands: false,
+            pieceEdgeBandOverrides: {},
             session: null,
             history: null,
             dragPreview: null,
@@ -87,6 +91,8 @@
                 sidebarSplit: state.sidebarSplit,
                 magnetEnabled: state.magnetEnabled !== false,
                 measureToolActive: state.measureToolActive === true,
+                showEdgeBands: state.showEdgeBands === true,
+                pieceEdgeBandOverrides: { ...state.pieceEdgeBandOverrides },
                 session: state.session,
                 dragPreview: state.dragPreview,
                 dropMessage: state.dropMessage,
@@ -173,6 +179,100 @@
 
         function toggleMeasureTool() {
             setMeasureToolActive(!state.measureToolActive);
+        }
+
+        function edgesPayloadHasBands(edges) {
+            if (!edges || typeof edges !== "object") return false;
+            if (edges.edge_width_top || edges.edge_width_bottom
+                || edges.edge_long_left || edges.edge_long_right
+                || edges.edge_break || edges.edge_break_only) {
+                return true;
+            }
+            return ["top", "bottom", "left", "right"].some((side) => (
+                edges[side] && (edges[side].selected || edges[side].custom)
+            ));
+        }
+
+        function displayEdgesForPieceKey(pieceKey) {
+            const key = String(pieceKey || "").trim();
+            const sessionPiece = key && state.session && state.session.pieces
+                ? state.session.pieces[key]
+                : null;
+            if (!sessionPiece || sessionPiece.distribution === "excluded") return null;
+            if (edgesPayloadHasBands(sessionPiece.display_edges)) return sessionPiece.display_edges;
+            const projection = (state.payload && state.payload.projection) || {};
+            const instanceId = sessionPiece.piece_instance_id;
+            const pieceId = sessionPiece.piece_id;
+            const fromPieces = (projection.pieces || []).find((row) => (
+                (instanceId && String(row.piece_instance_id) === String(instanceId))
+                || (!instanceId && Number(row.piece_id) === Number(pieceId))
+            ));
+            if (edgesPayloadHasBands(fromPieces && fromPieces.display_edges)) {
+                return fromPieces.display_edges;
+            }
+            const fromElement = (projection.elements || []).find((element) => {
+                if (!(element && (element.kind === "placement_rect" || element.kind === "finished_outline"))) {
+                    return false;
+                }
+                if (instanceId && String(element.piece_instance_id) === String(instanceId)) return true;
+                return !instanceId && Number(element.piece_id) === Number(pieceId);
+            });
+            const payloadEdges = fromElement && fromElement.payload && fromElement.payload.display_edges;
+            return edgesPayloadHasBands(payloadEdges) ? payloadEdges : null;
+        }
+
+        function pieceHasEdgeBands(pieceOrKey) {
+            if (pieceOrKey && typeof pieceOrKey === "object") {
+                if (pieceOrKey.distribution === "excluded") return false;
+                if (edgesPayloadHasBands(pieceOrKey.display_edges)) return true;
+                if (pieceOrKey.piece_key) return Boolean(displayEdgesForPieceKey(pieceOrKey.piece_key));
+                return false;
+            }
+            return Boolean(displayEdgesForPieceKey(pieceOrKey));
+        }
+
+        function isPieceEdgeBandVisible(pieceKey) {
+            const key = String(pieceKey || "").trim();
+            if (key && Object.prototype.hasOwnProperty.call(state.pieceEdgeBandOverrides, key)) {
+                return Boolean(state.pieceEdgeBandOverrides[key]);
+            }
+            return state.showEdgeBands === true;
+        }
+
+        function edgeBandEligibleKeys() {
+            const pieces = (state.session && state.session.pieces) || {};
+            return Object.keys(pieces).filter((key) => Boolean(displayEdgesForPieceKey(key)));
+        }
+
+        function edgeBandGlobalUiState() {
+            const keys = edgeBandEligibleKeys();
+            if (!keys.length) {
+                return {
+                    checked: state.showEdgeBands === true,
+                    indeterminate: false,
+                };
+            }
+            let visible = 0;
+            keys.forEach((key) => {
+                if (isPieceEdgeBandVisible(key)) visible += 1;
+            });
+            if (visible === 0) return { checked: false, indeterminate: false };
+            if (visible === keys.length) return { checked: true, indeterminate: false };
+            return { checked: false, indeterminate: true };
+        }
+
+        function setShowEdgeBands(visible) {
+            // Explicit global change resets every per-piece exception.
+            state.showEdgeBands = Boolean(visible);
+            state.pieceEdgeBandOverrides = {};
+            emit();
+        }
+
+        function setPieceEdgeBandVisible(pieceKey, visible) {
+            const key = String(pieceKey || "").trim();
+            if (!key) return;
+            state.pieceEdgeBandOverrides[key] = Boolean(visible);
+            emit();
         }
 
         function setDragPreview(preview) {
@@ -436,6 +536,11 @@
             toggleMagnet,
             setMeasureToolActive,
             toggleMeasureTool,
+            setShowEdgeBands,
+            setPieceEdgeBandVisible,
+            isPieceEdgeBandVisible,
+            edgeBandGlobalUiState,
+            pieceHasEdgeBands,
             setDragPreview,
             setDropMessage,
             commitSession,
@@ -462,6 +567,17 @@
         };
     }
 
+    function isPieceEdgeBandVisibleInView(storeView, pieceKey) {
+        if (!storeView) return false;
+        const key = String(pieceKey || "").trim();
+        const overrides = storeView.pieceEdgeBandOverrides || {};
+        if (key && Object.prototype.hasOwnProperty.call(overrides, key)) {
+            return Boolean(overrides[key]);
+        }
+        return storeView.showEdgeBands === true;
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.createStore = createStore;
+    window.AlmdinaBoardEditor.isPieceEdgeBandVisibleInView = isPieceEdgeBandVisibleInView;
 })();

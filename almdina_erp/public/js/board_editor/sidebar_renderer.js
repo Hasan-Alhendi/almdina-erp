@@ -200,6 +200,20 @@
         const layerActionHtml = layerAction
             ? `<button type="button" class="abe-layer-visibility" data-abe-layer-action="${esc(layerAction.action)}" data-abe-layer-state="${esc(layerAction.state)}" title="${esc(layerAction.label)}" aria-label="${esc(layerAction.label)}">${frappeIcon(layerAction.icon)}</button>`
             : "";
+        const edgeBandUi = (handlers && typeof handlers.edgeBandGlobalUiState === "function")
+            ? handlers.edgeBandGlobalUiState()
+            : {
+                checked: storeView.showEdgeBands === true,
+                indeterminate: false,
+            };
+        const edgeBandChecked = edgeBandUi.checked && !edgeBandUi.indeterminate ? "checked" : "";
+        const displayOptionsHtml = `<div class="abe-display-options" data-abe-display-options="1">
+            <div class="abe-display-options-title">${esc(__("Display options"))}</div>
+            <label class="abe-layer-row abe-display-option-row" title="${esc(__("Show edge banding marks on pieces"))}">
+                <input type="checkbox" data-abe-show-edge-bands="1" ${edgeBandChecked}/>
+                <span class="abe-layer-name">${esc(__("Show edge banding"))}</span>
+            </label>
+        </div>`;
         host.innerHTML = `
             <div class="abe-sidebar" style="--abe-split:${split}%">
                 <section class="abe-sidebar-section abe-layers-section" aria-label="${esc(__("DXF layers"))}">
@@ -207,7 +221,7 @@
                         <h2>${esc(__("DXF layers"))}</h2>
                         <div class="abe-layer-actions">${layerActionHtml}</div>
                     </header>
-                    <div class="abe-section-scroll abe-layers-scroll">${layerRows || `<div class="abe-empty-inline">${esc(__("No layers"))}</div>`}</div>
+                    <div class="abe-section-scroll abe-layers-scroll">${displayOptionsHtml}${layerRows || `<div class="abe-empty-inline">${esc(__("No layers"))}</div>`}</div>
                 </section>
                 <div class="abe-split-handle" role="separator" aria-orientation="horizontal" aria-label="${esc(__("Resize sidebar sections"))}" tabindex="0"></div>
                 <section class="abe-sidebar-section abe-tree-section" aria-label="${esc(__("Boards and pieces"))}">
@@ -229,6 +243,14 @@
                 );
             });
         });
+        const edgeBandInput = host.querySelector("input[data-abe-show-edge-bands]");
+        if (edgeBandInput) {
+            edgeBandInput.indeterminate = Boolean(edgeBandUi.indeterminate);
+            edgeBandInput.addEventListener("change", () => {
+                // Mixed → click lands as checked: show all and clear overrides.
+                handlers && handlers.setShowEdgeBands && handlers.setShowEdgeBands(edgeBandInput.checked);
+            });
+        }
         const layerVisibility = host.querySelector(".abe-layer-visibility");
         if (layerVisibility) {
             layerVisibility.onclick = () => {

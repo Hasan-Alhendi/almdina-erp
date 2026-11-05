@@ -348,7 +348,18 @@
         return { fill: "#e4f5ff", stroke: "#111111", strokeWidth: 1 };
     }
 
-    function edgeMarkSvg(piece, edges, geometrySource, sessionPiece, boards, origin, scale, defaultType) {
+    function edgeBandsVisible(storeView, sessionPiece) {
+        const api = window.AlmdinaBoardEditor;
+        const pieceKey = sessionPiece && sessionPiece.piece_key;
+        if (api && typeof api.isPieceEdgeBandVisibleInView === "function") {
+            return api.isPieceEdgeBandVisibleInView(storeView, pieceKey);
+        }
+        return Boolean(storeView && storeView.showEdgeBands);
+    }
+
+    function edgeMarkSvg(piece, edges, geometrySource, sessionPiece, boards, origin, scale, defaultType, storeView) {
+        // Visual gate only — manufacturing edges stay on the piece/projection.
+        if (!edgeBandsVisible(storeView, sessionPiece)) return "";
         const marks = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PlanEdgeMarks;
         if (!marks || !piece || !edges) return "";
         const bands = marks.bandsForPiece(piece, edges, scale, geometrySource, defaultType);
@@ -1651,7 +1662,8 @@
                     boards,
                     origin,
                     scale,
-                    defaultEdgeTypeOf(storeView)
+                    defaultEdgeTypeOf(storeView),
+                    storeView
                 );
                 const caption = pieceCaption(element, sessionPiece, storeView, boards, origin, scale);
                 const html = `<g${pieceKeyAttr}${pieceIdAttr} data-element-id="${esc(element.element_id)}" data-fill-role="${esc(role)}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}" style="pointer-events:${pointer};opacity:${opacity}">
@@ -1787,7 +1799,8 @@
                     boards,
                     origin,
                     scale,
-                    defaultEdgeTypeOf(storeView)
+                    defaultEdgeTypeOf(storeView),
+                    storeView
                 );
                 caption = pieceCaption(element, sessionPiece, storeView, boards, origin, scale);
             }

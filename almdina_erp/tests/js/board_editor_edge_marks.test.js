@@ -189,6 +189,8 @@ function renderPiece(piece, extra, viewport, defaultEdgeType) {
     const history = History.create(session);
     const store = createStore({ projection, orderName: "ORD", planName: "PLAN" });
     store.attachSession(history.get(), history);
+    // Edge-mark geometry tests assert band polylines; default open state hides them.
+    store.setShowEdgeBands(true);
     store.setViewport(viewport);
     const host = makeHost();
     CanvasRenderer.render(host, store.snapshot(), {});
