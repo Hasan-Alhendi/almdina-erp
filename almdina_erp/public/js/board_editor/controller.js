@@ -31,6 +31,7 @@
         const createStore = window.AlmdinaBoardEditor.createStore;
         const CanvasRenderer = window.AlmdinaBoardEditor.CanvasRenderer;
         const SidebarRenderer = window.AlmdinaBoardEditor.SidebarRenderer;
+        const RightSidebarRenderer = window.AlmdinaBoardEditor.RightSidebarRenderer;
         const SessionDocument = window.AlmdinaBoardEditor.SessionDocument;
         const History = window.AlmdinaBoardEditor.History;
         const createMoveInteraction = window.AlmdinaBoardEditor.createMoveInteraction;
@@ -653,7 +654,7 @@
         function onCanvasWheel(event) {
             if (!store || suspended || !CanvasRenderer.shouldZoomWheel(event)) return;
             const target = event.target;
-            if (target && target.closest && target.closest(".abe-float-tools, .abe-float-stack, .abe-position-bar, .abe-angle-field, .abe-angle-input, .abe-pos-input")) {
+            if (target && target.closest && target.closest(".abe-float-tools, .abe-float-stack, .abe-right-sidebar, .abe-angle-field, .abe-angle-input, .abe-pos-input")) {
                 event.preventDefault();
                 return;
             }
@@ -1219,6 +1220,58 @@
             return { ok: true, unchanged: false, model: readModel() };
         }
 
+        function applyAlignment(mode) {
+            const AlignmentGeometry = window.AlmdinaBoardEditor.AlignmentGeometry;
+            const MoveGeometryLocal = window.AlmdinaBoardEditor.MoveGeometry;
+            if (!store || !AlignmentGeometry || !MoveGeometryLocal) return { ok: false };
+            finishActiveGesture();
+            const view = store.snapshot();
+            const proposal = AlignmentGeometry.proposeAlignment(
+                view.session,
+                view.selectedPieceKeys || [],
+                mode
+            );
+            if (!proposal || !proposal.ok) {
+                store.setDropMessage(__((proposal && proposal.reason) || "Alignment rejected."));
+                return { ok: false, reason: proposal && proposal.reason };
+            }
+            if (proposal.unchanged) {
+                store.setDropMessage(null);
+                return { ok: true, unchanged: true };
+            }
+            let next = view.session;
+            (proposal.commands || []).forEach((command) => {
+                next = MoveGeometryLocal.applyPieceMove(next, command);
+            });
+            store.commitSession(next);
+            store.setDropMessage(null);
+            return { ok: true, unchanged: false };
+        }
+
+        function inspectorHandlers() {
+            return {
+                applyPositionAxis: (pieceKey, axis, value) => applyPrecisionPosition(
+                    () => window.AlmdinaBoardEditor.PositionGeometry.proposeAxisMove(
+                        store.snapshot().session,
+                        pieceKey,
+                        axis,
+                        value
+                    ),
+                    pieceKey
+                ),
+                readPositionModel: (pieceKey) => {
+                    const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+                    if (!store || !PositionGeometry) return null;
+                    return PositionGeometry.boardPositionForPiece(store.snapshot().session, pieceKey);
+                },
+                onPositionRejected: (message) => {
+                    if (!store) return;
+                    store.setDropMessage(__(message || "Enter a valid millimetre value."));
+                },
+                applyAlignment: (mode) => applyAlignment(mode),
+            };
+        }
+
         function nudgeSelectedPieceByArrow(event) {
             if (!store || suspended || !event) return false;
             if (isEditableTarget(event.target)) return false;
@@ -1255,6 +1308,7 @@
             if (!root) return;
             const sidebar = root.querySelector("[data-abe-sidebar]");
             const canvas = root.querySelector("[data-abe-canvas]");
+            const rightSidebar = root.querySelector("[data-abe-right-sidebar-host]");
             SidebarRenderer.render(sidebar, view, {
                 setLayerVisible: (key, visible) => store.setLayerVisible(key, visible),
                 setAllLayersVisible: (visible) => store.setAllLayersVisible(visible),
@@ -1299,6 +1353,9 @@
                 },
                 setSidebarSplit: (ratio, sidebarHeight) => store.setSidebarSplit(ratio, sidebarHeight),
             });
+            if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
+                RightSidebarRenderer.render(rightSidebar, view, inspectorHandlers());
+            }
             lastCanvasApi = CanvasRenderer.render(canvas, view, {
                 selectPiece: (pieceId, elementId) => {
                     const piece = ((view.projection.pieces) || []).find((row) => Number(row.piece_id) === Number(pieceId));
@@ -1372,24 +1429,6 @@
                 applyAngle: (pieceKey, value) => (
                     rotationInteraction && rotationInteraction.applyNumericAngle(pieceKey, value)
                 ),
-                applyPositionAxis: (pieceKey, axis, value) => applyPrecisionPosition(
-                    () => window.AlmdinaBoardEditor.PositionGeometry.proposeAxisMove(
-                        store.snapshot().session,
-                        pieceKey,
-                        axis,
-                        value
-                    ),
-                    pieceKey
-                ),
-                readPositionModel: (pieceKey) => {
-                    const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
-                    if (!store || !PositionGeometry) return null;
-                    return PositionGeometry.boardPositionForPiece(store.snapshot().session, pieceKey);
-                },
-                onPositionRejected: (message) => {
-                    if (!store) return;
-                    store.setDropMessage(__(message || "Enter a valid millimetre value."));
-                },
                 toggleAngle0_180: (pieceKey) => toggleAngle0_180(pieceKey),
                 toggleAngle90_270: (pieceKey) => toggleAngle90_270(pieceKey),
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
@@ -1483,6 +1522,7 @@
                     <div class="abe-body">
                         <aside data-abe-sidebar class="abe-sidebar-host"></aside>
                         <section data-abe-canvas class="abe-canvas-host"></section>
+                        <aside data-abe-right-sidebar-host class="abe-right-sidebar-host"></aside>
                     </div>
                     <div class="abe-review-dialog" data-abe-review hidden></div>
                 </div>

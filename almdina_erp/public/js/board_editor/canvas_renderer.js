@@ -38,139 +38,6 @@
         return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${icon}</button>`;
     }
 
-    function positionAxisField(axis, label, valueText, editable) {
-        const disabled = editable ? "" : " disabled";
-        const stepMinus = __("Decrease {0} by 1 mm", [label]);
-        const stepPlus = __("Increase {0} by 1 mm", [label]);
-        return `<div class="abe-pos-field" data-abe-pos-axis="${esc(axis)}">
-            <span class="abe-pos-axis-label" dir="ltr">${esc(label)}</span>
-            <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="-1"${disabled} title="${esc(stepMinus)}" aria-label="${esc(stepMinus)}">−</button>
-            <input type="text" inputmode="decimal" class="abe-pos-input" data-abe-pos-input="1" value="${esc(valueText)}"${disabled} aria-label="${esc(label)}" title="${esc(label)}" dir="ltr" />
-            <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="1"${disabled} title="${esc(stepPlus)}" aria-label="${esc(stepPlus)}">+</button>
-        </div>`;
-    }
-
-    function positionBarHtml(model) {
-        if (!model) return "";
-        const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
-        const format = PG && typeof PG.formatMm === "function" ? PG.formatMm : (value) => String(value);
-        const editable = Boolean(model.editable);
-        const dims = `${format(model.lengthMm)} × ${format(model.widthMm)} mm`;
-        return `<div class="abe-position-bar" role="group" aria-label="${esc(__("Precision piece position"))}" data-abe-position-bar="1" data-abe-pos-piece="${esc(model.pieceKey)}">
-            <div class="abe-pos-meta" title="${esc(model.label)}">
-                <span class="abe-pos-label" dir="ltr">${esc(model.label)}</span>
-                <span class="abe-pos-dims" dir="ltr">${esc(dims)}</span>
-            </div>
-            <span class="abe-tool-sep" aria-hidden="true"></span>
-            ${positionAxisField("x", __("X (mm)"), format(model.x), editable)}
-            ${positionAxisField("y", __("Y (mm)"), format(model.y), editable)}
-        </div>`;
-    }
-
-    function bindPositionBar(host, handlers, model) {
-        const bar = host && host.querySelector("[data-abe-position-bar]");
-        if (!bar || !model) return;
-        const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
-        const format = PG && typeof PG.formatMm === "function" ? PG.formatMm : (value) => String(value);
-        const parse = PG && typeof PG.parseMm === "function" ? PG.parseMm : (text) => Number(text);
-        const pieceKey = model.pieceKey;
-
-        function syncInputsFromModel(nextModel) {
-            if (!nextModel) return;
-            bar.querySelectorAll("[data-abe-pos-axis]").forEach((field) => {
-                const axis = field.getAttribute("data-abe-pos-axis");
-                const input = field.querySelector("[data-abe-pos-input]");
-                if (!input || !axis) return;
-                input.value = format(nextModel[axis]);
-                input.dataset.abePosCommitted = input.value;
-            });
-        }
-
-        syncInputsFromModel(model);
-
-        bar.querySelectorAll("[data-abe-pos-input]").forEach((input) => {
-            const field = input.closest("[data-abe-pos-axis]");
-            const axis = field && field.getAttribute("data-abe-pos-axis");
-            if (!axis) return;
-            input.dataset.abePosCommitted = input.value;
-
-            const commit = () => {
-                if (!(handlers && handlers.applyPositionAxis)) return;
-                const raw = input.value;
-                const parsed = parse(raw);
-                if (parsed == null) {
-                    if (handlers.onPositionRejected) {
-                        handlers.onPositionRejected(__("Enter a valid millimetre value."));
-                    }
-                    input.value = input.dataset.abePosCommitted || format(model[axis]);
-                    return;
-                }
-                const result = handlers.applyPositionAxis(pieceKey, axis, parsed);
-                if (!result || result.ok === false) {
-                    input.value = input.dataset.abePosCommitted || format(model[axis]);
-                    return;
-                }
-                if (result.model) syncInputsFromModel(result.model);
-                else input.dataset.abePosCommitted = format(parsed);
-            };
-
-            input.addEventListener("keydown", (event) => {
-                if (event.key === " " || event.code === "Space" || event.key === "Delete") {
-                    event.stopPropagation();
-                }
-                if (event.key === "Escape") {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    input.value = input.dataset.abePosCommitted || format(model[axis]);
-                    input.blur();
-                    return;
-                }
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    commit();
-                    input.blur();
-                }
-            });
-            input.addEventListener("wheel", (event) => {
-                event.stopPropagation();
-            });
-            input.addEventListener("change", commit);
-            input.addEventListener("blur", () => {
-                // change already commits on most browsers; keep blur as safety net
-                // without double-applying identical values (apply path no-ops unchanged).
-                if (String(input.value) !== String(input.dataset.abePosCommitted || "")) {
-                    commit();
-                }
-            });
-        });
-
-        bar.querySelectorAll("[data-abe-pos-step]").forEach((button) => {
-            const field = button.closest("[data-abe-pos-axis]");
-            const axis = field && field.getAttribute("data-abe-pos-axis");
-            const input = field && field.querySelector("[data-abe-pos-input]");
-            const step = Number(button.getAttribute("data-abe-pos-step")) || 0;
-            if (!axis || !input || !step) return;
-            button.addEventListener("mousedown", (event) => {
-                // Keep focus/text in the input; avoid blur+click double commits.
-                event.preventDefault();
-            });
-            button.addEventListener("click", () => {
-                if (!(handlers && handlers.applyPositionAxis)) return;
-                const parsed = parse(input.value);
-                const liveModel = handlers.readPositionModel && handlers.readPositionModel(pieceKey);
-                const base = parsed == null
-                    ? Number((liveModel && liveModel[axis]) || model[axis]) || 0
-                    : parsed;
-                const result = handlers.applyPositionAxis(pieceKey, axis, base + step);
-                if (!result || result.ok === false) {
-                    syncInputsFromModel(liveModel || model);
-                    return;
-                }
-                if (result.model) syncInputsFromModel(result.model);
-            });
-        });
-    }
-
     function saveStatusText(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
         if (state === "dirty") return __("Unsaved changes");
@@ -2006,10 +1873,6 @@
         const magnetOn = storeView.magnetEnabled !== false;
         const measureOn = storeView.measureToolActive === true;
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
-        const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
-        const positionModel = PG && typeof PG.selectionPositionModel === "function"
-            ? PG.selectionPositionModel(session, selectedKeyList)
-            : null;
         host.innerHTML = `
             ${dropNote}
             <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}" data-abe-stage="1">
@@ -2022,7 +1885,6 @@
             </div>
             <div class="abe-float-dock">
                 <div class="abe-float-stack">
-                ${positionBarHtml(positionModel)}
                 <div class="abe-canvas-tools abe-float-tools" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
                     ${toolButton("abe-zoom-in", "zoom-in", __("Zoom in"))}
                     ${toolButton("abe-zoom-out", "zoom-out", __("Zoom out"))}
@@ -2157,7 +2019,6 @@
                 event.stopPropagation();
             });
         }
-        bindPositionBar(host, handlers, positionModel);
         const magnet = host.querySelector("[data-abe-magnet]");
         if (magnet) {
             magnet.onclick = () => handlers && handlers.toggleMagnet && handlers.toggleMagnet();

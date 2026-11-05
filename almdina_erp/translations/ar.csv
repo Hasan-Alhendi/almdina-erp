@@ -3346,3 +3346,30 @@ Enter a valid millimetre value.,أدخل قيمة مليمتر صالحة.
 Position update rejected.,رُفض تحديث الموضع.
 Select one piece on a board.,حدّد درفة واحدة على لوح.
 Position controls unavailable.,عناصر التحكم بالموضع غير متاحة.
+Piece properties,خصائص القطعة
+Alignment,المحاذاة
+Select a piece to edit its properties.,حدّد قطعة لتعديل خصائصها.
+Multiple pieces selected,تم تحديد عدة قطع
+{0} pieces selected,تم تحديد {0} قطع
+Board X/Y is available for pieces placed on a board.,إحداثيات X/Y للوح متاحة للقطع الموضوعة على لوح.
+Align left,محاذاة لليسار
+Align right,محاذاة لليمين
+Align top,محاذاة للأعلى
+Align bottom,محاذاة للأسفل
+Align horizontal centers,توسيط أفقي
+Align vertical centers,توسيط عمودي
+Align left edges of the selection,محاذاة الحواف اليسرى للتحديد
+Align right edges of the selection,محاذاة الحواف اليمنى للتحديد
+Align top edges of the selection,محاذاة الحواف العلوية للتحديد
+Align bottom edges of the selection,محاذاة الحواف السفلية للتحديد
+Align horizontal centers of the selection,توسيط مراكز X للتحديد
+Align vertical centers of the selection,توسيط مراكز Y للتحديد
+Select two or more pieces to align them.,حدّد قطعتين أو أكثر لمحاذاتهما.
+Alignment is unavailable while a locked piece is selected.,المحاذاة غير متاحة أثناء تحديد قطعة مقفلة.
+Align pieces on the same board only, or pieces outside all boards.,يمكن محاذاة القطع الموجودة على اللوح نفسه فقط، أو القطع الموجودة خارج الألواح.
+Alignment would break a glass host relationship.,المحاذاة ستكسر علاقة المضيف الزجاجي.
+Alignment must keep each piece on its current board.,يجب أن تُبقي المحاذاة كل قطعة على لوحها الحالي.
+Alignment rejected: the final layout is not manufacturable.,رُفضت المحاذاة: التخطيط النهائي غير قابل للتصنيع.
+Alignment geometry is unavailable.,هندسة المحاذاة غير متاحة.
+Pieces are already aligned.,القطع محاذاة مسبقاً.
+Alignment rejected.,رُفضت المحاذاة.

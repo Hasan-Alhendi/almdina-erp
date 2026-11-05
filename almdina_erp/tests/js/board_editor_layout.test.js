@@ -140,9 +140,11 @@ assert.doesNotMatch(cssSource, /min-height:\s*calc\(100vh/);
 assert.match(cssSource, /\.abe-canvas-stage[\s\S]*overflow:\s*auto/);
 assert.match(cssSource, /\.abe-canvas-tools/);
 assert.match(cssSource, /--abe-sidebar-width:\s*208px/);
-assert.match(cssSource, /grid-template-columns:\s*var\(--abe-sidebar-width\)/);
-assert.match(cssSource, /grid-template-areas:\s*"sidebar canvas"/);
+assert.match(cssSource, /--abe-right-sidebar-width:\s*240px/);
+assert.match(cssSource, /grid-template-columns:\s*var\(--abe-sidebar-width\) minmax\(0, 1fr\) var\(--abe-right-sidebar-width\)/);
+assert.match(cssSource, /grid-template-areas:\s*"sidebar canvas inspector"/);
 assert.match(cssSource, /\.abe-body[\s\S]*direction:\s*ltr/);
+assert.match(controllerSource, /data-abe-right-sidebar-host/);
 /* Zoom width compensation must not clip the physical-left sidebar under RTL. */
 assert.match(cssSource, /\.abe-shell-host/);
 assert.match(cssSource, /direction:\s*ltr/);

@@ -14,8 +14,10 @@ function loadEditor() {
         "public/js/board_editor/move_geometry.js",
         "public/js/board_editor/rotation_geometry.js",
         "public/js/board_editor/position_geometry.js",
+        "public/js/board_editor/alignment_geometry.js",
         "public/js/board_editor/store.js",
         "public/js/board_editor/canvas_renderer.js",
+        "public/js/board_editor/right_sidebar_renderer.js",
     ];
     const context = {
         frappe: { utils: { escape_html: (value) => String(value) } },
@@ -367,20 +369,29 @@ const pageSource = fs.readFileSync(path.join(root, "almdina_erp/page/board_edito
 const cssSource = fs.readFileSync(path.join(root, "public/css/board_editor.css"), "utf8");
 const arCsv = fs.readFileSync(path.join(root, "translations/ar.csv"), "utf8");
 
-assert.match(canvasSource, /data-abe-position-bar/);
-assert.match(canvasSource, /bindPositionBar/);
-assert.match(canvasSource, /abe-pos-input/);
-assert.match(canvasSource, /data-abe-pos-axis/);
-assert.doesNotMatch(canvasSource, /data-abe-pos-edge/);
+const rightSidebarSource = fs.readFileSync(
+    path.join(root, "public/js/board_editor/right_sidebar_renderer.js"),
+    "utf8"
+);
+assert.doesNotMatch(canvasSource, /data-abe-position-bar/);
+assert.match(canvasSource, /abe-float-tools/);
+assert.match(rightSidebarSource, /data-abe-position-bar/);
+assert.match(rightSidebarSource, /abe-pos-input/);
+assert.match(rightSidebarSource, /data-abe-pos-axis/);
+assert.doesNotMatch(rightSidebarSource, /data-abe-pos-edge/);
 assert.doesNotMatch(canvasSource, /Top inset|Bottom inset|Left inset|Right inset/);
 assert.match(controllerSource, /applyPositionAxis/);
 assert.match(controllerSource, /proposeAxisMove|proposeKeyboardNudge/);
 assert.match(controllerSource, /nudgeSelectedPieceByArrow/);
 assert.match(controllerSource, /PositionGeometry/);
+assert.match(controllerSource, /RightSidebarRenderer/);
 assert.doesNotMatch(controllerSource, /applyPositionEdge|proposeEdgeMove/);
 assert.match(pageSource, /position_geometry\.js\?v=2/);
-assert.match(cssSource, /\.abe-position-bar/);
+assert.match(pageSource, /right_sidebar_renderer\.js\?v=2/);
+assert.match(pageSource, /board_editor\.css\?v=35/);
+assert.match(cssSource, /\.abe-right-sidebar/);
 assert.match(cssSource, /\.abe-pos-axis-label/);
+assert.doesNotMatch(cssSource, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/);
 
 [
     "Precision piece position",
@@ -394,33 +405,13 @@ assert.match(cssSource, /\.abe-pos-axis-label/);
     assert.ok(arCsv.includes(messageId), `missing ar.csv key: ${messageId}`);
 });
 
-// Render shows / hides bar with selection and only X/Y fields.
-function hostStub() {
+// Right inspector shows / hides X/Y with selection; canvas float bar stays tool-only.
+function inspectorHostStub() {
     return {
         __html: "",
         set innerHTML(value) { this.__html = String(value); },
         get innerHTML() { return this.__html; },
         querySelector(selector) {
-            if (selector === "[data-abe-stage]") {
-                return {
-                    scrollLeft: 0,
-                    scrollTop: 0,
-                    classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
-                    style: {},
-                    addEventListener() {},
-                    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
-                };
-            }
-            if (selector === ".abe-svg") {
-                return {
-                    addEventListener() {},
-                    querySelectorAll: () => [],
-                    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
-                };
-            }
-            if (selector === ".abe-float-dock") {
-                return { addEventListener() {} };
-            }
             if (selector === "[data-abe-position-bar]") {
                 if (!this.__html.includes("data-abe-position-bar")) return null;
                 return {
@@ -439,7 +430,7 @@ function hostStub() {
     };
 }
 
-function renderWithSelection(keys) {
+function renderInspector(keys) {
     const view = store.snapshot();
     view.selectedPieceKeys = keys.slice();
     view.selectedPieceKey = keys.length === 1 ? keys[0] : null;
@@ -449,34 +440,26 @@ function renderWithSelection(keys) {
     view.selectedSheetNo = keys.length === 1
         ? (view.session.pieces[keys[0]] && view.session.pieces[keys[0]].sheet_no)
         : null;
-    view.viewport = { scale: 0.2, scrollX: 0, scrollY: 0, cameraToken: 1, opened: true };
-    const host = hostStub();
-    CanvasRenderer.render(host, view, {});
+    const host = inspectorHostStub();
+    editor.RightSidebarRenderer.render(host, view, {});
     return host.innerHTML;
 }
 
 {
+    assert.ok(editor.RightSidebarRenderer);
     assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyA, keyB]), null);
     assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyOut]), null);
-    const html = renderWithSelection([keyA]);
+    const html = renderInspector([keyA]);
     assert.match(html, /data-abe-position-bar/);
     assert.match(html, /abe-pos-input/);
     assert.match(html, /data-abe-pos-axis="x"/);
     assert.match(html, /data-abe-pos-axis="y"/);
     assert.doesNotMatch(html, /data-abe-pos-edge/);
-    assert.doesNotMatch(renderWithSelection([]), /data-abe-position-bar/);
-    const outsideHtml = (() => {
-        const view = store.snapshot();
-        view.selectedPieceKeys = [keyOut];
-        view.selectedPieceKey = keyOut;
-        view.selectedPieceId = Number(view.session.pieces[keyOut].piece_id);
-        view.selectedSheetNo = null;
-        view.viewport = { scale: 0.2, scrollX: 0, scrollY: 0, cameraToken: 1, opened: true };
-        const host = hostStub();
-        CanvasRenderer.render(host, view, {});
-        return host.innerHTML;
-    })();
-    assert.doesNotMatch(outsideHtml, /data-abe-position-bar/);
+    assert.doesNotMatch(renderInspector([]), /data-abe-position-bar/);
+    assert.match(renderInspector([]), /Select a piece to edit its properties/);
+    assert.match(renderInspector([keyA, keyB]), /Multiple pieces selected/);
+    assert.doesNotMatch(renderInspector([keyOut]), /data-abe-pos-axis/);
+    assert.match(renderInspector([keyOut]), /Board X\/Y is available for pieces placed on a board/);
 }
 
 console.log("board_editor_position_bar.test.js: ok");
