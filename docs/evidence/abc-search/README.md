@@ -74,8 +74,7 @@ python scripts/benchmark_abc.py --cases regular-48 3687 --budget 5 --repeats 2 \
 On Windows, use a workspace-owned `--basetemp` for pytest when the shared user
 temp pytest directory is inaccessible. The harness records child failures and
 returns failure if any child fails or returns invalid geometry. Each arm is a
-fresh sequential process; arm order reverses between repeats. Arm bits are A/B/C:
-000, 001, 010, 011, 100, 101, 110, 111. It records wall/CPU/peak RSS, dependency
+fresh sequential process; arm order reverses between repeats. It records wall/CPU/peak RSS, dependency
 versions, source SHA/dirty status, raw/final metrics, actual canonical topology,
 identity signatures, local work counts and optional actual JS/strict import.
 RSS is the Python worker's own peak, not child Node memory.
@@ -92,3 +91,8 @@ Linux/Frappe CI remain gates before considering default activation. A smoke run
 with one repetition does not pass those gates. Record every regression rather
 than averaging away extra boards or validation failures. Actual DXF validation
 does not certify CNC motion, clamping, tool depth or execution time.
+
+The 2026-11-05 real-order DXF structural audit is recorded in
+`298-real-dxf-comparability-ar.md`. It is intentionally excluded from the ABC
+performance corpus until the designer's `OFFCUT` classification and the
+matching manufacturing settings are confirmed.
