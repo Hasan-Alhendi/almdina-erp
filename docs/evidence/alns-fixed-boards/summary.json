@@ -1,0 +1,1525 @@
+{
+  "observations": 120,
+  "valid": 120,
+  "strict_pass": 244,
+  "strict_fail": 0,
+  "comparisons": {
+    "equal": 82,
+    "better": 36,
+    "worse": 2
+  },
+  "groups": [
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.15525370000978,
+        0.18350630000350066
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.1806030000152532,
+        0.1877597999991849
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "exchange",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.6099776000191923,
+        0.6697563000197988
+      ],
+      "attempts": [
+        64,
+        64
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "frontier",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.28119280000100844,
+        0.31192969999392517
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "grid",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        1.3595367000089027,
+        1.6141352999839
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "relocate",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        4.587110699998448,
+        5.220807200006675
+      ],
+      "attempts": [
+        160,
+        159
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "repack",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.8228197999997064,
+        1.043926599988481
+      ],
+      "attempts": [
+        20,
+        20
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        2.53737230002298,
+        2.97723990000668
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        3.4450505999848247,
+        3.2500019000144675
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "263",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.5183305000246037,
+        0.5232027000165544
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.15130840000347234,
+        0.14287700000568293
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.14035750000039116,
+        0.15574819999164902
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "exchange",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.5804841000062879,
+        0.5450128000229597
+      ],
+      "attempts": [
+        44,
+        44
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "frontier",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.2662214000010863,
+        0.3404156999895349
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "grid",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        3.7100131000042893,
+        4.526982299983501
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "relocate",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111153.0
+      ],
+      "segments": [
+        128
+      ],
+      "wall": [
+        5.4976821999880485,
+        5.472367300011683
+      ],
+      "attempts": [
+        125,
+        113
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "repack",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111183.0
+      ],
+      "segments": [
+        124
+      ],
+      "wall": [
+        2.988211699994281,
+        2.51052750000963
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        3.250390100001823,
+        3.336584899981972
+      ],
+      "attempts": [
+        159,
+        159
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        3.2644497999863233,
+        3.358798100001877
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "replay",
+      "case": "298",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111080.5
+      ],
+      "segments": [
+        129
+      ],
+      "wall": [
+        0.47388620002311654,
+        0.42583360002026893
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.16610339999897406,
+        0.18048589999671094
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.1579343999910634,
+        0.23206609999760985
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "grid",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        1.146027700015111,
+        1.2387452000111807
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "relocate",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        4.405286499997601,
+        5.0855395999969915
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "repack",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.8706727000244427,
+        1.0109350999991875
+      ],
+      "attempts": [
+        20,
+        20
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        3.1896431000204757,
+        3.0787004999874625
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        3.2453884000133257,
+        2.8746655999857467
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "263",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.4712048999790568,
+        0.5378320000017993
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.17488540001795627,
+        0.15072170001803897
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        0.1588521999947261,
+        0.160161000007065
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "grid",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111158.5
+      ],
+      "segments": [
+        127
+      ],
+      "wall": [
+        2.5630884999991395,
+        2.209963700006483
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "relocate",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111153.0
+      ],
+      "segments": [
+        128
+      ],
+      "wall": [
+        5.570056800002931,
+        5.509467900003074
+      ],
+      "attempts": [
+        124,
+        111
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "repack",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111183.0
+      ],
+      "segments": [
+        124
+      ],
+      "wall": [
+        2.700936300010653,
+        2.4681194000004325
+      ],
+      "attempts": [
+        160,
+        160
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "fixed",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        110836.5
+      ],
+      "segments": [
+        125
+      ],
+      "wall": [
+        3.737336599995615,
+        3.446118599997135
+      ],
+      "attempts": [
+        157,
+        157
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "adaptive",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        110836.5
+      ],
+      "segments": [
+        125
+      ],
+      "wall": [
+        3.5663086000131443,
+        3.241238299990073
+      ],
+      "attempts": [
+        157,
+        157
+      ]
+    },
+    {
+      "cohort": "replay-v2",
+      "case": "298",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111080.5
+      ],
+      "segments": [
+        129
+      ],
+      "wall": [
+        0.4420979999995325,
+        0.4833863000094425
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        6.119590499991318,
+        6.257633200002601
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        6.191816399979871,
+        5.992469999997411
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "previous",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        5.918711399979657,
+        5.9807560999761336
+      ],
+      "attempts": [
+        33,
+        32
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        5.9703109000111,
+        5.811893499980215
+      ],
+      "attempts": [
+        69,
+        94
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        5.9050235000031535,
+        5.807112499984214
+      ],
+      "attempts": [
+        56,
+        62
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "263",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        7.1117340000055265,
+        7.040082899999106
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "segments": [
+        120
+      ],
+      "wall": [
+        5.95860729998094,
+        5.951646600005915
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "segments": [
+        120
+      ],
+      "wall": [
+        5.929640499991365,
+        6.261361899989424
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "previous",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        111982.5
+      ],
+      "segments": [
+        126
+      ],
+      "wall": [
+        6.506547800003318,
+        6.424738700006856
+      ],
+      "attempts": [
+        17,
+        17
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "fixed",
+      "comparisons": {
+        "worse": 1,
+        "better": 1
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113316.5,
+        113899.5
+      ],
+      "segments": [
+        119,
+        121
+      ],
+      "wall": [
+        5.517838100000517,
+        5.966008799994597
+      ],
+      "attempts": [
+        78,
+        34
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "adaptive",
+      "comparisons": {
+        "worse": 1,
+        "better": 1
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113316.5,
+        113899.5
+      ],
+      "segments": [
+        119,
+        121
+      ],
+      "wall": [
+        5.628878499992425,
+        6.050055800005794
+      ],
+      "attempts": [
+        69,
+        31
+      ]
+    },
+    {
+      "cohort": "operational",
+      "case": "298",
+      "arm": "align",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113803.0
+      ],
+      "segments": [
+        119
+      ],
+      "wall": [
+        6.7192833999870345,
+        6.781677200022386
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "263",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.48120189999463037,
+        0.5458281000028364
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "263",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        0.58565229998203,
+        0.5175555000023451
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "263",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        3.3442127000016626,
+        3.5648930000024848
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "263",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        3.4502791999839246,
+        3.457546599995112
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "298",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111080.5
+      ],
+      "segments": [
+        129
+      ],
+      "wall": [
+        0.42663260002154857,
+        0.4725230000040028
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "298",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111080.5
+      ],
+      "segments": [
+        129
+      ],
+      "wall": [
+        0.46800059999804944,
+        0.4857721999869682
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "298",
+      "arm": "fixed",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        110824.0,
+        110836.5
+      ],
+      "segments": [
+        122,
+        123
+      ],
+      "wall": [
+        4.288504299998749,
+        4.632210099982331
+      ],
+      "attempts": [
+        157,
+        157
+      ]
+    },
+    {
+      "cohort": "with-alignment",
+      "case": "298",
+      "arm": "adaptive",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        110824.0,
+        110836.5
+      ],
+      "segments": [
+        122,
+        123
+      ],
+      "wall": [
+        4.294274599989876,
+        5.048824700003024
+      ],
+      "attempts": [
+        157,
+        157
+      ]
+    },
+    {
+      "cohort": "continuation",
+      "case": "263",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        6.948372999991989,
+        7.5981522999936715
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "continuation",
+      "case": "263",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall": [
+        2.864938800019445,
+        2.795204200025182
+      ],
+      "attempts": [
+        158,
+        158
+      ]
+    },
+    {
+      "cohort": "continuation",
+      "case": "298",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111408.5
+      ],
+      "segments": [
+        130
+      ],
+      "wall": [
+        6.774537099990994,
+        6.760146199987503
+      ],
+      "attempts": [
+        0,
+        0
+      ]
+    },
+    {
+      "cohort": "continuation",
+      "case": "298",
+      "arm": "adaptive",
+      "comparisons": {
+        "better": 2
+      },
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        110824.0,
+        110836.5
+      ],
+      "segments": [
+        122,
+        123
+      ],
+      "wall": [
+        4.287522500002524,
+        4.421213199995691
+      ],
+      "attempts": [
+        157,
+        157
+      ]
+    }
+  ]
+}

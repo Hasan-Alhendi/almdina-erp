@@ -1,0 +1,17 @@
+[
+  {
+    "module": "test_smart_plan_portfolio",
+    "returncode": 3221225477,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_smart_plan_portfolio.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_smart_plan_portfolio",
+      "--junitxml",
+      "docs\\evidence\\alns-study\\verification-portfolio-repro\\test_smart_plan_portfolio.xml"
+    ]
+  }
+]
