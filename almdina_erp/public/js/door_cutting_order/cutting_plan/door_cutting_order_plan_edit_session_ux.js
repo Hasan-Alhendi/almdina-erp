@@ -14,6 +14,12 @@
         "optimization_time_limit_sec",
         "deduct_edge_thickness",
     ]);
+    const TOOL_SETTING_FIELDS = Object.freeze([
+        "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
+    ]);
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
             fieldname: "kerf_mm",
@@ -218,6 +224,16 @@
                 options: catalogOptions(frm, spec.catalog, values[spec.fieldname]),
             };
         });
+    }
+
+    function groupPlanSettingSpecs(specs) {
+        const tools = [];
+        const plan = [];
+        (specs || []).forEach((spec) => {
+            if (TOOL_SETTING_FIELDS.includes(spec.fieldname)) tools.push(spec);
+            else plan.push(spec);
+        });
+        return { plan, tools };
     }
 
     function approvedPlanName(frm) {
@@ -479,6 +495,15 @@
                 height: 16px;
                 display: block;
             }
+            .dco-plan-settings-editor__groups {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+                flex: 1 1 auto;
+                min-width: 0;
+                width: 100%;
+            }
             .dco-plan-settings-editor__grid {
                 display: flex;
                 flex-wrap: wrap;
@@ -487,6 +512,13 @@
                 flex: 1 1 auto;
                 min-width: 0;
                 padding: 0;
+            }
+            .dco-plan-settings-editor__tool-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
             }
                 .dco-plan-settings-editor__field--check label {
                     display: inline-flex;
@@ -789,8 +821,13 @@
         preserveRecalculateButton(host);
         host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
-        const fields = specs
-            .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
+        const groups = groupPlanSettingSpecs(specs);
+        const draft = state.draft || {};
+        const planFields = groups.plan
+            .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
+            .join("");
+        const toolFields = groups.tools
+            .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
             .join("");
         host.prepend(`
             <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
@@ -800,7 +837,10 @@
                             <span class="dco-plan-settings-editor__icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h3.2M8.2 4.5h5.3M2.5 11.5h5.3M10.3 11.5h3.2"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9.2" cy="11.5" r="1.6"/></svg></span>
                             <span class="dco-plan-settings-editor__lead-text">${escapeHtml(translate("Cutting settings"))}</span>
                         </div>
-                        <div class="dco-plan-settings-editor__grid">${fields}</div>
+                        <div class="dco-plan-settings-editor__groups">
+                            <div class="dco-plan-settings-editor__grid" data-settings-group="plan">${planFields}</div>
+                            <div class="dco-plan-settings-editor__grid dco-plan-settings-editor__tool-row" data-settings-group="tools">${toolFields}</div>
+                        </div>
                     </div>
                     <div class="dco-plan-settings-editor__footer">
                         <div class="dco-plan-settings-editor__action-bar is-edit-layout">
@@ -1140,7 +1180,9 @@
     window.AlmdinaPlanEditSessionUX = Object.freeze({
         PLAN_SETTING_FIELDS,
         PLAN_SETTING_SPECS,
+        TOOL_SETTING_FIELDS,
         planSettingSpecs,
+        groupPlanSettingSpecs,
         canEditPlanSettings,
         isEditing,
         planSettingsMayWrite,

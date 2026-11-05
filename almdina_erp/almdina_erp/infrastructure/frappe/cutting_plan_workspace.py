@@ -20,6 +20,11 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     build_manufacturing_requirements,
+    require_cut_dimension_cm,
+)
+from almdina_erp.almdina_erp.domain.orders.cut_dimensions import (
+    CutDimensionInput,
+    calculate_cut_dimensions,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import decision_from_values
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
@@ -93,34 +98,84 @@ def _edge_selected(row: Any) -> bool:
 
 
 def _policy_cut_row(order: Any, row: Any, data: dict[str, Any], *, deduct: bool) -> dict[str, Any]:
-    """Use the saved cut size when it already expresses the plan policy.
+    """Use the saved cut when it already equals the calculated policy size.
 
-    Enabled deduction keeps the historical persisted size bit-for-bit. The
-    finished size replaces it only while deduction is off, or the enabled
-    policy is asked to leave a previously disabled cache.
+    Rows with no selected edge keep their persisted manufacturing identity.
+    A selected edge is overlaid only when the saved size is not the size
+    calculated from that edge's thickness and the active deduction policy.
     """
 
+    if not _edge_selected(row):
+        return data
+    expected = _expected_policy_cut(order, row, deduct=deduct)
+    if expected is None:
+        return data
+    width_cm, length_cm = expected
     if persisted_cut_matches_policy(
-        finished_width_cm=getattr(row, "width_cm", 0),
-        finished_length_cm=getattr(row, "length_cm", 0),
         persisted_width_cm=data["width_cm"],
         persisted_length_cm=data["length_cm"],
-        deduct_edge_thickness=deduct,
-        edge_selected=_edge_selected(row),
+        expected_width_cm=width_cm,
+        expected_length_cm=length_cm,
     ):
         return data
-    from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
-        expected_policy_cut_cm,
-    )
-
-    width_cm, length_cm = expected_policy_cut_cm(
-        order,
-        row,
-        deduct_edge_thickness=deduct,
-    )
     data["width_cm"] = width_cm
     data["length_cm"] = length_cm
     return data
+
+
+def _expected_policy_cut(
+    order: Any, row: Any, *, deduct: bool,
+) -> tuple[float, float] | None:
+    """Return the cut size for this policy, or None when no thickness is provable.
+
+    A real order resolves the selected edge profiles. A historical row that only
+    carries saved axis thicknesses is calculated from those thicknesses. A row
+    with a selected edge and no recorded thickness keeps its saved cut.
+    """
+
+    if hasattr(order, "default_edge_type"):
+        from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+            expected_policy_cut_cm,
+        )
+
+        return expected_policy_cut_cm(
+            order,
+            row,
+            deduct_edge_thickness=deduct,
+        )
+    if not deduct:
+        return _cut_from_recorded_thickness(row, deduct=False)
+    long_selected = cint(getattr(row, "edge_long_right", 0)) or cint(
+        getattr(row, "edge_long_left", 0)
+    )
+    width_selected = cint(getattr(row, "edge_width_top", 0)) or cint(
+        getattr(row, "edge_width_bottom", 0)
+    )
+    if long_selected and flt(getattr(row, "edge_long_thickness_mm", 0)) <= 0:
+        return None
+    if width_selected and flt(getattr(row, "edge_width_thickness_mm", 0)) <= 0:
+        return None
+    return _cut_from_recorded_thickness(row, deduct=True)
+
+
+def _cut_from_recorded_thickness(row: Any, *, deduct: bool) -> tuple[float, float]:
+    result = calculate_cut_dimensions(
+        CutDimensionInput(
+            final_width_cm=flt(getattr(row, "width_cm", 0)),
+            final_length_cm=flt(getattr(row, "length_cm", 0)),
+            edge_long_right=cint(getattr(row, "edge_long_right", 0)),
+            edge_long_left=cint(getattr(row, "edge_long_left", 0)),
+            edge_width_top=cint(getattr(row, "edge_width_top", 0)),
+            edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
+            long_edge_thickness_mm=flt(getattr(row, "edge_long_thickness_mm", 0)),
+            width_edge_thickness_mm=flt(getattr(row, "edge_width_thickness_mm", 0)),
+            deduct_edge_thickness=deduct,
+        )
+    )
+    return (
+        require_cut_dimension_cm(result.cut_width_cm, fieldname="cut_width_cm"),
+        require_cut_dimension_cm(result.cut_length_cm, fieldname="cut_length_cm"),
+    )
 
 
 def _piece_rows(order: Any, plan: Any | None = None) -> tuple[dict[str, Any], ...]:
@@ -136,12 +191,22 @@ def _piece_rows(order: Any, plan: Any | None = None) -> tuple[dict[str, Any], ..
     return tuple(rows)
 
 
-def _manufacturing_requirements(order: Any) -> dict[str, Any]:
-    """Capture persisted cut requirements for the exact plan revision."""
+def _manufacturing_requirements(order: Any, plan: Any | None = None) -> dict[str, Any]:
+    """Capture the cut requirements of one plan revision.
 
+    A plan uses the same policy cut rows as its optimizer. A read without a
+    plan keeps the persisted order sizes used by historical checks, and does
+    not rewrite those rows.
+    """
+
+    policy_rows = _piece_rows(order, plan) if plan is not None else None
     requirements: list[dict[str, Any]] = []
     for source_piece_no, row in enumerate(order.pieces or [], start=1):
-        piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        piece = (
+            policy_rows[source_piece_no - 1]
+            if policy_rows is not None
+            else FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        )
         base_identity = str(getattr(row, "piece_instance_id", "") or "").strip()
         if not base_identity:
             frappe.throw(
@@ -542,7 +607,7 @@ def _apply_snapshot(
     engine_version_fallback: str = "",
 ) -> None:
     snapshot = with_physical_execution_contract(snapshot)
-    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
+    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order, plan)
     baseline = manufacturing_baseline_v4(order, plan)
     generation_fingerprint = fingerprint
     fingerprint = fingerprint_payload(baseline)

@@ -144,33 +144,21 @@ def calculate_cut_dimensions(
 
 def persisted_cut_matches_policy(
     *,
-    finished_width_cm: object,
-    finished_length_cm: object,
     persisted_width_cm: object,
     persisted_length_cm: object,
-    deduct_edge_thickness: bool,
-    edge_selected: bool,
+    expected_width_cm: object,
+    expected_length_cm: object,
 ) -> bool:
-    """Tell a caller whether saved cut sizes already express this policy.
+    """True only when the saved cut equals the size this policy calculates.
 
-    An enabled policy keeps a historical deducted size exactly. It only stops
-    matching when edges are selected and the saved size is still the finished
-    size, which is the disabled-policy cache. A disabled policy matches only
-    the finished size.
+    The expected size comes from the selected edge thicknesses. A saved size
+    does not match merely because it differs from the finished size.
     """
 
-    finished_width = normalize_cut_cm(finished_width_cm)
-    finished_length = normalize_cut_cm(finished_length_cm)
-    persisted_width = normalize_cut_cm(persisted_width_cm)
-    persisted_length = normalize_cut_cm(persisted_length_cm)
-    if not deduct_edge_thickness:
-        return (
-            persisted_width == finished_width
-            and persisted_length == finished_length
-        )
-    if edge_selected and persisted_width == finished_width and persisted_length == finished_length:
-        return False
-    return True
+    return (
+        normalize_cut_cm(persisted_width_cm) == normalize_cut_cm(expected_width_cm)
+        and normalize_cut_cm(persisted_length_cm) == normalize_cut_cm(expected_length_cm)
+    )
 
 
 def special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction(

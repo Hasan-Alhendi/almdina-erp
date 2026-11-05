@@ -52,30 +52,30 @@ def test_plan_settings_keep_an_explicit_off_value():
     assert searched.optimization_mode == "smart"
 
 
-def test_historical_deducted_size_matches_only_the_enabled_policy():
+def test_saved_cut_matches_only_the_calculated_edge_thickness():
     assert persisted_cut_matches_policy(
-        finished_width_cm=60,
-        finished_length_cm=40,
         persisted_width_cm=59.8,
         persisted_length_cm=39.8,
-        deduct_edge_thickness=True,
-        edge_selected=True,
+        expected_width_cm=59.8,
+        expected_length_cm=39.8,
     )
     assert not persisted_cut_matches_policy(
-        finished_width_cm=60,
-        finished_length_cm=40,
-        persisted_width_cm=60,
-        persisted_length_cm=40,
-        deduct_edge_thickness=True,
-        edge_selected=True,
+        persisted_width_cm=59.8,
+        persisted_length_cm=39.8,
+        expected_width_cm=59.6,
+        expected_length_cm=39.6,
+    )
+    assert not persisted_cut_matches_policy(
+        persisted_width_cm=59.8,
+        persisted_length_cm=39.8,
+        expected_width_cm=60,
+        expected_length_cm=40,
     )
     assert persisted_cut_matches_policy(
-        finished_width_cm=60,
-        finished_length_cm=40,
         persisted_width_cm=60,
         persisted_length_cm=40,
-        deduct_edge_thickness=False,
-        edge_selected=True,
+        expected_width_cm=60,
+        expected_length_cm=40,
     )
 
 
