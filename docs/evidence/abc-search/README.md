@@ -93,7 +93,8 @@ with one repetition does not pass those gates. Record every regression rather
 than averaging away extra boards or validation failures. Actual DXF validation
 does not certify CNC motion, clamping, tool depth or execution time.
 
-The 2026-11-05 real-order DXF structural audit is recorded in
-`298-real-dxf-comparability-ar.md`. It is intentionally excluded from the ABC
-performance corpus until the designer's `OFFCUT` classification and the
-matching manufacturing settings are confirmed.
+The 2026-11-05 real-order DXF audit is recorded in
+`298-real-dxf-comparability-ar.md`. For the structural comparison, the user
+directed that the designer's `OFFCUT` be treated as required part #17. It remains
+excluded from ABC performance claims until the original manufacturing settings
+and source piece order are known.
