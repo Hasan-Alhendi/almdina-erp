@@ -119,6 +119,16 @@ assert.deepEqual(invalidations[0], {
 
     invalidations.length = 0;
     frm.doc.plan_needs_recalculation = 0;
+    const orderHandlers = handlers.get("Door Cutting Order");
+    assert.equal(typeof orderHandlers.allow_piece_mirroring, "function");
+    orderHandlers.allow_piece_mirroring(frm);
+    assert.deepEqual(invalidations[0], {
+        resources: ["plan"],
+        reason: "allow_piece_mirroring_changed",
+    });
+    assert.equal(invalidations[0].resources.includes("cost"), false);
+
+    invalidations.length = 0;
     detailHandlers.allow_rotation(frm, "Door Cutting Order Detail", "ROW-1");
     assert.equal(piece.__almdina_special_price_basis_stale, undefined,
         "non-pricing-basis geometry must not invalidate the approved special price");

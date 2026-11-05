@@ -79,6 +79,9 @@ _PLAN_FIELDS = (
     "usable_board_width_mm",
     "usable_board_length_mm",
     "kerf_mm",
+    "liner_tool_diameter_mm",
+    "handle_recess_tool_diameter_mm",
+    "rear_groove_tool_diameter_mm",
     "trim_margin_mm",
     "plan_needs_recalculation",
     "input_fingerprint",
@@ -131,12 +134,18 @@ def _capabilities(order: Any) -> dict[str, bool]:
 
 
 def _plan_settings(plan: Any) -> dict[str, Any]:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    resolved = diameters_for_record(plan)
     return {
         "packing_mode": public_mode_value(plan.get("optimization_mode")),
         "cutting_machine_type": str(plan.get("machine_type") or "Auto"),
         "optimization_time_limit_sec": flt(plan.get("optimization_time_limit_sec")),
         "kerf_mm": flt(plan.get("kerf_mm")),
         "trim_margin_mm": flt(plan.get("trim_margin_mm")),
+        "liner_tool_diameter_mm": resolved["liner_tool_diameter_mm"],
+        "handle_recess_tool_diameter_mm": resolved["handle_recess_tool_diameter_mm"],
+        "rear_groove_tool_diameter_mm": resolved["rear_groove_tool_diameter_mm"],
     }
 
 
@@ -289,12 +298,19 @@ def _calculation_settings(rows: list[Any]) -> dict[str, Any]:
         return _plan_settings(target)
 
     defaults = factory_default_plan_settings()
+    factory = frappe.get_cached_doc("Almdina ERP Settings")
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import initial_diameters
+
+    seeded = initial_diameters(kerf_mm=defaults.kerf_mm, factory=factory)
     return {
         "packing_mode": public_mode_value(defaults.optimization_mode),
         "cutting_machine_type": defaults.machine_type,
         "optimization_time_limit_sec": flt(defaults.optimization_time_limit_sec),
         "kerf_mm": flt(defaults.kerf_mm),
         "trim_margin_mm": flt(defaults.trim_margin_mm),
+        "liner_tool_diameter_mm": seeded["liner_tool_diameter_mm"] or defaults.kerf_mm,
+        "handle_recess_tool_diameter_mm": seeded["handle_recess_tool_diameter_mm"] or defaults.kerf_mm,
+        "rear_groove_tool_diameter_mm": seeded["rear_groove_tool_diameter_mm"] or defaults.kerf_mm,
     }
 
 

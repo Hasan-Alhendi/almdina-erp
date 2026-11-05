@@ -54,7 +54,7 @@ async function run() {
                 exact_preview_commit: true, committed_preview_id: id, name,
                 cutting_plan: "CP-1", plan_revision: 1,
                 plan_source_type: "System", plan_status: "Draft",
-                packing_mode: "optimal", cutting_machine_type: "saw", kerf_mm: 3,
+                packing_mode: "smart", cutting_machine_type: "saw", kerf_mm: 3,
                 trim_margin_mm: 5, optimization_time_limit_sec: 30,
             }); },
             load() { return Promise.resolve({ order_name: frm.doc.name, plans: { system_draft: { snapshot_json: frm.doc.system_plan_json } } }); },
@@ -82,7 +82,7 @@ async function run() {
     const mutableA = settings("auto_pro");
     const a = preview.preview(frm, mutableA);
     mutableA.packing_mode = "optimal";
-    assert.equal(calls[0].requested.packing_mode, "auto_pro", "request settings must be copied before dispatch");
+    assert.equal(calls[0].requested.packing_mode, "smart", "request settings must be copied before dispatch");
     preview.invalidate(frm);
     const b = preview.preview(frm, settings("optimal"));
     calls[1].job.resolve(response("B", calls[1].requested));

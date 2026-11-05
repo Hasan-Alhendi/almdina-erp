@@ -7,6 +7,9 @@
         "packing_mode",
         "cutting_machine_type",
         "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
         "optimization_time_limit_sec",
     ]);
@@ -19,6 +22,43 @@
             min: 0,
             step: "0.1",
             suffix: "mm",
+            compact: true,
+        }),
+        Object.freeze({
+            fieldname: "liner_tool_diameter_mm",
+            label: "Liner tool diameter (mm)",
+            shortLabel: "Liner",
+            fieldtype: "Float",
+            min: 0,
+            step: "0.1",
+            suffix: "mm",
+            compact: true,
+            positive: true,
+            layerKind: "liner",
+        }),
+        Object.freeze({
+            fieldname: "handle_recess_tool_diameter_mm",
+            label: "Handle recess tool diameter (mm)",
+            shortLabel: "Handle recess",
+            fieldtype: "Float",
+            min: 0,
+            step: "0.1",
+            suffix: "mm",
+            compact: true,
+            positive: true,
+            layerKind: "recessed_handle_cutout",
+        }),
+        Object.freeze({
+            fieldname: "rear_groove_tool_diameter_mm",
+            label: "Rear groove tool diameter (mm)",
+            shortLabel: "Rear groove",
+            fieldtype: "Float",
+            min: 0,
+            step: "0.1",
+            suffix: "mm",
+            compact: true,
+            positive: true,
+            layerKind: "back_groove",
         }),
         Object.freeze({
             fieldname: "trim_margin_mm",
@@ -28,13 +68,6 @@
             min: 0,
             step: "0.1",
             suffix: "mm",
-        }),
-        Object.freeze({
-            fieldname: "packing_mode",
-            label: "Piece packing algorithm",
-            shortLabel: "Algorithm",
-            fieldtype: "Select",
-            catalog: "optimization_catalog",
         }),
         Object.freeze({
             fieldname: "cutting_machine_type",
@@ -97,7 +130,7 @@
     const ORIGINAL_DISABLED_ATTR = "data-almdina-plan-edit-original-disabled";
     const PHASE_DISABLED_ATTR = "data-almdina-plan-phase-original-disabled";
     const EDITOR_SELECTOR = ".dco-plan-settings-editor";
-    const STYLE_ID = "almdina-plan-settings-editor-style-v4";
+    const STYLE_ID = "almdina-plan-settings-editor-style-v5";
 
     function documentContext() {
         return window.AlmdinaDocumentContext || null;
@@ -156,8 +189,22 @@
         return options;
     }
 
+    function layerVisibility(frm) {
+        const owner = window.AlmdinaPlanWorkspaceState;
+        const engine = window.AlmdinaMachiningOverlay;
+        const row = owner && typeof owner.displayedPlan === "function" ? owner.displayedPlan(frm) : null;
+        if (!row || !engine || typeof engine.layersInPlan !== "function") {
+            return { readable: false };
+        }
+        return engine.layersInPlan(row);
+    }
+
     function planSettingSpecs(frm, values = {}) {
-        return PLAN_SETTING_SPECS.map((spec) => {
+        const layers = layerVisibility(frm);
+        return PLAN_SETTING_SPECS.filter((spec) => {
+            if (!spec.layerKind) return true;
+            return Boolean(layers.readable && layers[spec.layerKind]);
+        }).map((spec) => {
             if (spec.fieldtype !== "Select") return spec;
             return {
                 ...spec,
@@ -370,7 +417,7 @@
     }
 
     function installEditorStyles() {
-        ["almdina-plan-settings-editor-style", STYLE_ID].forEach((id) => {
+        ["almdina-plan-settings-editor-style", "almdina-plan-settings-editor-style-v4", STYLE_ID].forEach((id) => {
             if (id === STYLE_ID) return;
             const legacy = document.getElementById(id);
             if (legacy) legacy.remove();
@@ -395,20 +442,20 @@
             }
             .dco-plan-settings-editor__sheet {
                 display: flex;
-                flex-wrap: nowrap;
+                flex-wrap: wrap;
                 align-items: center;
                 gap: 8px;
                 width: 100%;
                 border: 0;
                 border-radius: 0;
                 background: transparent;
-                overflow-x: auto;
+                overflow: visible;
                 box-shadow: none;
             }
             .dco-plan-settings-editor__settings-row {
                 display: flex;
                 flex: 1 1 auto;
-                flex-wrap: nowrap;
+                flex-wrap: wrap;
                 align-items: center;
                 gap: 6px;
                 padding: 0;
@@ -427,7 +474,7 @@
             }
             .dco-plan-settings-editor__grid {
                 display: flex;
-                flex-wrap: nowrap;
+                flex-wrap: wrap;
                 align-items: center;
                 gap: 6px;
                 flex: 1 1 auto;
@@ -477,6 +524,16 @@
                 box-shadow: none;
                 text-align: start;
                 color: var(--text-color, #1f272e);
+            }
+            .dco-plan-settings-editor__field[data-tool-diameter="1"] .form-control {
+                width: 4.8em;
+                min-width: 3.6em;
+                max-width: 5.4em;
+                padding-inline: 6px;
+            }
+            .dco-plan-settings-editor__field[data-tool-diameter="1"] .dco-plan-settings-editor__input-wrap.has-suffix .form-control {
+                padding-inline-start: 22px;
+                padding-inline-end: 4px;
             }
             .dco-plan-settings-editor select.form-control {
                 min-width: 7em;
@@ -606,6 +663,7 @@
     function fieldMarkup(spec, value) {
         const fieldname = escapeHtml(spec.fieldname);
         const label = escapeHtml(translate(spec.shortLabel || spec.label));
+        const compact = spec.compact ? ' data-tool-diameter="1"' : "";
         if (spec.fieldtype === "Select") {
             return `
                 <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
@@ -621,7 +679,7 @@
         const suffix = spec.suffix ? escapeHtml(translate(spec.suffix)) : "";
         const inputClass = suffix ? "dco-plan-settings-editor__input-wrap has-suffix" : "dco-plan-settings-editor__input-wrap";
         return `
-            <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
+            <div class="dco-plan-settings-editor__field"${compact} data-fieldname="${fieldname}">
                 <label for="dco-plan-setting-${fieldname}">${label}:</label>
                 <div class="${inputClass}">
                     <input
@@ -788,6 +846,9 @@
             if (Number(value) < Number(spec.min || 0)) {
                 return translate("{0} cannot be negative.", [label]);
             }
+            if (spec.positive && !(Number(value) > 0)) {
+                return translate("{0} must be greater than zero.", [label]);
+            }
         }
         return "";
     }
@@ -902,7 +963,8 @@
                         return !selected || selected.available === false;
                     }
                     return value === null || value === undefined || value === ""
-                        || !Number.isFinite(Number(value)) || Number(value) < Number(spec.min || 0);
+                        || !Number.isFinite(Number(value)) || Number(value) < Number(spec.min || 0)
+                        || (spec.positive && !(Number(value) > 0));
                 })?.fieldname || "kerf_mm"
             );
             return false;
@@ -1001,6 +1063,7 @@
         "almdina:stage-context-ready",
         "almdina:surfaces-settled",
         "almdina:plan-workspace-updated",
+        "almdina:plan-selection-changed",
     ].forEach((eventName) => {
         window.addEventListener(eventName, () => {
             const frm = window.cur_frm;

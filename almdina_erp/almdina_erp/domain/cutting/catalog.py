@@ -68,6 +68,7 @@ OPTIMIZATION_MODES = (
     OptimizationMode("auto_pro", "تلقائي متقدم (موصى به)", "Auto Pro"),
     OptimizationMode("deep_search", "بحث معمّق", "Deep Search"),
     OptimizationMode("optimal", "بحث أمثل", "Optimal Search"),
+    OptimizationMode("smart", "بحث ذكي", "Smart Search"),
     OptimizationMode("maxrects", "تعبئة المستطيلات القصوى", "MaxRects Best Short Side"),
     OptimizationMode("guillotine", "القص المقصلي", "Guillotine Short Axis"),
     OptimizationMode("shelf", "التعبئة بالرفوف", "Shelf Horizontal"),

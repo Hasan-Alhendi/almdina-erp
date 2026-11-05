@@ -517,7 +517,7 @@
 		const preview = window.AlmdinaPlanPreviewSession;
 		const banner = !(preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm))
 			? planStatusBanner(frm, "System") : "";
-		return `${banner}${planHtml}`;
+		return window.AlmdinaPlanPreviewPresenter?.galleryMarkup?.(frm, `${banner}${planHtml}`) || `${banner}${planHtml}`;
 	}
 
 	function ensureApprovedPlanLoaded(frm) {
@@ -583,6 +583,7 @@
 			`);
 		renderContextActions(frm, wrapper);
 		bindApplyReturnRetry(frm, wrapper);
+		window.AlmdinaPlanPreviewPresenter?.bindGallery?.(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			const nextTab = $(this).attr("data-plan-tab");
 			if (this && this.disabled) return;

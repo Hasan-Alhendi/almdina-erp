@@ -17,12 +17,15 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_CONTOUR,
     CATEGORY_LAYOUT,
+    CATEGORY_OVERLAY,
     CUT_INVALID_GEOMETRY,
     DxfIssueTarget,
     DxfValidationIssue,
     KERF_VIOLATION,
+    TOOL_DIAMETER_INVALID,
     contour_pair_target,
     issue,
+    piece_target,
     topology_error_to_issue,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
@@ -763,6 +766,39 @@ def normalize_dxf_for_autocad(
     }
 
 
+def _with_tool_diameters(snapshot: dict[str, Any], plan: Any) -> dict[str, Any]:
+    """Attach the plan's own diameters without rewriting the stored snapshot."""
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    resolved = diameters_for_record(plan)
+    exported = dict(snapshot)
+    exported["kerf_mm"] = resolved["kerf_mm"]
+    exported["liner_tool_diameter_mm"] = resolved["liner_tool_diameter_mm"]
+    exported["handle_recess_tool_diameter_mm"] = resolved["handle_recess_tool_diameter_mm"]
+    exported["rear_groove_tool_diameter_mm"] = resolved["rear_groove_tool_diameter_mm"]
+    return exported
+
+
+def _assert_layer_tool_diameters(snapshot: dict[str, Any]) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import snapshot_tool_errors
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+    errors = snapshot_tool_errors(snapshot, snapshot)
+    if not errors:
+        return
+    issues = [
+        issue(
+            TOOL_DIAMETER_INVALID,
+            CATEGORY_OVERLAY,
+            target=piece_target(label=item.get("label") or None),
+            params={"overlay_kind": item.get("kind") or "", "reason": item.get("code") or ""},
+        )
+        for item in errors
+    ]
+    frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -800,8 +836,11 @@ def get_validated_dxf_plan(
             frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
+        snapshot = _with_tool_diameters(snapshot, plan)
         include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
         prefer_original = prefer_original_uploaded_download(order, plan)
+        if not prefer_original:
+            _assert_layer_tool_diameters(snapshot)
         return {
             "plan": snapshot,
             "manifest": _plan_manifest(order, plan),

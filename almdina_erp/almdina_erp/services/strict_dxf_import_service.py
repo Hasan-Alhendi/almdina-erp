@@ -55,6 +55,9 @@ from almdina_erp.almdina_erp.domain.orders.extra_addons import (
     EXTRA_ADDON_FIELD_BY_CODE,
     physical_cut_quantity,
 )
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import (
+    piece_mirroring_allowed,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_DIMENSIONS,
@@ -70,6 +73,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CUT_DIMENSIONS_BIND_FAILED,
     CUT_DIMENSIONS_MISSING,
     CUT_SIZE_MISMATCH,
+    FORBIDDEN_MIRRORING,
     FORBIDDEN_ROTATION,
     PERSISTED_CUT_SPECS,
     PERSISTED_CUT_CONTEXT_CODES,
@@ -216,6 +220,7 @@ def _proxy_order(
     order: Any,
     specs: list[OrderPieceCutSpec],
     settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None = None,
 ) -> Any:
     pieces = []
     for spec in specs:
@@ -279,6 +284,9 @@ def _proxy_order(
         full_board_width_mm=getattr(order, "full_board_width_mm", 0),
         full_board_length_mm=getattr(order, "full_board_length_mm", 0),
         kerf_mm=settings.kerf_mm,
+        liner_tool_diameter_mm=(tool_diameters or {}).get("liner_tool_diameter_mm"),
+        handle_recess_tool_diameter_mm=(tool_diameters or {}).get("handle_recess_tool_diameter_mm"),
+        rear_groove_tool_diameter_mm=(tool_diameters or {}).get("rear_groove_tool_diameter_mm"),
     )
 
 
@@ -340,7 +348,13 @@ def _find_exact_candidate(
             matches.append(index)
     if len(matches) <= 1 or piece is None:
         return _ExactCandidateMatch(matches[0] if matches else None)
-    if all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches):
+    # An equal-bbox Glass/Regular row must not disable contour identity for a
+    # proven corner. In particular a nonrotatable square otherwise makes the
+    # direct and rotated passes choose different corner rows.
+    if (
+        all(is_corner_cut(unmatched[index]["spec"].piece_type) for index in matches)
+        or classify_corner_contour_type(_outer_ring_mm(piece) or ()) is not None
+    ):
         return _unique_corner_contour_candidate(unmatched, matches, piece)
     return _ExactCandidateMatch(matches[0])
 
@@ -1017,6 +1031,8 @@ def _unique_unresolved_corner_dimension_candidate(
 def _bind_corner_edge_rotation(
     piece: dict[str, Any],
     candidate: dict[str, Any],
+    *,
+    allow_piece_mirroring: object = None,
 ) -> DxfValidationIssue | None:
     """Record the unique dihedral transform used to place corner edge bands.
 
@@ -1085,6 +1101,17 @@ def _bind_corner_edge_rotation(
             candidate=candidate,
             actual_w=actual_w,
             actual_h=actual_h,
+        )
+    if match.mirrored and not piece_mirroring_allowed(allow_piece_mirroring):
+        return issue(
+            FORBIDDEN_MIRRORING,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(
+                source_piece_no=spec.row_index,
+                copy_no=int(candidate.get("copy_no") or 1),
+                label=str(candidate.get("label") or ""),
+            ),
+            params={"piece_type": spec.piece_type},
         )
 
     piece["corner_rotation_quarter_turns"] = int(match.quarter_turns)
@@ -1456,7 +1483,13 @@ def _apply_strict_dimension_contract(
                     candidate,
                     rotated=bool(rotated),
                 )
-                binding_error = _bind_corner_edge_rotation(piece, candidate)
+                binding_error = _bind_corner_edge_rotation(
+                    piece,
+                    candidate,
+                    allow_piece_mirroring=(
+                        getattr(order, "allow_piece_mirroring", None) if order is not None else None
+                    ),
+                )
                 if binding_error:
                     issues.append(binding_error)
                 else:
@@ -1680,7 +1713,13 @@ def _apply_strict_dimension_contract(
 
             candidate = unmatched.pop(match_index)
             _apply_piece_contract_metadata(piece, candidate, rotated=rotated)
-            binding_error = _bind_corner_edge_rotation(piece, candidate)
+            binding_error = _bind_corner_edge_rotation(
+                piece,
+                candidate,
+                allow_piece_mirroring=(
+                    getattr(order, "allow_piece_mirroring", None) if order is not None else None
+                ),
+            )
             if binding_error:
                 issues.append(binding_error)
             else:
@@ -1801,6 +1840,7 @@ def parse_production_dxf(
     order: Any,
     *,
     settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate DXF against order pieces and canonical Cutting Plan settings.
 
@@ -1830,7 +1870,7 @@ def parse_production_dxf(
     try:
         snapshot = _legacy_parse_production_dxf(
             file_url,
-            _proxy_order(order, specs, settings),
+            _proxy_order(order, specs, settings, tool_diameters=tool_diameters),
             validate_regular_machining=False,
         )
     except DxfImportError as exc:
@@ -1845,8 +1885,19 @@ def parse_production_dxf(
             preferred_trim_mm=settings.preferred_trim_mm,
         )
     except DxfAppliedTrimError as exc:
+        details = exc.details
+        target = piece_target(
+            source_piece_no=details.get("source_piece_no"),
+            copy_no=details.get("copy_no"),
+            label=details.get("label"),
+        )
         raise DxfImportError(
-            issues=[issue(APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT)]
+            issues=[issue(
+                APPLIED_TRIM_OVERFLOW,
+                CATEGORY_LAYOUT,
+                target=target,
+                params={key: value for key, value in details.items() if key not in {"source_piece_no", "copy_no", "label"}},
+            )]
         ) from exc
 
     exact_issues = _apply_strict_dimension_contract(

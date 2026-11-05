@@ -35,8 +35,16 @@ class PackingStrategy:
         board_w_cm: float,
         board_h_cm: float,
         kerf_cm: float,
+        *,
+        discarded_direct_callback: Any = None,
     ) -> dict[str, Any]:
         ordered = sort_pieces(pieces, self.sort_method)
+        capture = {}
+        if discarded_direct_callback is not None:
+            capture["discarded_direct_callback"] = lambda direct, expanded: discarded_direct_callback(
+                direct, expanded, dict(method_key=self.key, ordering_strategy=self.sort_method,
+                    complexity=self.complexity, piece_ids=tuple(p["id"] for p in ordered)),
+            )
         raw = pack_with_stable_kerf(
             self.packer,
             ordered,
@@ -44,6 +52,7 @@ class PackingStrategy:
             board_h_cm,
             kerf_cm,
             self.args,
+            **capture,
         )
         return evaluate_plan(
             raw,
@@ -220,12 +229,17 @@ def run_single_method(
     board_h_cm: float,
     kerf_cm: float,
     method_key: str,
+    *,
+    discarded_direct_callback: Any = None,
 ) -> dict[str, Any]:
+    capture = ({"discarded_direct_callback": discarded_direct_callback}
+               if discarded_direct_callback is not None else {})
     return get_strategy(method_key).execute(
         pieces,
         board_w_cm,
         board_h_cm,
         kerf_cm,
+        **capture,
     )
 
 

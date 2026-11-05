@@ -13,6 +13,9 @@
         "almdina_erp.almdina_erp.services.cutting_plan_preview_service.preview_cutting_plan";
     const COMMIT_PREVIEW_METHOD =
         "almdina_erp.almdina_erp.services.cutting_plan_preview_service.commit_cutting_plan_preview";
+    const SELECT_CANDIDATE_METHOD = "almdina_erp.almdina_erp.services.cutting_plan_preview_service.select_cutting_plan_candidate";
+    const CONTINUE_SEARCH_METHOD = "almdina_erp.almdina_erp.services.cutting_plan_preview_service.continue_cutting_plan_search";
+    const DISCARD_PREVIEW_METHOD = "almdina_erp.almdina_erp.services.cutting_plan_preview_service.discard_cutting_plan_preview";
     const APPROVE_METHOD =
         "almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf";
     const CANCEL_APPROVAL_METHOD =
@@ -63,9 +66,19 @@
     }
 
     function saveSettings(orderName, settings) {
+        const values = settings || {};
+        const args = settingsArgs(orderName, settings);
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             SAVE_SETTINGS_METHOD,
-            settingsArgs(orderName, settings),
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_SAVE_SETTINGS),
@@ -106,13 +119,27 @@
         );
     }
 
-    function commitPreview(orderName, previewId) {
+    function commitPreview(orderName, previewId, candidateId, toolSettings) {
+        const args = {
+            order_name: orderName,
+            preview_id: previewId,
+            candidate_id: candidateId,
+        };
+        // Layer diameters travel with the commit so one save writes the nesting
+        // snapshot and the bits. They are not optimizer settings and are omitted
+        // from preview fingerprints.
+        const values = toolSettings || {};
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             COMMIT_PREVIEW_METHOD,
-            {
-                order_name: orderName,
-                preview_id: previewId,
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_COMMIT),
@@ -183,6 +210,9 @@
         bootstrapPlan,
         preview,
         commitPreview,
+        selectCandidate: (orderName, previewId, candidateId) => call(SELECT_CANDIDATE_METHOD, { order_name: orderName, preview_id: previewId, candidate_id: candidateId }),
+        continueSearch: (orderName, previewId) => call(CONTINUE_SEARCH_METHOD, { order_name: orderName, preview_id: previewId }),
+        discardPreview: (orderName, previewId) => call(DISCARD_PREVIEW_METHOD, { order_name: orderName, preview_id: previewId }),
         approve,
         cancelApproval,
         saveOffcutAssignments,

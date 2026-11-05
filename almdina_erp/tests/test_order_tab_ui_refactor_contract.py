@@ -80,6 +80,7 @@ def test_board_and_edge_inputs_share_one_material_section() -> None:
         "board_width_column",
         "default_edge_type",
         "edge_color",
+        "allow_piece_mirroring",
     ]
 
 
@@ -149,9 +150,11 @@ def test_order_and_material_controls_follow_exact_requested_rows() -> None:
     assert '"board_width_cm"' in layout
     assert '"default_edge_type"' in layout
     assert '"edge_color"' in layout
+    assert '"allow_piece_mirroring"' in layout
     assert "function ensureMaterialRows(frm)" in layout
     assert 'ensureMaterialRow(body, "primary")' in layout
     assert 'ensureMaterialRow(body, "edge")' in layout
+    assert 'ensureMaterialRow(body, "mirroring")' in layout
     assert "primary.appendChild(node)" in layout
     assert "edge.appendChild(node)" in layout
     assert "dco-material-row--primary" in layout
@@ -210,6 +213,7 @@ def test_order_notes_are_disabled_outside_order_edit_session() -> None:
     assert "textarea.disabled = !editable" in layout
     assert "textarea.readOnly = !editable" in layout
     assert 'syncLockedInput(frm, "order_cutting_machine")' in layout
+    assert 'syncLockedInput(frm, "allow_piece_mirroring")' in layout
     assert "dco-order-notes-locked" in layout
     assert "dco-order-notes-locked select:disabled" in layout
     assert "dco-order-notes-locked input[type=\"radio\"]:disabled" in layout

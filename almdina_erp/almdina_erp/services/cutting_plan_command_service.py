@@ -599,6 +599,27 @@ def approve_order_plan(
     }
 
 
+def _apply_tool_diameters(plan: Any, updates: dict[str, Any]) -> list[str]:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        TOOL_DIAMETER_FIELDS,
+        explicit_diameter,
+    )
+
+    changed: list[str] = []
+    for fieldname in TOOL_DIAMETER_FIELDS:
+        if fieldname not in updates or updates[fieldname] is None:
+            continue
+        explicit = explicit_diameter(updates[fieldname], fieldname)
+        if explicit is None:
+            continue
+        current = getattr(plan, fieldname, None)
+        if current is not None and abs(flt(current) - explicit) < 0.000001:
+            continue
+        setattr(plan, fieldname, explicit)
+        changed.append(fieldname)
+    return changed
+
+
 def save_system_plan_settings(
     order: Any,
     updates: dict[str, Any],
@@ -620,8 +641,14 @@ def save_system_plan_settings(
             repository,
         )
         plan = repository.get_document(plan.name)
+    # Layer diameters do not move doors. Persist them without marking the
+    # nesting plan stale and without rewriting an approved snapshot.
+    diameter_changed = _apply_tool_diameters(plan, updates)
+    if diameter_changed:
+        repository.save_document(plan)
+        plan = repository.get_document(plan.name)
     result = plan_payload(plan, order)
-    result["changed_fields"] = changed
+    result["changed_fields"] = [*changed, *diameter_changed]
     return result
 
 
@@ -637,7 +664,12 @@ def recalculate_system_plan(
     repository = FrappeCuttingPlanCommandRepository(Capability.RECALCULATE_PLAN)
     plan = repository.ensure_system_draft(order)
     initialize_draft_plan_cost_snapshot(order, plan)
-    changed = _changed_settings(plan, updates or {})
+    # Mode is server-owned for new calculations. Validate legacy API input,
+    # but it must neither select the engine nor require settings-edit authority.
+    updates = dict(updates or {})
+    if "packing_mode" in updates:
+        require_executable_optimization_mode(updates.pop("packing_mode"))
+    changed = _changed_settings(plan, updates)
     if changed:
         require_cutting_plan_capability(
             order,
@@ -657,10 +689,6 @@ def recalculate_system_plan(
         plan = repository.get_document(plan.name)
         initialize_draft_plan_cost_snapshot(order, plan)
 
-    # A historical known-but-unavailable mode remains readable and unchanged,
-    # but recalculation must ask for an executable choice instead of leaking the
-    # domain exception or silently converting the stored algorithm.
-    require_executable_optimization_mode(plan.optimization_mode)
     backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))

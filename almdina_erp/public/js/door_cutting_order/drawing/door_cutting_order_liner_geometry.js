@@ -1100,7 +1100,11 @@
         let local;
         try {
             if (toolpath) {
-                const diameter = num(piece.kerf_mm);
+                const mapped = piece.tool_diameters && piece.tool_diameters[kind];
+                const mappedDiameter = Number(mapped);
+                const diameter = Number.isFinite(mappedDiameter) && mappedDiameter > 0
+                    ? mappedDiameter
+                    : num(piece.kerf_mm);
                 if (!(diameter > TOLERANCE_MM)) {
                     return { kind, layer, synthetic: true, error: "cutter_diameter_invalid" };
                 }

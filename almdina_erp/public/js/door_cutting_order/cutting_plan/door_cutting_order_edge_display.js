@@ -67,13 +67,44 @@
         return edgeTypeIsNonDefault(effective, fallback);
     }
 
+    function explicitCornerOrientation(piece) {
+        if (!piece) return null;
+        const hasTurns = Number.isInteger(piece.corner_rotation_quarter_turns);
+        const mirrored = Boolean(piece.corner_mirrored || piece.mirrored);
+        if (!hasTurns && !mirrored) return null;
+        const recorded = hasTurns ? piece.corner_rotation_quarter_turns : 0;
+        return {
+            turns: ((recorded % 4) + 4) % 4,
+            mirrored,
+        };
+    }
+
     function mapSemanticSidesToDisplay(semantic, piece, geometryModel) {
         let left = semantic.long_left ? 1 : 0;
         let right = semantic.long_right ? 1 : 0;
         let top = semantic.width_top ? 1 : 0;
         let bottom = semantic.width_bottom ? 1 : 0;
-        if (geometryModel && geometryModel.source === "dxf"
+        const recorded = !(geometryModel && geometryModel.source === "dxf")
+            ? explicitCornerOrientation(piece)
+            : null;
+
+        if (recorded) {
+            if (recorded.mirrored) {
+                const swap = left;
+                left = right;
+                right = swap;
+            }
+            for (let turn = 0; turn < recorded.turns; turn += 1) {
+                const previous = { left, top, right, bottom };
+                left = previous.bottom;
+                top = previous.left;
+                right = previous.top;
+                bottom = previous.right;
+            }
+        } else if (geometryModel && geometryModel.source === "dxf"
             && Number.isInteger(piece.rotation_quarter_turns)) {
+            // Imported DXF geometry is already physically oriented. Rotate
+            // the original semantic bands only, never its stored contour.
             const turns = ((piece.rotation_quarter_turns % 4) + 4) % 4;
             for (let turn = 0; turn < turns; turn += 1) {
                 const previous = { left, top, right, bottom };
@@ -83,6 +114,7 @@
                 bottom = previous.right;
             }
         } else if (piece && piece.rotated) {
+            // 90 degrees clockwise, preserving the physical edge meaning.
             top = semantic.long_left ? 1 : 0;
             bottom = semantic.long_right ? 1 : 0;
             right = semantic.width_top ? 1 : 0;

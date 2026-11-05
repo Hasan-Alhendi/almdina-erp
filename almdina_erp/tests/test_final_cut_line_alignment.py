@@ -1,0 +1,1488 @@
+"""Regression: final System projection should share real cutter-center segments."""
+
+from copy import deepcopy
+
+import pytest
+
+from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+    BoardGeometry,
+    OptimizeOrderPlanCommand,
+    OptimizerOptions,
+    optimize_order_plan,
+)
+from almdina_erp.almdina_erp.domain.cutting import expand_piece_groups
+from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
+from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
+from almdina_erp.almdina_erp.domain.cutting.plan_search import _rectangular_cleanup_geometry
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import PlanSettings
+from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
+
+
+class TwoRowsEngine:
+    """Complete, real-geometry Smart candidate; no packing is mocked away."""
+
+    def __init__(self):
+        self.original = None
+
+    def expand_pieces(self, rows):
+        return expand_piece_groups(rows)
+
+    def optimize(self, pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs):
+        assert (board_width_cm, board_length_cm, kerf_cm) == (100, 100, 0.5)
+        plan = {
+            "method_key": "MaxRects Best Short Side",
+            "method_label": "Fixture",
+            "optimization_mode": "smart",
+            "sheets": [{
+                "sheet_no": 1, "resource_kind": "FULL_BOARD", "w": 100, "h": 100,
+                "pieces": [
+                    make_placed_piece(pieces[0], 15.0, 0.0, 20.0, 20.0, False),
+                    make_placed_piece(pieces[1], 15.3, 20.5, 20.0, 20.0, False),
+                ],
+            }],
+            "unplaced": [],
+            "used_area_m2": 0.08,
+            "total_board_area_m2": 1.0,
+            "waste_area_m2": 0.92,
+        }
+        self.original = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+        return {**deepcopy(self.original), "smart_candidates": [deepcopy(self.original)]}
+
+    def validate(self, plan, pieces, board_width_cm, board_length_cm):
+        return validate_plan(plan, pieces, board_width_cm, board_length_cm, kerf_cm=0.5)
+
+
+def test_system_snapshot_recovers_three_mm_alignment_without_repacking():
+    engine = TwoRowsEngine()
+    rows = ({"width_cm": 20, "length_cm": 20, "qty": 2},)
+    command = OptimizeOrderPlanCommand(
+        engine_version="final-alignment-fixture", input_fingerprint="unchanged",
+        board=BoardGeometry(100, 100, 0, 0.5),
+        optimizer=OptimizerOptions("smart", "CNC Router", 10, 40, 30, 30, 0.09),
+        piece_rows=rows,
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=engine)
+    baseline = engine.original
+    assert baseline is not None
+    assert baseline["industrial_metrics"]["largest_reusable_free_area_m2"] > 0
+    assert not validate_plan(baseline, engine.expand_pieces(list(rows)), 100, 100, kerf_cm=0.5)
+    final = outcome.snapshot
+    assert final["validation"]["is_valid"]
+    assert len(final["sheets"]) == 1
+    positioned = {p["id"]: p for p in final["sheets"][0]["pieces"]}
+    assert positioned[1]["x"] == pytest.approx(positioned[2]["x"])
+    before_length = _rectangular_cleanup_geometry(baseline, [0], 0.5)[1]
+    after_length = _rectangular_cleanup_geometry(final, [0], 0.5)[1]
+    assert after_length < before_length - 0.01  # centimeters: measured cutter-center network
+    assert final["industrial_metrics"]["largest_reusable_free_area_m2"] >= (
+        baseline["industrial_metrics"]["largest_reusable_free_area_m2"]
+    )
+    assert {(p["id"], p.get("piece_instance_id"), p.get("rotated"))
+            for p in final["sheets"][0]["pieces"]} == {
+        (p["id"], p.get("piece_instance_id"), p.get("rotated"))
+        for p in baseline["sheets"][0]["pieces"]
+    }
+    assert engine.original == baseline  # never modify raw Smart seed
+
+
+def _domain_fixture(*, kerf=0.5, offset=0.3):
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=2,
+                                        piece_instance_id="stable-door")])
+    plan = dict(
+        method_key="MaxRects Best Short Side",
+        sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100, pieces=[
+            make_placed_piece(sources[0], 15, 0, 20, 20, False),
+            make_placed_piece(sources[1], 15 + offset, 20 + kerf, 20, 20, False),
+        ])],
+        unplaced=[], used_area_m2=.08, total_board_area_m2=1, waste_area_m2=.92,
+    )
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=kerf)
+    assert _rectangles(plan, kerf)[0] > 0
+    return sources, plan
+
+
+def _run_alignment(plan, sources, *, kerf=0.5, deadline=None):
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+    return align_regular_cut_lines(
+        plan, sources, 100, 100, kerf,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        deadline_monotonic=deadline,
+    )
+
+
+@pytest.mark.parametrize("kerf", [0.3, 0.5])
+def test_exact_center_network_gets_shorter_without_changing_original(kerf):
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources, original = _domain_fixture(kerf=kerf)
+    original_copy = deepcopy(original)
+    changed = _run_alignment(original, sources, kerf=kerf)
+    assert changed is not original
+    assert original == original_copy
+    assert _rectangles(changed, kerf)[0] < _rectangles(original, kerf)[0] - .05
+    assert _rectangles(changed, kerf)[1] <= _rectangles(original, kerf)[1]
+    assert not validate_plan(changed, sources, 100, 100, kerf_cm=kerf)
+    assert changed["industrial_rank"][:4] <= original["industrial_rank"][:4]
+    for a, b in zip(original["sheets"][0]["pieces"], changed["sheets"][0]["pieces"]):
+        assert {k: v for k, v in a.items() if k not in ("x", "y")} == {
+            k: v for k, v in b.items() if k not in ("x", "y")
+        }
+    # Idempotence of an already-aligned locally optimal plan.
+    again = _run_alignment(changed, sources, kerf=kerf)
+    assert again == changed
+
+
+def test_already_aligned_no_op_returns_the_exact_object():
+    sources, plan = _domain_fixture(offset=0)
+    assert _run_alignment(plan, sources) is plan
+
+
+def test_time_expiry_does_not_change_any_geometry():
+    sources, plan = _domain_fixture()
+    assert _run_alignment(plan, sources, deadline=0) is plan
+
+
+@pytest.mark.parametrize("protected", ["Glass", "L-Shaped Corner", "Clipped Corner", "Joint", "OFFCUT", "overlay", "geometry"])
+def test_protected_nests_and_offcut_do_not_move(protected):
+    sources, plan = _domain_fixture()
+    original = deepcopy(plan)
+    if protected in {"Glass", "L-Shaped Corner", "Clipped Corner", "Joint"}:
+        sources[0]["piece_type"] = plan["sheets"][0]["pieces"][0]["piece_type"] = protected
+    elif protected == "OFFCUT":
+        sources[0]["resource_kind"] = plan["sheets"][0]["pieces"][0]["resource_kind"] = "OFFCUT"
+    elif protected == "overlay":
+        plan["sheets"][0]["pieces"][0]["overlays"] = [{"type": "protected"}]
+    else:
+        plan["sheets"][0]["pieces"][0]["geometry"] = {"version": 2}
+    expected = deepcopy(plan)
+    assert _run_alignment(plan, sources) is plan
+    assert plan == expected
+    assert original["sheets"][0]["pieces"][0]["x"] == 15
+
+
+def test_group_candidate_preserves_internal_kerf_and_identity():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        _groups, _translate_if_clear,
+    )
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=3,
+                                        piece_instance_id="row")])
+    sheet = dict(sheet_no=1, w=100, h=100, pieces=[
+        make_placed_piece(sources[0], 10, 0, 20, 20, False),
+        make_placed_piece(sources[1], 30.5, 0, 20, 20, False),
+        make_placed_piece(sources[2], 10.3, 20.5, 20, 20, False),
+    ])
+    assert (1, 2) in _groups(sheet, "x")
+    moved = _translate_if_clear(dict(sheets=[sheet]), 0, "x", (1, 2), 0.3, 0.5)
+    assert moved is not None
+    placed = moved["sheets"][0]["pieces"]
+    assert placed[1]["x"] - placed[0]["x"] == pytest.approx(20.5)
+    assert placed[2]["x"] == 10.3
+    assert [p["piece_instance_id"] for p in placed] == [
+        p["piece_instance_id"] for p in sheet["pieces"]
+    ]
+    assert not validate_plan(dict(sheets=moved["sheets"], unplaced=[]), sources, 100, 100, kerf_cm=.5)
+
+
+def test_non_aligned_regular_geometry_is_not_an_import_validation_error():
+    sources, plan = _domain_fixture(offset=.3)
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    bad = deepcopy(plan)
+    bad["sheets"][0]["pieces"][1]["y"] = 20.2  # breaks the actual 5 mm kerf
+    assert validate_plan(bad, sources, 100, 100, kerf_cm=.5)
+
+
+def test_vertical_alignment_is_measured_on_the_entire_board():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=2)])
+    plan = dict(
+        method_key="MaxRects Best Short Side",
+        sheets=[dict(sheet_no=1, w=100, h=100, pieces=[
+            make_placed_piece(sources[0], 0, 15, 20, 20, False),
+            make_placed_piece(sources[1], 20.5, 15.3, 20, 20, False),
+        ])],
+        unplaced=[], used_area_m2=.08, total_board_area_m2=1, waste_area_m2=.92,
+    )
+    baseline = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(baseline, sources, 100, 100, kerf_cm=.5)
+    candidate = _run_alignment(baseline, sources)
+    assert candidate["sheets"][0]["pieces"][0]["y"] == pytest.approx(
+        candidate["sheets"][0]["pieces"][1]["y"]
+    )
+    assert _rectangles(candidate, .5)[0] < _rectangles(baseline, .5)[0]
+    assert not validate_plan(candidate, sources, 100, 100, kerf_cm=.5)
+
+
+def test_repeated_generation_is_deterministic_and_large_shift_is_not_forced():
+    sources, plan = _domain_fixture()
+    runs = [_run_alignment(deepcopy(plan), sources) for _ in range(3)]
+    assert runs[0] == runs[1] == runs[2]
+    sources, distant = _domain_fixture(offset=2.0)
+    aligned = _run_alignment(distant, sources)
+    # Geometry, not a 10 mm magic number, now determines legal translations.
+    assert aligned["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        aligned["sheets"][0]["pieces"][1]["x"]
+    )
+    assert not validate_plan(aligned, sources, 100, 100, kerf_cm=.5)
+
+
+def test_zero_kerf_does_not_fabricate_common_cuts_across_a_real_gap():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources, baseline = _domain_fixture(kerf=0.5)
+    assert not validate_plan(baseline, sources, 100, 100, kerf_cm=0)
+    result = _run_alignment(baseline, sources, kerf=0)
+    # An optional axis alignment is allowed but must not fabricate shared cuts
+    # where the real 5 mm space remains.
+    assert _rectangles(result, 0) == pytest.approx(_rectangles(baseline, 0))
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=0)
+
+
+def test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned(tmp_path):
+    """Strict importer must not turn optional System alignment into a validation rule."""
+    import ezdxf
+    from almdina_erp.tests.test_cutter_center_paths import (
+        _import, _order, _piece, _rect, _sheet,
+    )
+
+    document = ezdxf.new("R2010")
+    for layer in ("SHEET_OUTLINE", "GEOMETRY", "TEXT"):
+        document.layers.add(layer)
+    model = _sheet(document)
+    for number, x, y in ((1, 150, 100), (2, 153, 305)):
+        model.add_lwpolyline(
+            _rect(x, y, 200, 200), close=True,
+            dxfattribs={"layer": "GEOMETRY"},
+        )
+        model.add_text(
+            str(number), dxfattribs={
+                "layer": "TEXT", "insert": (x + 100, y + 100), "height": 12,
+            },
+        )
+    path = tmp_path / "nonaligned-original.dxf"
+    document.saveas(path)
+    original_bytes = path.read_bytes()
+    order = _order([
+        _piece(piece_instance_id="door-1", width_cm=20, length_cm=20,
+               cut_width_cm=20, cut_length_cm=20),
+        _piece(piece_instance_id="door-2", width_cm=20, length_cm=20,
+               cut_width_cm=20, cut_length_cm=20),
+    ])
+    imported = _import(str(path), order, kerf_mm=5, trim_mm=0)
+    placed = [p for sheet in imported["sheets"] for p in sheet["pieces"]]
+    assert len(placed) == 2
+    assert sorted(p["x"] for p in placed) == pytest.approx([15, 15.3])
+    assert path.read_bytes() == original_bytes
+
+
+def test_five_candidate_alignment_runtime_and_memory_evidence():
+    """Measured A/B application projection under identical candidate inputs.
+
+    Intentionally diagnostic: timing is runner-sensitive, so no flaky wall-clock
+    threshold is used as a correctness assertion.
+    """
+    import statistics
+    import time
+    import tracemalloc
+    from unittest.mock import patch
+
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+
+    class FiveCandidates(TwoRowsEngine):
+        def optimize(self, *args, **kwargs):
+            result = super().optimize(*args, **kwargs)
+            result["smart_candidates"] = [
+                deepcopy(result["smart_candidates"][0]) for _ in range(5)
+            ]
+            return result
+
+    command = OptimizeOrderPlanCommand(
+        engine_version="five-plan-benchmark", input_fingerprint="same-input",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions("smart", "CNC Router", 10, 40, 30, 30, .09),
+        piece_rows=({"width_cm": 20, "length_cm": 20, "qty": 2},),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    def run_once(enabled):
+        engine = FiveCandidates()
+        if enabled:
+            return optimize_order_plan(command, engine=engine)
+        with patch.object(
+            align, "align_regular_cut_lines",
+            side_effect=lambda plan, *args, **kwargs: plan,
+        ):
+            return optimize_order_plan(command, engine=engine)
+
+    # First warm imports, then time with tracemalloc OFF (its overhead
+    # distorts short projections). Measure memory peaks in separate runs.
+    run_once(False)
+    run_once(True)
+    output = {}
+    for enabled in (False, True):
+        elapsed, memory, shifts, profiles, remnants = [], [], [], [], []
+        for _ in range(7):
+            started = time.perf_counter()
+            result = run_once(enabled)
+            elapsed.append((time.perf_counter() - started) * 1000)
+            assert result.snapshot["validation"]["is_valid"]
+            assert result.required_boards == 1
+            shifts.append(
+                result.snapshot["sheets"][0]["pieces"][1]["x"] -
+                result.snapshot["sheets"][0]["pieces"][0]["x"]
+            )
+            profiles.append(align._rectangles(result.snapshot, .5))
+            remnants.append(result.snapshot["industrial_metrics"]["largest_reusable_free_area_m2"])
+        for _ in range(3):
+            tracemalloc.start()
+            result = run_once(enabled)
+            memory.append(tracemalloc.get_traced_memory()[1] / 1024)
+            tracemalloc.stop()
+        output[enabled] = (
+            statistics.median(elapsed), statistics.median(memory), shifts, profiles, remnants,
+        )
+    print(
+        "CUT_ALIGNMENT_5_CANDIDATES "
+        f"baseline_median_ms={output[False][0]:.3f} "
+        f"enabled_median_ms={output[True][0]:.3f} "
+        f"baseline_peak_KiB={output[False][1]:.1f} "
+        f"enabled_peak_KiB={output[True][1]:.1f} "
+        f"baseline_delta_cm={output[False][2][-1]:.3f} "
+        f"enabled_delta_cm={output[True][2][-1]:.3f} "
+        f"baseline_network_mm={output[False][3][-1][0]:.3f} "
+        f"enabled_network_mm={output[True][3][-1][0]:.3f} "
+        f"baseline_segments={output[False][3][-1][1]} "
+        f"enabled_segments={output[True][3][-1][1]} "
+        f"baseline_remnant_m2={output[False][4][-1]:.6f} "
+        f"enabled_remnant_m2={output[True][4][-1]:.6f}",
+        flush=True,
+    )
+
+
+# General, non-image-specific witnesses for alignment rather than shared cutting.
+def _separated_fixture(*, axis="x"):
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=20, qty=2)])
+    points = [(0.0, 0.0), (0.3, 50.0)] if axis == "x" else [(0.0, 0.0), (50.0, 0.3)]
+    placements = [make_placed_piece(p, x, y, 20, 20, False)
+                  for p, (x, y) in zip(sources, points)]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100, pieces=placements)],
+                unplaced=[], used_area_m2=.08, total_board_area_m2=1, waste_area_m2=.92)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    return sources, plan
+
+
+@pytest.mark.parametrize("axis", ["x", "y"])
+def test_distant_rows_and_columns_gain_axis_alignment_without_fake_shared_cut(axis):
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    sources, raw = _separated_fixture(axis=axis)
+    before = deepcopy(raw)
+    outcome = _run_alignment(raw, sources)
+    a, b = outcome["sheets"][0]["pieces"]
+    assert a[axis] == pytest.approx(b[axis])
+    other_axis = "y" if axis == "x" else "x"
+    assert [p[other_axis] for p in outcome["sheets"][0]["pieces"]] == [
+        p[other_axis] for p in raw["sheets"][0]["pieces"]
+    ]  # no closing the distant perpendicular gap under an alignment pretext
+    assert _rectangles(outcome, .5) == pytest.approx(_rectangles(raw, .5))
+    assert not validate_plan(outcome, sources, 100, 100, kerf_cm=.5)
+    assert raw == before
+
+
+def test_large_multi_board_plan_does_not_disable_small_board_alignment():
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=1, length_cm=1, qty=65),
+    ])
+    first = [make_placed_piece(sources[0], 0, 0, 20, 20, False),
+             make_placed_piece(sources[1], .3, 50, 20, 20, False)]
+    second = [
+        make_placed_piece(p, 2.5 * ((index - 2) % 13),
+                          2.5 * ((index - 2) // 13), 1, 1, False)
+        for index, p in enumerate(sources[2:], 2)
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100, pieces=first),
+                        dict(sheet_no=2, resource_kind="FULL_BOARD", w=100, h=100, pieces=second)],
+                unplaced=[], used_area_m2=.145, total_board_area_m2=2, waste_area_m2=1.855)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    after = _run_alignment(plan, sources)
+    assert after["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        after["sheets"][0]["pieces"][1]["x"])
+    assert after["sheets"][1]["pieces"] == plan["sheets"][1]["pieces"]
+    assert len(after["sheets"]) == 2
+    assert not validate_plan(after, sources, 100, 100, kerf_cm=.5)
+
+
+def test_diagnostics_distinguish_candidates_from_eligibility_and_time_budget():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+    sources, plan = _separated_fixture()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=dict(
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    assert result["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        result["sheets"][0]["pieces"][1]["x"])
+    assert diagnostics.get("candidate_count", 0) > 0
+    assert diagnostics.get("tested", 0) > 0
+    assert diagnostics.get("accepted", 0) > 0
+    expired = {}
+    unchanged = align_regular_cut_lines(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=dict(
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09),
+        deadline_monotonic=0, diagnostics=expired,
+    )
+    assert unchanged is plan
+    assert expired["reason"] == "deadline"
+
+
+def test_protected_glass_stays_fixed_while_independent_regular_pair_aligns():
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=15, length_cm=15, qty=1, piece_type="Glass"),
+    ])
+    placed = [
+        make_placed_piece(sources[0], 0, 0, 20, 20, False),
+        make_placed_piece(sources[1], .3, 50, 20, 20, False),
+        make_placed_piece(sources[2], 70, 80, 15, 15, False),
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.1025, total_board_area_m2=1, waste_area_m2=.8975)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    original = deepcopy(plan)
+    changed = _run_alignment(plan, sources)
+    assert changed["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        changed["sheets"][0]["pieces"][1]["x"])
+    assert changed["sheets"][0]["pieces"][2] == original["sheets"][0]["pieces"][2]
+    assert not validate_plan(changed, sources, 100, 100, kerf_cm=.5)
+    assert plan == original
+
+
+def test_large_single_sheet_is_bounded_and_diagnosed_without_repacking():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import align_regular_cut_lines
+    sources = expand_piece_groups([dict(width_cm=1, length_cm=1, qty=65)])
+    sheet = dict(sheet_no=1, w=100, h=100, resource_kind="FULL_BOARD", pieces=[
+        make_placed_piece(source, (i % 13) * 2.5, (i // 13) * 2.5, 1, 1, False)
+        for i, source in enumerate(sources)
+    ])
+    plan = dict(method_key="MaxRects Best Short Side", sheets=[sheet], unplaced=[],
+                used_area_m2=.0065, total_board_area_m2=1, waste_area_m2=.9935)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    assert result is plan
+    assert diagnostics["large_sheets_skipped"] == 1
+    assert diagnostics["reason"] == "no_eligible_pair"
+
+
+def test_aligned_projection_is_repeatable_after_second_application_run():
+    sources, plan = _separated_fixture()
+    first = _run_alignment(plan, sources)
+    second = _run_alignment(first, sources)
+    assert second == first
+    assert not validate_plan(second, sources, 100, 100, kerf_cm=.5)
+
+
+# Anonymized manufacturing-geometry witness reconstructed from an exported
+# three-board rectangular DXF. Only one 16-piece board is needed to reproduce
+# the grouped-axis opportunity; no customer/order identifiers are stored.
+_FIRST_BOARD_MM = (
+    (33, 4, 1010, 299),
+    (33, 308, 1010, 299),
+    (33, 612, 1010, 269),
+    (33, 886, 1010, 269),
+    (6.5, 1160, 903, 299),
+    (914.5, 1160, 299, 903),
+    (6.5, 1464, 903, 299),
+    (6.5, 1768, 903, 299),
+    (1048, 4, 139, 461),
+    (1048, 470, 139, 461),
+    (22.5, 2072, 461, 129),
+    (22.5, 2206, 461, 129),
+    (488.5, 2072, 461, 129),
+    (954.5, 2068, 119, 368),
+    (488.5, 2206, 400, 119),
+    (1078.5, 2068, 119, 368),
+)
+_RIGID_SIX_IDS = frozenset((1, 2, 3, 4, 9, 10))
+
+
+def _production_geometry_witness():
+    sources = expand_piece_groups([
+        dict(width_cm=w / 10, length_cm=h / 10, qty=1)
+        for x, y, w, h in _FIRST_BOARD_MM
+    ])
+    pieces = [
+        make_placed_piece(source, x / 10, y / 10, w / 10, h / 10, False)
+        for source, (x, y, w, h) in zip(sources, _FIRST_BOARD_MM)
+    ]
+    used = sum(piece["w"] * piece["h"] for piece in pieces) / 10000
+    plan = dict(
+        method_key="MaxRects Best Short Side",
+        sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                     w=122, h=244, pieces=pieces)],
+        unplaced=[], used_area_m2=used,
+        total_board_area_m2=122 * 244 / 10000,
+        waste_area_m2=122 * 244 / 10000 - used,
+    )
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def _six_piece_group_shift(plan):
+    moved = deepcopy(plan)
+    for piece in moved["sheets"][0]["pieces"]:
+        if piece["id"] in _RIGID_SIX_IDS:
+            piece["x"] -= 2.65
+    return moved
+
+
+def test_anonymized_large_board_real_kerf_prefers_group_six_over_four():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        _rectangles, _groups,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import (
+        _largest_reusable_free_area,
+    )
+    sources, original = _production_geometry_witness()
+    assert _RIGID_SIX_IDS in [
+        frozenset(group) for group in _groups(original["sheets"][0], "x")
+    ]
+    four = deepcopy(original)
+    for piece in four["sheets"][0]["pieces"]:
+        if piece["id"] in {1, 2, 3, 4}:
+            piece["x"] -= 2.65
+    full = _six_piece_group_shift(original)
+    assert not validate_plan(four, sources, 122, 244, kerf_cm=.5)
+    assert not validate_plan(full, sources, 122, 244, kerf_cm=.5)
+    before_length, before_segments = _rectangles(original, .5)
+    four_length, four_segments = _rectangles(four, .5)
+    after_length, after_segments = _rectangles(full, .5)
+    assert four_length > before_length + 900  # mm: breaks existing shared cutters
+    assert four_segments > before_segments
+    assert after_length == pytest.approx(before_length, abs=.05)
+    assert after_segments < before_segments
+    assert full["sheets"][0]["pieces"][0]["x"] == pytest.approx(
+        full["sheets"][0]["pieces"][4]["x"]
+    )
+    def reusable(p):
+        return _largest_reusable_free_area(p, 30, 30, .09, machine_type="CNC Router")
+    assert reusable(full) >= reusable(original) - 1e-9
+    # A second independent rigid six-piece group can also align without
+    # destroying any original cut: this proves why two sweeps matter.
+    combined = deepcopy(full)
+    for piece in combined["sheets"][0]["pieces"]:
+        if piece["id"] in {11, 12, 13, 14, 15, 16}:
+            piece["x"] -= 1.6
+    assert not validate_plan(combined, sources, 122, 244, kerf_cm=.5)
+    combined_length, combined_segments = _rectangles(combined, .5)
+    assert combined_length <= after_length + .05
+    assert combined_segments < after_segments
+    assert reusable(combined) >= reusable(original) - 1e-9
+    assert original["sheets"][0]["pieces"][0]["x"] == pytest.approx(3.3)
+
+
+def test_anonymized_board_alignment_search_reaches_proven_six_piece_move():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, original = _production_geometry_witness()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        original, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    before = {p["id"]: p for p in original["sheets"][0]["pieces"]}
+    after = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert after[1]["x"] == pytest.approx(after[5]["x"])
+    assert after[1]["x"] == pytest.approx(.65)  # 6.5 mm from board origin
+    # Group's vertical and internal geometry must remain unaltered.
+    for piece_id in _RIGID_SIX_IDS:
+        assert after[piece_id]["x"] - before[piece_id]["x"] == pytest.approx(-2.65)
+        assert after[piece_id]["y"] == before[piece_id]["y"]
+    assert _rectangles(result, .5)[0] <= _rectangles(original, .5)[0] + .05
+    assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+    assert diagnostics["accepted"] >= 1
+
+
+# Remaining two sheet rectangles in the same anonymized DXF. This captures
+# portfolio/multi-sheet budget pressure without storing uploaded file contents.
+_SECOND_BOARD_MM = (
+    (5, 12, 448, 299), (5, 316, 903, 269), (913, 12, 299, 770),
+    (5, 590, 818, 299), (828, 787, 299, 818), (5, 894, 818, 299),
+    (5, 1198, 818, 299), (5, 1502, 818, 139), (828, 1610, 139, 818),
+    (5, 1646, 409, 745), (458, 12, 448, 299),
+    (419, 1646, 400, 119), (419, 1770, 400, 119),
+    (419, 1894, 400, 119), (419, 2018, 400, 119),
+    (419, 2142, 400, 119), (419, 2266, 400, 119),
+    (972, 1610, 119, 400), (1096, 1610, 119, 368),
+    (1096, 1983, 119, 368), (972, 2015, 119, 368),
+)
+_THIRD_BOARD_MM = (
+    (0, 0, 903, 269), (0, 274, 745, 409),
+    (750, 274, 368, 119), (750, 398, 368, 119), (750, 522, 368, 119),
+)
+
+
+def _three_sheet_dxf_geometry_witness():
+    board_sets = (_FIRST_BOARD_MM, _SECOND_BOARD_MM, _THIRD_BOARD_MM)
+    sources = expand_piece_groups([
+        dict(width_cm=w / 10, length_cm=h / 10, qty=1)
+        for board_set in board_sets for x, y, w, h in board_set
+    ])
+    sheets = []
+    index = 0
+    for no, board_set in enumerate(board_sets, 1):
+        pieces = []
+        for x, y, w, h in board_set:
+            pieces.append(make_placed_piece(
+                sources[index], x / 10, y / 10, w / 10, h / 10, False
+            ))
+            index += 1
+        sheets.append(dict(sheet_no=no, resource_kind="FULL_BOARD", w=122, h=244,
+                           pieces=pieces))
+    used = sum(p["w"] * p["h"] for s in sheets for p in s["pieces"]) / 10000
+    total = len(sheets) * 122 * 244 / 10000
+    plan = enrich_plan_metrics(
+        dict(method_key="MaxRects Best Short Side", sheets=sheets, unplaced=[],
+             used_area_m2=used, total_board_area_m2=total,
+             waste_area_m2=total - used), "MaxRects Best Short Side", "CNC Router"
+    )
+    assert len(sources) == 42 and len(plan["sheets"]) == 3
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def test_anonymized_three_board_dxf_search_finds_group_without_clock_assumptions():
+    import time
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, plan = _three_sheet_dxf_geometry_witness()
+    diagnostics = {}
+    result = align_regular_cut_lines(
+        plan, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostics,
+    )
+    first = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert first[1]["x"] == pytest.approx(first[5]["x"]), diagnostics
+    assert len(result["sheets"]) == 3
+    assert _rectangles(result, .5)[0] <= _rectangles(plan, .5)[0] + .05
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+
+
+def test_anonymized_three_board_budget_observation_not_flaky_clock_gate():
+    import time
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines,
+    )
+    sources, plan = _three_sheet_dxf_geometry_witness()
+    for seconds in (.15, .50, 1.0):
+        diagnostic = {}
+        started = time.monotonic()
+        result = align_regular_cut_lines(
+            plan, sources, 122, 244, .5,
+            machine_type="CNC Router", mirroring_allowed=False,
+            metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                               min_remnant_area_m2=.09),
+            deadline_monotonic=time.monotonic() + seconds,
+            diagnostics=diagnostic,
+        )
+        x = result["sheets"][0]["pieces"][0]["x"]
+        print(
+            f"DXF_3_BOARD_ALIGNMENT_BUDGET budget_s={seconds:g} "
+            f"elapsed_ms={(time.monotonic()-started)*1000:.2f} "
+            f"first_x_cm={x:g} diagnostics={diagnostic}",
+            flush=True,
+        )
+        # Timing is diagnostic only; acceptance must remain manufacturing-safe
+        # on any CI runner, even where the budget causes a clean no-op.
+        assert len(result["sheets"]) == 3
+        assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+
+
+def test_factory_budget_zero_disables_alignment_without_changing_raw_seed():
+    engine = TwoRowsEngine()
+    command = OptimizeOrderPlanCommand(
+        engine_version="budget-zero-regression", input_fingerprint="unchanged",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions(
+            "smart", "CNC Router", 10, 40, 30, 30, .09,
+            alignment_search_budget_sec=0,
+        ),
+        piece_rows=({"width_cm": 20, "length_cm": 20, "qty": 2},),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=engine)
+    placed = outcome.snapshot["sheets"][0]["pieces"]
+    assert placed[0]["x"] != pytest.approx(placed[1]["x"])
+    assert engine.original is not None
+    assert outcome.snapshot["validation"]["is_valid"]
+
+
+def test_factory_alignment_budget_metadata_and_security_contract():
+    import json
+    from pathlib import Path
+    from almdina_erp.almdina_erp.domain.security.factory_settings import (
+        FactorySettingsSection, SECTION_FIELDS,
+    )
+    path = (Path(__file__).resolve().parents[1] / "almdina_erp" /
+            "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json")
+    metadata = json.loads(path.read_text())
+    fields = {f["fieldname"]: f for f in metadata["fields"]}
+    budget = fields["alignment_search_budget_sec"]
+    assert budget["fieldtype"] == "Float"
+    assert budget["non_negative"] == 1
+    assert float(budget["default"]) > 0
+    assert "alignment_search_budget_sec" in SECTION_FIELDS[FactorySettingsSection.CUTTING]
+
+
+def test_contact_chain_moves_together_when_single_piece_cannot_preserve_shared_cuts():
+    """A Kerf-spaced column forms a cut-connected group despite no Y overlap."""
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=10, qty=4)])
+    placements = ((3, 0), (3, 10.5), (3, 21), (1, 50))
+    placed = [make_placed_piece(p, x, y, 20, 10, False)
+              for p, (x, y) in zip(sources, placements)]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.08,
+                total_board_area_m2=1, waste_area_m2=.92)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    before_profile = _rectangles(plan, .5)
+    original = deepcopy(plan)
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+    )
+    changed = result["sheets"][0]["pieces"]
+    # All Kerf-connected regular pieces can be translated as one rigid group
+    # while preserving the two shared cutter centers between stacked doors.
+    assert [p["x"] for p in changed] == pytest.approx([1, 1, 1, 1])
+    assert [p["y"] for p in changed] == pytest.approx([p["y"] for p in placed])
+    after_profile = _rectangles(result, .5)
+    assert after_profile[0] <= before_profile[0] + .05
+    assert after_profile[1] <= before_profile[1]
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
+    assert plan == original
+
+
+def test_protected_adjacent_piece_cannot_lose_existing_shared_cutter_center():
+    """The secondary regular-only score must not erase a cut shared with Glass."""
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines,
+    )
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=2),
+        dict(width_cm=20, length_cm=20, qty=1, piece_type="Glass"),
+    ])
+    placed = [
+        make_placed_piece(sources[0], 3, 10, 20, 20, False),
+        make_placed_piece(sources[1], 1, 50, 20, 20, False),
+        make_placed_piece(sources[2], 23.5, 10, 20, 20, False),
+    ]
+    plan = dict(method_key="MaxRects Best Short Side",
+                sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                             w=100, h=100, pieces=placed)],
+                unplaced=[], used_area_m2=.12,
+                total_board_area_m2=1, waste_area_m2=.88)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    result = align_regular_cut_lines(
+        plan, sources, 100, 100, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+    )
+    positions = {p["id"]: p for p in result["sheets"][0]["pieces"]}
+    assert positions[1]["x"] == pytest.approx(3)  # cannot break Glass shared contact
+    assert positions[3]["x"] == pytest.approx(23.5)
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
+
+
+def test_smart_gallery_alignment_deadline_is_shared_fairly(monkeypatch):
+    """Every displayed alternative must get a chance at the shared tail budget."""
+    import time
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+
+    class ThreeCandidates(TwoRowsEngine):
+        def optimize(self, pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs):
+            result = super().optimize(
+                pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs
+            )
+            raw = result["smart_candidates"][0]
+            result["smart_candidates"] = [deepcopy(raw) for _ in range(3)]
+            return result
+
+    durations = []
+    def capture(plan, *args, deadline_monotonic=None, **kwargs):
+        durations.append(deadline_monotonic - time.monotonic())
+        return plan
+    monkeypatch.setattr(align, "align_regular_cut_lines", capture)
+    command = OptimizeOrderPlanCommand(
+        engine_version="gallery-budget-test", input_fingerprint="unchanged",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions(
+            "smart", "CNC Router", 10, 40, 30, 30, .09,
+            alignment_search_budget_sec=1,
+        ),
+        piece_rows=(dict(width_cm=20, length_cm=20, qty=2),),
+        plan_settings=PlanSettings("smart", "CNC Router", 10, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=ThreeCandidates())
+    assert outcome.snapshot["validation"]["is_valid"]
+    assert len(durations) == 3
+    assert 0 < durations[0] <= .51
+    assert durations[0] > .15  # first of three gets about one third, not all
+    # When a fast candidate doesn't consume its slot, unused time is returned
+    # to subsequent alternatives. The last may use all remaining allowance.
+    assert durations[0] < durations[1] < durations[2]
+    assert durations[2] <= 1.01
+
+
+def _left_edge_biased_exported_geometry():
+    """New anonymized DXF: top and bottom pushed to X=0, middle is X=6.5mm.
+
+    The target is a real continuous cutter *center* at X=4mm with 5mm Kerf,
+    not a decorative equality of the left sheet-boundary coordinate.
+    """
+    sources, plan = _production_geometry_witness()
+    sheet = plan["sheets"][0]
+    offsets_mm = {
+        1: -33, 2: -33, 3: -33, 4: -33,
+        9: -33, 10: -33,
+        11: -22.5, 12: -22.5,
+        13: -22.5, 14: -22.5, 15: -22.5, 16: -22.5,
+    }
+    for piece in sheet["pieces"]:
+        piece["x"] += offsets_mm.get(int(piece["id"]), 0) / 10
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router")
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    return sources, plan
+
+
+def _longest_vertical_center(plan, x_mm, kerf_cm=.5):
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
+        cutter_center_segments,
+    )
+    sheet = plan["sheets"][0]
+    shapes = []
+    for piece in sheet["pieces"]:
+        x, y, w, h = (piece[k] * 10 for k in ("x", "y", "w", "h"))
+        shapes.append(([(x, y), (x+w, y), (x+w, y+h), (x, y+h)], []))
+    segments = cutter_center_segments(shapes, kerf_cm * 5)
+    return max(
+        (abs(b[1] - a[1]) for a, b in segments
+         if abs(a[0] - x_mm) <= .05 and abs(b[0] - x_mm) <= .05),
+        default=0.0,
+    )
+
+
+def test_actual_dxf_cutting_axis_is_not_the_left_sheet_border():
+    sources, original = _left_edge_biased_exported_geometry()
+    assert original["sheets"][0]["pieces"][0]["x"] == pytest.approx(0.0)
+    assert original["sheets"][0]["pieces"][4]["x"] == pytest.approx(.65)
+    assert _longest_vertical_center(original, 4.0) < 1000
+    aligned = deepcopy(original)
+    for piece in aligned["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16}:
+            piece["x"] += .65
+    assert not validate_plan(aligned, sources, 122, 244, kerf_cm=.5)
+    assert _longest_vertical_center(aligned, 4.0) > 2300
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import _rectangles
+    assert _rectangles(aligned, .5)[0] <= _rectangles(original, .5)[0]
+    assert _rectangles(aligned, .5)[1] < _rectangles(original, .5)[1]
+
+
+def test_alignment_prefers_shared_cutter_center_over_pushing_to_board_edge():
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        align_regular_cut_lines, _rectangles,
+    )
+    sources, original = _left_edge_biased_exported_geometry()
+    diagnostic = {}
+    result = align_regular_cut_lines(
+        original, sources, 122, 244, .5,
+        machine_type="CNC Router", mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30,
+                           min_remnant_area_m2=.09),
+        diagnostics=diagnostic,
+    )
+    top = result["sheets"][0]["pieces"][0]
+    middle = result["sheets"][0]["pieces"][4]
+    assert top["x"] == pytest.approx(middle["x"]), diagnostic
+    assert middle["x"] == pytest.approx(.65)
+    assert _longest_vertical_center(result, 4.0) >= 2000
+    assert _rectangles(result, .5)[0] <= _rectangles(original, .5)[0] + .05
+    assert _rectangles(result, .5)[1] < _rectangles(original, .5)[1]
+    assert not validate_plan(result, sources, 122, 244, kerf_cm=.5)
+
+
+def test_generic_centerline_continuity_prefers_internal_route_not_left_border():
+    """Equal length/count are not enough: physical cutter axis matters.
+
+    Three Kerf-spaced bands with different widths. Either move the middle door
+    to X=0 (outside cutter center), or move top+bottom to X=6.5mm (in-board
+    continuous cutter center). A zero-Trim upper edge may overhang by radius.
+    """
+    from almdina_erp.almdina_erp.domain.cutting.final_cut_line_alignment import (
+        _sheet_center_profile,
+    )
+    def at(x_cm, y_cm, width_cm):
+        return dict(x=x_cm, y=y_cm, w=width_cm, h=20, piece_type="Regular")
+    original = [at(0, 0, 20), at(.65, 20.5, 14), at(0, 41, 20)]
+    at_border = deepcopy(original)
+    at_border[1]["x"] = 0
+    inboard = deepcopy(original)
+    inboard[0]["x"] = inboard[2]["x"] = .65
+    def metrics(placed):
+        return _sheet_center_profile(
+            dict(w=100, h=100, pieces=placed), .5, regular_only=True
+        )
+    edge_length, edge_count, edge_run = metrics(at_border)
+    inside_length, inside_count, inside_run = metrics(inboard)
+    assert edge_length == pytest.approx(inside_length, abs=.05)
+    assert edge_count == inside_count
+    assert edge_run < 300  # left common cutter line has X = -2.5mm
+    assert inside_run > 600  # internal cutter center X = 4mm, clipped at Y=0
+
+
+def test_final_system_cutter_quality_matches_dxf_target_not_border_proxy():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        final_cut_quality_key, plan_cut_line_quality,
+    )
+    sources, original = _left_edge_biased_exported_geometry()
+    at_border = deepcopy(original)
+    for piece in at_border["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {5, 7, 8}:
+            piece["x"] -= .65
+    at_reference = deepcopy(original)
+    for piece in at_reference["sheets"][0]["pieces"]:
+        if int(piece["id"]) in {1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 15, 16}:
+            piece["x"] += .65
+    assert not validate_plan(at_border, sources, 122, 244, kerf_cm=.5)
+    assert not validate_plan(at_reference, sources, 122, 244, kerf_cm=.5)
+    # The legacy fast optimizer estimate prefers the border because it omits
+    # X=0, even though the actual internal cutter is much more coherent.
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import _cut_metrics
+    assert _cut_metrics(at_border)[0] < _cut_metrics(at_reference)[0]
+    inside_quality = plan_cut_line_quality(at_reference, .5)
+    border_quality = plan_cut_line_quality(at_border, .5)
+    assert inside_quality is not None and border_quality is not None
+    assert final_cut_quality_key(inside_quality) < final_cut_quality_key(border_quality)
+    assert inside_quality[2] > border_quality[2] + 1000
+    assert at_reference["sheets"][0]["pieces"][4]["x"] == pytest.approx(.65)
+    # Full three-board industrial priority: the actual largest reusable
+    # offcut sits on the unchanged third sheet. No material priority excuses
+    # replacing the 29.9x90.3 shared route with the original left border.
+    _, three = _three_sheet_dxf_geometry_witness()
+    def complete(first):
+        full = deepcopy(three)
+        full["sheets"][0] = deepcopy(first["sheets"][0])
+        return enrich_plan_metrics(full, full["method_key"], "CNC Router",
+            min_remnant_width_cm=30, min_remnant_length_cm=30,
+            min_remnant_area_m2=.09)
+    border_full, reference_full = complete(at_border), complete(at_reference)
+    assert tuple(border_full["industrial_rank"][:4]) == tuple(
+        reference_full["industrial_rank"][:4])
+    assert border_full["industrial_metrics"]["largest_reusable_free_area_m2"] == pytest.approx(
+        reference_full["industrial_metrics"]["largest_reusable_free_area_m2"])
+
+
+def test_final_system_cutter_quality_fails_closed_for_unproven_shapes():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import plan_cut_line_quality
+    special = dict(x=10, y=10, w=20, h=20, piece_type="Special",
+                   special_shape_geometry_json="")
+    plan = dict(sheets=[dict(w=100, h=100, pieces=[special])])
+    assert plan_cut_line_quality(plan, .5) is None
+    regular = dict(x=10, y=10, w=20, h=20, piece_type="Regular")
+    plan["sheets"][0]["pieces"] = [regular]
+    assert plan_cut_line_quality(plan, .5) is not None
+    # Never fabricate a cutter network by truncating a dense sheet.
+    plan["sheets"][0]["pieces"] = [dict(regular, x=i) for i in range(65)]
+    assert plan_cut_line_quality(plan, .5) is None
+
+
+def test_final_system_gallery_ranks_real_toolpath_above_border_estimate(monkeypatch):
+    """The gallery's displayed first plan must use the final shared metric."""
+    import importlib
+    app = importlib.import_module(
+        "almdina_erp.almdina_erp.application.cutting.optimize_order_plan"
+    )
+    from almdina_erp.almdina_erp.domain.cutting import plan_search, final_cut_line_alignment
+
+    monkeypatch.setattr(app, "realize_sheet_edge_trim", lambda *args, **kwargs: None)
+    monkeypatch.setattr(plan_search, "compact_regular_final",
+                        lambda plan, *args, **kwargs: plan)
+    monkeypatch.setattr(final_cut_line_alignment, "align_regular_cut_lines",
+                        lambda plan, *args, **kwargs: plan)
+
+    class Gallery:
+        @staticmethod
+        def expand_pieces(rows):
+            return expand_piece_groups(rows)
+
+        def optimize(self, sources, *args, **kwargs):
+            top, middle, bottom = sources
+            def variant(x):
+                placed = [
+                    make_placed_piece(top, x, 0, 20, 20, False),
+                    make_placed_piece(middle, x, 20.5, 14, 20, False),
+                    make_placed_piece(bottom, x, 41, 20, 20, False),
+                ]
+                plan = dict(method_key="MaxRects Best Short Side",
+                    sheets=[dict(sheet_no=1, resource_kind="FULL_BOARD",
+                                 w=100, h=100, pieces=placed)],
+                    unplaced=[], used_area_m2=.108, total_board_area_m2=1,
+                    waste_area_m2=.892)
+                return enrich_plan_metrics(
+                    plan, plan["method_key"], "CNC Router",
+                    min_remnant_width_cm=200, min_remnant_length_cm=200,
+                    min_remnant_area_m2=1,
+                )
+            border, internal = variant(0), variant(.65)
+            from almdina_erp.almdina_erp.domain.cutting.optimizer import _cut_metrics
+            assert _cut_metrics(border)[0] < _cut_metrics(internal)[0]
+            assert tuple(border["industrial_rank"][:4]) == tuple(internal["industrial_rank"][:4])
+            self.border = deepcopy(border)
+            self.internal = deepcopy(internal)
+            return dict(**border, smart_candidates=[deepcopy(border), deepcopy(internal)])
+
+        @staticmethod
+        def validate(plan, sources, w, h):
+            return validate_plan(plan, sources, w, h, kerf_cm=.5)
+
+    rows = (
+        dict(width_cm=20, length_cm=20, qty=1),
+        dict(width_cm=14, length_cm=20, qty=1),
+        dict(width_cm=20, length_cm=20, qty=1),
+    )
+    engine = Gallery()
+    command = OptimizeOrderPlanCommand(
+        engine_version="final-network-gallery", input_fingerprint="test-fingerprint",
+        board=BoardGeometry(100, 100, 0, .5),
+        optimizer=OptimizerOptions("smart", "CNC Router", 5, 40,
+            200, 200, 1, max_centerable_edge_gap_cm=0,
+            alignment_search_budget_sec=0),
+        piece_rows=rows,
+        plan_settings=PlanSettings("smart", "CNC Router", 5, 5, 0),
+    )
+    outcome = optimize_order_plan(command, engine=engine)
+    assert len(outcome.candidate_snapshots) == 2
+    positions = [s["sheets"][0]["pieces"][0]["x"] for s in outcome.candidate_snapshots]
+    assert positions == pytest.approx([.65, 0])
+    assert outcome.snapshot["sheets"][0]["pieces"][0]["x"] == pytest.approx(.65)
+    # The fast native seeds remain available for continue-search, unmodified.
+    assert sorted(s["sheets"][0]["pieces"][0]["x"] for s in outcome.search_seeds) == [0, .65]
+
+
+def test_final_cut_quality_uses_glass_hole_as_real_contour_not_bounding_rectangle():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        plan_cut_line_quality,
+    )
+    regular = dict(piece_type="Regular", x=10, y=10, w=50, h=50)
+    glass = dict(regular, piece_type="Glass",
+                 glass_hole_local_mm=[
+                     [100, 100], [400, 100], [400, 400], [100, 400],
+                 ])
+    before = plan_cut_line_quality(
+        dict(sheets=[dict(w=100, h=100, pieces=[regular])]), .5
+    )
+    after = plan_cut_line_quality(
+        dict(sheets=[dict(w=100, h=100, pieces=[glass])]), .5
+    )
+    assert before is not None and after is not None
+    assert after[0] > before[0] + 500  # additional real inner cut perimeter
+    assert after[1] > before[1]
+
+
+def test_final_compaction_cannot_undo_internal_shared_center_to_reach_board_edge():
+    """Final compaction and alignment use the same real cutter profile."""
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import (
+        final_cut_quality_key, plan_cut_line_quality,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.plan_search import (
+        compact_regular_final,
+    )
+    sources = expand_piece_groups([
+        dict(width_cm=20, length_cm=20, qty=1),
+        dict(width_cm=14, length_cm=20, qty=1),
+        dict(width_cm=20, length_cm=20, qty=1),
+    ])
+    sheet = dict(sheet_no=1, resource_kind="FULL_BOARD", w=100, h=100,
+                 pieces=[
+                     make_placed_piece(sources[0], .65, 0, 20, 20, False),
+                     make_placed_piece(sources[1], .65, 20.5, 14, 20, False),
+                     make_placed_piece(sources[2], .65, 41, 20, 20, False),
+                 ])
+    plan = dict(method_key="MaxRects Best Short Side", sheets=[sheet],
+                unplaced=[], used_area_m2=.108, total_board_area_m2=1,
+                waste_area_m2=.892)
+    settings = dict(min_remnant_width_cm=200, min_remnant_length_cm=200,
+                    min_remnant_area_m2=1)
+    plan = enrich_plan_metrics(plan, plan["method_key"], "CNC Router", **settings)
+    assert not validate_plan(plan, sources, 100, 100, kerf_cm=.5)
+    baseline = deepcopy(plan)
+    result = compact_regular_final(
+        plan, sources, 100, 100, .5, machine_type="CNC Router",
+        mirroring_allowed=False, metric_kwargs=settings,
+    )
+    before = plan_cut_line_quality(baseline, .5)
+    after = plan_cut_line_quality(result, .5)
+    assert before is not None and after is not None
+    assert final_cut_quality_key(after) <= final_cut_quality_key(before)
+    assert after[0] <= before[0] + .05
+    assert after[1] <= before[1]
+    assert result["sheets"][0]["pieces"][1]["x"] == pytest.approx(.65)
+    assert plan == baseline  # no mutation of the raw native seed
+
+
+def test_completed_valid_alignment_is_not_lost_when_the_next_trial_expires(monkeypatch):
+    """Expire after a fully checked contender, before the round can finish."""
+    import time
+    from types import SimpleNamespace
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+    engine = TwoRowsEngine()
+    sources = engine.expand_pieces([dict(width_cm=20, length_cm=20, qty=2)])
+    original = engine.optimize(sources, 100, 100, .5)
+    baseline = deepcopy(original)
+    started = time.monotonic()
+    state = dict(expired=False, completed=[])
+    enrich = align.enrich_plan_metrics
+    def finish_contender(*args, **kwargs):
+        candidate = enrich(*args, **kwargs)
+        state['completed'].append(deepcopy(candidate))
+        state['expired'] = True
+        return candidate
+    monkeypatch.setattr(align, 'time', SimpleNamespace(monotonic=lambda: started+61 if state['expired'] else started))
+    monkeypatch.setattr(align, 'enrich_plan_metrics', finish_contender)
+    diagnostic = {}
+    result = align.align_regular_cut_lines(original, sources, 100, 100, .5,
+        machine_type='CNC Router', mirroring_allowed=False,
+        metric_kwargs=dict(min_remnant_width_cm=30, min_remnant_length_cm=30, min_remnant_area_m2=.09),
+        deadline_monotonic=started+60, diagnostics=diagnostic)
+    assert state['completed']
+    assert original == baseline
+    assert align._rectangles(result, .5)[0] < align._rectangles(original, .5)[0]-.05
+    assert not validate_plan(result, sources, 100, 100, kerf_cm=.5)
+    assert diagnostic['accepted'] >= 1
+
+
+def test_invalid_centering_is_rolled_back_before_alignment_not_after_it(monkeypatch):
+    from almdina_erp.almdina_erp.application.cutting import optimize_order_plan as app
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+    engine = TwoRowsEngine()
+    def invalid_center(sheets, **kwargs):
+        sheets[0]['pieces'][1]['y'] = 19.9
+    received = []
+    actual_align = align.align_regular_cut_lines
+    def inspect(plan, sources, width, height, kerf, **kwargs):
+        received.append(validate_plan(plan, sources, width, height, kerf_cm=kerf))
+        return actual_align(plan, sources, width, height, kerf, **kwargs)
+    monkeypatch.setattr(app, 'realize_sheet_edge_trim', invalid_center)
+    monkeypatch.setattr(align, 'align_regular_cut_lines', inspect)
+    outcome = app.optimize_order_plan(OptimizeOrderPlanCommand(
+        'centering-boundary', 'same-input', BoardGeometry(100, 100, 0, .5),
+        OptimizerOptions('smart', 'CNC Router', 10, 40, 30, 30, .09),
+        (dict(width_cm=20, length_cm=20, qty=2),)), engine=engine)
+    assert received and all(not errors for errors in received)
+    assert outcome.snapshot['validation']['is_valid']
+    a,b = outcome.snapshot['sheets'][0]['pieces']
+    assert a['x'] == pytest.approx(b['x'])
+
+
+def test_inboard_cutter_quality_is_invariant_under_equivalent_trim_frames():
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import sheet_cut_line_quality
+    sources = expand_piece_groups([dict(width_cm=20, length_cm=30, qty=1),
+                                  dict(width_cm=30, length_cm=30, qty=1)])
+    trimmed = dict(w=100, h=100, full_width_cm=102, full_length_cm=102,
+        applied_trim_width_cm=1, applied_trim_length_cm=1,
+        pieces=[make_placed_piece(p, 0, y, p['width_cm'], 30, False)
+            for p,y in zip(sources, [0,30.5])])
+    physical = deepcopy(trimmed)
+    physical.update(w=102,h=102,applied_trim_width_cm=0,applied_trim_length_cm=0)
+    for p in physical['pieces']:
+        p['x'] += 1
+        p['y'] += 1
+    assert sheet_cut_line_quality(trimmed,.5) == pytest.approx(sheet_cut_line_quality(physical,.5))
+
+
+@pytest.mark.parametrize('change', ['placement', 'source', 'kerf', 'mirror', 'none'])
+def test_baseline_proof_only_reuses_exact_full_validated_inputs(monkeypatch, change):
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+    engine = TwoRowsEngine()
+    sources = engine.expand_pieces([dict(width_cm=20,length_cm=20,qty=2)])
+    plan = engine.optimize(sources,100,100,.5)
+    proof = align.validate_alignment_baseline(plan,sources,100,100,.5,mirroring_allowed=False)
+    assert proof is not None
+    kerf,mirror=.5,False
+    if change=='placement': plan['sheets'][0]['pieces'][1]['y']=19.9
+    if change=='source': sources[0]['allow_rotation']=not sources[0]['allow_rotation']
+    if change=='kerf': kerf=.4
+    if change=='mirror': mirror=True
+    actual=align.validate_plan;calls=[]
+    def record(*a,**kw):
+        calls.append(deepcopy(a[0]))
+        return actual(*a,**kw)
+    monkeypatch.setattr(align,'validate_plan',record)
+    diagnostic={}
+    result=align.align_regular_cut_lines(plan,sources,100,100,kerf,
+        machine_type='CNC Router',mirroring_allowed=mirror,baseline_proof=proof,
+        metric_kwargs=dict(min_remnant_width_cm=30,min_remnant_length_cm=30,min_remnant_area_m2=.09),
+        diagnostics=diagnostic)
+    assert diagnostic['baseline_validation_reused'] == (change=='none')
+    if change!='none': assert calls and calls[0] == plan
+    if change=='placement': assert result is plan and diagnostic['reason']=='invalid_initial'
+
+
+@pytest.mark.parametrize('change', ['none','other_sheet','missing_id','duplicate_id','unplaced'])
+def test_changed_sheet_validation_matches_full_plan_and_unexpected_changes_invalidate_reuse(change):
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+    sources=expand_piece_groups([dict(width_cm=20,length_cm=20,qty=4)])
+    plan=dict(sheets=[dict(sheet_no=i+1,w=100,h=100,pieces=[
+        make_placed_piece(sources[2*i],15,0,20,20,False),
+        make_placed_piece(sources[2*i+1],15.3,20.5,20,20,False)]) for i in range(2)],unplaced=[])
+    assert not validate_plan(plan,sources,100,100,kerf_cm=.5)
+    candidate=deepcopy(plan)
+    candidate['sheets'][0]['pieces'][1]['x']=15
+    if change=='other_sheet': candidate['sheets'][1]['pieces'][1]['y']=19.9
+    if change=='missing_id': candidate['sheets'][0]['pieces'].pop()
+    if change=='duplicate_id': candidate['sheets'][0]['pieces'][1]['id']=sources[0]['id']
+    if change=='unplaced': candidate['unplaced']=[sources[0]]
+    checked,requested,reused=align._translation_validation_scope(candidate,plan,sources,0)
+    assert reused == (change=='none')
+    assert bool(validate_plan(checked,requested,100,100,kerf_cm=.5)) == bool(
+        validate_plan(candidate,sources,100,100,kerf_cm=.5))
+    if change!='none': assert checked is candidate and requested is sources
+
+
+def test_disabled_alignment_does_not_prepare_an_unused_baseline_proof(monkeypatch):
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as align
+    monkeypatch.setattr(align,'validate_alignment_baseline',lambda *a,**kw:pytest.fail('disabled proof work'))
+    outcome=optimize_order_plan(OptimizeOrderPlanCommand('disabled','same-input',BoardGeometry(100,100,0,.5),
+        OptimizerOptions('smart','CNC Router',10,40,30,30,.09,alignment_search_budget_sec=0),
+        (dict(width_cm=20,length_cm=20,qty=2),)),engine=TwoRowsEngine())
+    assert outcome.snapshot['validation']['is_valid']
+
+
+def _native_dimension_rows():
+    """Anonymized input-only witness: no poses, reference axes or warm plans.
+
+    Reconstructed dimensions/quantities; CNC, 5mm Kerf, zero trim and rotation
+    permissions are explicit assumptions, not a live factory snapshot.
+    """
+    dimensions = (
+        (29.9, 90.3, 4), (26.9, 90.3, 2), (13.9, 46.1, 2),
+        (12.9, 46.1, 3), (29.9, 101, 2), (26.9, 101, 2),
+        (13.9, 81.8, 2), (29.9, 81.8, 4), (29.9, 44.8, 2),
+        (40.9, 74.5, 2), (11.9, 36.8, 8), (11.9, 40, 8), (29.9, 77, 1),
+    )
+    return tuple(dict(width_cm=w, length_cm=h, qty=qty, allow_rotation=1,
+                      piece_type="Regular", piece_instance_id=f"native:{i}")
+                 for i, (w, h, qty) in enumerate(dimensions, 1))
+
+
+def _native_input_outcome(monkeypatch):
+    import time
+    from types import SimpleNamespace
+    from almdina_erp.almdina_erp.domain.cutting import optimizer
+    from almdina_erp.almdina_erp.domain.cutting import final_cut_line_alignment as alignment
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import DomainCuttingEngineAdapter
+
+    class RecordingEngine(DomainCuttingEngineAdapter):
+        def optimize(self, *args, **kwargs):
+            result = super().optimize(*args, **kwargs)
+            self.raw = deepcopy(result)
+            return result
+
+    # A deterministic work clock advances ONLY after a real packing attempt.
+    # All production packing/nesting/refinement/alignment/validators execute.
+    # This is a work-bound regression, not a five-second wall-time benchmark.
+    original_pack = optimizer._run_preordered_method
+    work = [0]
+
+    def counted_pack(*args, **kwargs):
+        result = original_pack(*args, **kwargs)
+        work[0] += 1
+        return result
+
+    engine = RecordingEngine()
+    original_align = alignment.align_regular_cut_lines
+    original_enrich = alignment.enrich_plan_metrics
+    completed = [0]
+
+    def counted_enrich(*args, **kwargs):
+        result = original_enrich(*args, **kwargs)
+        completed[0] += 1
+        return result
+
+    def bounded_align(*args, **kwargs):
+        completed[0] = 0
+        return original_align(*args, **kwargs)
+
+    with monkeypatch.context() as clock:
+        clock.setattr(optimizer, "_run_preordered_method", counted_pack)
+        clock.setattr(time, "monotonic", lambda: 1000 + work[0] * .02)
+        # Also exercise actual tail expiry: after three REAL completed metric
+        # evaluations the next alignment clock check observes its deadline.
+        # Neither placement generation nor manufacturing validation is mocked.
+        clock.setattr(alignment, "enrich_plan_metrics", counted_enrich)
+        clock.setattr(alignment, "align_regular_cut_lines", bounded_align)
+        clock.setattr(alignment, "time", SimpleNamespace(
+            monotonic=lambda: time.monotonic() + (1 if completed[0] >= 3 else 0)))
+        outcome = optimize_order_plan(OptimizeOrderPlanCommand(
+            "native-input-regression", "unchanged", BoardGeometry(122, 244, 0, .5),
+            OptimizerOptions("smart", "CNC Router", 5, 40, 30, 30, .09),
+            _native_dimension_rows(),
+        ), engine=engine)
+    return outcome, engine.raw, work[0]
+
+
+def _identity_geometry(plan):
+    return sorted((s["sheet_no"], p["piece_instance_id"],
+                   *(round(p[k], 6) for k in ("x", "y", "w", "h")), bool(p["rotated"]))
+                  for s in plan["sheets"] for p in s["pieces"])
+
+
+def test_native_inputs_reach_aligned_final_gallery_deterministically(monkeypatch):
+    import json
+    from almdina_erp.almdina_erp.application.cutting.plan_preview_session import (
+        CuttingPlanPreviewSession, merge_preview_candidates,
+    )
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import cutter_center_segments
+
+    first, raw, work = _native_input_outcome(monkeypatch)
+    second, _, repeated_work = _native_input_outcome(monkeypatch)
+    assert work == repeated_work
+    assert 0 < work <= 251
+    assert _identity_geometry(first.snapshot) == _identity_geometry(second.snapshot)
+    assert [_identity_geometry(p) for p in first.candidate_snapshots] == [
+        _identity_geometry(p) for p in second.candidate_snapshots]
+    plan = first.snapshot
+    sources = expand_piece_groups(list(_native_dimension_rows()))
+    assert len(sources) == 42
+    assert len(plan["sheets"]) == 3
+    assert plan["validation"]["is_valid"]
+    assert not validate_plan(plan, sources, 122, 244, kerf_cm=.5)
+    assert tuple(plan["industrial_rank"][:4]) <= tuple(raw["industrial_rank"][:4])
+    # Find the reference geometrically, without supplying an axis to the engine.
+    sheet = next(s for s in plan["sheets"] if sum(
+        p["w"] == 90.3 and p["h"] == 29.9 for p in s["pieces"]) == 3)
+    aligned = [p for p in sheet["pieces"] if p["w"] in (90.3, 101)
+               and p["h"] in (26.9, 29.9)]
+    assert len(aligned) == 7
+    axis = aligned[0]["x"] * 10 - plan["kerf_cm"] * 5
+    assert axis > 0  # an actual internal cutter, not the physical sheet border
+    assert all(p["x"] * 10 - plan["kerf_cm"] * 5 == pytest.approx(axis) for p in aligned)
+    shapes = [([(p["x"]*10, p["y"]*10), ((p["x"]+p["w"])*10, p["y"]*10),
+                ((p["x"]+p["w"])*10, (p["y"]+p["h"])*10),
+                (p["x"]*10, (p["y"]+p["h"])*10)], []) for p in sheet["pieces"]]
+    centers = cutter_center_segments(shapes, plan["kerf_cm"] * 5)
+    shared = [(a, b) for a, b in centers if abs(a[0]-axis) < .01 and abs(b[0]-axis) < .01]
+    lo = min(p["y"] for p in aligned) * 10
+    hi = max(p["y"] + p["h"] for p in aligned) * 10
+    assert any(min(a[1], b[1]) <= lo and max(a[1], b[1]) >= hi for a, b in shared)
+    gallery = list(first.candidate_snapshots)
+    assert 1 <= len(gallery) <= 5
+    assert gallery[0] == plan
+    assert final_system_sort_keys(gallery) == sorted(final_system_sort_keys(gallery))
+    candidates = {str(i): dict(candidate_id=str(i), geometry_fingerprint=str(_identity_geometry(p)),
+                               snapshot=p) for i, p in enumerate(gallery)}
+    merged = merge_preview_candidates(candidates, candidates)
+    assert next(iter(merged.values()))["snapshot"] == plan
+    session = CuttingPlanPreviewSession("preview", "test", "user", "", "", "input", "settings",
+                                        {}, plan, "now", candidates=merged)
+    reloaded = CuttingPlanPreviewSession.from_cache_value(json.loads(json.dumps(session.as_cache_value())))
+    assert _identity_geometry(reloaded.snapshot) == _identity_geometry(plan)
+    assert [c["snapshot"] for c in reloaded.candidates.values()] == [
+        c["snapshot"] for c in merged.values()]
+
+
+def test_native_aligned_plan_survives_persisted_projection_and_actual_dxf(monkeypatch, tmp_path):
+    import json
+    import os
+    import subprocess
+    from pathlib import Path
+    from types import SimpleNamespace
+    import ezdxf
+    from almdina_erp.tests.test_glass_opening_nesting import _lifecycle_placed_row
+    from almdina_erp.tests.test_cutter_center_paths import _layer_segments, _import, _order, _piece
+    from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import sanitize_plan_snapshot
+    from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
+    from almdina_erp.almdina_erp.services.dxf_export_service import _kerf_errors
+    from almdina_erp.almdina_erp.services.dxf_autocad_normalization import rebuild_autocad_dxf
+
+    outcome, _, _ = _native_input_outcome(monkeypatch)
+    saved = sanitize_plan_snapshot(json.loads(json.dumps(outcome.snapshot)))
+    placed = [_lifecycle_placed_row(p, s["sheet_no"]) for s in saved["sheets"] for p in s["pieces"]]
+    cutting_plan = SimpleNamespace(
+        snapshot_json=json.dumps(saved), placed_pieces=placed,
+        sources=[SimpleNamespace(sheet_no=s["sheet_no"], source_type="Full Board", remnant=None,
+            board_item=None, material="", color="", thickness_mm=18, full_width_mm=1220,
+            full_length_mm=2440, usable_width_mm=1220, usable_length_mm=2440,
+            source_area_m2=2.9768) for s in saved["sheets"]],
+        engine_version=saved["engine_version"], method_key=saved["method_key"], method_label=saved["method_label"],
+        full_board_width_mm=1220, full_board_length_mm=2440, usable_board_width_mm=1220,
+        usable_board_length_mm=2440, kerf_mm=5, trim_margin_mm=0, used_area_m2=saved["used_area_m2"],
+        total_source_area_m2=saved["total_board_area_m2"], waste_area_m2=saved["waste_area_m2"], required_boards=3,
+    )
+    rebuilt = _plan_to_export_snapshot(cutting_plan)
+    assert _identity_geometry(rebuilt) == _identity_geometry(saved)
+    assert not _kerf_errors(rebuilt)
+    cases = tmp_path / "native.json"
+    cases.write_text(json.dumps([rebuilt]))
+    subprocess.run(["node", str(Path(__file__).parents[1] / "tests/js/secure_dxf_topology_export.test.js")],
+                   check=True, capture_output=True, text=True,
+                   env=dict(os.environ, PERIMETER_CASES=str(cases), PERIMETER_OUTPUT_DIR=str(tmp_path)))
+    path = tmp_path / "0.dxf"
+    path.write_bytes(rebuild_autocad_dxf(path.read_bytes()))
+    document = ezdxf.readfile(path)
+    assert document.units == 4
+    assert len(_layer_segments(document, "GEOMETRY")) == 42 * 4
+    assert _layer_segments(document, "CUT_PATH")
+    order = _order([_piece(width_cm=r["width_cm"], length_cm=r["length_cm"], qty=r["qty"],
+                           cut_width_cm=r["width_cm"], cut_length_cm=r["length_cm"],
+                           allow_rotation=1, piece_instance_id=r["piece_instance_id"])
+                    for r in _native_dimension_rows()])
+    imported = _import(str(path), order, kerf_mm=5, trim_mm=0)
+    # Import binds copies of equal-size pieces independently; assert exact
+    # finished geometry per stable source family, not invented copy provenance.
+    def geometry_by_family(p):
+        return sorted((s["sheet_no"], v["source_piece_no"],
+                       *(round(v[k], 5) for k in ("x", "y", "w", "h")))
+                      for s in p["sheets"] for v in s["pieces"])
+    assert imported["saw_center_status"] == "Present"
+    assert geometry_by_family(imported) == geometry_by_family(rebuilt)

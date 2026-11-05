@@ -359,6 +359,20 @@
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
+    function layerDiametersMm(plan, cutterMm) {
+        const fields = {
+            liner: "liner_tool_diameter_mm",
+            recessed_handle_cutout: "handle_recess_tool_diameter_mm",
+            back_groove: "rear_groove_tool_diameter_mm",
+        };
+        const map = {};
+        Object.keys(fields).forEach(kind => {
+            const explicit = positiveKerf(plan && plan[fields[kind]]);
+            map[kind] = explicit != null ? explicit : cutterMm;
+        });
+        return map;
+    }
+
     function cutterDiameterMm(plan) {
         const millimetres = positiveKerf(plan && plan.kerf_mm);
         const centimetres = positiveKerf(plan && plan.kerf_cm);
@@ -380,8 +394,8 @@
     function linerExportError(piece, code, addon) {
         const noun = translate(addon && addon.nounMessageId || "the liner");
         const messages = {
-            cutter_diameter_invalid: "Specify a saw blade thickness above zero before exporting {0} toolpaths.",
-            liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness.",
+            cutter_diameter_invalid: "Specify a tool diameter above zero before exporting {0} toolpaths.",
+            liner_narrower_than_cutter: "The width of {0} is less than its tool diameter.",
             liner_extension_hits_piece: "The {0} cutter extension overlaps an adjacent piece.",
             liner_extension_unsafe: "Could not extend the {0} toolpath to the cutting line.",
             strip_outside: "The {0} strip extends beyond the door.",
@@ -414,11 +428,11 @@
         };
     }
 
-    function exportOverlays(piece, kerfMm, board) {
+    function exportOverlays(piece, kerfMm, board, diameters) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         const engine = window.AlmdinaMachiningOverlay;
         if (engine && typeof engine.completeToolpaths === "function") {
-            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board);
+            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board, diameters);
             if (completed && completed.error) {
                 throw linerExportError(piece, completed.error.code, completed.error.addon);
             }
@@ -443,8 +457,8 @@
         return overlays.concat(synthetic);
     }
 
-    function persistedOverlays(piece, kerfMm, board) {
-        const overlays = exportOverlays(piece, kerfMm, board);
+    function persistedOverlays(piece, kerfMm, board, diameters) {
+        const overlays = exportOverlays(piece, kerfMm, board, diameters);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {
@@ -752,6 +766,21 @@
     }
 
     function finishedRings(piece, placement) {
+        const voidOutline = piece && piece.placement_outline_cm;
+        if (Array.isArray(voidOutline) && voidOutline.length >= 3) {
+            // This exception only has a proven plain-rectangle import contract.
+            // Never silently discard a Glass opening or misorient machining.
+            if (String(piece.piece_type || "Regular") !== "Regular"
+                || piece.extra_liner || piece.extra_back_groove || piece.extra_recessed_handle_cutout) {
+                throw new Error("Unsupported angled manufacturing contour");
+            }
+            const { offsetX, offsetY, fullHeight, appliedTrim } = placement;
+            const outer = voidOutline.map(point => [
+                offsetX + appliedTrim.width + num(point[0]) * 10,
+                offsetY + fullHeight - appliedTrim.length - num(point[1]) * 10,
+            ]);
+            return { outer, holes: [] };
+        }
         const topology = persistedTopology(piece);
         if (topology) {
             return {
@@ -828,6 +857,7 @@
         const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
+        const layerDiameters = layerDiametersMm(plan, cutterMm);
         assertRequiredGlassOpenings(plan);
         const sheets = plan.sheets || [];
         const perRow = 2;
@@ -894,9 +924,10 @@
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
                 let conflictDetails = null;
+                const overlayDiameter = layerDiameters[overlay.kind] || cutterMm;
                 const conflict = liner.extensionConflict(
                     overlay.path,
-                    cutterMm,
+                    overlayDiameter,
                     usableBoardMm(plan, sheet, trim),
                     overlayObstacles(sheet, piece),
                     details => { conflictDetails = details; }
@@ -961,7 +992,8 @@
                 const overlays = persistedOverlays(
                     piece,
                     cutterMm,
-                    usableBoardMm(plan, sheet, appliedTrim)
+                    usableBoardMm(plan, sheet, appliedTrim),
+                    layerDiameters
                 );
                 overlays.forEach(overlay => {
                     entities += emitOverlayEntity(overlay, placement, sheet, piece);

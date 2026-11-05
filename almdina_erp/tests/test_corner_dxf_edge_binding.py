@@ -323,8 +323,9 @@ def _spec(**overrides) -> OrderPieceCutSpec:
     return OrderPieceCutSpec(**values)
 
 
-def _order(count=1):
+def _order(count=1, *, allow_piece_mirroring=0):
     return SimpleNamespace(
+        allow_piece_mirroring=allow_piece_mirroring,
         pieces=[
             SimpleNamespace(
                 piece_instance_id=f"piece:corner-{index + 1}",
@@ -480,7 +481,7 @@ def test_snapshot_accepts_a_reflected_corner_without_rewriting_dxf(piece_type, t
     errors = _apply_strict_dimension_contract(
         snapshot,
         [_spec(piece_type=piece_type)],
-        order=_order(),
+        order=_order(allow_piece_mirroring=1),
     )
 
     piece = snapshot["sheets"][0]["pieces"][0]
@@ -531,7 +532,7 @@ def test_unrotated_reflection_is_allowed_when_rotation_is_off():
     errors = _apply_strict_dimension_contract(
         snapshot,
         [_spec(piece_type="Clipped Corner", allow_rotation=0, edge_break_only=1)],
-        order=_order(),
+        order=_order(allow_piece_mirroring=1),
     )
 
     piece = snapshot["sheets"][0]["pieces"][0]
@@ -539,6 +540,29 @@ def test_unrotated_reflection_is_allowed_when_rotation_is_off():
     assert piece["corner_mirrored"] == 1
     assert piece["corner_rotation_quarter_turns"] == 0
     assert piece["rotated"] is False
+
+
+def test_unrotated_reflection_is_rejected_when_the_order_forbids_mirroring():
+    transformed, width_mm, height_mm = _mirror_then_turn(
+        _POLYGONS[("Clipped Corner", "Top Right")],
+        0,
+    )
+    snapshot = _snapshot(
+        _disturb(transformed),
+        width_cm=width_mm / 10.0,
+        height_cm=height_mm / 10.0,
+    )
+
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [_spec(piece_type="Clipped Corner", allow_rotation=0, edge_break_only=1)],
+        order=_order(allow_piece_mirroring=0),
+    )
+
+    piece = snapshot["sheets"][0]["pieces"][0]
+    assert [error.code for error in errors] == ["FORBIDDEN_MIRRORING"]
+    assert "corner_mirrored" not in piece
+    assert piece["geometry"]["outer"] == snapshot["sheets"][0]["pieces"][0]["geometry"]["outer"]
 
 
 def test_half_turn_reflection_still_requires_rotation_permission():
@@ -1161,9 +1185,13 @@ def _l_contract(**overrides):
     return _spec(**values)
 
 
-def _import_l(outer, spec, *, width_cm, height_cm):
+def _import_l(outer, spec, *, width_cm, height_cm, allow_piece_mirroring=0):
     snapshot = _snapshot(outer, width_cm=width_cm, height_cm=height_cm)
-    errors = _apply_strict_dimension_contract(snapshot, [spec], order=_order())
+    errors = _apply_strict_dimension_contract(
+        snapshot,
+        [spec],
+        order=_order(allow_piece_mirroring=allow_piece_mirroring),
+    )
     return errors, snapshot["sheets"][0]["pieces"][0]
 
 
@@ -1394,6 +1422,7 @@ def test_raw_l_notch_matches_after_a_mirror_and_each_quarter_turn(turns):
         spec,
         width_cm=width_mm / 10.0,
         height_cm=height_mm / 10.0,
+        allow_piece_mirroring=1,
     )
     assert errors == []
     assert piece["corner_mirrored"] == 1
