@@ -3,10 +3,46 @@
 
     const AXES = Object.freeze(["x", "y"]);
     const STEP_MM = 1;
+    const MIXED_LABEL = "Mixed";
+
+    const CODE = Object.freeze({
+        OK: "ok",
+        MISSING_GEOMETRY: "missing_geometry",
+        NO_BOARD_PIECE: "no_board_piece",
+        NEED_GROUP: "need_group_selection",
+        LOCKED: "locked_selection",
+        MIXED_SCOPE: "mixed_scope",
+        CROSS_SHEET: "cross_sheet",
+        SHEET_CHANGED: "sheet_changed",
+        DETACH_HOST: "detach_host",
+        INVALID_VALUE: "invalid_value",
+        INVALID_AXIS: "invalid_axis",
+        INVALID_KEY: "invalid_key",
+        UNCHANGED: "unchanged",
+    });
+
+    const REASON_LABELS = Object.freeze({
+        [CODE.MISSING_GEOMETRY]: "Move geometry unavailable.",
+        [CODE.NO_BOARD_PIECE]: "Select one piece on a board.",
+        [CODE.NEED_GROUP]: "Select two or more pieces to move them together.",
+        [CODE.LOCKED]: "Group positioning is unavailable while a locked piece is selected.",
+        [CODE.MIXED_SCOPE]: "Precise group moves are available for pieces on the same board only, or pieces outside all boards.",
+        [CODE.CROSS_SHEET]: "Precise group moves are available for pieces on the same board only, or pieces outside all boards.",
+        [CODE.SHEET_CHANGED]: "Precise moves must keep each piece on its current board.",
+        [CODE.DETACH_HOST]: "Group move would break a glass host relationship.",
+        [CODE.INVALID_VALUE]: "Enter a valid millimetre offset.",
+        [CODE.INVALID_AXIS]: "Position update rejected.",
+        [CODE.INVALID_KEY]: "Position update rejected.",
+        [CODE.UNCHANGED]: "Position is unchanged.",
+    });
 
     function num(value) {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
+    }
+
+    function reasonMessage(code) {
+        return REASON_LABELS[code] || "Position update rejected.";
     }
 
     function formatMm(value) {
@@ -31,6 +67,16 @@
         return n;
     }
 
+    function parseRelativeOffset(text) {
+        // Multi-selection input is always a relative millimetre offset.
+        // Bare numbers (e.g. "5") mean +5; signs are kept as typed.
+        if (text == null) return null;
+        const raw = String(text).trim();
+        if (!raw.length) return null;
+        if (raw.toLowerCase() === MIXED_LABEL.toLowerCase()) return null;
+        return parseMm(raw);
+    }
+
     function pieceDimensionsMm(piece) {
         const placement = (piece && piece.placement_cm) || {};
         return {
@@ -39,12 +85,32 @@
         };
     }
 
+    function sheetToken(piece) {
+        if (!piece || piece.sheet_no == null || piece.sheet_no === "") return null;
+        return Number(piece.sheet_no);
+    }
+
+    function sameSheetIdentity(beforePiece, targetSheetNo) {
+        const before = sheetToken(beforePiece);
+        const after = targetSheetNo == null || targetSheetNo === "" ? null : Number(targetSheetNo);
+        if (before == null && after == null) return true;
+        return before != null && after != null && Number(before) === Number(after);
+    }
+
+    function moveGeometry() {
+        return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
+    }
+
+    function alignmentGeometry() {
+        return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.AlignmentGeometry;
+    }
+
     function boardPositionForPiece(session, pieceKeyOrInstance) {
         // X/Y are editor UI coords in usable-sheet millimetres:
         //   (0,0) = top-left of usable area (after trim)
         //   X+ right, Y+ down
         // Values are the AABB min corner after rotation/mirror (outline_mm).
-        const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
+        const MoveGeometry = moveGeometry();
         if (!MoveGeometry || !session || !session.pieces) return null;
         const pieceKey = MoveGeometry.resolvePieceKey(session, pieceKeyOrInstance);
         const piece = pieceKey && session.pieces[pieceKey];
@@ -59,6 +125,8 @@
 
         const dims = pieceDimensionsMm(piece);
         return {
+            mixed: false,
+            mode: "absolute",
             pieceKey,
             sheetNo: Number(piece.sheet_no),
             label: piece.label || piece.piece_instance_id || String(piece.piece_id || ""),
@@ -67,45 +135,192 @@
             lengthMm: dims.lengthMm,
             x: num(bounds.x),
             y: num(bounds.y),
+            displayX: formatMm(bounds.x),
+            displayY: formatMm(bounds.y),
+        };
+    }
+
+    function groupScope(session, selectedPieceKeys) {
+        const AG = alignmentGeometry();
+        if (AG && typeof AG.selectionScope === "function") {
+            return AG.selectionScope(session, selectedPieceKeys);
+        }
+        return {
+            keys: Array.isArray(selectedPieceKeys) ? selectedPieceKeys.filter(Boolean) : [],
+            locked: true,
+            scope: "invalid",
+            eligible: false,
         };
     }
 
     function selectionPositionModel(session, selectedPieceKeys) {
         const keys = Array.isArray(selectedPieceKeys) ? selectedPieceKeys.filter(Boolean) : [];
-        if (keys.length !== 1) return null;
-        return boardPositionForPiece(session, keys[0]);
+        if (!keys.length) return null;
+        if (keys.length === 1) return boardPositionForPiece(session, keys[0]);
+
+        const scope = groupScope(session, keys);
+        let reason = null;
+        if (scope.locked) reason = reasonMessage(CODE.LOCKED);
+        else if (scope.scope === "cross_sheet") reason = reasonMessage(CODE.CROSS_SHEET);
+        else if (scope.scope === "mixed" || !scope.eligible) reason = reasonMessage(CODE.MIXED_SCOPE);
+
+        return {
+            mixed: true,
+            mode: "relative",
+            count: (scope.keys && scope.keys.length) || keys.length,
+            keys: scope.keys && scope.keys.length ? scope.keys : keys.slice(),
+            editable: Boolean(scope.eligible),
+            reason,
+            x: null,
+            y: null,
+            displayX: MIXED_LABEL,
+            displayY: MIXED_LABEL,
+        };
     }
 
     function worldDeltaForAxis(current, axis, nextValue) {
         if (!current) {
-            return { ok: false, code: "no_selection", dx: 0, dy: 0 };
+            return { ok: false, code: CODE.NEED_GROUP, dx: 0, dy: 0 };
         }
         const target = num(nextValue);
         if (!Number.isFinite(target)) {
-            return { ok: false, code: "invalid_value", dx: 0, dy: 0 };
+            return { ok: false, code: CODE.INVALID_VALUE, dx: 0, dy: 0 };
         }
         const name = String(axis || "").toLowerCase();
         let dx = 0;
         let dy = 0;
         if (name === "x") dx = target - num(current.x);
         else if (name === "y") dy = target - num(current.y);
-        else return { ok: false, code: "invalid_axis", dx: 0, dy: 0 };
+        else return { ok: false, code: CODE.INVALID_AXIS, dx: 0, dy: 0 };
 
         if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
-            return { ok: true, code: "unchanged", dx: 0, dy: 0, unchanged: true };
+            return { ok: true, code: CODE.UNCHANGED, dx: 0, dy: 0, unchanged: true };
         }
-        return { ok: true, code: "ok", dx, dy, unchanged: false };
+        return { ok: true, code: CODE.OK, dx, dy, unchanged: false };
+    }
+
+    function axisDelta(axis, amount) {
+        const name = String(axis || "").toLowerCase();
+        const value = num(amount);
+        if (name === "x") return { dx: value, dy: 0 };
+        if (name === "y") return { dx: 0, dy: value };
+        return null;
+    }
+
+    function proposeGroupDeltaMove(session, selectedPieceKeys, dx, dy) {
+        const MoveGeometry = moveGeometry();
+        if (!MoveGeometry) {
+            return { ok: false, code: CODE.MISSING_GEOMETRY, reason: reasonMessage(CODE.MISSING_GEOMETRY), commands: [] };
+        }
+        const scope = groupScope(session, selectedPieceKeys);
+        if (!scope.keys || scope.keys.length < 2) {
+            return { ok: false, code: CODE.NEED_GROUP, reason: reasonMessage(CODE.NEED_GROUP), commands: [] };
+        }
+        if (scope.locked) {
+            return { ok: false, code: CODE.LOCKED, reason: reasonMessage(CODE.LOCKED), commands: [] };
+        }
+        if (!scope.eligible) {
+            const code = scope.scope === "cross_sheet" ? CODE.CROSS_SHEET : CODE.MIXED_SCOPE;
+            return { ok: false, code, reason: reasonMessage(code), commands: [] };
+        }
+
+        const shiftX = num(dx);
+        const shiftY = num(dy);
+        if (!(Math.abs(shiftX) > 1e-9 || Math.abs(shiftY) > 1e-9)) {
+            return {
+                ok: true,
+                unchanged: true,
+                code: CODE.UNCHANGED,
+                commands: [],
+                dx: 0,
+                dy: 0,
+                mixed: true,
+                current: selectionPositionModel(session, scope.keys),
+            };
+        }
+
+        const plan = MoveGeometry.groupMovePlan(session, scope.keys, scope.keys[0]);
+        if (plan.locked || !plan.roots.length) {
+            return { ok: false, code: CODE.LOCKED, reason: reasonMessage(CODE.LOCKED), commands: [] };
+        }
+
+        const proposal = MoveGeometry.proposeGroupMove(session, plan.roots, shiftX, shiftY);
+        if (!proposal.ok) {
+            return {
+                ok: false,
+                code: proposal.code,
+                reason: proposal.reason || "Drop rejected.",
+                commands: [],
+                dx: shiftX,
+                dy: shiftY,
+                mixed: true,
+            };
+        }
+
+        const hostLinksBefore = {};
+        Object.keys(session.pieces || {}).forEach((key) => {
+            const piece = session.pieces[key];
+            if (piece && piece.glass_host_key) hostLinksBefore[key] = piece.glass_host_key;
+        });
+
+        for (let index = 0; index < (proposal.commands || []).length; index += 1) {
+            const command = proposal.commands[index];
+            const piece = session.pieces[command.piece_key];
+            if (!piece || !sameSheetIdentity(piece, command.target_sheet_no)) {
+                return {
+                    ok: false,
+                    code: CODE.SHEET_CHANGED,
+                    reason: reasonMessage(CODE.SHEET_CHANGED),
+                    commands: [],
+                };
+            }
+            if (command.detach_host) {
+                return {
+                    ok: false,
+                    code: CODE.DETACH_HOST,
+                    reason: reasonMessage(CODE.DETACH_HOST),
+                    commands: [],
+                };
+            }
+        }
+
+        let trial = session;
+        (proposal.commands || []).forEach((command) => {
+            trial = MoveGeometry.applyPieceMove(trial, command);
+        });
+        for (const [guestKey, hostKey] of Object.entries(hostLinksBefore)) {
+            const guest = trial.pieces[guestKey];
+            if (!guest || guest.glass_host_key !== hostKey) {
+                return {
+                    ok: false,
+                    code: CODE.DETACH_HOST,
+                    reason: reasonMessage(CODE.DETACH_HOST),
+                    commands: [],
+                };
+            }
+        }
+
+        return {
+            ok: true,
+            unchanged: false,
+            code: CODE.OK,
+            commands: proposal.commands || [],
+            dx: shiftX,
+            dy: shiftY,
+            mixed: true,
+            current: selectionPositionModel(trial, scope.keys),
+        };
     }
 
     function proposeDeltaMove(session, pieceKeyOrInstance, dx, dy) {
         // Exact millimetre delta through MoveGeometry — no magnet/snap.
-        const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
+        const MoveGeometry = moveGeometry();
         if (!MoveGeometry) {
-            return { ok: false, code: "missing_geometry", reason: "Move geometry unavailable." };
+            return { ok: false, code: CODE.MISSING_GEOMETRY, reason: reasonMessage(CODE.MISSING_GEOMETRY) };
         }
         const current = boardPositionForPiece(session, pieceKeyOrInstance);
         if (!current) {
-            return { ok: false, code: "no_board_piece", reason: "Select one piece on a board." };
+            return { ok: false, code: CODE.NO_BOARD_PIECE, reason: reasonMessage(CODE.NO_BOARD_PIECE) };
         }
         if (!current.editable) {
             return {
@@ -130,6 +345,18 @@
                 dy: shiftY,
             };
         }
+        for (let index = 0; index < (proposal.commands || []).length; index += 1) {
+            const command = proposal.commands[index];
+            const piece = session.pieces[command.piece_key];
+            if (!piece || !sameSheetIdentity(piece, command.target_sheet_no)) {
+                return {
+                    ok: false,
+                    code: CODE.SHEET_CHANGED,
+                    reason: reasonMessage(CODE.SHEET_CHANGED),
+                    current,
+                };
+            }
+        }
         return {
             ok: true,
             unchanged: false,
@@ -143,22 +370,44 @@
     function proposeAxisMove(session, pieceKeyOrInstance, axis, nextValue) {
         const current = boardPositionForPiece(session, pieceKeyOrInstance);
         if (!current) {
-            return { ok: false, code: "no_board_piece", reason: "Select one piece on a board." };
+            return { ok: false, code: CODE.NO_BOARD_PIECE, reason: reasonMessage(CODE.NO_BOARD_PIECE) };
         }
         const delta = worldDeltaForAxis(current, axis, nextValue);
         if (!delta.ok) {
             return {
                 ok: false,
                 code: delta.code,
-                reason: delta.code === "invalid_value"
-                    ? "Enter a valid millimetre value."
-                    : "Position update rejected.",
+                reason: delta.code === CODE.INVALID_VALUE
+                    ? reasonMessage(CODE.INVALID_VALUE)
+                    : reasonMessage(CODE.INVALID_AXIS),
             };
         }
         if (delta.unchanged) {
             return { ok: true, unchanged: true, current, commands: [], dx: 0, dy: 0 };
         }
         return proposeDeltaMove(session, current.pieceKey, delta.dx, delta.dy);
+    }
+
+    function proposeGroupAxisStep(session, selectedPieceKeys, axis, stepMm) {
+        const delta = axisDelta(axis, stepMm);
+        if (!delta) {
+            return { ok: false, code: CODE.INVALID_AXIS, reason: reasonMessage(CODE.INVALID_AXIS), commands: [] };
+        }
+        return proposeGroupDeltaMove(session, selectedPieceKeys, delta.dx, delta.dy);
+    }
+
+    function proposeGroupAxisRelative(session, selectedPieceKeys, axis, textOrNumber) {
+        const offset = typeof textOrNumber === "number"
+            ? (Number.isFinite(textOrNumber) ? textOrNumber : null)
+            : parseRelativeOffset(textOrNumber);
+        if (offset == null) {
+            return { ok: false, code: CODE.INVALID_VALUE, reason: reasonMessage(CODE.INVALID_VALUE), commands: [] };
+        }
+        const delta = axisDelta(axis, offset);
+        if (!delta) {
+            return { ok: false, code: CODE.INVALID_AXIS, reason: reasonMessage(CODE.INVALID_AXIS), commands: [] };
+        }
+        return proposeGroupDeltaMove(session, selectedPieceKeys, delta.dx, delta.dy);
     }
 
     function proposeKeyboardNudge(session, pieceKeyOrInstance, key) {
@@ -169,16 +418,36 @@
         else if (code === "ArrowLeft") dx = -STEP_MM;
         else if (code === "ArrowDown") dy = STEP_MM;
         else if (code === "ArrowUp") dy = -STEP_MM;
-        else return { ok: false, code: "invalid_key", reason: "Position update rejected." };
+        else return { ok: false, code: CODE.INVALID_KEY, reason: reasonMessage(CODE.INVALID_KEY) };
         return proposeDeltaMove(session, pieceKeyOrInstance, dx, dy);
+    }
+
+    function proposeSelectionKeyboardNudge(session, selectedPieceKeys, key) {
+        const keys = Array.isArray(selectedPieceKeys) ? selectedPieceKeys.filter(Boolean) : [];
+        if (keys.length <= 1) {
+            return proposeKeyboardNudge(session, keys[0], key);
+        }
+        const code = String(key || "");
+        let dx = 0;
+        let dy = 0;
+        if (code === "ArrowRight") dx = STEP_MM;
+        else if (code === "ArrowLeft") dx = -STEP_MM;
+        else if (code === "ArrowDown") dy = STEP_MM;
+        else if (code === "ArrowUp") dy = -STEP_MM;
+        else return { ok: false, code: CODE.INVALID_KEY, reason: reasonMessage(CODE.INVALID_KEY) };
+        return proposeGroupDeltaMove(session, keys, dx, dy);
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.PositionGeometry = Object.freeze({
         AXES,
         STEP_MM,
+        MIXED_LABEL,
+        CODE,
+        reasonMessage,
         formatMm,
         parseMm,
+        parseRelativeOffset,
         pieceDimensionsMm,
         boardPositionForPiece,
         // Alias kept for callers/tests that still name the helper generically.
@@ -187,6 +456,10 @@
         worldDeltaForAxis,
         proposeAxisMove,
         proposeDeltaMove,
+        proposeGroupDeltaMove,
+        proposeGroupAxisStep,
+        proposeGroupAxisRelative,
         proposeKeyboardNudge,
+        proposeSelectionKeyboardNudge,
     });
 })();

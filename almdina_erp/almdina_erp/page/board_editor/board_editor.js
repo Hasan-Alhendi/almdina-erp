@@ -18,7 +18,7 @@
         `${ASSET_ROOT}/rotation_geometry.js?v=19`,
         `${ASSET_ROOT}/transform_geometry.js?v=2`,
         `${ASSET_ROOT}/measure_geometry.js?v=1`,
-        `${ASSET_ROOT}/position_geometry.js?v=2`,
+        `${ASSET_ROOT}/position_geometry.js?v=3`,
         `${ASSET_ROOT}/alignment_geometry.js?v=1`,
         `${ASSET_ROOT}/move_interaction.js?v=20`,
         `${ASSET_ROOT}/rotation_interaction.js?v=19`,
@@ -30,8 +30,8 @@
         `${ASSET_ROOT}/store.js?v=20`,
         `${ASSET_ROOT}/canvas_renderer.js?v=34`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=18`,
-        `${ASSET_ROOT}/right_sidebar_renderer.js?v=2`,
-        `${ASSET_ROOT}/controller.js?v=31`,
+        `${ASSET_ROOT}/right_sidebar_renderer.js?v=3`,
+        `${ASSET_ROOT}/controller.js?v=32`,
     ]);
 
     function pageModule() {

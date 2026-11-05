@@ -3352,6 +3352,16 @@ Select a piece to edit its properties.,حدّد قطعة لتعديل خصائص
 Multiple pieces selected,تم تحديد عدة قطع
 {0} pieces selected,تم تحديد {0} قطع
 Board X/Y is available for pieces placed on a board.,إحداثيات X/Y للوح متاحة للقطع الموضوعة على لوح.
+Nudge selected pieces −1 mm on {0},حرّك القطع المحددة −1 مم على {0}
+Nudge selected pieces +1 mm on {0},حرّك القطع المحددة +1 مم على {0}
+Enter a relative millimetre offset for the selection (for example +5 or -2.5). Bare numbers mean a positive offset.,أدخل إزاحة نسبية بالمليمتر للتحديد (مثل +5 أو -2.5). الأرقام بدون إشارة تعني إزاحة موجبة.
+Enter a valid millimetre offset.,أدخل إزاحة مليمتر صالحة.
+Select two or more pieces to move them together.,حدّد قطعتين أو أكثر لتحريكهما معاً.
+Group positioning is unavailable while a locked piece is selected.,تحريك المجموعة غير متاح أثناء تحديد قطعة مقفلة.
+Precise group moves are available for pieces on the same board only, or pieces outside all boards.,الحركة الدقيقة الجماعية متاحة للقطع الموجودة على اللوح نفسه فقط، أو القطع الموجودة خارج الألواح.
+Precise moves must keep each piece on its current board.,يجب أن تُبقي الحركات الدقيقة كل قطعة على لوحها الحالي.
+Group move would break a glass host relationship.,تحريك المجموعة سيكسر علاقة المضيف الزجاجي.
+Move geometry unavailable.,هندسة التحريك غير متاحة.
 Align left,محاذاة لليسار
 Align right,محاذاة لليمين
 Align top,محاذاة للأعلى

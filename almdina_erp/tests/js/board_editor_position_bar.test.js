@@ -160,13 +160,13 @@ const keyB = "instance:pi-b";
 const keyOut = "instance:pi-out";
 const keyPoly = "instance:pi-poly";
 
-// Visibility model: single on-board piece only.
+// Visibility model: single absolute; multi Mixed (same board eligible).
 assert.equal(PositionGeometry.selectionPositionModel(session, []), null);
-assert.equal(PositionGeometry.selectionPositionModel(session, [keyA, keyB]), null);
 assert.equal(PositionGeometry.selectionPositionModel(session, [keyOut]), null);
 const modelA = PositionGeometry.selectionPositionModel(session, [keyA]);
 assert.ok(modelA);
 assert.equal(modelA.pieceKey, keyA);
+assert.equal(modelA.mixed, false);
 assert.equal(modelA.label, "A");
 assert.equal(modelA.widthMm, 200);
 assert.equal(modelA.lengthMm, 100);
@@ -175,6 +175,15 @@ assert.equal(PositionGeometry.formatMm(modelA.x), "10");
 assert.equal(PositionGeometry.formatMm(modelA.y), "20");
 assert.equal(modelA.left, undefined);
 assert.equal(modelA.top, undefined);
+
+const mixedAB = PositionGeometry.selectionPositionModel(session, [keyA, keyB]);
+assert.ok(mixedAB);
+assert.equal(mixedAB.mixed, true);
+assert.equal(mixedAB.editable, true);
+assert.equal(mixedAB.displayX, PositionGeometry.MIXED_LABEL);
+assert.equal(mixedAB.displayY, PositionGeometry.MIXED_LABEL);
+assert.equal(mixedAB.x, null);
+assert.equal(mixedAB.y, null);
 
 // Non-rect polygon uses transformed outline AABB in usable coords.
 const modelPoly = PositionGeometry.boardPositionForPiece(session, keyPoly);
@@ -217,6 +226,90 @@ function applyNudge(activeStore, pieceKey, key) {
     return {
         ok: true,
         model: PositionGeometry.boardPositionForPiece(activeStore.snapshot().session, pieceKey),
+    };
+}
+
+function applyGroupStep(activeStore, keys, axis, stepMm) {
+    const proposal = PositionGeometry.proposeGroupAxisStep(
+        activeStore.snapshot().session,
+        keys,
+        axis,
+        stepMm
+    );
+    if (!proposal.ok) {
+        activeStore.setDropMessage(proposal.reason || "rejected");
+        return proposal;
+    }
+    if (proposal.unchanged) {
+        return {
+            ok: true,
+            unchanged: true,
+            model: PositionGeometry.selectionPositionModel(activeStore.snapshot().session, keys),
+        };
+    }
+    let next = activeStore.snapshot().session;
+    proposal.commands.forEach((command) => {
+        next = MoveGeometry.applyPieceMove(next, command);
+    });
+    activeStore.commitSession(next);
+    activeStore.setDropMessage(null);
+    return {
+        ok: true,
+        model: PositionGeometry.selectionPositionModel(activeStore.snapshot().session, keys),
+        commands: proposal.commands,
+    };
+}
+
+function applyGroupRelative(activeStore, keys, axis, textOrNumber) {
+    const proposal = PositionGeometry.proposeGroupAxisRelative(
+        activeStore.snapshot().session,
+        keys,
+        axis,
+        textOrNumber
+    );
+    if (!proposal.ok) {
+        activeStore.setDropMessage(proposal.reason || "rejected");
+        return proposal;
+    }
+    if (proposal.unchanged) {
+        return {
+            ok: true,
+            unchanged: true,
+            model: PositionGeometry.selectionPositionModel(activeStore.snapshot().session, keys),
+        };
+    }
+    let next = activeStore.snapshot().session;
+    proposal.commands.forEach((command) => {
+        next = MoveGeometry.applyPieceMove(next, command);
+    });
+    activeStore.commitSession(next);
+    activeStore.setDropMessage(null);
+    return {
+        ok: true,
+        model: PositionGeometry.selectionPositionModel(activeStore.snapshot().session, keys),
+    };
+}
+
+function applyGroupNudge(activeStore, keys, key) {
+    const proposal = PositionGeometry.proposeSelectionKeyboardNudge(
+        activeStore.snapshot().session,
+        keys,
+        key
+    );
+    if (!proposal.ok) {
+        activeStore.setDropMessage(proposal.reason || "rejected");
+        return proposal;
+    }
+    if (proposal.unchanged) return proposal;
+    let next = activeStore.snapshot().session;
+    proposal.commands.forEach((command) => {
+        next = MoveGeometry.applyPieceMove(next, command);
+    });
+    activeStore.commitSession(next);
+    activeStore.setDropMessage(null);
+    return {
+        ok: true,
+        model: PositionGeometry.selectionPositionModel(activeStore.snapshot().session, keys),
     };
 }
 
@@ -386,12 +479,17 @@ assert.match(controllerSource, /nudgeSelectedPieceByArrow/);
 assert.match(controllerSource, /PositionGeometry/);
 assert.match(controllerSource, /RightSidebarRenderer/);
 assert.doesNotMatch(controllerSource, /applyPositionEdge|proposeEdgeMove/);
-assert.match(pageSource, /position_geometry\.js\?v=2/);
-assert.match(pageSource, /right_sidebar_renderer\.js\?v=2/);
+assert.match(pageSource, /position_geometry\.js\?v=3/);
+assert.match(pageSource, /right_sidebar_renderer\.js\?v=3/);
+assert.match(pageSource, /controller\.js\?v=32/);
 assert.match(pageSource, /board_editor\.css\?v=35/);
 assert.match(cssSource, /\.abe-right-sidebar/);
 assert.match(cssSource, /\.abe-pos-axis-label/);
 assert.doesNotMatch(cssSource, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/);
+assert.match(controllerSource, /proposeGroupAxisStep|proposeGroupAxisRelative/);
+assert.match(controllerSource, /proposeSelectionKeyboardNudge/);
+assert.match(rightSidebarSource, /data-abe-pos-mixed/);
+assert.match(rightSidebarSource, /parseRelativeOffset/);
 
 [
     "Precision piece position",
@@ -400,10 +498,16 @@ assert.doesNotMatch(cssSource, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:
     "Decrease {0} by 1 mm",
     "Increase {0} by 1 mm",
     "Enter a valid millimetre value.",
+    "Enter a valid millimetre offset.",
     "Position update rejected.",
+    "Precise group moves are available for pieces on the same board only, or pieces outside all boards.",
+    "Nudge selected pieces −1 mm on {0}",
+    "Nudge selected pieces +1 mm on {0}",
+    "Enter a relative millimetre offset for the selection (for example +5 or -2.5). Bare numbers mean a positive offset.",
 ].forEach((messageId) => {
     assert.ok(arCsv.includes(messageId), `missing ar.csv key: ${messageId}`);
 });
+assert.ok(arCsv.includes("Mixed"), "missing Mixed translation");
 
 // Right inspector shows / hides X/Y with selection; canvas float bar stays tool-only.
 function inspectorHostStub() {
@@ -447,7 +551,6 @@ function renderInspector(keys) {
 
 {
     assert.ok(editor.RightSidebarRenderer);
-    assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyA, keyB]), null);
     assert.equal(PositionGeometry.selectionPositionModel(store.snapshot().session, [keyOut]), null);
     const html = renderInspector([keyA]);
     assert.match(html, /data-abe-position-bar/);
@@ -455,11 +558,262 @@ function renderInspector(keys) {
     assert.match(html, /data-abe-pos-axis="x"/);
     assert.match(html, /data-abe-pos-axis="y"/);
     assert.doesNotMatch(html, /data-abe-pos-edge/);
+    assert.doesNotMatch(html, /data-abe-pos-mixed/);
     assert.doesNotMatch(renderInspector([]), /data-abe-position-bar/);
     assert.match(renderInspector([]), /Select a piece to edit its properties/);
-    assert.match(renderInspector([keyA, keyB]), /Multiple pieces selected/);
+    const multiHtml = renderInspector([keyA, keyB]);
+    assert.match(multiHtml, /data-abe-position-bar/);
+    assert.match(multiHtml, /data-abe-pos-mixed/);
+    assert.match(multiHtml, /2 pieces selected/);
+    assert.match(multiHtml, /value="Mixed"/);
+    assert.match(multiHtml, /data-abe-pos-step="-1"/);
+    assert.match(multiHtml, /data-abe-pos-step="1"/);
     assert.doesNotMatch(renderInspector([keyOut]), /data-abe-pos-axis/);
     assert.match(renderInspector([keyOut]), /Board X\/Y is available for pieces placed on a board/);
+}
+
+// Relative parse: Mixed label / invalid / signed / bare positive.
+assert.equal(PositionGeometry.parseRelativeOffset("Mixed"), null);
+assert.equal(PositionGeometry.parseRelativeOffset("abc"), null);
+assert.equal(PositionGeometry.parseRelativeOffset(""), null);
+assert.equal(PositionGeometry.parseRelativeOffset("+5"), 5);
+assert.equal(PositionGeometry.parseRelativeOffset("-2.5"), -2.5);
+assert.equal(PositionGeometry.parseRelativeOffset("5"), 5);
+assert.equal(PositionGeometry.parseRelativeOffset("0"), 0);
+
+// Group X+ twice keeps relative gaps and Mixed display.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const beforeA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const beforeB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    const gapX = beforeB.x - beforeA.x;
+    const gapY = beforeB.y - beforeA.y;
+    const undoBefore = local.snapshot().canUndo;
+    assert.equal(applyGroupStep(local, [keyA, keyB], "x", 1).ok, true);
+    assert.equal(applyGroupStep(local, [keyA, keyB], "x", 1).ok, true);
+    const afterA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const afterB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    assert.equal(PositionGeometry.formatMm(afterA.x), PositionGeometry.formatMm(beforeA.x + 2));
+    assert.equal(PositionGeometry.formatMm(afterB.x), PositionGeometry.formatMm(beforeB.x + 2));
+    assert.equal(PositionGeometry.formatMm(afterA.y), PositionGeometry.formatMm(beforeA.y));
+    assert.equal(PositionGeometry.formatMm(afterB.y), PositionGeometry.formatMm(beforeB.y));
+    assert.equal(afterB.x - afterA.x, gapX);
+    assert.equal(afterB.y - afterA.y, gapY);
+    const mixed = PositionGeometry.selectionPositionModel(local.snapshot().session, [keyA, keyB]);
+    assert.equal(mixed.displayX, "Mixed");
+    assert.equal(mixed.displayY, "Mixed");
+    assert.equal(local.snapshot().canUndo, true);
+    assert.notEqual(local.snapshot().canUndo, undoBefore);
+}
+
+// Relative typed offsets + zero does not create history.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const beforeA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const beforeB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    assert.equal(applyGroupRelative(local, [keyA, keyB], "x", "+5").ok, true);
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).x),
+        PositionGeometry.formatMm(beforeA.x + 5)
+    );
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB).x),
+        PositionGeometry.formatMm(beforeB.x + 5)
+    );
+    assert.equal(applyGroupRelative(local, [keyA, keyB], "y", "-2.5").ok, true);
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).y),
+        PositionGeometry.formatMm(beforeA.y - 2.5)
+    );
+    const undoBefore = local.snapshot().canUndo;
+    const zero = applyGroupRelative(local, [keyA, keyB], "x", "0");
+    assert.equal(zero.ok, true);
+    assert.equal(zero.unchanged, true);
+    assert.equal(local.snapshot().canUndo, undoBefore);
+    assert.equal(applyGroupRelative(local, [keyA, keyB], "x", "NaN").ok, false);
+}
+
+// Keyboard group nudge net +1 X.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const startA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const startB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    assert.equal(applyGroupNudge(local, [keyA, keyB], "ArrowRight").ok, true);
+    assert.equal(applyGroupNudge(local, [keyA, keyB], "ArrowRight").ok, true);
+    assert.equal(applyGroupNudge(local, [keyA, keyB], "ArrowDown").ok, true);
+    assert.equal(applyGroupNudge(local, [keyA, keyB], "ArrowUp").ok, true);
+    assert.equal(applyGroupNudge(local, [keyA, keyB], "ArrowLeft").ok, true);
+    const endA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const endB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    assert.equal(PositionGeometry.formatMm(endA.x), PositionGeometry.formatMm(startA.x + 1));
+    assert.equal(PositionGeometry.formatMm(endB.x), PositionGeometry.formatMm(startB.x + 1));
+    assert.equal(PositionGeometry.formatMm(endA.y), PositionGeometry.formatMm(startA.y));
+    assert.equal(PositionGeometry.formatMm(endB.y), PositionGeometry.formatMm(startB.y));
+}
+
+// Atomic undo/redo for one group commit.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const startA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const startB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    const result = applyGroupRelative(local, [keyA, keyB], "x", 5);
+    assert.equal(result.ok, true);
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).x),
+        PositionGeometry.formatMm(startA.x + 5)
+    );
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB).x),
+        PositionGeometry.formatMm(startB.x + 5)
+    );
+    local.undo();
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).x),
+        PositionGeometry.formatMm(startA.x)
+    );
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB).x),
+        PositionGeometry.formatMm(startB.x)
+    );
+    local.redo();
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).x),
+        PositionGeometry.formatMm(startA.x + 5)
+    );
+    assert.equal(
+        PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB).x),
+        PositionGeometry.formatMm(startB.x + 5)
+    );
+}
+
+// Reject board exit for any member — no partial move / no history.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const before = JSON.stringify(local.snapshot().session.pieces);
+    const undoBefore = local.snapshot().canUndo;
+    const rejected = applyGroupRelative(local, [keyA, keyB], "x", 900);
+    assert.equal(rejected.ok, false);
+    assert.equal(JSON.stringify(local.snapshot().session.pieces), before);
+    assert.equal(local.snapshot().canUndo, undoBefore);
+}
+
+// Reject group overlap / kerf against a non-selected neighbour.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    // Park A just clear of B (A 200×100, B at 400,400). Then group-move A+Poly into B.
+    assert.equal(applyAxis(local, keyA, "x", 190).ok, true, "park A x");
+    assert.equal(applyAxis(local, keyA, "y", 280).ok, true, "park A y");
+    const before = JSON.stringify(local.snapshot().session.pieces);
+    const undoBefore = local.snapshot().canUndo;
+    // dy=+125 → A spans y ~405–505 overlapping B; Poly also shifts but B is not selected.
+    const collide = applyGroupRelative(local, [keyA, keyPoly], "y", 125);
+    assert.equal(collide.ok, false, collide.reason || "expected group kerf rejection");
+    assert.equal(JSON.stringify(local.snapshot().session.pieces), before);
+    assert.equal(local.snapshot().canUndo, undoBefore);
+}
+
+// Mixed board+outside selection is not editable / rejects move.
+{
+    const mixedScope = PositionGeometry.selectionPositionModel(session, [keyA, keyOut]);
+    assert.ok(mixedScope);
+    assert.equal(mixedScope.mixed, true);
+    assert.equal(mixedScope.editable, false);
+    const rejected = PositionGeometry.proposeGroupAxisStep(session, [keyA, keyOut], "x", 1);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, PositionGeometry.CODE.MIXED_SCOPE);
+}
+
+// Outside-only pair can move without gaining a sheet.
+{
+    const proj2 = JSON.parse(JSON.stringify(projection));
+    // Keep free-space pieces clear of board extents so +1 mm never clips a board edge.
+    const outA = proj2.pieces.find((piece) => piece.piece_instance_id === "pi-out");
+    outA.placement_cm = { x: 200, y: 0, w: 5, h: 5 };
+    const outEl = proj2.elements.find((element) => element.piece_instance_id === "pi-out");
+    outEl.geometry = { outer: [[2000, 0], [2050, 0], [2050, 50], [2000, 50]] };
+    outEl.payload = { placement_cm: outA.placement_cm };
+    proj2.pieces.push({
+        piece_id: 5,
+        piece_instance_id: "pi-out-2",
+        label: "OUT2",
+        sheet_no: null,
+        placement_cm: { x: 220, y: 0, w: 5, h: 5 },
+    });
+    proj2.elements.push({
+        element_id: "e-out-2",
+        kind: "finished_outline",
+        piece_id: 5,
+        piece_instance_id: "pi-out-2",
+        sheet_no: null,
+        geometry: { outer: [[2200, 0], [2250, 0], [2250, 50], [2200, 50]] },
+        payload: { placement_cm: { x: 220, y: 0, w: 5, h: 5 } },
+    });
+    const layout2 = CanvasRenderer.sheetLayout(proj2.sheets, 1);
+    const fresh = SessionDocument.buildFromProjection(proj2, layout2);
+    const hist = History.create(fresh);
+    const local = createStore({ projection: proj2, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const keyOut2 = "instance:pi-out-2";
+    const model = PositionGeometry.selectionPositionModel(local.snapshot().session, [keyOut, keyOut2]);
+    assert.equal(model.editable, true);
+    const moved = applyGroupStep(local, [keyOut, keyOut2], "x", 1);
+    assert.equal(moved.ok, true, moved.reason || "outside group move");
+    assert.equal(local.snapshot().session.pieces[keyOut].sheet_no, null);
+    assert.equal(local.snapshot().session.pieces[keyOut2].sheet_no, null);
+}
+
+// Cross-sheet selection rejected.
+{
+    const proj2 = JSON.parse(JSON.stringify(projection));
+    proj2.sheets.push({
+        sheet_no: 2,
+        full_width_cm: 100,
+        full_length_cm: 100,
+        applied_trim_width_cm: 1,
+        applied_trim_length_cm: 1,
+    });
+    proj2.pieces.push({
+        piece_id: 6,
+        piece_instance_id: "pi-c",
+        label: "C",
+        sheet_no: 2,
+        placement_cm: { x: 5, y: 5, w: 10, h: 10 },
+    });
+    proj2.elements.push({
+        element_id: "e6",
+        kind: "finished_outline",
+        piece_id: 6,
+        piece_instance_id: "pi-c",
+        sheet_no: 2,
+        geometry: { outer: [[50, 50], [150, 50], [150, 150], [50, 150]] },
+        payload: { placement_cm: { x: 5, y: 5, w: 10, h: 10 } },
+    });
+    const layout2 = CanvasRenderer.sheetLayout(proj2.sheets, 1);
+    const fresh = SessionDocument.buildFromProjection(proj2, layout2);
+    const keyC = "instance:pi-c";
+    const model = PositionGeometry.selectionPositionModel(fresh, [keyA, keyC]);
+    assert.equal(model.editable, false);
+    const rejected = PositionGeometry.proposeGroupAxisStep(fresh, [keyA, keyC], "x", 1);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, PositionGeometry.CODE.CROSS_SHEET);
 }
 
 console.log("board_editor_position_bar.test.js: ok");

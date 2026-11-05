@@ -211,6 +211,7 @@ async function pageBootstrapLoadsVersionedScripts() {
         "transform_geometry.js",
         "measure_geometry.js",
         "position_geometry.js",
+        "alignment_geometry.js",
         "move_interaction.js",
         "rotation_interaction.js",
         "measure_interaction.js",
@@ -219,6 +220,7 @@ async function pageBootstrapLoadsVersionedScripts() {
         "store.js",
         "canvas_renderer.js",
         "sidebar_renderer.js",
+        "right_sidebar_renderer.js",
         "controller.js",
     ]);
     versioned.forEach((src) => {

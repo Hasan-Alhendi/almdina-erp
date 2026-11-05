@@ -1181,6 +1181,24 @@
 
         let lastPositionRejectAt = 0;
 
+        function readSelectionPositionModel(preferredKey) {
+            const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
+            if (!store || !PositionGeometry) return null;
+            const view = store.snapshot();
+            const keys = Array.isArray(view.selectedPieceKeys)
+                ? view.selectedPieceKeys.filter(Boolean)
+                : [];
+            if (typeof PositionGeometry.selectionPositionModel === "function") {
+                return PositionGeometry.selectionPositionModel(view.session, keys);
+            }
+            if (preferredKey) {
+                return PositionGeometry.boardPositionForPiece(view.session, preferredKey);
+            }
+            return keys.length === 1
+                ? PositionGeometry.boardPositionForPiece(view.session, keys[0])
+                : null;
+        }
+
         function applyPrecisionPosition(proposeFn, pieceKey) {
             // Shared path for X/Y fields, +/−, and keyboard nudges — validation only,
             // no magnet/snap (proposeGroupMove is exact millimetre deltas).
@@ -1191,10 +1209,18 @@
             }
             const snap = store.snapshot();
             const proposal = proposeFn();
-            const readModel = () => PositionGeometry.boardPositionForPiece(
-                store.snapshot().session,
-                pieceKey
-            );
+            const readModel = () => {
+                if (proposal && proposal.mixed) {
+                    return readSelectionPositionModel(pieceKey);
+                }
+                if (pieceKey) {
+                    return PositionGeometry.boardPositionForPiece(
+                        store.snapshot().session,
+                        pieceKey
+                    );
+                }
+                return readSelectionPositionModel(pieceKey);
+            };
             if (!proposal || !proposal.ok) {
                 const now = Date.now();
                 if (now - lastPositionRejectAt > 500) {
@@ -1217,7 +1243,12 @@
             });
             store.commitSession(next);
             store.setDropMessage(null);
-            return { ok: true, unchanged: false, model: readModel() };
+            // After commit, re-read from the live session. Mixed group models stay Mixed.
+            return {
+                ok: true,
+                unchanged: false,
+                model: readModel(),
+            };
         }
 
         function applyAlignment(mode) {
@@ -1250,20 +1281,40 @@
 
         function inspectorHandlers() {
             return {
-                applyPositionAxis: (pieceKey, axis, value) => applyPrecisionPosition(
-                    () => window.AlmdinaBoardEditor.PositionGeometry.proposeAxisMove(
-                        store.snapshot().session,
-                        pieceKey,
-                        axis,
-                        value
-                    ),
-                    pieceKey
-                ),
-                readPositionModel: (pieceKey) => {
+                applyPositionAxis: (pieceKey, axis, value, options) => {
                     const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
-                    if (!store || !PositionGeometry) return null;
-                    return PositionGeometry.boardPositionForPiece(store.snapshot().session, pieceKey);
+                    const opts = options || {};
+                    const view = store.snapshot();
+                    const keys = Array.isArray(view.selectedPieceKeys)
+                        ? view.selectedPieceKeys.filter(Boolean)
+                        : [];
+                    if (opts.mixed || (keys.length > 1)) {
+                        const propose = opts.step
+                            ? () => PositionGeometry.proposeGroupAxisStep(
+                                store.snapshot().session,
+                                keys,
+                                axis,
+                                value
+                            )
+                            : () => PositionGeometry.proposeGroupAxisRelative(
+                                store.snapshot().session,
+                                keys,
+                                axis,
+                                value
+                            );
+                        return applyPrecisionPosition(propose, pieceKey || keys[0]);
+                    }
+                    return applyPrecisionPosition(
+                        () => PositionGeometry.proposeAxisMove(
+                            store.snapshot().session,
+                            pieceKey || keys[0],
+                            axis,
+                            value
+                        ),
+                        pieceKey || keys[0]
+                    );
                 },
+                readPositionModel: (pieceKey) => readSelectionPositionModel(pieceKey),
                 onPositionRejected: (message) => {
                     if (!store) return;
                     store.setDropMessage(__(message || "Enter a valid millimetre value."));
@@ -1281,19 +1332,46 @@
                 return false;
             }
             const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
-            if (!PositionGeometry || typeof PositionGeometry.proposeKeyboardNudge !== "function") {
-                return false;
-            }
+            if (!PositionGeometry) return false;
             const view = store.snapshot();
             const keys = Array.isArray(view.selectedPieceKeys)
                 ? view.selectedPieceKeys.filter(Boolean)
                 : [];
-            if (keys.length !== 1) return false;
-            const model = PositionGeometry.boardPositionForPiece(view.session, keys[0]);
-            if (!model || !model.editable) return false;
+            if (!keys.length) return false;
+
+            if (keys.length === 1) {
+                if (typeof PositionGeometry.proposeKeyboardNudge !== "function") return false;
+                const model = PositionGeometry.boardPositionForPiece(view.session, keys[0]);
+                if (!model || !model.editable) return false;
+                event.preventDefault();
+                applyPrecisionPosition(
+                    () => PositionGeometry.proposeKeyboardNudge(store.snapshot().session, keys[0], key),
+                    keys[0]
+                );
+                return true;
+            }
+
+            if (typeof PositionGeometry.proposeSelectionKeyboardNudge !== "function") return false;
+            const groupModel = typeof PositionGeometry.selectionPositionModel === "function"
+                ? PositionGeometry.selectionPositionModel(view.session, keys)
+                : null;
+            if (!groupModel || !groupModel.editable) {
+                if (groupModel && groupModel.reason) {
+                    const now = Date.now();
+                    if (now - lastPositionRejectAt > 500) {
+                        store.setDropMessage(__(groupModel.reason));
+                        lastPositionRejectAt = now;
+                    }
+                }
+                return false;
+            }
             event.preventDefault();
             applyPrecisionPosition(
-                () => PositionGeometry.proposeKeyboardNudge(store.snapshot().session, keys[0], key),
+                () => PositionGeometry.proposeSelectionKeyboardNudge(
+                    store.snapshot().session,
+                    keys,
+                    key
+                ),
                 keys[0]
             );
             return true;

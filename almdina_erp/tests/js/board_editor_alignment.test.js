@@ -340,7 +340,7 @@ assert.match(css, /--abe-right-sidebar-width:\s*240px/);
 assert.match(css, /grid-template-areas:\s*"sidebar canvas inspector"/);
 assert.doesNotMatch(css, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/);
 assert.match(page, /alignment_geometry\.js\?v=1/);
-assert.match(page, /right_sidebar_renderer\.js\?v=2/);
+assert.match(page, /right_sidebar_renderer\.js\?v=3/);
 assert.match(page, /board_editor\.css\?v=35/);
 assert.match(controller, /RightSidebarRenderer/);
 assert.match(controller, /applyAlignment/);

@@ -46,14 +46,24 @@
         { mode: "align_bottom", label: "Align bottom", title: "Align bottom edges of the selection" },
     ]);
 
-    function positionAxisField(axis, label, valueText, editable) {
+    function positionAxisField(axis, label, valueText, editable, options) {
+        const opts = options || {};
         const disabled = editable ? "" : " disabled";
-        const stepMinus = __("Decrease {0} by 1 mm", [label]);
-        const stepPlus = __("Increase {0} by 1 mm", [label]);
+        const mixed = Boolean(opts.mixed);
+        const stepMinus = mixed
+            ? __("Nudge selected pieces −1 mm on {0}", [label])
+            : __("Decrease {0} by 1 mm", [label]);
+        const stepPlus = mixed
+            ? __("Nudge selected pieces +1 mm on {0}", [label])
+            : __("Increase {0} by 1 mm", [label]);
+        const inputTitle = mixed
+            ? __("Enter a relative millimetre offset for the selection (for example +5 or -2.5). Bare numbers mean a positive offset.")
+            : label;
+        const attrs = mixed ? ` data-abe-pos-mixed="1" placeholder="${esc(__("Mixed"))}"` : "";
         return `<div class="abe-pos-field abe-inspector-pos-field" data-abe-pos-axis="${esc(axis)}">
             <span class="abe-pos-axis-label" dir="ltr">${esc(label)}</span>
             <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="-1"${disabled} title="${esc(stepMinus)}" aria-label="${esc(stepMinus)}">−</button>
-            <input type="text" inputmode="decimal" class="abe-pos-input" data-abe-pos-input="1" value="${esc(valueText)}"${disabled} aria-label="${esc(label)}" title="${esc(label)}" dir="ltr" />
+            <input type="text" inputmode="decimal" class="abe-pos-input" data-abe-pos-input="1" value="${esc(valueText)}"${disabled}${attrs} aria-label="${esc(label)}" title="${esc(inputTitle)}" dir="ltr" />
             <button type="button" class="alm-btn-secondary abe-tool-btn abe-pos-step" data-abe-pos-step="1"${disabled} title="${esc(stepPlus)}" aria-label="${esc(stepPlus)}">+</button>
         </div>`;
     }
@@ -92,14 +102,30 @@
                 <div class="abe-inspector-empty" role="status">${esc(__("Select a piece to edit its properties."))}</div>
             </section>`;
         }
+
+        const positionModel = PG && typeof PG.selectionPositionModel === "function"
+            ? PG.selectionPositionModel(session, keys)
+            : null;
+        const mixedLabel = (PG && PG.MIXED_LABEL) || "Mixed";
+
         if (keys.length > 1) {
+            const editable = Boolean(positionModel && positionModel.editable);
+            const note = positionModel && positionModel.reason
+                ? `<div class="abe-inspector-note" role="status">${esc(__(positionModel.reason))}</div>`
+                : "";
             return `<section class="abe-inspector-block abe-inspector-props-block">
-                <div class="abe-inspector-multi" role="status">
-                    <strong>${esc(__("Multiple pieces selected"))}</strong>
-                    <span>${esc(__("{0} pieces selected", [String(keys.length)]))}</span>
+                <div class="abe-inspector-position" data-abe-position-bar="1" data-abe-pos-mixed="1" role="group" aria-label="${esc(__("Precision piece position"))}">
+                    <div class="abe-inspector-block-title">${esc(__("Position"))}</div>
+                    <div class="abe-inspector-multi" role="status">
+                        <span>${esc(__("{0} pieces selected", [String(keys.length)]))}</span>
+                    </div>
+                    ${positionAxisField("x", __("X (mm)"), mixedLabel, editable, { mixed: true })}
+                    ${positionAxisField("y", __("Y (mm)"), mixedLabel, editable, { mixed: true })}
+                    ${note}
                 </div>
             </section>`;
         }
+
         const pieceKey = keys[0];
         const piece = session && session.pieces && session.pieces[pieceKey];
         if (!piece) {
@@ -113,11 +139,8 @@
             : { widthMm: 0, lengthMm: 0 };
         const label = piece.label || piece.piece_instance_id || String(piece.piece_id || "");
         const dims = `${format(dimsHelper.lengthMm)} × ${format(dimsHelper.widthMm)} mm`;
-        const positionModel = PG && typeof PG.boardPositionForPiece === "function"
-            ? PG.boardPositionForPiece(session, pieceKey)
-            : null;
         let positionHtml = "";
-        if (positionModel) {
+        if (positionModel && !positionModel.mixed) {
             positionHtml = `<div class="abe-inspector-position" data-abe-position-bar="1" data-abe-pos-piece="${esc(positionModel.pieceKey)}" role="group" aria-label="${esc(__("Precision piece position"))}">
                 <div class="abe-inspector-block-title">${esc(__("Position"))}</div>
                 ${positionAxisField("x", __("X (mm)"), format(positionModel.x), Boolean(positionModel.editable))}
@@ -147,8 +170,21 @@
         if (!bar || !model) return;
         const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
         const format = PG && typeof PG.formatMm === "function" ? PG.formatMm : (value) => String(value);
-        const parse = PG && typeof PG.parseMm === "function" ? PG.parseMm : (text) => Number(text);
+        const parseAbsolute = PG && typeof PG.parseMm === "function" ? PG.parseMm : (text) => Number(text);
+        const parseRelative = PG && typeof PG.parseRelativeOffset === "function"
+            ? PG.parseRelativeOffset
+            : parseAbsolute;
+        const mixedLabel = (PG && PG.MIXED_LABEL) || "Mixed";
+        const mixed = Boolean(model.mixed);
         const pieceKey = model.pieceKey;
+
+        function displayFor(nextModel, axis) {
+            if (!nextModel) return mixed ? mixedLabel : "0";
+            if (nextModel.mixed) return mixedLabel;
+            if (axis === "x" && nextModel.displayX != null) return nextModel.displayX;
+            if (axis === "y" && nextModel.displayY != null) return nextModel.displayY;
+            return format(nextModel[axis]);
+        }
 
         function syncInputsFromModel(nextModel) {
             if (!nextModel) return;
@@ -156,7 +192,7 @@
                 const axis = field.getAttribute("data-abe-pos-axis");
                 const input = field.querySelector("[data-abe-pos-input]");
                 if (!input || !axis) return;
-                input.value = format(nextModel[axis]);
+                input.value = displayFor(nextModel, axis);
                 input.dataset.abePosCommitted = input.value;
             });
         }
@@ -171,7 +207,25 @@
 
             const commit = () => {
                 if (!(handlers && handlers.applyPositionAxis)) return;
-                const parsed = parse(input.value);
+                const raw = input.value;
+                if (mixed) {
+                    const parsed = parseRelative(raw);
+                    if (parsed == null) {
+                        if (handlers.onPositionRejected) {
+                            handlers.onPositionRejected(__("Enter a valid millimetre offset."));
+                        }
+                        input.value = input.dataset.abePosCommitted || mixedLabel;
+                        return;
+                    }
+                    const result = handlers.applyPositionAxis(pieceKey, axis, parsed, { mixed: true });
+                    if (!result || result.ok === false) {
+                        input.value = input.dataset.abePosCommitted || mixedLabel;
+                        return;
+                    }
+                    syncInputsFromModel(result.model || { mixed: true });
+                    return;
+                }
+                const parsed = parseAbsolute(raw);
                 if (parsed == null) {
                     if (handlers.onPositionRejected) {
                         handlers.onPositionRejected(__("Enter a valid millimetre value."));
@@ -188,6 +242,14 @@
                 else input.dataset.abePosCommitted = format(parsed);
             };
 
+            input.addEventListener("focus", () => {
+                if (!mixed || input.disabled) return;
+                // Keep focus; clear Mixed so the relative offset can be typed.
+                if (String(input.value).toLowerCase() === mixedLabel.toLowerCase()) {
+                    input.value = "";
+                }
+                input.select();
+            });
             input.addEventListener("keydown", (event) => {
                 if (event.key === " " || event.code === "Space" || event.key === "Delete") {
                     event.stopPropagation();
@@ -195,7 +257,7 @@
                 if (event.key === "Escape") {
                     event.preventDefault();
                     event.stopPropagation();
-                    input.value = input.dataset.abePosCommitted || format(model[axis]);
+                    input.value = input.dataset.abePosCommitted || displayFor(model, axis);
                     input.blur();
                     return;
                 }
@@ -210,6 +272,10 @@
             });
             input.addEventListener("change", commit);
             input.addEventListener("blur", () => {
+                if (mixed && !String(input.value).trim()) {
+                    input.value = input.dataset.abePosCommitted || mixedLabel;
+                    return;
+                }
                 if (String(input.value) !== String(input.dataset.abePosCommitted || "")) {
                     commit();
                 }
@@ -227,7 +293,17 @@
             });
             button.addEventListener("click", () => {
                 if (!(handlers && handlers.applyPositionAxis)) return;
-                const parsed = parse(input.value);
+                if (mixed) {
+                    const result = handlers.applyPositionAxis(pieceKey, axis, step, { mixed: true, step: true });
+                    const liveModel = handlers.readPositionModel && handlers.readPositionModel(pieceKey);
+                    if (!result || result.ok === false) {
+                        syncInputsFromModel(liveModel || model);
+                        return;
+                    }
+                    syncInputsFromModel(result.model || liveModel || { mixed: true });
+                    return;
+                }
+                const parsed = parseAbsolute(input.value);
                 const liveModel = handlers.readPositionModel && handlers.readPositionModel(pieceKey);
                 const base = parsed == null
                     ? Number((liveModel && liveModel[axis]) || model[axis]) || 0
@@ -259,8 +335,8 @@
         const keys = Array.isArray(storeView.selectedPieceKeys)
             ? storeView.selectedPieceKeys.filter(Boolean)
             : [];
-        const positionModel = keys.length === 1 && PG
-            ? PG.boardPositionForPiece(storeView.session, keys[0])
+        const positionModel = PG && typeof PG.selectionPositionModel === "function"
+            ? PG.selectionPositionModel(storeView.session, keys)
             : null;
 
         // Alignment stays pinned at the top of the stack; properties follow tightly.
