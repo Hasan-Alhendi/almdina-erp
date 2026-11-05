@@ -207,8 +207,36 @@
             }
         }
 
-        function publishCached(entryKey, lines) {
-            altOverlay = lines.slice();
+        function presentGeomLines(MG, session, geomLines, world) {
+            const rows = Array.isArray(geomLines) ? geomLines : [];
+            if (!world || !MG || typeof MG.presentPieceClearanceNearPointer !== "function") {
+                return rows.map((row) => ({ ...row }));
+            }
+            const pointer = [world.x, world.y];
+            return rows.map((row) => {
+                if (!row || row.kind !== "piece") return { ...row };
+                const presented = MG.presentPieceClearanceNearPointer(row, pointer, session);
+                return presented ? { ...presented } : { ...row };
+            });
+        }
+
+        function presentationFingerprint(lines) {
+            return (Array.isArray(lines) ? lines : []).map((row) => {
+                if (!row) return "";
+                return [
+                    row.kind || "",
+                    row.distance,
+                    row.start && row.start[0],
+                    row.start && row.start[1],
+                    row.end && row.end[0],
+                    row.end && row.end[1],
+                    row.label || "",
+                ].join(":");
+            }).join("|");
+        }
+
+        function publishPresented(entryKey, presented) {
+            altOverlay = presented.slice();
             publishedCacheKey = entryKey;
             publish();
         }
@@ -262,35 +290,36 @@
             }
 
             const entryKey = cacheEntryKey(selectedKey, hoverKey);
-            if (publishedCacheKey === entryKey) {
-                return;
-            }
-            const cached = readCache(entryKey);
-            if (cached) {
-                publishCached(entryKey, cached);
-                return;
+            let geomLines = readCache(entryKey);
+            if (!geomLines) {
+                geometryComputeCount += 1;
+                if (hoverKey) {
+                    const between = MG.shortestClearanceBetweenPieces(snap.session, selectedKey, hoverKey);
+                    geomLines = between
+                        ? [{
+                            ...between,
+                            label: MG.formatDistanceMm(between.distance),
+                            style: "alt",
+                        }]
+                        : [];
+                } else {
+                    geomLines = MG.edgeClearances(snap.session, selectedKey).map((row) => ({
+                        ...row,
+                        label: MG.formatDistanceMm(row.distance),
+                        style: "alt",
+                    }));
+                }
+                writeCache(entryKey, geomLines);
             }
 
-            geometryComputeCount += 1;
-            if (hoverKey) {
-                const between = MG.shortestClearanceBetweenPieces(snap.session, selectedKey, hoverKey);
-                altOverlay = between
-                    ? [{
-                        ...between,
-                        label: MG.formatDistanceMm(between.distance),
-                        style: "alt",
-                    }]
-                    : [];
-            } else {
-                altOverlay = MG.edgeClearances(snap.session, selectedKey).map((row) => ({
-                    ...row,
-                    label: MG.formatDistanceMm(row.distance),
-                    style: "alt",
-                }));
+            const presented = presentGeomLines(MG, snap.session, geomLines, world);
+            if (
+                publishedCacheKey === entryKey
+                && presentationFingerprint(altOverlay) === presentationFingerprint(presented)
+            ) {
+                return;
             }
-            writeCache(entryKey, altOverlay);
-            publishedCacheKey = entryKey;
-            publish();
+            publishPresented(entryKey, presented);
         }
 
         function beginTool(event) {

@@ -402,6 +402,120 @@
         };
     }
 
+    function facingCorridor(boundsA, boundsB) {
+        if (!boundsA || !boundsB) return null;
+        const aRight = boundsA.x + boundsA.w;
+        const bRight = boundsB.x + boundsB.w;
+        const aBottom = boundsA.y + boundsA.h;
+        const bBottom = boundsB.y + boundsB.h;
+        const yOverlap = Math.min(aBottom, bBottom) - Math.max(boundsA.y, boundsB.y);
+        const xOverlap = Math.min(aRight, bRight) - Math.max(boundsA.x, boundsB.x);
+
+        if (yOverlap > EPS) {
+            if (aRight <= boundsB.x + EPS) {
+                return {
+                    axis: "x",
+                    gap: boundsB.x - aRight,
+                    min: Math.max(boundsA.y, boundsB.y),
+                    max: Math.min(aBottom, bBottom),
+                    startX: aRight,
+                    endX: boundsB.x,
+                };
+            }
+            if (bRight <= boundsA.x + EPS) {
+                return {
+                    axis: "x",
+                    gap: boundsA.x - bRight,
+                    min: Math.max(boundsA.y, boundsB.y),
+                    max: Math.min(aBottom, bBottom),
+                    startX: bRight,
+                    endX: boundsA.x,
+                };
+            }
+        }
+        if (xOverlap > EPS) {
+            if (aBottom <= boundsB.y + EPS) {
+                return {
+                    axis: "y",
+                    gap: boundsB.y - aBottom,
+                    min: Math.max(boundsA.x, boundsB.x),
+                    max: Math.min(aRight, bRight),
+                    startY: aBottom,
+                    endY: boundsB.y,
+                };
+            }
+            if (bBottom <= boundsA.y + EPS) {
+                return {
+                    axis: "y",
+                    gap: boundsA.y - bBottom,
+                    min: Math.max(boundsA.x, boundsB.x),
+                    max: Math.min(aRight, bRight),
+                    startY: bBottom,
+                    endY: boundsA.y,
+                };
+            }
+        }
+        return null;
+    }
+
+    function presentPieceClearanceNearPointer(result, pointerWorld, session) {
+        // Presentation only: slide an already-correct axis-aligned facing gap
+        // toward the pointer. Never invent a new distance or diagonal substitute.
+        if (!result || result.kind !== "piece" || !pointerWorld || !session) return result;
+        const pieces = session.pieces || {};
+        const boards = session.boards || {};
+        const pieceA = pieces[result.pieceKeyA];
+        const pieceB = pieces[result.pieceKeyB];
+        if (!pieceA || !pieceB) return result;
+        const matA = pieceMaterial(pieceA, boards);
+        const matB = pieceMaterial(pieceB, boards);
+        if (!matA || !matB) return result;
+
+        const corridor = facingCorridor(matA.bounds, matB.bounds);
+        if (!corridor || !(corridor.gap >= 0)) return result;
+        // Only slide when the geometric clearance is exactly the parallel AABB gap.
+        if (Math.abs(corridor.gap - num(result.distance)) > 0.05) return result;
+
+        const start = [num(result.start[0]), num(result.start[1])];
+        const end = [num(result.end[0]), num(result.end[1])];
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const span = Math.max(0, corridor.max - corridor.min);
+        const inset = span > EPS ? Math.min(2, span * 0.08) : 0;
+        const lo = corridor.min + inset;
+        const hi = Math.max(lo, corridor.max - inset);
+        const px = num(pointerWorld[0]);
+        const py = num(pointerWorld[1]);
+
+        if (corridor.axis === "x") {
+            // Horizontal ruler between facing vertical edges.
+            if (Math.abs(dy) > 0.05) return result;
+            if (Math.abs(Math.abs(dx) - corridor.gap) > 0.05) return result;
+            const y = Math.min(hi, Math.max(lo, py));
+            const leftX = Math.min(start[0], end[0]);
+            const rightX = Math.max(start[0], end[0]);
+            return {
+                ...result,
+                start: [leftX, y],
+                end: [rightX, y],
+                presentation: "pointer-anchored",
+            };
+        }
+
+        // Vertical ruler between facing horizontal edges.
+        if (Math.abs(dx) > 0.05) return result;
+        if (Math.abs(Math.abs(dy) - corridor.gap) > 0.05) return result;
+        const x = Math.min(hi, Math.max(lo, px));
+        const topY = Math.min(start[1], end[1]);
+        const bottomY = Math.max(start[1], end[1]);
+        return {
+            ...result,
+            start: [x, topY],
+            end: [x, bottomY],
+            presentation: "pointer-anchored",
+        };
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.MeasureGeometry = Object.freeze({
         distance,
@@ -420,5 +534,7 @@
         hitTestPieceKey,
         measureLine,
         densifySegment,
+        facingCorridor,
+        presentPieceClearanceNearPointer,
     });
 })();

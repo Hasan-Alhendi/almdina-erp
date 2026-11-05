@@ -39,7 +39,7 @@ assert.match(tabs, /dco-plan-apply-return-retry/);
 assert.match(tabs, /Retry loading the plan/);
 assert.match(page, /controller\.js\?v=33/);
 assert.match(page, /transform_geometry\.js\?v=2/);
-assert.match(page, /measure_geometry\.js\?v=1/);
+assert.match(page, /measure_geometry\.js\?v=2/);
 assert.match(page, /canvas_renderer\.js\?v=35/);
 assert.match(workspace, /planApplyReturn/);
 assert.match(workspace, /settleApplyReturn/);
