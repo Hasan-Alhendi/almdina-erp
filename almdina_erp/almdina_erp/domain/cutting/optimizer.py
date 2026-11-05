@@ -9,6 +9,8 @@ from copy import deepcopy
 from typing import Any
 
 from .evaluation import evaluate_plan, validate_plan
+from .abc_search import ABCSearchPolicy, ABCSearchSession
+from .regular_templates import supports_regular_sources
 from .kerf_layout import pack_with_stable_kerf
 from .glass_opening_dxf import record_glass_opening
 from .primitives import (
@@ -478,13 +480,18 @@ def auto_fast(
     kerf_cm: float,
     machine_type: str = "Auto",
     discarded_direct_callback: Any = None,
+    candidate_callback: Any = None,
+    deadline_monotonic: float | None = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     capture = ({"discarded_direct_callback": discarded_direct_callback}
                if discarded_direct_callback is not None else {})
     methods = _candidate_methods(machine_type)
     best: dict[str, Any] | None = None
+    attempts = 0
     for method in methods:
+        if best is not None and deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            break
         candidate = run_single_method(
             pieces,
             board_w_cm,
@@ -501,10 +508,13 @@ def auto_fast(
         )
         if _candidate_is_better(candidate, best):
             best = candidate
+        attempts += 1
+        if candidate_callback is not None:
+            candidate_callback(candidate)
     assert best is not None
     best["optimization_mode"] = AUTO_FAST
     best["method_label"] = "Auto اختار: " + best["method_label"]
-    best["attempts"] = len(methods)
+    best["attempts"] = attempts
     return best
 
 
@@ -1014,6 +1024,7 @@ def smart_search(
     seed_plans: tuple[dict[str, Any], ...] = (), search_round: int = 0,
     discarded_direct_callback: Any = None,
     experimental_regrouping: bool = False,
+    research_abc: ABCSearchPolicy | None = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     """Finish diverse seeds before selection; retain five distinct valid finals.
@@ -1039,6 +1050,10 @@ def smart_search(
     accepted_ranks = {}
     rejected_finals = {}
     finals: list[dict[str, Any]] = []
+    research = (ABCSearchSession(research_abc, pieces, board_w_cm, board_h_cm, kerf_cm,
+        machine_type, mirroring_allowed, metric_kwargs, overall_deadline)
+        if research_abc is not None and research_abc.enabled and budget > 0
+        and machine_type in {"Auto", "CNC Router"} and supports_regular_sources(pieces) else None)
     def offer(candidate):
         nonlocal deadline
         from .plan_portfolio import manufacturing_export_rejection
@@ -1050,6 +1065,8 @@ def smart_search(
             candidate,pieces,mirroring_allowed=mirroring_allowed):
             rejected_finals['validation_or_permission'] = rejected_finals.get('validation_or_permission',0)+1
             return
+        if research is not None:
+            research.observe_valid(candidate)
         signature = _layout_signature(candidate)
         rank=tuple(candidate['industrial_rank'])
         accepted_ranks[signature] = min(accepted_ranks.get(signature,rank),rank)
@@ -1069,8 +1086,21 @@ def smart_search(
         if all(abs(float(sh.get('w',0))-board_w_cm)<1e-8 and abs(float(sh.get('h',0))-board_h_cm)<1e-8
                for sh in plan.get('sheets') or []):
             offer(enrich_plan_metrics(plan,str(plan.get('method_key') or ''),machine_type,**metric_kwargs))
+    research_started = False
+    def seed_checkpoint(candidate):
+        nonlocal research_started
+        # A raw Auto observation must not silently become a native finalist.
+        # It is a validated checkpoint/side proposal only; native finishing
+        # and retention still own their existing seed selection.
+        checked = research.consider(candidate, deadline=deadline)
+        if not research_started and checked is not None:
+            research_started = True
+            research.run(checked, offer, budget)
     seed = (deepcopy(finals[0]) if finals else
-            auto_fast(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,**capture,**metric_kwargs))
+            auto_fast(pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,
+                **(dict(candidate_callback=seed_checkpoint,
+                        deadline_monotonic=(deadline if research.policy.schedule or research.policy.templates else None))
+                   if research is not None else {}), **capture, **metric_kwargs))
     completed, attempts, trials = 0, int(seed.get('attempts') or 0), 0
     def finish(raw, share):
         nonlocal completed
@@ -1082,6 +1112,8 @@ def smart_search(
         offer(result)
         return result
     initial = finish(seed,min(budget*.2,max(0,deadline-time.monotonic())))
+    if research is not None and not research_started:
+        research.run(finals[0] if finals else initial, offer, budget)
     seed_rank = list(initial.get('industrial_rank') or [])
     from .joint_nesting import has_joint_sources, joint_nesting_candidates
     joint_diagnostics = None
@@ -1167,7 +1199,10 @@ def smart_search(
             if signature in seen_layouts:
                 continue
             seen_layouts.add(signature)
-            batch.append(enrich_plan_metrics(raw,method,machine_type,**metric_kwargs))
+            ranked_raw = enrich_plan_metrics(raw,method,machine_type,**metric_kwargs)
+            batch.append(ranked_raw)
+            if research is not None and research.policy.retention:
+                research.consider(ranked_raw, deadline=deadline)
             if len(batch)>=12:
                 finish_batch()
         if trials>=500 or completed>=8 or time.monotonic()>=deadline:
@@ -1245,6 +1280,11 @@ def smart_search(
             boards_before_after=[len(initial['sheets']), len(best['sheets'])])
         best['smart_search']['joint'] = joint_diagnostics
     best['smart_candidates'] = [dict(p) for p in finals]
+    if research is not None:
+        nominee = research.nominee(finals)
+        best['smart_research_candidates'] = [nominee] if nominee is not None else []
+        best['smart_search']['abc_research'] = dict(research.trace,
+            local_packing_calls=dict(research.budget.counts), measured_profiles=research.profiles)
     return best
 
 
@@ -1263,6 +1303,7 @@ def optimize_plan(
     mirroring_allowed: bool = False,
     seed_plans: tuple[dict[str, Any], ...] = (),
     search_round: int = 0,
+    research_abc: ABCSearchPolicy | None = None,
 ) -> dict[str, Any]:
     mode = selected_mode or AUTO_FAST
     metric_kwargs = {
@@ -1274,7 +1315,8 @@ def optimize_plan(
     if mode == SMART_SEARCH:
         return smart_search(
             pieces, board_w_cm, board_h_cm, kerf_cm, machine_type, time_limit_sec,
-            exact_piece_limit, mirroring_allowed, seed_plans, search_round, **metric_kwargs,
+            exact_piece_limit, mirroring_allowed, seed_plans, search_round,
+            **({'research_abc': research_abc} if research_abc is not None else {}), **metric_kwargs,
         )
     if mode == AUTO_FAST:
         baseline = auto_fast(
