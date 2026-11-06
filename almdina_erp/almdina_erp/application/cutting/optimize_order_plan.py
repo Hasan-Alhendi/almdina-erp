@@ -103,6 +103,7 @@ class OptimizerOptions:
     max_centerable_edge_gap_cm: float = 5.0
     alignment_search_budget_sec: float = 1.0
     research_abc: ABCSearchPolicy | None = None
+    alns_search_budget_sec: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +221,33 @@ def optimize_order_plan(
                 seen.add(signature)
                 unique.append(snapshot)
         snapshots = unique[:5]
+        # Preserve the completed native gallery, including its full alignment
+        # allowance. Refinement has its own *additional*, bounded stage; it
+        # never steals discoveries or alignment time from this incumbent.
+        configured_alns = command.optimizer.alns_search_budget_sec
+        alns_seconds = (min(10.0, configured_alns, max(0.0, command.optimizer.time_limit_sec))
+                        if math.isfinite(configured_alns) and configured_alns > 0 else 0.0)
+        alns_trace = None
+        if snapshots and raw_seeds and alns_seconds > 0:
+            additions, alns_trace = _refine_smart_gallery(command, engine, expanded,
+                raw_seeds[0], snapshots[0], applied_trim, trim_decision, plan_settings, alns_seconds)
+            if additions:
+                native_by_signature = {geometry_signature(snapshot): seed for snapshot, seed in reversed(ranked)}
+                records = [(snapshot, native_by_signature[geometry_signature(snapshot)]) for snapshot in snapshots]
+                records.extend(additions)
+                keys = final_system_sort_keys([snapshot for snapshot, _ in records])
+                ordered = [record for _, record in sorted(zip(keys, records), key=lambda item: item[0])]
+                seen = set()
+                selected = []
+                for snapshot, seed in ordered:
+                    signature = geometry_signature(snapshot)
+                    if signature not in seen:
+                        seen.add(signature)
+                        selected.append((snapshot, seed))
+                snapshots = [snapshot for snapshot, _ in selected[:5]]
+                # Keep visible seed correspondence first, then remaining native
+                # warm discoveries. Continuation still receives at most five.
+                raw_seeds = [seed for _, seed in selected[:5]] + raw_seeds
         if snapshots:
             outcome = replace(
                 outcome,
@@ -232,7 +260,60 @@ def optimize_order_plan(
         outcome.snapshot['search_time_limit_sec'] = command.optimizer.time_limit_sec
         outcome.snapshot['total_elapsed_sec'] = round(time.monotonic()-started,3)
         outcome.snapshot['smart_search']['trim_evaluations'] = 1
+        if alns_trace is not None:
+            outcome.snapshot['smart_search']['alns'] = alns_trace
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
+
+
+def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_trim,
+                          trim_decision, plan_settings, seconds):
+    """One shared refinement deadline, then the existing snapshot/validation port.
+
+    Called for a new System calculation only. Saved/uploaded snapshots are never
+    loaded here. A proposal that projects worse cannot remove the native winner.
+    """
+    from almdina_erp.almdina_erp.domain.cutting.same_count_layout_search import material_signature
+    from almdina_erp.almdina_erp.domain.cutting.system_layout_refinement import refine_system_layout
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    board = command.board
+    started = time.monotonic()
+    deadline = started + seconds
+    width = applied_trim.usable_width_cm(full_width_cm=board.full_width_cm)
+    height = applied_trim.usable_length_cm(full_length_cm=board.full_length_cm)
+    projection_reserve = min(1.5, seconds*.15)
+    proposals, trace = refine_system_layout(raw, expanded, width, height, board.kerf_cm,
+        deadline=deadline-projection_reserve, machine_type=command.optimizer.machine_type,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+            min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+            min_remnant_area_m2=command.optimizer.min_remnant_area_m2))
+    original = material_signature(raw)
+    # Reserve projection time cooperatively within the same stage deadline.
+    # Completed Domain improvements remain available at expiry: validation is
+    # atomic and may finish after the cooperative deadline, as in native search.
+    additions = []
+    for index, proposal in enumerate(proposals[1:]):
+        if index and time.monotonic() >= deadline:
+            break
+        if material_signature(proposal) == original:
+            continue
+        configured_alignment = command.optimizer.alignment_search_budget_sec
+        alignment_share = (min(.15, configured_alignment) if math.isfinite(configured_alignment)
+                           and configured_alignment > 0 else 0.0)
+        result = _snapshot_outcome(command, engine, deepcopy(proposal), expanded,
+            applied_trim, trim_decision, plan_settings,
+            alignment_budget={"deadline": min(deadline,time.monotonic()+alignment_share),
+                              "remaining_candidates": 1})
+        if result.snapshot['validation']['is_valid']:
+            before, after = final_system_sort_keys([incumbent, result.snapshot])
+            if after < before:
+                additions.append((result.snapshot, proposal))
+    summary = {key: trace[key] for key in (
+        'attempts', 'stop', 'operators', 'weights', 'movable_pieces', 'pinned_pieces',
+        'skeletons', 'compound_attempts', 'compound_improvements') if key in trace}
+    summary.update(budget_sec=seconds, elapsed_sec=round(time.monotonic()-started, 3),
+        projected_improvements=len(additions), additional_to_native_search=True)
+    return additions, summary
 
 
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,

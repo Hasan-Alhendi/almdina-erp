@@ -260,6 +260,8 @@ jobs:
             almdina_erp/tests/test_abc_cutting_search.py \
             almdina_erp/tests/test_alns_research.py \
             almdina_erp/tests/test_fixed_board_layout_search.py \
+            almdina_erp/tests/test_alns_recalculation.py \
+            almdina_erp/tests/test_compound_layout_refinement.py \
             almdina_erp/tests/test_smart_plan_portfolio.py \
             almdina_erp/tests/test_joint_nesting.py \
             almdina_erp/tests/test_geometry_first_nesting.py \

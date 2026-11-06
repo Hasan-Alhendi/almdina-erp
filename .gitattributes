@@ -2,3 +2,4 @@
 # Preserve their original bytes on Windows and Linux.
 docs/evidence/alns-study/** -text
 docs/evidence/alns-fixed-boards/** -text
+docs/evidence/alns-ui/** -text

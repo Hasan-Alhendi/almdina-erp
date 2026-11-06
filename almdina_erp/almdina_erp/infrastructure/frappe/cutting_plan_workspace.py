@@ -456,6 +456,11 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 alignment_search_budget_sec=flt(
                     getattr(factory_settings, "alignment_search_budget_sec", 1.0)
                 ),
+                # New System calculations from Recalculate/Preview/Continue use
+                # the same bounded ALNS stage. Application caps this allowance
+                # to native search time and ten additional seconds. The native
+                # search and its completed gallery keep their full allowance.
+                alns_search_budget_sec=10.0,
             ),
             piece_rows=_piece_rows(order),
             allow_piece_mirroring=piece_mirroring_allowed(

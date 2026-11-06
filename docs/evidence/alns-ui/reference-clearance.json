@@ -1,0 +1,22 @@
+{
+  "108-system": {
+    "min_clearance_mm": 5.0,
+    "overlaps": [],
+    "below_kerf_5_mm": []
+  },
+  "108-designer": {
+    "min_clearance_mm": 4.9999999999980105,
+    "overlaps": [],
+    "below_kerf_5_mm": []
+  },
+  "154-system": {
+    "min_clearance_mm": 5.0,
+    "overlaps": [],
+    "below_kerf_5_mm": []
+  },
+  "154-designer": {
+    "min_clearance_mm": 4.999999999995879,
+    "overlaps": [],
+    "below_kerf_5_mm": []
+  }
+}

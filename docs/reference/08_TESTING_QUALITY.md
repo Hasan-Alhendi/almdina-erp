@@ -148,6 +148,14 @@ Persona لا يملك `VIEW_COSTS` يجب ألا يحصل على Internal factor
 
 ## 11. Evidence-driven testing for optimization and safety
 
+ربط ALNS بزر إعادة الحساب محمي أيضًا بـ`test_alns_recalculation.py` و
+`test_compound_layout_refinement.py`: استدعاء Composition Root الفعلي مع
+حقل الانعكاس، الاحتفاظ بالـbaseline، رفض المرشح غير الصالح، ميزانية مشتركة
+مع الإسقاط، احترام تعطيل Final Alignment، مجموعات زوايا وضيوف صحيحة،
+هوية كاملة عند حذف لوح فارغ، حساب مساحة الألواح بعد حذفه، وتحريك مجموعة
+تعشيق كاملة دون تغيير اتجاهاتها. بيانات CI اصطناعية؛ قياسات DXF المرفقة
+وأدلة 108/154 مفصولة في [دراسة ALNS للواجهة](../evidence/alns-ui/README-ar.md).
+
 هذا القسم يحدد **متى** نضيف نوع اختبار، ولا يفرض مكتبة جديدة أو تشغيل اختبارات ثقيلة عند تعديل نص فقط.
 
 - **Root-cause regression:** في إصلاح العطل، اختبر الحالة التي فشلت قبل الإصلاح؛ لا تكفي حالة happy-path أو تعديل expected result لتوافق المخرجات الجديدة.

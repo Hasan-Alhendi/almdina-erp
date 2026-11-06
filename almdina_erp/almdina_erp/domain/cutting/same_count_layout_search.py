@@ -1,7 +1,8 @@
 """Opt-in ALNS neighborhoods for remnants and layout at a fixed board count.
 
-Not wired into any production optimizer mode. Partial repair delegates position
-selection and placement to native MaxRects; no dummy piece or new stock exists.
+Partial repair delegates position selection and placement to native MaxRects;
+no dummy piece or new stock exists. The optional mixed cohort pins protected
+pieces and their bounding-box nesting contacts; it never repacks their shapes.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from .regular_templates import _unprotected_regular, grid_specs
 from .strategies.maxrects import find_best_position_maxrects, place_piece_maxrects
 
 OPERATORS = ("exchange", "frontier", "grid", "relocate", "repack")
+MIXED_LAYOUT_OPERATORS = ("owner_repack", "global_refill", "concentrate", *OPERATORS)
 
 
 @dataclass(frozen=True)
@@ -35,9 +37,11 @@ class FixedBoardSearchPolicy:
     max_pair_pieces: int = 64
     segment: int = 12
     refine_seconds: float = 0.0
+    pinned_shapes: bool = False
+    allow_fewer_boards: bool = False
 
     def __post_init__(self):
-        if not self.operators or len(set(self.operators)) != len(self.operators) or any(x not in OPERATORS for x in self.operators):
+        if not self.operators or len(set(self.operators)) != len(self.operators) or any(x not in MIXED_LAYOUT_OPERATORS for x in self.operators):
             raise ValueError("Unknown, duplicate or empty operator set")
         if not 0 < self.max_attempts <= 512 or not 0 < self.max_removed <= 32 or not 0 < self.max_pair_pieces <= 64 or self.segment < 1:
             raise ValueError("Invalid work caps")
@@ -111,10 +115,18 @@ def _remove(plan, ids, kerf, region=None):
     return trial
 
 
-def _repair(trial, sources, ids, receivers, kerf, ordering, heuristic, deadline):
+def _repair(trial, sources, ids, receivers, kerf, ordering, heuristic, deadline, *,
+            prioritize_receivers=False, allow_empty=False):
     pending = [p for p in sources if p["id"] in ids]
     if ordering == "family":
         pending.sort(key=lambda p: (p["width_cm"], p["length_cm"], p["id"]))
+    elif ordering == "width_length_desc":
+        pending.sort(key=lambda p: (-min(p['width_cm'], p['length_cm']),
+                                    -max(p['width_cm'], p['length_cm']), p['id']))
+    elif ordering.startswith('dimension_cycle_'):
+        from .optimizer import _local_sequences
+        pending = next((sequence for name, sequence in _local_sequences(trial, pending)
+                        if name == ordering), pending)
     else:
         pending = order_pieces(pending, ordering)
     for piece in pending:
@@ -127,9 +139,10 @@ def _repair(trial, sources, ids, receivers, kerf, ordering, heuristic, deadline)
                 options.append((spot["score"], i, spot))
         if not options:
             return False
-        _, index, spot = min(options, key=lambda v: (v[0], receivers.index(v[1])))
+        _, index, spot = min(options, key=lambda v: ((receivers.index(v[1]), v[0])
+            if prioritize_receivers else (v[0], receivers.index(v[1]))))
         place_piece_maxrects(trial["sheets"][index], piece, spot, kerf)
-    return all(sheet["pieces"] for sheet in trial["sheets"])
+    return allow_empty or all(sheet["pieces"] for sheet in trial["sheets"])
 
 
 def _exchange(plan, sources, kerf, region, policy, deadline):
@@ -137,14 +150,16 @@ def _exchange(plan, sources, kerf, region, policy, deadline):
         return
     owner = region.sheet_index
     outgoing = {p["id"] for p in plan["sheets"][owner]["pieces"]}
-    if len(outgoing) >= policy.max_removed:
+    movable = {p["id"] for p in sources}
+    if len(outgoing) >= policy.max_removed or not outgoing <= movable:
         return
     families = {}
     for i, sheet in enumerate(plan["sheets"]):
         if i == owner:
             continue
         for p in sheet["pieces"]:
-            families.setdefault(tuple(sorted((p["w"], p["h"]))), []).append(p["id"])
+            if p["id"] in movable:
+                families.setdefault(tuple(sorted((p["w"], p["h"]))), []).append(p["id"])
     seeds = sorted(families.values(), key=lambda ids: (
         min(next(p["area_m2"] for p in sources if p["id"] == item) for item in ids), ids))[:6]
     receivers = tuple(i for i in range(len(plan["sheets"])) if i != owner)
@@ -188,13 +203,15 @@ def _frontier(plan, sources, kerf, region, policy, deadline):
                     target.update({axis:left, extent:right-left})
                     targets.append(target)
     seen = set()
+    movable = {p["id"] for p in sources}
     for target in sorted(targets, key=lambda t: t["w"]*t["h"]):
         key = tuple(round(target[k], 8) for k in ("x", "y", "w", "h"))
         if key in seen:
             continue
         seen.add(key)
         removed = {p["id"] for p in sheet["pieces"] if rect_intersects(p, target)}
-        if not removed or len(removed) > policy.max_removed or len(removed) == len(sheet["pieces"]):
+        if (not removed or not removed <= movable or len(removed) > policy.max_removed
+                or len(removed) == len(sheet["pieces"])):
             continue
         protected = RemnantRegion(index, **target)
         for order in ("area_desc", "long_side_desc", "family"):
@@ -211,6 +228,7 @@ def _grid(plan, sources, kerf, region, policy, deadline):
     eligible = [i for i in range(len(plan["sheets"])) if i != owner]
     located = {p["id"]: (i, p) for i, s in enumerate(plan["sheets"]) for p in s["pieces"]}
     subset = [p for p in sources if located[p["id"]][0] in eligible]
+    movable = {p["id"] for p in sources}
     if not eligible:
         return
     width, height = plan["sheets"][eligible[0]]["w"], plan["sheets"][eligible[0]]["h"]
@@ -262,7 +280,7 @@ def _grid(plan, sources, kerf, region, policy, deadline):
                 blockers = {p["id"] for p in plan["sheets"][index]["pieces"]
                             if p["id"] not in ids and not rects_have_clearance(p, target, kerf)}
                 removed = ids | blockers
-                if len(removed) > policy.max_removed:
+                if len(removed) > policy.max_removed or not removed <= movable:
                     continue
                 for ordering in ("long_side_desc", "area_desc", "family"):
                     for heuristic in ("contact_point", "best_short_side", "best_area", "bottom_left"):
@@ -287,8 +305,9 @@ def _grid(plan, sources, kerf, region, policy, deadline):
 
 def _repack(plan, sources, kerf, region, policy, deadline):
     owner = region.sheet_index if region is not None else -1
-    eligible = [i for i in range(len(plan["sheets"])) if i != owner]
     source = {p["id"]: p for p in sources}
+    eligible = [i for i, sheet in enumerate(plan["sheets"]) if i != owner
+                and all(p["id"] in source for p in sheet["pieces"])]
     for pair in combinations(eligible, 2):
         subset = [source[p["id"]] for i in pair for p in plan["sheets"][i]["pieces"]]
         if len(subset) > policy.max_pair_pieces:
@@ -314,7 +333,8 @@ def _relocate(plan, sources, kerf, region, policy, deadline):
         return
     owner = region.sheet_index if region is not None else -1
     receivers = tuple(i for i in range(len(plan["sheets"])) if i != owner)
-    placed = [p for i in receivers for p in plan["sheets"][i]["pieces"]]
+    movable = {p["id"] for p in sources}
+    placed = [p for i in receivers for p in plan["sheets"][i]["pieces"] if p["id"] in movable]
     by_family = {}
     for p in placed:
         by_family.setdefault(tuple(sorted((round(p["w"], 6), round(p["h"], 6)))), []).append(p)
@@ -343,51 +363,174 @@ def _relocate(plan, sources, kerf, region, policy, deadline):
                 yield trial if complete else None, dict(removed=pair, ordering=ordering, heuristic=heuristic)
 
 
-def _valid(candidate, sources, width, height, kerf, machine, metrics, deadline):
+def _concentrate(plan, sources, kerf, region, policy, deadline):
+    """Reinsert a real two-board pool into the donor first, around pinned shapes.
+
+    The empty region is an objective, not an obstacle: unlike organization-only
+    Repack this can enlarge the incumbent's remnant. Native placement, original
+    instances and independent final validation still own every placement.
+    """
+    if region is None:
+        return
+    owner = region.sheet_index
+    movable = {p["id"] for p in sources}
+    outgoing = {p["id"] for p in plan["sheets"][owner]["pieces"] if p["id"] in movable}
+    if not outgoing or len(outgoing) > policy.max_removed:
+        return
+    for other in sorted((i for i in range(len(plan["sheets"])) if i != owner),
+                        key=lambda i: -sum(p["w"]*p["h"] for p in plan["sheets"][i]["pieces"])):
+        donor = {p["id"] for p in plan["sheets"][other]["pieces"] if p["id"] in movable}
+        if not donor:
+            continue
+        members = [p for p in sources if p["id"] in donor]
+        selected = order_pieces(members, "area_desc")[:policy.max_removed-len(outgoing)]
+        removed = outgoing | {p["id"] for p in selected}
+        for ordering in ("area_desc", "width_desc", "length_desc", "long_side_desc", "family"):
+            for heuristic in ("best_short_side", "contact_point", "best_area"):
+                if time.monotonic() >= deadline:
+                    return
+                trial = _remove(plan, removed, kerf)
+                complete = _repair(trial, sources, removed, (other, owner), kerf,
+                    ordering, heuristic, deadline, prioritize_receivers=True)
+                yield trial if complete else None, dict(pair=[owner, other], removed=sorted(removed),
+                    ordering=ordering, heuristic=heuristic)
+
+
+def _global_refill(plan, sources, kerf, region, policy, deadline):
+    """Bounded whole-Regular repair around an immutable shape/host skeleton.
+
+    At most 64 original instances, as for whole-pool Repack; no partial ejection
+    chain or new board is created. Reuse the native free-space primitives.
+    """
+    if region is None or len(sources) > policy.max_pair_pieces:
+        return
+    owner = region.sheet_index
+    ids = {p["id"] for p in sources}
+    others = [i for i in range(len(plan["sheets"])) if i != owner]
+    dense = sorted(others, key=lambda i: -sum(p["w"]*p["h"] for p in plan["sheets"][i]["pieces"]
+                                             if p["id"] not in ids))
+    orders = list(dict.fromkeys((tuple(dense), tuple(reversed(dense)), tuple(others))))
+    for ordering in ("width_desc", "area_desc", "length_desc", "long_side_desc", "family"):
+        for receivers in orders:
+            for heuristic in ("best_short_side", "contact_point", "best_area", "bottom_left"):
+                if time.monotonic() >= deadline:
+                    return
+                trial = _remove(plan, ids, kerf)
+                complete = _repair(trial, sources, ids, (*receivers, owner), kerf,
+                    ordering, heuristic, deadline, prioritize_receivers=True,
+                    allow_empty=policy.allow_fewer_boards)
+                if complete and policy.allow_fewer_boards:
+                    trial["sheets"] = [s for s in trial["sheets"] if s["pieces"]]
+                yield trial if complete else None, dict(removed=len(ids), ordering=ordering,
+                    heuristic=heuristic, receivers=[*receivers, owner])
+
+
+def _owner_repack(plan, sources, kerf, region, policy, deadline):
+    """Repack the remnant board itself; a rotated short row can enlarge it."""
+    if region is None:
+        return
+    owner = region.sheet_index
+    movable = {p['id']: p for p in sources}
+    ids = {p['id'] for p in plan['sheets'][owner]['pieces']}
+    if not ids <= movable.keys() or len(ids) > policy.max_removed:
+        return
+    subset = [movable[piece_id] for piece_id in sorted(ids)]
+    sheet = plan['sheets'][owner]
+    span = max(min(p['width_cm'],p['length_cm']) for p in subset)
+    optimistic_area = max(max(0,sheet['w']-span)*sheet['h'],
+                          sheet['w']*max(0,sheet['h']-span))/10000
+    if optimistic_area <= region.area_m2+1e-9:
+        return
+    for ordering in ('area_desc', 'width_desc', 'length_desc'):
+        for method in ('MaxRects Best Short Side', 'MaxRects Contact Point', 'MaxRects Best Area'):
+            if time.monotonic() >= deadline:
+                return
+            packed = _run_preordered_method(order_pieces(subset, ordering), subset,
+                sheet['w'], sheet['h'], kerf, method, ordering)
+            trial = None
+            if not packed.get('unplaced') and len(packed['sheets']) == 1:
+                trial = deepcopy(plan)
+                trial['sheets'][owner]['pieces'] = deepcopy(packed['sheets'][0]['pieces'])
+                _cache(trial['sheets'][owner], kerf)
+            yield trial, dict(owner=owner, ordering=ordering, method=method)
+
+
+def _valid(candidate, sources, width, height, kerf, machine, metrics, deadline, mirroring_allowed=False):
     if candidate.get("unplaced") or manufacturing_export_rejection(candidate):
         return None
     if validate_plan(candidate, sources, width, height, kerf_cm=kerf, deadline_monotonic=deadline):
         return None
-    if placement_permission_errors(candidate, sources, mirroring_allowed=False):
+    if placement_permission_errors(candidate, sources, mirroring_allowed=mirroring_allowed):
         return None
     expected = Counter(p.get("piece_instance_id") for p in sources)
     actual = Counter(p.get("piece_instance_id") for s in candidate["sheets"] for p in s["pieces"])
     if actual != expected:
         return None
+    # Whole-pool repair may remove an empty board when explicitly enabled.
+    # Refresh the existing usable-board accounting before metric projection.
+    candidate = deepcopy(candidate)
+    candidate['total_board_area_m2'] = sum(s['w']*s['h'] for s in candidate['sheets'])/10000
+    if candidate.get('used_area_m2') is None:
+        candidate['used_area_m2'] = sum(p['area_m2'] for p in sources)
+    candidate['waste_area_m2'] = max(0.0, candidate['total_board_area_m2']-candidate['used_area_m2'])
     candidate = enrich_plan_metrics(candidate, str(candidate.get("method_key") or ""), machine, **metrics)
     candidate.update(kerf_cm=kerf, machine_type=machine)
     return candidate
 
 
+def _movable_sources(plan, sources, kerf):
+    """Pin machining, shape hosts/guests and conservative nesting contacts."""
+    eligible = {p["id"] for p in sources if _unprotected_regular(p)}
+    for sheet in plan.get("sheets") or []:
+        protected = [p for p in sheet["pieces"] if not _unprotected_regular(p)]
+        for piece in sheet["pieces"]:
+            if not _unprotected_regular(piece) or any(
+                    not rects_have_clearance(piece, fixed, kerf) for fixed in protected):
+                eligible.discard(piece["id"])
+    return [p for p in sources if p["id"] in eligible]
+
+
 def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
         policy=FixedBoardSearchPolicy(), machine_type="CNC Router", metric_kwargs=None,
-        cancelled=lambda: False):
+        cancelled=lambda: False, mirroring_allowed=False):
     """Best plus up to four physical alternatives, trace; never auto-persist."""
     metrics = metric_kwargs or dict(min_remnant_width_cm=30., min_remnant_length_cm=30., min_remnant_area_m2=.09)
     trace = dict(attempts=0, stop="exhausted", operators={}, events=[])
     if (machine_type not in {"Auto", "CNC Router"} or not sources or plan.get("unplaced")
-            or not all(_unprotected_regular(p) for p in sources)
-            or not all(_unprotected_regular(p) and (s.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
-                       for s in plan.get("sheets") or [] for p in s["pieces"])):
+            or any((p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD" for p in sources)
+            or any((s.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD"
+                   or any((p.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD" for p in s["pieces"])
+                   for s in plan.get("sheets") or [])
+            or (not policy.pinned_shapes and (not all(_unprotected_regular(p) for p in sources)
+                or not all(_unprotected_regular(p) for s in plan.get("sheets") or [] for p in s["pieces"])))):
         trace["stop"] = "unsupported_cohort"
         return [deepcopy(plan)], trace
     if cancelled() or time.monotonic() >= deadline:
         trace["stop"] = "stopped"
         return [deepcopy(plan)], trace
-    best = _valid(deepcopy(plan), sources, width, height, kerf, machine_type, metrics, deadline)
+    best = _valid(deepcopy(plan), sources, width, height, kerf, machine_type, metrics, deadline, mirroring_allowed)
     if best is None or not best.get("sheets"):
         trace["stop"] = "invalid_incumbent"
         return [deepcopy(plan)], trace
     count = len(best["sheets"])
+    movable = _movable_sources(best, sources, kerf)
+    moving_ids = {p["id"] for p in movable}
+    pinned = {p["id"]: (s.get("sheet_no", i+1), deepcopy(p)) for i, s in enumerate(best["sheets"])
+              for p in s["pieces"] if p["id"] not in moving_ids}
+    trace.update(movable_pieces=len(movable), pinned_pieces=len(pinned))
+    if not movable:
+        trace["stop"] = "no_movable_pieces"
+        return [deepcopy(plan)], trace
     portfolio, seen = [best], {material_signature(best)}
     rng = random.Random(policy.seed)
     weights = {op: 1. for op in policy.operators}
     scores, uses = Counter(), Counter()
-    generators = dict(exchange=_exchange, frontier=_frontier, grid=_grid, relocate=_relocate, repack=_repack)
+    generators = dict(owner_repack=_owner_repack, global_refill=_global_refill, concentrate=_concentrate, exchange=_exchange, frontier=_frontier,
+                      grid=_grid, relocate=_relocate, repack=_repack)
 
     def streams():
         region = largest_remnant_region(best, machine_type=machine_type, metric_kwargs=metrics)
-        return {op: iter(generators[op](best, sources, kerf, region, policy, deadline)) for op in policy.operators}
+        return {op: iter(generators[op](best, movable, kerf, region, policy, deadline)) for op in policy.operators}
 
     pending = streams()
     for op in policy.operators:
@@ -418,8 +561,12 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
         reason = None
         if candidate is None:
             reason = "repair_failed"
-        elif len(candidate["sheets"]) != count or any(not s["pieces"] for s in candidate["sheets"]):
+        elif ((len(candidate["sheets"]) > count if policy.allow_fewer_boards else len(candidate["sheets"]) != count)
+              or not candidate["sheets"] or any(not s["pieces"] for s in candidate["sheets"])):
             reason = "changed_board_count"
+        elif {p["id"]: (s.get("sheet_no", i+1), p) for i, s in enumerate(candidate["sheets"])
+              for p in s["pieces"] if p["id"] in pinned} != pinned:
+            reason = "changed_pinned_geometry"
         else:
             stat["repaired"] += 1
             ranked = enrich_plan_metrics(candidate, str(best.get("method_key") or ""), machine_type, **metrics)
@@ -431,10 +578,10 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
             else:
                 if policy.refine_seconds > 0:
                     from .final_cut_line_alignment import align_regular_cut_lines
-                    ranked = _valid(ranked, sources, width, height, kerf, machine_type, metrics, deadline)
+                    ranked = _valid(ranked, sources, width, height, kerf, machine_type, metrics, deadline, mirroring_allowed)
                     if ranked is not None:
                         ranked = align_regular_cut_lines(ranked, sources, width, height, kerf,
-                            machine_type=machine_type, mirroring_allowed=False, metric_kwargs=metrics,
+                            machine_type=machine_type, mirroring_allowed=mirroring_allowed, metric_kwargs=metrics,
                             deadline_monotonic=min(deadline, time.monotonic()+policy.refine_seconds))
                 if ranked is None:
                     stat["rejects"]["pre_refinement_validation"] = stat["rejects"].get("pre_refinement_validation", 0)+1
@@ -449,15 +596,17 @@ def improve_fixed_board_layout(plan, sources, width, height, kerf, *, deadline,
                 elif equal_remnant and (before is None or after is None or after[0] > before[0]+1e-5 or after[1] > before[1]):
                     reason = "organization_network_regression"
                 else:
-                    checked = _valid(ranked, sources, width, height, kerf, machine_type, metrics, deadline)
+                    checked = _valid(ranked, sources, width, height, kerf, machine_type, metrics, deadline, mirroring_allowed)
                     if checked is None:
                         reason = "validation_failed"
                     else:
                         stat["valid"] += 1
                         seen.add(material_signature(checked))
                         best = checked
+                        count = len(best["sheets"])
                         portfolio.append(best)
-                        portfolio.sort(key=lambda p: final_system_sort_keys([p])[0])
+                        keys = final_system_sort_keys(portfolio)
+                        portfolio = [p for _,p in sorted(zip(keys,portfolio),key=lambda item:item[0])]
                         portfolio = portfolio[:5]
                         stat["improvements"] += 1
                         scores[op] += 5 if not equal_remnant else 2
