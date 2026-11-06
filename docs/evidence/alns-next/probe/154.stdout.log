@@ -1,0 +1,100 @@
+initial patterns 66
+built patterns 378 seconds 17.094000000011874
+stage1 OPTIMAL
+stage2 OPTIMAL
+{
+  "case": "154",
+  "augment": true,
+  "initial_patterns": 66,
+  "total_patterns": 378,
+  "pool_build_sec": 17.094000000011874,
+  "stage1": {
+    "status": "OPTIMAL",
+    "wall_sec": 0.28099999998812564,
+    "bound": 783920.0
+  },
+  "stage2": {
+    "status": "OPTIMAL",
+    "wall_sec": 0.0629999999946449
+  },
+  "selected": [
+    {
+      "index": 29,
+      "origin": "frozen_alns",
+      "remnant": 0.0
+    },
+    {
+      "index": 30,
+      "origin": "frozen_alns",
+      "remnant": 0.0
+    },
+    {
+      "index": 32,
+      "origin": "frozen_alns",
+      "remnant": 0.78392
+    },
+    {
+      "index": 47,
+      "origin": "frozen_alns",
+      "remnant": 0.0
+    }
+  ],
+  "rejected": {},
+  "before": {
+    "boards": 4,
+    "pieces": 67,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      4,
+      0,
+      -0.78392,
+      148,
+      10955.4,
+      16,
+      5
+    ],
+    "reusable_m2": 0.78392,
+    "aligned": 64,
+    "adjacent": 118,
+    "alignment_ratio": 0.5423728813559322,
+    "family_splits": 11,
+    "cutter_profile": [
+      74998.57813036592,
+      106,
+      6296.5
+    ],
+    "signature": "67108a5825c1ecdc19623cbf6f2751b144d18648169ac6fa5b24912561670cd0"
+  },
+  "after": {
+    "boards": 4,
+    "pieces": 67,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      4,
+      0,
+      -0.78392,
+      148,
+      10955.4,
+      16,
+      5
+    ],
+    "reusable_m2": 0.78392,
+    "aligned": 64,
+    "adjacent": 118,
+    "alignment_ratio": 0.5423728813559322,
+    "family_splits": 11,
+    "cutter_profile": [
+      74998.57813036592,
+      106,
+      6296.5
+    ],
+    "signature": "30991922383daa20ef5e33f398047acac753b998cb09caa28506041b595955d7"
+  },
+  "strict_roundtrip": true,
+  "comparison": "equal",
+  "solver_backend": "Cbc 2.10.12",
+  "script_sha256": "71f65f651237f8102a4f490a1856f2b082554a26c9d11bf00fe694aa8be0d3e7",
+  "warning": "Offline upper-potential experiment with historical multi-budget pool, not a cold/equal-budget benchmark or global optimality proof"
+}
