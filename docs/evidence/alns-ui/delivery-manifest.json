@@ -7,12 +7,13 @@
   "observations": 24,
   "strict_roundtrips": 120,
   "local_pytest": {
-    "tests": 267,
+    "tests": 279,
     "subtests": 123,
     "failures": 0,
     "errors": 0,
     "skipped": 0,
-    "junit_entries": 390
+    "junit_entries": 402,
+    "report": "final-regression-version-contract.xml"
   },
   "node_suites": [
     "plan_candidate_gallery.test.js",
@@ -74,6 +75,7 @@
     "final-matrix/298-native-r0.json": "3cfbc0b4ac8dfbb42eedd61c1da59e3bb644efaa3f0ccc25c6b682c119527779",
     "final-matrix/298-native-r1.json": "eb23ce5f5a2687d59b92d457e3f3b74e2a3bd8ffc187c8b0956bb3e8ddc8a9f3",
     "final-matrix/index.json": "b86cb14c40cf248e2fb288e356283f3485d608af77d3bae548e0c8667a7ecf35",
+    "final-regression-version-contract.xml": "7ce0a5dd49443f3a02982a48fe72d8937034227795efae4d3483a36e2248657b",
     "final-regression.xml": "7a4fe6207b5b0e07d4ef0b6997df5d8bdb4e909e90e9bf9732e679c7b4b69982",
     "final-units.xml": "6c0491a7d0fb8c02dc0ce1878ef57c373e3a3fcfe16330a0da422da32ae90e2f",
     "fragile-family/108.json": "a885685261d8c5cf4ef7893627a495580954b27f608eca7bffd4e0ba3c297fdd",
@@ -89,6 +91,7 @@
     "grid-skeleton/154.json": "4f403545974a3f0e91763c495b8d262b218b89a9dc914aac019c4136eabd5f43",
     "input-108.json": "dfbfc9dafe1872a4828a58498513caca8116edb17461b5affb9ea12fc92356de",
     "input-154.json": "051910cbe0d6af5d273886d31a203d1cb50159ccd24c2c6da731f1badd4b70c2",
+    "integration-version-contract-failure.json": "65a65188a49a1033e95a7aa5c68f9627183793d6fc20d03a155968da91373324",
     "mixed-depth-application/108-r0.json": "e37cfd3bfb2e9fa6e7f00e3227d70bf512d89efa2cbca71aa4db3e538e7def95",
     "mixed-depth-application/154-r0.json": "60935fce1c4101361d6147edd28eb9876e9e0c14d92658930a9cb3d9f9f6791d",
     "mixed-depth-application/index.json": "369e906b3d1018a2f4f726293e7969a5d88ff4bca32684b7c78a2fcef32b24f0",
@@ -105,7 +108,7 @@
     "pilot-source-contact-boundary/almdina_erp/almdina_erp/domain/cutting/same_count_layout_search.py": "ae4c4db620cc3d14d6c9692db2e2d59a419f65bab9d111e44597bdaf6a8778bc",
     "pilot-source-contact-boundary/almdina_erp/almdina_erp/domain/cutting/system_layout_refinement.py": "8fa33e9e1331a4813a076b61c1dea542c8189b918cf5a68de1a25b46bcd11e68",
     "protocol-ar.md": "b19f4578bdf6e15b88ac7da22dfad1f0f2f7ff931a8d662f81b96b2843978e72",
-    "README-ar.md": "d84cec3a90809aeaa3afc13a61909b982ac440b10b12fb86134cb5848e73b3b3",
+    "README-ar.md": "4ba8d14628f30b30be18184b6a5c2883a4a57151adf765b0c1ef0730fc068ef8",
     "reference-clearance.json": "362fb4e95e8396633087a13ae02f9136b04287e8bc4c02483774b86cd4c85fc2",
     "refinement-initial/108-r0.json": "7c1850433c8632f6e68855c616488d42ed82e16f3d806c8f3c446f746c988daa",
     "refinement-initial/154-r0.json": "1ef7a1e1f09575d07a33094a3bcc16d2084ea6e07069ba66853b0343677fdcc3",
@@ -217,5 +220,6 @@
     "whole-family-application/108-r0.json": "7edbc36b83965cd23e7d312f0bbf5439af090158e67f880801d29e585f23bf3f",
     "whole-family-application/154-r0.json": "6fdcaea6e074886ab3f1d8741524ca3d2edcc4a26fc4b03c08aad7834707914f",
     "whole-family-application/index.json": "4468e203f5910a8e9dddd62b5f491f810a1ecd2a90c542470ae974c1b1a6dfec"
-  }
+  },
+  "test_contract_correction_base": "bbb59317e3201286a9d7def3199945490f2e1c4e"
 }

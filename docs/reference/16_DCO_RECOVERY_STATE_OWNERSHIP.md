@@ -482,6 +482,10 @@ fingerprint; it does not make engine-version drift alone stale. Later recovery
 must retain both values, must not put engine version into the v1 hash, and must
 apply an explicit product/migration decision before changing that behavior.
 
+The System ALNS refinement release uses `2.2.0-alns-refinement` as its result
+provenance. This version change preserves the input-fingerprint and freshness
+rules above; it does not invalidate an existing plan by engine version alone.
+
 Recovery stores raw editable DCO requirements and a Plan workspace settings
 draft. It does not calculate this server fingerprint in the browser. After DCO
 normalization/checkpoint, the existing server adapter computes the authoritative

@@ -34,6 +34,7 @@ jobs:
             almdina_erp/tests/test_cutting_plan_application.py \
             almdina_erp/tests/test_plan_preview_session_exact_commit.py \
             almdina_erp/tests/test_plan_fingerprint_compatibility.py \
+            almdina_erp/tests/test_dco_recovery_state_ownership_contract.py \
             almdina_erp/tests/test_cutting_domain_architecture.py \
             almdina_erp/tests/test_stage13_quality_gates.py \
             almdina_erp/tests/test_stage15_documentation_contract.py \
