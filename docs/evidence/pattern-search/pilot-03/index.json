@@ -1,0 +1,26 @@
+[
+  {
+    "case": "108",
+    "returncode": 0,
+    "file": "108.json.gz",
+    "sha256": "cf7f0851b74010ce21eea7e27f7af92aa1f0f9150538be6619cf0f6f5024fe8d",
+    "stderr": "",
+    "uncompressed_sha256": "a07156fbb7bcdf3c7ffd48b7f8107414017a58e6fcf579295a9d9341955f84ae"
+  },
+  {
+    "case": "154",
+    "returncode": 0,
+    "file": "154.json.gz",
+    "sha256": "83beb34f1725ad33bed2eaeb02042f5c17b82fad07d4a9b2a778c07f14958662",
+    "stderr": "",
+    "uncompressed_sha256": "16a6c426be2ec763142ee9a2abbda960c04fe87a9f4ba0070f22aed28e430165"
+  },
+  {
+    "case": "298",
+    "returncode": 0,
+    "file": "298.json.gz",
+    "sha256": "cf93d63405c2673f3ade53d1bc8a34fb21c8755eb23c1fe6e510eb53f3a4e38f",
+    "stderr": "",
+    "uncompressed_sha256": "d6aaea1f981cb1cb92bfd81a73b1fdf2700ad7e823a606613504ef98864977da"
+  }
+]

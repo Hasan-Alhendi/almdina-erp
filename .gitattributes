@@ -3,3 +3,5 @@
 docs/evidence/alns-study/** -text
 docs/evidence/alns-fixed-boards/** -text
 docs/evidence/alns-ui/** -text
+docs/evidence/alns-next/** -text
+docs/evidence/pattern-search/** -text

@@ -54,7 +54,7 @@ def _body_rotations(body, sources):
     return [variants[i] for i in (0, 2, 1, 3)]
 
 
-def _skeletons(plan, sources, width, height, kerf, mirror, deadline):
+def _skeletons(plan, sources, width, height, kerf, mirror, deadline, pattern_sink=None):
     """Fair repair scheduling: a large first family cannot consume every probe."""
     variations = iter(_skeleton_variations(plan, sources, width, height, kerf, mirror, deadline))
     pending = deque()
@@ -70,6 +70,8 @@ def _skeletons(plan, sources, width, height, kerf, mirror, deadline):
         except StopIteration:
             exhausted = True
             break
+        if pattern_sink is not None:
+            pattern_sink(skeleton)
         stream = iter(_repair_variation(skeleton, sources, remaining, event, width, height, kerf, deadline))
         for _ in range(8):
             try:
@@ -82,6 +84,8 @@ def _skeletons(plan, sources, width, height, kerf, mirror, deadline):
         if not exhausted and len(pending) < 16:
             try:
                 skeleton, remaining, event = next(variations)
+                if pattern_sink is not None:
+                    pattern_sink(skeleton)
                 pending.append(iter(_repair_variation(skeleton, sources, remaining, event,
                                                      width, height, kerf, deadline)))
             except StopIteration:
@@ -315,7 +319,7 @@ def _ranked(plans):
 
 
 def refine_system_layout(plan, sources, width, height, kerf, *, deadline,
-                         machine_type, mirroring_allowed, metric_kwargs):
+                         machine_type, mirroring_allowed, metric_kwargs, pattern_sink=None):
     """Preserve the original; explore compound moves before accepting by quality."""
     started = time.monotonic()
     trace = dict(attempts=0, skeletons=0, compound_attempts=0, compound_improvements=0,
@@ -406,7 +410,7 @@ def refine_system_layout(plan, sources, width, height, kerf, *, deadline,
 
     if has_shapes and time.monotonic() < deadline:
         skeleton_deadline = started+(deadline-started)*.7
-        for skeleton, event in _skeletons(plan, sources, width, height, kerf, mirroring_allowed, skeleton_deadline):
+        for skeleton, event in _skeletons(plan, sources, width, height, kerf, mirroring_allowed, skeleton_deadline, pattern_sink):
             if time.monotonic() >= skeleton_deadline or trace['skeletons'] >= 160:
                 break
             trace['compound_attempts'] += 1

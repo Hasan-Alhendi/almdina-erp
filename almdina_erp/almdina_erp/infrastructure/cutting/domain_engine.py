@@ -70,6 +70,14 @@ class DomainCuttingEngineAdapter:
             kerf_cm=max(0.0, float(plan.get("kerf_cm") or 0)),
         )
 
+    def solve_pattern_master(self, columns, demand, max_boards, *, deadline, hint=()):
+        from .pattern_solver import solve_pattern_master
+        return solve_pattern_master(columns,demand,max_boards,deadline=deadline,hint=hint)
+
+    def solve_shelf_master(self,*args,**kwargs):
+        from .pattern_solver import solve_shelf_master
+        return solve_shelf_master(*args,**kwargs)
+
 
 domain_cutting_engine = DomainCuttingEngineAdapter()
 

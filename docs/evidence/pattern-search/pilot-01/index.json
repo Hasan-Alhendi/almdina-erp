@@ -1,0 +1,18 @@
+[
+  {
+    "case": "108",
+    "returncode": 0,
+    "file": "108.json.gz",
+    "sha256": "79a42a8218ce900695b583977e445f340e8fba0203d709be709400897334dcad",
+    "stderr": "",
+    "uncompressed_sha256": "ec13ac9a01ed0ba7a2f13c66b09ec914dc06fada37cbcd7ef0d17e5de1c68cc1"
+  },
+  {
+    "case": "154",
+    "returncode": 0,
+    "file": "154.json.gz",
+    "sha256": "dc1ed8fcdb4634f4950443a3608f0b53f70c821825f3c3a5a679108c8cdf3297",
+    "stderr": "",
+    "uncompressed_sha256": "367493b771aa505b15054bdd37ee3e0cce0182be3006ebc28f4effc8049d3294"
+  }
+]

@@ -182,7 +182,8 @@ def test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag(monk
     assert applied == [outcome]
     assert outcome.snapshot['smart_search']['alns']['attempts'] > 0
     assert outcome.snapshot['allow_piece_mirroring'] is mirror
-    assert outcome.snapshot['engine_version'] == '2.2.0-alns-refinement'
+    assert outcome.snapshot['engine_version'] == '2.3.0-pattern-layout'
+    assert outcome.snapshot['smart_search']['pattern_search']['budget_sec'] == 5
 
 
 def test_global_refill_keeps_real_identity_and_its_whole_pool_cap():

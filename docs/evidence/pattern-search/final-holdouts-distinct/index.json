@@ -1,0 +1,74 @@
+[
+  {
+    "case": "holdout-01",
+    "arm": "alns",
+    "returncode": 1,
+    "file": "holdout-01-alns.json.gz",
+    "sha256": "e648d6f2fc07f2c3a8cd627c90cac2cb0ddbc2ccdf267a19353003a1b488f90b",
+    "stderr": "",
+    "uncompressed_sha256": "519b77ae09990f1c371ebb96c4d3e1a00340b1e2eaa38c955176bc33f55ef71a"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "patterns",
+    "returncode": 1,
+    "file": "holdout-01-patterns.json.gz",
+    "sha256": "f8990e3bc9a424b7d014a295984997ae7b95fb1e568a3751273d94f5b151c8fe",
+    "stderr": "",
+    "uncompressed_sha256": "6226101477e746623dfad56af1729a2473e6df52640f0bb5a4bbe5e722de16dd"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "equal_total_alns",
+    "returncode": 1,
+    "file": "holdout-01-equal_total_alns.json.gz",
+    "sha256": "22b6b6e719c21cb9c31e9c81adf291e8e45180469f9beb5908c94a4e9a412e67",
+    "stderr": "",
+    "uncompressed_sha256": "2fdd30d3c540e49d27abaf2e49145930cf6471405b72c1161cafeeec25d44c0d"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "equal_total_alns",
+    "returncode": 1,
+    "file": "holdout-02-equal_total_alns.json.gz",
+    "sha256": "cbcf43e9bbe7b11ca9d8ad750a51d5bd771648be6670949591011138c3b9f8e3",
+    "stderr": "",
+    "uncompressed_sha256": "b9cb826091aff51b8f1f8d85ad447c4529aa012eb1afcc86f9035cab02822e00"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "patterns",
+    "returncode": 1,
+    "file": "holdout-02-patterns.json.gz",
+    "sha256": "33e296b4c2b721d6d78a84ebbced40ce66a39218e60786cb8a39c10f45d90e9c",
+    "stderr": "",
+    "uncompressed_sha256": "5cf7bccb3a362522cbce8122dae62ddd058691084b5664b55546097d0fb34f1a"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "alns",
+    "returncode": 1,
+    "file": "holdout-02-alns.json.gz",
+    "sha256": "fdaf8b12c812cec429209f72404fb317b6600c2b2bf82c6be4a807380dab0dc4",
+    "stderr": "",
+    "uncompressed_sha256": "befaf4fc3059cf1bf53e8b436f953969b20080646015a5cfdc6cd3622dc1eafc"
+  },
+  {
+    "case": "holdout-03",
+    "arm": "alns",
+    "returncode": 1,
+    "file": "holdout-03-alns.json.gz",
+    "sha256": "602eca683e969952bbd58abb21026ea6fe505c74fe826965337fbb7e008b5009",
+    "stderr": "",
+    "uncompressed_sha256": "60a105de5ecec22257cae8971c5fa8874c66c8cfa750aaf54f7dd349a74592fe"
+  },
+  {
+    "case": "holdout-03",
+    "arm": "patterns",
+    "returncode": 1,
+    "file": "holdout-03-patterns.json.gz",
+    "sha256": "4bfa9dfa683bd1e8de9b4b0c086e134c87b18f898cd920fd22330c508224d9cb",
+    "stderr": "",
+    "uncompressed_sha256": "84d9648d8a95e17a98c453315857b88ee02b2efd01a4c9c4fd45a25ef9e0e147"
+  }
+]

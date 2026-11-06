@@ -1,0 +1,240 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="990" height="695" viewBox="0 0 990 695">
+<rect width="100%" height="100%" fill="#f5f7fa"/>
+<style>text{font-family:Arial,sans-serif;fill:#19334a;font-size:11px}</style>
+<text x="20" y="26" font-size="19">Order 154: actual material outlines, Kerf 5 mm</text>
+<text x="20" y="46">Cold repetition 0. Material geometry; measured cutter network is not CNC sequence certification.</text>
+<text x="20" y="75" font-size="14">Previous stages: N10 + ALNS10</text>
+<text x="20" y="94">4 boards | remnant 0.783920 m²</text>
+<text x="20" y="111">Cutter 74.9986 m | 106 segments</text>
+<rect x="20" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="79.9000,130.0000 20.0000,130.0000 20.0000,200.0000 46.9000,200.0000 79.9000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="80.4000,130.0000 140.3000,130.0000 140.3000,200.0000 113.4000,200.0000 80.4000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="60.1500,187.6000 100.1500,187.6000 100.1500,199.5000 60.1500,199.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="79.9000,200.5000 20.0000,200.5000 20.0000,270.5000 49.9000,270.5000 79.9000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="80.4000,200.5000 140.3000,200.5000 140.3000,270.5000 110.4000,270.5000 80.4000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="60.1500,258.1000 100.1500,258.1000 100.1500,270.0000 60.1500,270.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="20.0000,271.0000 49.9000,271.0000 49.9000,356.8000 20.0000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="50.4000,271.0000 80.3000,271.0000 80.3000,356.8000 50.4000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="80.8000,271.0000 110.7000,271.0000 110.7000,356.8000 80.8000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="111.2000,271.0000 141.1000,271.0000 141.1000,356.8000 111.2000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="20.0000,357.3000 60.0000,357.3000 60.0000,369.2000 20.0000,369.2000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="60.5000,357.3000 127.3000,357.3000 127.3000,363.2000 60.5000,363.2000" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="60.5000,363.7000 100.5000,363.7000 100.5000,369.6000 60.5000,369.6000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="101.0000,363.7000 141.0000,363.7000 141.0000,369.6000 101.0000,369.6000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="20" y="391.0">Board 1: 14 pieces</text>
+<rect x="170" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="170.4500,130.6500 200.3500,130.6500 200.3500,210.4500 170.4500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="200.8500,130.6500 230.7500,130.6500 230.7500,210.4500 200.8500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="231.2500,130.6500 261.1500,130.6500 261.1500,210.4500 231.2500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="261.6500,130.6500 291.5500,130.6500 291.5500,210.4500 261.6500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="170.4500,210.9500 200.3500,210.9500 200.3500,290.7500 170.4500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="200.8500,210.9500 230.7500,210.9500 230.7500,290.7500 200.8500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="231.2500,210.9500 261.1500,210.9500 261.1500,290.7500 231.2500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="261.6500,210.9500 291.5500,210.9500 291.5500,290.7500 261.6500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="170.4500,291.2500 200.3500,291.2500 200.3500,366.9500 170.4500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="200.8500,291.2500 230.7500,291.2500 230.7500,366.9500 200.8500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="231.2500,291.2500 261.1500,291.2500 261.1500,366.9500 231.2500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="261.6500,291.2500 291.5500,291.2500 291.5500,366.9500 261.6500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="170.0000,367.4500 236.8000,367.4500 236.8000,373.3500 170.0000,373.3500" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="237.3000,367.4500 277.3000,367.4500 277.3000,373.3500 237.3000,373.3500" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="170" y="391.0">Board 2: 14 pieces</text>
+<rect x="20" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="20.2500,415.7000 47.1500,415.7000 47.1500,491.4000 20.2500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="47.6500,415.7000 74.5500,415.7000 74.5500,491.4000 47.6500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="75.0500,415.7000 101.9500,415.7000 101.9500,491.4000 75.0500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="102.4500,415.7000 129.3500,415.7000 129.3500,491.4000 102.4500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="20.2500,491.9000 50.1500,491.9000 50.1500,577.7000 20.2500,577.7000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="20.2500,578.2000 50.1500,578.2000 50.1500,653.9000 20.2500,653.9000" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="50.6500,491.9000 80.5500,491.9000 80.5500,560.6000 50.6500,560.6000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="50.6500,561.1000 80.5500,561.1000 80.5500,627.9000 50.6500,627.9000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<polygon points="81.0500,491.9000 107.9500,491.9000 107.9500,560.6000 81.0500,560.6000" fill="#c8abaa" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 68.7))</title></polygon>
+<polygon points="81.0500,561.1000 107.9500,561.1000 107.9500,627.9000 81.0500,627.9000" fill="#abbbcc" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 66.8))</title></polygon>
+<polygon points="50.6500,628.4000 85.3500,628.4000 85.3500,658.3000 50.6500,658.3000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="108.4500,491.9000 135.3500,491.9000 135.3500,526.6000 108.4500,526.6000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="108.4500,527.1000 138.3500,527.1000 138.3500,612.9000 108.4500,612.9000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="85.8500,628.4000 120.5500,628.4000 120.5500,658.3000 85.8500,658.3000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="129.8500,415.7000 141.7500,415.7000 141.7500,455.7000 129.8500,455.7000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="121.0500,613.4000 132.9500,613.4000 132.9500,653.4000 121.0500,653.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="133.4500,613.4000 139.3500,613.4000 139.3500,653.4000 133.4500,653.4000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="135.8500,456.2000 141.7500,456.2000 141.7500,496.2000 135.8500,496.2000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="20" y="676.0">Board 3: 18 pieces</text>
+<rect x="170" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="170.2500,415.0000 210.1500,415.0000 210.1500,455.0000 170.2500,455.0000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="210.6500,415.0000 279.3500,415.0000 279.3500,444.9000 210.6500,444.9000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="170.2500,455.5000 200.1500,455.5000 200.1500,522.3000 170.2500,522.3000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<polygon points="170.2500,522.8000 210.1500,522.8000 210.1500,562.8000 170.2500,562.8000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="170.2500,563.3000 197.1500,563.3000 197.1500,598.0000 170.2500,598.0000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="210.6500,445.4000 279.3500,445.4000 279.3500,475.3000 210.6500,475.3000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="170.0000,598.5000 199.9000,598.5000 199.9000,633.2000 170.0000,633.2000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="200.6500,475.8000 227.5500,475.8000 227.5500,510.5000 200.6500,510.5000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="228.0500,475.8000 257.9500,475.8000 257.9500,510.5000 228.0500,510.5000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="258.4500,475.8000 285.3500,475.8000 285.3500,510.5000 258.4500,510.5000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="279.8500,415.0000 291.7500,415.0000 291.7500,455.0000 279.8500,455.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="170.0000,633.7000 210.0000,633.7000 210.0000,645.6000 170.0000,645.6000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="170.0000,646.1000 210.0000,646.1000 210.0000,658.0000 170.0000,658.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="210.6500,511.0000 222.5500,511.0000 222.5500,551.0000 210.6500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="223.0500,511.0000 234.9500,511.0000 234.9500,551.0000 223.0500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="235.4500,511.0000 247.3500,511.0000 247.3500,551.0000 235.4500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="247.8500,511.0000 259.7500,511.0000 259.7500,551.0000 247.8500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="260.2500,511.0000 272.1500,511.0000 272.1500,551.0000 260.2500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="272.6500,511.0000 284.5500,511.0000 284.5500,551.0000 272.6500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="210.6500,551.5000 250.6500,551.5000 250.6500,563.4000 210.6500,563.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="251.1500,551.5000 291.1500,551.5000 291.1500,563.4000 251.1500,563.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<text x="170" y="676.0">Board 4: 21 pieces</text>
+<text x="345" y="75" font-size="14">Equal budget: N20 + ALNS10</text>
+<text x="345" y="94">4 boards | remnant 0.783920 m²</text>
+<text x="345" y="111">Cutter 74.9986 m | 106 segments</text>
+<rect x="345" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="404.9000,130.0000 345.0000,130.0000 345.0000,200.0000 371.9000,200.0000 404.9000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="405.4000,130.0000 465.3000,130.0000 465.3000,200.0000 438.4000,200.0000 405.4000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="385.1500,187.6000 425.1500,187.6000 425.1500,199.5000 385.1500,199.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="404.9000,200.5000 345.0000,200.5000 345.0000,270.5000 374.9000,270.5000 404.9000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="405.4000,200.5000 465.3000,200.5000 465.3000,270.5000 435.4000,270.5000 405.4000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="385.1500,258.1000 425.1500,258.1000 425.1500,270.0000 385.1500,270.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="345.0000,271.0000 374.9000,271.0000 374.9000,356.8000 345.0000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="375.4000,271.0000 405.3000,271.0000 405.3000,356.8000 375.4000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="405.8000,271.0000 435.7000,271.0000 435.7000,356.8000 405.8000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="436.2000,271.0000 466.1000,271.0000 466.1000,356.8000 436.2000,356.8000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="345.0000,357.3000 385.0000,357.3000 385.0000,369.2000 345.0000,369.2000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="385.5000,357.3000 452.3000,357.3000 452.3000,363.2000 385.5000,363.2000" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="385.5000,363.7000 425.5000,363.7000 425.5000,369.6000 385.5000,369.6000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="426.0000,363.7000 466.0000,363.7000 466.0000,369.6000 426.0000,369.6000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="345" y="391.0">Board 1: 14 pieces</text>
+<rect x="495" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="495.4500,130.6500 525.3500,130.6500 525.3500,210.4500 495.4500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="525.8500,130.6500 555.7500,130.6500 555.7500,210.4500 525.8500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="556.2500,130.6500 586.1500,130.6500 586.1500,210.4500 556.2500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="586.6500,130.6500 616.5500,130.6500 616.5500,210.4500 586.6500,210.4500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="495.4500,210.9500 525.3500,210.9500 525.3500,290.7500 495.4500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="525.8500,210.9500 555.7500,210.9500 555.7500,290.7500 525.8500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="556.2500,210.9500 586.1500,210.9500 586.1500,290.7500 556.2500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="586.6500,210.9500 616.5500,210.9500 616.5500,290.7500 586.6500,290.7500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="495.4500,291.2500 525.3500,291.2500 525.3500,366.9500 495.4500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="525.8500,291.2500 555.7500,291.2500 555.7500,366.9500 525.8500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="556.2500,291.2500 586.1500,291.2500 586.1500,366.9500 556.2500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="586.6500,291.2500 616.5500,291.2500 616.5500,366.9500 586.6500,366.9500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="495.0000,367.4500 561.8000,367.4500 561.8000,373.3500 495.0000,373.3500" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="562.3000,367.4500 602.3000,367.4500 602.3000,373.3500 562.3000,373.3500" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="495" y="391.0">Board 2: 14 pieces</text>
+<rect x="345" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="345.2500,415.7000 372.1500,415.7000 372.1500,491.4000 345.2500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="372.6500,415.7000 399.5500,415.7000 399.5500,491.4000 372.6500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="400.0500,415.7000 426.9500,415.7000 426.9500,491.4000 400.0500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="427.4500,415.7000 454.3500,415.7000 454.3500,491.4000 427.4500,491.4000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="345.2500,491.9000 375.1500,491.9000 375.1500,577.7000 345.2500,577.7000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="345.2500,578.2000 375.1500,578.2000 375.1500,653.9000 345.2500,653.9000" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="375.6500,491.9000 405.5500,491.9000 405.5500,560.6000 375.6500,560.6000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="375.6500,561.1000 405.5500,561.1000 405.5500,627.9000 375.6500,627.9000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<polygon points="406.0500,491.9000 432.9500,491.9000 432.9500,560.6000 406.0500,560.6000" fill="#c8abaa" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 68.7))</title></polygon>
+<polygon points="406.0500,561.1000 432.9500,561.1000 432.9500,627.9000 406.0500,627.9000" fill="#abbbcc" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 66.8))</title></polygon>
+<polygon points="375.6500,628.4000 410.3500,628.4000 410.3500,658.3000 375.6500,658.3000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="433.4500,491.9000 460.3500,491.9000 460.3500,526.6000 433.4500,526.6000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="433.4500,527.1000 463.3500,527.1000 463.3500,612.9000 433.4500,612.9000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="410.8500,628.4000 445.5500,628.4000 445.5500,658.3000 410.8500,658.3000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="454.8500,415.7000 466.7500,415.7000 466.7500,455.7000 454.8500,455.7000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="446.0500,613.4000 457.9500,613.4000 457.9500,653.4000 446.0500,653.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="458.4500,613.4000 464.3500,613.4000 464.3500,653.4000 458.4500,653.4000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="460.8500,456.2000 466.7500,456.2000 466.7500,496.2000 460.8500,496.2000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="345" y="676.0">Board 3: 18 pieces</text>
+<rect x="495" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="495.2500,415.0000 535.1500,415.0000 535.1500,455.0000 495.2500,455.0000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="535.6500,415.0000 604.3500,415.0000 604.3500,444.9000 535.6500,444.9000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="495.2500,455.5000 525.1500,455.5000 525.1500,522.3000 495.2500,522.3000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<polygon points="495.2500,522.8000 535.1500,522.8000 535.1500,562.8000 495.2500,562.8000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="495.2500,563.3000 522.1500,563.3000 522.1500,598.0000 495.2500,598.0000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="535.6500,445.4000 604.3500,445.4000 604.3500,475.3000 535.6500,475.3000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="495.0000,598.5000 524.9000,598.5000 524.9000,633.2000 495.0000,633.2000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="525.6500,475.8000 552.5500,475.8000 552.5500,510.5000 525.6500,510.5000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="553.0500,475.8000 582.9500,475.8000 582.9500,510.5000 553.0500,510.5000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="583.4500,475.8000 610.3500,475.8000 610.3500,510.5000 583.4500,510.5000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="604.8500,415.0000 616.7500,415.0000 616.7500,455.0000 604.8500,455.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="495.0000,633.7000 535.0000,633.7000 535.0000,645.6000 495.0000,645.6000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="495.0000,646.1000 535.0000,646.1000 535.0000,658.0000 495.0000,658.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="535.6500,511.0000 547.5500,511.0000 547.5500,551.0000 535.6500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="548.0500,511.0000 559.9500,511.0000 559.9500,551.0000 548.0500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="560.4500,511.0000 572.3500,511.0000 572.3500,551.0000 560.4500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="572.8500,511.0000 584.7500,511.0000 584.7500,551.0000 572.8500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="585.2500,511.0000 597.1500,511.0000 597.1500,551.0000 585.2500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="597.6500,511.0000 609.5500,511.0000 609.5500,551.0000 597.6500,551.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="535.6500,551.5000 575.6500,551.5000 575.6500,563.4000 535.6500,563.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="576.1500,551.5000 616.1500,551.5000 616.1500,563.4000 576.1500,563.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<text x="495" y="676.0">Board 4: 21 pieces</text>
+<text x="670" y="75" font-size="14">New: N10 + ALNS10 + Patterns10</text>
+<text x="670" y="94">4 boards | remnant 0.850340 m²</text>
+<text x="670" y="111">Cutter 75.2961 m | 99 segments</text>
+<rect x="670" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="729.9000,130.0000 670.0000,130.0000 670.0000,200.0000 696.9000,200.0000 729.9000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="730.4000,130.0000 790.3000,130.0000 790.3000,200.0000 763.4000,200.0000 730.4000,157.0000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="710.1500,187.6000 750.1500,187.6000 750.1500,199.5000 710.1500,199.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="729.9000,200.5000 670.0000,200.5000 670.0000,270.5000 699.9000,270.5000 729.9000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="730.4000,200.5000 790.3000,200.5000 790.3000,270.5000 760.4000,270.5000 730.4000,230.5000" fill="#ce9ea5" stroke="#355064" stroke-width=".35"><title>(&#x27;Clipped Corner&#x27;, (59.9, 70.0))</title></polygon>
+<polygon points="710.1500,258.1000 750.1500,258.1000 750.1500,270.0000 710.1500,270.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="670.0000,271.0000 681.9000,271.0000 681.9000,311.0000 670.0000,311.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="682.4000,271.0000 694.3000,271.0000 694.3000,311.0000 682.4000,311.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="694.8000,271.0000 706.7000,271.0000 706.7000,311.0000 694.8000,311.0000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="707.2000,271.0000 747.2000,271.0000 747.2000,310.9000 707.2000,310.9000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="747.7000,271.0000 787.7000,271.0000 787.7000,310.9000 747.7000,310.9000" fill="#b697cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (39.9, 40.0))</title></polygon>
+<polygon points="670.0000,311.5000 704.7000,311.5000 704.7000,341.4000 670.0000,341.4000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="705.2000,311.5000 780.9000,311.5000 780.9000,341.4000 705.2000,341.4000" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="670.0000,341.9000 704.7000,341.9000 704.7000,371.8000 670.0000,371.8000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="705.2000,341.9000 772.0000,341.9000 772.0000,371.8000 705.2000,371.8000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<text x="670" y="391.0">Board 1: 15 pieces</text>
+<rect x="820" y="130" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="820.2500,130.8500 826.1500,130.8500 826.1500,197.6500 820.2500,197.6500" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="826.6500,130.8500 853.5500,130.8500 853.5500,206.5500 826.6500,206.5500" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="854.0500,130.8500 880.9500,130.8500 880.9500,206.5500 854.0500,206.5500" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="881.4500,130.8500 911.3500,130.8500 911.3500,206.5500 881.4500,206.5500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="911.8500,130.8500 941.7500,130.8500 941.7500,206.5500 911.8500,206.5500" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="820.4500,207.0500 850.3500,207.0500 850.3500,292.8500 820.4500,292.8500" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="850.8500,207.0500 880.7500,207.0500 880.7500,292.8500 850.8500,292.8500" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="881.2500,207.0500 911.1500,207.0500 911.1500,292.8500 881.2500,292.8500" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="911.6500,207.0500 941.5500,207.0500 941.5500,292.8500 911.6500,292.8500" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="820.4500,293.3500 850.3500,293.3500 850.3500,373.1500 820.4500,373.1500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="850.8500,293.3500 880.7500,293.3500 880.7500,373.1500 850.8500,373.1500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="881.2500,293.3500 911.1500,293.3500 911.1500,373.1500 881.2500,373.1500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="911.6500,293.3500 941.5500,293.3500 941.5500,373.1500 911.6500,373.1500" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<text x="820" y="391.0">Board 2: 13 pieces</text>
+<rect x="670" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="670.2500,415.0000 676.1500,415.0000 676.1500,481.8000 670.2500,481.8000" fill="#c997bd" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 66.8))</title></polygon>
+<polygon points="676.6500,415.0000 703.5500,415.0000 703.5500,490.7000 676.6500,490.7000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="704.0500,415.0000 730.9500,415.0000 730.9500,490.7000 704.0500,490.7000" fill="#a3d2cb" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 75.7))</title></polygon>
+<polygon points="731.4500,415.0000 761.3500,415.0000 761.3500,490.7000 731.4500,490.7000" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="761.8500,415.0000 791.7500,415.0000 791.7500,490.7000 761.8500,490.7000" fill="#ddd8c7" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 75.7))</title></polygon>
+<polygon points="670.4500,491.2000 700.3500,491.2000 700.3500,571.0000 670.4500,571.0000" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="700.8500,491.2000 730.7500,491.2000 730.7500,571.0000 700.8500,571.0000" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="731.2500,491.2000 761.1500,491.2000 761.1500,571.0000 731.2500,571.0000" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="761.6500,491.2000 791.5500,491.2000 791.5500,571.0000 761.6500,571.0000" fill="#c8a8ab" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 79.8))</title></polygon>
+<polygon points="670.5000,571.5000 710.5000,571.5000 710.5000,583.4000 670.5000,583.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="711.0000,571.5000 751.0000,571.5000 751.0000,583.4000 711.0000,583.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="751.5000,571.5000 791.5000,571.5000 791.5000,583.4000 751.5000,583.4000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="670.5000,583.9000 710.5000,583.9000 710.5000,589.8000 670.5000,589.8000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="711.0000,583.9000 751.0000,583.9000 751.0000,589.8000 711.0000,589.8000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="751.5000,583.9000 791.5000,583.9000 791.5000,589.8000 751.5000,589.8000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="671.9500,590.3000 698.8500,590.3000 698.8500,659.0000 671.9500,659.0000" fill="#c8abaa" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 68.7))</title></polygon>
+<polygon points="699.3500,590.3000 729.2500,590.3000 729.2500,659.0000 699.3500,659.0000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="729.7500,590.3000 759.6500,590.3000 759.6500,659.0000 729.7500,659.0000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<polygon points="760.1500,590.3000 790.0500,590.3000 790.0500,659.0000 760.1500,659.0000" fill="#9ecedf" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 68.7))</title></polygon>
+<text x="670" y="676.0">Board 3: 19 pieces</text>
+<rect x="820" y="415" width="122.0" height="244.0" fill="white" stroke="#18364c" stroke-width=".7"/>
+<polygon points="820.2000,415.0000 847.1000,415.0000 847.1000,449.7000 820.2000,449.7000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="847.6000,415.0000 874.5000,415.0000 874.5000,449.7000 847.6000,449.7000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="875.0000,415.0000 941.8000,415.0000 941.8000,444.9000 875.0000,444.9000" fill="#c4acd2" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 66.8))</title></polygon>
+<polygon points="820.2000,450.2000 847.1000,450.2000 847.1000,484.9000 820.2000,484.9000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="847.6000,450.2000 874.5000,450.2000 874.5000,484.9000 847.6000,484.9000" fill="#e0caae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 34.7))</title></polygon>
+<polygon points="875.0000,450.2000 941.8000,450.2000 941.8000,477.1000 875.0000,477.1000" fill="#abbbcc" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (26.9, 66.8))</title></polygon>
+<polygon points="820.5000,485.4000 855.2000,485.4000 855.2000,515.3000 820.5000,515.3000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="855.7000,485.4000 941.5000,485.4000 941.5000,515.3000 855.7000,515.3000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="820.5000,515.8000 855.2000,515.8000 855.2000,545.7000 820.5000,545.7000" fill="#dac5ae" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 34.7))</title></polygon>
+<polygon points="855.7000,515.8000 941.5000,515.8000 941.5000,545.7000 855.7000,545.7000" fill="#959da9" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (29.9, 85.8))</title></polygon>
+<polygon points="820.5000,546.2000 860.5000,546.2000 860.5000,558.1000 820.5000,558.1000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="861.0000,546.2000 901.0000,546.2000 901.0000,558.1000 861.0000,558.1000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="901.5000,546.2000 941.5000,546.2000 941.5000,558.1000 901.5000,558.1000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="820.5000,558.6000 860.5000,558.6000 860.5000,570.5000 820.5000,570.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="861.0000,558.6000 901.0000,558.6000 901.0000,570.5000 861.0000,570.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="901.5000,558.6000 941.5000,558.6000 941.5000,570.5000 901.5000,570.5000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="820.5000,571.0000 860.5000,571.0000 860.5000,576.9000 820.5000,576.9000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<polygon points="861.0000,571.0000 901.0000,571.0000 901.0000,582.9000 861.0000,582.9000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="901.5000,571.0000 941.5000,571.0000 941.5000,582.9000 901.5000,582.9000" fill="#a6c18e" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (11.9, 40.0))</title></polygon>
+<polygon points="820.0000,583.4000 860.0000,583.4000 860.0000,589.3000 820.0000,589.3000" fill="#a3a8a1" stroke="#355064" stroke-width=".35"><title>(&#x27;Regular&#x27;, (5.9, 40.0))</title></polygon>
+<text x="820" y="676.0">Board 4: 20 pieces</text>
+</svg>

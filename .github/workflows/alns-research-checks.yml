@@ -29,6 +29,7 @@ jobs:
             almdina_erp/tests/test_fixed_board_layout_search.py \
             almdina_erp/tests/test_alns_recalculation.py \
             almdina_erp/tests/test_compound_layout_refinement.py \
+            almdina_erp/tests/test_pattern_layout_search.py \
             almdina_erp/tests/test_board_regrouping.py \
             almdina_erp/tests/test_same_count_layout_quality.py \
             almdina_erp/tests/test_cutting_plan_application.py \
