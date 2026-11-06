@@ -1,0 +1,34 @@
+[
+  {
+    "case": "108",
+    "returncode": 0,
+    "file": "108.json.gz",
+    "sha256": "a0dde7e41ecea46da1cc01fdc431cf2934230cab1782924b83b720766d82a08a",
+    "stderr": "",
+    "uncompressed_sha256": "cc3ccc8a8d4ab5ec87613747e4fbc649a542d2989a68504adc7cdedc7507718e"
+  },
+  {
+    "case": "154",
+    "returncode": 0,
+    "file": "154.json.gz",
+    "sha256": "7db4de515512ad3942cf27cae454a36ce383d98afb8176d7b927504855a4b7bc",
+    "stderr": "",
+    "uncompressed_sha256": "b9056f2a2cc57d734c0021eb2945027c249bd1db20a85ad98a1d71fb6951d11f"
+  },
+  {
+    "case": "263",
+    "returncode": 0,
+    "file": "263.json.gz",
+    "sha256": "d6dd2ee0bc183a4eaec77e63fbd1d66a2b753feb48aab7437df8972b66762284",
+    "stderr": "",
+    "uncompressed_sha256": "1afe0fbeb0b8ae68a9c939017b03eb761b135c139d490f8dccb84f354e8ca579"
+  },
+  {
+    "case": "298",
+    "returncode": 0,
+    "file": "298.json.gz",
+    "sha256": "837b65749005413b0e63cdeda7c2393ed02113db1b3b5834e8be03b97c3f2e5c",
+    "stderr": "",
+    "uncompressed_sha256": "aecee2b14789c5e6db011f0e2c5abad37874759ed92647e8c1012540406b48e5"
+  }
+]

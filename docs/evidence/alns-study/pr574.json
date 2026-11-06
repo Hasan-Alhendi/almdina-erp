@@ -1,0 +1,15 @@
+{
+  "url": "https://github.com/Hasan-Alhendi/almdina-erp/pull/574",
+  "number": 574,
+  "state": "closed",
+  "merged": true,
+  "title": "feat(cutting): Smart gallery, geometry nesting and bounded board reformation",
+  "base": "fix/cutting-best-valid-plan",
+  "base_sha": "e09092019bdcb08115412bbac4af729c8805715c",
+  "head": "feature/smart-cutting-search",
+  "head_sha": "6654f0e90ca9bbfdd320139f2f3d71eca0042732",
+  "merge_commit_sha": "7a593f3ab3d9072535c9a4b14cc8c36431ad62e4",
+  "merged_at": "2026-11-02T09:45:16Z",
+  "commits": 48,
+  "changed_files": 127
+}

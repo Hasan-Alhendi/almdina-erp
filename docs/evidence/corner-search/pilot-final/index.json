@@ -1,0 +1,22 @@
+[
+  {
+    "case": "108",
+    "arm": "configured",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "108-configured-r0.json.gz",
+    "sha256": "9c141a74795b095702ba8e5f3beb57d1172990a4b4238c0864d6c609bd4a7d80",
+    "stderr": "",
+    "uncompressed_sha256": "e86de11692f0f99ee2ab2bb399235f8a700895d289c6c52994b071abb83e2cd9"
+  },
+  {
+    "case": "154",
+    "arm": "configured",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "154-configured-r0.json.gz",
+    "sha256": "6907d75b166b4d70bda37253ef5605576f18b4256361744f164cf15304bd5033",
+    "stderr": "",
+    "uncompressed_sha256": "9a872a69b25b0a3fc2f6a8eddfd7288c1b0fd6eb9af258776808c8ebe99bb787"
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "case": "holdout-01",
+    "arm": "alns",
+    "returncode": 1,
+    "file": "holdout-01-alns.json.gz",
+    "sha256": "a9b42828dcdaa98dd472aab912946d2d3352d5f3dfb1620d2415ec59a188b3e5",
+    "stderr": "",
+    "uncompressed_sha256": "4864326e715b92166ca24f84ecdfd953208108c12751397d5c9cd705b1e7e5f5"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "patterns",
+    "returncode": 1,
+    "file": "holdout-01-patterns.json.gz",
+    "sha256": "17e2f8d2322346e00d00b5841458983d07bf0a9995ba294ff3e065fae741e90e",
+    "stderr": "",
+    "uncompressed_sha256": "d80d67a69e52bfa5328882c7775920266cb85665e718333c9aafa8e16123ec77"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "equal_total_alns",
+    "returncode": 1,
+    "file": "holdout-01-equal_total_alns.json.gz",
+    "sha256": "d88175005243d55ab3643390be8496df67b855c8ce3ced50a163152867d8881f",
+    "stderr": "",
+    "uncompressed_sha256": "fdb08fad3e309dd552748d8261806bfddfb5e4dc15b83127236178f20ddfbfdd"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "equal_total_alns",
+    "returncode": 1,
+    "file": "holdout-02-equal_total_alns.json.gz",
+    "sha256": "b89dcf07ccc3b817e578b9c52c18f28182cea38ee4fbee507aada87e18eab226",
+    "stderr": "",
+    "uncompressed_sha256": "ae0481bd8dfce66eeecf16224970441e8ecf8890285659f33eb2bfe81f50c4e7"
+  }
+]

@@ -1,0 +1,1379 @@
+{
+  "observations": 28,
+  "strict_roundtrips": 113,
+  "frozen_source_files": 77,
+  "strict_contract": "Source family bboxes + identity inventory + actual material outer contours",
+  "controls": "Same frozen 2.4 code with coupled stage disabled; prior stages finish first. N10 main: 30 / 40 / 40 allocated search seconds. Regular-only skips corners. Cooperative budgets; actual wall reported.",
+  "comparisons": [
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "repeat": 1,
+      "control": "prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "repeat": 1,
+      "control": "equal_total_prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "repeat": 1,
+      "control": "prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "repeat": 1,
+      "control": "equal_total_prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-regular",
+      "case": "263",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "better"
+    },
+    {
+      "cohort": "final-regular",
+      "case": "298",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "equal"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-05",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "equal"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-05",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "worse"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-06",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "worse"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-06",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "worse"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-07",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "equal"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-07",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "equal"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-08",
+      "repeat": 0,
+      "control": "prior",
+      "comparison": "equal"
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-08",
+      "repeat": 0,
+      "control": "equal_total_prior",
+      "comparison": "worse"
+    }
+  ],
+  "designer_comparison": [
+    {
+      "case": "108",
+      "repeat": 0,
+      "exact_shape_inventory_equal": false,
+      "designer_remnant_m2": 2.59137335553524,
+      "designer_cutter_mm": 70133.5306616341,
+      "designer_segments": 88,
+      "default": {
+        "boards": 5,
+        "pieces": 52,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          5,
+          0,
+          -2.61202,
+          104,
+          9673.6,
+          22,
+          4
+        ],
+        "reusable_m2": 2.6120200000000002,
+        "aligned": 53,
+        "adjacent": 82,
+        "alignment_ratio": 0.6463414634146342,
+        "family_splits": 7,
+        "cutter_profile": [
+          69871.0,
+          82,
+          7790.5
+        ],
+        "signature": "d8bb55bbf44493996fd10fedf7ec95223d8e6a7062ad4b3e1e919c168771a98f"
+      },
+      "shortest_preserving_reference_remnant_candidate": 0,
+      "balanced": {
+        "boards": 5,
+        "pieces": 52,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          5,
+          0,
+          -2.61202,
+          104,
+          9673.6,
+          22,
+          4
+        ],
+        "reusable_m2": 2.6120200000000002,
+        "aligned": 53,
+        "adjacent": 82,
+        "alignment_ratio": 0.6463414634146342,
+        "family_splits": 7,
+        "cutter_profile": [
+          69871.0,
+          82,
+          7790.5
+        ],
+        "signature": "d8bb55bbf44493996fd10fedf7ec95223d8e6a7062ad4b3e1e919c168771a98f"
+      },
+      "numerically_dominating_candidates": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "gallery": [
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            104,
+            9673.6,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 7,
+          "cutter_profile": [
+            69871.0,
+            82,
+            7790.5
+          ],
+          "signature": "d8bb55bbf44493996fd10fedf7ec95223d8e6a7062ad4b3e1e919c168771a98f"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            103,
+            9643.7,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 7,
+          "cutter_profile": [
+            69871.0,
+            82,
+            7788.0
+          ],
+          "signature": "652b7efdbb3f4d1bfff1f1da0fe71e3a0725c8414f44d3931424c30f6d5fb7d2"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            97,
+            9420.6,
+            28,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 75,
+          "alignment_ratio": 0.7066666666666667,
+          "family_splits": 5,
+          "cutter_profile": [
+            70002.5,
+            78,
+            7510.5
+          ],
+          "signature": "c2e1d4ca72eac180e523d50e88ae9a106db9d8aaa21c7992044cab3b5d00174b"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            103,
+            9656.1,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 52,
+          "adjacent": 81,
+          "alignment_ratio": 0.6419753086419753,
+          "family_splits": 6,
+          "cutter_profile": [
+            70078.0,
+            81,
+            7790.5
+          ],
+          "signature": "cd786ed3947adb19506bebfbebba7177007b04e1fbba2be1503a2672a71472e7"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            101,
+            9569.4,
+            20,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 6,
+          "cutter_profile": [
+            70393.0,
+            80,
+            8361.0
+          ],
+          "signature": "57b27529b443b0b0a7f6ec574ebd28559ae8a0a1628ee3fed0eb6c0233be842f"
+        }
+      ],
+      "caveat": "108 notch depths differ by 1 mm and reference uses a different stock inset; numeric comparison is not an algorithm-only controlled gain"
+    },
+    {
+      "case": "108",
+      "repeat": 1,
+      "exact_shape_inventory_equal": false,
+      "designer_remnant_m2": 2.59137335553524,
+      "designer_cutter_mm": 70133.5306616341,
+      "designer_segments": 88,
+      "default": {
+        "boards": 5,
+        "pieces": 52,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          5,
+          0,
+          -2.61202,
+          104,
+          9830.4,
+          22,
+          4
+        ],
+        "reusable_m2": 2.6120200000000002,
+        "aligned": 53,
+        "adjacent": 82,
+        "alignment_ratio": 0.6463414634146342,
+        "family_splits": 7,
+        "cutter_profile": [
+          69871.0,
+          82,
+          8543.5
+        ],
+        "signature": "a319ccd093b17ed948ef4d9e9e064ef195f1712911e8f2eb0c08cda135c06ce7"
+      },
+      "shortest_preserving_reference_remnant_candidate": 0,
+      "balanced": {
+        "boards": 5,
+        "pieces": 52,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          5,
+          0,
+          -2.61202,
+          104,
+          9830.4,
+          22,
+          4
+        ],
+        "reusable_m2": 2.6120200000000002,
+        "aligned": 53,
+        "adjacent": 82,
+        "alignment_ratio": 0.6463414634146342,
+        "family_splits": 7,
+        "cutter_profile": [
+          69871.0,
+          82,
+          8543.5
+        ],
+        "signature": "a319ccd093b17ed948ef4d9e9e064ef195f1712911e8f2eb0c08cda135c06ce7"
+      },
+      "numerically_dominating_candidates": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "gallery": [
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            104,
+            9830.4,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 7,
+          "cutter_profile": [
+            69871.0,
+            82,
+            8543.5
+          ],
+          "signature": "a319ccd093b17ed948ef4d9e9e064ef195f1712911e8f2eb0c08cda135c06ce7"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            103,
+            9800.5,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 7,
+          "cutter_profile": [
+            69871.0,
+            82,
+            8541.0
+          ],
+          "signature": "194fe850fae4bea24690212efb53772b755301d862f0a84f008f41baec6cd4df"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            97,
+            9420.6,
+            28,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 75,
+          "alignment_ratio": 0.7066666666666667,
+          "family_splits": 5,
+          "cutter_profile": [
+            70002.5,
+            78,
+            7510.5
+          ],
+          "signature": "c2e1d4ca72eac180e523d50e88ae9a106db9d8aaa21c7992044cab3b5d00174b"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            103,
+            9812.9,
+            22,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 52,
+          "adjacent": 81,
+          "alignment_ratio": 0.6419753086419753,
+          "family_splits": 6,
+          "cutter_profile": [
+            70078.0,
+            81,
+            8543.5
+          ],
+          "signature": "19c0ce49a2580d1b54838525e7e5eac0b3a8a8a0bfb76b9645a4165d8b92ea8e"
+        },
+        {
+          "boards": 5,
+          "pieces": 52,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            5,
+            0,
+            -2.61202,
+            101,
+            9726.2,
+            20,
+            4
+          ],
+          "reusable_m2": 2.6120200000000002,
+          "aligned": 53,
+          "adjacent": 82,
+          "alignment_ratio": 0.6463414634146342,
+          "family_splits": 6,
+          "cutter_profile": [
+            70393.0,
+            80,
+            9114.0
+          ],
+          "signature": "7428b095d3fd9455a305040b7cd73eae1f999965195cf1a11761ebd90dcdb993"
+        }
+      ],
+      "caveat": "108 notch depths differ by 1 mm and reference uses a different stock inset; numeric comparison is not an algorithm-only controlled gain"
+    },
+    {
+      "case": "154",
+      "repeat": 0,
+      "exact_shape_inventory_equal": true,
+      "designer_remnant_m2": 0.5828484491624052,
+      "designer_cutter_mm": 72771.57813036592,
+      "designer_segments": 99,
+      "default": {
+        "boards": 4,
+        "pieces": 67,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          4,
+          0,
+          -0.92842,
+          147,
+          10920.5,
+          19,
+          5
+        ],
+        "reusable_m2": 0.9284199999999999,
+        "aligned": 61,
+        "adjacent": 118,
+        "alignment_ratio": 0.5169491525423728,
+        "family_splits": 9,
+        "cutter_profile": [
+          73003.57813036592,
+          104,
+          5509.5
+        ],
+        "signature": "c35b424860b0fa43fd062c042a0891105814f86d2202242eef3b5cdb3d08a16c"
+      },
+      "shortest_preserving_reference_remnant_candidate": 1,
+      "balanced": {
+        "boards": 4,
+        "pieces": 67,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          4,
+          0,
+          -0.9028,
+          139,
+          10711.8,
+          19,
+          5
+        ],
+        "reusable_m2": 0.9028,
+        "aligned": 66,
+        "adjacent": 120,
+        "alignment_ratio": 0.55,
+        "family_splits": 8,
+        "cutter_profile": [
+          72699.07813036592,
+          97,
+          6271.0
+        ],
+        "signature": "16c6b658633f6e67dc42eed652ac036e9f8a6804c8ad90e433453453abfc4f99"
+      },
+      "numerically_dominating_candidates": [
+        1
+      ],
+      "gallery": [
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.92842,
+            147,
+            10920.5,
+            19,
+            5
+          ],
+          "reusable_m2": 0.9284199999999999,
+          "aligned": 61,
+          "adjacent": 118,
+          "alignment_ratio": 0.5169491525423728,
+          "family_splits": 9,
+          "cutter_profile": [
+            73003.57813036592,
+            104,
+            5509.5
+          ],
+          "signature": "c35b424860b0fa43fd062c042a0891105814f86d2202242eef3b5cdb3d08a16c"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.9028,
+            139,
+            10711.8,
+            19,
+            5
+          ],
+          "reusable_m2": 0.9028,
+          "aligned": 66,
+          "adjacent": 120,
+          "alignment_ratio": 0.55,
+          "family_splits": 8,
+          "cutter_profile": [
+            72699.07813036592,
+            97,
+            6271.0
+          ],
+          "signature": "16c6b658633f6e67dc42eed652ac036e9f8a6804c8ad90e433453453abfc4f99"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.88816,
+            133,
+            10611.2,
+            20,
+            5
+          ],
+          "reusable_m2": 0.8881599999999998,
+          "aligned": 67,
+          "adjacent": 109,
+          "alignment_ratio": 0.6146788990825688,
+          "family_splits": 9,
+          "cutter_profile": [
+            75209.57813036592,
+            98,
+            5786.0
+          ],
+          "signature": "6541cfec11f9c2beeb235c60c9d3094d9ffdb32353b0769ba330356c7f7ac925"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.88816,
+            132,
+            10619.9,
+            20,
+            5
+          ],
+          "reusable_m2": 0.8881599999999998,
+          "aligned": 67,
+          "adjacent": 107,
+          "alignment_ratio": 0.6261682242990654,
+          "family_splits": 9,
+          "cutter_profile": [
+            75513.57813036592,
+            99,
+            5786.0
+          ],
+          "signature": "d2c85c5e9548c70558d3813b04d10b67071c467c318a6912fee0f3c66ca5b8eb"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.78392,
+            148,
+            10955.4,
+            16,
+            5
+          ],
+          "reusable_m2": 0.78392,
+          "aligned": 64,
+          "adjacent": 118,
+          "alignment_ratio": 0.5423728813559322,
+          "family_splits": 11,
+          "cutter_profile": [
+            74998.57813036592,
+            106,
+            6296.5
+          ],
+          "signature": "67108a5825c1ecdc19623cbf6f2751b144d18648169ac6fa5b24912561670cd0"
+        }
+      ],
+      "caveat": "Exact source-shape inventory; stock inset differs"
+    },
+    {
+      "case": "154",
+      "repeat": 1,
+      "exact_shape_inventory_equal": true,
+      "designer_remnant_m2": 0.5828484491624052,
+      "designer_cutter_mm": 72771.57813036592,
+      "designer_segments": 99,
+      "default": {
+        "boards": 4,
+        "pieces": 67,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          4,
+          0,
+          -0.92842,
+          147,
+          10920.5,
+          19,
+          5
+        ],
+        "reusable_m2": 0.9284199999999999,
+        "aligned": 61,
+        "adjacent": 118,
+        "alignment_ratio": 0.5169491525423728,
+        "family_splits": 9,
+        "cutter_profile": [
+          73003.57813036592,
+          104,
+          5509.5
+        ],
+        "signature": "c35b424860b0fa43fd062c042a0891105814f86d2202242eef3b5cdb3d08a16c"
+      },
+      "shortest_preserving_reference_remnant_candidate": 1,
+      "balanced": {
+        "boards": 4,
+        "pieces": 67,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          4,
+          0,
+          -0.9028,
+          139,
+          10711.8,
+          19,
+          5
+        ],
+        "reusable_m2": 0.9028,
+        "aligned": 66,
+        "adjacent": 120,
+        "alignment_ratio": 0.55,
+        "family_splits": 8,
+        "cutter_profile": [
+          72699.07813036592,
+          97,
+          6271.0
+        ],
+        "signature": "16c6b658633f6e67dc42eed652ac036e9f8a6804c8ad90e433453453abfc4f99"
+      },
+      "numerically_dominating_candidates": [
+        1
+      ],
+      "gallery": [
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.92842,
+            147,
+            10920.5,
+            19,
+            5
+          ],
+          "reusable_m2": 0.9284199999999999,
+          "aligned": 61,
+          "adjacent": 118,
+          "alignment_ratio": 0.5169491525423728,
+          "family_splits": 9,
+          "cutter_profile": [
+            73003.57813036592,
+            104,
+            5509.5
+          ],
+          "signature": "c35b424860b0fa43fd062c042a0891105814f86d2202242eef3b5cdb3d08a16c"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.9028,
+            139,
+            10711.8,
+            19,
+            5
+          ],
+          "reusable_m2": 0.9028,
+          "aligned": 66,
+          "adjacent": 120,
+          "alignment_ratio": 0.55,
+          "family_splits": 8,
+          "cutter_profile": [
+            72699.07813036592,
+            97,
+            6271.0
+          ],
+          "signature": "16c6b658633f6e67dc42eed652ac036e9f8a6804c8ad90e433453453abfc4f99"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.88816,
+            133,
+            10611.2,
+            20,
+            5
+          ],
+          "reusable_m2": 0.8881599999999998,
+          "aligned": 67,
+          "adjacent": 109,
+          "alignment_ratio": 0.6146788990825688,
+          "family_splits": 9,
+          "cutter_profile": [
+            75209.57813036592,
+            98,
+            5786.0
+          ],
+          "signature": "6541cfec11f9c2beeb235c60c9d3094d9ffdb32353b0769ba330356c7f7ac925"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.88816,
+            132,
+            10619.9,
+            20,
+            5
+          ],
+          "reusable_m2": 0.8881599999999998,
+          "aligned": 67,
+          "adjacent": 107,
+          "alignment_ratio": 0.6261682242990654,
+          "family_splits": 9,
+          "cutter_profile": [
+            75513.57813036592,
+            99,
+            5786.0
+          ],
+          "signature": "d2c85c5e9548c70558d3813b04d10b67071c467c318a6912fee0f3c66ca5b8eb"
+        },
+        {
+          "boards": 4,
+          "pieces": 67,
+          "unplaced": 0,
+          "industrial_rank": [
+            0,
+            4,
+            0,
+            -0.78392,
+            148,
+            10955.4,
+            16,
+            5
+          ],
+          "reusable_m2": 0.78392,
+          "aligned": 64,
+          "adjacent": 118,
+          "alignment_ratio": 0.5423728813559322,
+          "family_splits": 11,
+          "cutter_profile": [
+            74998.57813036592,
+            106,
+            6296.5
+          ],
+          "signature": "67108a5825c1ecdc19623cbf6f2751b144d18648169ac6fa5b24912561670cd0"
+        }
+      ],
+      "caveat": "Exact source-shape inventory; stock inset differs"
+    }
+  ],
+  "groups": [
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "arm": "prior",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70393.0
+      ],
+      "segments": [
+        80
+      ],
+      "wall_sec": [
+        29.030999999988126,
+        28.26600000000326
+      ]
+    },
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "arm": "coupled",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        69871.0
+      ],
+      "segments": [
+        82
+      ],
+      "wall_sec": [
+        38.203000000008615,
+        39.14000000001397
+      ]
+    },
+    {
+      "cohort": "final-main",
+      "case": "108",
+      "arm": "equal_total_prior",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70393.0
+      ],
+      "segments": [
+        80
+      ],
+      "wall_sec": [
+        37.937999999994645,
+        39.062999999994645
+      ]
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "arm": "prior",
+      "boards": [
+        4
+      ],
+      "remnants_m2": [
+        0.8881599999999998
+      ],
+      "cutter_mm": [
+        75209.57813036592
+      ],
+      "segments": [
+        98
+      ],
+      "wall_sec": [
+        33.26600000000326,
+        32.594000000011874
+      ]
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "arm": "coupled",
+      "boards": [
+        4
+      ],
+      "remnants_m2": [
+        0.9284199999999999
+      ],
+      "cutter_mm": [
+        73003.57813036592
+      ],
+      "segments": [
+        104
+      ],
+      "wall_sec": [
+        43.344000000011874,
+        42.40700000000652
+      ]
+    },
+    {
+      "cohort": "final-main",
+      "case": "154",
+      "arm": "equal_total_prior",
+      "boards": [
+        4
+      ],
+      "remnants_m2": [
+        0.8881599999999998
+      ],
+      "cutter_mm": [
+        75209.57813036592
+      ],
+      "segments": [
+        98
+      ],
+      "wall_sec": [
+        43.437000000005355,
+        43.34399999998277
+      ]
+    },
+    {
+      "cohort": "final-regular",
+      "case": "263",
+      "arm": "prior",
+      "boards": [
+        3
+      ],
+      "remnants_m2": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46245.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        28.562999999994645
+      ]
+    },
+    {
+      "cohort": "final-regular",
+      "case": "263",
+      "arm": "coupled",
+      "boards": [
+        3
+      ],
+      "remnants_m2": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        28.530999999988126
+      ]
+    },
+    {
+      "cohort": "final-regular",
+      "case": "298",
+      "arm": "prior",
+      "boards": [
+        8
+      ],
+      "remnants_m2": [
+        2.02764
+      ],
+      "cutter_mm": [
+        113394.5
+      ],
+      "segments": [
+        136
+      ],
+      "wall_sec": [
+        31.14100000000326
+      ]
+    },
+    {
+      "cohort": "final-regular",
+      "case": "298",
+      "arm": "coupled",
+      "boards": [
+        8
+      ],
+      "remnants_m2": [
+        2.02764
+      ],
+      "cutter_mm": [
+        113394.5
+      ],
+      "segments": [
+        136
+      ],
+      "wall_sec": [
+        31.296999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-05",
+      "arm": "prior",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        0.3383528000000001
+      ],
+      "cutter_mm": [
+        94924.37654780428
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        4.921999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-05",
+      "arm": "coupled",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        0.3383528000000001
+      ],
+      "cutter_mm": [
+        94924.37654780428
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        6.265999999974156
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-05",
+      "arm": "equal_total_prior",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        0.35368140000000015
+      ],
+      "cutter_mm": [
+        95918.37654780429
+      ],
+      "segments": [
+        97
+      ],
+      "wall_sec": [
+        9.01600000000326
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-06",
+      "arm": "prior",
+      "boards": [
+        4
+      ],
+      "remnants_m2": [
+        0.4076612000000005
+      ],
+      "cutter_mm": [
+        71905.1
+      ],
+      "segments": [
+        91
+      ],
+      "wall_sec": [
+        6.5
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-06",
+      "arm": "coupled",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        2.6545324
+      ],
+      "cutter_mm": [
+        73105.55
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        8.671999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-06",
+      "arm": "equal_total_prior",
+      "boards": [
+        5
+      ],
+      "remnants_m2": [
+        2.7157180000000003
+      ],
+      "cutter_mm": [
+        73147.95000000001
+      ],
+      "segments": [
+        96
+      ],
+      "wall_sec": [
+        10.23499999998603
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-07",
+      "arm": "prior",
+      "boards": [
+        12
+      ],
+      "remnants_m2": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        7.671999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-07",
+      "arm": "coupled",
+      "boards": [
+        12
+      ],
+      "remnants_m2": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        8.719000000011874
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-07",
+      "arm": "equal_total_prior",
+      "boards": [
+        12
+      ],
+      "remnants_m2": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        10.047000000020489
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-08",
+      "arm": "prior",
+      "boards": [
+        6
+      ],
+      "remnants_m2": [
+        0.8438751999999997
+      ],
+      "cutter_mm": [
+        107725.25
+      ],
+      "segments": [
+        115
+      ],
+      "wall_sec": [
+        6.046999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-08",
+      "arm": "coupled",
+      "boards": [
+        6
+      ],
+      "remnants_m2": [
+        0.8438751999999997
+      ],
+      "cutter_mm": [
+        107725.25
+      ],
+      "segments": [
+        115
+      ],
+      "wall_sec": [
+        6.5
+      ]
+    },
+    {
+      "cohort": "final-holdout",
+      "case": "holdout-08",
+      "arm": "equal_total_prior",
+      "boards": [
+        6
+      ],
+      "remnants_m2": [
+        0.8491228000000001
+      ],
+      "cutter_mm": [
+        108223.95
+      ],
+      "segments": [
+        126
+      ],
+      "wall_sec": [
+        8.0
+      ]
+    }
+  ]
+}

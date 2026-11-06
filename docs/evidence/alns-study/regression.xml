@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="5.038" timestamp="2026-11-05T20:03:04.147287+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="" name="almdina_erp.tests.test_cutting_plan_permission_regressions" time="0.000"><error message="collection failure">almdina_erp\tests\test_cutting_plan_permission_regressions.py:23: in &lt;module&gt;
+    VALID_PLAN_JSON = frappe.as_json(
+                      ^^^^^^^^^^^^^^
+E   AttributeError: module 'frappe' has no attribute 'as_json'</error></testcase></testsuite></testsuites>

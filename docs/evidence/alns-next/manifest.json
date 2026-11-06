@@ -1,0 +1,31 @@
+{
+  "base_commit": "ed09369ca6e09d64658691c61e7362e0325c51a4",
+  "script": {
+    "path": "scripts/study_pattern_master.py",
+    "sha256": "71f65f651237f8102a4f490a1856f2b082554a26c9d11bf00fe694aa8be0d3e7"
+  },
+  "evidence": {
+    "observations.csv": "8738eb84a10a4bb574522fd10970fd4028a86ec60b75b5016dffc0ca1598904a",
+    "probe/108-patterns.json.gz": "583dcab86dff8f94d638d361498c6392db187d07e9c2cfe3ad83f9b9384b6cb0",
+    "probe/108.json": "9a1b2d9cb9c9b2368ab90c66d44f1e9878fecc9429c4a38b79ba707e985bf662",
+    "probe/108.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe/108.stdout.log": "be2d373dc2251d5f44d38a93bc25d9e670b7c73c8ea7e59f0e3f0d711ac0c665",
+    "probe/154-patterns.json.gz": "71fe8e22fd718290e5053bc9d83b7d9b1ebb62aa08b1d7a2f201160604de2593",
+    "probe/154.json": "07980bef65c33863afdf59438e007bc77debe2ee56805c4960c4b387825848bd",
+    "probe/154.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe/154.stdout.log": "414ba51bdf1f44f1a24d92b7cb2a6e713de2db4008578d9233d74411003af022",
+    "probe/263-patterns.json.gz": "e15b08639df9968663c79dfd5ac8314777434c2f13d4e134ee500554986f9d46",
+    "probe/263.json": "599c28631fd41dfb44e2729ba051def0d1869cb84397107dbf777a3b059a5888",
+    "probe/263.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe/263.stdout.log": "0c59bf055e9416cd337953c9e478059244f90086e708b42f95daad1530b091ff",
+    "probe/298-patterns.json.gz": "adb8b1106e94ffaa7e5fe5a71ceac0f96fb576c3a81d54344b6452d58ecbdde3",
+    "probe/298-solve10.json": "e7141f3043c5287c23e943ab3a2f160d74732f01f478294a6572e7e438e058ef",
+    "probe/298.json": "e30ebc615e488953e4f2bf0ae419488e2d1bb6fca05b6ce0ddaef60f1ef3005e",
+    "probe/298.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe/298.stdout.log": "f6bac0dbdb9fa1fada29bdaee0308cf44c7cb61fb18122e8a7173d6a77ff75c2",
+    "probe/pilot-154-metadata-tie.json": "edb1dd27a938e4e0d184aaa7c42f82400b78ae9fcc80937093908a958f048747",
+    "README-ar.md": "3be6d352789d3aa8f9fdafa0850ec0816af593872e2b813f0beed56b772aee00",
+    "summary.json": "6532153c0d4328236b3918a6714e6190a8e51cb33cde5dbdadb9493cac01f866"
+  },
+  "runtime_unchanged": true
+}

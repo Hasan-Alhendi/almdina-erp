@@ -1,0 +1,382 @@
+[
+  {
+    "module": "test_alns_research",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_alns_research.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_alns_research",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_alns_research.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "31",
+      "time": "2.533",
+      "timestamp": "2026-11-05T20:05:19.238277+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_board_regrouping",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_board_regrouping.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_board_regrouping",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_board_regrouping.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "37",
+      "time": "8.730",
+      "timestamp": "2026-11-05T20:05:22.642105+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_same_count_layout_quality",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_same_count_layout_quality.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_same_count_layout_quality",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_same_count_layout_quality.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "52",
+      "time": "14.755",
+      "timestamp": "2026-11-05T20:05:32.218107+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_abc_cutting_search",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_abc_cutting_search.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_abc_cutting_search",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_abc_cutting_search.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "30",
+      "time": "3.136",
+      "timestamp": "2026-11-05T20:05:47.795005+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_cutting_kerf_clearance",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_cutting_kerf_clearance.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_cutting_kerf_clearance",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_cutting_kerf_clearance.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "6",
+      "time": "0.479",
+      "timestamp": "2026-11-05T20:05:52.282219+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_smart_plan_portfolio",
+    "returncode": 4294967295,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_smart_plan_portfolio.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_smart_plan_portfolio",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_smart_plan_portfolio.xml"
+    ]
+  },
+  {
+    "module": "test_cutting_plan_application",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_cutting_plan_application.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_cutting_plan_application",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_cutting_plan_application.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "34",
+      "time": "1.297",
+      "timestamp": "2026-11-05T20:09:44.333339+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_plan_preview_session_exact_commit",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_plan_preview_session_exact_commit.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_plan_preview_session_exact_commit",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_plan_preview_session_exact_commit.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "10",
+      "time": "0.466",
+      "timestamp": "2026-11-05T20:09:46.457751+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_cutting_plan_lifecycle_safety",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_cutting_plan_lifecycle_safety.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_cutting_plan_lifecycle_safety",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_cutting_plan_lifecycle_safety.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "25",
+      "time": "0.556",
+      "timestamp": "2026-11-05T20:09:47.669441+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_plan_fingerprint_compatibility",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_plan_fingerprint_compatibility.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_plan_fingerprint_compatibility",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_plan_fingerprint_compatibility.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "63",
+      "time": "0.839",
+      "timestamp": "2026-11-05T20:09:48.965298+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_cutting_domain_architecture",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_cutting_domain_architecture.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_cutting_domain_architecture",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_cutting_domain_architecture.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "57",
+      "time": "2.320",
+      "timestamp": "2026-11-05T20:09:50.530757+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_stage13_quality_gates",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_stage13_quality_gates.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_stage13_quality_gates",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_stage13_quality_gates.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "5",
+      "time": "2.780",
+      "timestamp": "2026-11-05T20:09:53.604260+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_stage15_documentation_contract",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_stage15_documentation_contract.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_stage15_documentation_contract",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_stage15_documentation_contract.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "9",
+      "time": "0.440",
+      "timestamp": "2026-11-05T20:09:57.282151+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_smart_cutting_lifecycle",
+    "returncode": 0,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_smart_cutting_lifecycle.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_smart_cutting_lifecycle",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_smart_cutting_lifecycle.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "8",
+      "time": "0.700",
+      "timestamp": "2026-11-05T20:09:58.563990+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_final_cut_line_alignment",
+    "returncode": 1,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_final_cut_line_alignment.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_final_cut_line_alignment",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_final_cut_line_alignment.xml"
+    ],
+    "summary": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "1",
+      "skipped": "0",
+      "tests": "59",
+      "time": "65.519",
+      "timestamp": "2026-11-05T20:09:59.983186+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    }
+  },
+  {
+    "module": "test_smart_cutting_manufacturing",
+    "returncode": 4294967295,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-m",
+      "pytest",
+      "-q",
+      "almdina_erp/tests/test_smart_cutting_manufacturing.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_smart_cutting_manufacturing",
+      "--junitxml",
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\docs\\evidence\\alns-study\\verification\\test_smart_cutting_manufacturing.xml"
+    ]
+  }
+]

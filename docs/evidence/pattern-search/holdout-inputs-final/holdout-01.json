@@ -1,0 +1,60 @@
+{
+  "width": 100.0,
+  "height": 210.0,
+  "rows": [
+    {
+      "width_cm": 24.3,
+      "length_cm": 104.7,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:1"
+    },
+    {
+      "width_cm": 33.51,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:2"
+    },
+    {
+      "width_cm": 24.52,
+      "length_cm": 104.7,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:3"
+    },
+    {
+      "width_cm": 24.63,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:4"
+    },
+    {
+      "width_cm": 20.14,
+      "length_cm": 59.2,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:5"
+    },
+    {
+      "width_cm": 24.85,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "smart:6"
+    }
+  ],
+  "test_settings": {
+    "kerf_mm": 4.0,
+    "trim_mm": 0.0,
+    "allow_mirroring": true
+  },
+  "provenance": "Synthetic seed 719041 revision 3: distinct geometry; IDs match the existing strict fixture smart:N; revisions 1/2 failures retained; optimizer source remains frozen; no reference poses or designer dimensions"
+}
