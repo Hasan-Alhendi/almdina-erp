@@ -26,6 +26,7 @@ PatternSolver = Callable[..., PatternSelection]
 class ShelfColumn:
     counts: tuple[int, ...]
     thickness: int
+    work_units: int = 0
 
 
 @dataclass(frozen=True, slots=True)

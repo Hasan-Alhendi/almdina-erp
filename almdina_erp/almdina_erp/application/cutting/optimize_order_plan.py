@@ -105,6 +105,7 @@ class OptimizerOptions:
     research_abc: ABCSearchPolicy | None = None
     alns_search_budget_sec: float = 0.0
     pattern_search_budget_sec: float = 0.0
+    corner_search_budget_sec: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +262,7 @@ def optimize_order_plan(
             additions,pattern_trace = _refine_pattern_gallery(command,engine,expanded,raw_seeds,
                 snapshots[0],applied_trim,trim_decision,plan_settings,pattern_seconds,formation_seeds)
             if additions:
+                extra_records.extend(additions)
                 seed_by_signature = {geometry_signature(s):r for s,r in [*ranked,*extra_records]}
                 records = [(s,seed_by_signature[geometry_signature(s)]) for s in snapshots]
                 records.extend(additions)
@@ -273,6 +275,26 @@ def optimize_order_plan(
                         selected.append(record)
                 snapshots = [s for s,_ in selected[:5]]
                 raw_seeds = [r for _,r in selected[:5]] + raw_seeds
+        corner_trace = None
+        configured_corners=command.optimizer.corner_search_budget_sec
+        corner_seconds=(min(10.0,configured_corners,max(0.,command.optimizer.time_limit_sec))
+            if math.isfinite(configured_corners) and configured_corners>0 else 0.)
+        if (snapshots and raw_seeds and corner_seconds>0
+                and any(p.get('piece_type') in {'L-Shaped Corner','Clipped Corner'} for p in expanded)):
+            additions,corner_trace=_refine_pattern_gallery(command,engine,expanded,raw_seeds,
+                snapshots[0],applied_trim,trim_decision,plan_settings,corner_seconds,corner_only=True)
+            if additions:
+                seed_by_signature={geometry_signature(s):r for s,r in [*ranked,*extra_records]}
+                records=[(s,seed_by_signature[geometry_signature(s)]) for s in snapshots]+additions
+                keys=final_system_sort_keys([s for s,_ in records])
+                selected,seen=[],set()
+                for _,record in sorted(zip(keys,records),key=lambda item:item[0]):
+                    signature=geometry_signature(record[0])
+                    if signature not in seen:
+                        seen.add(signature)
+                        selected.append(record)
+                snapshots=[s for s,_ in selected[:5]]
+                raw_seeds=[r for _,r in selected[:5]]+raw_seeds
         if snapshots:
             outcome = replace(
                 outcome,
@@ -289,6 +311,8 @@ def optimize_order_plan(
             outcome.snapshot['smart_search']['alns'] = alns_trace
         if pattern_trace is not None:
             outcome.snapshot['smart_search']['pattern_search'] = pattern_trace
+        if corner_trace is not None:
+            outcome.snapshot['smart_search']['corner_search'] = corner_trace
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
 
 
@@ -348,7 +372,7 @@ def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_tri
 
 
 def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim,
-                            trim_decision,plan_settings,seconds,formation_seeds=()):
+                            trim_decision,plan_settings,seconds,formation_seeds=(),*,corner_only=False):
     from almdina_erp.almdina_erp.domain.cutting.pattern_layout_search import refine_pattern_layout
     from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
     started = time.monotonic()
@@ -368,7 +392,11 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
     seeds = physical_frames(seeds[:5])
     formation_seeds = physical_frames(formation_seeds)
     try:
-        proposals,trace = refine_pattern_layout(seeds[0],seeds,expanded,
+        refiner=refine_pattern_layout
+        if corner_only:
+            from almdina_erp.almdina_erp.domain.cutting.corner_frame_search import refine_corner_layout
+            refiner=refine_corner_layout
+        proposals,trace = refiner(seeds[0],seeds,expanded,
             applied_trim.usable_width_cm(full_width_cm=board.full_width_cm),
             applied_trim.usable_length_cm(full_length_cm=board.full_length_cm),board.kerf_cm,
             deadline=deadline-min(1.5,seconds*.15),machine_type=command.optimizer.machine_type,
@@ -400,6 +428,8 @@ def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim
                 additions.append((result.snapshot,proposal))
     trace.update(budget_sec=seconds,elapsed_sec=round(time.monotonic()-started,3),
         projected_improvements=len(additions),additional_to_completed_alns=True)
+    if corner_only:
+        trace['additional_to_completed_patterns']=True
     return additions,trace
 
 

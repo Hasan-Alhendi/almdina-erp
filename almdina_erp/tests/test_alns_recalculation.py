@@ -177,13 +177,20 @@ def test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag(monk
     monkeypatch.setattr(workspace, '_piece_rows', lambda order: tuple(rows))
     monkeypatch.setattr(workspace, 'domain_cutting_engine', FrozenEngine(plan))
     applied = []
+    commands=[]
+    actual_calculate=workspace.optimize_order_plan
+    def observe_command(cmd,**kwargs):
+        commands.append(cmd)
+        return actual_calculate(cmd,**kwargs)
+    monkeypatch.setattr(workspace,'optimize_order_plan',observe_command)
     monkeypatch.setattr(workspace, 'apply_calculation_outcome', lambda order, target, outcome, **kw: applied.append(outcome))
     outcome = workspace.calculate_system_plan(SimpleNamespace(allow_piece_mirroring=mirror), SimpleNamespace())
     assert applied == [outcome]
     assert outcome.snapshot['smart_search']['alns']['attempts'] > 0
     assert outcome.snapshot['allow_piece_mirroring'] is mirror
-    assert outcome.snapshot['engine_version'] == '2.3.0-pattern-layout'
+    assert outcome.snapshot['engine_version'] == '2.4.0-coupled-corners'
     assert outcome.snapshot['smart_search']['pattern_search']['budget_sec'] == 5
+    assert commands[0].optimizer.corner_search_budget_sec==10
 
 
 def test_global_refill_keeps_real_identity_and_its_whole_pool_cap():

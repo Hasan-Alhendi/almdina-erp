@@ -74,7 +74,7 @@ def solve_pattern_master(columns, demand, max_boards, *, deadline, hint=()):
         return PatternSelection(status='solver_error')
 
 
-def solve_shelf_master(columns,demand,capacities,slot_boards,mandatory,owner,owner_limit,*,deadline):
+def solve_shelf_master(columns,demand,capacities,slot_boards,mandatory,owner,owner_limit,*,deadline,cut_work=False):
     """Assign coherent rows globally; independent Domain validates the result."""
     if time.monotonic()>=deadline:
         return ShelfSelection(status='deadline')
@@ -84,6 +84,7 @@ def solve_shelf_master(columns,demand,capacities,slot_boards,mandatory,owner,own
             or sum(map(len,columns))>16384 or any(not 0<=b<len(mandatory) for b in slot_boards)
             or any(type(c) is not int or c<=0 for c in capacities)
             or any(len(c.counts)!=len(demand) or not any(c.counts) or c.thickness<=0
+                or type(c.work_units) is not int or not 0<=c.work_units<=10**13
                 or any(type(n) is not int or n<0 for n in c.counts) for choices in columns for c in choices)):
         return ShelfSelection(status='unsupported_model')
     try:
@@ -114,7 +115,8 @@ def solve_shelf_master(columns,demand,capacities,slot_boards,mandatory,owner,own
         heights=[sum(v*c.thickness for v,c in zip(values,choices)) for values,(choices,_) in zip(variables,grouped)]
         for used,(_,slots) in zip(heights,grouped):
             model.Add(used<=sum(effective[i] for i in slots))
-        model.Minimize(sum(heights))
+        model.Minimize(sum(v*c.work_units for values,(choices,_) in zip(variables,grouped)
+            for v,c in zip(values,choices)) if cut_work else sum(heights))
 
         def pack_rows(rows,slots,pack_deadline):
             """Exact bounded 1D repair; unequal capacities and owner stay real."""

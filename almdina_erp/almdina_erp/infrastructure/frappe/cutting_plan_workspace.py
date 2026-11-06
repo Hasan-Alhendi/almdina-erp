@@ -462,6 +462,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
                 # search and its completed gallery keep their full allowance.
                 alns_search_budget_sec=10.0,
                 pattern_search_budget_sec=10.0,
+                corner_search_budget_sec=10.0,
             ),
             piece_rows=_piece_rows(order),
             allow_piece_mirroring=piece_mirroring_allowed(

@@ -35,6 +35,8 @@ def worker(args):
         command = replace(command, optimizer=replace(command.optimizer, alns_search_budget_sec=args.refinement))
     if args.patterns > 0:
         command = replace(command,optimizer=replace(command.optimizer,pattern_search_budget_sec=args.patterns))
+    if args.corners > 0:
+        command = replace(command,optimizer=replace(command.optimizer,corner_search_budget_sec=args.corners))
     start = time.monotonic()
     outcome = optimize_order_plan(command, engine=DomainCuttingEngineAdapter())
     elapsed = time.monotonic()-start
@@ -43,7 +45,7 @@ def worker(args):
     for path in (Path(__file__), ROOT/'scripts/study_designer_layout.py',
                  ROOT/'almdina_erp/almdina_erp/infrastructure/frappe/cutting_plan_workspace.py'):
         manifest[str(path.relative_to(ROOT))] = hashlib.sha256(path.read_bytes()).hexdigest()
-    result = dict(status='completed',case=args.case, budget=args.budget, refinement=args.refinement,patterns=args.patterns,
+    result = dict(status='completed',case=args.case, budget=args.budget, refinement=args.refinement,patterns=args.patterns,corners=args.corners,
         alignment_sec=args.alignment_sec, trim_mm=args.trim_mm, kerf_mm=args.kerf_mm,
         mirroring_allowed=not args.no_mirroring, wall=elapsed, peak_rss_kib=peak_rss_kib(),
         environment=dict(python=sys.version,platform=platform.platform(),
@@ -67,6 +69,11 @@ def worker(args):
             or any(str(stage.get('status','')).startswith('solver_error') for stage in diagnostic.get('row_pricing',[]))
             or str(diagnostic.get('master_status','')).startswith('solver_error')):
         raise SystemExit('Optional refinement failed; baseline retained, benchmark not certified')
+    diagnostic=outcome.snapshot.get('smart_search',{}).get('corner_search',{})
+    if (diagnostic.get('stop')=='refinement_error' or diagnostic.get('projection_errors')
+            or any(str(s.get('status','')).startswith('solver_error') for s in diagnostic.get('row_pricing',[]))
+            or str(diagnostic.get('master_status','')).startswith('solver_error')):
+        raise SystemExit('Coupled corner refinement failed; benchmark not certified')
 
 
 def main():
@@ -80,6 +87,7 @@ def main():
     p.add_argument('--budget', type=float, default=5)
     p.add_argument('--refinement', type=float, default=0)
     p.add_argument('--patterns',type=float,default=0)
+    p.add_argument('--corners',type=float,default=0)
     p.add_argument('--repeats', type=int, default=2)
     p.add_argument('--alignment-sec', type=float, default=1)
     p.add_argument('--trim-mm', type=float, default=0)
@@ -89,8 +97,8 @@ def main():
     p.add_argument('--no-mirroring', action='store_true')
     p.add_argument('--output', required=True)
     args = p.parse_args()
-    if (not all(math.isfinite(v) for v in (args.budget,args.refinement,args.patterns,args.trim_mm,args.kerf_mm))
-            or args.budget <= 0 or min(args.refinement,args.patterns,args.trim_mm,args.kerf_mm) < 0):
+    if (not all(math.isfinite(v) for v in (args.budget,args.refinement,args.patterns,args.corners,args.trim_mm,args.kerf_mm))
+            or args.budget <= 0 or min(args.refinement,args.patterns,args.corners,args.trim_mm,args.kerf_mm) < 0):
         p.error('Finite positive search time and nonnegative physical/refinement settings required')
     if args.worker:
         worker(args)
@@ -114,7 +122,7 @@ def main():
                 target = output/f'{case}-{arm}-r{repeat}.json'
                 command = [sys.executable, __file__, '--worker', '--case', case, '--input', str(source),
                     '--budget', str(budget), '--refinement', str(refinement),
-                    '--patterns',str(patterns),
+                    '--patterns',str(patterns),'--corners',str(args.corners),
                     '--alignment-sec', str(args.alignment_sec), '--trim-mm', str(args.trim_mm),
                     '--kerf-mm',str(args.kerf_mm),'--machine',args.machine,'--output', str(target)]
                 if args.strict:

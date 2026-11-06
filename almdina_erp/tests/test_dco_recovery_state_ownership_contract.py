@@ -295,7 +295,7 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             self.assertIn(field, fingerprint_body)
         self.assertNotIn('"description"', fingerprint_body)
         self.assertNotIn("ENGINE_VERSION", fingerprint_body)
-        self.assertIn('ENGINE_VERSION = "2.3.0-pattern-layout"', version)
+        self.assertIn('ENGINE_VERSION = "2.4.0-coupled-corners"', version)
 
         left = {"settings": {"kerf_mm": 3}, "version": 1, "pieces": []}
         right = {"pieces": [], "version": 1, "settings": {"kerf_mm": 3}}

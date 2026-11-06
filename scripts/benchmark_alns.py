@@ -63,6 +63,17 @@ def strict_check(plan, rows):
     ids = lambda p: sorted(v["piece_instance_id"] for s in p["sheets"] for v in s["pieces"])
     if ids(imported) != ids(reloaded):
         raise AssertionError("Strict import changed identity inventory")
+    from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import parse_geometry_mm,geometry_mm_to_cm
+    from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
+    def polygons(p):
+        def outer(part):
+            if part.get('geometry'):
+                return geometry_mm_to_cm(parse_geometry_mm(part['geometry'])).outer
+            return material_outline_cm(part)
+        return sorted(tuple(sorted(tuple(sorted((round(x,4),round(y,4)) for x,y in outer(part)))
+            for part in sheet['pieces'])) for sheet in p['sheets'])
+    if polygons(imported) != polygons(reloaded):
+        raise AssertionError('Strict import changed actual material outlines')
     return True
 
 

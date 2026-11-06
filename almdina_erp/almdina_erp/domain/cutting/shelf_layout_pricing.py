@@ -102,7 +102,12 @@ def row_patterns(families,width,height,kerf,transpose,deadline,limit=512):
         used+=(sum(counts)-1)*kerf
         if used>width+1e-8 or sum(counts)>64:
             return None
-        generated[signature]=dict(column=ShelfColumn(tuple(counts),round((thick+kerf)*_UNIT)),
+        bars=[((o['h'] if transpose else o['w']),(o['w'] if transpose else o['h']))
+              for _,o,q in members for _ in range(q)]
+        # Screening estimate only: adjacent shared sides and one horizontal
+        # row boundary. Final acceptance always measures the real full network.
+        work=sum(2*(a+b) for a,b in bars)-sum(min(a[1],b[1]) for a,b in zip(bars,bars[1:]))-used
+        generated[signature]=dict(column=ShelfColumn(tuple(counts),round((thick+kerf)*_UNIT),round(max(0,work)*_UNIT)),
             members=members,height=thick,used_width=used,
             quality=((width*thick-area)/(width*thick),-area,thick))
         return signature
@@ -164,7 +169,7 @@ def row_patterns(families,width,height,kerf,transpose,deadline,limit=512):
 
 
 def price_shelf_layout(frame,template,sources,width,height,kerf,*,deadline,solver,
-                       min_remnant_m2,transpose=False):
+                       min_remnant_m2,transpose=False,column_order='source',cut_work=False):
     trace=dict(status='not_run',rows=0,slots=0,transpose=transpose,target_remnant_m2=min_remnant_m2)
     if solver is None or time.monotonic()>=deadline:
         return None,trace
@@ -210,7 +215,8 @@ def price_shelf_layout(frame,template,sources,width,height,kerf,*,deadline,solve
         return None,trace
     answer=solver(columns,tuple(map(len,families)),tuple(capacities),
         tuple(s['board'] for s in slots),tuple(bool(s['pieces']) for s in sheets),
-        owner,math.floor(owner_limit*_UNIT+1e-5),deadline=deadline)
+        owner,math.floor(owner_limit*_UNIT+1e-5),deadline=deadline,
+        **({'cut_work':True} if cut_work else {}))
     trace['status']=getattr(answer,'status','invalid_selection')
     if (not isinstance(answer,ShelfSelection) or len(answer.allocations)!=len(slots)
             or any(len(values)!=len(choices) or any(type(v) is not int or not 0<=v<=256 for v in values)
@@ -236,7 +242,10 @@ def price_shelf_layout(frame,template,sources,width,height,kerf,*,deadline,solve
         _cache(sheet,kerf)
         for row in rows:
             horizontal=0.
-            for group,orientation,quantity in row['members']:
+            members=row['members']
+            if column_order=='width_desc':
+                members=sorted(members,key=lambda m:(-(m[1]['h'] if transpose else m[1]['w']),m[0]))
+            for group,orientation,quantity in members:
                 for _ in range(quantity):
                     source=available[group].popleft()
                     x=slot['x']+(vertical if transpose else horizontal)
