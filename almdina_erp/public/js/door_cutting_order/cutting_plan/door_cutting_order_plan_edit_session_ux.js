@@ -700,7 +700,6 @@
             .dco-plan-settings-editor__recalc-btn.btn:disabled {
                 opacity: 0.55;
             }
-            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) .dco-plan-actions-shell,
             [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-stale-banner {
                 display: none !important;
             }
@@ -820,22 +819,6 @@
         store.patchDraft({ [fieldname]: value });
     }
 
-    function preserveRecalculateButton(host) {
-        const button = host.find(".dco-recalculate-plan").first();
-        if (!button.length) return;
-        const shell = host.children(".dco-plan-actions-shell").first();
-        const target = shell.find(".dco-plan-actions").first();
-        if (target.length) {
-            target.append(button);
-            return;
-        }
-        if (shell.length) {
-            shell.append(button);
-            return;
-        }
-        host.append(button);
-    }
-
     function mountDraftControls(frm) {
         const store = storeFor(frm);
         const state = store && store.snapshot();
@@ -843,7 +826,6 @@
         if (!store || !state || !state.editing || !host) return false;
 
         installEditorStyles();
-        preserveRecalculateButton(host);
         host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
         const groups = groupPlanSettingSpecs(specs);
@@ -894,18 +876,9 @@
         const editor = host.children(EDITOR_SELECTOR).first();
         if (!editor.length) return;
 
-        const recalcSlot = editor.find('[data-role="recalc"]').first();
-        const button = host.find(".dco-recalculate-plan").first();
-        if (button.length && recalcSlot.length && !button.parent().is(recalcSlot)) {
-            recalcSlot.append(button);
-            button.addClass("dco-plan-settings-editor__recalc-btn");
-        }
-
         const controls = window.AlmdinaPlanControlsUX;
-        if (controls && typeof controls.refresh === "function") {
-            controls.refresh(frm);
-        } else if (button.length && typeof button.prop === "function") {
-            button.prop("disabled", false);
+        if (controls && typeof controls.syncRecalculateButton === "function") {
+            controls.syncRecalculateButton(frm);
         }
 
         const fastSave = window.AlmdinaFastSaveUX;

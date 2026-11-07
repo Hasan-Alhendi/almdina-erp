@@ -19,51 +19,30 @@ function functionBlock(source, startMarker, endMarker) {
 const planSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js");
 const editSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_edit_session_ux.js");
 const controlsSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js");
+const contextSource = read("../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_context_actions_ux.js");
 
 const renderActions = functionBlock(planSource, "function renderActions(frm)", "async function recalculate");
-assert.match(renderActions, /const wrapper = field\.\$wrapper;/);
 assert.match(renderActions, /wrapper\.children\("\.dco-plan-actions-shell"\)\.remove\(\)/);
-assert.match(renderActions, /wrapper\.append\(`/);
-assert.match(renderActions, /const shell = wrapper\.children\("\.dco-plan-actions-shell"\)\.last\(\)/);
+assert.match(renderActions, /controls\.syncRecalculateButton\(frm\)/);
+assert.doesNotMatch(renderActions, /Cutting plan commands/);
+assert.doesNotMatch(renderActions, /\.on\("click"/);
 assert.doesNotMatch(renderActions, /field\.\$wrapper\.(?:html|empty)\(/);
-assert.doesNotMatch(renderActions, /field\.\$wrapper\.find\(/);
 
-const pending = functionBlock(planSource, "function renderWorkspacePending(frm)", "function refreshPlanUX(frm)");
-assert.match(pending, /actions\.\$wrapper\.children\("\.dco-plan-actions-shell"\)\.remove\(\)/);
-assert.doesNotMatch(pending, /actions\.\$wrapper\.empty\(\)/);
+const mount = functionBlock(editSource, "function mountDraftControls(frm)", "function syncEditorChrome");
+assert.match(mount, /data-role="recalc"/);
+assert.doesNotMatch(mount, /preserveRecalculateButton/);
+assert.doesNotMatch(mount, /\.dco-recalculate-plan/);
+assert.match(editSource, /controls\.syncRecalculateButton\(frm\)/);
+assert.doesNotMatch(editSource, /recalcSlot\.append\(button\)/);
 
-const editorHost = functionBlock(editSource, "function editorHost(frm)", "function markEditorDirty");
-assert.match(editorHost, /return actionSurface\(frm\);/);
-assert.doesNotMatch(editorHost, /dco-plan-actions-shell/);
-const mount = functionBlock(editSource, "function mountDraftControls(frm)", "function unmountDraftControls(frm)");
-assert.match(mount, /host\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
-assert.match(mount, /host\.prepend\(`/);
-assert.match(mount, /const editor = host\.children\(EDITOR_SELECTOR\)\.first\(\)/);
-const unmount = functionBlock(editSource, "function unmountDraftControls(frm)", "function focusDraftControl(frm");
-assert.match(unmount, /wrapper\.children\(EDITOR_SELECTOR\)\.remove\(\)/);
-
-const simplify = functionBlock(controlsSource, "function simplifyActions(frm)", "function apply(frm)");
-assert.doesNotMatch(simplify, /field\.\$wrapper\.empty\(\)/);
-assert.match(simplify, /field\.\$wrapper\.children\("\.dco-plan-actions-shell"\)\.first\(\)/);
-assert.match(simplify, /shell\.find\(DUPLICATED_ACTIONS\)/);
-assert.match(simplify, /installApprovalAction\(frm, shell\)/);
-
-function rerenderActions(root) {
-    return root.filter(name => name !== "dco-plan-actions-shell").concat("dco-plan-actions-shell");
-}
-function unmountEditor(root) {
-    return root.filter(name => name !== "dco-plan-settings-editor");
-}
-
-let root = ["dco-plan-settings-editor", "dco-plan-actions-shell"];
-for (let i = 0; i < 5; i += 1) root = rerenderActions(root);
-assert.deepEqual(root, ["dco-plan-settings-editor", "dco-plan-actions-shell"]);
-root = unmountEditor(root);
-assert.deepEqual(root, ["dco-plan-actions-shell"], "Cancel/Save cleanup must leave PlanUX actions intact");
-
-let reverse = ["dco-plan-actions-shell"];
-reverse.unshift("dco-plan-settings-editor");
-reverse = rerenderActions(reverse);
-assert.deepEqual(reverse, ["dco-plan-settings-editor", "dco-plan-actions-shell"]);
+const delegation = functionBlock(controlsSource, "function bindRecalculateDelegation", "function buttonHost");
+assert.match(delegation, /click\.almdinaRecalculate/);
+assert.match(delegation, /__almdinaRecalculateDelegated/);
+assert.match(controlsSource, /function syncRecalculateButton/);
+assert.match(contextSource, /dco-plan-context-approve/);
+assert.match(contextSource, /dco-print-cutting-plan/);
+assert.match(contextSource, /dco-export-dxf/);
+assert.match(contextSource, /dco-upload-dxf-plan/);
+assert.doesNotMatch(planSource, /Cutting plan commands/);
 
 console.log("plan edit DOM ownership contract passed");

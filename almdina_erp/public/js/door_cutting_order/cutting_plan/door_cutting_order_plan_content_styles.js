@@ -131,73 +131,10 @@
             max-width:none !important;
             box-sizing:border-box !important;
         }
-        [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
+        [data-fieldname="plan_control_actions"] .dco-plan-calculate-host {
             margin:0 !important;
-            padding-block:14px 16px !important;
+            padding-block:8px !important;
             padding-inline:var(--dco-tab-card-inset-inline, 44px) !important;
-            border:1px solid var(--border-color,#dfe3e8) !important;
-            border-radius:14px !important;
-            background:linear-gradient(180deg,color-mix(in srgb, var(--alm-surface-muted,#f4f6f8) 92%, transparent),color-mix(in srgb, var(--alm-surface-muted,#f4f6f8) 55%, transparent)) !important;
-            box-shadow:none !important;
-            width:100% !important;
-            max-width:none !important;
-            box-sizing:border-box !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-actions-title {
-            display:flex !important;
-            align-items:center !important;
-            justify-content:space-between !important;
-            gap:12px !important;
-            margin-bottom:11px !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-actions-title strong {
-            font-size:13px !important;
-            font-weight:900 !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-mode-hint {
-            max-width:620px;
-            padding:5px 9px;
-            border-radius:999px;
-            background:var(--alm-card,#ffffff);
-            border:1px solid var(--border-color,#e2e8f0);
-            font-size:10px !important;
-            line-height:1.45 !important;
-            color:var(--text-muted,#66717e);
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-actions {
-            display:grid !important;
-            grid-template-columns:repeat(2,minmax(190px,1fr)) !important;
-            gap:9px !important;
-            width:100% !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-actions > .btn {
-            width:100% !important;
-            min-width:0 !important;
-            min-height:42px !important;
-            margin:0 !important;
-            border-radius:10px !important;
-            font-weight:850 !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-document-actions {
-            display:flex !important;
-            align-items:center !important;
-            gap:8px !important;
-            flex-wrap:wrap !important;
-            margin-top:11px !important;
-            padding-top:11px !important;
-            border-top:1px dashed var(--border-color,#dfe3e8) !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-document-actions .btn {
-            min-height:36px !important;
-            border-radius:9px !important;
-            font-weight:800 !important;
-            margin:0 !important;
-        }
-        [data-fieldname="plan_control_actions"] .dco-plan-note {
-            margin-top:10px !important;
-            padding-top:9px !important;
-            border-top:1px dashed var(--border-color,#dfe3e8) !important;
-            color:var(--text-muted,#66717e);
         }
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs,
         [data-fieldname="cutting_plan_html"] .dco-plan-tabs.dco-plan-tabs--underline {

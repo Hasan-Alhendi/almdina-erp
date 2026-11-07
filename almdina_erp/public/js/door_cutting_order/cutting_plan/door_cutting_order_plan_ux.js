@@ -339,79 +339,11 @@
                     position:relative;
                     z-index:1;
                 }
-                .dco-plan-actions-shell {
-                    margin-top:8px;
-                    padding:12px;
-                    border:1px solid var(--border-color,#dfe3e8);
-                    border-radius:13px;
-                    background:rgba(248,250,252,.72);
+                .dco-plan-calculate-host .dco-recalculate-plan {
+                    min-height:40px;
+                    border-radius:10px;
+                    font-weight:850;
                 }
-                .dco-plan-actions-title {
-                    display:flex;
-                    align-items:center;
-                    justify-content:space-between;
-                    gap:10px;
-                    margin-bottom:9px;
-                    flex-wrap:wrap;
-                }
-                .dco-plan-actions-title strong { font-size:12px; }
-                .dco-plan-mode-hint {
-                    font-size:10px;
-                    opacity:.7;
-                    line-height:1.5;
-                }
-                .dco-plan-actions {
-                    display:flex;
-                    gap:8px;
-                    flex-wrap:wrap;
-                    align-items:center;
-                }
-                .dco-plan-actions .btn {
-                    border-radius:9px;
-                    font-weight:750;
-                    min-height:34px;
-                    padding-inline:13px;
-                }
-                .dco-plan-actions .dco-recalculate-plan {
-                    box-shadow:0 4px 10px color-mix(in srgb, var(--alm-primary, #172033) 16%, transparent);
-                }
-                .dco-plan-document-actions {
-                    display:flex;
-                    gap:8px;
-                    flex-wrap:wrap;
-                    align-items:center;
-                    margin-top:10px;
-                    padding-top:10px;
-                    border-top:1px dashed var(--border-color,#dfe3e8);
-                }
-                .dco-plan-document-actions .btn {
-                    border-radius:9px;
-                    font-weight:750;
-                    min-height:34px;
-                    padding-inline:13px;
-                }
-                .dco-plan-note {
-                    width:100%;
-                    font-size:10px;
-                    opacity:.72;
-                    line-height:1.6;
-                    margin-top:9px;
-                    padding-top:8px;
-                    border-top:1px dashed var(--border-color,#dfe3e8);
-                }
-                .dco-plan-dirty-note {
-                    display:none;
-                    width:100%;
-                    padding:8px 10px;
-                    border-radius:9px;
-                    background:#fff7df;
-                    color:#7a5200;
-                    border:1px solid #f1d58c;
-                    font-size:11px;
-                    font-weight:750;
-                    margin-bottom:8px;
-                }
-                .dco-plan-dirty-note.is-visible { display:block; }
                 .dco-solver-badge {
                     display:inline-flex;
                     align-items:center;
@@ -451,8 +383,7 @@
                 }
                 @media (max-width:560px) {
                     .dco-plan-intro { grid-template-columns:1fr; }
-                    .dco-plan-actions .btn { width:100%; }
-                    .dco-plan-actions-shell { padding:10px; }
+                    .dco-plan-calculate-host .dco-recalculate-plan { width:100%; }
                 }
             </style>
         `);
@@ -607,7 +538,11 @@
         if (!field || !field.$wrapper) return;
         const wrapper = field.$wrapper;
         wrapper.children(".dco-plan-actions-shell").remove();
-        if (!workspaceReady(frm)) return;
+        if (!workspaceReady(frm)) {
+            wrapper.attr("data-almdina-plan-actions", "0");
+            wrapper.attr("data-almdina-plan-bootstrap", "0");
+            return;
+        }
 
         const mayMutate = canRecalculatePlan(frm);
         const systemPlan = workspaceData(frm)?.plans?.system_draft;
@@ -617,48 +552,13 @@
                 ? workspaceOwner.isCurrentDraftRow(systemPlan)
                 : String(systemPlan.status || "") === "Draft"
         ));
-        // Read mode hides the Plan settings section, except for the first
-        // authorized System-plan command. Its only entry point lives here.
-        const firstSystemPlan = mayMutate
-            && !hasCurrentSystemDraft;
+        const firstSystemPlan = mayMutate && !hasCurrentSystemDraft;
         wrapper.attr("data-almdina-plan-bootstrap", firstSystemPlan ? "1" : "0");
-        const settings = activeSettings(frm);
-        const mode = String(settings.packing_mode || "Auto Pro");
-        const blockReason = stageMutationBlockReason(frm);
-
-        wrapper.append(`
-            <div class="almdina-ui dco-plan-actions-shell" dir="${esc(uiDirection())}">
-                <div class="dco-plan-dirty-note">${esc(translate("A plan setting changed. Recalculate to apply the change to the drawing and the results."))}</div>
-                <div class="dco-plan-actions-title">
-                    <strong>${esc(translate("Cutting plan commands"))}</strong>
-                    <span class="dco-plan-mode-hint">${esc(modeDescription(mode))}</span>
-                </div>
-                ${mayMutate ? `
-                    <div class="dco-plan-actions">
-                        ${uiButton({
-                            label: translate("Recalculate with the current settings"),
-                            variant: "primary",
-                            size: "btn-sm",
-                            className: "dco-recalculate-plan",
-                        })}
-                    </div>
-                ` : ""}
-                ${documentActionsHtml(frm)}
-                <div class="dco-plan-note">
-                    ${blockReason
-                        ? esc(blockReason)
-                        : mayMutate
-                            ? esc(translate("Edit the plan settings from “Edit cutting plan”, save them, then recalculate."))
-                            : esc(translate("Plan settings are read-only in the current state."))}
-                </div>
-            </div>
-        `);
-
-        const shell = wrapper.children(".dco-plan-actions-shell").last();
-        shell.find(".dco-recalculate-plan").on("click", () => recalculate(frm));
-        shell.find(".dco-print-cutting-plan").on("click", () => printCuttingPlan(frm));
-        shell.find(".dco-export-dxf").on("click", () => exportCuttingPlanDxf(frm));
-        shell.find(".dco-upload-dxf-plan").on("click", () => uploadCuttingPlanDxf(frm));
+        wrapper.attr("data-almdina-plan-actions", "ready");
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.syncRecalculateButton === "function") {
+            controls.syncRecalculateButton(frm);
+        }
     }
 
     async function recalculate(frm) {

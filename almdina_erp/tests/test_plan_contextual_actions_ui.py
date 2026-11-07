@@ -119,7 +119,7 @@ class TestPlanContextualActionsUI(unittest.TestCase):
     def test_legacy_general_action_surface_is_edit_only(self) -> None:
         context = source(CONTEXT)
 
-        self.assertIn("field.$wrapper.toggle(Boolean(isEditing(frm)))", context)
+        self.assertIn("isEditing(frm) || (data && !hasSystemDraft)", context)
         self.assertIn(
             '[data-fieldname="plan_control_actions"] .dco-plan-document-actions',
             context,

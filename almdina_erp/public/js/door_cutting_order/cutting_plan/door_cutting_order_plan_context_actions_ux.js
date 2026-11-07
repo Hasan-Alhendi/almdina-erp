@@ -371,7 +371,10 @@
     function syncLegacyActionSurface(frm) {
         const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
         if (!field || !field.$wrapper) return;
-        field.$wrapper.toggle(Boolean(isEditing(frm)));
+        const data = workspaceData(frm);
+        const system = data && data.plans && data.plans.system_draft;
+        const hasSystemDraft = Boolean(system && String(system.status || "") === "Draft");
+        field.$wrapper.toggle(Boolean(isEditing(frm) || (data && !hasSystemDraft)));
     }
 
     function hostFor(frm) {

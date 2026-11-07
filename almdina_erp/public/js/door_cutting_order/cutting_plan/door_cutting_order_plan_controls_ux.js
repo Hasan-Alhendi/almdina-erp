@@ -327,6 +327,16 @@
     }
 
     async function runRecalculation(frm) {
+        if (frm.__almdinaRecalculateInflight) return false;
+        frm.__almdinaRecalculateInflight = true;
+        try {
+            return await runRecalculationNow(frm);
+        } finally {
+            frm.__almdinaRecalculateInflight = false;
+        }
+    }
+
+    async function runRecalculationNow(frm) {
         await ensureWorkspaceLoaded(frm);
         if (!canCalculate(frm)) {
             const reason = recalculationDisabledReason(frm);
@@ -363,7 +373,11 @@
             return Boolean(ok);
         } catch (error) {
             console.error("Cutting plan calculation failed", error);
-            throw error;
+            const message = error && error.message
+                ? error.message
+                : "Could not prepare the cutting plan service. Reload the page and try again.";
+            frappe.msgprint(translate(message));
+            return false;
         }
     }
 
@@ -461,52 +475,6 @@
         });
     }
 
-    function approvalButtonState(frm, button) {
-        const source = approvalSource(frm);
-        const row = approvalRow(frm, source);
-        const allowed = approvalAllowed(frm, source);
-        if (button.prop("disabled") === allowed) button.prop("disabled", !allowed);
-        button.attr("aria-disabled", allowed ? "false" : "true");
-        setTextIfChanged(button, translate(source === "Custom" ? "Approve DXF plan" : "Approve cutting plan"));
-        if (!allowed) {
-            button.attr(
-                "title",
-                translate(row && row.validation && row.validation.needs_recalculation
-                    ? (
-                        source === "Custom"
-                            ? "Upload a new DXF that matches the current order data before approval"
-                            : "Recalculate the plan before approving it"
-                    )
-                    : "Approval is unavailable in the current order state, or you do not have permission")
-            );
-        } else button.removeAttr("title");
-    }
-
-    function installApprovalAction(frm, shell) {
-        if (!can(frm, "approve_dxf") || !canMutateCurrentStage(frm)) {
-            shell.find(".dco-approve-cutting-plan").remove();
-            return;
-        }
-        let host = shell.find(".dco-plan-actions").first();
-        if (!host.length) host = shell;
-        let button = shell.find(".dco-approve-cutting-plan").first();
-        if (!button.length) {
-            button = $('<button type="button" class="btn btn-success btn-sm dco-approve-cutting-plan"></button>');
-            host.append(button);
-        }
-        approvalButtonState(frm, button);
-        const element = button.get(0);
-        if (element && !element.__almdinaApprovePlanBound) {
-            button.off("click");
-            button.on("click.almdinaApprovePlan", (event) => {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                runApproval(frm);
-            });
-            element.__almdinaApprovePlanBound = true;
-        }
-    }
-
     function bindRecalculationAction(frm, button) {
         if (!button || !button.length) return;
         const firstPlan = !hasSystemDraft(frm);
@@ -524,53 +492,87 @@
                 || "Create a temporary preview with these settings before saving the change"
             )
         );
-        const element = button.get(0);
-        if (element && !element.__almdinaPlanCommandBound) {
-            button.off("click");
-            button.on("click.almdinaPlanCommand", (event) => {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                runRecalculation(frm);
-            });
-            element.__almdinaPlanCommandBound = true;
+    }
+
+    function uiButton(options) {
+        const ui = window.AlmdinaUi;
+        if (!ui || typeof ui.button !== "function") {
+            throw new Error("AlmdinaUi.button is required for DCO plan actions");
         }
+        return $(ui.button(options));
+    }
+
+    function actionWrapper(frm) {
+        const field = frm && frm.fields_dict && frm.fields_dict.plan_control_actions;
+        return field && field.$wrapper && field.$wrapper.length ? field.$wrapper : null;
+    }
+
+    function bindRecalculateDelegation(frm, wrapper) {
+        const node = wrapper.get(0);
+        if (!node || node.__almdinaRecalculateDelegated) return;
+        node.__almdinaRecalculateDelegated = true;
+        wrapper.on("click.almdinaRecalculate", ".dco-recalculate-plan", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            runRecalculation(frm);
+        });
+    }
+
+    function buttonHost(frm, wrapper) {
+        if (workspaceEditing(frm)) {
+            wrapper.children(".dco-plan-calculate-host").remove();
+            const slot = wrapper.find('[data-role="recalc"]').first();
+            return slot.length ? slot : null;
+        }
+        if (hasSystemDraft(frm)) {
+            wrapper.children(".dco-plan-calculate-host").remove();
+            return false;
+        }
+        let host = wrapper.children(".dco-plan-calculate-host").first();
+        if (!host.length) {
+            wrapper.append('<div class="dco-plan-calculate-host"></div>');
+            host = wrapper.children(".dco-plan-calculate-host").first();
+        }
+        return host;
+    }
+
+    function syncRecalculateButton(frm) {
+        const wrapper = actionWrapper(frm);
+        if (!wrapper || !workspaceReady(frm)) return;
+        bindRecalculateDelegation(frm, wrapper);
+        const host = buttonHost(frm, wrapper);
+        if (host === false) {
+            wrapper.find(".dco-recalculate-plan").remove();
+            return;
+        }
+        if (!host) {
+            const existing = wrapper.find(".dco-recalculate-plan").first();
+            if (existing.length) bindRecalculationAction(frm, existing);
+            return;
+        }
+        let button = host.children(".dco-recalculate-plan").first();
+        if (!button.length) button = host.find(".dco-recalculate-plan").first();
+        if (!button.length) {
+            button = uiButton({
+                label: "",
+                variant: "primary",
+                size: "btn-sm",
+                className: "dco-recalculate-plan",
+            });
+            host.append(button);
+        }
+        wrapper.find(".dco-recalculate-plan").each((_, element) => {
+            if (button.get(0) !== element) $(element).remove();
+        });
+        const inEditor = String(host.attr("data-role") || "") === "recalc";
+        button.toggleClass("dco-plan-settings-editor__recalc-btn", inEditor);
+        bindRecalculationAction(frm, button);
     }
 
     function simplifyActions(frm) {
-        const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
-        if (!field || !field.$wrapper) return;
-        if (!workspaceReady(frm)) return;
-
-        const shell = field.$wrapper.children(".dco-plan-actions-shell").first();
-        if (!shell.length) {
-            const presenter = window.AlmdinaDoorCuttingPlanUX;
-            if (presenter && typeof presenter.refresh === "function") presenter.refresh(frm);
-            return;
-        }
-
-        shell.attr("dir", uiDirection());
-        const duplicated = shell.find(DUPLICATED_ACTIONS);
-        if (duplicated.length) duplicated.remove();
-        bindRecalculationAction(frm, shell.find(".dco-recalculate-plan").first());
-        installApprovalAction(frm, shell);
-
-        const note = shell.find(".dco-plan-note").first();
-        if (note.length) {
-            let message;
-            if (!hasSystemDraft(frm) && can(frm, "recalculate_plan")) {
-                message = can(frm, "edit_optimizer_settings")
-                    ? "Start with “Calculate the cutting plan”. You can edit the settings first or use the current factory settings. The plan will be saved and the cost updated automatically."
-                    : "Start with “Calculate the cutting plan”. The current plan settings or factory settings will be used and the cost will update automatically. Changing the settings needs a separate permission.";
-            } else if (can(frm, "edit_optimizer_settings")) {
-                message = "Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.";
-            } else if (can(frm, "recalculate_plan")) {
-                message = "The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.";
-            } else {
-                message = "You need the “Recalculate plan” permission to run the cutting plan engine.";
-            }
-            note.attr("dir", uiDirection());
-            setTextIfChanged(note, translate(message));
-        }
+        const wrapper = actionWrapper(frm);
+        if (!wrapper || !workspaceReady(frm)) return;
+        syncRecalculateButton(frm);
     }
 
     function apply(frm) {
@@ -655,6 +657,7 @@
         preparePlanInputs,
         persistPendingOrderInputs,
         runRecalculation,
+        syncRecalculateButton,
         runApproval,
         refreshWorkspaceOwners,
     });

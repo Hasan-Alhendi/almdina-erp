@@ -32,7 +32,10 @@
     }
 
     function settingsSnapshot(settings) {
-        return Object.freeze(Object.fromEntries(SETTINGS.map(key => [key, settings && settings[key]])));
+        const entries = SETTINGS
+            .map((key) => [key, settings && settings[key]])
+            .filter(([, value]) => value !== undefined);
+        return Object.freeze(Object.fromEntries(entries));
     }
 
     function matchesSettings(payload, requested) {
