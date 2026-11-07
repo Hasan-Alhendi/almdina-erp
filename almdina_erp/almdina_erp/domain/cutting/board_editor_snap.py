@@ -143,12 +143,38 @@ def _edge_delta(moving: Mapping[str, Any], target: Mapping[str, Any], gap: float
     return None
 
 
-def _candidate_key(dx: float, dy: float, source: str, side: str) -> tuple:
-    return (abs(dx) + abs(dy), abs(dx), abs(dy), source, side, round(dx, 6), round(dy, 6))
+_ALIGN_MODE_RANK = {
+    "top": 1.0,
+    "left": 1.0,
+    "bottom": 1.25,
+    "right": 1.25,
+    "centerX": 2.0,
+    "centerY": 2.0,
+}
 
 
-def _guide(moving: Mapping[str, Any], target: Mapping[str, Any], dx: float, dy: float) -> dict[str, float]:
+def _candidate_key(
+    dx: float,
+    dy: float,
+    source: str,
+    side: str,
+    rank: float = 0.0,
+) -> tuple:
+    return (
+        abs(dx) + abs(dy),
+        float(rank),
+        abs(dx),
+        abs(dy),
+        source,
+        side,
+        round(dx, 6),
+        round(dy, 6),
+    )
+
+
+def _guide(moving: Mapping[str, Any], target: Mapping[str, Any], dx: float, dy: float) -> dict[str, Any]:
     return {
+        "kind": "edge",
         "x1": num(target["a"][0]),
         "y1": num(target["a"][1]),
         "x2": num(target["b"][0]),
@@ -158,6 +184,94 @@ def _guide(moving: Mapping[str, Any], target: Mapping[str, Any], dx: float, dy: 
         "mx2": num(moving["b"][0]) + dx,
         "my2": num(moving["b"][1]) + dy,
     }
+
+
+def _aabb_metrics(bounds: Mapping[str, float]) -> dict[str, float]:
+    min_x = num(bounds["x"])
+    min_y = num(bounds["y"])
+    max_x = min_x + num(bounds["w"])
+    max_y = min_y + num(bounds["h"])
+    return {
+        "minX": min_x,
+        "minY": min_y,
+        "maxX": max_x,
+        "maxY": max_y,
+        "centerX": (min_x + max_x) * 0.5,
+        "centerY": (min_y + max_y) * 0.5,
+    }
+
+
+def _same_sheet_scope(a: Any, b: Any) -> bool:
+    left = None if a is None or a == "" else str(a)
+    right = None if b is None or b == "" else str(b)
+    return left == right
+
+
+def _alignment_guide(
+    mode: str,
+    moving_bounds: Mapping[str, float],
+    target_bounds: Mapping[str, float],
+    dx: float,
+    dy: float,
+    source_piece_key: Any,
+    target_piece_key: Any,
+) -> dict[str, Any]:
+    moving = _aabb_metrics(
+        {
+            "x": num(moving_bounds["x"]) + dx,
+            "y": num(moving_bounds["y"]) + dy,
+            "w": moving_bounds["w"],
+            "h": moving_bounds["h"],
+        }
+    )
+    target = _aabb_metrics(target_bounds)
+    if mode in {"top", "bottom", "centerY"}:
+        y = target["minY"] if mode == "top" else (
+            target["maxY"] if mode == "bottom" else target["centerY"]
+        )
+        x1 = min(moving["minX"], target["minX"])
+        x2 = max(moving["maxX"], target["maxX"])
+        return {
+            "kind": "alignment",
+            "mode": mode,
+            "sourcePieceKey": source_piece_key,
+            "targetPieceKey": target_piece_key,
+            "x1": x1,
+            "y1": y,
+            "x2": x2,
+            "y2": y,
+        }
+    x = target["minX"] if mode == "left" else (
+        target["maxX"] if mode == "right" else target["centerX"]
+    )
+    y1 = min(moving["minY"], target["minY"])
+    y2 = max(moving["maxY"], target["maxY"])
+    return {
+        "kind": "alignment",
+        "mode": mode,
+        "sourcePieceKey": source_piece_key,
+        "targetPieceKey": target_piece_key,
+        "x1": x,
+        "y1": y1,
+        "x2": x,
+        "y2": y2,
+    }
+
+
+def _alignment_deltas(
+    moving_bounds: Mapping[str, float],
+    target_bounds: Mapping[str, float],
+) -> list[dict[str, Any]]:
+    moving = _aabb_metrics(moving_bounds)
+    target = _aabb_metrics(target_bounds)
+    return [
+        {"mode": "top", "axis": "y", "dx": 0.0, "dy": target["minY"] - moving["minY"]},
+        {"mode": "bottom", "axis": "y", "dx": 0.0, "dy": target["maxY"] - moving["maxY"]},
+        {"mode": "left", "axis": "x", "dx": target["minX"] - moving["minX"], "dy": 0.0},
+        {"mode": "right", "axis": "x", "dx": target["maxX"] - moving["maxX"], "dy": 0.0},
+        {"mode": "centerX", "axis": "x", "dx": target["centerX"] - moving["centerX"], "dy": 0.0},
+        {"mode": "centerY", "axis": "y", "dx": 0.0, "dy": target["centerY"] - moving["centerY"]},
+    ]
 
 
 def _aabb_near(a: Mapping[str, float], b: Mapping[str, float], pad: float) -> bool:
@@ -235,15 +349,21 @@ def suggest_piece_snap(
         usable = {"x": ox, "y": oy, "w": uw, "h": uh}
         if _aabb_near(proposed["bounds"], usable, num(threshold_mm)):
             near_boards.append(str(sheet_no))
-    if len(near_boards) != 1:
-        return {"ok": False, "dx": raw_dx, "dy": raw_dy, "guides": [], "source": None}
 
-    sheet_no = near_boards[0]
-    board = boards[sheet_no]
-    moving_edges = footprint_edges(proposed)
-    targets: list[tuple[str, dict[str, Any], float]] = [
-        ("usable", edge, 0.0) for edge in usable_edges_world(board)
-    ]
+    unique_board = near_boards[0] if len(near_boards) == 1 else None
+    piece_sheet = piece.get("sheet_no")
+    sheet_scope = (
+        str(unique_board)
+        if unique_board is not None
+        else (None if piece_sheet is None or piece_sheet == "" else str(piece_sheet))
+    )
+
+    moving_edges = footprint_edges(proposed) if unique_board is not None else []
+    targets: list[tuple[str, dict[str, Any], float]] = []
+    if unique_board is not None:
+        targets.extend(
+            ("usable", edge, 0.0) for edge in usable_edges_world(boards[unique_board])
+        )
 
     piece_key = piece.get("piece_key")
     moving_keys = {piece_key}
@@ -251,18 +371,23 @@ def suggest_piece_snap(
         key for key, other in pieces.items() if other.get("glass_host_key") == piece_key
     )
     pad = num(threshold_mm) + max(proposed["bounds"]["w"], proposed["bounds"]["h"])
+    nearby_pieces: list[tuple[str, Mapping[str, Any]]] = []
     for other_key, other in pieces.items():
         if other_key in moving_keys:
             continue
-        if str(other.get("sheet_no")) != sheet_no:
+        if other.get("distribution") == "excluded":
+            continue
+        if not _same_sheet_scope(other.get("sheet_no"), sheet_scope):
             continue
         if other.get("glass_host_key") == piece_key or piece.get("glass_host_key") == other_key:
             continue
         other_fp = _world_footprint(other, boards)
         if not _aabb_near(proposed["bounds"], other_fp["bounds"], pad):
             continue
-        for edge in footprint_edges(other_fp):
-            targets.append((f"piece:{other_key}", edge, num(kerf_mm)))
+        nearby_pieces.append((other_key, other_fp))
+        if unique_board is not None:
+            for edge in footprint_edges(other_fp):
+                targets.append((f"piece:{other_key}", edge, num(kerf_mm)))
 
     axis_candidates: dict[str, list[dict[str, Any]]] = {"x": [], "y": [], "n": []}
     for source, target_edge, gap in targets:
@@ -286,7 +411,35 @@ def suggest_piece_snap(
                     "dy": abs_dy,
                     "source": source,
                     "guide": _guide(moving_edge, target_edge, dx, dy),
-                    "key": _candidate_key(abs_dx, abs_dy, source, axis),
+                    "key": _candidate_key(abs_dx, abs_dy, source, axis, 0.0),
+                }
+            )
+
+    for other_key, other_fp in nearby_pieces:
+        for row in _alignment_deltas(proposed["bounds"], other_fp["bounds"]):
+            rel = hypot(row["dx"], row["dy"])
+            if rel <= _EPS or rel > num(threshold_mm) + _EPS:
+                continue
+            abs_dx = raw_dx + row["dx"]
+            abs_dy = raw_dy + row["dy"]
+            source = f"align:{row['mode']}:{other_key}"
+            guide_row = _alignment_guide(
+                row["mode"],
+                proposed["bounds"],
+                other_fp["bounds"],
+                row["dx"],
+                row["dy"],
+                piece_key,
+                other_key,
+            )
+            rank = _ALIGN_MODE_RANK.get(row["mode"], 1.0)
+            axis_candidates[row["axis"]].append(
+                {
+                    "dx": abs_dx,
+                    "dy": abs_dy,
+                    "source": source,
+                    "guide": guide_row,
+                    "key": _candidate_key(abs_dx, abs_dy, source, row["axis"], rank),
                 }
             )
 

@@ -285,7 +285,158 @@ const session = {
 const canvasSource = fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8");
 assert.match(canvasSource, /data-abe-magnet/);
 assert.match(canvasSource, /data-abe-guide/);
+assert.match(canvasSource, /data-abe-guide-kind/);
 assert.match(canvasSource, /vector-effect/);
 assert.doesNotMatch(canvasSource, /abe-tool-select/);
+
+// Smart alignment: top / bottom / left / right / centerX / centerY + guide geometry.
+{
+    const alignSession = JSON.parse(JSON.stringify(session));
+    delete alignSession.pieces["instance:hidden"];
+    // Offset B vertically so tops differ by 5mm in world (trim 10 → world tops 110 vs 115).
+    alignSession.pieces["instance:b"].local_y_mm = 105;
+    alignSession.pieces["instance:b"].outline_mm = [[500, 105], [700, 105], [700, 305], [500, 305]];
+
+    const top = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 110, 112, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(top.ok, true);
+    assert.match(String(top.source), /^align:top:/);
+    assert.equal(Math.round(110 + top.dy), 115);
+    assert.ok((top.guides || []).some((guide) => guide.kind === "alignment" && guide.mode === "top"));
+    const topGuide = top.guides.find((guide) => guide.kind === "alignment");
+    assert.equal(Math.round(topGuide.y1), 115);
+    assert.equal(Math.round(topGuide.y2), 115);
+    assert.ok(topGuide.x2 > topGuide.x1);
+    assert.equal(topGuide.sourcePieceKey, "instance:a");
+    assert.equal(topGuide.targetPieceKey, "instance:b");
+
+    // Bottom alignment: taller B so top is outside threshold while bottoms are near.
+    alignSession.pieces["instance:b"].local_y_mm = 105;
+    alignSession.pieces["instance:b"].outline_mm = [[500, 105], [700, 105], [700, 355], [500, 355]];
+    const bottom = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 110, 162, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(bottom.ok, true);
+    assert.match(String(bottom.source), /align:bottom:/);
+    assert.equal(Math.round(110 + bottom.dy + 200), 365);
+
+    // Left alignment with vertically separated neighbour (world left of B = 114).
+    alignSession.pieces["instance:b"].local_x_mm = 104;
+    alignSession.pieces["instance:b"].local_y_mm = 500;
+    alignSession.pieces["instance:b"].outline_mm = [[104, 500], [304, 500], [304, 700], [104, 700]];
+    const left = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 108, 110, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(left.ok, true);
+    assert.match(String(left.source), /align:left:/);
+    assert.equal(Math.round(110 + left.dx), 114);
+    const leftGuide = left.guides.find((guide) => guide.kind === "alignment");
+    assert.equal(leftGuide.mode, "left");
+    assert.equal(Math.round(leftGuide.x1), Math.round(leftGuide.x2));
+
+    // Right alignment: wider B so left is outside threshold while rights are near.
+    alignSession.pieces["instance:b"].local_x_mm = 496;
+    alignSession.pieces["instance:b"].outline_mm = [[496, 500], [746, 500], [746, 700], [496, 700]];
+    const right = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 552, 110, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(right.ok, true);
+    assert.match(String(right.source), /align:right:/);
+    assert.equal(Math.round(110 + right.dx + 200), 756);
+
+    // Center X / Center Y: narrower B so edge aligns stay outside the enter threshold.
+    alignSession.pieces["instance:b"].local_x_mm = 550;
+    alignSession.pieces["instance:b"].local_y_mm = 550;
+    alignSession.pieces["instance:b"].outline_mm = [[550, 550], [650, 550], [650, 650], [550, 650]];
+    const centerX = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 506, 110, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(centerX.ok, true);
+    assert.match(String(centerX.source), /align:centerX:/);
+    const aCenterX = 110 + centerX.dx + 100;
+    assert.equal(Math.round(aCenterX), 610);
+
+    const centerY = SnapGeometry.suggestPieceSnap(alignSession, "instance:a", 110, 506, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(centerY.ok, true);
+    assert.match(String(centerY.source), /align:centerY:/);
+    const aCenterY = 110 + centerY.dy + 100;
+    assert.equal(Math.round(aCenterY), 610);
+}
+
+// Alignment that would overlap must be rejected (free drag remains).
+{
+    const clash = JSON.parse(JSON.stringify(session));
+    // B sits above A; top-align would stack them on the same footprint region.
+    clash.pieces["instance:b"].local_x_mm = 100;
+    clash.pieces["instance:b"].local_y_mm = 105;
+    clash.pieces["instance:b"].outline_mm = [[100, 105], [300, 105], [300, 305], [100, 305]];
+    const suggestion = SnapGeometry.suggestPieceSnap(clash, "instance:a", 110, 112, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    if (suggestion.ok) {
+        assert.doesNotMatch(String(suggestion.source), /align:top:/);
+    }
+}
+
+// Combined kerf (X) + top alignment (Y).
+{
+    const combo = JSON.parse(JSON.stringify(session));
+    combo.pieces["instance:b"].local_y_mm = 105;
+    combo.pieces["instance:b"].outline_mm = [[500, 105], [700, 105], [700, 305], [500, 305]];
+    // Approach from a near-kerf X and near-top Y.
+    const suggestion = SnapGeometry.suggestPieceSnap(combo, "instance:a", 304, 112, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(suggestion.ok, true);
+    const proposal = MoveGeometry.proposePieceDrop(
+        combo,
+        "instance:a",
+        110 + suggestion.dx,
+        110 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(Math.round(proposal.local_x_mm + 200 + combo.kerf_mm), 500);
+    assert.equal(Math.round(proposal.local_y_mm), 105);
+    assert.ok((suggestion.guides || []).length >= 1);
+}
+
+// Off-board pieces can still align visually without jumping onto a board.
+{
+    const floating = JSON.parse(JSON.stringify(session));
+    floating.pieces["instance:a"].sheet_no = null;
+    floating.pieces["instance:a"].local_x_mm = 2000;
+    floating.pieces["instance:a"].local_y_mm = 100;
+    floating.pieces["instance:a"].outline_mm = [[2000, 100], [2200, 100], [2200, 300], [2000, 300]];
+    floating.pieces["instance:b"].sheet_no = null;
+    floating.pieces["instance:b"].local_x_mm = 2400;
+    floating.pieces["instance:b"].local_y_mm = 105;
+    floating.pieces["instance:b"].outline_mm = [[2400, 105], [2600, 105], [2600, 305], [2400, 305]];
+    const suggestion = SnapGeometry.suggestPieceSnap(floating, "instance:a", 2000, 102, {
+        magnetEnabled: true,
+        thresholdMm: 8,
+    });
+    assert.equal(suggestion.ok, true);
+    assert.match(String(suggestion.source), /align:top:/);
+    const proposal = MoveGeometry.proposePieceDrop(
+        floating,
+        "instance:a",
+        2000 + suggestion.dx,
+        100 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(proposal.target_sheet_no, null);
+    assert.equal(Math.round(proposal.local_y_mm), 105);
+}
 
 console.log("board_editor_snap.test.js: ok");

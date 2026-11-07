@@ -319,6 +319,113 @@ class TestBoardEditorSnap(unittest.TestCase):
         self.assertEqual(next_session["pieces"]["instance:a"]["piece_instance_id"], "a")
         self.assertAlmostEqual(next_session["pieces"]["instance:a"]["local_x_mm"], 0.0, places=3)
 
+    def test_alignment_top_and_guide(self):
+        session = _session()
+        session["pieces"].pop("instance:c", None)
+        session["pieces"].pop("instance:l", None)
+        session["pieces"]["instance:b"]["local_y_mm"] = 105
+        session["pieces"]["instance:b"]["outline_mm"] = [
+            [500, 105],
+            [700, 105],
+            [700, 305],
+            [500, 305],
+        ]
+        suggestion = suggest_piece_snap(
+            piece=session["pieces"]["instance:a"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=110,
+            world_y_mm=112,
+            kerf_mm=session["kerf_mm"],
+            threshold_mm=8,
+        )
+        self.assertTrue(suggestion["ok"])
+        self.assertTrue(str(suggestion["source"]).startswith("align:top:"))
+        self.assertAlmostEqual(110 + suggestion["dy"], 115, places=3)
+        guide = next(g for g in suggestion["guides"] if g.get("kind") == "alignment")
+        self.assertEqual(guide["mode"], "top")
+        self.assertAlmostEqual(guide["y1"], guide["y2"], places=3)
+        self.assertAlmostEqual(guide["y1"], 115, places=3)
+        self.assertGreater(guide["x2"], guide["x1"])
+
+    def test_alignment_center_x(self):
+        session = _session()
+        session["pieces"].pop("instance:c", None)
+        session["pieces"].pop("instance:l", None)
+        session["pieces"]["instance:b"]["local_x_mm"] = 550
+        session["pieces"]["instance:b"]["local_y_mm"] = 550
+        session["pieces"]["instance:b"]["outline_mm"] = [
+            [550, 550],
+            [650, 550],
+            [650, 650],
+            [550, 650],
+        ]
+        suggestion = suggest_piece_snap(
+            piece=session["pieces"]["instance:a"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=506,
+            world_y_mm=110,
+            kerf_mm=session["kerf_mm"],
+            threshold_mm=8,
+        )
+        self.assertTrue(suggestion["ok"])
+        self.assertIn("align:centerX:", str(suggestion["source"]))
+        self.assertAlmostEqual(110 + suggestion["dx"] + 100, 610, places=3)
+
+    def test_alignment_rejects_overlap(self):
+        session = _session()
+        session["pieces"]["instance:b"]["local_x_mm"] = 100
+        session["pieces"]["instance:b"]["local_y_mm"] = 105
+        session["pieces"]["instance:b"]["outline_mm"] = [
+            [100, 105],
+            [300, 105],
+            [300, 305],
+            [100, 305],
+        ]
+        suggestion = suggest_piece_snap(
+            piece=session["pieces"]["instance:a"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=110,
+            world_y_mm=112,
+            kerf_mm=session["kerf_mm"],
+            threshold_mm=8,
+        )
+        if suggestion["ok"]:
+            self.assertNotIn("align:top:", str(suggestion["source"]))
+
+    def test_combined_kerf_and_top_alignment(self):
+        session = _session()
+        session["pieces"]["instance:b"]["local_y_mm"] = 105
+        session["pieces"]["instance:b"]["outline_mm"] = [
+            [500, 105],
+            [700, 105],
+            [700, 305],
+            [500, 305],
+        ]
+        suggestion = suggest_piece_snap(
+            piece=session["pieces"]["instance:a"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=304,
+            world_y_mm=112,
+            kerf_mm=session["kerf_mm"],
+            threshold_mm=8,
+        )
+        self.assertTrue(suggestion["ok"])
+        check = validate_piece_drop(
+            piece=session["pieces"]["instance:a"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=110 + suggestion["dx"],
+            world_y_mm=110 + suggestion["dy"],
+            kerf_mm=session["kerf_mm"],
+        )
+        self.assertTrue(check["ok"])
+        self.assertAlmostEqual(check["local_x_mm"] + 200 + session["kerf_mm"], 500.0, places=3)
+        self.assertAlmostEqual(check["local_y_mm"], 105.0, places=3)
+
 
 if __name__ == "__main__":
     unittest.main()

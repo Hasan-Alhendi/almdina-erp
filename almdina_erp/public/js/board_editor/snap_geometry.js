@@ -140,8 +140,28 @@
         return null;
     }
 
-    function candidateKey(dx, dy, source, side) {
-        return [Math.abs(dx) + Math.abs(dy), Math.abs(dx), Math.abs(dy), source, side, Number(dx.toFixed(6)), Number(dy.toFixed(6))];
+    // Lower rank wins ties after magnitude: board/kerf (0), edge align, center align.
+    // top/left beat bottom/right when the resulting translation magnitude is identical.
+    const ALIGN_MODE_RANK = Object.freeze({
+        top: 1,
+        left: 1,
+        bottom: 1.25,
+        right: 1.25,
+        centerX: 2,
+        centerY: 2,
+    });
+
+    function candidateKey(dx, dy, source, side, rank) {
+        return [
+            Math.abs(dx) + Math.abs(dy),
+            rank == null ? 0 : num(rank),
+            Math.abs(dx),
+            Math.abs(dy),
+            source,
+            side,
+            Number(dx.toFixed(6)),
+            Number(dy.toFixed(6)),
+        ];
     }
 
     function keyLess(a, b) {
@@ -158,6 +178,7 @@
 
     function guide(moving, target, dx, dy) {
         return {
+            kind: "edge",
             x1: num(target.a[0]),
             y1: num(target.a[1]),
             x2: num(target.b[0]),
@@ -167,6 +188,81 @@
             mx2: num(moving.b[0]) + dx,
             my2: num(moving.b[1]) + dy,
         };
+    }
+
+    function aabbMetrics(bounds) {
+        const minX = num(bounds.x);
+        const minY = num(bounds.y);
+        const maxX = minX + num(bounds.w);
+        const maxY = minY + num(bounds.h);
+        return {
+            minX,
+            minY,
+            maxX,
+            maxY,
+            centerX: (minX + maxX) * 0.5,
+            centerY: (minY + maxY) * 0.5,
+        };
+    }
+
+    function sameSheetScope(a, b) {
+        const left = a == null || a === "" ? null : String(a);
+        const right = b == null || b === "" ? null : String(b);
+        return left === right;
+    }
+
+    function alignmentGuide(mode, movingBounds, targetBounds, dx, dy, sourcePieceKey, targetPieceKey) {
+        const moving = aabbMetrics({
+            x: num(movingBounds.x) + dx,
+            y: num(movingBounds.y) + dy,
+            w: movingBounds.w,
+            h: movingBounds.h,
+        });
+        const target = aabbMetrics(targetBounds);
+        let x1;
+        let y1;
+        let x2;
+        let y2;
+        if (mode === "top" || mode === "bottom" || mode === "centerY") {
+            const y = mode === "top"
+                ? target.minY
+                : (mode === "bottom" ? target.maxY : target.centerY);
+            x1 = Math.min(moving.minX, target.minX);
+            x2 = Math.max(moving.maxX, target.maxX);
+            y1 = y;
+            y2 = y;
+        } else {
+            const x = mode === "left"
+                ? target.minX
+                : (mode === "right" ? target.maxX : target.centerX);
+            y1 = Math.min(moving.minY, target.minY);
+            y2 = Math.max(moving.maxY, target.maxY);
+            x1 = x;
+            x2 = x;
+        }
+        return {
+            kind: "alignment",
+            mode,
+            sourcePieceKey,
+            targetPieceKey,
+            x1,
+            y1,
+            x2,
+            y2,
+        };
+    }
+
+    function alignmentDeltas(movingBounds, targetBounds) {
+        const moving = aabbMetrics(movingBounds);
+        const target = aabbMetrics(targetBounds);
+        return [
+            { mode: "top", axis: "y", dx: 0, dy: target.minY - moving.minY },
+            { mode: "bottom", axis: "y", dx: 0, dy: target.maxY - moving.maxY },
+            { mode: "left", axis: "x", dx: target.minX - moving.minX, dy: 0 },
+            { mode: "right", axis: "x", dx: target.maxX - moving.maxX, dy: 0 },
+            { mode: "centerX", axis: "x", dx: target.centerX - moving.centerX, dy: 0 },
+            { mode: "centerY", axis: "y", dx: 0, dy: target.centerY - moving.centerY },
+        ];
     }
 
     function aabbNear(a, b, pad) {
@@ -248,29 +344,41 @@
             };
             if (aabbNear(proposed.bounds, usable, thresholdMm)) nearBoards.push(sheetNo);
         });
-        if (nearBoards.length !== 1) {
-            return { ok: false, dx: rawDx, dy: rawDy, guides: [], source: null };
+
+        // Board-edge / Kerf snaps require a unique nearby board.
+        // Alignment snaps may still run for same-sheet (or both off-board) neighbours.
+        const uniqueBoard = nearBoards.length === 1 ? nearBoards[0] : null;
+        const sheetScope = uniqueBoard != null
+            ? String(uniqueBoard)
+            : (piece.sheet_no == null || piece.sheet_no === "" ? null : String(piece.sheet_no));
+
+        const movingEdges = uniqueBoard != null ? footprintEdges(proposed) : [];
+        const targets = [];
+        if (uniqueBoard != null) {
+            usableEdgesWorld(session.boards[uniqueBoard]).forEach((edge) => {
+                targets.push(["usable", edge, 0]);
+            });
         }
 
-        const sheetNo = nearBoards[0];
-        const board = session.boards[sheetNo];
-        const movingEdges = footprintEdges(proposed);
-        const targets = usableEdgesWorld(board).map((edge) => ["usable", edge, 0]);
         const movingKeys = new Set(MoveGeometry.draggedPieceIds(session, pieceKey));
         if (opts.ignoreKeys && typeof opts.ignoreKeys.forEach === "function") {
             opts.ignoreKeys.forEach((key) => movingKeys.add(key));
         }
         const pad = thresholdMm + Math.max(proposed.bounds.w, proposed.bounds.h);
+        const nearbyPieces = [];
         Object.entries(session.pieces || {}).forEach(([otherKey, other]) => {
             if (movingKeys.has(otherKey)) return;
             if (other.distribution === "excluded") return;
-            if (String(other.sheet_no) !== String(sheetNo)) return;
+            if (!sameSheetScope(other.sheet_no, sheetScope)) return;
             if (other.glass_host_key === pieceKey || piece.glass_host_key === otherKey) return;
             const otherFp = MoveGeometry.worldFootprint(other, session.boards);
             if (!aabbNear(proposed.bounds, otherFp.bounds, pad)) return;
-            footprintEdges(otherFp).forEach((edge) => {
-                targets.push([`piece:${otherKey}`, edge, num(session.kerf_mm)]);
-            });
+            nearbyPieces.push({ key: otherKey, footprint: otherFp });
+            if (uniqueBoard != null) {
+                footprintEdges(otherFp).forEach((edge) => {
+                    targets.push([`piece:${otherKey}`, edge, num(session.kerf_mm)]);
+                });
+            }
         });
 
         const axisCandidates = { x: [], y: [], n: [] };
@@ -291,7 +399,36 @@
                     dy: absDy,
                     source,
                     guide: guide(movingEdge, targetEdge, dx, dy),
-                    key: candidateKey(absDx, absDy, source, axis),
+                    key: candidateKey(absDx, absDy, source, axis, 0),
+                });
+            });
+        });
+
+        // Alignment snap: same-side edges and centers (AABB discovery; MoveGeometry validates).
+        nearbyPieces.forEach(({ key: otherKey, footprint: otherFp }) => {
+            alignmentDeltas(proposed.bounds, otherFp.bounds).forEach((row) => {
+                const rel = hypot(row.dx, row.dy);
+                // Skip already-aligned axes so zero-delta centers do not hijack combined picks.
+                if (rel <= EPS || rel > thresholdMm + EPS) return;
+                const absDx = rawDx + row.dx;
+                const absDy = rawDy + row.dy;
+                const source = `align:${row.mode}:${otherKey}`;
+                const guideRow = alignmentGuide(
+                    row.mode,
+                    proposed.bounds,
+                    otherFp.bounds,
+                    row.dx,
+                    row.dy,
+                    pieceKey,
+                    otherKey
+                );
+                const rank = ALIGN_MODE_RANK[row.mode] == null ? 1 : ALIGN_MODE_RANK[row.mode];
+                axisCandidates[row.axis].push({
+                    dx: absDx,
+                    dy: absDy,
+                    source,
+                    guide: guideRow,
+                    key: candidateKey(absDx, absDy, source, row.axis, rank),
                 });
             });
         });
@@ -353,5 +490,7 @@
         usableEdgesWorld,
         suggestPieceSnap,
         thresholdMmFromScale,
+        alignmentDeltas,
+        alignmentGuide,
     });
 })();

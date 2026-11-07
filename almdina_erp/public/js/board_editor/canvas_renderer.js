@@ -1254,13 +1254,17 @@
             preview.guides.forEach((guide) => {
                 const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
                 line.setAttribute("data-abe-guide", "1");
+                if (guide.kind) line.setAttribute("data-abe-guide-kind", String(guide.kind));
+                if (guide.mode) line.setAttribute("data-abe-guide-mode", String(guide.mode));
                 line.setAttribute("x1", String(Number(guide.x1) || 0));
                 line.setAttribute("y1", String(Number(guide.y1) || 0));
                 line.setAttribute("x2", String(Number(guide.x2) || 0));
                 line.setAttribute("y2", String(Number(guide.y2) || 0));
                 line.setAttribute("stroke", "#0b5fff");
-                line.setAttribute("stroke-width", "1.25");
-                line.setAttribute("stroke-dasharray", "6 4");
+                // Alignment guides stay solid and thinner; kerf/board edge guides stay dashed.
+                const isAlignment = guide.kind === "alignment";
+                line.setAttribute("stroke-width", isAlignment ? "1" : "1.25");
+                if (!isAlignment) line.setAttribute("stroke-dasharray", "6 4");
                 line.setAttribute("vector-effect", "non-scaling-stroke");
                 line.setAttribute("pointer-events", "none");
                 world.appendChild(line);
