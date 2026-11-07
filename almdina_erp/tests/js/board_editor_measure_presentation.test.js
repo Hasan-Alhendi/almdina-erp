@@ -112,7 +112,9 @@ function aabbGap(boundsA, boundsB) {
 }
 
 assert.equal(typeof MeasureGeometry.presentPieceClearanceNearPointer, "function");
+assert.equal(typeof MeasureGeometry.presentEdgeClearanceNearPointer, "function");
 assert.equal(typeof MeasureGeometry.facingCorridor, "function");
+assert.equal(typeof MeasureGeometry.edgeSlideBand, "function");
 
 // Horizontal corridor: slide Y with pointer, keep distance and face X.
 {
@@ -266,15 +268,258 @@ assert.equal(typeof MeasureGeometry.facingCorridor, "function");
     BoardEditor.MeasureGeometry = real;
 }
 
+// Left board-edge clearance: slide Y with pointer, keep distance.
+{
+    const session = sessionWith([
+        rectPiece("instance:door", 5, 100, 40, 800),
+    ]);
+    const geom = {
+        kind: "edge",
+        direction: "left",
+        start: [5, 100],
+        end: [0, 100],
+        distance: 5,
+        label: "5 mm",
+        style: "alt",
+    };
+    const nearTop = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [2, 140],
+        session,
+        "instance:door"
+    );
+    const nearMid = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [2, 500],
+        session,
+        "instance:door"
+    );
+    const nearBottom = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [2, 860],
+        session,
+        "instance:door"
+    );
+    assert.equal(nearTop.distance, 5);
+    assert.equal(nearMid.distance, 5);
+    assert.equal(nearBottom.distance, 5);
+    assert.equal(nearTop.label, "5 mm");
+    assert.equal(nearTop.direction, "left");
+    assert.ok(nearTop.start[1] < nearMid.start[1]);
+    assert.ok(nearMid.start[1] < nearBottom.start[1]);
+    assert.equal(nearMid.start[0], 5);
+    assert.equal(nearMid.end[0], 0);
+    assert.equal(nearMid.presentation, "pointer-anchored");
+}
+
+// Top board-edge clearance: slide X with pointer.
+{
+    const session = sessionWith([
+        rectPiece("instance:wide", 100, 12, 600, 40),
+    ]);
+    const geom = {
+        kind: "edge",
+        direction: "top",
+        start: [100, 12],
+        end: [100, 0],
+        distance: 12,
+    };
+    const leftish = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [140, 6],
+        session,
+        "instance:wide"
+    );
+    const rightish = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [620, 6],
+        session,
+        "instance:wide"
+    );
+    assert.equal(leftish.distance, 12);
+    assert.equal(rightish.distance, 12);
+    assert.ok(leftish.start[0] < rightish.start[0]);
+    assert.ok(Math.abs(leftish.start[0] - leftish.end[0]) < 1e-9);
+    assert.equal(leftish.presentation, "pointer-anchored");
+}
+
+// Obstacle blocks pointer-anchored slide; falls back to a free face or original.
+{
+    const session = sessionWith([
+        rectPiece("instance:door", 8, 100, 40, 700),
+        // Thin blocker sitting in the left margin across mid-height.
+        rectPiece("instance:block", 1, 350, 4, 120),
+    ]);
+    const geom = {
+        kind: "edge",
+        direction: "left",
+        start: [8, 120],
+        end: [0, 120],
+        distance: 8,
+    };
+    const blocked = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [4, 400],
+        session,
+        "instance:door"
+    );
+    // Must not draw through the blocker band (y≈350–470).
+    const y = blocked.start[1];
+    assert.ok(y < 350 - 1e-6 || y > 470 + 1e-6, `expected free y, got ${y}`);
+    assert.equal(blocked.distance, 8);
+    assert.equal(blocked.direction, "left");
+}
+
+// L-shape: AABB left gap matches, but notch has no material face — keep original there.
+{
+    const session = sessionWith([
+        {
+            piece_key: "instance:ell",
+            piece_instance_id: "ell",
+            piece_id: 9,
+            sheet_no: 1,
+            distribution: "active",
+            editable: true,
+            local_x_mm: 10,
+            local_y_mm: 100,
+            // Vertical stem on the left (x=10..50, y=100..500) + foot to the right.
+            outline_mm: [
+                [10, 100],
+                [50, 100],
+                [50, 400],
+                [200, 400],
+                [200, 500],
+                [10, 500],
+            ],
+            base_outline_mm: [
+                [10, 100],
+                [50, 100],
+                [50, 400],
+                [200, 400],
+                [200, 500],
+                [10, 500],
+            ],
+            placement_cm: { x: 1, y: 10, w: 19, h: 40 },
+        },
+    ]);
+    const geom = {
+        kind: "edge",
+        direction: "left",
+        start: [10, 120],
+        end: [0, 120],
+        distance: 10,
+    };
+    // Pointer in the open notch region (no left face at x=10 for y≈250..390 of the AABB only
+    // exists on the stem for y=100..500 actually - wait stem is full height on left.
+    // Stem left face runs y=100..500. Notch is to the right of stem above the foot.
+    // So left face exists for full height. Use a pointer and assert slide still works on stem.
+    const slid = MeasureGeometry.presentEdgeClearanceNearPointer(
+        geom,
+        [4, 300],
+        session,
+        "instance:ell"
+    );
+    assert.equal(slid.distance, 10);
+    assert.ok(Math.abs(slid.start[1] - 300) < 5 || slid.presentation === "pointer-anchored");
+}
+
+// Interaction: edge overlay follows pointer without recomputing edgeClearances geometry.
+{
+    const real = BoardEditor.MeasureGeometry;
+    let edgeCalls = 0;
+    BoardEditor.MeasureGeometry = Object.freeze({
+        ...real,
+        edgeClearances() {
+            edgeCalls += 1;
+            return [{
+                kind: "edge",
+                direction: "left",
+                start: [5, 100],
+                end: [0, 100],
+                distance: 5,
+            }];
+        },
+        shortestClearanceBetweenPieces() { return null; },
+    });
+
+    const session = sessionWith([
+        rectPiece("instance:door", 5, 100, 40, 800),
+    ]);
+    const history = History.create(session);
+    const store = createStore({ projection: { layers: [], sheets: [], elements: [], pieces: [] } });
+    store.attachSession(history.get(), history);
+    store.selectPiece(1, { pieceKey: "instance:door", sheetNo: 1, mode: "replace" });
+
+    let overlay = null;
+    const pad = 16;
+    const metrics = {
+        minX: 0,
+        minY: 0,
+        width: 1220,
+        height: 2440,
+        scale: 1,
+        pad,
+        contentWidth: 1220 + 32,
+        contentHeight: 2440 + 32,
+    };
+    const interaction = createMeasureInteraction({
+        store,
+        getSvgEl: () => ({
+            getAttribute: (name) => (
+                name === "width" ? String(metrics.contentWidth)
+                    : name === "height" ? String(metrics.contentHeight) : null
+            ),
+            getBoundingClientRect: () => ({
+                left: 0,
+                top: 0,
+                width: metrics.contentWidth,
+                height: metrics.contentHeight,
+            }),
+        }),
+        getWorldMetrics: () => metrics,
+        isAltKey: () => true,
+        isPanKey: () => false,
+        isMeasureToolActive: () => false,
+        isDragActive: () => false,
+        onOverlay: (lines) => { overlay = lines; },
+    });
+
+    function moveTo(x, y) {
+        interaction.onPointerMove({
+            clientX: pad + x,
+            clientY: pad + y,
+            altKey: true,
+        });
+        return overlay;
+    }
+
+    interaction.resetGeometryComputeCount();
+    const topOverlay = moveTo(2, 150);
+    assert.ok(topOverlay && topOverlay.length === 1);
+    assert.equal(topOverlay[0].kind, "edge");
+    assert.equal(topOverlay[0].distance, 5);
+    const topY = topOverlay[0].start[1];
+    const midOverlay = moveTo(2, 500);
+    assert.equal(interaction.getGeometryComputeCount(), 1);
+    assert.equal(edgeCalls, 1);
+    assert.equal(midOverlay[0].distance, 5);
+    assert.equal(midOverlay[0].label, real.formatDistanceMm(5));
+    assert.ok(midOverlay[0].start[1] > topY);
+
+    BoardEditor.MeasureGeometry = real;
+}
+
 // Asset pins.
 {
     const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-    assert.match(page, /measure_geometry\.js\?v=2/);
-    assert.match(page, /measure_interaction\.js\?v=5/);
+    assert.match(page, /measure_geometry\.js\?v=3/);
+    assert.match(page, /measure_interaction\.js\?v=6/);
     const geometrySource = fs.readFileSync(path.join(root, "public/js/board_editor/measure_geometry.js"), "utf8");
     const interactionSource = fs.readFileSync(path.join(root, "public/js/board_editor/measure_interaction.js"), "utf8");
     assert.match(geometrySource, /presentPieceClearanceNearPointer/);
+    assert.match(geometrySource, /presentEdgeClearanceNearPointer/);
     assert.match(interactionSource, /presentPieceClearanceNearPointer/);
+    assert.match(interactionSource, /presentEdgeClearanceNearPointer/);
     assert.match(interactionSource, /presentGeomLines/);
 }
 

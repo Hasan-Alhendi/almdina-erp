@@ -207,16 +207,28 @@
             }
         }
 
-        function presentGeomLines(MG, session, geomLines, world) {
+        function presentGeomLines(MG, session, geomLines, world, selectedKey) {
             const rows = Array.isArray(geomLines) ? geomLines : [];
-            if (!world || !MG || typeof MG.presentPieceClearanceNearPointer !== "function") {
+            if (!world || !MG) {
                 return rows.map((row) => ({ ...row }));
             }
             const pointer = [world.x, world.y];
             return rows.map((row) => {
-                if (!row || row.kind !== "piece") return { ...row };
-                const presented = MG.presentPieceClearanceNearPointer(row, pointer, session);
-                return presented ? { ...presented } : { ...row };
+                if (!row) return { ...row };
+                if (row.kind === "piece" && typeof MG.presentPieceClearanceNearPointer === "function") {
+                    const presented = MG.presentPieceClearanceNearPointer(row, pointer, session);
+                    return presented ? { ...presented } : { ...row };
+                }
+                if (row.kind === "edge" && typeof MG.presentEdgeClearanceNearPointer === "function") {
+                    const presented = MG.presentEdgeClearanceNearPointer(
+                        row,
+                        pointer,
+                        session,
+                        selectedKey
+                    );
+                    return presented ? { ...presented } : { ...row };
+                }
+                return { ...row };
             });
         }
 
@@ -312,7 +324,7 @@
                 writeCache(entryKey, geomLines);
             }
 
-            const presented = presentGeomLines(MG, snap.session, geomLines, world);
+            const presented = presentGeomLines(MG, snap.session, geomLines, world, selectedKey);
             if (
                 publishedCacheKey === entryKey
                 && presentationFingerprint(altOverlay) === presentationFingerprint(presented)

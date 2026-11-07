@@ -184,6 +184,30 @@
         return !pointInMaterial(probe, material);
     }
 
+    function clearanceSlabBlocked(dirId, start, end, others) {
+        const x0 = Math.min(start[0], end[0]);
+        const x1 = Math.max(start[0], end[0]);
+        const y0 = Math.min(start[1], end[1]);
+        const y1 = Math.max(start[1], end[1]);
+        return (others || []).some((other) => {
+            const b = other.bounds;
+            if (!b) return false;
+            if (dirId === "left" || dirId === "right") {
+                // Include grazing contact on the obstacle's top/bottom edges.
+                const yOverlap = Math.min(y1, b.y + b.h) - Math.max(y0, b.y);
+                if (yOverlap < -EPS) return false;
+                const ox0 = b.x;
+                const ox1 = b.x + b.w;
+                return ox1 > x0 + EPS && ox0 < x1 - EPS;
+            }
+            const xOverlap = Math.min(x1, b.x + b.w) - Math.max(x0, b.x);
+            if (xOverlap < -EPS) return false;
+            const oy0 = b.y;
+            const oy1 = b.y + b.h;
+            return oy1 > y0 + EPS && oy0 < y1 - EPS;
+        });
+    }
+
     function edgeClearances(session, pieceKey) {
         const pieces = (session && session.pieces) || {};
         const boards = (session && session.boards) || {};
@@ -206,30 +230,6 @@
             { id: "right", vector: [1, 0], edgePoint: (p) => [outer.right, p[1]] },
         ];
 
-        function slabBlocked(dirId, start, end) {
-            const x0 = Math.min(start[0], end[0]);
-            const x1 = Math.max(start[0], end[0]);
-            const y0 = Math.min(start[1], end[1]);
-            const y1 = Math.max(start[1], end[1]);
-            return others.some((other) => {
-                const b = other.bounds;
-                if (!b) return false;
-                if (dirId === "left" || dirId === "right") {
-                    // Include grazing contact on the obstacle's top/bottom edges.
-                    const yOverlap = Math.min(y1, b.y + b.h) - Math.max(y0, b.y);
-                    if (yOverlap < -EPS) return false;
-                    const ox0 = b.x;
-                    const ox1 = b.x + b.w;
-                    return ox1 > x0 + EPS && ox0 < x1 - EPS;
-                }
-                const xOverlap = Math.min(x1, b.x + b.w) - Math.max(x0, b.x);
-                if (xOverlap < -EPS) return false;
-                const oy0 = b.y;
-                const oy1 = b.y + b.h;
-                return oy1 > y0 + EPS && oy0 < y1 - EPS;
-            });
-        }
-
         const samples = sampleBoundary(material.outer, 64);
         const results = [];
         dirs.forEach((dir) => {
@@ -244,7 +244,7 @@
                     }
                     return;
                 }
-                if (slabBlocked(dir.id, point, end)) return;
+                if (clearanceSlabBlocked(dir.id, point, end, others)) return;
                 if (segmentBlockedByMaterials(point, end, others, [pieceKey])) return;
                 if (!best || gap < best.distance - EPS) {
                     best = { kind: "edge", direction: dir.id, start: point, end, distance: gap };
@@ -253,6 +253,104 @@
             if (best) results.push(best);
         });
         return results;
+    }
+
+    function edgeSlideBand(direction, bounds, outer, distanceMm) {
+        // Presentation helper: only when the measured gap equals the AABB face gap.
+        if (!bounds || !outer) return null;
+        const gapWanted = num(distanceMm);
+        const dir = String(direction || "");
+        if (dir === "left") {
+            const gap = num(bounds.x) - num(outer.x);
+            if (Math.abs(gap - gapWanted) > 0.05) return null;
+            return {
+                freeAxis: "y",
+                min: num(bounds.y),
+                max: num(bounds.y) + num(bounds.h),
+                build(free) {
+                    return {
+                        start: [num(bounds.x), free],
+                        end: [num(outer.x), free],
+                    };
+                },
+            };
+        }
+        if (dir === "right") {
+            const gap = num(outer.right) - (num(bounds.x) + num(bounds.w));
+            if (Math.abs(gap - gapWanted) > 0.05) return null;
+            return {
+                freeAxis: "y",
+                min: num(bounds.y),
+                max: num(bounds.y) + num(bounds.h),
+                build(free) {
+                    return {
+                        start: [num(bounds.x) + num(bounds.w), free],
+                        end: [num(outer.right), free],
+                    };
+                },
+            };
+        }
+        if (dir === "top") {
+            const gap = num(bounds.y) - num(outer.y);
+            if (Math.abs(gap - gapWanted) > 0.05) return null;
+            return {
+                freeAxis: "x",
+                min: num(bounds.x),
+                max: num(bounds.x) + num(bounds.w),
+                build(free) {
+                    return {
+                        start: [free, num(bounds.y)],
+                        end: [free, num(outer.y)],
+                    };
+                },
+            };
+        }
+        if (dir === "bottom") {
+            const gap = num(outer.bottom) - (num(bounds.y) + num(bounds.h));
+            if (Math.abs(gap - gapWanted) > 0.05) return null;
+            return {
+                freeAxis: "x",
+                min: num(bounds.x),
+                max: num(bounds.x) + num(bounds.w),
+                build(free) {
+                    return {
+                        start: [free, num(bounds.y) + num(bounds.h)],
+                        end: [free, num(outer.bottom)],
+                    };
+                },
+            };
+        }
+        return null;
+    }
+
+    function materialSupportsEdgeFace(direction, material, free) {
+        if (!material || !material.bounds) return false;
+        const b = material.bounds;
+        const inset = 0.75;
+        let face;
+        let inward;
+        let vector;
+        if (direction === "left") {
+            face = [num(b.x), free];
+            inward = [num(b.x) + inset, free];
+            vector = [-1, 0];
+        } else if (direction === "right") {
+            face = [num(b.x) + num(b.w), free];
+            inward = [num(b.x) + num(b.w) - inset, free];
+            vector = [1, 0];
+        } else if (direction === "top") {
+            face = [free, num(b.y)];
+            inward = [free, num(b.y) + inset];
+            vector = [0, -1];
+        } else if (direction === "bottom") {
+            face = [free, num(b.y) + num(b.h)];
+            inward = [free, num(b.y) + num(b.h) - inset];
+            vector = [0, 1];
+        } else {
+            return false;
+        }
+        if (!pointInMaterial(inward, material)) return false;
+        return outwardProbe(face, vector, material);
     }
 
     function projectPointOnSegment(point, a, b) {
@@ -516,6 +614,95 @@
         };
     }
 
+    function presentEdgeClearanceNearPointer(result, pointerWorld, session, pieceKey) {
+        // Presentation only: slide an already-correct board-edge clearance
+        // toward the pointer along the equal-distance face. Never recompute gap.
+        if (!result || result.kind !== "edge" || !pointerWorld || !session || !pieceKey) {
+            return result;
+        }
+        const pieces = session.pieces || {};
+        const boards = session.boards || {};
+        const piece = pieces[pieceKey];
+        if (!piece || piece.sheet_no == null || piece.sheet_no === "") return result;
+        const board = boards[String(piece.sheet_no)];
+        const outer = boardOuterWorld(board);
+        const material = pieceMaterial(piece, boards);
+        if (!outer || !material || !material.bounds) return result;
+
+        const band = edgeSlideBand(result.direction, material.bounds, outer, result.distance);
+        if (!band) return result;
+
+        const start = [num(result.start[0]), num(result.start[1])];
+        const end = [num(result.end[0]), num(result.end[1])];
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        if (band.freeAxis === "y") {
+            if (Math.abs(dy) > 0.05) return result;
+            if (Math.abs(Math.abs(dx) - num(result.distance)) > 0.05) return result;
+        } else {
+            if (Math.abs(dx) > 0.05) return result;
+            if (Math.abs(Math.abs(dy) - num(result.distance)) > 0.05) return result;
+        }
+
+        const others = Object.keys(pieces)
+            .filter((key) => key !== pieceKey && Number(pieces[key].sheet_no) === Number(piece.sheet_no))
+            .map((key) => pieceMaterial(pieces[key], boards))
+            .filter(Boolean);
+
+        function pathBlocked(a, b) {
+            if (clearanceSlabBlocked(result.direction, a, b, others)) return true;
+            return segmentBlockedByMaterials(a, b, others, [pieceKey]);
+        }
+
+        const span = Math.max(0, band.max - band.min);
+        const inset = span > EPS ? Math.min(2, span * 0.08) : 0;
+        const lo = band.min + inset;
+        const hi = Math.max(lo, band.max - inset);
+        const preferred = band.freeAxis === "y" ? num(pointerWorld[1]) : num(pointerWorld[0]);
+
+        function tryFree(free) {
+            if (free < lo - EPS || free > hi + EPS) return null;
+            if (!materialSupportsEdgeFace(result.direction, material, free)) return null;
+            const built = band.build(free);
+            if (Math.abs(distance(built.start, built.end) - num(result.distance)) > 0.05) return null;
+            if (pathBlocked(built.start, built.end)) return null;
+            return {
+                ...result,
+                start: built.start,
+                end: built.end,
+                presentation: "pointer-anchored",
+            };
+        }
+
+        const clamped = Math.min(hi, Math.max(lo, preferred));
+        const direct = tryFree(clamped);
+        if (direct) return direct;
+
+        // Nearest unblocked face sample within the equal-distance band.
+        const step = Math.max(1, Math.min(8, span > EPS ? span / 40 : 1));
+        let best = null;
+        let bestDist = Infinity;
+        for (let free = lo; free <= hi + EPS; free += step) {
+            const candidate = tryFree(free);
+            if (!candidate) continue;
+            const delta = Math.abs(free - preferred);
+            if (delta < bestDist) {
+                bestDist = delta;
+                best = candidate;
+            }
+        }
+        [lo, hi].forEach((free) => {
+            const candidate = tryFree(free);
+            if (!candidate) return;
+            const delta = Math.abs(free - preferred);
+            if (delta < bestDist) {
+                bestDist = delta;
+                best = candidate;
+            }
+        });
+        return best || result;
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.MeasureGeometry = Object.freeze({
         distance,
@@ -536,5 +723,7 @@
         densifySegment,
         facingCorridor,
         presentPieceClearanceNearPointer,
+        presentEdgeClearanceNearPointer,
+        edgeSlideBand,
     });
 })();

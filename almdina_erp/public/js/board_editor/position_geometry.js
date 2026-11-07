@@ -105,11 +105,30 @@
         return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.AlignmentGeometry;
     }
 
+    function usableHeightMm(board) {
+        if (!board) return 0;
+        return num(board.usable_length_mm) || num(board.height_mm);
+    }
+
+    // Position UI only: convert internal usable-sheet AABB (Y+ down) to
+    // bottom-left displayed Y (Y+ up). Does not mutate stored geometry.
+    function internalYToDisplayedY(usableHeight, bounds) {
+        const height = num(usableHeight);
+        const top = num(bounds && bounds.y);
+        const pieceH = num(bounds && bounds.h);
+        return height - (top + pieceH);
+    }
+
+    function displayedYDeltaToInternal(currentDisplayedY, targetDisplayedY) {
+        return num(currentDisplayedY) - num(targetDisplayedY);
+    }
+
     function boardPositionForPiece(session, pieceKeyOrInstance) {
-        // X/Y are editor UI coords in usable-sheet millimetres:
-        //   (0,0) = top-left of usable area (after trim)
-        //   X+ right, Y+ down
-        // Values are the AABB min corner after rotation/mirror (outline_mm).
+        // Position UI coords in usable-sheet millimetres (display only):
+        //   (0,0) = bottom-left of usable area (after trim)
+        //   X+ right, Y+ up
+        // Values use the AABB after rotation/mirror (outline_mm footprint).
+        // Internal MoveGeometry / SVG / session storage stay Y+ down.
         const MoveGeometry = moveGeometry();
         if (!MoveGeometry || !session || !session.pieces) return null;
         const pieceKey = MoveGeometry.resolvePieceKey(session, pieceKeyOrInstance);
@@ -123,6 +142,9 @@
         const bounds = local && local.bounds;
         if (!bounds) return null;
 
+        const usableH = usableHeightMm(board);
+        const x = num(bounds.x);
+        const y = internalYToDisplayedY(usableH, bounds);
         const dims = pieceDimensionsMm(piece);
         return {
             mixed: false,
@@ -133,10 +155,11 @@
             editable: Boolean(piece.editable),
             widthMm: dims.widthMm,
             lengthMm: dims.lengthMm,
-            x: num(bounds.x),
-            y: num(bounds.y),
-            displayX: formatMm(bounds.x),
-            displayY: formatMm(bounds.y),
+            usableHeightMm: usableH,
+            x,
+            y,
+            displayX: formatMm(x),
+            displayY: formatMm(y),
         };
     }
 
@@ -190,7 +213,7 @@
         let dx = 0;
         let dy = 0;
         if (name === "x") dx = target - num(current.x);
-        else if (name === "y") dy = target - num(current.y);
+        else if (name === "y") dy = displayedYDeltaToInternal(current.y, target);
         else return { ok: false, code: CODE.INVALID_AXIS, dx: 0, dy: 0 };
 
         if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
@@ -203,7 +226,8 @@
         const name = String(axis || "").toLowerCase();
         const value = num(amount);
         if (name === "x") return { dx: value, dy: 0 };
-        if (name === "y") return { dx: 0, dy: value };
+        // Displayed Y+ is up; internal MoveGeometry Y+ is down.
+        if (name === "y") return { dx: 0, dy: -value };
         return null;
     }
 
@@ -449,6 +473,9 @@
         parseMm,
         parseRelativeOffset,
         pieceDimensionsMm,
+        usableHeightMm,
+        internalYToDisplayedY,
+        displayedYDeltaToInternal,
         boardPositionForPiece,
         // Alias kept for callers/tests that still name the helper generically.
         boardInsetsForPiece: boardPositionForPiece,

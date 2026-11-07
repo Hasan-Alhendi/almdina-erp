@@ -163,6 +163,14 @@ const keyPoly = "instance:pi-poly";
 // Visibility model: single absolute; multi Mixed (same board eligible).
 assert.equal(PositionGeometry.selectionPositionModel(session, []), null);
 assert.equal(PositionGeometry.selectionPositionModel(session, [keyOut]), null);
+const usableH = PositionGeometry.usableHeightMm(session.boards["1"]);
+assert.equal(usableH, 980);
+assert.equal(
+    PositionGeometry.internalYToDisplayedY(980, { y: 20, h: 100 }),
+    860
+);
+assert.equal(PositionGeometry.displayedYDeltaToInternal(860, 100), 760);
+
 const modelA = PositionGeometry.selectionPositionModel(session, [keyA]);
 assert.ok(modelA);
 assert.equal(modelA.pieceKey, keyA);
@@ -170,9 +178,10 @@ assert.equal(modelA.mixed, false);
 assert.equal(modelA.label, "A");
 assert.equal(modelA.widthMm, 200);
 assert.equal(modelA.lengthMm, 100);
-// Usable-origin AABB: placement 10×20 mm inside usable area (trim is NOT added).
+// Bottom-left usable origin: X from left, Y from bottom (trim is NOT double-counted).
 assert.equal(PositionGeometry.formatMm(modelA.x), "10");
-assert.equal(PositionGeometry.formatMm(modelA.y), "20");
+assert.equal(PositionGeometry.formatMm(modelA.y), "860");
+assert.equal(modelA.usableHeightMm, 980);
 assert.equal(modelA.left, undefined);
 assert.equal(modelA.top, undefined);
 
@@ -185,11 +194,11 @@ assert.equal(mixedAB.displayY, PositionGeometry.MIXED_LABEL);
 assert.equal(mixedAB.x, null);
 assert.equal(mixedAB.y, null);
 
-// Non-rect polygon uses transformed outline AABB in usable coords.
+// Non-rect polygon uses transformed outline AABB; Y is distance from usable bottom.
 const modelPoly = PositionGeometry.boardPositionForPiece(session, keyPoly);
 assert.ok(modelPoly);
 assert.equal(PositionGeometry.formatMm(modelPoly.x), "600");
-assert.equal(PositionGeometry.formatMm(modelPoly.y), "700");
+assert.equal(PositionGeometry.formatMm(modelPoly.y), "80");
 
 function applyAxis(activeStore, pieceKey, axis, value) {
     const proposal = PositionGeometry.proposeAxisMove(activeStore.snapshot().session, pieceKey, axis, value);
@@ -334,13 +343,29 @@ function applyGroupNudge(activeStore, keys, key) {
     assert.equal(store.snapshot().canUndo, undoBefore);
 }
 
-// Y +1 moves downward; X unchanged.
+// Y +1 moves upward (displayed Y increases); X unchanged.
 {
     const before = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    const fpBefore = MoveGeometry.footprint(store.snapshot().session.pieces[keyA]).bounds;
     const result = applyAxis(store, keyA, "y", before.y + 1);
     assert.equal(result.ok, true);
     assert.equal(PositionGeometry.formatMm(result.model.y), PositionGeometry.formatMm(before.y + 1));
     assert.equal(PositionGeometry.formatMm(result.model.x), PositionGeometry.formatMm(before.x));
+    const fpAfter = MoveGeometry.footprint(store.snapshot().session.pieces[keyA]).bounds;
+    assert.equal(PositionGeometry.formatMm(fpAfter.y), PositionGeometry.formatMm(fpBefore.y - 1));
+}
+
+// Y = 0 seats the AABB bottom on the usable bottom edge when valid.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const result = applyAxis(local, keyA, "y", 0);
+    assert.equal(result.ok, true);
+    assert.equal(PositionGeometry.formatMm(result.model.y), "0");
+    const fp = MoveGeometry.footprint(local.snapshot().session.pieces[keyA]).bounds;
+    assert.equal(PositionGeometry.formatMm(fp.y + fp.h), PositionGeometry.formatMm(usableH));
 }
 
 // Decimal step via axis target.
@@ -351,12 +376,14 @@ function applyGroupNudge(activeStore, keys, key) {
     assert.equal(PositionGeometry.formatMm(result.model.x), PositionGeometry.formatMm(before.x + 0.5));
 }
 
-// Keyboard nudge: Right Right Down Up Left → net +1 X.
+// Keyboard nudge: screen arrows unchanged; ArrowUp raises displayed Y.
 {
     const start = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
     assert.equal(applyNudge(store, keyA, "ArrowRight").ok, true);
     assert.equal(applyNudge(store, keyA, "ArrowRight").ok, true);
     assert.equal(applyNudge(store, keyA, "ArrowDown").ok, true);
+    const afterDown = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
+    assert.equal(PositionGeometry.formatMm(afterDown.y), PositionGeometry.formatMm(start.y - 1));
     assert.equal(applyNudge(store, keyA, "ArrowUp").ok, true);
     assert.equal(applyNudge(store, keyA, "ArrowLeft").ok, true);
     const end = PositionGeometry.boardPositionForPiece(store.snapshot().session, keyA);
@@ -382,9 +409,10 @@ function applyGroupNudge(activeStore, keys, key) {
     const local = createStore({ projection, order_name: "O", plan_name: "P" });
     local.attachSession(hist.get(), hist);
     assert.equal(applyAxis(local, keyA, "x", 400).ok, true);
+    // B sits at internal y=400 (displayed 480). Move A so its AABB overlaps B.
     const before = JSON.stringify(local.snapshot().session.pieces[keyA]);
     const undoBefore = local.snapshot().canUndo;
-    const collide = applyAxis(local, keyA, "y", 410);
+    const collide = applyAxis(local, keyA, "y", 480);
     assert.equal(collide.ok, false, collide.reason || "expected overlap rejection");
     assert.equal(JSON.stringify(local.snapshot().session.pieces[keyA]), before);
     assert.equal(local.snapshot().canUndo, undoBefore);
@@ -452,6 +480,11 @@ function applyGroupNudge(activeStore, keys, key) {
     assert.equal(delta.ok, true);
     assert.equal(delta.dx, 5);
     assert.equal(delta.dy, 0);
+    // Displayed Y+ maps to internal dy negative (up).
+    const deltaY = PositionGeometry.worldDeltaForAxis(current, "y", current.y + 5);
+    assert.equal(deltaY.ok, true);
+    assert.equal(deltaY.dx, 0);
+    assert.equal(deltaY.dy, -5);
     assert.equal(JSON.stringify(store.snapshot().session.pieces[keyA]), pieceBefore);
 }
 
@@ -479,7 +512,7 @@ assert.match(controllerSource, /nudgeSelectedPieceByArrow/);
 assert.match(controllerSource, /PositionGeometry/);
 assert.match(controllerSource, /RightSidebarRenderer/);
 assert.doesNotMatch(controllerSource, /applyPositionEdge|proposeEdgeMove/);
-assert.match(pageSource, /position_geometry\.js\?v=3/);
+assert.match(pageSource, /position_geometry\.js\?v=4/);
 assert.match(pageSource, /right_sidebar_renderer\.js\?v=4/);
 assert.match(pageSource, /controller\.js\?v=33/);
 assert.match(pageSource, /board_editor\.css\?v=36/);
@@ -626,11 +659,15 @@ assert.equal(PositionGeometry.parseRelativeOffset("0"), 0);
         PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB).x),
         PositionGeometry.formatMm(beforeB.x + 5)
     );
+    // Y -2.5 lowers displayed Y (moves group down internally).
     assert.equal(applyGroupRelative(local, [keyA, keyB], "y", "-2.5").ok, true);
     assert.equal(
         PositionGeometry.formatMm(PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA).y),
         PositionGeometry.formatMm(beforeA.y - 2.5)
     );
+    const fpA = MoveGeometry.footprint(local.snapshot().session.pieces[keyA]).bounds;
+    const fpA0 = MoveGeometry.footprint(fresh.pieces[keyA]).bounds;
+    assert.equal(PositionGeometry.formatMm(fpA.y), PositionGeometry.formatMm(fpA0.y + 2.5));
     const undoBefore = local.snapshot().canUndo;
     const zero = applyGroupRelative(local, [keyA, keyB], "x", "0");
     assert.equal(zero.ok, true);
@@ -718,16 +755,34 @@ assert.equal(PositionGeometry.parseRelativeOffset("0"), 0);
     const hist = History.create(fresh);
     const local = createStore({ projection, order_name: "O", plan_name: "P" });
     local.attachSession(hist.get(), hist);
-    // Park A just clear of B (A 200×100, B at 400,400). Then group-move A+Poly into B.
-    assert.equal(applyAxis(local, keyA, "x", 190).ok, true, "park A x");
-    assert.equal(applyAxis(local, keyA, "y", 280).ok, true, "park A y");
+    // Park A below and under B in X. Y+125 moves up into B (Poly tagged along).
+    assert.equal(applyAxis(local, keyA, "x", 300).ok, true, "park A x");
+    assert.equal(applyAxis(local, keyA, "y", 360).ok, true, "park A y");
     const before = JSON.stringify(local.snapshot().session.pieces);
     const undoBefore = local.snapshot().canUndo;
-    // dy=+125 → A spans y ~405–505 overlapping B; Poly also shifts but B is not selected.
     const collide = applyGroupRelative(local, [keyA, keyPoly], "y", 125);
     assert.equal(collide.ok, false, collide.reason || "expected group kerf rejection");
     assert.equal(JSON.stringify(local.snapshot().session.pieces), before);
     assert.equal(local.snapshot().canUndo, undoBefore);
+}
+
+// Group Y+ step raises displayed Y and moves pieces up internally.
+{
+    const fresh = SessionDocument.buildFromProjection(projection, layout);
+    const hist = History.create(fresh);
+    const local = createStore({ projection, order_name: "O", plan_name: "P" });
+    local.attachSession(hist.get(), hist);
+    const beforeA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const beforeB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    const fpBeforeA = MoveGeometry.footprint(local.snapshot().session.pieces[keyA]).bounds;
+    assert.equal(applyGroupStep(local, [keyA, keyB], "y", 1).ok, true);
+    const afterA = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyA);
+    const afterB = PositionGeometry.boardPositionForPiece(local.snapshot().session, keyB);
+    const fpAfterA = MoveGeometry.footprint(local.snapshot().session.pieces[keyA]).bounds;
+    assert.equal(PositionGeometry.formatMm(afterA.y), PositionGeometry.formatMm(beforeA.y + 1));
+    assert.equal(PositionGeometry.formatMm(afterB.y), PositionGeometry.formatMm(beforeB.y + 1));
+    assert.equal(PositionGeometry.formatMm(fpAfterA.y), PositionGeometry.formatMm(fpBeforeA.y - 1));
+    assert.equal(afterB.y - afterA.y, beforeB.y - beforeA.y);
 }
 
 // Mixed board+outside selection is not editable / rejects move.
