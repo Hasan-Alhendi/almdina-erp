@@ -32,7 +32,10 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import PartGeometry
 from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import serialize_text_label
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    Party,
+    ResourceKind,
     canonicalize_snapshot_allocation,
+    decision_from_piece,
     decision_from_values,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import BOARD_EDITOR
@@ -143,6 +146,7 @@ def materialize_plan_snapshot(
         source_snapshot=source_snapshot,
         trusted=trusted,
         layout=normalized,
+        posed_sheets=posed.get("sheets") or {},
         posed_pieces=posed.get("pieces") or [],
         source_plan_name=source_plan_name,
         draft_version=int(expected_draft_version),
@@ -171,6 +175,7 @@ def _build_snapshot(
     source_snapshot: Mapping[str, Any],
     trusted: Mapping[str, Any],
     layout: Mapping[str, Any],
+    posed_sheets: Mapping[str, Any],
     posed_pieces: Sequence[Mapping[str, Any]],
     source_plan_name: str,
     draft_version: int,
@@ -191,7 +196,7 @@ def _build_snapshot(
         and int(piece.get("sheet_no") or 0) in kept_boards
     ]
 
-    by_sheet: dict[int, list[dict[str, Any]]] = {number: [] for number in sorted(kept_boards)}
+    by_sheet: dict[int, list[dict[str, Any]]] = {}
     for posed in active:
         sheet_no = int(posed["sheet_no"])
         by_sheet.setdefault(sheet_no, []).append(
@@ -205,15 +210,23 @@ def _build_snapshot(
     sheets: list[dict[str, Any]] = []
     used_area = 0.0
     total_board_area = 0.0
+    # Empty editor/source boards stay in the draft for continued editing, but they
+    # never become operational sheets or consume full-board allocation.
     for sheet_no in sorted(by_sheet):
+        pieces = by_sheet[sheet_no]
+        if not pieces:
+            continue
+        posed_sheet = posed_sheets.get(str(sheet_no)) or {}
         trusted_sheet = (trusted.get("sheets") or {}).get(str(sheet_no)) or {}
         source_sheet = source_sheets.get(sheet_no) or {}
         sheet = _materialize_sheet(
             sheet_no=sheet_no,
+            posed_sheet=posed_sheet,
             trusted_sheet=trusted_sheet,
             source_sheet=source_sheet,
-            pieces=by_sheet[sheet_no],
+            pieces=pieces,
             source_snapshot=source_snapshot,
+            standard_full_board=trusted.get("standard_full_board") or {},
         )
         sheets.append(sheet)
         used_area += sum(num(piece.get("area_m2")) for piece in sheet.get("pieces") or [])
@@ -277,28 +290,46 @@ def _index_source_pieces(source_snapshot: Mapping[str, Any]) -> dict[str, dict[s
 def _materialize_sheet(
     *,
     sheet_no: int,
+    posed_sheet: Mapping[str, Any],
     trusted_sheet: Mapping[str, Any],
     source_sheet: Mapping[str, Any],
     pieces: list[dict[str, Any]],
     source_snapshot: Mapping[str, Any],
+    standard_full_board: Mapping[str, Any],
 ) -> dict[str, Any]:
-    decision = decision_from_values(
-        trusted_sheet.get("resource_kind") or source_sheet.get("resource_kind"),
-        trusted_sheet.get("offcut_source_party") or source_sheet.get("offcut_source_party"),
-        trusted_sheet.get("offcut_execution_party") or source_sheet.get("offcut_execution_party"),
-    )
-    usable_w = num(trusted_sheet.get("usable_width_mm"))
-    usable_h = num(trusted_sheet.get("usable_length_mm"))
+    # Piece classification is authoritative; canonicalize_snapshot_sources then
+    # aligns the physical source kind with the homogeneous piece set.
+    decisions = [decision_from_piece(piece) for piece in pieces]
+    if decisions and all(decision.is_offcut for decision in decisions):
+        decision = decisions[0]
+    else:
+        decision = decision_from_values(ResourceKind.FULL_BOARD, Party.UNASSIGNED, Party.UNASSIGNED)
+    usable_w = num(posed_sheet.get("usable_width_mm") or trusted_sheet.get("usable_width_mm"))
+    usable_h = num(posed_sheet.get("usable_length_mm") or trusted_sheet.get("usable_length_mm"))
     if usable_w <= 0:
         usable_w = num(source_sheet.get("usable_width_cm") or source_sheet.get("w")) * 10.0
     if usable_h <= 0:
         usable_h = num(source_sheet.get("usable_length_cm") or source_sheet.get("h")) * 10.0
-    full_w = num(source_sheet.get("full_width_cm")) * 10.0 or num(
-        source_snapshot.get("full_board_width_cm")
-    ) * 10.0 or usable_w
-    full_h = num(source_sheet.get("full_length_cm")) * 10.0 or num(
-        source_snapshot.get("full_board_length_cm")
-    ) * 10.0 or usable_h
+    if usable_w <= 0:
+        usable_w = num(standard_full_board.get("usable_width_mm"))
+    if usable_h <= 0:
+        usable_h = num(standard_full_board.get("usable_length_mm"))
+    full_w = (
+        num(posed_sheet.get("width_mm"))
+        or num(trusted_sheet.get("full_width_mm"))
+        or num(source_sheet.get("full_width_cm")) * 10.0
+        or num(standard_full_board.get("full_width_mm"))
+        or num(source_snapshot.get("full_board_width_cm")) * 10.0
+        or usable_w
+    )
+    full_h = (
+        num(posed_sheet.get("height_mm"))
+        or num(trusted_sheet.get("full_length_mm"))
+        or num(source_sheet.get("full_length_cm")) * 10.0
+        or num(standard_full_board.get("full_length_mm"))
+        or num(source_snapshot.get("full_board_length_cm")) * 10.0
+        or usable_h
+    )
     source_area = usable_w * usable_h / 1_000_000.0
     used_area = sum(num(piece.get("area_m2")) for piece in pieces)
     sheet: dict[str, Any] = {
@@ -410,13 +441,21 @@ def _materialize_piece(
         "apply_rotated_to_geometry": False,
         "area_m2": area_m2,
         "glass_host_piece_id": posed.get("glass_host_piece_id"),
-        "resource_kind": posed.get("resource_kind") or source.get("resource_kind"),
-        "offcut_source_party": posed.get("offcut_source_party") or source.get("offcut_source_party"),
-        "offcut_execution_party": posed.get("offcut_execution_party")
-        or source.get("offcut_execution_party"),
         "overlays": _overlays_from_machining(posed.get("machining_paths") or []),
         "piece_type": piece_type or source.get("piece_type") or "Regular",
     }
+    classification = decision_from_values(
+        posed.get("resource_kind") or source.get("resource_kind"),
+        posed.get("offcut_source_party")
+        if posed.get("resource_kind") not in (None, "")
+        else source.get("offcut_source_party"),
+        posed.get("offcut_execution_party")
+        if posed.get("resource_kind") not in (None, "")
+        else source.get("offcut_execution_party"),
+    )
+    piece["resource_kind"] = classification.resource_kind.value
+    piece["offcut_source_party"] = classification.source_party.value
+    piece["offcut_execution_party"] = classification.execution_party.value
     if geometry is not None:
         piece["geometry"] = geometry
     else:

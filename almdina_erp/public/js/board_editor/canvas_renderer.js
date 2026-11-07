@@ -1473,11 +1473,17 @@
         const staleText = new Set((session && session.stale_unbound_text_sheets) || []);
         const body = [];
         const sheetGroups = {};
+        const outlinedSheets = new Set();
 
         sheets.forEach((sheet) => {
             const key = String(sheet.sheet_no);
             sheetGroups[key] = [];
         });
+        if (session && session.boards) {
+            Object.keys(session.boards).forEach((key) => {
+                if (!sheetGroups[key]) sheetGroups[key] = [];
+            });
+        }
         sheetGroups.__outside = [];
 
         elements.forEach((element) => {
@@ -1538,6 +1544,7 @@
             const pieceIdAttr = element.piece_id != null ? ` data-piece-id="${esc(element.piece_id)}"` : "";
 
             if (element.kind === "sheet_outline") {
+                outlinedSheets.add(String(element.sheet_no));
                 const fullW = (Number(element.payload.full_width_cm) || 122) * 10;
                 const fullH = (Number(element.payload.full_length_cm) || 244) * 10;
                 const usableW = (Number(element.payload.usable_width_cm) || fullW / 10) * 10;
@@ -1557,9 +1564,22 @@
                     return Number(live.sheet_no) === Number(element.sheet_no);
                 });
                 const waste = style ? style.sheetWaste(storeView.projection.board || {}, boardPieces) : null;
-                const title = isOffcut
+                const SessionDocument = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
+                const composition = session && SessionDocument && typeof SessionDocument.boardCompositionKind === "function"
+                    ? SessionDocument.boardCompositionKind(session, element.sheet_no)
+                    : null;
+                let title = isOffcut
                     ? __("Offcut")
                     : __("Board {0}", [String(element.sheet_no)]);
+                if (composition === "mixed") {
+                    title = `${__("Board {0}", [String(element.sheet_no)])} — ${__("Mixed")}`;
+                } else if (composition === "OFFCUT") {
+                    title = isOffcut
+                        ? __("Offcut")
+                        : `${__("Board {0}", [String(element.sheet_no)])} — ${__("OFFCUT")}`;
+                } else if (composition === "GEOMETRY" && !isOffcut) {
+                    title = `${__("Board {0}", [String(element.sheet_no)])} — ${__("GEOMETRY")}`;
+                }
                 const stats = waste
                     ? __("Pieces: {0} | waste: {1} m² ({2}%)", [String(waste.pieces), String(waste.waste), String(waste.percent)])
                     : "";
@@ -1598,7 +1618,7 @@
                 // data-sheet identifies the frame for selection. data-sheet-group
                 // belongs only on the outer host that wraps frame + pieces so
                 // board-drag preview translate applies once (never double-shift).
-                const html = `<g data-sheet="${esc(String(element.sheet_no))}" data-element-id="${esc(element.element_id)}" class="abe-sheet${selected ? " is-selected" : ""}${isOffcut ? " is-offcut" : ""}" style="pointer-events:${pointer};opacity:${opacity}">
+                const html = `<g data-sheet="${esc(String(element.sheet_no))}" data-element-id="${esc(element.element_id)}" class="abe-sheet${selected ? " is-selected" : ""}${isOffcut ? " is-offcut" : ""}${composition === "mixed" ? " is-mixed" : ""}" style="pointer-events:${pointer};opacity:${opacity}">
                     <text class="abe-board-title" data-screen-px="${titlePx}" data-board-drag="${esc(String(element.sheet_no))}" x="${pos.originX}" y="${titleY}" font-size="${screenFontMm(titlePx, scale)}" font-weight="900" fill="#101828" style="pointer-events:all;cursor:default">${esc(title)}</text>
                     <text class="abe-board-stats" data-screen-px="${statsPx}" x="${pos.originX + fullW}" y="${titleY}" text-anchor="end" font-size="${screenFontMm(statsPx, scale)}" fill="#667085" pointer-events="none">${esc(stats)}</text>
                     ${edgeText ? `<text class="abe-board-original-edges" data-screen-px="${edgePx}" x="${pos.originX}" y="${edgeY}" font-size="${screenFontMm(edgePx, scale)}" font-weight="700" fill="#8a5a00" pointer-events="none">${esc(edgeText)}</text>` : ""}
@@ -1819,6 +1839,40 @@
                 : `<path data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke" style="pointer-events:${pointer};opacity:${opacity}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}"/>`;
             (sheetGroups[sheetKey] || sheetGroups.__outside).push(html);
         });
+
+        if (session && session.boards) {
+            const SessionDocument = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.SessionDocument;
+            const edgeDisplay = window.AlmdinaEdgeDisplay;
+            const titlePx = (edgeDisplay && edgeDisplay.BOARD_TITLE_PX) || 11.5;
+            Object.values(session.boards).forEach((board) => {
+                const key = String(board.sheet_no);
+                if (outlinedSheets.has(key)) return;
+                if (!sheetGroups[key]) sheetGroups[key] = [];
+                const pos = layout.positions[key] || {
+                    originX: Number(board.origin_x_mm) || 0,
+                    originY: Number(board.origin_y_mm) || BOARD_TITLE_MM,
+                };
+                const fullW = Number(board.width_mm) || 1;
+                const fullH = Number(board.height_mm) || 1;
+                const composition = SessionDocument && typeof SessionDocument.boardCompositionKind === "function"
+                    ? SessionDocument.boardCompositionKind(session, board.sheet_no)
+                    : "empty";
+                let title = __("Board {0}", [String(board.sheet_no)]);
+                if (composition === "mixed") {
+                    title = `${title} — ${__("Mixed")}`;
+                } else if (composition === "GEOMETRY" || composition === "OFFCUT") {
+                    title = `${title} — ${__(composition)}`;
+                }
+                const selected = Number(storeView.selectedSheetNo) === Number(board.sheet_no);
+                const titleY = (Number(pos.originY) || 0) - screenFontMm(4, scale);
+                const html = `<g data-sheet="${esc(key)}" data-element-id="session-sheet:${esc(key)}" class="abe-sheet${selected ? " is-selected" : ""}${composition === "mixed" ? " is-mixed" : ""}" style="pointer-events:all;opacity:1">
+                    <text class="abe-board-title" data-screen-px="${titlePx}" data-board-drag="${esc(key)}" x="${pos.originX}" y="${titleY}" font-size="${screenFontMm(titlePx, scale)}" font-weight="900" fill="#101828" style="pointer-events:all;cursor:default">${esc(title)}</text>
+                    <rect x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="#ffffff" stroke="#111111" stroke-width="2" vector-effect="non-scaling-stroke"/>
+                    <rect class="abe-board-waste-hatch" x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="url(#abe-waste-hatch)" pointer-events="none"/>
+                </g>`;
+                sheetGroups[key].unshift(html);
+            });
+        }
 
         Object.keys(sheetGroups).forEach((key) => {
             if (key === "__outside") return;

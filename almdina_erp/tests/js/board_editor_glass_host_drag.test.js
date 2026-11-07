@@ -221,7 +221,7 @@ const otherKey = "instance:pi-other";
 {
     const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
     assert.match(page, /move_geometry\.js\?v=20/);
-    assert.match(page, /session_document\.js\?v=23/);
+    assert.match(page, /session_document\.js\?v=24/);
 }
 
 console.log("board_editor_glass_host_drag.test.js: ok");

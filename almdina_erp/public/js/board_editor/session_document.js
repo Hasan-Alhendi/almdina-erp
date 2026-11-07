@@ -70,6 +70,178 @@
         return Number(placement.w) > 0 && Number(placement.h) > 0;
     }
 
+    function standardBoardDimsMm(projection) {
+        const board = (projection && projection.board) || {};
+        const fullW = Number(board.full_width_cm);
+        const fullH = Number(board.full_length_cm);
+        if (!(fullW > 0) || !(fullH > 0)) return null;
+        const trimFallback = Number(board.trim_cm) || 0;
+        const trimXRaw = board.applied_trim_width_cm;
+        const trimYRaw = board.applied_trim_length_cm;
+        const trimX = (trimXRaw == null || trimXRaw === "") ? trimFallback : Number(trimXRaw);
+        const trimY = (trimYRaw == null || trimYRaw === "") ? trimFallback : Number(trimYRaw);
+        let usableW = Number(board.usable_width_cm);
+        let usableH = Number(board.usable_length_cm);
+        if (!(usableW > 0)) usableW = Math.max(0.1, fullW - (Number(trimX) || 0) * 2);
+        if (!(usableH > 0)) usableH = Math.max(0.1, fullH - (Number(trimY) || 0) * 2);
+        return {
+            width_mm: fullW * 10,
+            height_mm: fullH * 10,
+            trim_x_mm: (Number(trimX) || 0) * 10,
+            trim_y_mm: (Number(trimY) || 0) * 10,
+            usable_width_mm: usableW * 10,
+            usable_length_mm: usableH * 10,
+        };
+    }
+
+    function nextUnusedSheetNo(session) {
+        const numbers = Object.keys((session && session.boards) || {})
+            .map((key) => Number(key))
+            .filter((number) => Number.isFinite(number) && number > 0);
+        return (numbers.length ? Math.max(...numbers) : 0) + 1;
+    }
+
+    function boardOccupies(board, originX, originY, widthMm, heightMm) {
+        const ax1 = Number(board.origin_x_mm) || 0;
+        const ay1 = (Number(board.origin_y_mm) || 0) - (Number(board.title_band_mm) || TITLE_BAND_MM);
+        const ax2 = ax1 + (Number(board.width_mm) || 0);
+        const ay2 = (Number(board.origin_y_mm) || 0) + (Number(board.height_mm) || 0);
+        const bx1 = originX;
+        const by1 = originY - TITLE_BAND_MM;
+        const bx2 = originX + widthMm;
+        const by2 = originY + heightMm;
+        return !(bx2 <= ax1 || bx1 >= ax2 || by2 <= ay1 || by1 >= ay2);
+    }
+
+    function outsidePieceOverlaps(session, originX, originY, widthMm, heightMm) {
+        const MoveGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MoveGeometry;
+        if (!MoveGeometry || typeof MoveGeometry.footprint !== "function") return false;
+        const bx1 = originX;
+        const by1 = originY - TITLE_BAND_MM;
+        const bx2 = originX + widthMm;
+        const by2 = originY + heightMm;
+        return Object.values((session && session.pieces) || {}).some((piece) => {
+            if (piece.distribution === "excluded") return false;
+            if (piece.sheet_no != null && piece.sheet_no !== "") return false;
+            const fp = MoveGeometry.footprint(piece);
+            if (!fp || !fp.bounds) return false;
+            const ax1 = fp.bounds.x;
+            const ay1 = fp.bounds.y;
+            const ax2 = ax1 + fp.bounds.w;
+            const ay2 = ay1 + fp.bounds.h;
+            return !(bx2 <= ax1 || bx1 >= ax2 || by2 <= ay1 || by1 >= ay2);
+        });
+    }
+
+    function freeBoardOrigin(session, widthMm, heightMm) {
+        const gap = 48;
+        const boards = Object.values((session && session.boards) || {});
+        if (!boards.length) return { x: 0, y: TITLE_BAND_MM };
+        let maxRight = 0;
+        let maxBottom = 0;
+        boards.forEach((board) => {
+            maxRight = Math.max(maxRight, (Number(board.origin_x_mm) || 0) + (Number(board.width_mm) || 0));
+            maxBottom = Math.max(
+                maxBottom,
+                (Number(board.origin_y_mm) || 0) + (Number(board.height_mm) || 0)
+            );
+        });
+        const candidates = [
+            { x: maxRight + gap, y: TITLE_BAND_MM },
+            { x: 0, y: maxBottom + gap + TITLE_BAND_MM },
+            { x: maxRight + gap, y: maxBottom + gap + TITLE_BAND_MM },
+        ];
+        for (let index = 0; index < candidates.length; index += 1) {
+            const candidate = candidates[index];
+            const blocked = boards.some((board) => boardOccupies(
+                board,
+                candidate.x,
+                candidate.y,
+                widthMm,
+                heightMm
+            )) || outsidePieceOverlaps(session, candidate.x, candidate.y, widthMm, heightMm);
+            if (!blocked) return candidate;
+        }
+        return { x: maxRight + gap, y: maxBottom + gap + TITLE_BAND_MM };
+    }
+
+    function addFullBoard(session, projection) {
+        const dims = standardBoardDimsMm(projection);
+        if (!dims) return { ok: false, code: "standard_board_unavailable" };
+        const next = clone(session);
+        const sheetNo = nextUnusedSheetNo(next);
+        const origin = freeBoardOrigin(next, dims.width_mm, dims.height_mm);
+        next.boards[String(sheetNo)] = {
+            sheet_no: sheetNo,
+            origin_x_mm: origin.x,
+            origin_y_mm: origin.y,
+            width_mm: dims.width_mm,
+            height_mm: dims.height_mm,
+            trim_x_mm: dims.trim_x_mm,
+            trim_y_mm: dims.trim_y_mm,
+            usable_width_mm: dims.usable_width_mm,
+            usable_length_mm: dims.usable_length_mm,
+            title_band_mm: TITLE_BAND_MM,
+            rotation_deg: 0,
+            flip_h: false,
+            flip_v: false,
+            mirrored: false,
+            user_moved: false,
+            editor_origin: "full_board",
+            resource_kind: "FULL_BOARD",
+        };
+        next.standard_board = dims;
+        return { ok: true, session: next, sheet_no: sheetNo };
+    }
+
+    function classifyPiece(session, pieceKey, resourceKind, parties) {
+        const next = clone(session);
+        const piece = next.pieces && next.pieces[pieceKey];
+        if (!piece) return { ok: false, code: "unknown_piece" };
+        const kind = String(resourceKind || "").trim().toUpperCase();
+        if (kind !== "FULL_BOARD" && kind !== "OFFCUT") {
+            return { ok: false, code: "invalid_offcut_classification" };
+        }
+        piece.resource_kind = kind;
+        if (kind === "FULL_BOARD") {
+            piece.offcut_source_party = "UNASSIGNED";
+            piece.offcut_execution_party = "UNASSIGNED";
+        } else {
+            const source = String((parties && parties.source_party) || "UNASSIGNED").trim().toUpperCase();
+            const execution = String((parties && parties.execution_party) || "UNASSIGNED").trim().toUpperCase();
+            const allowed = new Set([
+                "UNASSIGNED|UNASSIGNED",
+                "CUSTOMER|FACTORY",
+                "CUSTOMER|CUSTOMER",
+                "FACTORY|FACTORY",
+            ]);
+            const key = `${source}|${execution}`;
+            if (!allowed.has(key)) {
+                return { ok: false, code: "invalid_offcut_classification" };
+            }
+            piece.offcut_source_party = source;
+            piece.offcut_execution_party = execution;
+        }
+        return { ok: true, session: next, piece_key: pieceKey };
+    }
+
+    function boardCompositionKind(session, sheetNo) {
+        const pieces = Object.values((session && session.pieces) || {}).filter((piece) => (
+            piece.distribution !== "excluded"
+            && piece.sheet_no != null
+            && piece.sheet_no !== ""
+            && Number(piece.sheet_no) === Number(sheetNo)
+        ));
+        if (!pieces.length) return "empty";
+        const kinds = new Set(pieces.map((piece) => (
+            String(piece.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT"
+                ? "OFFCUT"
+                : "GEOMETRY"
+        )));
+        if (kinds.size > 1) return "mixed";
+        return kinds.has("OFFCUT") ? "OFFCUT" : "GEOMETRY";
+    }
+
     function buildFromProjection(projection, boardLayout) {
         const sheets = (projection && projection.sheets) || [];
         const pieces = (projection && projection.pieces) || [];
@@ -79,6 +251,7 @@
         const pieceMap = {};
         const kerfMm = Number((projection.board && projection.board.kerf_cm) || 0) * 10;
         const boundLabelKeys = new Set();
+        const standardBoard = standardBoardDimsMm(projection);
 
         sheets.forEach((sheet) => {
             const sheetNo = sheet.sheet_no;
@@ -103,6 +276,8 @@
                 flip_v: false,
                 mirrored: false,
                 user_moved: false,
+                editor_origin: null,
+                resource_kind: String(sheet.resource_kind || "FULL_BOARD").toUpperCase(),
             };
         });
 
@@ -189,10 +364,30 @@
                 allow_rotation: allowProven ? allowRotation : false,
                 allow_rotation_proven: Boolean(allowProven),
                 piece_type: piece.piece_type || "",
+                resource_kind: null,
+                offcut_source_party: String(piece.offcut_source_party || "UNASSIGNED").toUpperCase() || "UNASSIGNED",
+                offcut_execution_party: String(piece.offcut_execution_party || "UNASSIGNED").toUpperCase()
+                    || "UNASSIGNED",
                 geometry_source: piece.geometry_source || "",
                 exact_geometry: Boolean(piece.exact_geometry),
                 special_representation: piece.special_representation || null,
             };
+            {
+                const explicit = String(piece.resource_kind || "").trim().toUpperCase();
+                const sheetMeta = sheets.find((row) => Number(row.sheet_no) === Number(piece.sheet_no));
+                const inherited = String((sheetMeta && sheetMeta.resource_kind) || "").trim().toUpperCase();
+                if (explicit === "OFFCUT" || explicit === "FULL_BOARD") {
+                    sessionPiece.resource_kind = explicit;
+                } else if (inherited === "OFFCUT") {
+                    sessionPiece.resource_kind = "OFFCUT";
+                } else {
+                    sessionPiece.resource_kind = "FULL_BOARD";
+                }
+                if (sessionPiece.resource_kind !== "OFFCUT") {
+                    sessionPiece.offcut_source_party = "UNASSIGNED";
+                    sessionPiece.offcut_execution_party = "UNASSIGNED";
+                }
+            }
             if (Array.isArray(sessionPiece.base_outline_mm) && sessionPiece.base_outline_mm.length >= 3) {
                 const xs = sessionPiece.base_outline_mm.map((point) => Number(point[0]) || 0);
                 const ys = sessionPiece.base_outline_mm.map((point) => Number(point[1]) || 0);
@@ -247,6 +442,7 @@
             boards,
             pieces: pieceMap,
             kerf_mm: kerfMm,
+            standard_board: standardBoard,
             stale_cut_path_sheets: [],
             stale_unbound_text_sheets: [],
             bound_label_keys: Array.from(boundLabelKeys),
@@ -377,7 +573,7 @@
         const pieces = Object.keys((session && session.pieces) || {}).sort().map((key) => {
             const piece = session.pieces[key];
             const excluded = piece.distribution === "excluded";
-            return {
+            const row = {
                 piece_instance_id: String(piece.piece_instance_id || ""),
                 sheet_no: piece.sheet_no == null || piece.sheet_no === "" ? null : Number(piece.sheet_no),
                 local_x_mm: round4(piece.local_x_mm),
@@ -391,18 +587,31 @@
                 glass_host_piece_id: piece.glass_host_piece_id == null || piece.glass_host_piece_id === ""
                     ? null
                     : Number(piece.glass_host_piece_id),
+                resource_kind: String(piece.resource_kind || "FULL_BOARD").toUpperCase(),
+                offcut_source_party: String(piece.offcut_source_party || "UNASSIGNED").toUpperCase(),
+                offcut_execution_party: String(piece.offcut_execution_party || "UNASSIGNED").toUpperCase(),
             };
+            if (row.resource_kind !== "OFFCUT") {
+                row.resource_kind = "FULL_BOARD";
+                row.offcut_source_party = "UNASSIGNED";
+                row.offcut_execution_party = "UNASSIGNED";
+            }
+            return row;
         });
         const boards = Object.keys((session && session.boards) || {})
             .sort((left, right) => Number(left) - Number(right))
             .map((key) => {
                 const board = session.boards[key];
-                return {
+                const row = {
                     sheet_no: Number(board.sheet_no != null ? board.sheet_no : key),
                     origin_x_mm: round4(board.origin_x_mm),
                     origin_y_mm: round4(board.origin_y_mm),
                     user_moved: board.user_moved === true,
                 };
+                if (board.editor_origin === "full_board") {
+                    row.editor_origin = "full_board";
+                }
+                return row;
             });
         return { schema: 1, pieces, boards };
     }
@@ -479,6 +688,17 @@
             piece.local_y_mm = Number(row.local_y_mm);
             piece.distribution = row.distribution === "excluded" ? "excluded" : "active";
             piece.exclusion_reason = piece.distribution === "excluded" ? (row.exclusion_reason || null) : null;
+            if (row.resource_kind != null && row.resource_kind !== "") {
+                const kind = String(row.resource_kind).toUpperCase();
+                piece.resource_kind = kind === "OFFCUT" ? "OFFCUT" : "FULL_BOARD";
+                if (piece.resource_kind === "OFFCUT") {
+                    piece.offcut_source_party = String(row.offcut_source_party || "UNASSIGNED").toUpperCase();
+                    piece.offcut_execution_party = String(row.offcut_execution_party || "UNASSIGNED").toUpperCase();
+                } else {
+                    piece.offcut_source_party = "UNASSIGNED";
+                    piece.offcut_execution_party = "UNASSIGNED";
+                }
+            }
         });
         const idToKey = {};
         Object.keys(next.pieces).forEach((key) => {
@@ -500,14 +720,41 @@
         // origin. Keep the grid from buildFromProjection instead of stacking.
         // Do not touch deliberately user-moved boards or spaced saved layouts.
         const collapsedDefaults = boardsShareCollapsedDefaultOrigin(layout.boards);
+        const dims = next.standard_board || null;
         (layout.boards || []).forEach((board) => {
-            const target = next.boards[String(board.sheet_no)];
+            let target = next.boards[String(board.sheet_no)];
+            if (!target && board.editor_origin === "full_board") {
+                if (!dims) return;
+                target = {
+                    sheet_no: Number(board.sheet_no),
+                    origin_x_mm: Number(board.origin_x_mm) || 0,
+                    origin_y_mm: Number(board.origin_y_mm) || TITLE_BAND_MM,
+                    width_mm: dims.width_mm,
+                    height_mm: dims.height_mm,
+                    trim_x_mm: dims.trim_x_mm,
+                    trim_y_mm: dims.trim_y_mm,
+                    usable_width_mm: dims.usable_width_mm,
+                    usable_length_mm: dims.usable_length_mm,
+                    title_band_mm: TITLE_BAND_MM,
+                    rotation_deg: 0,
+                    flip_h: false,
+                    flip_v: false,
+                    mirrored: false,
+                    user_moved: board.user_moved === true,
+                    editor_origin: "full_board",
+                    resource_kind: "FULL_BOARD",
+                };
+                next.boards[String(board.sheet_no)] = target;
+            }
             if (!target) return;
             if (!collapsedDefaults) {
                 target.origin_x_mm = Number(board.origin_x_mm) || 0;
                 target.origin_y_mm = Number(board.origin_y_mm) || 0;
             }
             target.user_moved = board.user_moved === true;
+            if (board.editor_origin === "full_board") {
+                target.editor_origin = "full_board";
+            }
         });
         return { ok: true, session: next };
     }
@@ -575,6 +822,10 @@
     window.AlmdinaBoardEditor.SessionDocument = Object.freeze({
         resolveSessionHoleMm,
         usableSheetHoleFromPieceLocal,
+        standardBoardDimsMm,
+        addFullBoard,
+        classifyPiece,
+        boardCompositionKind,
         buildFromProjection,
         boardPositions,
         relayoutUnmovedBoards,

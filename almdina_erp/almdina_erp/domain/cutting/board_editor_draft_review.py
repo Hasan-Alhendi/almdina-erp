@@ -11,6 +11,7 @@ from copy import deepcopy
 from typing import Any, Mapping
 
 from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import (
+    EDITOR_ORIGIN_FULL_BOARD,
     DraftLayoutError,
     distribution_fingerprint,
     normalize_layout,
@@ -56,8 +57,11 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     OffcutPolicyError,
+    ResourceKind,
     decision_from_piece,
+    decision_from_values,
     resource_kind_from_value,
+    validate_source_resource_homogeneity,
 )
 from almdina_erp.almdina_erp.domain.cutting.primitives import num, rect_intersects
 from almdina_erp.almdina_erp.domain.orders.liner_specs import (
@@ -230,14 +234,49 @@ def trusted_model_from_projection(
         if not isinstance(sheet, Mapping) or sheet.get("sheet_no") in (None, ""):
             continue
         number = int(sheet["sheet_no"])
+        full_w = num(sheet.get("full_width_cm") or sheet.get("w")) * 10.0
+        full_h = num(sheet.get("full_length_cm") or sheet.get("h")) * 10.0
+        trim_x = num(sheet.get("applied_trim_width_cm")) * 10.0
+        trim_y = num(sheet.get("applied_trim_length_cm")) * 10.0
+        usable_w = num(sheet.get("usable_width_cm")) * 10.0
+        usable_h = num(sheet.get("usable_length_cm")) * 10.0
+        if usable_w <= 0:
+            usable_w = max(1.0, full_w - (trim_x * 2.0))
+        if usable_h <= 0:
+            usable_h = max(1.0, full_h - (trim_y * 2.0))
         sheets[number] = {
             "resource_kind": sheet.get("resource_kind") or "FULL_BOARD",
-            "usable_width_mm": num(sheet.get("usable_width_cm") or sheet.get("full_width_cm")) * 10.0,
-            "usable_length_mm": num(sheet.get("usable_length_cm") or sheet.get("full_length_cm")) * 10.0,
+            "usable_width_mm": usable_w,
+            "usable_length_mm": usable_h,
+            "full_width_mm": full_w if full_w > 0 else usable_w,
+            "full_length_mm": full_h if full_h > 0 else usable_h,
+            "trim_x_mm": trim_x,
+            "trim_y_mm": trim_y,
         }
+    board = projection.get("board") if isinstance(projection.get("board"), Mapping) else {}
+    trim_cm = num(board.get("trim_cm"))
+    trim_x_cm = board.get("applied_trim_width_cm")
+    trim_y_cm = board.get("applied_trim_length_cm")
+    standard = {
+        "full_width_mm": num(board.get("full_width_cm")) * 10.0,
+        "full_length_mm": num(board.get("full_length_cm")) * 10.0,
+        "usable_width_mm": num(board.get("usable_width_cm")) * 10.0,
+        "usable_length_mm": num(board.get("usable_length_cm")) * 10.0,
+        "trim_x_mm": num(trim_x_cm if trim_x_cm not in (None, "") else trim_cm) * 10.0,
+        "trim_y_mm": num(trim_y_cm if trim_y_cm not in (None, "") else trim_cm) * 10.0,
+    }
+    if standard["usable_width_mm"] <= 0 and standard["full_width_mm"] > 0:
+        standard["usable_width_mm"] = max(1.0, standard["full_width_mm"] - (standard["trim_x_mm"] * 2.0))
+    if standard["usable_length_mm"] <= 0 and standard["full_length_mm"] > 0:
+        standard["usable_length_mm"] = max(1.0, standard["full_length_mm"] - (standard["trim_y_mm"] * 2.0))
+    if standard["full_width_mm"] <= 0:
+        standard["full_width_mm"] = standard["usable_width_mm"]
+    if standard["full_length_mm"] <= 0:
+        standard["full_length_mm"] = standard["usable_length_mm"]
     return {
         "pieces": pieces,
         "sheets": sheets,
+        "standard_full_board": standard,
         "kerf_mm": num((projection.get("board") or {}).get("kerf_cm")) * 10.0,
         "machine_type": str(machine_type or ""),
     }
@@ -293,6 +332,7 @@ def _review_normalized(
         for piece in pieces
         if piece.get("distribution") != "excluded" and piece.get("sheet_no") not in (None, "")
     ]
+    _homogeneity_rules(placed, issues)
     _placement_rules(pieces, sheets, issues)
     _hosting_rules(placed, issues)
     _rotation_rules(pieces, str(trusted.get("machine_type") or ""), issues)
@@ -322,10 +362,15 @@ def _sheets(
     layout: Mapping[str, Any],
     issues: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    kept = {int(board["sheet_no"]) for board in layout.get("boards") or []}
+    layout_boards = {
+        int(board["sheet_no"]): board
+        for board in (layout.get("boards") or [])
+        if isinstance(board, Mapping) and board.get("sheet_no") not in (None, "")
+    }
     sheets: dict[str, dict[str, Any]] = {}
+    standard = trusted.get("standard_full_board") if isinstance(trusted.get("standard_full_board"), Mapping) else {}
     for number, info in (trusted.get("sheets") or {}).items():
-        if int(number) not in kept:
+        if int(number) not in layout_boards:
             continue
         try:
             kind = resource_kind_from_value(info.get("resource_kind"))
@@ -342,12 +387,37 @@ def _sheets(
             "resource_kind": kind.value,
             "origin_x_mm": 0.0,
             "origin_y_mm": 0.0,
-            "trim_x_mm": 0.0,
-            "trim_y_mm": 0.0,
+            "trim_x_mm": num(info.get("trim_x_mm")),
+            "trim_y_mm": num(info.get("trim_y_mm")),
             "usable_width_mm": num(info.get("usable_width_mm")),
             "usable_length_mm": num(info.get("usable_length_mm")),
-            "width_mm": num(info.get("usable_width_mm")),
-            "height_mm": num(info.get("usable_length_mm")),
+            "width_mm": num(info.get("full_width_mm") or info.get("usable_width_mm")),
+            "height_mm": num(info.get("full_length_mm") or info.get("usable_length_mm")),
+            "editor_origin": None,
+        }
+    for number, board in layout_boards.items():
+        if str(number) in sheets:
+            continue
+        if board.get("editor_origin") != EDITOR_ORIGIN_FULL_BOARD:
+            issues.append(_issue("unknown_sheet", sheet_nos=[int(number)]))
+            continue
+        usable_w = num(standard.get("usable_width_mm"))
+        usable_h = num(standard.get("usable_length_mm"))
+        if usable_w <= 0 or usable_h <= 0:
+            issues.append(_issue("standard_board_unavailable", sheet_nos=[int(number)]))
+            continue
+        sheets[str(number)] = {
+            "sheet_no": int(number),
+            "resource_kind": ResourceKind.FULL_BOARD.value,
+            "origin_x_mm": 0.0,
+            "origin_y_mm": 0.0,
+            "trim_x_mm": num(standard.get("trim_x_mm")),
+            "trim_y_mm": num(standard.get("trim_y_mm")),
+            "usable_width_mm": usable_w,
+            "usable_length_mm": usable_h,
+            "width_mm": num(standard.get("full_width_mm")) or usable_w,
+            "height_mm": num(standard.get("full_length_mm")) or usable_h,
+            "editor_origin": EDITOR_ORIGIN_FULL_BOARD,
         }
     return sheets
 
@@ -447,11 +517,87 @@ def _posed_pieces(
         piece["rotation_deg"] = angle
         piece["distribution"] = row.get("distribution")
         piece["glass_host_piece_id"] = row.get("glass_host_piece_id")
-        piece["resource_kind"] = info.get("resource_kind")
-        piece["offcut_source_party"] = info.get("offcut_source_party")
-        piece["offcut_execution_party"] = info.get("offcut_execution_party")
+        if row.get("resource_kind") not in (None, ""):
+            kind_value = row.get("resource_kind")
+            source_party = row.get("offcut_source_party")
+            execution_party = row.get("offcut_execution_party")
+        else:
+            kind_value = info.get("resource_kind")
+            source_party = info.get("offcut_source_party")
+            execution_party = info.get("offcut_execution_party")
+        try:
+            decision = decision_from_values(kind_value, source_party, execution_party)
+        except OffcutPolicyError:
+            issues.append(
+                _issue(
+                    "unsupported_sheet_resource",
+                    piece_instance_ids=[str(instance)],
+                    piece_ids=_ids(info),
+                )
+            )
+            continue
+        piece["resource_kind"] = decision.resource_kind.value
+        piece["offcut_source_party"] = decision.source_party.value
+        piece["offcut_execution_party"] = decision.execution_party.value
         posed.append(piece)
     return posed
+
+
+def _homogeneity_rules(placed: list[dict[str, Any]], issues: list[dict[str, Any]]) -> None:
+    by_sheet: dict[int, list[dict[str, Any]]] = {}
+    for piece in placed:
+        sheet_no = piece.get("sheet_no")
+        if sheet_no in (None, ""):
+            continue
+        by_sheet.setdefault(int(sheet_no), []).append(piece)
+        try:
+            decision = decision_from_piece(piece)
+        except OffcutPolicyError:
+            issues.append(
+                _issue(
+                    "unsupported_sheet_resource",
+                    piece_instance_ids=[str(piece.get("piece_instance_id") or "")],
+                    piece_ids=_ids(piece),
+                    sheet_nos=[int(sheet_no)],
+                )
+            )
+            continue
+        if decision.is_offcut and not decision.is_resolved:
+            issues.append(
+                _issue(
+                    "offcut_unresolved",
+                    piece_instance_ids=[str(piece.get("piece_instance_id") or "")],
+                    piece_ids=_ids(piece),
+                    sheet_nos=[int(sheet_no)],
+                )
+            )
+    sources = [{"pieces": group} for group in by_sheet.values()]
+    try:
+        validate_source_resource_homogeneity(sources)
+    except OffcutPolicyError:
+        for sheet_no, group in by_sheet.items():
+            kinds = set()
+            for piece in group:
+                try:
+                    kinds.add(decision_from_piece(piece).resource_kind)
+                except OffcutPolicyError:
+                    continue
+            if len(kinds) > 1:
+                piece_ids: list[int] = []
+                for piece in group:
+                    piece_ids.extend(_ids(piece))
+                issues.append(
+                    _issue(
+                        "mixed_full_board_offcut_source",
+                        piece_instance_ids=[
+                            str(piece.get("piece_instance_id") or "")
+                            for piece in group
+                            if piece.get("piece_instance_id")
+                        ],
+                        piece_ids=piece_ids,
+                        sheet_nos=[sheet_no],
+                    )
+                )
 
 
 def _entry_piece(instance: str, info: Mapping[str, Any]) -> dict[str, Any]:

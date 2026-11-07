@@ -164,6 +164,45 @@
                 <span>${esc(__("Show edge banding for this piece"))}</span>
             </label>
         </div>`;
+        const resourceKind = String(piece.resource_kind || "FULL_BOARD").toUpperCase() === "OFFCUT"
+            ? "OFFCUT"
+            : "FULL_BOARD";
+        const uiKind = resourceKind === "OFFCUT" ? "OFFCUT" : "GEOMETRY";
+        const sourceParty = String(piece.offcut_source_party || "UNASSIGNED").toUpperCase();
+        const executionParty = String(piece.offcut_execution_party || "UNASSIGNED").toUpperCase();
+        const businessState = resourceKind !== "OFFCUT"
+            ? "UNASSIGNED"
+            : (
+                sourceParty === "CUSTOMER" && executionParty === "FACTORY"
+                    ? "CUSTOMER_FACTORY"
+                    : (sourceParty === "CUSTOMER" && executionParty === "CUSTOMER"
+                        ? "CUSTOMER_CUSTOMER"
+                        : (sourceParty === "FACTORY" && executionParty === "FACTORY"
+                            ? "FACTORY_FACTORY"
+                            : "UNASSIGNED"))
+            );
+        const businessOptions = [
+            { value: "UNASSIGNED", label: __("Unassigned") },
+            { value: "CUSTOMER_FACTORY", label: __("Customer offcut — factory execution") },
+            { value: "CUSTOMER_CUSTOMER", label: __("Customer offcut — customer execution") },
+            { value: "FACTORY_FACTORY", label: __("Factory offcut — factory execution") },
+        ];
+        const classificationHtml = `<div class="abe-inspector-classification" data-abe-piece-classification="1">
+            <div class="abe-inspector-block-title">${esc(__("Piece classification"))}</div>
+            <label class="abe-inspector-field">
+                <span class="abe-inspector-field-label">${esc(__("Piece classification"))}</span>
+                <select class="abe-inspector-select" data-abe-piece-resource-kind="1" data-abe-piece-key="${esc(pieceKey)}" aria-label="${esc(__("Piece classification"))}">
+                    <option value="GEOMETRY"${uiKind === "GEOMETRY" ? " selected" : ""}>${esc(__("GEOMETRY"))}</option>
+                    <option value="OFFCUT"${uiKind === "OFFCUT" ? " selected" : ""}>${esc(__("OFFCUT"))}</option>
+                </select>
+            </label>
+            ${uiKind === "OFFCUT" ? `<label class="abe-inspector-field">
+                <span class="abe-inspector-field-label">${esc(__("Offcut type"))}</span>
+                <select class="abe-inspector-select" data-abe-piece-offcut-state="1" data-abe-piece-key="${esc(pieceKey)}" aria-label="${esc(__("Offcut type"))}">
+                    ${businessOptions.map((option) => `<option value="${esc(option.value)}"${businessState === option.value ? " selected" : ""}>${esc(option.label)}</option>`).join("")}
+                </select>
+            </label>` : ""}
+        </div>`;
         return `<section class="abe-inspector-block abe-inspector-props-block">
             ${positionHtml}
             <div class="abe-inspector-piece">
@@ -175,6 +214,7 @@
                 </div>
             </div>
             ${displayHtml}
+            ${classificationHtml}
         </section>`;
     }
 
@@ -354,6 +394,50 @@
         });
     }
 
+    function partiesFromBusinessState(state) {
+        switch (String(state || "").toUpperCase()) {
+        case "CUSTOMER_FACTORY":
+            return { source_party: "CUSTOMER", execution_party: "FACTORY" };
+        case "CUSTOMER_CUSTOMER":
+            return { source_party: "CUSTOMER", execution_party: "CUSTOMER" };
+        case "FACTORY_FACTORY":
+            return { source_party: "FACTORY", execution_party: "FACTORY" };
+        default:
+            return { source_party: "UNASSIGNED", execution_party: "UNASSIGNED" };
+        }
+    }
+
+    function bindClassificationControls(host, handlers) {
+        const kindSelect = host && host.querySelector("select[data-abe-piece-resource-kind]");
+        if (kindSelect) {
+            kindSelect.addEventListener("change", () => {
+                const pieceKey = kindSelect.getAttribute("data-abe-piece-key");
+                if (!pieceKey || !(handlers && handlers.setPieceClassification)) return;
+                const uiKind = String(kindSelect.value || "").toUpperCase();
+                if (uiKind === "OFFCUT") {
+                    handlers.setPieceClassification(pieceKey, "OFFCUT", partiesFromBusinessState("UNASSIGNED"));
+                    return;
+                }
+                handlers.setPieceClassification(pieceKey, "FULL_BOARD", {
+                    source_party: "UNASSIGNED",
+                    execution_party: "UNASSIGNED",
+                });
+            });
+        }
+        const stateSelect = host && host.querySelector("select[data-abe-piece-offcut-state]");
+        if (stateSelect) {
+            stateSelect.addEventListener("change", () => {
+                const pieceKey = stateSelect.getAttribute("data-abe-piece-key");
+                if (!pieceKey || !(handlers && handlers.setPieceClassification)) return;
+                handlers.setPieceClassification(
+                    pieceKey,
+                    "OFFCUT",
+                    partiesFromBusinessState(stateSelect.value)
+                );
+            });
+        }
+    }
+
     function render(host, storeView, handlers) {
         if (!host) return;
         const PG = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.PositionGeometry;
@@ -375,6 +459,7 @@
         bindPositionControls(host, handlers || {}, positionModel);
         bindAlignmentControls(host, handlers || {});
         bindPieceEdgeBandControl(host, handlers || {});
+        bindClassificationControls(host, handlers || {});
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};

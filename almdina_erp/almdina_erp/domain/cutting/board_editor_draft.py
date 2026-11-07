@@ -17,6 +17,11 @@ from typing import Any
 from almdina_erp.almdina_erp.domain.cutting.board_editor_hosting import (
     hosting_link_creates_cycle,
 )
+from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
+    OffcutPolicyError,
+    Party,
+    decision_from_values,
+)
 from almdina_erp.almdina_erp.domain.orders.piece_policy import is_corner_cut
 
 SCHEMA = 1
@@ -42,9 +47,17 @@ PIECE_FIELDS = frozenset(
         "distribution",
         "exclusion_reason",
         "glass_host_piece_id",
+        # Classification only — physical board dims stay server-stamped.
+        "resource_kind",
+        "offcut_source_party",
+        "offcut_execution_party",
     }
 )
-BOARD_FIELDS = frozenset({"sheet_no", "origin_x_mm", "origin_y_mm", "user_moved"})
+# editor_origin marks a board created in the editor; dims are never client-trusted.
+BOARD_FIELDS = frozenset(
+    {"sheet_no", "origin_x_mm", "origin_y_mm", "user_moved", "editor_origin"}
+)
+EDITOR_ORIGIN_FULL_BOARD = "full_board"
 TOP_FIELDS = frozenset({"schema", "pieces", "boards"})
 FORBIDDEN_FIELDS = frozenset(
     {
@@ -66,6 +79,12 @@ FORBIDDEN_FIELDS = frozenset(
         "kerf_mm",
         "width_mm",
         "height_mm",
+        "full_width_cm",
+        "full_length_cm",
+        "usable_width_cm",
+        "usable_length_cm",
+        "applied_trim_width_cm",
+        "applied_trim_length_cm",
         "snapshot",
         "snapshot_json",
         "cost",
@@ -451,19 +470,32 @@ def _normalize_boards(
         if set(raw) - BOARD_FIELDS:
             raise DraftLayoutError("forbidden_field")
         sheet_no = _required_int(raw.get("sheet_no"))
+        if sheet_no <= 0:
+            raise DraftLayoutError("invalid_number")
+        editor_origin = raw.get("editor_origin")
+        if editor_origin in (None, ""):
+            editor_origin = None
+        elif editor_origin != EDITOR_ORIGIN_FULL_BOARD:
+            raise DraftLayoutError("invalid_editor_origin")
         if sheet_no not in source_sheets:
-            raise DraftLayoutError("unknown_sheet")
+            # New boards must declare editor_origin; dims are stamped server-side.
+            if editor_origin != EDITOR_ORIGIN_FULL_BOARD:
+                raise DraftLayoutError("unknown_sheet")
+        elif editor_origin is not None:
+            # Source boards cannot pretend to be editor-created.
+            raise DraftLayoutError("invalid_editor_origin")
         if sheet_no in seen:
             raise DraftLayoutError("duplicate_sheet")
         seen.add(sheet_no)
-        boards.append(
-            {
-                "sheet_no": sheet_no,
-                "origin_x_mm": _finite_mm(raw.get("origin_x_mm")),
-                "origin_y_mm": _finite_mm(raw.get("origin_y_mm")),
-                "user_moved": _required_bool(raw.get("user_moved", False)),
-            }
-        )
+        row = {
+            "sheet_no": sheet_no,
+            "origin_x_mm": _finite_mm(raw.get("origin_x_mm")),
+            "origin_y_mm": _finite_mm(raw.get("origin_y_mm")),
+            "user_moved": _required_bool(raw.get("user_moved", False)),
+        }
+        if editor_origin is not None:
+            row["editor_origin"] = editor_origin
+        boards.append(row)
     return boards
 
 
@@ -527,6 +559,23 @@ def _normalize_pieces(
             "exclusion_reason": reason,
             "glass_host_piece_id": None,
         }
+        # Legacy drafts omit classification; review falls back to the trusted source.
+        if raw.get("resource_kind") not in (None, ""):
+            try:
+                decision = decision_from_values(
+                    raw.get("resource_kind"),
+                    raw.get("offcut_source_party") or Party.UNASSIGNED,
+                    raw.get("offcut_execution_party") or Party.UNASSIGNED,
+                )
+            except OffcutPolicyError as exc:
+                raise DraftLayoutError(str(exc) or "invalid_offcut_classification") from exc
+            row["resource_kind"] = decision.resource_kind.value
+            row["offcut_source_party"] = decision.source_party.value
+            row["offcut_execution_party"] = decision.execution_party.value
+        elif raw.get("offcut_source_party") not in (None, "") or raw.get(
+            "offcut_execution_party"
+        ) not in (None, ""):
+            raise DraftLayoutError("invalid_offcut_classification")
         _capture_requested_host(raw, row)
         pieces.append(row)
     if seen != set(trusted):

@@ -1281,6 +1281,29 @@
 
         function inspectorHandlers() {
             return {
+                setPieceClassification: (pieceKey, resourceKind, parties) => {
+                    if (!store || !SessionDocument || typeof SessionDocument.classifyPiece !== "function") {
+                        return { ok: false };
+                    }
+                    finishActiveGesture();
+                    const result = SessionDocument.classifyPiece(
+                        store.snapshot().session,
+                        pieceKey,
+                        resourceKind,
+                        parties
+                    );
+                    if (!result || !result.ok) {
+                        if (window.frappe && frappe.show_alert) {
+                            frappe.show_alert({
+                                message: translate("Could not change the piece classification."),
+                                indicator: "orange",
+                            }, 4);
+                        }
+                        return result || { ok: false };
+                    }
+                    store.commitSession(result.session);
+                    return result;
+                },
                 applyPositionAxis: (pieceKey, axis, value, options) => {
                     const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
                     const opts = options || {};
@@ -1436,6 +1459,27 @@
                     if (!(meta && meta.shiftKey) && targetSheet != null) revealSheet(targetSheet);
                 },
                 setSidebarSplit: (ratio, sidebarHeight) => store.setSidebarSplit(ratio, sidebarHeight),
+                addBoard: () => {
+                    if (!store || !SessionDocument || typeof SessionDocument.addFullBoard !== "function") return;
+                    finishActiveGesture();
+                    const current = store.snapshot();
+                    const result = SessionDocument.addFullBoard(current.session, current.projection);
+                    if (!result || !result.ok) {
+                        if (window.frappe && frappe.show_alert) {
+                            frappe.show_alert({
+                                message: translate(
+                                    result && result.code === "standard_board_unavailable"
+                                        ? "A new board cannot be created because the order's standard board dimensions are missing or invalid."
+                                        : "Could not add a board."
+                                ),
+                                indicator: "orange",
+                            }, 5);
+                        }
+                        return;
+                    }
+                    store.commitSession(result.session);
+                    store.selectSheet(result.sheet_no);
+                },
             });
             if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
                 RightSidebarRenderer.render(rightSidebar, view, inspectorHandlers());

@@ -103,16 +103,27 @@
             </label>`;
         }).join("");
 
-        const visibleSheets = (session && session.boards)
-            ? sheets.filter((sheet) => session.boards[String(sheet.sheet_no)])
-            : sheets;
+        const projectionByNo = {};
+        sheets.forEach((sheet) => {
+            projectionByNo[String(sheet.sheet_no)] = sheet;
+        });
+        const visibleSheetNos = (session && session.boards)
+            ? Object.keys(session.boards)
+                .map((key) => Number(session.boards[key].sheet_no != null ? session.boards[key].sheet_no : key))
+                .filter((number) => Number.isFinite(number))
+                .sort((left, right) => left - right)
+            : sheets.map((sheet) => Number(sheet.sheet_no)).filter((number) => Number.isFinite(number));
         const selectedKeySet = new Set(
             Array.isArray(storeView.selectedPieceKeys) && storeView.selectedPieceKeys.length
                 ? storeView.selectedPieceKeys
                 : (storeView.selectedPieceKey ? [storeView.selectedPieceKey] : [])
         );
-        const sheetRows = visibleSheets.map((sheet) => {
-            const sheetNo = sheet.sheet_no;
+        const sheetRows = visibleSheetNos.map((sheetNo) => {
+            const sheet = projectionByNo[String(sheetNo)] || {
+                sheet_no: sheetNo,
+                resource_kind: (session.boards[String(sheetNo)] || {}).resource_kind || "FULL_BOARD",
+                pieces: [],
+            };
             const expanded = storeView.expandedSheets[String(sheetNo)] !== false;
             const selected = Number(storeView.selectedSheetNo) === Number(sheetNo);
             let pieceButtons = "";
@@ -129,12 +140,26 @@
                         <span class="abe-piece-label" dir="ltr">${esc(piece.label || piece.piece_id)}</span>
                     </button>`).join("");
             }
-            const resourceKind = String(sheet.resource_kind || "FULL_BOARD");
+            const composition = session && SessionDocument && typeof SessionDocument.boardCompositionKind === "function"
+                ? SessionDocument.boardCompositionKind(session, sheetNo)
+                : null;
+            let compositionLabel = composition === "mixed"
+                ? "Mixed"
+                : (composition === "OFFCUT"
+                    ? "OFFCUT"
+                    : (composition === "GEOMETRY" ? "GEOMETRY" : ""));
+            if (!compositionLabel && String(sheet.resource_kind || "").toUpperCase() === "OFFCUT") {
+                // Empty source OFFCUT boards keep the source badge until pieces land.
+                compositionLabel = "OFFCUT";
+            }
+            const compositionTitle = composition === "mixed"
+                ? __("This board mixes GEOMETRY and OFFCUT pieces")
+                : compositionLabel;
+            const kindLabel = compositionLabel
+                ? `<span class="abe-sheet-kind${composition === "mixed" ? " is-mixed" : ""}" dir="ltr" title="${esc(compositionTitle)}">${esc(__(compositionLabel))}${composition === "mixed" ? " ⚠" : ""}</span>`
+                : "";
             const sheetLabel = __("Sheet {0}", [sheetNo]);
-            const kindLabel = resourceKind.toUpperCase() === "FULL_BOARD"
-                ? ""
-                : `<span class="abe-sheet-kind" dir="ltr" title="${esc(resourceKind)}">${esc(resourceKind)}</span>`;
-            return `<div class="abe-sheet-block${selected ? " is-selected" : ""}" data-sheet-block="${esc(sheetNo)}" data-resource-kind="${esc(resourceKind)}">
+            return `<div class="abe-sheet-block${selected ? " is-selected" : ""}${composition === "mixed" ? " is-mixed" : ""}" data-sheet-block="${esc(sheetNo)}" data-resource-kind="${esc(String(sheet.resource_kind || "FULL_BOARD"))}">
                 <div class="abe-sheet-head">
                     <button type="button" class="abe-sheet-chevron" data-sheet-toggle="${esc(sheetNo)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "▾" : "▸"}</button>
                     <button type="button" class="abe-sheet-title" data-sheet-select="${esc(sheetNo)}" title="${esc(sheetLabel)}">${esc(sheetLabel)}</button>
@@ -143,6 +168,8 @@
                 <div class="abe-sheet-body" ${expanded ? "" : "hidden"}>${pieceButtons || `<div class="abe-empty-inline">${esc(__("No pieces on this sheet"))}</div>`}</div>
             </div>`;
         }).join("");
+        const addBoardLabel = __("Add board");
+        const addBoardHtml = `<button type="button" class="abe-add-board-btn" data-abe-add-board="1" title="${esc(addBoardLabel)}" aria-label="${esc(addBoardLabel)}">+</button>`;
 
         let outsideHtml = "";
         if (session && SessionDocument) {
@@ -225,7 +252,10 @@
                 </section>
                 <div class="abe-split-handle" role="separator" aria-orientation="horizontal" aria-label="${esc(__("Resize sidebar sections"))}" tabindex="0"></div>
                 <section class="abe-sidebar-section abe-tree-section" aria-label="${esc(__("Boards and pieces"))}">
-                    <header class="abe-section-head"><h2>${esc(__("Boards and pieces"))}</h2></header>
+                    <header class="abe-section-head">
+                        <h2>${esc(__("Boards and pieces"))}</h2>
+                        <div class="abe-tree-actions">${addBoardHtml}</div>
+                    </header>
                     <div class="abe-section-scroll abe-tree-scroll">${sheetRows || `<div class="abe-empty-inline">${esc(__("No boards"))}</div>`}${outsideHtml}${excludedHtml}${unplacedHtml}</div>
                 </section>
             </div>
@@ -234,6 +264,13 @@
         const treeScroll = host.querySelector(".abe-tree-scroll");
         if (layersScroll) layersScroll.scrollTop = layersScrollTop;
         if (treeScroll) treeScroll.scrollTop = treeScrollTop;
+
+        const addBoardBtn = host.querySelector("[data-abe-add-board]");
+        if (addBoardBtn) {
+            addBoardBtn.addEventListener("click", () => {
+                handlers && handlers.addBoard && handlers.addBoard();
+            });
+        }
 
         host.querySelectorAll("input[data-layer-key]").forEach((input) => {
             input.addEventListener("change", () => {

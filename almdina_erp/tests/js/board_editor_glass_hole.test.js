@@ -269,7 +269,7 @@ function assertHoleInsideOutline(hole, outline, label) {
 
 {
     const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-    assert.match(page, /session_document\.js\?v=23/);
+    assert.match(page, /session_document\.js\?v=24/);
     const source = fs.readFileSync(path.join(root, "public/js/board_editor/session_document.js"), "utf8");
     assert.match(source, /resolveSessionHoleMm|usableSheetHoleFromPieceLocal/);
 }

@@ -420,6 +420,9 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
         "sheet_no": sheet_no,
         "piece_type": str(piece.get("piece_type") or ""),
         "resource_kind": str(piece.get("resource_kind") or "").strip().upper() or None,
+        "offcut_source_party": str(piece.get("offcut_source_party") or "").strip().upper() or None,
+        "offcut_execution_party": str(piece.get("offcut_execution_party") or "").strip().upper()
+        or None,
         "placement_cm": {
             "x": piece.get("x"),
             "y": piece.get("y"),

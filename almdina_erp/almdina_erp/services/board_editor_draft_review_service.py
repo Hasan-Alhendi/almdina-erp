@@ -48,6 +48,13 @@ def _message(code: str) -> str:
         "addon_material_conflict": _("A machining add-on conflicts with neighbouring material."),
         "unsupported_sheet_resource": _("A board resource is not a supported full board or offcut."),
         "offcut_unresolved": _("An offcut piece has no resolved execution owner."),
+        "mixed_full_board_offcut_source": _(
+            "Board {0} mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan."
+        ),
+        "standard_board_unavailable": _(
+            "A new board cannot be created because the order's standard board dimensions are missing or invalid."
+        ),
+        "invalid_editor_origin": _("The draft marks a board origin that is not supported."),
         "invalid_layout": _("The saved draft is not a valid edit document."),
         "schema": _("The saved draft is not a valid edit document."),
         "forbidden_field": _("The saved draft contains a field that cannot be reviewed."),
@@ -80,6 +87,19 @@ def _issue_message(issue: Mapping[str, Any]) -> str:
                 "This piece has no supported geometry ({0}), so it cannot be marked ready."
             ).format(reason)
         return _message(code)
+    if code == "mixed_full_board_offcut_source":
+        sheet_nos = [
+            str(number)
+            for number in (issue.get("sheet_nos") or [])
+            if number not in (None, "")
+        ]
+        if sheet_nos:
+            return _(
+                "Board {0} mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan."
+            ).format(sheet_nos[0])
+        return _(
+            "A board mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan."
+        )
     return _message(code)
 
 
