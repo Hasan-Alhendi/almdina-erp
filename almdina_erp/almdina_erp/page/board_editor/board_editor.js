@@ -31,7 +31,7 @@
         `${ASSET_ROOT}/canvas_renderer.js?v=37`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=21`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=5`,
-        `${ASSET_ROOT}/controller.js?v=34`,
+        `${ASSET_ROOT}/controller.js?v=35`,
     ]);
 
     function pageModule() {

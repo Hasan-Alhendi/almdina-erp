@@ -58,7 +58,7 @@ class FrappeBoardEditorPlanCreateStore:
 
 class FrappeBoardEditorCuttingPlanPort:
     def __init__(self) -> None:
-        self._repo = FrappeCuttingPlanCommandRepository(Capability.EDIT_OPTIMIZER_SETTINGS)
+        self._repo = FrappeCuttingPlanCommandRepository(Capability.USE_BOARD_EDITOR)
 
     def existing_revisions(self, order_name: str) -> list[int]:
         rows = frappe.get_all(

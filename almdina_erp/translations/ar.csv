@@ -3457,3 +3457,6 @@ Could not add a board.,تعذّر إضافة اللوح.
 Could not change the piece classification.,تعذّر تغيير تصنيف الدرفة.
 Board {0} mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan.,اللوح رقم {0} يحتوي على قطع GEOMETRY وOFFCUT معاً. يجب توحيد تصنيف القطع الموجودة داخله قبل تطبيق التوزيع على خطة القص.
 A board mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan.,يوجد لوح يحتوي على قطع GEOMETRY وOFFCUT معاً. يجب توحيد تصنيف القطع الموجودة داخله قبل تطبيق التوزيع على خطة القص.
+Use Board Editor,استخدام محرر الألواح
+"Open and use the board editor to rearrange pieces, add boards, change piece resource classifications, save drafts, and apply layouts to cutting plans.",فتح محرر الألواح واستخدامه لإعادة توزيع القطع وإضافة ألواح وتغيير تصنيف الدرف وحفظ المسودات وتطبيق التوزيع على خطط القص.
+You do not have permission to use the board editor.,ليست لديك صلاحية استخدام محرر الألواح.

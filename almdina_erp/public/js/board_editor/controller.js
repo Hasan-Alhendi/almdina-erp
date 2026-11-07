@@ -1771,7 +1771,7 @@
                             ? translate("Cutting plan unavailable")
                             : translate("Could not load the board editor"),
                     permission
-                        ? translate("You do not have permission to open this cutting plan in the board editor.")
+                        ? translate("You do not have permission to use the board editor.")
                         : missing
                             ? translate("The selected cutting plan is not available for this order.")
                             : translate("Reload the page or return to the order and try again."),

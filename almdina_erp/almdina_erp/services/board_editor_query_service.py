@@ -91,6 +91,20 @@ def _authorized_order(order_name: str) -> Any:
     return order
 
 
+def _require_use_board_editor(order: Any) -> None:
+    """Board Editor authority is independent of Edit cutting algorithm."""
+
+    require_cutting_plan_capability(
+        order,
+        Capability.USE_BOARD_EDITOR,
+        message=_("You do not have permission to use the board editor."),
+    )
+
+
+def _use_board_editor_allowed(order: Any) -> bool:
+    return cutting_plan_capability_allowed(order, Capability.USE_BOARD_EDITOR)
+
+
 def _capabilities(order: Any) -> dict[str, bool]:
     return {
         "view_system": cutting_plan_capability_allowed(
@@ -102,6 +116,7 @@ def _capabilities(order: Any) -> dict[str, bool]:
         "view_approved": cutting_plan_capability_allowed(
             order, Capability.VIEW_APPROVED_CUTTING_PLAN
         ),
+        "use_board_editor": _use_board_editor_allowed(order),
     }
 
 
@@ -187,7 +202,7 @@ def _edit_layout_allowed(order: Any, plan: Any, capabilities: dict[str, bool]) -
     status = str(getattr(order, "status", "") or "").strip()
     if status in LOCKED_ORDER_STATUSES:
         return False
-    if not cutting_plan_capability_allowed(order, Capability.EDIT_OPTIMIZER_SETTINGS):
+    if not capabilities.get("use_board_editor"):
         return False
     if not _plan_view_allowed(order, plan, capabilities):
         return False
@@ -573,6 +588,7 @@ def get_board_editor_projection(
     """
 
     order = _authorized_order(order_name)
+    _require_use_board_editor(order)
     capabilities = _capabilities(order)
     plan = _load_plan_for_order(order, plan_name)
     denial = _plan_view_denial_code(order, plan, capabilities)
@@ -640,6 +656,7 @@ def get_board_editor_projection(
             "view_system": capabilities["view_system"],
             "view_uploaded": capabilities["view_uploaded"],
             "view_approved": capabilities["view_approved"],
+            "use_board_editor": True,
             # View opens the selected identity; edit_layout only gates draft save /
             # derived apply. Neither mutates an Approved Cutting Plan snapshot.
             "edit_layout": _edit_layout_allowed(order, plan, capabilities),
@@ -663,4 +680,8 @@ def get_board_editor_projection(
     }
 
 
-__all__ = ["get_board_editor_projection"]
+__all__ = [
+    "get_board_editor_projection",
+    "_require_use_board_editor",
+    "_use_board_editor_allowed",
+]

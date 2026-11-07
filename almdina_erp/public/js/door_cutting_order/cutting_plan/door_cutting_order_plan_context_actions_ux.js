@@ -294,6 +294,7 @@
             !isEditing(frm)
             && identityOk
             && can(frm, "view_cutting_plan")
+            && can(frm, "use_board_editor")
         );
     }
 

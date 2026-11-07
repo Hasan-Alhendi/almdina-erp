@@ -10,10 +10,14 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
 )
 
 
-def draft_review_allowed(*, has_plan_view: bool) -> bool:
-    """Review needs plan view. It does not require the draft write capability."""
+def draft_review_allowed(
+    *,
+    has_board_editor_capability: bool,
+    has_plan_view: bool,
+) -> bool:
+    """Review is a Board Editor function: capability + selected plan view."""
 
-    return bool(has_plan_view)
+    return bool(has_board_editor_capability and has_plan_view)
 
 
 def review_editor_draft(

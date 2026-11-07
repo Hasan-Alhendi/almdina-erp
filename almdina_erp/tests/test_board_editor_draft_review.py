@@ -685,10 +685,28 @@ class BoardEditorDraftReviewTests(unittest.TestCase):
         self.assertEqual(codes(result), ["source_changed"])
         self.assertEqual(result["distribution_fingerprint"], "old")
         self.assertEqual(layout, before)
-        self.assertFalse(draft_review_allowed(has_plan_view=False))
-        self.assertTrue(draft_review_allowed(has_plan_view=True))
+        self.assertFalse(
+            draft_review_allowed(
+                has_board_editor_capability=False,
+                has_plan_view=True,
+            )
+        )
+        self.assertFalse(
+            draft_review_allowed(
+                has_board_editor_capability=True,
+                has_plan_view=False,
+            )
+        )
+        self.assertTrue(
+            draft_review_allowed(
+                has_board_editor_capability=True,
+                has_plan_view=True,
+            )
+        )
         source = (APP / "services" / "board_editor_draft_review_service.py").read_text(encoding="utf-8")
         self.assertIn("draft_review_allowed", source)
+        self.assertIn("_require_use_board_editor", source)
+        self.assertIn("_use_board_editor_allowed", source)
         self.assertIn("_plan_view_allowed", source)
         self.assertIn("frappe.PermissionError", source)
         self.assertIn("_load_plan_for_order", source)

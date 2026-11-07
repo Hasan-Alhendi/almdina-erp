@@ -113,12 +113,24 @@ class TestPermissionMatrixApplication(unittest.TestCase):
         for action in (
             Capability.RECALCULATE_PLAN,
             Capability.EDIT_OPTIMIZER_SETTINGS,
+            Capability.USE_BOARD_EDITOR,
             Capability.PRINT_CUTTING_PLAN,
             Capability.APPROVE_DXF,
         ):
             with self.subTest(action=action):
                 state = normalize_capability_state({action: True})
                 self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+
+    def test_use_board_editor_is_independent_of_optimizer_and_approval(self) -> None:
+        state = normalize_capability_state({Capability.USE_BOARD_EDITOR: True})
+        self.assertTrue(state[Capability.USE_BOARD_EDITOR])
+        self.assertTrue(state[Capability.VIEW_CUTTING_PLAN])
+        self.assertFalse(state[Capability.EDIT_OPTIMIZER_SETTINGS])
+        self.assertFalse(state[Capability.RECALCULATE_PLAN])
+        self.assertFalse(state[Capability.APPROVE_DXF])
+
+        optimizer = normalize_capability_state({Capability.EDIT_OPTIMIZER_SETTINGS: True})
+        self.assertFalse(optimizer[Capability.USE_BOARD_EDITOR])
 
     def test_optimizer_editing_implies_recalculation_without_cost_or_order_edit(self) -> None:
         state = normalize_capability_state(

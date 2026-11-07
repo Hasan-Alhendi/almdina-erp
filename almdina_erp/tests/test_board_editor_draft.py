@@ -537,7 +537,10 @@ class BoardEditorDraftTests(unittest.TestCase):
     def test_service_does_not_mutate_the_cutting_plan(self):
         source = (APP / "services" / "board_editor_draft_service.py").read_text(encoding="utf-8")
         store = (APP / "infrastructure" / "frappe" / "board_editor_draft_store.py").read_text(encoding="utf-8")
-        self.assertIn("Capability.EDIT_OPTIMIZER_SETTINGS", source)
+        self.assertIn("_require_use_board_editor", source)
+        self.assertIn("_use_board_editor_allowed", source)
+        self.assertNotIn("Capability.EDIT_OPTIMIZER_SETTINGS", source)
+        self.assertNotIn("EDIT_OPTIMIZER_SETTINGS", source)
         self.assertIn("frappe.PermissionError", source)
         self.assertIn('methods=["POST"]', source)
         self.assertIn("begin_board_editor_draft_from_current_source", source)

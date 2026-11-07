@@ -16,19 +16,17 @@ from almdina_erp.almdina_erp.application.cutting.board_editor_plan_create import
     create_write_allowed,
     execute_create,
 )
-from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_plan_create_adapter import (
     FrappeBoardEditorCuttingPlanPort,
     FrappeBoardEditorPlanCreateStore,
-)
-from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
-    cutting_plan_capability_allowed,
 )
 from almdina_erp.almdina_erp.services.board_editor_query_service import (
     _authorized_order,
     _capabilities,
     _load_plan_for_order,
     _plan_view_allowed,
+    _require_use_board_editor,
+    _use_board_editor_allowed,
     get_board_editor_projection,
 )
 
@@ -63,14 +61,12 @@ def create_board_editor_plan_copy(
     """Create one Board Editor Cutting Plan Draft from the locked saved draft."""
 
     order = _authorized_order(order_name)
+    _require_use_board_editor(order)
     plan = _load_plan_for_order(order, plan_name)
     order_status = str(getattr(order, "status", "") or "")
     capabilities = _capabilities(order)
     if not create_write_allowed(
-        has_edit_capability=cutting_plan_capability_allowed(
-            order,
-            Capability.EDIT_OPTIMIZER_SETTINGS,
-        ),
+        has_edit_capability=_use_board_editor_allowed(order),
         has_plan_view=_plan_view_allowed(order, plan, capabilities),
         order_status=order_status,
     ):

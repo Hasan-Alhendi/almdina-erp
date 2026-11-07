@@ -19,6 +19,8 @@ from almdina_erp.almdina_erp.services.board_editor_query_service import (
     _capabilities,
     _load_plan_for_order,
     _plan_view_allowed,
+    _require_use_board_editor,
+    _use_board_editor_allowed,
     get_board_editor_projection,
 )
 
@@ -108,9 +110,11 @@ def validate_board_editor_draft(order_name: str, plan_name: str) -> dict[str, An
     """Review one saved draft. View permission is required; the check is read-only."""
 
     order = _authorized_order(order_name)
+    _require_use_board_editor(order)
     plan = _load_plan_for_order(order, plan_name)
     if not draft_review_allowed(
-        has_plan_view=_plan_view_allowed(order, plan, _capabilities(order))
+        has_board_editor_capability=_use_board_editor_allowed(order),
+        has_plan_view=_plan_view_allowed(order, plan, _capabilities(order)),
     ):
         frappe.throw(
             _("You do not have permission to review this board editor draft."),

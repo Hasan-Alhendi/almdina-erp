@@ -24,6 +24,7 @@ function loadContext(workspacePayload, permissions = {
     view_cutting_plan: true,
     view_system_cutting_plan: true,
     view_approved_cutting_plan: true,
+    use_board_editor: true,
 }) {
     const document = {
         documentElement: { getAttribute: () => "rtl" },
@@ -229,6 +230,7 @@ const afterApproveA = {
         view_cutting_plan: false,
         view_system_cutting_plan: false,
         view_approved_cutting_plan: false,
+        use_board_editor: false,
     });
     const frm = {
         doctype: "Door Cutting Order",
@@ -241,6 +243,30 @@ const afterApproveA = {
         false,
         "unauthorized open remains closed",
     );
+}
+
+{
+    const viewOnly = loadContext(afterApproveA, {
+        approve_dxf: true,
+        view_cutting_plan: true,
+        view_system_cutting_plan: true,
+        view_approved_cutting_plan: true,
+        use_board_editor: false,
+        edit_optimizer_settings: true,
+    });
+    const frm = {
+        doctype: "Door Cutting Order",
+        doc: { name: "26-00021", status: "Draft", production_path: "" },
+        __almdina_active_plan_tab: "BoardEditor",
+        fields_dict: {},
+    };
+    assert.equal(
+        viewOnly.owner.canOpenBoardEditor(frm, viewOnly.owner.rowForTab(frm)),
+        false,
+        "plan view + edit algorithm without use_board_editor hides open button",
+    );
+    viewOnly.owner.render(frm, viewOnly.host);
+    assert.doesNotMatch(viewOnly.host.html(), /dco-open-board-editor/);
 }
 
 {

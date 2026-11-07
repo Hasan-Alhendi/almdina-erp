@@ -514,7 +514,7 @@ assert.match(controllerSource, /RightSidebarRenderer/);
 assert.doesNotMatch(controllerSource, /applyPositionEdge|proposeEdgeMove/);
 assert.match(pageSource, /position_geometry\.js\?v=4/);
 assert.match(pageSource, /right_sidebar_renderer\.js\?v=5/);
-assert.match(pageSource, /controller\.js\?v=34/);
+assert.match(pageSource, /controller\.js\?v=35/);
 assert.match(pageSource, /board_editor\.css\?v=38/);
 assert.match(cssSource, /\.abe-right-sidebar/);
 assert.match(cssSource, /\.abe-pos-axis-label/);

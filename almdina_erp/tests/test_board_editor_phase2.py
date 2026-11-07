@@ -199,7 +199,11 @@ def test_page_and_entry_point_exist():
     assert "Open board editor" in context_source
     assert "dco-open-board-editor" in context_source
     assert "board-editor" in context_source
-    assert "edit_optimizer_settings" not in context_source.split("canOpenBoardEditor", 1)[1][:400]
+    can_open = context_source.split("function canOpenBoardEditor", 1)[1].split(
+        "function runOpenBoardEditor", 1
+    )[0]
+    assert "use_board_editor" in can_open
+    assert "edit_optimizer_settings" not in can_open
 
 
 def test_frontend_modules_use_svg_and_single_store():
