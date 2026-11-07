@@ -242,6 +242,7 @@ def _proxy_order(
             "cut_length_cm": float(spec.cut_length_cm),
             "finished_width_cm": float(spec.finished_width_cm),
             "finished_length_cm": float(spec.finished_length_cm),
+            "deduct_edge_thickness": bool(spec.deduct_edge_thickness),
             "allow_rotation": spec.allow_rotation,
             "piece_type": spec.piece_type,
             "liner_reference_side": str(getattr(row, "liner_reference_side", "") or ""),
@@ -743,6 +744,7 @@ def _l_corner_cut(spec: OrderPieceCutSpec):
         side_thickness_mm=_side_thickness_mm(spec),
         edge_break=bool(spec.edge_break),
         edge_break_thickness_mm=spec.edge_break_thickness_mm,
+        deduct_edge_thickness=spec.deduct_edge_thickness,
     )
 
 
@@ -759,6 +761,7 @@ def _contour_notch_cm(spec: OrderPieceCutSpec) -> tuple[float, float]:
         side_thickness_mm=_side_thickness_mm(spec),
         edge_break=bool(spec.edge_break),
         edge_break_thickness_mm=spec.edge_break_thickness_mm,
+        deduct_edge_thickness=spec.deduct_edge_thickness,
     )
 
 
@@ -937,6 +940,17 @@ def _l_break_thickness_unproven(
     return measure_l_remainings_cm(outer, rotated=bool(piece.get("rotated"))) is not None
 
 
+def _drop_directed_contour_evidence(snapshot: dict[str, Any]) -> None:
+    """Remove import-only orientation evidence before a snapshot can be stored."""
+
+    for sheet in snapshot.get("sheets") or []:
+        if not isinstance(sheet, dict):
+            continue
+        for piece in sheet.get("pieces") or []:
+            if isinstance(piece, dict):
+                piece.pop("directed_contour_mm", None)
+
+
 def _outer_ring_mm(piece: dict[str, Any]) -> list[list[float]] | None:
     geometry = piece.get("geometry")
     if not isinstance(geometry, dict):
@@ -1047,6 +1061,7 @@ def _bind_corner_edge_rotation(
 
     outer = _outer_ring_mm(piece)
     notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    directed = piece.get("directed_contour_mm")
     match = (
         match_corner_contour(
             outer,
@@ -1057,6 +1072,7 @@ def _bind_corner_edge_rotation(
             cut_width_cm=notch_width_cm,
             cut_length_cm=notch_length_cm,
             edge_bands=_corner_band_tokens(spec),
+            directed_ring_mm=directed if isinstance(directed, list) else None,
         )
         if outer is not None
         else None
@@ -1295,12 +1311,30 @@ def _corner_liner_issue(
     )
 
 
+def _layer_cutter_diameter_mm(
+    kind: str,
+    cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None,
+) -> float | None:
+    """Use the layer bit when the plan recorded one. Otherwise keep the saw kerf."""
+
+    if cutter_diameters_mm is None:
+        return cutter_diameter_mm
+    raw = cutter_diameters_mm.get(kind)
+    try:
+        diameter = float(raw) if raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        diameter = 0.0
+    return diameter if diameter > 0 else None
+
+
 def _corner_machining_issues(
     piece: dict[str, Any],
     spec: OrderPieceCutSpec,
     order: Any | None,
     *,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
     sheet: dict[str, Any] | None = None,
 ):
     issues = []
@@ -1309,7 +1343,9 @@ def _corner_machining_issues(
             piece,
             spec,
             order,
-            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameter_mm=_layer_cutter_diameter_mm(
+                addon.kind, cutter_diameter_mm, cutter_diameters_mm
+            ),
             sheet=sheet,
             kind=addon.kind,
         )
@@ -1326,6 +1362,7 @@ def _regular_machining_issues(
     *,
     cutter_diameter_mm: float | None,
     sheet: dict[str, Any] | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     """Bind one proved rotation after exact dimensions and piece identity."""
     if spec.piece_type != "Regular" or order is None:
@@ -1374,6 +1411,7 @@ def _regular_machining_issues(
         candidate_turns=turns,
         edge_bands=_corner_band_tokens(spec),
         cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
         origin_mm=(float(piece.get("x") or 0) * 10, float(piece.get("y") or 0) * 10),
         board_mm=_shifted_board_mm(sheet),
     )
@@ -1431,15 +1469,20 @@ def _piece_machining_issues(
     *,
     cutter_diameter_mm: float | None,
     sheet: dict[str, Any] | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     if spec.piece_type == "Regular":
         return _regular_machining_issues(
             piece, spec, order,
-            cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
+            sheet=sheet,
         )
     return _corner_machining_issues(
         piece, spec, order,
-        cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
+        sheet=sheet,
     )
 
 
@@ -1449,6 +1492,7 @@ def _apply_strict_dimension_contract(
     *,
     order: Any | None = None,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
     issues: list[DxfValidationIssue] = []
@@ -1499,6 +1543,7 @@ def _apply_strict_dimension_contract(
                             candidate["spec"],
                             order,
                             cutter_diameter_mm=cutter_diameter_mm,
+                            cutter_diameters_mm=cutter_diameters_mm,
                             sheet=sheet,
                         )
                     )
@@ -1729,6 +1774,7 @@ def _apply_strict_dimension_contract(
                         candidate["spec"],
                         order,
                         cutter_diameter_mm=cutter_diameter_mm,
+                        cutter_diameters_mm=cutter_diameters_mm,
                         sheet=sheet,
                     )
                 )
@@ -1835,6 +1881,30 @@ def _with_persisted_cut_context(
     return DxfImportError(issues=annotated)
 
 
+def _resolved_layer_diameters_mm(
+    settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None,
+) -> dict[str, float | None]:
+    """Measure each machining layer with its own bit.
+
+    A missing or blank diameter inherits this plan's saw kerf, which is how a
+    plan saved before per-layer bits was cut. An explicit diameter is kept,
+    including when it differs from the saw. The saw diameter itself stays the
+    nesting kerf and is not rewritten here.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        LAYER_FIELDS,
+        diameters_for_record,
+    )
+
+    resolved = diameters_for_record(tool_diameters or {}, kerf_mm=settings.kerf_mm)
+    return {
+        kind: resolved[kind] if resolved[kind] > 0 else None
+        for kind, _field in LAYER_FIELDS
+    }
+
+
 def parse_production_dxf(
     file_url: str,
     order: Any,
@@ -1853,7 +1923,10 @@ def parse_production_dxf(
     shape-free.
     """
     try:
-        specs = build_order_piece_cut_specs(order)
+        specs = build_order_piece_cut_specs(
+            order,
+            deduct_edge_thickness=settings.deduct_edge_thickness,
+        )
     except CutDimensionError as exc:
         raise DxfImportError(
             issues=[
@@ -1905,6 +1978,7 @@ def parse_production_dxf(
         specs,
         order=order,
         cutter_diameter_mm=settings.kerf_mm,
+        cutter_diameters_mm=_resolved_layer_diameters_mm(settings, tool_diameters),
     )
     if exact_issues:
         # Existing saw-center provenance distinguishes modern GEOMETRY from
@@ -1941,6 +2015,7 @@ def parse_production_dxf(
         "edge_markers_from_order": True,
         "rotation_owned_by_renderer": True,
     }
+    _drop_directed_contour_evidence(snapshot)
     return snapshot
 
 

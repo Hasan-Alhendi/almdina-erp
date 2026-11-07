@@ -156,6 +156,7 @@ const plan = Projection.createPlanWorkspaceDraft({
         handle_recess_tool_diameter_mm: 6,
         rear_groove_tool_diameter_mm: 5,
         trim_margin_mm: 8,
+        deduct_edge_thickness: 0,
         preview_id: "PREVIEW-TRANSIENT",
     },
 }, { normalized_settings_hash: "plan-baseline-hash" });

@@ -231,7 +231,12 @@
             && wrapperAttached(frm, layout)
             && wrapperOrder(actions) === orderName
             && wrapperOrder(layout) === orderName
-            && actions.find(".dco-plan-actions-shell").length
+            && (
+                actions.attr("data-almdina-plan-actions") === "ready"
+                || actions.find(".dco-plan-actions-shell").length
+                || actions.find(".dco-recalculate-plan").length
+                || actions.find(".dco-plan-settings-editor").length
+            )
             && layout.find(".dco-plan-tab-content").length
             && layout.children().length
             && contextActionsReady(frm, layout)

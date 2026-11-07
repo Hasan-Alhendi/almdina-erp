@@ -1082,7 +1082,11 @@
         }
         const liner = window.AlmdinaLinerGeometry;
         if (liner && typeof liner.contourNotchFromOrder === "function") {
-            const notch = liner.contourNotchFromOrder(frm, row);
+            const notch = liner.contourNotchFromOrder(
+                frm,
+                row,
+                renderedDeductEdgeThickness(frm)
+            );
             copy.clipped_corner_width_cm = notch.cutWidthCm;
             copy.clipped_corner_length_cm = notch.cutLengthCm;
         }
@@ -1107,6 +1111,14 @@
         const centimetres = num(plan && plan.kerf_cm);
         if (centimetres > 0) return centimetres * 10;
         return num(frm && frm.doc && frm.doc.kerf_mm);
+    }
+
+    function renderedDeductEdgeThickness(frm) {
+        const source = diameterSource(null, frm);
+        if (!source || !Object.prototype.hasOwnProperty.call(source, "deduct_edge_thickness")) {
+            return undefined;
+        }
+        return source.deduct_edge_thickness;
     }
 
     function diameterSource(plan, frm) {

@@ -82,6 +82,7 @@
             return [
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order."), [
                     [t("Default kerf (mm)"), source.default_kerf_mm],
+                    [t("Deduct edge banding thickness by default"), source.default_deduct_edge_thickness == null || source.default_deduct_edge_thickness === "" || Number(source.default_deduct_edge_thickness) !== 0 ? t("Enabled") : t("Disabled")],
                     [t("Default liner tool diameter (mm)"), source.default_liner_tool_diameter_mm == null || source.default_liner_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_liner_tool_diameter_mm],
                     [t("Default handle recess tool diameter (mm)"), source.default_handle_recess_tool_diameter_mm == null || source.default_handle_recess_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_handle_recess_tool_diameter_mm],
                     [t("Default rear groove tool diameter (mm)"), source.default_rear_groove_tool_diameter_mm == null || source.default_rear_groove_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_rear_groove_tool_diameter_mm],

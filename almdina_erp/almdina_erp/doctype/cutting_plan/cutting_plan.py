@@ -118,6 +118,7 @@ class CuttingPlan(Document):
                 optimization_time_limit_sec=self.optimization_time_limit_sec,
                 kerf_mm=self.kerf_mm,
                 preferred_trim_mm=self.trim_margin_mm,
+                deduct_edge_thickness=getattr(self, "deduct_edge_thickness", None),
             )
         except PlanSettingsValidationError:
             frappe.throw(_("Invalid Cutting Plan settings."), frappe.ValidationError)
@@ -128,6 +129,7 @@ class CuttingPlan(Document):
         self.optimization_time_limit_sec = settings.optimization_time_limit_sec
         self.kerf_mm = settings.kerf_mm
         self.trim_margin_mm = settings.preferred_trim_mm
+        self.deduct_edge_thickness = 1 if settings.deduct_edge_thickness else 0
 
     def _populate_source_identity_snapshots(self) -> None:
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)

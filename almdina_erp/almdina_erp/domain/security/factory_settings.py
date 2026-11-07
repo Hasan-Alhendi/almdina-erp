@@ -22,6 +22,7 @@ SECTION_FIELDS = MappingProxyType(
         FactorySettingsSection.CUTTING: frozenset(
             {
                 "default_kerf_mm",
+                "default_deduct_edge_thickness",
                 "default_liner_tool_diameter_mm",
                 "default_handle_recess_tool_diameter_mm",
                 "default_rear_groove_tool_diameter_mm",

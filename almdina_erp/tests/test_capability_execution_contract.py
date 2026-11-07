@@ -25,6 +25,14 @@ PLAN_CONTROLS = (
     / "cutting_plan"
     / "door_cutting_order_plan_controls_ux.js"
 )
+PLAN_CONTEXT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_context_actions_ux.js"
+)
 PLAN_WORKSPACE_API = (
     ROOT
     / "public"
@@ -216,6 +224,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         boundary = APPROVAL_SERVICE.read_text(encoding="utf-8")
         command = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
         controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        context_actions = PLAN_CONTEXT_ACTIONS.read_text(encoding="utf-8")
         plan_api = PLAN_WORKSPACE_API.read_text(encoding="utf-8")
         approval_command = command.split("def approve_order_plan", 1)[1].split(
             "\n\ndef save_system_plan_settings", 1
@@ -231,9 +240,9 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("plan_needs_recalculation", command)
         self.assertNotIn("recalculate_system_plan", approval_command)
         self.assertNotIn("force_cutting_plan_recalculation", approval_command)
-        self.assertIn('"Approve DXF plan"', controls)
-        self.assertIn('"Approve cutting plan"', controls)
-        self.assertIn('"Approve the edited plan"', controls)
+        self.assertIn('"Approve the uploaded plan"', context_actions)
+        self.assertIn('"Approve the system plan"', context_actions)
+        self.assertIn('"Approve the edited plan"', context_actions)
         self.assertIn('can(frm, "approve_dxf")', controls)
         self.assertIn('source === "BoardEditor"', controls)
         # Browser staleness comes from the Plan read model, not the DCO

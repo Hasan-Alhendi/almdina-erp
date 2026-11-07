@@ -51,6 +51,7 @@
         "kerf_mm",
         "trim_margin_mm",
         "optimization_time_limit_sec",
+        "deduct_edge_thickness",
     ]);
     const DIAMETER_FIELDS = Object.freeze([
         "liner_tool_diameter_mm",
@@ -72,7 +73,14 @@
             : null;
     }
 
+    function edgeDeductionOff(value) {
+        return value === false || value === 0 || value === "0" || String(value || "").toLowerCase() === "false";
+    }
+
     function sameSetting(fieldname, left, right) {
+        if (fieldname === "deduct_edge_thickness") {
+            return edgeDeductionOff(left) === edgeDeductionOff(right);
+        }
         if (fieldname === "packing_mode" || fieldname === "cutting_machine_type") {
             return String(left ?? "").trim() === String(right ?? "").trim();
         }

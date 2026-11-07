@@ -95,6 +95,9 @@ class ExpectedPieceEvidence:
     clipped_cut_width_mm: float = 0.0
     clipped_cut_length_mm: float = 0.0
     clipped_corner_position: str = ""
+    # Missing historical evidence keeps the current deduction. Explicit False
+    # measures the opening from the finished edge of an undeducted blank.
+    deduct_edge_thickness: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -944,11 +947,18 @@ def _expected_glass_insets(evidence: ExpectedPieceEvidence) -> dict[str, float] 
     margin = evidence.glass_margin_mm
     if margin is None:
         return None
+    if evidence.deduct_edge_thickness:
+        left = float(evidence.long_left_mm or 0.0)
+        right = float(evidence.long_right_mm or 0.0)
+        bottom = float(evidence.width_bottom_mm or 0.0)
+        top = float(evidence.width_top_mm or 0.0)
+    else:
+        left = right = bottom = top = 0.0
     return {
-        "left": float(margin) - float(evidence.long_left_mm or 0.0),
-        "right": float(margin) - float(evidence.long_right_mm or 0.0),
-        "bottom": float(margin) - float(evidence.width_bottom_mm or 0.0),
-        "top": float(margin) - float(evidence.width_top_mm or 0.0),
+        "left": float(margin) - left,
+        "right": float(margin) - right,
+        "bottom": float(margin) - bottom,
+        "top": float(margin) - top,
     }
 
 

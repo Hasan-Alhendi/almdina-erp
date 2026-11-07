@@ -141,6 +141,7 @@ class FrappeCuttingPlanCommandRepository:
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
         plan.trim_margin_mm = settings.preferred_trim_mm
+        plan.deduct_edge_thickness = 1 if settings.deduct_edge_thickness else 0
         self._assign_tool_diameters(
             plan,
             kerf_mm=settings.kerf_mm,
@@ -177,6 +178,7 @@ class FrappeCuttingPlanCommandRepository:
         plan.optimization_time_limit_sec = settings.optimization_time_limit_sec
         plan.kerf_mm = settings.kerf_mm
         plan.trim_margin_mm = settings.preferred_trim_mm
+        plan.deduct_edge_thickness = 1 if settings.deduct_edge_thickness else 0
         plan.plan_needs_recalculation = 1
         self._run_persist(plan, "save")
         return self._record(plan)

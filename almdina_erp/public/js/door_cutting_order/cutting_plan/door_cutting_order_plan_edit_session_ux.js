@@ -12,6 +12,13 @@
         "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
         "optimization_time_limit_sec",
+        "deduct_edge_thickness",
+    ]);
+    const TOOL_SETTING_FIELDS = Object.freeze([
+        "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
     ]);
     const PLAN_SETTING_SPECS = Object.freeze([
         Object.freeze({
@@ -84,6 +91,12 @@
             min: 0,
             step: "1",
             suffix: "seconds",
+        }),
+        Object.freeze({
+            fieldname: "deduct_edge_thickness",
+            label: "Deduct edge banding thickness automatically",
+            shortLabel: "Deduct edge banding thickness automatically",
+            fieldtype: "Check",
         }),
     ]);
     // Legacy catalog rows still send Arabic labels. Resolve only known stable IDs.
@@ -211,6 +224,16 @@
                 options: catalogOptions(frm, spec.catalog, values[spec.fieldname]),
             };
         });
+    }
+
+    function groupPlanSettingSpecs(specs) {
+        const tools = [];
+        const plan = [];
+        (specs || []).forEach((spec) => {
+            if (TOOL_SETTING_FIELDS.includes(spec.fieldname)) tools.push(spec);
+            else plan.push(spec);
+        });
+        return { plan, tools };
     }
 
     function approvedPlanName(frm) {
@@ -341,12 +364,28 @@
         return isEditing(frm);
     }
 
+    function applyRecalculateAvailability(frm, control) {
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.canCalculate === "function") {
+            const allowed = controls.canCalculate(frm) === true;
+            control.prop("disabled", !allowed);
+            control.attr("aria-disabled", allowed ? "false" : "true");
+            return;
+        }
+        // The controls owner is absent only in a partial page. An open edit
+        // session must not keep the disabled state captured before it started.
+        if (isEditing(frm)) {
+            control.prop("disabled", false);
+            control.attr("aria-disabled", "false");
+        }
+    }
+
     function syncPhaseLocks(frm) {
         const wrapper = actionSurface(frm);
         if (!wrapper) return;
         const phase = planPhase(frm);
         const locked = phase === "starting" || phase === "saving" || phase === "cancelling";
-        wrapper.find("[data-almdina-plan-setting], .dco-recalculate-plan").each((_, element) => {
+        wrapper.find("[data-almdina-plan-setting]").each((_, element) => {
             const control = $(element);
             if (locked) {
                 if (control.attr(PHASE_DISABLED_ATTR) === undefined) {
@@ -360,6 +399,15 @@
                     .attr("aria-disabled", original === "1" ? "true" : "false")
                     .removeAttr(PHASE_DISABLED_ATTR);
             }
+        });
+        wrapper.find(".dco-recalculate-plan").each((_, element) => {
+            const control = $(element);
+            if (locked) {
+                control.prop("disabled", true).attr("aria-disabled", "true");
+                return;
+            }
+            control.removeAttr(PHASE_DISABLED_ATTR);
+            applyRecalculateAvailability(frm, control);
         });
     }
 
@@ -472,6 +520,15 @@
                 height: 16px;
                 display: block;
             }
+            .dco-plan-settings-editor__groups {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+                flex: 1 1 auto;
+                min-width: 0;
+                width: 100%;
+            }
             .dco-plan-settings-editor__grid {
                 display: flex;
                 flex-wrap: wrap;
@@ -481,7 +538,25 @@
                 min-width: 0;
                 padding: 0;
             }
-            .dco-plan-settings-editor__field {
+            .dco-plan-settings-editor__tool-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px;
+                width: 100%;
+            }
+                .dco-plan-settings-editor__field--check label {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    min-height: 28px;
+                }
+                .dco-plan-settings-editor__field--check input {
+                    width: 16px;
+                    height: 16px;
+                    margin: 0;
+                }
+                .dco-plan-settings-editor__field {
                 display: inline-flex;
                 align-items: center;
                 gap: 4px;
@@ -625,7 +700,6 @@
             .dco-plan-settings-editor__recalc-btn.btn:disabled {
                 opacity: 0.55;
             }
-            [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) .dco-plan-actions-shell,
             [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) > .dco-plan-stale-banner {
                 display: none !important;
             }
@@ -660,10 +734,30 @@
         }).join("");
     }
 
+    function edgeDeductionOff(value) {
+        return value === false || value === 0 || value === "0" || String(value || "").toLowerCase() === "false";
+    }
+
     function fieldMarkup(spec, value) {
         const fieldname = escapeHtml(spec.fieldname);
         const label = escapeHtml(translate(spec.shortLabel || spec.label));
         const compact = spec.compact ? ' data-tool-diameter="1"' : "";
+        if (spec.fieldtype === "Check") {
+            const checked = !edgeDeductionOff(value);
+            return `
+                <div class="dco-plan-settings-editor__field dco-plan-settings-editor__field--check" data-fieldname="${fieldname}">
+                    <label for="dco-plan-setting-${fieldname}">
+                        <input
+                            id="dco-plan-setting-${fieldname}"
+                            type="checkbox"
+                            ${checked ? "checked" : ""}
+                            data-almdina-plan-setting="${fieldname}"
+                        >
+                        <span>${label}</span>
+                    </label>
+                </div>
+            `;
+        }
         if (spec.fieldtype === "Select") {
             return `
                 <div class="dco-plan-settings-editor__field" data-fieldname="${fieldname}">
@@ -716,27 +810,49 @@
         const spec = planSettingSpecs(frm, state && state.draft || {})
             .find((entry) => entry.fieldname === fieldname);
         if (!spec) return;
-        const raw = input.val();
-        const value = spec.fieldtype === "Float"
+        const raw = spec.fieldtype === "Check" ? input.prop("checked") : input.val();
+        const value = spec.fieldtype === "Check"
+            ? (raw ? 1 : 0)
+            : spec.fieldtype === "Float"
             ? (String(raw ?? "").trim() === "" ? null : Number(raw))
             : String(raw ?? "");
         store.patchDraft({ [fieldname]: value });
     }
 
-    function preserveRecalculateButton(host) {
-        const button = host.find(".dco-recalculate-plan").first();
-        if (!button.length) return;
-        const shell = host.children(".dco-plan-actions-shell").first();
-        const target = shell.find(".dco-plan-actions").first();
-        if (target.length) {
-            target.append(button);
-            return;
+    function editorStructureKey(frm, specs) {
+        const fields = (specs || []).map((spec) => {
+            const options = (spec.options || [])
+                .map((option) => `${option.value}${option.available === false ? "!" : ""}`)
+                .join(",");
+            return `${spec.fieldname}:${spec.fieldtype}:${options}`;
+        }).join("|");
+        return `${frm && frm.doc && frm.doc.name || ""}::${uiDirection()}::${fields}`;
+    }
+
+    function rememberEditorFocus() {
+        const active = typeof document !== "undefined" ? document.activeElement : null;
+        if (!active || !active.id || !String(active.id).startsWith("dco-plan-setting-")) return null;
+        return {
+            id: active.id,
+            start: active.selectionStart,
+            end: active.selectionEnd,
+        };
+    }
+
+    function restoreEditorFocus(host, memory) {
+        if (!host || !memory || !memory.id) return;
+        const control = host.find(`[id="${memory.id}"]`).first();
+        if (!control.length) return;
+        const node = control.get(0);
+        if (node && typeof node.focus === "function") node.focus();
+        if (
+            node
+            && memory.start != null
+            && memory.end != null
+            && typeof node.setSelectionRange === "function"
+        ) {
+            node.setSelectionRange(memory.start, memory.end);
         }
-        if (shell.length) {
-            shell.append(button);
-            return;
-        }
-        host.append(button);
     }
 
     function mountDraftControls(frm) {
@@ -746,21 +862,36 @@
         if (!store || !state || !state.editing || !host) return false;
 
         installEditorStyles();
-        preserveRecalculateButton(host);
-        host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
-        const fields = specs
-            .map((spec) => fieldMarkup(spec, (state.draft || {})[spec.fieldname]))
+        const structureKey = editorStructureKey(frm, specs);
+        const current = host.children(EDITOR_SELECTOR).first();
+        if (current.length && current.attr("data-editor-structure") === structureKey) {
+            markEditorDirty(host, state.dirty);
+            return true;
+        }
+
+        const focusMemory = rememberEditorFocus();
+        host.children(EDITOR_SELECTOR).remove();
+        const groups = groupPlanSettingSpecs(specs);
+        const draft = state.draft || {};
+        const planFields = groups.plan
+            .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
+            .join("");
+        const toolFields = groups.tools
+            .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
             .join("");
         host.prepend(`
-            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
+            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" data-editor-structure="${escapeHtml(structureKey)}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
                 <div class="dco-plan-settings-editor__sheet">
                     <div class="dco-plan-settings-editor__settings-row">
                         <div class="dco-plan-settings-editor__lead">
                             <span class="dco-plan-settings-editor__icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h3.2M8.2 4.5h5.3M2.5 11.5h5.3M10.3 11.5h3.2"/><circle cx="7" cy="4.5" r="1.6"/><circle cx="9.2" cy="11.5" r="1.6"/></svg></span>
                             <span class="dco-plan-settings-editor__lead-text">${escapeHtml(translate("Cutting settings"))}</span>
                         </div>
-                        <div class="dco-plan-settings-editor__grid">${fields}</div>
+                        <div class="dco-plan-settings-editor__groups">
+                            <div class="dco-plan-settings-editor__grid" data-settings-group="plan">${planFields}</div>
+                            <div class="dco-plan-settings-editor__grid dco-plan-settings-editor__tool-row" data-settings-group="tools">${toolFields}</div>
+                        </div>
                     </div>
                     <div class="dco-plan-settings-editor__footer">
                         <div class="dco-plan-settings-editor__action-bar is-edit-layout">
@@ -780,6 +911,7 @@
                 const current = store.snapshot();
                 markEditorDirty(host, Boolean(current && current.dirty));
             });
+        restoreEditorFocus(host, focusMemory);
         return true;
     }
 
@@ -789,18 +921,9 @@
         const editor = host.children(EDITOR_SELECTOR).first();
         if (!editor.length) return;
 
-        const recalcSlot = editor.find('[data-role="recalc"]').first();
-        const button = host.find(".dco-recalculate-plan").first();
-        if (button.length && recalcSlot.length && !button.parent().is(recalcSlot)) {
-            recalcSlot.append(button);
-            button.addClass("dco-plan-settings-editor__recalc-btn");
-        }
-
         const controls = window.AlmdinaPlanControlsUX;
-        if (controls && typeof controls.refresh === "function") {
-            controls.refresh(frm);
-        } else if (button.length && typeof button.prop === "function") {
-            button.prop("disabled", false);
+        if (controls && typeof controls.syncRecalculateButton === "function") {
+            controls.syncRecalculateButton(frm);
         }
 
         const fastSave = window.AlmdinaFastSaveUX;
@@ -830,6 +953,7 @@
         const values = draft || {};
         for (const spec of planSettingSpecs(frm, values)) {
             const value = values[spec.fieldname];
+            if (spec.fieldtype === "Check") continue;
             if (spec.fieldtype === "Select") {
                 const normalized = String(value ?? "").trim();
                 const selected = (spec.options || []).find((option) => option.value === normalized);
@@ -956,6 +1080,7 @@
                 frm,
                 specs.find((spec) => {
                     const value = (state.draft || {})[spec.fieldname];
+                    if (spec.fieldtype === "Check") return false;
                     if (spec.fieldtype === "Select") {
                         const selected = (spec.options || []).find(
                             (option) => option.value === String(value ?? "").trim()
@@ -1027,9 +1152,9 @@
         if (isEditing(frm)) {
             refreshFieldAccess(frm);
             mountDraftControls(frm);
+            syncPhaseLocks(frm);
             syncEditorChrome(frm);
             setPlanActionsSuspended(frm, true);
-            syncPhaseLocks(frm);
             return;
         }
         syncPhaseLocks(frm);
@@ -1098,7 +1223,9 @@
     window.AlmdinaPlanEditSessionUX = Object.freeze({
         PLAN_SETTING_FIELDS,
         PLAN_SETTING_SPECS,
+        TOOL_SETTING_FIELDS,
         planSettingSpecs,
+        groupPlanSettingSpecs,
         canEditPlanSettings,
         isEditing,
         planSettingsMayWrite,

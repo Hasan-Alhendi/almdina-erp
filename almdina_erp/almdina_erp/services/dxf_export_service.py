@@ -9,6 +9,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfGeometrySnapshotError,
     DxfTopologyError,
@@ -799,6 +802,12 @@ def _assert_layer_tool_diameters(snapshot: dict[str, Any]) -> None:
     frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
 
 
+def _export_deduct_edge_thickness(value: object) -> int:
+    """Return the plan's stored deduction choice. Missing stays on; explicit 0 stays off."""
+
+    return 1 if coerce_deduct_edge_thickness(value) else 0
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -843,6 +852,9 @@ def get_validated_dxf_plan(
             _assert_layer_tool_diameters(snapshot)
         return {
             "plan": snapshot,
+            "deduct_edge_thickness": _export_deduct_edge_thickness(
+                getattr(plan, "deduct_edge_thickness", None)
+            ),
             "manifest": _plan_manifest(order, plan),
             "cutting_plan": str(plan.name or ""),
             "plan_revision": cint(plan.revision),
@@ -872,6 +884,9 @@ def get_validated_dxf_plan(
     )
     return {
         "plan": snapshot,
+        "deduct_edge_thickness": _export_deduct_edge_thickness(
+            payload.get("deduct_edge_thickness")
+        ),
         "manifest": _draft_manifest(editable, snapshot),
         # Unsaved / draft desk export is for designer editing, not CNC.
         "include_saw_centers": False,

@@ -35,6 +35,7 @@ PLAN_SETTING_FIELDS = (
     "kerf_mm",
     "trim_margin_mm",
     "optimization_time_limit_sec",
+    "deduct_edge_thickness",
 )
 _PLAN_META_FIELDS = {
     "packing_mode": "optimization_mode",
@@ -42,6 +43,7 @@ _PLAN_META_FIELDS = {
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 
 
@@ -168,6 +170,10 @@ def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
                 "trim_margin_mm",
                 defaults.preferred_trim_mm,
             ),
+            deduct_edge_thickness=provided.get(
+                "deduct_edge_thickness",
+                defaults.deduct_edge_thickness,
+            ),
         )
     except PlanSettingsValidationError:
         frappe.throw(
@@ -182,6 +188,7 @@ def normalize_plan_settings_updates(values: dict[str, Any]) -> dict[str, Any]:
         "optimization_time_limit_sec": normalized.optimization_time_limit_sec,
         "kerf_mm": normalized.kerf_mm,
         "trim_margin_mm": normalized.preferred_trim_mm,
+        "deduct_edge_thickness": 1 if normalized.deduct_edge_thickness else 0,
     }
     canonical = {fieldname: canonical_values[fieldname] for fieldname in provided}
     canonical.update(diameter_updates)
@@ -196,6 +203,7 @@ def save_plan_settings(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
     liner_tool_diameter_mm: float | None = None,
     handle_recess_tool_diameter_mm: float | None = None,
     rear_groove_tool_diameter_mm: float | None = None,
@@ -227,6 +235,7 @@ def save_plan_settings(
             "kerf_mm": kerf_mm,
             "trim_margin_mm": trim_margin_mm,
             "optimization_time_limit_sec": optimization_time_limit_sec,
+            "deduct_edge_thickness": deduct_edge_thickness,
             "liner_tool_diameter_mm": liner_tool_diameter_mm,
             "handle_recess_tool_diameter_mm": handle_recess_tool_diameter_mm,
             "rear_groove_tool_diameter_mm": rear_groove_tool_diameter_mm,

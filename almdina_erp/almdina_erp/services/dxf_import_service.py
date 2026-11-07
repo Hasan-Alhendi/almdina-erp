@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from copy import deepcopy
 from dataclasses import replace
@@ -107,6 +108,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
+    consistent_directed_rings,
     is_axis_aligned_rectangle,
     polygon_area,
     polygon_distance,
@@ -1444,6 +1446,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "edge_width_bottom": cint(getattr(row, "edge_width_bottom", 0)),
                     "edge_long_thickness_mm": _num(getattr(row, "edge_long_thickness_mm", 0)),
                     "edge_width_thickness_mm": _num(getattr(row, "edge_width_thickness_mm", 0)),
+                    "deduct_edge_thickness": bool(getattr(row, "deduct_edge_thickness", True)),
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
@@ -1481,6 +1484,7 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
                 piece, "edge_width_bottom", "edge_width_thickness_mm"
             ),
             width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
+            deduct_edge_thickness=bool(piece.get("deduct_edge_thickness", True)),
             clipped_cut_width_mm=_num(piece.get("clipped_corner_width_cm")) * 10.0,
             clipped_cut_length_mm=_num(piece.get("clipped_corner_length_cm")) * 10.0,
             clipped_corner_position=str(piece.get("clipped_corner_position") or ""),
@@ -1710,6 +1714,7 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
             tolerance=GEOMETRY_TOLERANCE_MM,
             finished_width_mm=spec.get("finished_width_mm"),
             finished_length_mm=spec.get("finished_length_mm"),
+            deduct_edge_thickness=bool(spec.get("deduct_edge_thickness", True)),
         )
         if decision.ok:
             continue
@@ -1757,6 +1762,7 @@ def _apply_expected_identity(
         "allow_rotation": bool(candidate.get("allow_rotation")),
         "finished_width_mm": _num(candidate.get("finished_width_cm")) * 10.0,
         "finished_length_mm": _num(candidate.get("finished_length_cm")) * 10.0,
+        "deduct_edge_thickness": bool(candidate.get("deduct_edge_thickness", True)),
     }
     piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
     piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
@@ -2339,6 +2345,47 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
         ) from exc
 
 
+def _same_undirected_ring(
+    left: Sequence[tuple[float, float]],
+    right: Sequence[tuple[float, float]],
+    tolerance: float,
+) -> bool:
+    def edges(points: Sequence[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+        ring = list(points)
+        if len(ring) > 1 and math.dist(ring[0], ring[-1]) <= tolerance:
+            ring = ring[:-1]
+        return [
+            (ring[index], ring[(index + 1) % len(ring)])
+            for index in range(len(ring))
+        ]
+
+    left_edges = edges(left)
+    right_edges = edges(right)
+    if len(left_edges) != len(right_edges) or len(left_edges) < 3:
+        return False
+    unused = set(range(len(right_edges)))
+    for start, end in left_edges:
+        match = next(
+            (
+                index
+                for index in unused
+                if (
+                    math.dist(start, right_edges[index][0]) <= tolerance
+                    and math.dist(end, right_edges[index][1]) <= tolerance
+                )
+                or (
+                    math.dist(start, right_edges[index][1]) <= tolerance
+                    and math.dist(end, right_edges[index][0]) <= tolerance
+                )
+            ),
+            None,
+        )
+        if match is None:
+            return False
+        unused.remove(match)
+    return not unused
+
+
 def _extract_pieces(
     topology: ResolvedTopology,
     *,
@@ -2346,6 +2393,7 @@ def _extract_pieces(
     trim_mm: float,
     usable_width_cm: float,
     usable_length_cm: float,
+    directed_rings_mm: Sequence[Sequence[tuple[float, float]]] | None = None,
 ) -> list[dict[str, Any]]:
     issues: list[DxfValidationIssue] = []
     pieces: list[dict[str, Any]] = []
@@ -2405,6 +2453,16 @@ def _extract_pieces(
             polygon_area(hole) for hole in holes_mm
         )
         piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
+        for ring in directed_rings_mm or ():
+            ring_points = [(float(point[0]), float(point[1])) for point in ring]
+            if not _same_undirected_ring(points_mm, ring_points, CONNECTIVITY_TOLERANCE_MM):
+                continue
+            piece["_directed_outline_cm"] = _to_plan_points(
+                ring_points,
+                sheet=target_sheet,
+                trim_mm=trim_mm,
+            )
+            break
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
     if issues:
@@ -2895,6 +2953,14 @@ def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece["geometry"] = serialize_geometry_from_cm(
         _piece_material_geometry(piece, units="cm")
     )
+    directed = piece.get("_directed_outline_cm")
+    if isinstance(directed, list) and len(directed) >= 3:
+        # Import-only orientation evidence. Strict validation removes it before
+        # the uploaded snapshot can be stored.
+        public_piece["directed_contour_mm"] = [
+            [float(point[0]) * 10.0, float(point[1]) * 10.0]
+            for point in directed
+        ]
     return public_piece
 
 
@@ -3277,6 +3343,7 @@ def parse_production_dxf(
     if missing_issues:
         raise DxfImportError(issues=missing_issues)
 
+    directed_rings = consistent_directed_rings(cut_segments, CONNECTIVITY_TOLERANCE_MM)
     sheet_contours = assemble_contours(sheet_segments, CONNECTIVITY_TOLERANCE_MM)
     sheets = _validate_sheet_contours(
         sheet_contours,
@@ -3291,6 +3358,7 @@ def parse_production_dxf(
         trim_mm=trim_mm,
         usable_width_cm=usable_board_width_cm,
         usable_length_cm=usable_board_length_cm,
+        directed_rings_mm=directed_rings,
     )
     offcut_polygons = _closed_polygons_from_segments(offcut_segments)
     offcut_indexes = _offcut_piece_indexes(pieces, offcut_polygons)

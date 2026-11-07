@@ -53,9 +53,16 @@
         return call(READ_METHOD, { order_name: orderName });
     }
 
+    function edgeDeductionArg(values) {
+        if (!Object.prototype.hasOwnProperty.call(values, "deduct_edge_thickness")) return undefined;
+        const value = values.deduct_edge_thickness;
+        if (value === false || value === 0 || value === "0" || String(value).toLowerCase() === "false") return 0;
+        return 1;
+    }
+
     function settingsArgs(orderName, settings) {
         const values = settings || {};
-        return {
+        const args = {
             order_name: orderName,
             packing_mode: values.packing_mode,
             cutting_machine_type: values.cutting_machine_type,
@@ -63,6 +70,9 @@
             trim_margin_mm: values.trim_margin_mm,
             optimization_time_limit_sec: values.optimization_time_limit_sec,
         };
+        const deduct = edgeDeductionArg(values);
+        if (deduct !== undefined) args.deduct_edge_thickness = deduct;
+        return args;
     }
 
     function saveSettings(orderName, settings) {

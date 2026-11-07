@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Mapping, Sequence
 
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     bbox,
     is_axis_aligned_rectangle,
@@ -121,10 +124,18 @@ def cut_insets_mm(
     long_right_mm: object = 0,
     width_bottom_mm: object = 0,
     width_top_mm: object = 0,
+    deduct_edge_thickness: bool = True,
 ) -> dict[str, Decimal]:
-    """Inset of the opening from each side of the cut outline."""
+    """Inset of the opening from each side of the cut outline.
+
+    The margin is measured from the finished edge. While the blank is already
+    reduced by the band, the cut inset is margin minus that band. When the
+    band is not removed from the blank, the inset is the full margin.
+    """
 
     margin = _decimal(margin_mm)
+    if not deduct_edge_thickness:
+        long_left_mm = long_right_mm = width_bottom_mm = width_top_mm = 0
     return {
         "long_left": margin - _decimal(long_left_mm),
         "long_right": margin - _decimal(long_right_mm),
@@ -152,6 +163,7 @@ def glass_hole_ring_mm(
     width_bottom_mm: object = 0,
     width_top_mm: object = 0,
     rotated: bool = False,
+    deduct_edge_thickness: bool = True,
 ) -> tuple[tuple[float, float], ...] | None:
     """Piece-local opening. Y grows down from the top of the placed rectangle.
 
@@ -165,6 +177,7 @@ def glass_hole_ring_mm(
         long_right_mm=long_right_mm,
         width_bottom_mm=width_bottom_mm,
         width_top_mm=width_top_mm,
+        deduct_edge_thickness=deduct_edge_thickness,
     )
     if any(value <= 0 for value in insets.values()):
         return None
@@ -202,6 +215,9 @@ def placed_glass_hole_mm(piece: Mapping[str, object], *, rotated: bool) -> list[
         width_bottom_mm=width_thickness if piece.get("edge_width_bottom") else 0,
         width_top_mm=width_thickness if piece.get("edge_width_top") else 0,
         rotated=rotated,
+        deduct_edge_thickness=coerce_deduct_edge_thickness(
+            piece.get("deduct_edge_thickness", True)
+        ),
     )
     if ring is None:
         return None
@@ -378,6 +394,7 @@ def validate_glass_dxf_opening(
     tolerance: float,
     finished_width_mm: object = None,
     finished_length_mm: object = None,
+    deduct_edge_thickness: bool = True,
 ) -> GlassOpeningDecision:
     hole_list = list(holes or ())
     order_margin = _known_decimal(margin_mm)
@@ -465,6 +482,7 @@ def validate_glass_dxf_opening(
         long_right_mm=bands["long_right"],
         width_bottom_mm=bands["width_bottom"],
         width_top_mm=bands["width_top"],
+        deduct_edge_thickness=deduct_edge_thickness,
     )
     mapping_names = ("orientation_cw", "orientation_ccw") if rotated else ("orientation_0", "orientation_180")
     mappings = _ROTATED if rotated else _UNROTATED

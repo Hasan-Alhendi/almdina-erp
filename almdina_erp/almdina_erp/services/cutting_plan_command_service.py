@@ -26,6 +26,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     preserve_offcut_classification,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
     canonical_default_plan_settings,
@@ -69,10 +72,12 @@ _DCO_TO_PLAN_FIELDS = {
     "optimization_time_limit_sec": "optimization_time_limit_sec",
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 _NUMERIC_SETTING_FIELDS = frozenset(
     {"optimization_time_limit_sec", "kerf_mm", "trim_margin_mm"}
 )
+_CHECK_SETTING_FIELDS = frozenset({"deduct_edge_thickness"})
 _DXF_COMMAND_CAPABILITIES = frozenset({Capability.UPLOAD_DXF, Capability.REPLACE_DXF})
 
 
@@ -99,6 +104,7 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
             optimization_time_limit_sec=value("optimization_time_limit_sec"),
             kerf_mm=value("kerf_mm"),
             preferred_trim_mm=value("trim_margin_mm"),
+            deduct_edge_thickness=value("deduct_edge_thickness"),
         )
     except PlanSettingsValidationError:
         _settings_validation_error()
@@ -106,6 +112,8 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
+    if fieldname in _CHECK_SETTING_FIELDS:
+        return coerce_deduct_edge_thickness(left) == coerce_deduct_edge_thickness(right)
     if fieldname in _NUMERIC_SETTING_FIELDS:
         return abs(flt(left) - flt(right)) < 0.000001
     return str(left or "").strip() == str(right or "").strip()
@@ -131,6 +139,7 @@ def _requested_updates(
     kerf_mm: float | None,
     trim_margin_mm: float | None,
     optimization_time_limit_sec: float | None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     provided = {
         fieldname: value
@@ -140,6 +149,7 @@ def _requested_updates(
             "kerf_mm": kerf_mm,
             "trim_margin_mm": trim_margin_mm,
             "optimization_time_limit_sec": optimization_time_limit_sec,
+            "deduct_edge_thickness": deduct_edge_thickness,
         }.items()
         if value is not None
     }
@@ -169,6 +179,10 @@ def _requested_updates(
                 "trim_margin_mm",
                 defaults.preferred_trim_mm,
             ),
+            deduct_edge_thickness=provided.get(
+                "deduct_edge_thickness",
+                defaults.deduct_edge_thickness,
+            ),
         )
     except PlanSettingsValidationError:
         _settings_validation_error()
@@ -180,6 +194,7 @@ def _requested_updates(
         "kerf_mm": normalized.kerf_mm,
         "trim_margin_mm": normalized.preferred_trim_mm,
         "optimization_time_limit_sec": normalized.optimization_time_limit_sec,
+        "deduct_edge_thickness": 1 if normalized.deduct_edge_thickness else 0,
     }
     return {fieldname: canonical[fieldname] for fieldname in provided}
 
@@ -203,6 +218,19 @@ def _assert_recalculation_state(order: Any) -> None:
         return
 
     assert_order_editable(order)
+
+
+def _sync_saved_cut_policy(order: Any, value: Any) -> None:
+    """Write derived cut sizes after the manufacturing plan has stored the policy."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+        sync_order_cut_dimensions,
+    )
+
+    sync_order_cut_dimensions(
+        order,
+        deduct_edge_thickness=coerce_deduct_edge_thickness(value),
+    )
 
 
 def recalculation_is_allowed(order: Any) -> bool:
@@ -389,6 +417,9 @@ def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
         "kerf_mm": plan.kerf_mm,
         "trim_margin_mm": plan.trim_margin_mm,
         "optimization_time_limit_sec": plan.optimization_time_limit_sec,
+        "deduct_edge_thickness": 1 if coerce_deduct_edge_thickness(
+            getattr(plan, "deduct_edge_thickness", None)
+        ) else 0,
         "plan_needs_recalculation": int(plan.plan_needs_recalculation or 0),
         "cutting_plan_json": sanitize_plan_snapshot_json(snapshot_json),
         "system_plan_json": sanitize_plan_snapshot_json(snapshot_json),
@@ -641,6 +672,8 @@ def save_system_plan_settings(
             repository,
         )
         plan = repository.get_document(plan.name)
+        if "deduct_edge_thickness" in changed:
+            _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
     # Layer diameters do not move doors. Persist them without marking the
     # nesting plan stale and without rewriting an approved snapshot.
     diameter_changed = _apply_tool_diameters(plan, updates)
@@ -688,6 +721,8 @@ def recalculate_system_plan(
         )
         plan = repository.get_document(plan.name)
         initialize_draft_plan_cost_snapshot(order, plan)
+        if "deduct_edge_thickness" in changed:
+            _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
 
     backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
@@ -720,6 +755,7 @@ def recalculate_order_plan(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Canonical plan-owned replacement for the legacy DCO recalculation save."""
 
@@ -748,6 +784,7 @@ def recalculate_order_plan(
             kerf_mm=kerf_mm,
             trim_margin_mm=trim_margin_mm,
             optimization_time_limit_sec=optimization_time_limit_sec,
+            deduct_edge_thickness=deduct_edge_thickness,
         ),
     )
     order.add_comment(

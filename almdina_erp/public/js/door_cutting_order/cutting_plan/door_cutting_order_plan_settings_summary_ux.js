@@ -5,8 +5,18 @@
 
     const SUMMARY_CLASS = "dco-plan-settings-readonly";
     const OWNER_ATTR = "data-almdina-plan-settings-summary-owner";
-    const STYLE_ID = "dco-plan-settings-summary-owner-css-v3";
-    const LEGACY_STYLE_IDS = ["dco-plan-settings-summary-owner-css", "dco-plan-settings-summary-owner-css-v2"];
+    const STYLE_ID = "dco-plan-settings-summary-owner-css-v4";
+    const LEGACY_STYLE_IDS = [
+        "dco-plan-settings-summary-owner-css",
+        "dco-plan-settings-summary-owner-css-v2",
+        "dco-plan-settings-summary-owner-css-v3",
+    ];
+    const TOOL_SETTING_FIELDS = Object.freeze([
+        "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
+    ]);
     const TIME_LIMIT_HELP = "The maximum time the optimizer may spend searching for a better layout. The search may finish sooner. Increasing it can improve some complex plans, but it makes the preview slower.";
     const FALLBACK_SPECS = Object.freeze([
         Object.freeze({ fieldname: "kerf_mm", shortLabel: "Blade", fieldtype: "Float", suffix: "mm" }),
@@ -95,6 +105,10 @@
                 settings[fieldname] = systemSettings[fieldname];
             }
         });
+        const operational = activeSettings(frm);
+        if (operational && Object.prototype.hasOwnProperty.call(operational, "deduct_edge_thickness")) {
+            settings.deduct_edge_thickness = operational.deduct_edge_thickness;
+        }
         return settings;
     }
 
@@ -118,8 +132,15 @@
         return FALLBACK_SPECS;
     }
 
+    function edgeDeductionOff(value) {
+        return value === false || value === 0 || value === "0" || String(value || "").toLowerCase() === "false";
+    }
+
     function displayValue(spec, settings) {
         const raw = settings ? settings[spec.fieldname] : null;
+        if (spec.fieldtype === "Check") {
+            return translate(edgeDeductionOff(raw) ? "Disabled" : "Enabled");
+        }
         if (spec.fieldtype === "Select") {
             const normalized = String(raw ?? "").trim();
             const option = (spec.options || []).find((entry) => String(entry.value) === normalized);
@@ -173,6 +194,14 @@
                 background:var(--alm-card,#fff) !important;
                 box-shadow:none !important;
             }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__groups {
+                display:flex !important;
+                flex-direction:column !important;
+                align-items:stretch !important;
+                gap:6px !important;
+                width:100% !important;
+                min-width:0 !important;
+            }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__strip {
                 display:flex !important;
                 flex-wrap:wrap !important;
@@ -184,6 +213,11 @@
                 font-size:11px;
                 line-height:1.2;
                 color:var(--text-color,#1f272e);
+            }
+            .${SUMMARY_CLASS} .dco-plan-settings-readonly__tool-row {
+                display:flex !important;
+                flex-wrap:wrap !important;
+                width:100% !important;
             }
             .${SUMMARY_CLASS} .dco-plan-settings-readonly__lead {
                 display:none !important;
@@ -289,8 +323,22 @@
         if (summary) summary.remove();
     }
 
-    function summaryMarkup(frm, settings) {
-        const fields = settingSpecs(frm, settings).map((spec) => {
+    function groupSettingSpecs(specs) {
+        const editor = window.AlmdinaPlanEditSessionUX;
+        if (editor && typeof editor.groupPlanSettingSpecs === "function") {
+            return editor.groupPlanSettingSpecs(specs);
+        }
+        const tools = [];
+        const plan = [];
+        (specs || []).forEach((spec) => {
+            if (TOOL_SETTING_FIELDS.includes(spec.fieldname)) tools.push(spec);
+            else plan.push(spec);
+        });
+        return { plan, tools };
+    }
+
+    function summaryFields(specs, settings) {
+        return specs.map((spec) => {
             const label = frappe.utils.escape_html(translate(spec.shortLabel || spec.label));
             const value = frappe.utils.escape_html(displayValue(spec, settings));
             const helpText = spec.fieldname === "optimization_time_limit_sec" ? TIME_LIMIT_HELP : spec.help;
@@ -323,9 +371,18 @@
                 </div>
             `;
         }).join("");
+    }
+
+    function summaryMarkup(frm, settings) {
+        const groups = groupSettingSpecs(settingSpecs(frm, settings));
         return `
-            <div class="dco-plan-settings-readonly__strip" role="group" aria-label="${frappe.utils.escape_html(translate("Plan settings"))}">
-                ${fields}
+            <div class="dco-plan-settings-readonly__groups">
+                <div class="dco-plan-settings-readonly__strip" data-settings-group="plan" role="group" aria-label="${frappe.utils.escape_html(translate("Plan settings"))}">
+                    ${summaryFields(groups.plan, settings)}
+                </div>
+                <div class="dco-plan-settings-readonly__strip dco-plan-settings-readonly__tool-row" data-settings-group="tools" role="group" aria-label="${frappe.utils.escape_html(translate("Tool diameters"))}">
+                    ${summaryFields(groups.tools, settings)}
+                </div>
             </div>
         `;
     }

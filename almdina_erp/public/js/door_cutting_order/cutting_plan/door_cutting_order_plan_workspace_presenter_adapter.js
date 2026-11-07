@@ -128,10 +128,13 @@
 
     function activeSettings(frm) {
         const payload = data(frm);
-        const editable = payload && payload.editable_settings;
-        if (editable) return { ...editable };
-        const row = activeRow(frm);
-        return row && row.settings ? { ...row.settings } : null;
+        const operational = payload && (payload.calculation_settings || payload.editable_settings);
+        if (operational) return { ...operational };
+        const owner = stateOwner();
+        const system = owner && typeof owner.planForTab === "function"
+            ? owner.planForTab(frm, "System")
+            : null;
+        return system && system.settings ? { ...system.settings } : null;
     }
 
     function legacySummaryProjection(row) {

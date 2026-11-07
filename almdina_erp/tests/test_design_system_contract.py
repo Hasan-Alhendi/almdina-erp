@@ -95,6 +95,7 @@ DCO_TAB_EDIT = ROOT / "public" / "js" / "door_cutting_order" / "core" / "door_cu
 DCO_MEASUREMENT_ACTIONS = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_measurement_actions_ux.js"
 DCO_BULK_ROWS = ROOT / "public" / "js" / "door_cutting_order" / "order_entry" / "measurements" / "door_cutting_order_bulk_rows_ux.js"
 DCO_PLAN_UX = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_ux.js"
+DCO_PLAN_CONTROLS = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_controls_ux.js"
 DCO_DRAWING_PLAN = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_drawing_plan_ux.js"
 DCO_PLAN_CONTEXT = ROOT / "public" / "js" / "door_cutting_order" / "cutting_plan" / "door_cutting_order_plan_context_actions_ux.js"
 DCO_FINANCIAL_DOCS = ROOT / "public" / "js" / "door_cutting_order" / "costing" / "door_cutting_order_financial_documents_ux.js"
@@ -131,6 +132,7 @@ MIGRATED_SURFACES = (
     DCO_MEASUREMENT_ACTIONS,
     DCO_BULK_ROWS,
     DCO_PLAN_UX,
+    DCO_PLAN_CONTROLS,
     DCO_DRAWING_PLAN,
     DCO_PLAN_CONTEXT,
     DCO_FINANCIAL_DOCS,
@@ -839,7 +841,7 @@ class TestDesignSystemContract(unittest.TestCase):
         self.assertNotIn('class="btn btn-primary btn-sm dco-add-row"', self.dco_bulk_rows)
 
         self.assertIn("AlmdinaUi.button", self.dco_plan_ux)
-        self.assertIn("almdina-ui dco-plan-actions-shell", self.dco_plan_ux)
+        self.assertNotIn("Cutting plan commands", self.dco_plan_ux)
         self.assertNotIn('class="btn btn-primary btn-sm dco-recalculate-plan"', self.dco_plan_ux)
 
         self.assertIn("AlmdinaUi.button", self.dco_recovery)

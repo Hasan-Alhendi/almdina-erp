@@ -238,9 +238,6 @@
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor__action-bar {
                 padding-inline: var(--dco-plan-card-inset-inline) !important;
             }
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"]:has(.dco-plan-settings-editor) .dco-plan-actions-shell {
-                display: none !important;
-            }
             .${ROOT_CLASS} .dco-plan-settings-readonly[data-almdina-plan-settings-summary-owner="stable"] .dco-plan-settings-readonly__strip,
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly .dco-plan-settings-readonly__strip {
                 display: flex !important;
@@ -355,10 +352,6 @@
                 font-size: 10.5px !important;
                 line-height: 1.45 !important;
                 align-items: center !important;
-            }
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell {
-                padding-block: 8px 10px !important;
-                padding-inline: 14px !important;
             }
             /* Beat Frappe: body:not(.full-width) .std-form-layout .section-body { max-width: 900px } */
             body:not(.full-width) .${ROOT_CLASS} .std-form-layout .dco-plan-actions-section > .section-head,
@@ -528,10 +521,6 @@
             }
             .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .label{font-size:10.5px !important;font-weight:800 !important;letter-spacing:.01em;}
             .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card .value{font-size:17px !important;line-height:1.4 !important;}
-            .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell{
-                border-radius:var(--dco-workspace-radius) !important;border-color:var(--border-color,#dce3e8) !important;
-                background:var(--card-bg,#fff) !important;box-shadow:var(--dco-workspace-shadow) !important;
-            }
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions > .btn,
             .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-document-actions .btn{
                 transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;
@@ -593,7 +582,6 @@
                 .${ROOT_CLASS} .dco-cost-section{border-radius:14px !important}
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor,
-                .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-head,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body{
                     padding-inline:var(--dco-tab-card-inset-inline, 36px) !important;
@@ -609,7 +597,6 @@
                 .${ROOT_CLASS} [data-fieldname="plan_controls_intro"] .dco-plan-card{min-height:86px;padding:12px 13px}
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-readonly,
                 .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-settings-editor,
-                .${ROOT_CLASS} [data-fieldname="plan_control_actions"] .dco-plan-actions-shell,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-head,
                 .${ROOT_CLASS} .dco-plan-section-card.dco-layout-card > .section-body{
                     padding-inline:var(--dco-tab-card-inset-inline, 32px) !important;
