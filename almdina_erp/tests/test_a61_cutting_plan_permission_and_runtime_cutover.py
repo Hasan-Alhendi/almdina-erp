@@ -32,6 +32,7 @@ def test_plan_owned_capabilities_are_attached_to_cutting_plan() -> None:
         Capability.VIEW_APPROVED_CUTTING_PLAN,
         Capability.RECALCULATE_PLAN,
         Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.USE_BOARD_EDITOR,
         Capability.PRINT_CUTTING_PLAN,
         Capability.APPROVE_DXF,
         Capability.EXPORT_DXF,

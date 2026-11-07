@@ -12,6 +12,7 @@
     const TAB_ROWS = Object.freeze({
         System: "system_draft",
         Custom: "uploaded_draft",
+        BoardEditor: "board_editor_draft",
         Approved: "approved",
     });
 
@@ -140,17 +141,24 @@
     function sourceLabel(tab) {
         if (tab === "Custom") return translate("Uploaded plan");
         if (tab === "Approved") return translate("Approved plan");
+        if (tab === "BoardEditor") return translate("Edited plan");
         return translate("System plan");
     }
 
     function approveLabel(frm, tab) {
         const hasApproved = Boolean(String((workspaceData(frm) || {}).approved_plan || "").trim());
         if (!hasApproved) {
-            return tab === "Custom" ? translate("Approve the uploaded plan") : translate("Approve the system plan");
+            if (tab === "Custom") return translate("Approve the uploaded plan");
+            if (tab === "BoardEditor") return translate("Approve the edited plan");
+            return translate("Approve the system plan");
         }
-        return tab === "Custom"
-            ? translate("Replace the approved plan with the uploaded plan")
-            : translate("Replace the approved plan with the system plan");
+        if (tab === "Custom") {
+            return translate("Replace the approved plan with the uploaded plan");
+        }
+        if (tab === "BoardEditor") {
+            return translate("Replace the approved plan with the edited plan");
+        }
+        return translate("Replace the approved plan with the system plan");
     }
 
     function planMetrics(row) {
@@ -167,14 +175,67 @@
         return !routed || canMutateCurrentStage(frm);
     }
 
-    function canApprove(frm, tab, row) {
+    function hasApproveCapability(frm) {
         const caps = workspaceCapabilities(frm);
+        return Boolean(caps.approve && can(frm, "approve_dxf"));
+    }
+
+    function approveDenialReason(frm, tab, row) {
+        // Authorized operators get an explicit reason. Missing capability stays
+        // silent and follows the same hide/disable policy as System/Uploaded.
+        if (tab === "Approved" || !hasApproveCapability(frm)) return "";
+        if (isEditing(frm)) {
+            return translate("Save or cancel the plan settings edit before approval.");
+        }
+        if (!hasOperationalAccess(frm)) {
+            const context = documentContext();
+            const stageReason = context && typeof context.stageMutationBlockReason === "function"
+                ? context.stageMutationBlockReason(frm)
+                : "";
+            const reason = stageReason
+                || (String((frm.doc && frm.doc.status) || "").trim() === "Delivered"
+                    ? "This delivered order can no longer change cutting plan approval."
+                    : "Approval is unavailable in the current production stage.");
+            return translate(reason);
+        }
+        if (!rowHasPlan(row)) {
+            return tab === "BoardEditor"
+                ? translate("There is no edited board-editor plan ready to approve.")
+                : translate("There is no valid plan to approve in the current state.");
+        }
+        if (String(row.status || "") !== "Draft") {
+            return translate("Only a draft cutting plan can be approved.");
+        }
+        if (row.manufacturing_blocked === true || row.can_approve === false) {
+            const code = String(row.manufacturing_block_reason || "").trim();
+            if (code === "board_editor_plan_not_ready") {
+                return translate(
+                    "This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout."
+                );
+            }
+            return translate("This edited plan cannot be approved or exported for a specific manufacturing reason.");
+        }
+        if (!row.validation || row.validation.status !== "Valid") {
+            return translate("The cutting plan failed geometric validation and cannot be approved.");
+        }
+        if (row.validation.needs_recalculation) {
+            return tab === "BoardEditor"
+                ? translate("The order data changed. Re-apply the board-editor layout before approving the edited plan.")
+                : tab === "Custom"
+                    ? translate("The order data changed. Upload a new DXF that matches the current measurements, then approve the plan.")
+                    : translate("Recalculate the cutting plan and review the new result before approval.");
+        }
+        return "";
+    }
+
+    function canApprove(frm, tab, row) {
+        if (!hasApproveCapability(frm)) return false;
+        if (row && row.can_approve === false) return false;
+        if (row && row.manufacturing_blocked === true) return false;
         return Boolean(
             tab !== "Approved"
             && !isEditing(frm)
             && rowHasPlan(row)
-            && caps.approve
-            && can(frm, "approve_dxf")
             && hasOperationalAccess(frm)
             && String(row.status || "") === "Draft"
             && row.validation
@@ -206,8 +267,93 @@
         );
     }
 
+    function canOpenBoardEditor(frm, row) {
+        const caps = workspaceCapabilities(frm);
+        const tab = activeTab(frm);
+        const tabCapability = tab === "Custom"
+            ? "view_uploaded_cutting_plan"
+            : tab === "Approved"
+                ? "view_approved_cutting_plan"
+                : "view_system_cutting_plan";
+        const tabCapOk = tab === "Custom"
+            ? caps.view_uploaded
+            : tab === "Approved"
+                ? caps.view_approved
+                : caps.view_system;
+        // Board Editor tab opens the selected Board Editor plan identity explicitly.
+        const identityOk = tab === "BoardEditor"
+            ? Boolean(row && String(row.name || "").trim() && rowHasPlan(row) && caps.view_system)
+            : Boolean(
+                row
+                && String(row.name || "").trim()
+                && rowHasPlan(row)
+                && can(frm, tabCapability)
+                && tabCapOk
+            );
+        return Boolean(
+            !isEditing(frm)
+            && identityOk
+            && can(frm, "view_cutting_plan")
+            && can(frm, "use_board_editor")
+        );
+    }
+
+    let openBoardEditorGuardUntil = 0;
+
+    function boardEditorAppPath(orderName, planName, options) {
+        const segments = ["board-editor", String(orderName || "").trim(), String(planName || "").trim()];
+        if (options && options.sourceOnly) segments.push("source");
+        return `/app/${segments.map((part) => encodeURIComponent(part)).join("/")}`;
+    }
+
+    function boardEditorHref(orderName, planName, options) {
+        const path = boardEditorAppPath(orderName, planName, options);
+        if (window.frappe && frappe.urllib && typeof frappe.urllib.get_full_url === "function") {
+            return frappe.urllib.get_full_url(path);
+        }
+        const origin = String((window.location && window.location.origin) || "").replace(/\/$/, "");
+        return origin ? `${origin}${path}` : path;
+    }
+
+    function runOpenBoardEditor(frm, event) {
+        const row = rowForTab(frm);
+        if (!canOpenBoardEditor(frm, row)) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
+        const orderName = String((frm.doc && frm.doc.name) || "").trim();
+        // Prefer the selected row identity. For Edited plans that is the Board
+        // Editor Cutting Plan itself; otherwise the visible source plan.
+        const planName = String((row && row.name) || "").trim();
+        if (!orderName || !planName) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
+        const now = Date.now();
+        if (now < openBoardEditorGuardUntil) {
+            if (event && typeof event.preventDefault === "function") event.preventDefault();
+            return false;
+        }
+        openBoardEditorGuardUntil = now + 500;
+        const href = boardEditorHref(orderName, planName);
+        // Keep the order form tab untouched: never frappe.set_route here.
+        if (event && event.currentTarget && event.currentTarget.tagName === "A") {
+            event.currentTarget.setAttribute("href", href);
+            return true;
+        }
+        if (typeof window.open === "function") {
+            const opened = window.open(href, "_blank", "noopener,noreferrer");
+            if (opened) {
+                try { opened.opener = null; } catch (err) { /* ignore */ }
+            }
+        }
+        return true;
+    }
+
     function canExport(frm, row) {
         const caps = workspaceCapabilities(frm);
+        if (row && row.can_export === false) return false;
+        if (row && row.manufacturing_blocked === true) return false;
         const archiveOnly = isHistoricalRow(frm, row)
             && String((row && row.source_type) || "") === "Uploaded DXF"
             && hasOriginalDxfFile(row)
@@ -315,6 +461,13 @@
                 background:var(--alm-success-soft, #ecfdf3);
                 color:var(--alm-success, #166534);
                 border-color:color-mix(in srgb, var(--alm-success, #166534) 28%, transparent);
+            }
+            .dco-plan-context-chip.is-blocked {
+                max-width:min(100%, 42rem);
+                white-space:normal;
+                background:var(--alm-warning-soft, #fff7ed);
+                color:var(--alm-warning-ink, #9a3412);
+                border-color:color-mix(in srgb, var(--alm-warning-ink, #9a3412) 22%, transparent);
             }
             .dco-plan-context-bar .btn {
                 min-height:34px;
@@ -478,15 +631,41 @@
                     : ""}
             `;
         }
-        if (!rowHasPlan(row)) return "";
         const allowed = canApprove(frm, tab, row);
-        return uiButton({
-            label: approveLabel(frm, tab),
-            variant: "success",
-            size: "btn-sm",
-            className: "dco-plan-context-approve",
-            disabled: !allowed,
-        });
+        if (allowed) {
+            return uiButton({
+                label: approveLabel(frm, tab),
+                variant: "success",
+                size: "btn-sm",
+                className: "dco-plan-context-approve",
+            });
+        }
+        // Capability holders see why approval is closed. Users without approve
+        // capability keep the historical empty/silent surface.
+        if (!hasApproveCapability(frm)) return "";
+        if (!rowHasPlan(row) && tab !== "BoardEditor") return "";
+        const reason = approveDenialReason(frm, tab, row);
+        if (!reason) {
+            return uiButton({
+                label: approveLabel(frm, tab),
+                variant: "success",
+                size: "btn-sm",
+                className: "dco-plan-context-approve",
+                disabled: true,
+            });
+        }
+        return `
+            <span class="dco-plan-context-chip is-blocked" role="status">${esc(reason)}</span>
+            ${rowHasPlan(row)
+                ? uiButton({
+                    label: approveLabel(frm, tab),
+                    variant: "success",
+                    size: "btn-sm",
+                    className: "dco-plan-context-approve",
+                    disabled: true,
+                })
+                : ""}
+        `;
     }
 
     function hasOriginalDxfFile(row) {
@@ -526,16 +705,22 @@
 
     function toolsHtml(frm, row) {
         const tab = activeTab(frm);
+        const orderName = String((frm.doc && frm.doc.name) || "").trim();
+        const planName = String((row && row.name) || "").trim();
+        const boardEditor = canOpenBoardEditor(frm, row) && orderName && planName
+            ? `<a class="btn btn-default btn-sm dco-open-board-editor" href="${esc(boardEditorAppPath(orderName, planName))}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">▦</span>${esc(translate("Open board editor"))}</a>`
+            : "";
         const print = canPrint(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-print-cutting-plan"><span aria-hidden="true">▣</span>${esc(translate("Print"))}</button>`
             : "";
         const exportDxf = canExport(frm, row)
             ? `<button type="button" class="btn btn-default btn-sm dco-export-dxf"><span aria-hidden="true">↓</span>${esc(exportLabel(tab, row))}</button>`
             : "";
-        const upload = canUpload(frm)
+        // Upload is not an edit action for Board Editor copies.
+        const upload = (tab !== "BoardEditor" && canUpload(frm))
             ? `<button type="button" class="btn btn-default btn-sm dco-upload-dxf-plan"><span aria-hidden="true">↑</span>${esc(uploadedFile(frm) ? translate("Replace the uploaded plan") : translate("Upload a DXF plan"))}</button>`
             : "";
-        return `${upload}${exportDxf}${print}`;
+        return `${boardEditor}${upload}${exportDxf}${print}`;
     }
 
     function render(frm, host) {
@@ -577,6 +762,9 @@
 
         target.find(".dco-plan-context-approve").off("click").on("click", () => runApproval(frm));
         target.find(".dco-plan-context-cancel").off("click").on("click", () => runCancelApproval(frm));
+        target.find(".dco-open-board-editor").off("click").on("click", (event) => {
+            runOpenBoardEditor(frm, event);
+        });
         target.find(".dco-print-cutting-plan").off("click").on("click", () => runPrint(frm));
         target.find(".dco-export-dxf").off("click").on("click", () => runExport(frm));
         target.find(".dco-upload-dxf-plan").off("click").on("click", () => runUpload(frm));
@@ -628,10 +816,16 @@
     window.AlmdinaPlanContextActionsUX = Object.freeze({
         activeTab,
         rowForTab,
+        canApprove,
+        canOpenBoardEditor,
+        approveDenialReason,
+        boardEditorAppPath,
+        boardEditorHref,
         render,
         refresh,
         runApproval,
         runCancelApproval,
+        runOpenBoardEditor,
         runPrint,
         runExport,
         runUpload,

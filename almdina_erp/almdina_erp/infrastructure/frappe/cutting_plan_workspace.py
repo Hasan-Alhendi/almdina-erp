@@ -844,7 +844,48 @@ def apply_validated_dxf_snapshot(
     )
 
 
+def apply_board_editor_snapshot(
+    order: Any,
+    plan: Any,
+    raw_snapshot: dict[str, Any],
+    *,
+    method_label: str = "Board Editor",
+    engine_version: str = "board-editor-1",
+) -> None:
+    """Persist one board-editor materialization into a new Draft Cutting Plan.
+
+    Does not mutate the source plan, order approval, or generate CUT_PATH.
+    """
+
+    snapshot = sanitize_plan_snapshot(raw_snapshot)
+    validation = snapshot.get("validation") or {}
+    if not snapshot.get("sheets") or not validation.get("is_valid"):
+        frappe.throw(
+            _("Board editor layout is not ready to save as a cutting plan."),
+            frappe.ValidationError,
+        )
+    fingerprint = plan_input_fingerprint(order, plan)
+    _apply_snapshot(
+        order,
+        plan,
+        snapshot,
+        fingerprint=fingerprint,
+        method_label_fallback=method_label,
+        engine_version_fallback=engine_version,
+    )
+    # Board Editor copies are frozen layouts. Auto-recalc must not treat them as
+    # optimizer work waiting to overwrite the manual placement.
+    plan.plan_needs_recalculation = 0
+    if hasattr(plan, "dxf_file"):
+        plan.dxf_file = None
+    if hasattr(plan, "dxf_status"):
+        plan.dxf_status = ""
+    if hasattr(plan, "saw_center_status"):
+        plan.saw_center_status = "Absent"
+
+
 __all__ = [
+    "apply_board_editor_snapshot",
     "apply_calculation_outcome",
     "apply_validated_dxf_snapshot",
     "backfill_piece_instance_ids",

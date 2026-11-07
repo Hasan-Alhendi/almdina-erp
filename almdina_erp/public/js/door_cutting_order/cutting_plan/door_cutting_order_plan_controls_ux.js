@@ -410,15 +410,21 @@
 
     function approvalSource(frm) {
         const available = plans(frm);
-        if (frm.__almdina_active_plan_tab === "Custom" && rowHasPlan(available.uploaded_draft)) {
+        const tab = String(frm.__almdina_active_plan_tab || "");
+        if (tab === "Custom" && rowHasPlan(available.uploaded_draft)) {
             return "Custom";
+        }
+        if (tab === "BoardEditor" && rowHasPlan(available.board_editor_draft)) {
+            return "BoardEditor";
         }
         return "System";
     }
 
     function approvalRow(frm, source) {
         const available = plans(frm);
-        return source === "Custom" ? available.uploaded_draft : available.system_draft;
+        if (source === "Custom") return available.uploaded_draft;
+        if (source === "BoardEditor") return available.board_editor_draft;
+        return available.system_draft;
     }
 
     function approvalAllowed(frm, source) {
@@ -431,6 +437,8 @@
             && canMutateCurrentStage(frm)
             && rowHasPlan(row)
             && String(row.status || "") === "Draft"
+            && !(row && row.can_approve === false)
+            && !(row && row.manufacturing_blocked === true)
             && !(row && row.validation && row.validation.needs_recalculation)
         );
     }
@@ -446,7 +454,9 @@
                 frappe.msgprint(translate(
                     source === "Custom"
                         ? "The order data changed. Upload a new DXF that matches the current measurements, then approve the plan."
-                        : "Recalculate the cutting plan and review the new result before approval."
+                        : source === "BoardEditor"
+                            ? "The order data changed. Re-apply the board-editor layout before approving the edited plan."
+                            : "Recalculate the cutting plan and review the new result before approval."
                 ));
             } else if (!can(frm, "approve_dxf")) {
                 frappe.msgprint(translate("You do not have permission to approve the cutting plan."));
@@ -457,19 +467,29 @@
             return false;
         }
 
-        const sourceLabel = translate(source === "Custom" ? "Uploaded DXF plan" : "Current system plan");
+        const sourceLabel = translate(
+            source === "Custom"
+                ? "Uploaded DXF plan"
+                : source === "BoardEditor"
+                    ? "Edited board-editor plan"
+                    : "Current system plan"
+        );
         const warning = translate(approvedPlanName(frm)
             ? "An approval already exists. Continuing will create a new approval and replace the current approved plan."
             : "This plan will be fixed as the final production copy.");
         const transport = api();
         if (!transport || typeof transport.approve !== "function") return false;
 
+        const row = approvalRow(frm, source);
+        const planName = String((row && row.name) || "").trim();
         return new Promise((resolve) => {
             frappe.confirm(
                 `${warning}<br><br><b>${sourceLabel}</b>`,
                 async () => {
                     try {
-                        await transport.approve(frm.doc.name, source);
+                        await transport.approve(frm.doc.name, source, planName || null);
+                        // Show the newly approved copy without requiring a manual refresh.
+                        frm.__almdina_active_plan_tab = "Approved";
                         await refreshWorkspaceOwners(frm);
                         const context = documentContext();
                         if (context && typeof context.refreshStageContext === "function") {

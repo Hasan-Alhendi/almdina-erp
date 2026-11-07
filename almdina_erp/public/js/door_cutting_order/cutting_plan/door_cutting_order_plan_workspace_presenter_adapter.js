@@ -121,7 +121,9 @@
     }
 
     function sourceLabel(row) {
-        return row && row.source_type === "Uploaded DXF" ? "Custom" : "System";
+        if (row && row.source_type === "Uploaded DXF") return "Custom";
+        if (row && row.source_type === "Board Editor") return "BoardEditor";
+        return "System";
     }
 
     function activeSettings(frm) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 import frappe
@@ -22,8 +23,10 @@ from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SYSTEM,
+    select_board_editor_surface_plan,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     business_state_options,
@@ -263,6 +266,20 @@ def _system_plan(rows: list[Any]) -> Any | None:
     )
 
 
+def _board_editor_plan(rows: list[Any], order: Any) -> Any | None:
+    """Latest applied Board Editor copy for the Edited tab.
+
+    Payload key remains ``board_editor_draft`` for compatibility, but the row may
+    be Draft or the current Approved Board Editor tip. Approving the tip must not
+    fall back to an older leftover Draft.
+    """
+
+    return select_board_editor_surface_plan(
+        rows,
+        approved_plan_name=str(getattr(order, "approved_plan", None) or ""),
+    )
+
+
 def _approved(rows: list[Any], order: Any) -> Any | None:
     approved_name = str(getattr(order, "approved_plan", None) or "").strip()
     if not approved_name:
@@ -331,6 +348,78 @@ def _selected_snapshot_json(rows: list[Any | None]) -> dict[str, str]:
     }
 
 
+def _plan_content_identity(plan: Any, snapshot_json: str = "") -> str:
+    """Stable paint/cache identity: plan name + revision + content fingerprint."""
+
+    name = str(plan.get("name") or "").strip()
+    revision = cint(plan.get("revision"))
+    modified = str(plan.get("modified") or "").strip()
+    fingerprint = str(plan.get("input_fingerprint") or "").strip()
+    # Include a short snapshot digest so layout-only edits still bust paint cache
+    # even when the input fingerprint is unchanged. Prefer blake2s for speed and
+    # stability across processes (avoid PYTHONHASHSEED-randomized hash()).
+    digest = ""
+    raw = str(snapshot_json or "")
+    if raw:
+        digest = hashlib.blake2s(raw.encode("utf-8"), digest_size=8).hexdigest()
+    return "|".join([name, str(revision), modified, fingerprint, digest])
+
+
+def _board_editor_unapplied_draft_hint(order_name: str, plan_name: str) -> dict[str, Any]:
+    """Metadata-only hint that a saved editor draft is newer than the last apply.
+
+    Never returns layout geometry or financial fields. Missing table/columns fail
+    closed to ``present=False``.
+    """
+
+    empty = {
+        "present": False,
+        "unapplied": False,
+        "draft_version": 0,
+        "last_created_draft_version": 0,
+        "last_created_plan": "",
+    }
+    name = str(plan_name or "").strip()
+    order = str(order_name or "").strip()
+    if not name or not order:
+        return empty
+    if not frappe.db.table_exists("Board Editor Draft"):
+        return empty
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_draft import draft_key
+
+    fields = ["draft_version"]
+    has_tracking = (
+        frappe.db.has_column("Board Editor Draft", "last_created_plan")
+        and frappe.db.has_column("Board Editor Draft", "last_created_draft_version")
+    )
+    if has_tracking:
+        fields.extend(["last_created_plan", "last_created_draft_version"])
+    row = frappe.db.get_value(
+        "Board Editor Draft",
+        {"draft_key": draft_key(order, name)},
+        fields,
+        as_dict=True,
+    )
+    if not row:
+        return empty
+    draft_version = cint(row.get("draft_version"))
+    last_created_version = cint(row.get("last_created_draft_version")) if has_tracking else 0
+    last_created_plan = (
+        str(row.get("last_created_plan") or "").strip() if has_tracking else ""
+    )
+    unapplied = bool(
+        draft_version > 0
+        and (draft_version > last_created_version or not last_created_plan)
+    )
+    return {
+        "present": True,
+        "unapplied": unapplied,
+        "draft_version": draft_version,
+        "last_created_draft_version": last_created_version,
+        "last_created_plan": last_created_plan,
+    }
+
+
 def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[str, Any]:
     payload = _plan_row(plan, snapshot_json, order=order)
     status = str(plan.get("status") or "")
@@ -344,6 +433,7 @@ def _plan_row_with_freshness(order: Any, plan: Any, snapshot_json: str) -> dict[
         else "current_approved" if linked_approval
         else "historical"
     )
+    payload["content_identity"] = _plan_content_identity(plan, snapshot_json)
     try:
         compatibility = plan_fingerprint_compatibility(
             order, plan, str(plan.get("input_fingerprint") or ""),
@@ -389,6 +479,9 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         if capabilities["view_uploaded"]
         else None
     )
+    board_editor = (
+        _board_editor_plan(rows, order) if capabilities["view_system"] else None
+    )
     approved = _approved(rows, order) if capabilities["view_approved"] else None
     current_approved_name = str((approved or {}).get("name") or "").strip() or None
     calculation_settings = (
@@ -396,11 +489,55 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
         if capabilities["recalculate"] or capabilities["edit_settings"]
         else None
     )
-    snapshot_json = _selected_snapshot_json([system, uploaded, approved])
+    snapshot_json = _selected_snapshot_json([system, uploaded, board_editor, approved])
     uploaded_payload = (
         _plan_row_with_freshness(order, uploaded, snapshot_json.get(str(uploaded.get("name") or ""), ""))
         if uploaded else None
     )
+    board_editor_payload = (
+        _plan_row_with_freshness(
+            order,
+            board_editor,
+            snapshot_json.get(str(board_editor.get("name") or ""), ""),
+        )
+        if board_editor
+        else None
+    )
+    if board_editor_payload is not None:
+        # Posed Board Editor copies may be approved/exported once geometry and
+        # machine-angle checks pass. Only Draft rows remain approvable; an
+        # Approved tip stays visible on Edited without falling back to older Draft.
+        validation = board_editor_payload.get("validation") or {}
+        status = str(board_editor_payload.get("status") or "").strip()
+        ready = (
+            str(validation.get("status") or "") == "Valid"
+            and not validation.get("needs_recalculation")
+            and bool(str(board_editor_payload.get("snapshot_json") or "").strip())
+        )
+        board_editor_payload["manufacturing_blocked"] = status == DRAFT and not ready
+        board_editor_payload["manufacturing_block_reason"] = (
+            "board_editor_plan_not_ready"
+            if status == DRAFT and not ready
+            else None
+        )
+        board_editor_payload["can_approve"] = status == DRAFT and ready
+        board_editor_payload["can_export"] = ready
+        board_editor_payload["surface_role"] = "board_editor_applied"
+        board_editor_payload["is_current_approved_tip"] = (
+            status == APPROVED
+            and str(board_editor_payload.get("name") or "") == (current_approved_name or "")
+        )
+        unapplied = _board_editor_unapplied_draft_hint(
+            str(order.name),
+            str(board_editor_payload.get("name") or ""),
+        )
+        board_editor_payload["editor_draft"] = {
+            "present": bool(unapplied.get("present")),
+            "unapplied": bool(unapplied.get("unapplied")),
+            "draft_version": cint(unapplied.get("draft_version")),
+            "last_created_draft_version": cint(unapplied.get("last_created_draft_version")),
+            "last_created_plan": str(unapplied.get("last_created_plan") or ""),
+        }
 
     return {
         "order_name": order.name,
@@ -424,6 +561,7 @@ def get_plan_workspace_snapshot(order_name: str) -> dict[str, Any]:
                 if system else None
             ),
             "uploaded_draft": uploaded_payload,
+            "board_editor_draft": board_editor_payload,
             "approved": (
                 _plan_row_with_freshness(
                     order, approved,

@@ -39,10 +39,12 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
     is_current_manufacturing_candidate,
+    manufacturing_actions_allowed,
 )
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -375,6 +377,11 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
             latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
             or latest_plan(order.name, source_type=UPLOADED_DXF)
         )
+    if normalized in {"board editor", "board_editor", "boardeditor", "edited", "manual"}:
+        return (
+            latest_plan(order.name, source_type=BOARD_EDITOR, status=DRAFT)
+            or latest_plan(order.name, source_type=BOARD_EDITOR)
+        )
     if normalized == "approved":
         return approved_plan_for_order(order)
     frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
@@ -383,6 +390,41 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
 
 def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     plan = _saved_plan_for_source(order, plan_source)
+    if plan and not manufacturing_actions_allowed(_plan_field(plan, "source_type")):
+        frappe.throw(
+            _("مصدر خطة القص المحدد لا يدعم التصدير التصنيعي."),
+            frappe.ValidationError,
+        )
+    if plan and str(_plan_field(plan, "source_type") or "") == BOARD_EDITOR:
+        from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
+            BoardEditorManufacturingError,
+            assert_board_editor_manufacturing_ready,
+        )
+
+        snapshot = frappe.parse_json(_plan_field(plan, "snapshot_json") or "{}") or {}
+        try:
+            assert_board_editor_manufacturing_ready(
+                snapshot,
+                machine_type=str(_plan_field(plan, "machine_type") or ""),
+                kerf_mm=flt(_plan_field(plan, "kerf_mm") or 0),
+            )
+        except BoardEditorManufacturingError as exc:
+            messages = {
+                "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير."),
+                "missing_geometry": _(
+                    "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها."
+                ),
+                "machine_rotation_forbidden": _(
+                    "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
+                ),
+                "material_layout_invalid": _(
+                    "التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح)."
+                ),
+            }
+            frappe.throw(
+                messages.get(exc.code) or _("خطة محرر الألواح غير جاهزة للتصدير."),
+                frappe.ValidationError,
+            )
     belongs_to_order = bool(
         plan
         and str(_plan_field(plan, "door_cutting_order") or "") == str(order.name)
@@ -478,7 +520,20 @@ def _include_saw_centers_for_export(
         return True
     if order is not None and _is_current_approved_plan(order, plan):
         return True
-    if normalized in {"system", "custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
+    if normalized in {
+        "system",
+        "custom",
+        "uploaded",
+        "uploaded dxf",
+        "uploaded_dxf",
+        "dxf",
+        "board editor",
+        "board_editor",
+        "boardeditor",
+        "edited",
+        "manual",
+    }:
+        # Design export of a draft surface never publishes manufacturing CUT_PATH.
         return False
     return str(getattr(plan, "status", "") or "") == APPROVED
 

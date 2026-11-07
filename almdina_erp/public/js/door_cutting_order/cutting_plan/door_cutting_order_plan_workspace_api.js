@@ -157,13 +157,22 @@
         );
     }
 
-    function approve(orderName, source) {
+    function approve(orderName, source, planName = null) {
+        const normalized = String(source || "").trim();
+        let planSource = "System";
+        if (normalized === "Custom") planSource = "Custom";
+        else if (normalized === "BoardEditor" || normalized === "Board Editor") {
+            planSource = "Board Editor";
+        }
+        const args = {
+            order_name: orderName,
+            plan_source: planSource,
+        };
+        const explicitPlan = String(planName || "").trim();
+        if (explicitPlan) args.plan_name = explicitPlan;
         return call(
             APPROVE_METHOD,
-            {
-                order_name: orderName,
-                plan_source: source === "Custom" ? "Custom" : "System",
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_APPROVE),

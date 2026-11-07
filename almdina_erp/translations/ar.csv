@@ -3029,6 +3029,369 @@ The server is temporarily unavailable. Check the current status before repeating
 The request timed out. Check the current status before repeating the operation.,انتهت مهلة الطلب. تحقّق من الحالة الحالية قبل تكرار الإجراء.
 An unexpected system error prevented completion. Contact support.,تعذر إكمال العملية بسبب خطأ غير متوقع في النظام. تواصل مع الدعم.
 "The DXF upload service is not ready. Save or cancel unsaved changes, then reload the page.",خدمة رفع DXF ليست جاهزة. احفظ التعديلات غير المحفوظة أو ألغها، ثم أعد تحميل الصفحة.
+Board layout editor,محرر توزيع القطع على الألواح
+Open board editor,فتح محرر الألواح
+"View and select only. Moving, rotating, and saving layouts are not available in this version.",العرض والتحديد فقط. التحريك والتدوير وحفظ التوزيع غير متاحة في هذا الإصدار.
+Back to order,العودة إلى الطلب
+Loading board editor…,جارٍ فتح محرر الألواح…
+"Preparing layers, boards, and pieces.",تجهيز الطبقات والألواح والقطع.
+DXF layers,طبقات DXF
+Boards and pieces,الألواح والقطع
+Show all,إظهار الكل
+Hide all,إخفاء الكل
+Show only this layer,إظهار هذه الطبقة فقط
+Only,فقط
+Empty,فارغة
+Unavailable,غير متاحة
+Sheet {0},اللوح {0}
+No pieces on this sheet,لا توجد قطع على هذا اللوح
+Unplaced pieces,قطع غير موزعة
+No layers,لا توجد طبقات
+No boards,لا توجد ألواح
+Fit all,ملاءمة الكل
+Zoom in,تكبير
+Zoom out,تصغير
+Canvas tools,أدوات مساحة العرض
+Board layout canvas,مساحة عرض توزيع الألواح
+"Drag to pan. Display only — no move or save in this version.",اسحب للتحريك ضمن العرض. للعرض فقط — لا تحريك للقطع ولا حفظ في هذا الإصدار.
+"Scroll to move. Hold Space and drag to pan. Display only — no move or save in this version.",مرّر للانتقال. اضغط المسافة واسحب للتحريك. للعرض فقط — لا تحريك للقطع ولا حفظ في هذا الإصدار.
+Incomplete board editor link,رابط محرر الألواح غير مكتمل
+Open the board editor from a cutting plan tab on the order.,افتح محرر الألواح من تبويب خطة القص في الطلب.
+Permission denied,رفض الصلاحية
+You do not have permission to open this cutting plan in the board editor.,لا تملك صلاحية فتح خطة القص هذه في محرر الألواح.
+You do not have permission to view the approved cutting plan.,لا تملك صلاحية عرض خطة القص المعتمدة.
+You do not have permission to view the system cutting plan.,لا تملك صلاحية عرض خطة القص النظامية.
+You do not have permission to view the uploaded cutting plan.,لا تملك صلاحية عرض خطة القص المرفوعة.
+This board-editor cutting plan cannot be opened in its current status.,لا يمكن فتح خطة القص من محرر الألواح بهذه الحالة.
+This cutting plan source cannot be opened in the board editor.,مصدر خطة القص هذا لا يمكن فتحه في محرر الألواح.
+Unapplied board-editor draft,مسودة محرر ألواح غير مطبّقة
+The board editor has saved changes that are not applied to this cutting plan yet. The layout below is the last applied plan, not those unapplied edits.,محرر الألواح يحتوي تغييرات محفوظة لم تُطبَّق على خطة القص بعد. التوزيع أدناه هو آخر خطة مطبّقة، وليس تلك التعديلات غير المطبّقة.
+Cutting plan unavailable,خطة القص غير متاحة
+The selected cutting plan is not available for this order.,خطة القص المحددة غير متاحة لهذا الطلب.
+Could not load the board editor,تعذر تحميل محرر الألواح
+Reload the page or return to the order and try again.,أعد تحميل الصفحة أو ارجع إلى الطلب ثم حاول مجددًا.
+Could not load the board editor. Reload the page and try again.,تعذر تحميل محرر الألواح. أعد تحميل الصفحة ثم حاول مجددًا.
+No board editor data,لا توجد بيانات لمحرر الألواح
+The selected cutting plan has no displayable geometry.,خطة القص المحددة لا تحتوي على هندسة قابلة للعرض.
+Hosted,مستضافة
+Resize sidebar sections,تغيير ارتفاع أقسام الشريط الجانبي
+Order name is required.,يجب تحديد اسم الطلب.
+Cutting plan name is required.,يجب تحديد اسم خطة القص.
+The selected cutting plan is not available.,خطة القص المحددة غير متاحة.
+The selected cutting plan does not belong to this order.,خطة القص المحددة لا تتبع هذا الطلب.
+You do not have permission to view the cutting plan for this order.,لا تملك صلاحية عرض خطة القص لهذا الطلب.
+This uploaded plan has no attached DXF file.,هذه الخطة المرفوعة لا تحتوي على ملف DXF مرفق.
+The original DXF could not be opened for layer display.,تعذر فتح ملف DXF الأصلي لعرض الطبقات.
+The original DXF could not be parsed for board-editor display.,تعذر تحليل ملف DXF الأصلي لعرض محرر الألواح.
+An unsupported DXF entity type was skipped for display.,تم تخطي نوع عنصر DXF غير مدعوم عند العرض.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Select,تحديد
+Move,تحريك
+Undo,تراجع
+Redo,إعادة
+Restore entry layout,استعادة توزيع الدخول
+"Session trial only — moves stay in this editor and are not saved. Hold Space or middle-click to pan.",تجريبي داخل الجلسة فقط — التحريك لا يُحفظ. اضغط المسافة أو الزر الأوسط للتحريك.
+Outside boards,خارج الألواح
+Not editable,غير قابلة للتحرير
+"Special geometry unavailable — not editable",هندسة خاصة غير متاحة — غير قابلة للتحرير
+"Drop rejected: the piece crosses a board edge.",رُفض الإفلات: القطعة تعبر حافة لوح.
+"Drop rejected: the piece overlaps more than one board.",رُفض الإفلات: القطعة تتقاطع مع أكثر من لوح.
+"Drop rejected: the piece overlaps another piece.",رُفض الإفلات: القطعة تتداخل مع قطعة أخرى.
+"Drop rejected: kerf clearance is insufficient.",رُفض الإفلات: مسافة القص (Kerf) غير كافية.
+"Drop rejected: boards would overlap.",رُفض الإفلات: الألواح ستتراكب.
+"This piece cannot be moved in the session.",لا يمكن تحريك هذه القطعة في الجلسة.
+Drop rejected.,رُفض الإفلات.
+"Click to select, long-press then drag to move. Session-only — not saved. Space or middle-click to pan.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك.
+Magnet,المغنطة
+"Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass.",المغنطة: محاذاة القطع مع حدود اللوح والقطع المجاورة أثناء السحب. Alt للتجاوز المؤقت.
+"Click to select, long-press then drag to move. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+"Click to select, long-press then drag to move. Drag the rotation handle for free angles. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. اسحب مقبض الدوران لزوايا حرة. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+Angle,الزاوية
+Rotation angle in degrees,زاوية الدوران بالدرجات
+Rotation rejected.,رُفض الدوران.
+"Rotation is not allowed for this piece.",الدوران غير مسموح لهذه القطعة.
+"A nested piece does not allow rotation.",قطعة متداخلة لا تسمح بالدوران.
+"Special geometry unavailable — not rotatable.",الهندسة الخاصة غير متاحة — لا يمكن التدوير.
+"Incomplete geometry — not rotatable.",هندسة غير مكتملة — لا يمكن التدوير.
+"Guest must remain inside the host opening.",يجب أن يبقى الضيف داخل فتحة المضيف.
+"Enter a valid angle in degrees.",أدخل زاوية صالحة بالدرجات.
+"Piece would leave the usable board area.",القطعة ستخرج من المساحة الصالحة للوح.
+"Click to select, long-press then drag to move. Drag the rotation handle for free angles. Session-only — not saved. Space or middle-click to pan. Alt bypasses magnet.",انقر للتحديد، واضغط مطولًا ثم اسحب للتحريك. اسحب مقبض الدوران لزوايا حرة. التغييرات داخل الجلسة فقط ولا تُحفظ. المسافة أو الزر الأوسط للتحريك. Alt يتجاوز المغنطة.
+Angle,الزاوية
+Rotation angle in degrees,زاوية الدوران بالدرجات
+Rotation rejected.,رُفض الدوران.
+"Rotation is not allowed for this piece.",الدوران غير مسموح لهذه القطعة.
+"A nested piece does not allow rotation.",قطعة متداخلة لا تسمح بالدوران.
+"Special geometry unavailable — not rotatable.",هندسة خاصة غير متاحة — لا يمكن التدوير.
+"Incomplete geometry — not rotatable.",هندسة غير مكتملة — لا يمكن التدوير.
+"Guest must remain inside the host opening.",يجب أن يبقى الضيف داخل فتحة المضيف.
+"Enter a valid angle in degrees.",أدخل زاوية صالحة بالدرجات.
+"Piece would leave the usable board area.",القطعة ستخرج من المساحة الصالحة للوح.
+"Pieces would overlap.",القطع ستتداخل.
+"Kerf clearance is insufficient.",مسافة القص (Kerf) غير كافية.
+Cutting plan recalculation in progress,إعادة حساب خطة القص جارية
+"This editor still shows the previous plan snapshot. It will refresh when the calculation finishes — without running the optimizer from here.",ما زال المحرر يعرض لقطة الخطة السابقة. سيُحدَّث عند انتهاء الحساب — دون تشغيل المحسّن من هنا.
+Check again,تحقق مجددًا
+Historical cutting plan,خطة قص تاريخية
+"This snapshot is read-only history. Opening it does not change the approved or system plan.",هذه لقطة تاريخية للقراءة فقط. فتحها لا يغيّر الخطة المعتمدة أو خطة النظام.
+Cutting plan is out of date,خطة القص غير محدّثة
+"Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout.",تغيّرت قياسات الطلب بعد هذه الخطة. أعد حساب خطة القص من الطلب ثم افتح المحرر مجددًا. هذا العرض ليس التوزيع الجديد.
+Plan source changed while editing,تغيّر مصدر الخطة أثناء التحرير
+"Local move/rotate changes are still in this session. Reload to take the updated plan and lose those edits, or go back to the order.",ما زالت تعديلات التحريك/الدوران في هذه الجلسة. أعد التحميل لاعتماد الخطة المحدّثة وفقدان تلك التعديلات، أو ارجع إلى الطلب.
+Reload and discard local edits,إعادة التحميل وإهمال التعديلات المحلية
+Cutting plan mismatch,عدم تطابق خطة القص
+"The server returned a different cutting plan than the one requested. Return to the order and open the editor again.",أعاد الخادم خطة قص مختلفة عن المطلوبة. ارجع إلى الطلب وافتح المحرر مجددًا.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Retry,إعادة المحاولة
+Cutting plan recalculation in progress,جارٍ إعادة حساب خطة القص
+This editor still shows the previous plan snapshot. It will refresh when the calculation finishes — without running the optimizer from here.,لا يزال المحرر يعرض لقطة الخطة السابقة. سيُحدَّث عند انتهاء الحساب — دون تشغيل المحسّن من هنا.
+Check again,تحقق مجددًا
+Historical cutting plan,خطة قص تاريخية
+This snapshot is read-only history. Opening it does not change the approved or system plan.,هذه اللقطة تاريخية للقراءة فقط. فتحها لا يغيّر الخطة المعتمدة أو خطة النظام.
+Cutting plan is out of date,خطة القص غير محدّثة
+Order measurements changed after this plan. Recalculate the cutting plan on the order, then reopen the editor. This view is not the new layout.,تغيّرت قياسات الطلب بعد هذه الخطة. أعد حساب خطة القص من الطلب ثم افتح المحرر مجددًا. هذا العرض ليس التوزيع الجديد.
+Plan source changed while editing,تغيّر مصدر الخطة أثناء التعديل
+Local move/rotate changes are still in this session. Reload to take the updated plan and lose those edits, or go back to the order.,ما زالت تعديلات التحريك/الدوران المحلية في هذه الجلسة. أعد التحميل لأخذ الخطة المحدّثة مع فقدان تلك التعديلات، أو ارجع إلى الطلب.
+Reload and discard local edits,أعد التحميل وتخلَّ عن التعديلات المحلية
+Cutting plan mismatch,عدم تطابق خطة القص
+The server returned a different cutting plan than the one requested. Return to the order and open the editor again.,أعاد الخادم خطة قص مختلفة عن المطلوبة. ارجع إلى الطلب وافتح المحرر مجددًا.
+The board editor data arrived, but the layout could not be drawn.,وصلت بيانات محرر الألواح، لكن تعذر رسم التوزيع.
+Remove from distribution,إزالة من التوزيع
+Remove the selected piece from this session layout. The order row stays unchanged.,أزل القطعة المحددة من توزيع هذه الجلسة. صف الطلب يبقى كما هو.
+Remove board from distribution,إزالة اللوح من التوزيع
+Excluded from distribution,مستبعدة من التوزيع
+Removed from the layout,أُزيلت من التوزيع
+Removed with the host,أُزيلت مع المضيف
+Return to staging,إعادة إلى مساحة التجهيز
+A selected piece cannot be moved.,قطعة محددة لا يمكن تحريكها.
+Select one piece to remove it.,حدّد قطعة واحدة لإزالتها.
+All layers are visible. Hide all.,كل الطبقات ظاهرة. إخفاء الكل.
+All layers are hidden. Show all.,كل الطبقات مخفية. إظهار الكل.
+Some layers are hidden. Show all.,بعض الطبقات مخفية. إظهار الكل.
+No content on this layer,لا محتوى في هذه الطبقة
+Content is unavailable for this layer,محتوى هذه الطبقة غير متاح
+Save layout,حفظ التخطيط
+Unsaved changes,تغييرات غير محفوظة
+Saving layout,جارٍ الحفظ
+Layout saved,تم الحفظ
+Save failed. Your changes are still here.,فشل الحفظ. تغييراتك ما زالت هنا.
+This layout conflicts with another save or a changed source. Your changes are still here.,يتعارض هذا التخطيط مع حفظ آخر أو مع مصدر تغيّر. تغييراتك ما زالت هنا.
+No unsaved changes,لا توجد تغييرات غير محفوظة
+You do not have permission to save this layout.,ليست لديك صلاحية حفظ هذا التخطيط.
+This view shows the source plan. The saved draft is unchanged.,هذا العرض يُظهر خطة المصدر. المسودة المحفوظة لم تتغير.
+Board editor changes are not saved. Leave without saving?,تغييرات محرر الألواح غير محفوظة. المغادرة دون حفظ؟
+Saved draft does not match this plan source.,المسودة المحفوظة لا تطابق مصدر هذه الخطة.
+It was not applied. The cutting plan itself was not changed.,لم تُطبَّق. خطة القص نفسها لم تتغير.
+It was not applied. The cutting plan itself was not changed. Start a new draft from the current source to continue editing and saving. The previous draft is archived first; local unsaved moves on this screen are discarded on start.,لم تُطبَّق. خطة القص نفسها لم تتغير. ابدأ مسودة جديدة من المصدر الحالي لمتابعة التعديل والحفظ. تُؤرشف المسودة السابقة أولاً؛ وتُهمل الحركات المحلية غير المحفوظة على هذه الشاشة عند البدء.
+Start draft from current source,بدء مسودة من المصدر الحالي
+Start a new draft from the current plan source? The previous saved draft will be archived. Unsaved local moves on this screen will be discarded. The cutting plan itself will not be changed.,بدء مسودة جديدة من مصدر الخطة الحالي؟ ستُؤرشف المسودة المحفوظة السابقة. الحركات المحلية غير المحفوظة على هذه الشاشة ستُهمل. خطة القص نفسها لن تتغير.
+Could not start draft,تعذر بدء المسودة
+Another tab updated this draft. Reload and try again.,حدّث تبويب آخر هذه المسودة. أعد التحميل ثم حاول مرة أخرى.
+The draft could not be started from the current source. Your previous draft is unchanged.,تعذر بدء المسودة من المصدر الحالي. مسودتك السابقة لم تتغير.
+This view shows the source plan.,هذا العرض يُظهر خطة المصدر.
+The saved draft is unchanged. Open the editor without the source route to continue that draft.,المسودة المحفوظة لم تتغير. افتح المحرر دون مسار المصدر لمتابعة تلك المسودة.
+Review distribution,فحص التوزيع
+Save the current distribution before reviewing it. An older saved draft will not be shown as the current layout.,احفظ التوزيع الحالي قبل فحصه. لن تُعرض مسودة محفوظة أقدم باعتبارها التخطيط الحالي.
+Review failed. Your edits and selection are still here.,فشل الفحص. تعديلاتك والتحديد ما زالا هنا.
+Reviewing the saved distribution…,جارٍ فحص التوزيع المحفوظ…
+Distribution ready,التوزيع جاهز
+Distribution not ready,التوزيع غير جاهز
+Draft version,إصدار المسودة
+This review does not approve or export the plan.,هذا الفحص لا يعتمد الخطة ولا يصدّرها.
+Blocking issues,مشاكل تمنع الإنتاج
+Warnings,تحذيرات
+No distribution issues were found.,لم يُعثر على مشاكل في التوزيع.
+The distribution changed. Review it again.,تغيّر التوزيع. افحصه مرة أخرى.
+The distribution is not ready.,التوزيع غير جاهز.
+Save a board editor draft before reviewing it.,احفظ مسودة محرر الألواح قبل فحصها.
+The order or source plan changed after this draft was saved.,تغيّر الطلب أو خطة المصدر بعد حفظ هذه المسودة.
+A required piece is missing from the draft.,قطعة مطلوبة مفقودة من المسودة.
+A piece identity is repeated in the draft.,هوية قطعة مكررة في المسودة.
+The draft contains a piece that is not in the source plan.,المسودة تحتوي قطعة ليست في خطة المصدر.
+A required piece is excluded from the distribution.,قطعة مطلوبة مستبعدة من التوزيع.
+A required piece is outside the boards.,قطعة مطلوبة خارج الألواح.
+A piece crosses the usable edge of its board.,قطعة تتجاوز الحافة الصالحة من لوحها.
+A piece is outside the usable area of its board.,قطعة خارج المساحة الصالحة من لوحها.
+Two pieces overlap.,قطعتان متداخلتان.
+The kerf clearance between two pieces is too small.,مسافة القص بين قطعتين أصغر من المطلوب.
+A piece inside a glass opening is closer to the material than the kerf allows.,قطعة داخل فتحة البلور أقرب إلى المادة مما يسمح به القص.
+A piece declares a glass host that is not in the distribution.,قطعة تعلن مضيفاً زجاجياً غير موجود في التوزيع.
+A piece and its glass host are on different boards.,قطعة ومضيفها الزجاجي على لوحين مختلفين.
+Glass hosting contains a cycle.,علاقات الاستضافة الزجاجية تحتوي دورة.
+Glass hosting is nested deeper than the supported limit.,عمق الاستضافة الزجاجية يتجاوز الحد المدعوم.
+A hosted piece is not inside its glass opening.,قطعة مستضافة ليست داخل فتحة البلور.
+This piece is not allowed to rotate.,هذه القطعة غير مسموح لها بالدوران.
+This rotation is not allowed for the cutting machine.,هذه الزاوية غير مسموحة لماكينة القص.
+The cutting machine does not support a readiness decision for this angle.,الماكينة لا تدعم قرار جاهزية لهذه الزاوية.
+This piece has no supported geometry, so it cannot be marked ready.,هذه القطعة بلا هندسة مدعومة، لذلك لا يمكن إعلانها جاهزة.
+A board resource is not a supported full board or offcut.,مورد اللوح ليس لوحاً كاملاً أو قُصاصة مدعومة.
+An offcut piece has no resolved execution owner.,قطعة القُصاصة بلا مالك تنفيذ محسوم.
+The saved draft is not a valid edit document.,المسودة المحفوظة ليست مستند تعديل صالحاً.
+The saved draft contains a field that cannot be reviewed.,المسودة المحفوظة تحتوي حقلاً لا يمكن فحصه.
+The draft uses a board that is not in the source plan.,المسودة تستخدم لوحاً غير موجود في خطة المصدر.
+The saved draft contains an unsupported distribution state.,المسودة المحفوظة تحتوي حالة توزيع غير مدعومة.
+The saved draft changes a glass host that the source does not declare.,المسودة تغيّر مضيفاً زجاجياً لا يعلنه المصدر.
+You do not have permission to review this board editor draft.,ليست لديك صلاحية فحص مسودة محرر الألواح هذه.
+A machining add-on conflicts with neighbouring material.,إضافة تصنيع تتعارض مع مادة مجاورة.
+The {0} add-on conflicts with neighbouring material.,إضافة {0} تتعارض مع مادة مجاورة.
+The {0} add-on conflicts with neighbouring material ({1}).,إضافة {0} تتعارض مع مادة مجاورة ({1}).
+The {0} add-on has no proven geometry ({1}), so readiness cannot be declared.,إضافة {0} بلا هندسة مثبتة ({1})، لذلك لا يمكن إعلان الجاهزية.
+This piece has no supported geometry ({0}), so it cannot be marked ready.,هذه القطعة بلا هندسة مدعومة ({0})، لذلك لا يمكن إعلانها جاهزة.
+Create cutting plan copy,إنشاء نسخة خطة قص
+Save the current distribution before creating a cutting plan copy.,احفظ التوزيع الحالي قبل إنشاء نسخة خطة قص.
+Save the board editor distribution before creating a cutting plan copy.,احفظ توزيع محرر الألواح قبل إنشاء نسخة خطة قص.
+Cutting plan copy {0} was created. Open the Edited plan tab in the cutting plan section of order {1}.,تم إنشاء نسخة خطة القص {0}. افتح تبويب الخطة المعدّلة في قسم خطة القص للطلب {1}.
+The cutting plan copy could not be created.,تعذّر إنشاء نسخة خطة القص.
+Creating the cutting plan copy failed. The saved draft is unchanged.,فشل إنشاء نسخة خطة القص. المسودة المحفوظة لم تتغير.
+Edited plan,الخطة المعدّلة
+Edited plan (view only),خطة معدّلة (عرض فقط)
+Edited plan blocked,خطة معدّلة موقوفة
+Approval and DXF export are blocked until free-angle manufacturing support is complete.,الاعتماد وتصدير DXF موقوفان حتى اكتمال دعم التصنيع للزوايا الحرة.
+This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout.,هذه الخطة المعدّلة غير جاهزة للاعتماد أو تصدير DXF بعد. أصلح مشاكل التحقق ثم أعد تطبيق التوزيع.
+This edited plan cannot be approved or exported for a specific manufacturing reason.,لا يمكن اعتماد أو تصدير هذه الخطة المعدّلة لسبب تصنيعي محدد.
+Approve the edited plan,اعتماد الخطة المعدّلة
+Replace the approved plan with the edited plan,استبدال الخطة المعتمدة بالخطة المعدّلة
+There is no edited board-editor plan ready to approve.,لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد.
+Only a draft cutting plan can be approved.,يمكن اعتماد خطة قص في حالة المسودة فقط.
+The cutting plan failed geometric validation and cannot be approved.,فشل التحقق الهندسي لخطة القص ولا يمكن اعتمادها.
+This delivered order can no longer change cutting plan approval.,لا يمكن لهذا الطلب المسلّم تغيير اعتماد خطة القص.
+Approval is unavailable in the current production stage.,الاعتماد غير متاح في مرحلة الإنتاج الحالية.
+خطة القص المحددة غير موجودة.,خطة القص المحددة غير موجودة.
+خطة القص المحددة لا تنتمي إلى هذا الطلب.,خطة القص المحددة لا تنتمي إلى هذا الطلب.
+خطة القص المحددة ليست خطة طلب.,خطة القص المحددة ليست خطة طلب.
+مصدر خطة القص المحددة لا يطابق تبويب الاعتماد.,مصدر خطة القص المحددة لا يطابق تبويب الاعتماد.
+Edited board-editor plan,خطة محرر الألواح المعدّلة
+The order data changed. Re-apply the board-editor layout before approving the edited plan.,تغيّرت بيانات الطلب. أعد تطبيق توزيع محرر الألواح قبل اعتماد الخطة المعدّلة.
+Re-apply the board-editor layout before approving it,أعد تطبيق توزيع محرر الألواح قبل اعتمادها
+There is no edited board-editor plan yet.,لا توجد بعد خطة معدّلة من محرر الألواح.
+مصدر خطة القص المحدد لا يدعم الاعتماد والتصنيع.,مصدر خطة القص المحدد لا يدعم الاعتماد والتصنيع.
+مصدر خطة القص المحدد لا يدعم التصدير التصنيعي.,مصدر خطة القص المحدد لا يدعم التصدير التصنيعي.
+لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد. طبّق التوزيع من المحرر أولًا.,لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد. طبّق التوزيع من المحرر أولًا.
+خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع.,خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع.
+خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها.,خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها.
+زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة.,زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة.
+التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح).,التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح).
+خطة محرر الألواح غير جاهزة للاعتماد.,خطة محرر الألواح غير جاهزة للاعتماد.
+خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير.,خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير.
+خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها.,خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها.
+خطة محرر الألواح غير جاهزة للتصدير.,خطة محرر الألواح غير جاهزة للتصدير.
+خطة القص لم تعد في حالة المسودة. أعد تحميل مساحة العمل ثم حاول الاعتماد مرة أخرى.,خطة القص لم تعد في حالة المسودة. أعد تحميل مساحة العمل ثم حاول الاعتماد مرة أخرى.
+هذه الخطة معتمدة بالفعل لهذا الطلب.,هذه الخطة معتمدة بالفعل لهذا الطلب.
+تعارض اعتماد: تغيّرت حالة الخطة أثناء العملية ولم يُغيَّر مؤشر الاعتماد.,تعارض اعتماد: تغيّرت حالة الخطة أثناء العملية ولم يُغيَّر مؤشر الاعتماد.
+Cutting plan copy created.,تم إنشاء نسخة خطة القص.
+Board editor cutting plan copies cannot be approved yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن اعتماد نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.
+Board editor cutting plan copies cannot be exported yet. Free-angle manufacturing export is not supported in this phase.,لا يمكن تصدير نسخ خطة القص من محرر الألواح بعد. تصدير التصنيع بالزوايا الحرة غير مدعوم في هذه المرحلة.
+Board editor layout is not ready to save as a cutting plan.,توزيع محرر الألواح غير جاهز للحفظ كخطة قص.
+You do not have permission to create a cutting plan copy from this board editor draft.,ليست لديك صلاحية إنشاء نسخة خطة قص من مسودة محرر الألواح هذه.
+Apply to cutting plan,تطبيق على خطة القص
+Apply this layout as an unapproved edited cutting plan copy.,طبّق هذا التوزيع كنسخة خطة قص معدّلة غير معتمدة.
+Save the current distribution before applying it to the cutting plan.,احفظ التوزيع الحالي قبل تطبيقه على خطة القص.
+Save the board editor distribution before applying it to the cutting plan.,احفظ توزيع محرر الألواح قبل تطبيقه على خطة القص.
+The edited layout was applied as cutting plan {0}. It is not approved.,طُبّق التوزيع المعدّل كخطة قص {0}. وهي غير معتمدة.
+The layout could not be applied to a cutting plan.,تعذّر تطبيق التوزيع على خطة قص.
+Applying the layout to a cutting plan failed. The saved draft is unchanged.,فشل تطبيق التوزيع على خطة القص. المسودة المحفوظة لم تتغير.
+Could not apply layout,تعذّر تطبيق التوزيع
+The draft changed. Save again, then apply it to the cutting plan.,تغيّرت المسودة. احفظ مجدداً ثم طبّقها على خطة القص.
+This apply request was already used with a different draft version.,طُلب هذا التطبيق مسبقاً بإصدار مسودة مختلف.
+This order is locked and cannot receive an applied cutting plan.,هذا الطلب مقفل ولا يمكنه استقبال خطة قص مطبّقة.
+The apply request token is missing or invalid.,رمز طلب التطبيق مفقود أو غير صالح.
+A board editor cutting plan copy must reference a valid source plan.,يجب أن تشير نسخة خطة القص من محرر الألواح إلى خطة مصدر صالحة.
+A newer draft was saved. Your local edits are still here.,حُفظت نسخة أحدث من المسودة. تعديلاتك المحلية ما زالت هنا.
+The source cutting plan data changed. Your local edits are still here.,تغيّرت بيانات خطة المصدر. تعديلاتك المحلية ما زالت هنا.
+This layout conflicts with another save or a changed source. Your changes are still here.,هذا التوزيع يتعارض مع حفظ آخر أو مع تغيّر المصدر. تغييراتك ما زالت هنا.
+Select one piece to set its rotation angle. Group rotation is not available.,حدّد قطعة واحدة لتعيين زاوية دورانها. الدوران الجماعي غير متاح.
+Select a piece to set its rotation angle.,حدّد قطعة لتعيين زاوية دورانها.
+This piece cannot be rotated.,لا يمكن تدوير هذه القطعة.
+Rotation angle in degrees,زاوية الدوران بالدرجات
+A nested piece does not allow rotation.,قطعة متداخلة لا تسمح بالدوران.
+Special geometry unavailable — not rotatable.,الهندسة الخاصة غير متاحة — لا يمكن التدوير.
+Incomplete geometry — not rotatable.,الهندسة غير مكتملة — لا يمكن التدوير.
+This piece cannot be edited.,لا يمكن تعديل هذه القطعة.
+Guest must remain inside the host opening.,يجب أن تبقى القطعة المستضافة داخل فتحة المضيف.
+
+Updating the edited plan,جاري تحديث الخطة المعدلة
+Waiting for the edited cutting plan to appear...,في انتظار ظهور خطة القص المعدلة...
+Could not refresh the edited plan,تعذر تحديث الخطة المعدلة
+The edited cutting plan could not be refreshed after apply. Retry loading the plan.,تعذر تحديث خطة القص المعدلة بعد التطبيق. أعد محاولة تحميل الخطة.
+Retry loading the plan,إعادة تحميل الخطة
+Newer edited plan available,تتوفر خطة معدلة أحدث
+A newer edited cutting plan is shown.,تُعرض خطة قص معدلة أحدث.
+"A newer edited cutting plan ({0}) is shown. It replaced the applied plan ({1}).",تُعرض خطة قص معدلة أحدث ({0}). وقد حلّت محل الخطة المطبّقة ({1}).
+Flip horizontal,قلب أفقي
+Flip vertical,قلب عمودي
+Rotate +30°,تدوير +30°
+Mirror angle,انعكاس الزاوية
+Add 30 degrees in the positive rotation direction.,أضف 30 درجة باتجاه الدوران الموجب.
+"Toggle rotation 0° ↔ 180°",تبديل الدوران ‎0° ↔ 180°‎
+"Toggle rotation 90° ↔ 270°",تبديل الدوران ‎90° ↔ 270°‎
+Mirror this corner or L piece horizontally in its local axes. Apply twice to restore the original shape.,اعكس درفة الزاوية أو الـL أفقيًا في محاورها المحلية. طبّق مرتين لاستعادة الشكل الأصلي.
+Angle mirror is only available for corner-break and L pieces.,انعكاس الزاوية متاح فقط لدرف زاوية الكسر والـL.
+This piece cannot be flipped.,لا يمكن قلب هذه الدرفة.
+This piece cannot be flipped reliably with the available geometry.,لا يمكن قلب هذه الدرفة بصورة موثوقة بالهندسة المتاحة.
+Host and guest pieces cannot use this transform yet.,قطع المضيف والضيف لا تدعم هذا التحويل بعد.
+This machine does not allow that rotation after the flip.,هذه الآلة لا تسمح بهذا الدوران بعد القلب.
+Board editor page actions,إجراءات صفحة محرر الألواح
+Select one piece to transform it.,حدّد درفة واحدة لتحويلها.
+Select a piece to transform it.,حدّد درفة لتحويلها.
+Measure,قياس
+"Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line.",أداة القياس: اسحب خطًا مستقيمًا على اللوح لقراءة طوله بالمليمتر. Esc يمسح الخط.
+Start the measurement inside a board.,ابدأ القياس داخل لوح.
+Measurement rejected.,رُفض القياس.
+Precision piece position,موضع الدرفة الدقيق
+X (mm),X (mm)
+Y (mm),Y (mm)
+Top inset,أعلى
+Bottom inset,أسفل
+Left inset,يسار
+Right inset,يمين
+"Decrease {0} by 1 mm",إنقاص {0} بمقدار 1 مم
+"Increase {0} by 1 mm",زيادة {0} بمقدار 1 مم
+Enter a valid millimetre value.,أدخل قيمة مليمتر صالحة.
+Position update rejected.,رُفض تحديث الموضع.
+Select one piece on a board.,حدّد درفة واحدة على لوح.
+Position controls unavailable.,عناصر التحكم بالموضع غير متاحة.
+Piece properties,خصائص القطعة
+Alignment,المحاذاة
+Select a piece to edit its properties.,حدّد قطعة لتعديل خصائصها.
+Multiple pieces selected,تم تحديد عدة قطع
+{0} pieces selected,تم تحديد {0} قطع
+Board X/Y is available for pieces placed on a board.,إحداثيات X/Y للوح متاحة للقطع الموضوعة على لوح.
+Nudge selected pieces −1 mm on {0},حرّك القطع المحددة −1 مم على {0}
+Nudge selected pieces +1 mm on {0},حرّك القطع المحددة +1 مم على {0}
+Enter a relative millimetre offset for the selection (for example +5 or -2.5). Bare numbers mean a positive offset.,أدخل إزاحة نسبية بالمليمتر للتحديد (مثل +5 أو -2.5). الأرقام بدون إشارة تعني إزاحة موجبة.
+Enter a valid millimetre offset.,أدخل إزاحة مليمتر صالحة.
+Select two or more pieces to move them together.,حدّد قطعتين أو أكثر لتحريكهما معاً.
+Group positioning is unavailable while a locked piece is selected.,تحريك المجموعة غير متاح أثناء تحديد قطعة مقفلة.
+Precise group moves are available for pieces on the same board only, or pieces outside all boards.,الحركة الدقيقة الجماعية متاحة للقطع الموجودة على اللوح نفسه فقط، أو القطع الموجودة خارج الألواح.
+Precise moves must keep each piece on its current board.,يجب أن تُبقي الحركات الدقيقة كل قطعة على لوحها الحالي.
+Group move would break a glass host relationship.,تحريك المجموعة سيكسر علاقة المضيف الزجاجي.
+Move geometry unavailable.,هندسة التحريك غير متاحة.
+Display options,خيارات العرض
+Show edge banding,إظهار التقشيطات
+Show edge banding marks on pieces,إظهار علامات التقشيط على الدرف
+Show edge banding for this piece,إظهار تقشيطات هذه الدرفة
+Show edge banding marks for this piece only,إظهار علامات التقشيط لهذه الدرفة فقط
+Align left,محاذاة لليسار
+Align right,محاذاة لليمين
+Align top,محاذاة للأعلى
+Align bottom,محاذاة للأسفل
+Align horizontal centers,توسيط أفقي
+Align vertical centers,توسيط عمودي
+Align left edges of the selection,محاذاة الحواف اليسرى للتحديد
+Align right edges of the selection,محاذاة الحواف اليمنى للتحديد
+Align top edges of the selection,محاذاة الحواف العلوية للتحديد
+Align bottom edges of the selection,محاذاة الحواف السفلية للتحديد
+Align horizontal centers of the selection,توسيط مراكز X للتحديد
+Align vertical centers of the selection,توسيط مراكز Y للتحديد
+Select two or more pieces to align them.,حدّد قطعتين أو أكثر لمحاذاتهما.
+Alignment is unavailable while a locked piece is selected.,المحاذاة غير متاحة أثناء تحديد قطعة مقفلة.
+Align pieces on the same board only, or pieces outside all boards.,يمكن محاذاة القطع الموجودة على اللوح نفسه فقط، أو القطع الموجودة خارج الألواح.
+Alignment would break a glass host relationship.,المحاذاة ستكسر علاقة المضيف الزجاجي.
+Alignment must keep each piece on its current board.,يجب أن تُبقي المحاذاة كل قطعة على لوحها الحالي.
+Alignment rejected: the final layout is not manufacturable.,رُفضت المحاذاة: التخطيط النهائي غير قابل للتصنيع.
+Alignment geometry is unavailable.,هندسة المحاذاة غير متاحة.
+Pieces are already aligned.,القطع محاذاة مسبقاً.
+Alignment rejected.,رُفضت المحاذاة.
 "Press “Edit” to try other settings. Recalculation creates a preview, and the change is not saved until you press “Save”.",اضغط «تعديل» لتجربة إعدادات أخرى. تنشئ إعادة الحساب معاينة، ولا يُحفظ التغيير حتى تضغط «حفظ».
 "The engine can be run again with the saved settings. Changing kerf, trim, machine, or search time requires permission to edit optimizer settings.",يمكن إعادة الحساب بالإعدادات المحفوظة. تغيير الشفرة أو الهامش أو المكنة أو مدة البحث يحتاج صلاحية تعديل إعدادات المحسن.
 Press “Edit” to try other settings. The saved plan will not change while you are trying them.,اضغط «تعديل» لتجربة إعدادات أخرى. لن تتغير الخطة المحفوظة أثناء التجربة.
@@ -3078,6 +3441,25 @@ The width of {0} is less than its tool diameter.,عرض {0} أصغر من قطر
 Specify a tool diameter above zero for {0} toolpaths,حدّد عرض ريشة أكبر من صفر لمسارات {0}
 The width of {0} is less than its tool diameter,عرض {0} أصغر من قطر ريشته
 "Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order.",الهندسة الافتراضية وماكينة القص وحدود البحث. العروض الافتراضية لريش القص: الحقل الفارغ ينسخ عرض ريشة القص إلى كل طلب جديد.
+Add board,إضافة لوح
+Piece classification,تصنيف الدرفة
+GEOMETRY,GEOMETRY
+OFFCUT,OFFCUT
+Offcut type,نوع الفضلة
+Unassigned,غير محدد
+Customer offcut — factory execution,فضلة من الزبون — تنفيذ في المعمل
+Customer offcut — customer execution,فضلة من الزبون — تنفيذ عند الزبون
+Factory offcut — factory execution,فضلة من المعمل — تنفيذ في المعمل
+Mixed,Mixed
+This board mixes GEOMETRY and OFFCUT pieces,هذا اللوح يحتوي على قطع GEOMETRY وOFFCUT معاً
+A new board cannot be created because the order's standard board dimensions are missing or invalid.,لا يمكن إضافة لوح جديد لأن أبعاد اللوح القياسية في الطلب غير متوفرة أو غير صالحة.
+Could not add a board.,تعذّر إضافة اللوح.
+Could not change the piece classification.,تعذّر تغيير تصنيف الدرفة.
+Board {0} mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan.,اللوح رقم {0} يحتوي على قطع GEOMETRY وOFFCUT معاً. يجب توحيد تصنيف القطع الموجودة داخله قبل تطبيق التوزيع على خطة القص.
+A board mixes GEOMETRY and OFFCUT pieces. Unify the classifications before applying the distribution to a cutting plan.,يوجد لوح يحتوي على قطع GEOMETRY وOFFCUT معاً. يجب توحيد تصنيف القطع الموجودة داخله قبل تطبيق التوزيع على خطة القص.
+Use Board Editor,استخدام محرر الألواح
+"Open and use the board editor to rearrange pieces, add boards, change piece resource classifications, save drafts, and apply layouts to cutting plans.",فتح محرر الألواح واستخدامه لإعادة توزيع القطع وإضافة ألواح وتغيير تصنيف الدرف وحفظ المسودات وتطبيق التوزيع على خطط القص.
+You do not have permission to use the board editor.,ليست لديك صلاحية استخدام محرر الألواح.
 Deduct edge banding thickness by default,خصم سماكة القشاط افتراضياً
 Deduct edge banding thickness automatically,خصم سماكة القشاط تلقائياً
 Tool diameters,قياسات الريش

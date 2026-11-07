@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
 
 from .dxf_geometry import (
     EPSILON,
@@ -229,29 +229,57 @@ def material_footprints_overlap(
     return True
 
 
-def validate_material_layout(
+def _outer_bounds(polygon: Sequence[Point]) -> tuple[float, float, float, float]:
+    xs = [float(point[0]) for point in polygon]
+    ys = [float(point[1]) for point in polygon]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _bounds_clear(first: tuple[float, float, float, float], second: tuple[float, float, float, float], clearance: float) -> bool:
+    """True when axis-aligned bounds cannot violate overlap or clearance."""
+
+    return (
+        first[2] + clearance <= second[0]
+        or second[2] + clearance <= first[0]
+        or first[3] + clearance <= second[1]
+        or second[3] + clearance <= first[1]
+    )
+
+
+def material_layout_issues(
     parts: Sequence[PlacedPartGeometry],
     *,
     required_clearance: float,
     geometry_tolerance: float = EPSILON,
     numeric_tolerance: float = 0.0,
-) -> None:
-    """Validate MDF collision and canonical pairwise/hole-boundary clearance."""
+) -> list[dict[str, Any]]:
+    """Pair faults from the same material rule as ``validate_material_layout``.
+
+    Axis-aligned bounds only skip pairs that are already far enough apart.
+    Overlap and kerf still use the outline minus its holes.
+    """
+
     clearance = max(0.0, float(required_clearance))
     ordered = tuple(sorted(parts, key=lambda part: str(part.key)))
+    issues: list[dict[str, Any]] = []
     for index, first in enumerate(ordered):
+        first_bounds = _outer_bounds(first.geometry.outer)
         for second in ordered[index + 1 :]:
+            if _bounds_clear(first_bounds, _outer_bounds(second.geometry.outer), clearance):
+                continue
             if material_footprints_overlap(
                 first.geometry,
                 second.geometry,
                 tolerance=geometry_tolerance,
             ):
-                raise DxfTopologyError(
-                    "MATERIAL_FOOTPRINT_OVERLAP",
-                    first_key=first.key,
-                    second_key=second.key,
+                issues.append(
+                    {
+                        "code": "MATERIAL_FOOTPRINT_OVERLAP",
+                        "first_key": first.key,
+                        "second_key": second.key,
+                    }
                 )
-
+                continue
             first_hole = containing_hole(
                 first.geometry,
                 second.geometry.outer,
@@ -263,18 +291,10 @@ def validate_material_layout(
                 tolerance=geometry_tolerance,
             )
             if first_hole is not None:
-                distance = polygon_distance(
-                    first_hole,
-                    second.geometry.outer,
-                    geometry_tolerance,
-                )
+                distance = polygon_distance(first_hole, second.geometry.outer, geometry_tolerance)
                 violation_code = "HOLE_CLEARANCE_VIOLATION"
             elif second_hole is not None:
-                distance = polygon_distance(
-                    second_hole,
-                    first.geometry.outer,
-                    geometry_tolerance,
-                )
+                distance = polygon_distance(second_hole, first.geometry.outer, geometry_tolerance)
                 violation_code = "HOLE_CLEARANCE_VIOLATION"
             else:
                 distance = polygon_distance(
@@ -283,15 +303,44 @@ def validate_material_layout(
                     geometry_tolerance,
                 )
                 violation_code = "PART_CLEARANCE_VIOLATION"
-
             if distance + numeric_tolerance < clearance:
-                raise DxfTopologyError(
-                    violation_code,
-                    first_key=first.key,
-                    second_key=second.key,
-                    actual_clearance=distance,
-                    required_clearance=clearance,
+                issues.append(
+                    {
+                        "code": violation_code,
+                        "first_key": first.key,
+                        "second_key": second.key,
+                        "actual_clearance": distance,
+                        "required_clearance": clearance,
+                    }
                 )
+    return issues
+
+
+def validate_material_layout(
+    parts: Sequence[PlacedPartGeometry],
+    *,
+    required_clearance: float,
+    geometry_tolerance: float = EPSILON,
+    numeric_tolerance: float = 0.0,
+) -> None:
+    """Validate MDF collision and canonical pairwise/hole-boundary clearance."""
+
+    issues = material_layout_issues(
+        parts,
+        required_clearance=required_clearance,
+        geometry_tolerance=geometry_tolerance,
+        numeric_tolerance=numeric_tolerance,
+    )
+    if not issues:
+        return
+    first = issues[0]
+    raise DxfTopologyError(
+        str(first["code"]),
+        first_key=first.get("first_key"),
+        second_key=first.get("second_key"),
+        actual_clearance=first.get("actual_clearance"),
+        required_clearance=first.get("required_clearance"),
+    )
 
 
 def outline_compatible_with_piece_type(

@@ -208,9 +208,11 @@ class TestPlanContextualActionsUI(unittest.TestCase):
         )[0]
 
         self.assertIn("IMMUTABLE_STATUSES = {APPROVED, SUPERSEDED, CANCELLED}", doctype)
-        self.assertIn("if self.is_new() and parent.status != APPROVED", parent_guard)
+        # Approved-revision cycle stays gated; Board Editor lineage is exempt.
+        self.assertIn("board_editor_copy = is_board_editor_source(self.source_type)", parent_guard)
+        self.assertIn("if self.is_new() and parent.status != APPROVED:", parent_guard)
         self.assertIn(
-            "if not self.is_new() and parent.status not in IMMUTABLE_STATUSES",
+            "if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:",
             parent_guard,
         )
         self.assertIn("cint(self.revision) <= cint(parent.revision)", parent_guard)

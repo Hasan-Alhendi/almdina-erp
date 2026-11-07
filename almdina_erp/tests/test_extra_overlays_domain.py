@@ -244,6 +244,8 @@ def test_piece_with_only_commercial_addons_does_not_require_dxf_marks():
 
 
 def test_assign_extra_overlays_rejects_span_across_two_hosts():
+    # Two ordinary doors: the mark crosses both. Special is intentionally not
+    # used here so the span code is not shadowed by special_ambiguous.
     with pytest.raises(ExtraOverlayError) as exc_info:
         assign_extra_overlays(
             [
@@ -263,7 +265,7 @@ def test_assign_extra_overlays_rejects_span_across_two_hosts():
                 ),
                 ExtraOverlayHost(
                     key=2,
-                    piece_type="Special",
+                    piece_type="Regular",
                     polygon=_rect(160, 0, 310, 200),
                     selected_codes=("liner",),
                 ),
@@ -327,9 +329,20 @@ def test_liner_centers_in_the_kerf_do_not_span_neighboring_doors():
         for index, path in enumerate(paths)
     ]
 
-    with pytest.raises(ExtraOverlayError) as legacy:
-        assign_extra_overlays(overlays, hosts, tolerance=0.25, host_margin=3.0)
-    assert legacy.value.code == "extra_overlay_spans_hosts"
+    # host_margin 3 mm already covers a 2.5 mm kerf-radius tip, so the
+    # containment path binds each mark without a false span.
+    by_margin = assign_extra_overlays(
+        overlays, hosts, tolerance=0.25, host_margin=3.0
+    )
+    assert [item.host_key for item in by_margin] == [1, 2, 3]
+
+    # Without that margin the tips leave every outline, so ownership fails closed.
+    with pytest.raises(ExtraOverlayError) as unbound:
+        assign_extra_overlays(overlays, hosts, tolerance=0.25, host_margin=0.0)
+    assert unbound.value.code in {
+        "extra_overlay_floating",
+        "extra_overlay_spans_hosts",
+    }
 
     assigned = assign_extra_overlays(
         overlays,

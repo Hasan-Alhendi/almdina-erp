@@ -371,6 +371,7 @@ def recalculate_drawing_plan(
 def approve_production_dxf(
     order_name: str,
     plan_source: str = "System",
+    plan_name: str | None = None,
 ) -> dict[str, Any]:
     """Compatibility facade for the focused capability-managed approval service."""
 
@@ -378,7 +379,11 @@ def approve_production_dxf(
         approve_production_dxf as approve_drawing_plan,
     )
 
-    return approve_drawing_plan(order_name=order_name, plan_source=plan_source)
+    return approve_drawing_plan(
+        order_name=order_name,
+        plan_source=plan_source,
+        plan_name=plan_name,
+    )
 
 
 __all__ = [

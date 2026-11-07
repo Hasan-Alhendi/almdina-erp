@@ -31,6 +31,10 @@ const fakeWindow = {
     },
 };
 const context = vm.createContext({window: fakeWindow, console, Math, Number, JSON, Object, Array, Set});
+vm.runInContext(fs.readFileSync(path.resolve(
+    __dirname,
+    "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js"
+), "utf8"), context, { filename: "door_cutting_order_edge_display.js" });
 vm.runInContext(instrumented, context, { filename: "cutting_plan_renderer.js" });
 const edge = fakeWindow.__physicalEdgeFlags;
 const physical = { edge_long_right: 1, edge_long_left: 0, edge_width_top: 0, edge_width_bottom: 0 };
