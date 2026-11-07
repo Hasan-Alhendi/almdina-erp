@@ -1298,12 +1298,30 @@ def _corner_liner_issue(
     )
 
 
+def _layer_cutter_diameter_mm(
+    kind: str,
+    cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None,
+) -> float | None:
+    """Use the layer bit when the plan recorded one. Otherwise keep the saw kerf."""
+
+    if cutter_diameters_mm is None:
+        return cutter_diameter_mm
+    raw = cutter_diameters_mm.get(kind)
+    try:
+        diameter = float(raw) if raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        diameter = 0.0
+    return diameter if diameter > 0 else None
+
+
 def _corner_machining_issues(
     piece: dict[str, Any],
     spec: OrderPieceCutSpec,
     order: Any | None,
     *,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
     sheet: dict[str, Any] | None = None,
 ):
     issues = []
@@ -1312,7 +1330,9 @@ def _corner_machining_issues(
             piece,
             spec,
             order,
-            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameter_mm=_layer_cutter_diameter_mm(
+                addon.kind, cutter_diameter_mm, cutter_diameters_mm
+            ),
             sheet=sheet,
             kind=addon.kind,
         )
@@ -1329,6 +1349,7 @@ def _regular_machining_issues(
     *,
     cutter_diameter_mm: float | None,
     sheet: dict[str, Any] | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     """Bind one proved rotation after exact dimensions and piece identity."""
     if spec.piece_type != "Regular" or order is None:
@@ -1377,6 +1398,7 @@ def _regular_machining_issues(
         candidate_turns=turns,
         edge_bands=_corner_band_tokens(spec),
         cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
         origin_mm=(float(piece.get("x") or 0) * 10, float(piece.get("y") or 0) * 10),
         board_mm=_shifted_board_mm(sheet),
     )
@@ -1434,15 +1456,20 @@ def _piece_machining_issues(
     *,
     cutter_diameter_mm: float | None,
     sheet: dict[str, Any] | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     if spec.piece_type == "Regular":
         return _regular_machining_issues(
             piece, spec, order,
-            cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+            cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
+            sheet=sheet,
         )
     return _corner_machining_issues(
         piece, spec, order,
-        cutter_diameter_mm=cutter_diameter_mm, sheet=sheet,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=cutter_diameters_mm,
+        sheet=sheet,
     )
 
 
@@ -1452,6 +1479,7 @@ def _apply_strict_dimension_contract(
     *,
     order: Any | None = None,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> list[DxfValidationIssue]:
     """Relabel pieces and enrich them with exact order + edge-print metadata."""
     issues: list[DxfValidationIssue] = []
@@ -1502,6 +1530,7 @@ def _apply_strict_dimension_contract(
                             candidate["spec"],
                             order,
                             cutter_diameter_mm=cutter_diameter_mm,
+                            cutter_diameters_mm=cutter_diameters_mm,
                             sheet=sheet,
                         )
                     )
@@ -1732,6 +1761,7 @@ def _apply_strict_dimension_contract(
                         candidate["spec"],
                         order,
                         cutter_diameter_mm=cutter_diameter_mm,
+                        cutter_diameters_mm=cutter_diameters_mm,
                         sheet=sheet,
                     )
                 )
@@ -1838,6 +1868,30 @@ def _with_persisted_cut_context(
     return DxfImportError(issues=annotated)
 
 
+def _resolved_layer_diameters_mm(
+    settings: PlanSettings,
+    tool_diameters: dict[str, Any] | None,
+) -> dict[str, float | None]:
+    """Measure each machining layer with its own bit.
+
+    A missing or blank diameter inherits this plan's saw kerf, which is how a
+    plan saved before per-layer bits was cut. An explicit diameter is kept,
+    including when it differs from the saw. The saw diameter itself stays the
+    nesting kerf and is not rewritten here.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        LAYER_FIELDS,
+        diameters_for_record,
+    )
+
+    resolved = diameters_for_record(tool_diameters or {}, kerf_mm=settings.kerf_mm)
+    return {
+        kind: resolved[kind] if resolved[kind] > 0 else None
+        for kind, _field in LAYER_FIELDS
+    }
+
+
 def parse_production_dxf(
     file_url: str,
     order: Any,
@@ -1911,6 +1965,7 @@ def parse_production_dxf(
         specs,
         order=order,
         cutter_diameter_mm=settings.kerf_mm,
+        cutter_diameters_mm=_resolved_layer_diameters_mm(settings, tool_diameters),
     )
     if exact_issues:
         # Existing saw-center provenance distinguishes modern GEOMETRY from
