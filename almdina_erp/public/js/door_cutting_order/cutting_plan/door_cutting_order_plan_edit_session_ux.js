@@ -364,12 +364,28 @@
         return isEditing(frm);
     }
 
+    function applyRecalculateAvailability(frm, control) {
+        const controls = window.AlmdinaPlanControlsUX;
+        if (controls && typeof controls.canCalculate === "function") {
+            const allowed = controls.canCalculate(frm) === true;
+            control.prop("disabled", !allowed);
+            control.attr("aria-disabled", allowed ? "false" : "true");
+            return;
+        }
+        // The controls owner is absent only in a partial page. An open edit
+        // session must not keep the disabled state captured before it started.
+        if (isEditing(frm)) {
+            control.prop("disabled", false);
+            control.attr("aria-disabled", "false");
+        }
+    }
+
     function syncPhaseLocks(frm) {
         const wrapper = actionSurface(frm);
         if (!wrapper) return;
         const phase = planPhase(frm);
         const locked = phase === "starting" || phase === "saving" || phase === "cancelling";
-        wrapper.find("[data-almdina-plan-setting], .dco-recalculate-plan").each((_, element) => {
+        wrapper.find("[data-almdina-plan-setting]").each((_, element) => {
             const control = $(element);
             if (locked) {
                 if (control.attr(PHASE_DISABLED_ATTR) === undefined) {
@@ -383,6 +399,15 @@
                     .attr("aria-disabled", original === "1" ? "true" : "false")
                     .removeAttr(PHASE_DISABLED_ATTR);
             }
+        });
+        wrapper.find(".dco-recalculate-plan").each((_, element) => {
+            const control = $(element);
+            if (locked) {
+                control.prop("disabled", true).attr("aria-disabled", "true");
+                return;
+            }
+            control.removeAttr(PHASE_DISABLED_ATTR);
+            applyRecalculateAvailability(frm, control);
         });
     }
 
@@ -1109,9 +1134,9 @@
         if (isEditing(frm)) {
             refreshFieldAccess(frm);
             mountDraftControls(frm);
+            syncPhaseLocks(frm);
             syncEditorChrome(frm);
             setPlanActionsSuspended(frm, true);
-            syncPhaseLocks(frm);
             return;
         }
         syncPhaseLocks(frm);

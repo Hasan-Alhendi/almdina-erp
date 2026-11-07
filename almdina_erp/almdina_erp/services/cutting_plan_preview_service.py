@@ -16,7 +16,10 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
-from almdina_erp.almdina_erp.domain.cutting.plan_settings import settings_for_system_search
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    plan_settings_field_values,
+    settings_for_system_search,
+)
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import OptimizationOutcome
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import seed_plan_settings
 from almdina_erp.almdina_erp.services.export_validation_service import validate_cutting_plan_issues
@@ -175,9 +178,7 @@ def _system_draft(order: Any, capability: str) -> Any:
     plan.door_cutting_order = order.name
     plan.source_type, plan.status, plan.plan_kind = SYSTEM,DRAFT,"Order"
     plan.revision = int((approved or latest or {}).get('revision') or 0)+1
-    _apply_settings(plan,dict(packing_mode=settings.optimization_mode,cutting_machine_type=settings.machine_type,
-        kerf_mm=settings.kerf_mm,trim_margin_mm=settings.preferred_trim_mm,
-        optimization_time_limit_sec=settings.optimization_time_limit_sec))
+    _apply_settings(plan, plan_settings_field_values(settings))
     from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
     plan.modified = "new:"+fingerprint_payload(dict(latest=latest,approved=approved,settings=_settings_from_plan(plan).__dict__
         if hasattr(settings,'__dict__') else {k:getattr(plan,v) for k,v in _SETTING_TO_PLAN_FIELD.items()}))

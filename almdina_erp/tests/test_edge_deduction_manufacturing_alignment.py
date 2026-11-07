@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -217,6 +218,76 @@ def test_recorded_thickness_rejects_an_old_size_that_only_differs_from_finished(
     assert _sizes(enabled) == ("59.600", "39.600")
     assert _sizes(disabled) == ("60.000", "40.000")
     assert piece.cut_width_cm == 59.8
+
+
+def _execution_plan(deduct):
+    return SimpleNamespace(
+        name="CP-UPLOAD",
+        deduct_edge_thickness=deduct,
+        machine_type="CNC Router",
+        kerf_mm=3,
+        trim_margin_mm=5,
+        optimization_mode="quality",
+        optimization_time_limit_sec=10,
+        input_fingerprint="",
+        snapshot_json="",
+    )
+
+
+def _bind_snapshot(order, plan, *, historical):
+    from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
+
+    order.full_board_width_mm = 1220
+    order.full_board_length_mm = 2440
+    order.board_description = "MDF"
+    order.allow_piece_mirroring = 0
+    baseline = workspace.manufacturing_baseline_v4(order, plan, historical=historical)
+    sheets = [{"pieces": [{"piece_instance_id": "piece-1", "x": 0, "y": 0, "w": 598, "h": 398}]}]
+    plan.input_fingerprint = fingerprint_payload(baseline)
+    plan.snapshot_json = json.dumps({
+        "input_fingerprint_contract": 4,
+        "manufacturing_baseline": baseline,
+        "sheets": sheets,
+        "validation": {"is_valid": True},
+        "saved_layout_sha256": fingerprint_payload({"sheets": sheets}),
+    })
+    return plan.input_fingerprint
+
+
+def test_uploaded_overlay_matches_when_the_order_is_unchanged(policy_calculator):
+    piece = _piece(cut_width_cm=60, cut_length_cm=40, cut_size_label="60 × 40")
+    order = _order(piece)
+    plan = _execution_plan(1)
+    stored = _bind_snapshot(order, plan, historical=False)
+
+    decision = workspace.plan_fingerprint_compatibility(order, plan, stored)
+
+    assert decision.state == "MATCH"
+    assert decision.compatible
+    assert plan.deduct_edge_thickness == 1
+    assert (piece.cut_width_cm, piece.cut_length_cm) == (60, 40)
+
+
+def test_persisted_baseline_stays_fresh_when_the_plan_flag_would_overlay(policy_calculator):
+    piece = _piece(cut_width_cm=60, cut_length_cm=40, cut_size_label="60 × 40")
+    order = _order(piece)
+    plan = _execution_plan(1)
+    stored = _bind_snapshot(order, plan, historical=True)
+
+    assert workspace.plan_fingerprint_compatibility(order, plan, stored).state == "MATCH"
+
+
+def test_uploaded_overlay_stales_when_the_finished_size_changes(policy_calculator):
+    piece = _piece(cut_width_cm=60, cut_length_cm=40, cut_size_label="60 × 40")
+    order = _order(piece)
+    plan = _execution_plan(1)
+    stored = _bind_snapshot(order, plan, historical=False)
+    piece.width_cm = 70
+
+    decision = workspace.plan_fingerprint_compatibility(order, plan, stored)
+
+    assert decision.state == "MISMATCH"
+    assert decision.reason == "manufacturing_requirements_changed"
 
 
 def test_preview_does_not_sync_cut_sizes_before_commit():

@@ -218,7 +218,9 @@
         }
         if (approved) return false;
         if (!canMutateCurrentStage(frm)) return false;
-        if (frm.doc.current_production_stage) return isPlanningStage(frm);
+        // An unapproved plan follows the server rule: the current assignee may
+        // recalculate on the active stage. Approval outside planning stays blocked above.
+        if (frm.doc.current_production_stage) return true;
         return EDITABLE_ORDER_STATUSES.has(frm.doc.status || "Draft");
     }
 
@@ -649,6 +651,7 @@
         apply,
         applyOptimizerFieldAccess,
         canCalculate,
+        recalculationDisabledReason,
         preparePlanInputs,
         persistPendingOrderInputs,
         runRecalculation,

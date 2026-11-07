@@ -12,8 +12,11 @@ from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
     persisted_cut_matches_policy,
     special_bbox_matches_cut_envelope_with_unrecorded_edge_deduction,
 )
+from types import SimpleNamespace
+
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     normalize_plan_settings,
+    plan_settings_field_values,
     settings_for_system_search,
 )
 from almdina_erp.almdina_erp.domain.orders.costing import (
@@ -144,3 +147,41 @@ def test_readers_do_not_collapse_an_explicit_zero():
     assert "deduct_edge_thickness ||" not in api
     assert "coerce_deduct_edge_thickness" in query
     assert SIDE_LONG_RIGHT and SIDE_LONG_LEFT
+
+
+def _complete_settings(*, deduct):
+    return normalize_plan_settings(
+        optimization_mode="smart",
+        machine_type="Auto",
+        optimization_time_limit_sec=10,
+        kerf_mm=3,
+        preferred_trim_mm=5,
+        deduct_edge_thickness=deduct,
+    )
+
+
+def test_detached_system_draft_carries_deduction_on_and_off():
+    from almdina_erp.almdina_erp.services.cutting_plan_preview_service import (
+        _SETTING_TO_PLAN_FIELD,
+        _apply_settings,
+    )
+
+    preview = (
+        APP_ROOT / "almdina_erp/services/cutting_plan_preview_service.py"
+    ).read_text()
+    draft = preview.split("def _system_draft", 1)[1].split("\ndef ", 1)[0]
+    assert "plan_settings_field_values(settings)" in draft
+    assert "save_document" not in draft
+    assert ".insert(" not in draft
+
+    for deduct, expected in ((1, 1), (0, 0)):
+        payload = plan_settings_field_values(
+            settings_for_system_search(_complete_settings(deduct=deduct))
+        )
+        missing = [name for name in _SETTING_TO_PLAN_FIELD if name not in payload]
+        assert missing == []
+        assert payload["deduct_edge_thickness"] == expected
+        plan = SimpleNamespace()
+        _apply_settings(plan, payload)
+        assert plan.deduct_edge_thickness == expected
+        assert plan.kerf_mm == 3

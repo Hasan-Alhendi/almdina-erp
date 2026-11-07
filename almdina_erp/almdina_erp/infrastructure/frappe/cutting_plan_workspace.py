@@ -474,11 +474,23 @@ def plan_fingerprint_compatibility(
                 or not isinstance(validation, dict) or validation.get("is_valid") is not True
                 or snapshot.get("saved_layout_sha256") != fingerprint_payload({"sheets": snapshot["sheets"]})):
             return FingerprintCompatibility("REVIEW_REQUIRED", "", "v4", "invalid_saved_layout")
-        current = plan_input_fingerprint(order, plan, version=MANUFACTURING_BASELINE_VERSION,
-                                         historical=True)
-        if stored == current:
+        historical = plan_input_fingerprint(
+            order, plan, version=MANUFACTURING_BASELINE_VERSION, historical=True,
+        )
+        if stored == historical:
             return FingerprintCompatibility("MATCH", stored, "v4", "manufacturing_baseline_proven")
-        return FingerprintCompatibility("MISMATCH", current, "v4", "manufacturing_requirements_changed")
+        # A saved plan hashes the cut sizes that plan actually executed. Optional
+        # edge deduction stores that overlay, while the historical reader keeps
+        # the persisted order cuts. Recomputing the same plan against an
+        # unchanged order still matches. An order edit moves this digest too.
+        recorded = plan_input_fingerprint(
+            order, plan, version=MANUFACTURING_BASELINE_VERSION, historical=False,
+        )
+        if stored == recorded:
+            return FingerprintCompatibility("MATCH", stored, "v4", "manufacturing_baseline_proven")
+        return FingerprintCompatibility(
+            "MISMATCH", historical, "v4", "manufacturing_requirements_changed",
+        )
     if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
     current = plan_input_fingerprint(order, plan, historical=True)

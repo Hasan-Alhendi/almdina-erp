@@ -105,6 +105,10 @@
                 settings[fieldname] = systemSettings[fieldname];
             }
         });
+        const operational = activeSettings(frm);
+        if (operational && Object.prototype.hasOwnProperty.call(operational, "deduct_edge_thickness")) {
+            settings.deduct_edge_thickness = operational.deduct_edge_thickness;
+        }
         return settings;
     }
 

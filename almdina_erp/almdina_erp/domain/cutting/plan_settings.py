@@ -155,6 +155,23 @@ def settings_for_system_search(settings: PlanSettings) -> PlanSettings:
     return replace(settings, optimization_mode="smart")
 
 
+def plan_settings_field_values(settings: PlanSettings) -> dict[str, Any]:
+    """Map one complete PlanSettings value onto the workspace field names.
+
+    Every key is present. ``deduct_edge_thickness`` is ``1`` when deduction is
+    on and ``0`` when it is explicitly off.
+    """
+
+    return {
+        "packing_mode": settings.optimization_mode,
+        "cutting_machine_type": settings.machine_type,
+        "kerf_mm": settings.kerf_mm,
+        "trim_margin_mm": settings.preferred_trim_mm,
+        "optimization_time_limit_sec": settings.optimization_time_limit_sec,
+        "deduct_edge_thickness": 1 if settings.deduct_edge_thickness else 0,
+    }
+
+
 def canonical_default_plan_settings() -> PlanSettings:
     """Product defaults used only when a storage value is genuinely missing."""
 
@@ -178,4 +195,5 @@ __all__ = [
     "canonical_default_plan_settings",
     "coerce_deduct_edge_thickness",
     "normalize_plan_settings",
+    "plan_settings_field_values",
 ]
