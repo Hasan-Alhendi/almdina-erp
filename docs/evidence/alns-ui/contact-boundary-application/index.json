@@ -1,0 +1,20 @@
+[
+  {
+    "case": "108",
+    "arm": "configured",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "108-configured-r0.json",
+    "sha256": "0a29a1f8ba75b15d294c2450e3f6942c7b29752974889ff38e00ba6ce31e5a7c",
+    "stderr": ""
+  },
+  {
+    "case": "154",
+    "arm": "configured",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "154-configured-r0.json",
+    "sha256": "6b9c33abacd229d08492dfb8d78688b96ca0a3ead3c1e2bdab379a585db9ba08",
+    "stderr": ""
+  }
+]

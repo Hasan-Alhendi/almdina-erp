@@ -1,0 +1,478 @@
+"""Structured DXF validation issues (framework-free, language-free).
+
+Validators decide truth. Issues transport truth. Presenters explain truth.
+Business logic must branch on ``code`` (and structured fields), never on
+user-facing message text.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Mapping
+
+
+# Stable categories used for ordering and inventory.
+CATEGORY_FILE = "FILE"
+CATEGORY_READER = "READER"
+CATEGORY_LAYER = "LAYER"
+CATEGORY_SHEET = "SHEET"
+CATEGORY_CONTOUR = "CONTOUR"
+CATEGORY_IDENTITY = "IDENTITY"
+CATEGORY_DIMENSIONS = "DIMENSIONS"
+CATEGORY_TOPOLOGY = "TOPOLOGY"
+CATEGORY_LAYOUT = "LAYOUT"
+CATEGORY_OVERLAY = "OVERLAY"
+CATEGORY_OFFCUT = "OFFCUT"
+CATEGORY_PERSISTENCE = "PERSISTENCE"
+CATEGORY_EXPORT = "EXPORT"
+CATEGORY_WORKFLOW = "WORKFLOW"
+
+CATEGORY_ORDER: tuple[str, ...] = (
+    CATEGORY_FILE,
+    CATEGORY_READER,
+    CATEGORY_LAYER,
+    CATEGORY_SHEET,
+    CATEGORY_CONTOUR,
+    CATEGORY_IDENTITY,
+    CATEGORY_DIMENSIONS,
+    CATEGORY_TOPOLOGY,
+    CATEGORY_LAYOUT,
+    CATEGORY_OVERLAY,
+    CATEGORY_OFFCUT,
+    CATEGORY_PERSISTENCE,
+    CATEGORY_EXPORT,
+    CATEGORY_WORKFLOW,
+)
+
+# Target kinds
+TARGET_FILE = "file"
+TARGET_SHEET = "sheet"
+TARGET_PIECE = "piece"
+TARGET_PIECE_COPY = "piece_copy"
+TARGET_CONTOUR = "contour"
+TARGET_LAYER = "layer"
+TARGET_OVERLAY = "overlay"
+TARGET_BLOCK = "block"
+TARGET_PIECE_PAIR = "piece_pair"
+TARGET_CONTOUR_PAIR = "contour_pair"
+TARGET_ORDER = "order"
+TARGET_UNKNOWN = "unknown"
+
+# Stable codes (only those used by runtime paths).
+FILE_REQUIRED = "FILE_REQUIRED"
+FILE_INVALID_EXTENSION = "FILE_INVALID_EXTENSION"
+FILE_TOO_LARGE = "FILE_TOO_LARGE"
+FILE_MISSING = "FILE_MISSING"
+FILE_ATTACHED_ELSEWHERE = "FILE_ATTACHED_ELSEWHERE"
+FILE_UNREADABLE = "FILE_UNREADABLE"
+DXF_UNREADABLE = "DXF_UNREADABLE"
+DXF_LIBRARY_MISSING = "DXF_LIBRARY_MISSING"
+UNSUPPORTED_ENTITY = "UNSUPPORTED_ENTITY"
+MINSERT_UNSUPPORTED = "MINSERT_UNSUPPORTED"
+ENTITY_LIMIT_EXCEEDED = "ENTITY_LIMIT_EXCEEDED"
+BLOCK_NESTING_TOO_DEEP = "BLOCK_NESTING_TOO_DEEP"
+ENTITY_PARSE_FAILED = "ENTITY_PARSE_FAILED"
+BLOCK_TRANSFORM_FAILED = "BLOCK_TRANSFORM_FAILED"
+FILE_NOT_PRIVATE = "FILE_NOT_PRIVATE"
+
+SHEET_LAYER_MISSING = "SHEET_LAYER_MISSING"
+CUT_LAYER_MISSING = "CUT_LAYER_MISSING"
+SHEET_OPEN = "SHEET_OPEN"
+SHEET_BRANCHED = "SHEET_BRANCHED"
+SHEET_NOT_RECTANGLE = "SHEET_NOT_RECTANGLE"
+SHEET_SIZE_MISMATCH = "SHEET_SIZE_MISMATCH"
+
+CUT_OPEN = "CUT_OPEN"
+CUT_BRANCHED = "CUT_BRANCHED"
+CUT_SELF_INTERSECTION = "CUT_SELF_INTERSECTION"
+CUT_INVALID_GEOMETRY = "CUT_INVALID_GEOMETRY"
+CORNER_EDGE_UNRESOLVED = "CORNER_EDGE_UNRESOLVED"
+REGULAR_EDGE_ORIENTATION_UNRESOLVED = "REGULAR_EDGE_ORIENTATION_UNRESOLVED"
+L_CORNER_NOTCH_MISMATCH = "L_CORNER_NOTCH_MISMATCH"
+CLIPPED_CORNER_DIMENSIONS_MISMATCH = "CLIPPED_CORNER_DIMENSIONS_MISMATCH"
+CUT_SIZE_MISMATCH = "CUT_SIZE_MISMATCH"
+PIECE_COUNT_MISMATCH = "PIECE_COUNT_MISMATCH"
+SPECIAL_SIZE_MISMATCH = "SPECIAL_SIZE_MISMATCH"
+REGULAR_OUTLINE_NOT_RECTANGLE = "REGULAR_OUTLINE_NOT_RECTANGLE"
+SPECIAL_OUTLINE_IS_RECTANGLE = "SPECIAL_OUTLINE_IS_RECTANGLE"
+SPECIAL_ADDON_GROUP_EXTRA = "SPECIAL_ADDON_GROUP_EXTRA"
+SPECIAL_ADDON_GROUP_MISSING = "SPECIAL_ADDON_GROUP_MISSING"
+SPECIAL_ADDON_GROUP_SPLIT = "SPECIAL_ADDON_GROUP_SPLIT"
+SPECIAL_OVERLAY_AMBIGUOUS = "SPECIAL_OVERLAY_AMBIGUOUS"
+FORBIDDEN_ROTATION = "FORBIDDEN_ROTATION"
+FORBIDDEN_MIRRORING = "FORBIDDEN_MIRRORING"
+PIECE_MISSING = "PIECE_MISSING"
+EXTRA_CUT_PATH = "EXTRA_CUT_PATH"
+PIECE_IDENTITY_AMBIGUOUS = "PIECE_IDENTITY_AMBIGUOUS"
+PIECE_IDENTITY_MISSING = "PIECE_IDENTITY_MISSING"
+EXPECTED_PIECE_MISMATCH = "EXPECTED_PIECE_MISMATCH"
+AMBIGUOUS_CONTOUR_OWNERSHIP = "AMBIGUOUS_CONTOUR_OWNERSHIP"
+UNRESOLVED_CONTOUR_OWNERSHIP = "UNRESOLVED_CONTOUR_OWNERSHIP"
+INVALID_PART_TOPOLOGY = "INVALID_PART_TOPOLOGY"
+MATERIAL_OVERLAP = "MATERIAL_OVERLAP"
+KERF_VIOLATION = "KERF_VIOLATION"
+HOLE_CLEARANCE_VIOLATION = "HOLE_CLEARANCE_VIOLATION"
+PIECE_OUTSIDE_SHEET = "PIECE_OUTSIDE_SHEET"
+PIECE_INVALID_DIMENSIONS = "PIECE_INVALID_DIMENSIONS"
+BOARD_INVALID = "BOARD_INVALID"
+TRIM_EXCEEDS_BOARD = "TRIM_EXCEEDS_BOARD"
+APPLIED_TRIM_OVERFLOW = "APPLIED_TRIM_OVERFLOW"
+CUT_DIMENSIONS_MISSING = "CUT_DIMENSIONS_MISSING"
+CUT_DIMENSIONS_BIND_FAILED = "CUT_DIMENSIONS_BIND_FAILED"
+PERSISTED_CUT_SPECS = "PERSISTED_CUT_SPECS"
+MIXED_RESOURCE_SOURCE = "MIXED_RESOURCE_SOURCE"
+OFFCUT_IDENTITY_MISMATCH = "OFFCUT_IDENTITY_MISMATCH"
+MANUFACTURING_REQUIREMENTS_MISSING = "MANUFACTURING_REQUIREMENTS_MISSING"
+PLAN_SOURCE_MISSING = "PLAN_SOURCE_MISSING"
+PLAN_SOURCE_IDENTITY_MISMATCH = "PLAN_SOURCE_IDENTITY_MISMATCH"
+REMNANT_REFERENCE_MISSING = "REMNANT_REFERENCE_MISSING"
+REMNANT_NOT_FOUND = "REMNANT_NOT_FOUND"
+REMNANT_IDENTITY_MISMATCH = "REMNANT_IDENTITY_MISMATCH"
+PLAN_LABEL_DUPLICATE = "PLAN_LABEL_DUPLICATE"
+PLAN_UNPLACED_PIECES = "PLAN_UNPLACED_PIECES"
+PLAN_VALIDATION_FAILED = "PLAN_VALIDATION_FAILED"
+PLAN_UNKNOWN_PIECES = "PLAN_UNKNOWN_PIECES"
+PIECE_IDENTITY_MISMATCH = "PIECE_IDENTITY_MISMATCH"
+TOPOLOGY_VALIDATION_FAILED = "TOPOLOGY_VALIDATION_FAILED"
+
+OVERLAY_INVALID_PATH = "OVERLAY_INVALID_PATH"
+OVERLAY_SPANS_HOSTS = "OVERLAY_SPANS_HOSTS"
+OVERLAY_ADDON_NOT_SELECTED = "OVERLAY_ADDON_NOT_SELECTED"
+OVERLAY_ON_NON_EXTRA = "OVERLAY_ON_NON_EXTRA"
+OVERLAY_FLOATING = "OVERLAY_FLOATING"
+OVERLAY_ADDON_MISSING = "OVERLAY_ADDON_MISSING"
+OVERLAY_ADDON_DUPLICATE = "OVERLAY_ADDON_DUPLICATE"
+OVERLAY_UNKNOWN = "OVERLAY_UNKNOWN"
+LINER_OFFSET_MISMATCH = "LINER_OFFSET_MISMATCH"
+LINER_WIDTH_MISMATCH = "LINER_WIDTH_MISMATCH"
+LINER_SIDE_MISMATCH = "LINER_SIDE_MISMATCH"
+LINER_SHAPE_MISMATCH = "LINER_SHAPE_MISMATCH"
+LINER_WIDTH_NOT_MEASURABLE = "LINER_WIDTH_NOT_MEASURABLE"
+GLASS_OPENING_MISSING = "GLASS_OPENING_MISSING"
+GLASS_OPENING_UNEXPECTED = "GLASS_OPENING_UNEXPECTED"
+GLASS_MULTIPLE_OPENINGS = "GLASS_MULTIPLE_OPENINGS"
+GLASS_OPENING_INVALID = "GLASS_OPENING_INVALID"
+GLASS_MARGIN_MISMATCH = "GLASS_MARGIN_MISMATCH"
+GLASS_OPENING_OUTSIDE = "GLASS_OPENING_OUTSIDE"
+GLASS_GEOMETRY_AMBIGUOUS = "GLASS_GEOMETRY_AMBIGUOUS"
+SAW_CENTER_INVALID = "SAW_CENTER_INVALID"
+
+LEGACY_MESSAGE = "LEGACY_MESSAGE"
+
+
+@dataclass(frozen=True, slots=True)
+class DxfIssueTarget:
+    """Where the issue applies. Contour identity is never piece identity."""
+
+    kind: str = TARGET_UNKNOWN
+    source_piece_no: int | None = None
+    copy_no: int | None = None
+    contour_no: int | None = None
+    sheet_no: int | None = None
+    pair_piece_nos: tuple[int | str, int | str] | None = None
+    pair_contour_nos: tuple[int | str, int | str] | None = None
+    pair_copy_nos: tuple[int | None, int | None] | None = None
+    layer: str | None = None
+    label: str | None = None
+    piece_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DxfValidationIssue:
+    """Language-free structured DXF validation issue."""
+
+    code: str
+    category: str
+    target: DxfIssueTarget = field(default_factory=DxfIssueTarget)
+    params: Mapping[str, Any] = field(default_factory=dict)
+    debug: Mapping[str, Any] = field(default_factory=dict)
+
+    def param(self, key: str, default: Any = None) -> Any:
+        return self.params.get(key, default)
+
+
+def issue(
+    code: str,
+    category: str,
+    *,
+    target: DxfIssueTarget | None = None,
+    params: Mapping[str, Any] | None = None,
+    debug: Mapping[str, Any] | None = None,
+) -> DxfValidationIssue:
+    return DxfValidationIssue(
+        code=code,
+        category=category,
+        target=target or DxfIssueTarget(),
+        params=dict(params or {}),
+        debug=dict(debug or {}),
+    )
+
+
+def piece_target(
+    *,
+    source_piece_no: int | None = None,
+    copy_no: int | None = None,
+    label: str | None = None,
+    piece_index: int | None = None,
+) -> DxfIssueTarget:
+    if copy_no is not None and source_piece_no is not None:
+        kind = TARGET_PIECE_COPY
+    elif source_piece_no is not None or label is not None or piece_index is not None:
+        kind = TARGET_PIECE
+    else:
+        kind = TARGET_UNKNOWN
+    return DxfIssueTarget(
+        kind=kind,
+        source_piece_no=source_piece_no,
+        copy_no=copy_no,
+        label=label,
+        piece_index=piece_index,
+    )
+
+
+def contour_target(contour_no: int, *, layer: str | None = None) -> DxfIssueTarget:
+    return DxfIssueTarget(kind=TARGET_CONTOUR, contour_no=contour_no, layer=layer)
+
+
+def sheet_target(sheet_no: int, *, layer: str | None = None) -> DxfIssueTarget:
+    return DxfIssueTarget(kind=TARGET_SHEET, sheet_no=sheet_no, layer=layer)
+
+
+def pair_target(
+    first: int | str,
+    second: int | str,
+    *,
+    sheet_no: int | None = None,
+    copy_nos: tuple[int | None, int | None] | None = None,
+) -> DxfIssueTarget:
+    return DxfIssueTarget(
+        kind=TARGET_PIECE_PAIR,
+        pair_piece_nos=(first, second),
+        pair_copy_nos=copy_nos,
+        sheet_no=sheet_no,
+    )
+
+
+def contour_pair_target(
+    first: int | str,
+    second: int | str,
+    *,
+    sheet_no: int | None = None,
+) -> DxfIssueTarget:
+    return DxfIssueTarget(
+        kind=TARGET_CONTOUR_PAIR,
+        pair_contour_nos=(first, second),
+        sheet_no=sheet_no,
+    )
+
+
+def layer_target(layer: str) -> DxfIssueTarget:
+    return DxfIssueTarget(kind=TARGET_LAYER, layer=layer)
+
+
+def file_target(*, label: str | None = None) -> DxfIssueTarget:
+    return DxfIssueTarget(kind=TARGET_FILE, label=label)
+
+
+def sort_issues(issues: list[DxfValidationIssue]) -> list[DxfValidationIssue]:
+    order = {name: index for index, name in enumerate(CATEGORY_ORDER)}
+    return sorted(
+        issues,
+        key=lambda item: (order.get(item.category, len(CATEGORY_ORDER)), item.code),
+    )
+
+
+# Codes that receive persisted cut-spec annotation after a dimension failure.
+# Inventory count failures already name the missing/extra size in their own card.
+PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
+    {
+        CUT_SIZE_MISMATCH,
+        SPECIAL_SIZE_MISMATCH,
+        FORBIDDEN_ROTATION,
+        FORBIDDEN_MIRRORING,
+        PIECE_IDENTITY_MISSING,
+    }
+)
+
+# Codes that already carry a full inventory diagnosis; do not append cut specs.
+SKIP_PERSISTED_CUT_CONTEXT_CODES: frozenset[str] = frozenset(
+    {
+        EXPECTED_PIECE_MISMATCH,
+        EXTRA_CUT_PATH,
+        PIECE_MISSING,
+        REGULAR_OUTLINE_NOT_RECTANGLE,
+        SPECIAL_OUTLINE_IS_RECTANGLE,
+        SPECIAL_ADDON_GROUP_EXTRA,
+        SPECIAL_ADDON_GROUP_MISSING,
+        SPECIAL_ADDON_GROUP_SPLIT,
+        SPECIAL_OVERLAY_AMBIGUOUS,
+    }
+)
+
+
+def topology_error_to_issue(
+    error: Any,
+    *,
+    kerf_mm: float = 0.0,
+    details: str = "",
+    source_piece_no: int | None = None,
+    copy_no: int | None = None,
+    pair_identity_proven: bool = False,
+    pair_source_piece_nos: tuple[int | str, int | str] | None = None,
+    pair_copy_nos: tuple[int | None, int | None] | None = None,
+    sheet_no: int | None = None,
+    geometry_unit_mm: float | None = None,
+    debug: Mapping[str, Any] | None = None,
+) -> DxfValidationIssue:
+    """Map a domain ``DxfTopologyError`` to a structured issue."""
+    code = str(getattr(error, "code", "") or TOPOLOGY_VALIDATION_FAILED)
+    first = getattr(error, "first_key", None)
+    second = getattr(error, "second_key", None)
+    expected_index = getattr(error, "expected_piece_index", None)
+    params: dict[str, Any] = {"kerf_mm": kerf_mm}
+    if geometry_unit_mm is not None and getattr(error, "actual_clearance", None) is not None:
+        params["actual_clearance_mm"] = error.actual_clearance * geometry_unit_mm
+    pair = (first if first is not None else "؟", second if second is not None else "؟")
+    pair_location = (
+        pair_target(*pair_source_piece_nos, sheet_no=sheet_no, copy_nos=pair_copy_nos)
+        if pair_identity_proven and pair_source_piece_nos
+        else contour_pair_target(*pair, sheet_no=sheet_no)
+    )
+    if details:
+        params["details"] = details
+    if getattr(error, "actual_width", None) is not None:
+        params["actual_width_mm"] = error.actual_width
+        params["actual_height_mm"] = error.actual_height
+        params["expected_width_mm"] = error.expected_width
+        params["expected_height_mm"] = error.expected_height
+    if expected_index is not None:
+        params["expected_piece_index"] = expected_index
+
+    if code == "REGULAR_OUTLINE_NOT_RECTANGLE":
+        params["identity_unproven"] = True
+        return issue(
+            REGULAR_OUTLINE_NOT_RECTANGLE,
+            CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "SPECIAL_OUTLINE_IS_RECTANGLE":
+        params["identity_unproven"] = True
+        return issue(
+            SPECIAL_OUTLINE_IS_RECTANGLE,
+            CATEGORY_DIMENSIONS,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "FORBIDDEN_ROTATION":
+        return issue(
+            FORBIDDEN_ROTATION,
+            CATEGORY_DIMENSIONS,
+            target=piece_target(source_piece_no=source_piece_no, copy_no=copy_no),
+            params=params,
+            debug=debug,
+        )
+    if code == "EXPECTED_PIECE_MISMATCH":
+        return issue(
+            EXPECTED_PIECE_MISMATCH,
+            CATEGORY_IDENTITY,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "AMBIGUOUS_CONTOUR_OWNERSHIP":
+        return issue(
+            AMBIGUOUS_CONTOUR_OWNERSHIP,
+            CATEGORY_TOPOLOGY,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "UNRESOLVED_CONTOUR_OWNERSHIP":
+        return issue(
+            UNRESOLVED_CONTOUR_OWNERSHIP,
+            CATEGORY_TOPOLOGY,
+            target=DxfIssueTarget(kind=TARGET_ORDER),
+            params=params,
+            debug=debug,
+        )
+    if code == "INVALID_PART_TOPOLOGY":
+        return issue(
+            INVALID_PART_TOPOLOGY,
+            CATEGORY_TOPOLOGY,
+            target=contour_target(int(first)) if isinstance(first, int) else DxfIssueTarget(),
+            params=params,
+            debug=debug,
+        )
+    if code == "MATERIAL_FOOTPRINT_OVERLAP":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
+        return issue(
+            MATERIAL_OVERLAP,
+            CATEGORY_LAYOUT,
+            target=pair_location,
+            params=params,
+            debug=debug,
+        )
+    if code == "HOLE_CLEARANCE_VIOLATION":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
+        return issue(
+            HOLE_CLEARANCE_VIOLATION,
+            CATEGORY_LAYOUT,
+            target=pair_location,
+            params=params,
+            debug=debug,
+        )
+    if code == "PART_CLEARANCE_VIOLATION":
+        pair = (first if first is not None else "؟", second if second is not None else "؟")
+        return issue(
+            KERF_VIOLATION,
+            CATEGORY_LAYOUT,
+            target=pair_location,
+            params=params,
+            debug=debug,
+        )
+    return issue(
+        TOPOLOGY_VALIDATION_FAILED,
+        CATEGORY_TOPOLOGY,
+        target=DxfIssueTarget(kind=TARGET_ORDER),
+        params={**params, "topology_code": code},
+        debug=debug,
+    )
+
+
+_OVERLAY_CODE_MAP = {
+    "extra_overlay_invalid_path": OVERLAY_INVALID_PATH,
+    "extra_overlay_spans_hosts": OVERLAY_SPANS_HOSTS,
+    "extra_overlay_addon_not_selected": OVERLAY_ADDON_NOT_SELECTED,
+    "extra_overlay_on_non_extra": OVERLAY_ON_NON_EXTRA,
+    "extra_overlay_floating": OVERLAY_FLOATING,
+    "extra_overlay_addon_missing": OVERLAY_ADDON_MISSING,
+    "extra_overlay_addon_duplicate": OVERLAY_ADDON_DUPLICATE,
+    "extra_overlay_special_ambiguous": SPECIAL_OVERLAY_AMBIGUOUS,
+}
+
+
+def overlay_error_to_issue(error: Any) -> DxfValidationIssue:
+    """Map a domain ``ExtraOverlayError`` to a structured issue."""
+    raw_code = str(getattr(error, "code", "") or "")
+    code = _OVERLAY_CODE_MAP.get(raw_code, OVERLAY_UNKNOWN)
+    layer = str(getattr(error, "layer", "") or "")
+    label = str(getattr(error, "label", "") or getattr(error, "host_key", "") or "")
+    kind = str(getattr(error, "kind", "") or "")
+    # Overlay host labels/keys are internal references. They are not enough to
+    # establish source-piece identity for a user-facing door number.
+    source_piece_no = None
+    return issue(
+        code,
+        CATEGORY_OVERLAY,
+        target=DxfIssueTarget(
+            kind=TARGET_OVERLAY,
+            layer=layer or None,
+            label=label or None,
+            source_piece_no=source_piece_no,
+        ),
+        params={"overlay_kind": kind, "layer": layer, "label": label},
+        debug={"raw_code": raw_code, "host_key": getattr(error, "host_key", None)},
+    )

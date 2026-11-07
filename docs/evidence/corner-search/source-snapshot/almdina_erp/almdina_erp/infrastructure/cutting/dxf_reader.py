@@ -1,0 +1,370 @@
+from __future__ import annotations
+
+from collections import Counter
+from typing import Any, Callable, Iterable
+
+from almdina_erp.almdina_erp.domain.cutting.dxf_text_labels import matches_text_label_layer
+
+SUPPORTED_DXF_ENTITY_TYPES = frozenset({
+    "LINE",
+    "LWPOLYLINE",
+    "POLYLINE",
+    "ARC",
+    "CIRCLE",
+    "SPLINE",
+    "ELLIPSE",
+})
+TEXT_ANNOTATION_ENTITY_TYPES = frozenset({"TEXT", "MTEXT"})
+CURVE_FLATTENING_TOLERANCE_MM = 0.25
+MAX_INSERT_DEPTH = 32
+MAX_EXPANDED_ENTITIES = 100_000
+
+
+class DxfReadError(ValueError):
+    """Infrastructure DXF read failure with a stable machine code."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "DXF_UNREADABLE",
+        params: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = dict(params or {})
+
+
+def _annotation_point(value: Any) -> tuple[float, float]:
+    if hasattr(value, "x") and hasattr(value, "y"):
+        return (float(value.x), float(value.y))
+    return (float(value[0]), float(value[1]))
+
+
+def _annotation_from_entity(entity: Any, *, layer: str) -> dict[str, Any] | None:
+    entity_type = entity.dxftype().upper()
+    if entity_type == "TEXT":
+        content = str(getattr(entity.dxf, "text", "") or "").replace("%%u", "").strip()
+        insert = entity.dxf.insert
+        halign = int(getattr(entity.dxf, "halign", 0) or 0)
+        valign = int(getattr(entity.dxf, "valign", 0) or 0)
+        align = getattr(entity.dxf, "align_point", None)
+        point = align if (halign or valign) and align is not None else insert
+        height = float(getattr(entity.dxf, "height", 0) or 0)
+        rotation = float(getattr(entity.dxf, "rotation", 0) or 0)
+    elif entity_type == "MTEXT":
+        try:
+            content = str(entity.plain_text() or "").strip()
+        except Exception:
+            content = str(getattr(entity.dxf, "text", "") or "").strip()
+        point = entity.dxf.insert
+        height = float(
+            getattr(entity.dxf, "char_height", 0)
+            or getattr(entity.dxf, "height", 0)
+            or 0
+        )
+        rotation = float(getattr(entity.dxf, "rotation", 0) or 0)
+    else:
+        return None
+    if not content:
+        return None
+    x, y = _annotation_point(point)
+    return {
+        "layer": layer,
+        "entity_type": entity_type,
+        "text": content,
+        "x": x,
+        "y": y,
+        "height": height,
+        "rotation": rotation,
+    }
+
+
+def _legacy_annotation_from_row(row: dict[str, Any], *, layer: str) -> dict[str, Any] | None:
+    content = str(row.get("text") or "").strip()
+    if not content:
+        return None
+    try:
+        x = float(row.get("x") if row.get("x") is not None else row.get("x1") or 0)
+        y = float(row.get("y") if row.get("y") is not None else row.get("y1") or 0)
+        height = float(row.get("height") or 0)
+        rotation = float(row.get("rotation") or 0)
+    except (TypeError, ValueError):
+        return None
+    return {
+        "layer": layer,
+        "entity_type": str(row.get("entity_type") or row.get("type") or "TEXT").upper(),
+        "text": content,
+        "x": x,
+        "y": y,
+        "height": height,
+        "rotation": rotation,
+    }
+
+
+def _entity_is_closed(entity: Any) -> bool:
+    if bool(getattr(entity, "closed", False)):
+        return True
+    if bool(getattr(entity, "is_closed", False)):
+        return True
+    flags = getattr(getattr(entity, "dxf", None), "flags", None)
+    try:
+        return bool(int(flags or 0) & 1)
+    except (TypeError, ValueError):
+        return False
+
+
+def _segments_from_points(points: list[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    return [(points[index], points[index + 1]) for index in range(len(points) - 1) if points[index] != points[index + 1]]
+
+
+def _normalize_layer(value: Any) -> str:
+    """Normalize only case and surrounding whitespace; never infer aliases."""
+    return str(value or "0").strip().upper()
+
+
+def _effective_layer(raw_layer: Any, inherited_layer: str | None) -> str:
+    layer = _normalize_layer(raw_layer)
+    if layer == "0" and inherited_layer:
+        return inherited_layer
+    return layer
+
+
+def _is_minsert(entity: Any) -> bool:
+    return int(getattr(entity.dxf, "row_count", 1) or 1) > 1 or int(
+        getattr(entity.dxf, "column_count", 1) or 1
+    ) > 1
+
+
+def _diagnostics(
+    *,
+    detected_layers: set[str],
+    relevant_layers: set[str],
+    entity_counts: Counter[str],
+    has_inserts: bool,
+    block_names: set[str],
+    expanded_entities: int,
+) -> dict[str, Any]:
+    return {
+        "detected_layers": sorted(detected_layers),
+        "relevant_layers": sorted(detected_layers & relevant_layers),
+        "entity_counts": dict(sorted(entity_counts.items())),
+        "has_inserts": has_inserts,
+        "block_names": sorted(block_names),
+        "expanded_entities": expanded_entities,
+    }
+
+
+def _import_ezdxf():
+    import ezdxf
+    from ezdxf import path as ezpath
+
+    return ezdxf, ezpath
+
+
+def _load_ezdxf_document(ezdxf: Any, file_path: str) -> Any:
+    try:
+        return ezdxf.readfile(file_path)
+    except Exception:
+        try:
+            from ezdxf import recover
+
+            document, _auditor = recover.readfile(file_path)
+        except Exception as exc:
+            raise DxfReadError(
+                "تعذر قراءة بنية ملف DXF. تأكد أن الملف DXF صالح وغير تالف.",
+                code="DXF_UNREADABLE",
+            ) from exc
+        return document
+
+
+def _geometry_from_legacy_rows(
+    rows: list[dict[str, Any]],
+    *,
+    relevant_layers: set[str],
+) -> dict[str, Any]:
+    segments: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
+    detected_layers: set[str] = set()
+    entity_counts: Counter[str] = Counter()
+    for row in rows:
+        layer = _normalize_layer(row.get("layer"))
+        detected_layers.add(layer)
+        entity_type = str(row.get("entity_type") or row.get("type") or "LINE").upper()
+        entity_counts[entity_type] += 1
+        if layer not in relevant_layers:
+            continue
+        if matches_text_label_layer(layer):
+            if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
+                annotation = _legacy_annotation_from_row(row, layer=layer)
+                if annotation:
+                    annotations.append(annotation)
+            continue
+        if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
+            continue
+        segments.append(
+            {
+                "layer": layer,
+                "entity_type": entity_type,
+                "start": (float(row.get("x1") or 0), float(row.get("y1") or 0)),
+                "end": (float(row.get("x2") or 0), float(row.get("y2") or 0)),
+            }
+        )
+    return {
+        "segments": segments,
+        "annotations": annotations,
+        "unsupported": [],
+        "diagnostics": _diagnostics(
+            detected_layers=detected_layers,
+            relevant_layers=relevant_layers,
+            entity_counts=entity_counts,
+            has_inserts=False,
+            block_names=set(),
+            expanded_entities=len(rows),
+        ),
+    }
+
+
+def read_dxf_geometry(
+    file_path: str,
+    *,
+    relevant_layers: set[str],
+    legacy_line_parser: Callable[[], list[dict[str, Any]]] | None = None,
+) -> dict[str, Any]:
+    """Read DXF geometry and normalize curves to validation-only segments.
+
+    Modelspace and nested INSERT/BLOCK contents are read through ezdxf virtual
+    entities so INSERT translation, rotation and scaling are applied by the DXF
+    library. AutoCAD layer-0 inheritance is resolved explicitly after expansion.
+    The source DXF is never rewritten.
+    """
+    normalized_relevant_layers = {_normalize_layer(layer) for layer in relevant_layers}
+    try:
+        ezdxf, ezpath = _import_ezdxf()
+    except ImportError:
+        if legacy_line_parser is None:
+            raise DxfReadError(
+                "مكتبة قراءة DXF غير متوفرة على الخادم.",
+                code="DXF_LIBRARY_MISSING",
+            )
+        return _geometry_from_legacy_rows(
+            legacy_line_parser(),
+            relevant_layers=normalized_relevant_layers,
+        )
+
+    doc = _load_ezdxf_document(ezdxf, file_path)
+
+    segments: list[dict[str, Any]] = []
+    annotations: list[dict[str, Any]] = []
+    unsupported: list[dict[str, str]] = []
+    detected_layers: set[str] = set()
+    entity_counts: Counter[str] = Counter()
+    block_names: set[str] = set()
+    has_inserts = False
+    expanded_entities = 0
+    entity_seq = 0
+
+    def visit(entities: Iterable[Any], *, inherited_layer: str | None, depth: int) -> None:
+        nonlocal expanded_entities, has_inserts, entity_seq
+        if depth > MAX_INSERT_DEPTH:
+            raise DxfReadError(
+                "ملف DXF يحتوي على تداخل BLOCK/INSERT أعمق من الحد الآمن المسموح. بسّط البلوكات ثم أعد الرفع.",
+                code="BLOCK_NESTING_TOO_DEEP",
+            )
+
+        for entity in entities:
+            expanded_entities += 1
+            if expanded_entities > MAX_EXPANDED_ENTITIES:
+                raise DxfReadError(
+                    "ملف DXF يحتوي على عدد كبير جدًا من العناصر بعد توسيع BLOCK/INSERT. بسّط الرسم ثم أعد الرفع.",
+                    code="ENTITY_LIMIT_EXCEEDED",
+                )
+
+            entity_type = entity.dxftype().upper()
+            layer = _effective_layer(getattr(entity.dxf, "layer", "0"), inherited_layer)
+            detected_layers.add(layer)
+            entity_counts[entity_type] += 1
+
+            if entity_type == "INSERT":
+                has_inserts = True
+                block_name = str(getattr(entity.dxf, "name", "") or "").strip()
+                if block_name:
+                    block_names.add(block_name)
+                if _is_minsert(entity):
+                    raise DxfReadError(
+                        f"البلوك {block_name or '؟'} يستخدم MINSERT متعدد الصفوف/الأعمدة، وهذا الشكل غير مدعوم بأمان. "
+                        "حوّله إلى INSERT منفصلة ثم أعد الرفع.",
+                        code="MINSERT_UNSUPPORTED",
+                        params={"block_name": block_name or "؟"},
+                    )
+                try:
+                    virtual_entities = entity.virtual_entities()
+                    visit(virtual_entities, inherited_layer=layer, depth=depth + 1)
+                except DxfReadError:
+                    raise
+                except Exception as exc:
+                    raise DxfReadError(
+                        f"تعذر تطبيق تحويلات BLOCK/INSERT للبلوك {block_name or '؟'}. "
+                        "تحقق من البلوك ومقياسه ودورانه ثم أعد حفظ DXF.",
+                        code="BLOCK_TRANSFORM_FAILED",
+                        params={"block_name": block_name or "؟"},
+                    ) from exc
+                continue
+
+            if matches_text_label_layer(layer):
+                if layer not in normalized_relevant_layers:
+                    continue
+                if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
+                    annotation = _annotation_from_entity(entity, layer=layer)
+                    if annotation:
+                        annotations.append(annotation)
+                continue
+
+            if layer not in normalized_relevant_layers:
+                continue
+            if entity_type not in SUPPORTED_DXF_ENTITY_TYPES:
+                unsupported.append({"layer": layer, "entity_type": entity_type})
+                continue
+            try:
+                path = ezpath.make_path(entity)
+                flattened = [
+                    (float(vertex.x), float(vertex.y))
+                    for vertex in path.flattening(
+                        distance=CURVE_FLATTENING_TOLERANCE_MM,
+                        segments=8,
+                    )
+                ]
+            except Exception as exc:
+                raise DxfReadError(
+                    f"تعذر تحليل عنصر {entity_type} على الطبقة {layer}. أعد حفظ الرسم كـ DXF قياسي ثم حاول مجددًا.",
+                    code="ENTITY_PARSE_FAILED",
+                    params={"entity_type": entity_type, "layer": layer},
+                ) from exc
+            entity_seq += 1
+            closed = _entity_is_closed(entity)
+            for start, end in _segments_from_points(flattened):
+                segments.append(
+                    {
+                        "layer": layer,
+                        "entity_type": entity_type,
+                        "entity_id": entity_seq,
+                        "closed": closed,
+                        "start": start,
+                        "end": end,
+                    }
+                )
+
+    visit(doc.modelspace(), inherited_layer=None, depth=0)
+    return {
+        "segments": segments,
+        "annotations": annotations,
+        "unsupported": unsupported,
+        "diagnostics": _diagnostics(
+            detected_layers=detected_layers,
+            relevant_layers=normalized_relevant_layers,
+            entity_counts=entity_counts,
+            has_inserts=has_inserts,
+            block_names=block_names,
+            expanded_entities=expanded_entities,
+        ),
+    }

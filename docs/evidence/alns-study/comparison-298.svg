@@ -1,0 +1,267 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="1030" viewBox="0 0 1100 1030">
+<style>text{font-family:Arial,sans-serif;fill:#183044}.title{font-size:22px;font-weight:bold}.sub{font-size:12px}.piece{stroke:#34495e;stroke-width:.35}</style>
+<rect width="1100" height="1030" fill="#f3f6f9"/>
+<text class="title" x="20" y="30">Order 298: equal piece inventory, Kerf 5 mm</text>
+<text class="sub" x="20" y="52">Study geometry only; no NC certification. Colors identify equal-size families. Each panel uses its own board order.</text>
+<text x="20" y="82" font-size="16" font-weight="bold">Supplied SYSTEM</text>
+<text class="sub" x="20" y="101">8 boards | remnant 1.608 m2 | cutters 115.454 m</text>
+<rect x="20" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="20.819" y="125.858" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<rect class="piece" x="52.565" y="125.858" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<rect class="piece" x="84.311" y="125.858" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<rect class="piece" x="84.311" y="245.19799999999998" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="20.819" y="298.238" width="41.808" height="14.664000000000001" fill="hsl(215,55%,75%)"><title>536 x 188 mm</title></rect>
+<text class="sub" x="20" y="332.32">Board 1: 5 pieces</text>
+<rect x="185" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="185.312" y="127.34" width="42.822" height="77.766" fill="hsl(162,55%,75%)"><title>549 x 997 mm</title></rect>
+<rect class="piece" x="228.524" y="127.34" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<rect class="piece" x="252.236" y="127.34" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="185.312" y="205.496" width="37.83" height="69.264" fill="hsl(95,55%,75%)"><title>485 x 888 mm</title></rect>
+<rect class="piece" x="185.312" y="275.15" width="69.264" height="37.83" fill="hsl(95,55%,75%)"><title>888 x 485 mm</title></rect>
+<rect class="piece" x="254.966" y="242.0" width="24.882" height="70.044" fill="hsl(304,55%,75%)"><title>319 x 898 mm</title></rect>
+<rect class="piece" x="223.532" y="246.68" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<text class="sub" x="185" y="332.32">Board 2: 7 pieces</text>
+<rect x="20" y="350" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="21.092" y="351.248" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="44.804" y="351.248" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="44.804" y="412.322" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="84.038" y="351.248" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="84.038" y="420.902" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="26.317999999999998" y="490.556" width="69.264" height="30.03" fill="hsl(293,55%,75%)"><title>888 x 385 mm</title></rect>
+<rect class="piece" x="26.317999999999998" y="520.976" width="70.044" height="18.096" fill="hsl(140,55%,75%)"><title>898 x 232 mm</title></rect>
+<rect class="piece" x="21.092" y="465.908" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<rect class="piece" x="95.97200000000001" y="490.556" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<rect class="piece" x="96.75200000000001" y="514.502" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<rect class="piece" x="39.578" y="473.396" width="35.1" height="9.282" fill="hsl(334,55%,75%)"><title>450 x 119 mm</title></rect>
+<text class="sub" x="20" y="557.3199999999999">Board 3: 11 pieces</text>
+<rect x="185" y="350" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="185.039" y="350.585" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="185.039" y="420.23900000000003" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="215.459" y="350.585" width="29.718000000000004" height="69.264" fill="hsl(107,55%,75%)"><title>381 x 888 mm</title></rect>
+<rect class="piece" x="245.567" y="350.585" width="29.718000000000004" height="69.264" fill="hsl(107,55%,75%)"><title>381 x 888 mm</title></rect>
+<rect class="piece" x="215.459" y="420.23900000000003" width="20.67" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="236.519" y="420.23900000000003" width="20.67" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="185.039" y="516.413" width="73.71000000000001" height="23.322" fill="hsl(346,55%,75%)"><title>945 x 299 mm</title></rect>
+<rect class="piece" x="257.579" y="420.23900000000003" width="22.541999999999998" height="73.71000000000001" fill="hsl(7,55%,75%)"><title>289 x 945 mm</title></rect>
+<rect class="piece" x="259.139" y="494.33900000000006" width="9.282" height="35.1" fill="hsl(334,55%,75%)"><title>119 x 450 mm</title></rect>
+<rect class="piece" x="268.81100000000004" y="494.33900000000006" width="9.282" height="31.200000000000003" fill="hsl(102,55%,75%)"><title>119 x 400 mm</title></rect>
+<text class="sub" x="185" y="557.3199999999999">Board 4: 10 pieces</text>
+<rect x="20" y="575" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="21.365" y="575.078" width="27.924" height="69.264" fill="hsl(143,55%,75%)"><title>358 x 888 mm</title></rect>
+<rect class="piece" x="21.365" y="644.732" width="27.924" height="69.264" fill="hsl(143,55%,75%)"><title>358 x 888 mm</title></rect>
+<rect class="piece" x="49.679" y="575.078" width="29.874" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="79.943" y="575.078" width="29.874" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="49.679" y="636.152" width="23.322" height="73.71000000000001" fill="hsl(346,55%,75%)"><title>299 x 945 mm</title></rect>
+<rect class="piece" x="73.391" y="636.152" width="27.924" height="60.684" fill="hsl(142,55%,75%)"><title>358 x 778 mm</title></rect>
+<rect class="piece" x="21.365" y="714.386" width="60.684" height="27.924" fill="hsl(142,55%,75%)"><title>778 x 358 mm</title></rect>
+<rect class="piece" x="21.365" y="742.7" width="73.71000000000001" height="22.541999999999998" fill="hsl(7,55%,75%)"><title>945 x 289 mm</title></rect>
+<rect class="piece" x="82.439" y="697.226" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="101.705" y="636.152" width="9.282" height="31.200000000000003" fill="hsl(102,55%,75%)"><title>119 x 400 mm</title></rect>
+<text class="sub" x="20" y="782.3199999999999">Board 5: 10 pieces</text>
+<rect x="185" y="575" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="185.351" y="575.0" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="185.351" y="645.434" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="209.063" y="575.0" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="209.063" y="645.434" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="232.775" y="575.0" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="256.487" y="575.0" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="232.775" y="645.434" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="256.487" y="645.434" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="185.0" y="715.8679999999999" width="68.796" height="23.322" fill="hsl(286,55%,75%)"><title>882 x 299 mm</title></rect>
+<rect class="piece" x="185.0" y="739.58" width="67.47" height="23.322" fill="hsl(13,55%,75%)"><title>865 x 299 mm</title></rect>
+<text class="sub" x="185" y="782.3199999999999">Board 6: 10 pieces</text>
+<rect x="20" y="800" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="20.0" y="800.0" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="20.0" y="861.074" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="43.244" y="800.0" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="66.956" y="800.0" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="20.0" y="922.148" width="22.541999999999998" height="58.812000000000005" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<rect class="piece" x="43.244" y="858.5" width="22.541999999999998" height="58.812000000000005" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<rect class="piece" x="90.66799999999999" y="800.0" width="22.541999999999998" height="58.5" fill="hsl(325,55%,75%)"><title>289 x 750 mm</title></rect>
+<rect class="piece" x="66.176" y="858.89" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="42.932" y="922.148" width="22.541999999999998" height="56.940000000000005" fill="hsl(160,55%,75%)"><title>289 x 730 mm</title></rect>
+<rect class="piece" x="65.864" y="917.702" width="22.541999999999998" height="56.940000000000005" fill="hsl(160,55%,75%)"><title>289 x 730 mm</title></rect>
+<rect class="piece" x="88.796" y="900.464" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<text class="sub" x="20" y="1007.3199999999999">Board 7: 11 pieces</text>
+<rect x="185" y="800" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="185.0" y="800.0" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<rect class="piece" x="206.06" y="800.0" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<rect class="piece" x="237.806" y="800.0" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<rect class="piece" x="185.0" y="861.074" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<rect class="piece" x="185.0" y="900.854" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<text class="sub" x="185" y="1007.3199999999999">Board 8: 5 pieces</text>
+<text x="385" y="82" font-size="16" font-weight="bold">Supplied designer</text>
+<text class="sub" x="385" y="101">8 boards | remnant 2.204 m2 | cutters 108.790 m</text>
+<rect x="385" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="387.17598628" y="126.47888077999998" width="22.541999999999998" height="58.812000000000076" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<text class="sub" x="385" y="332.32">Board 1: 1 pieces</text>
+<rect x="550" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="551.8027048" y="128.354" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="557.8087048" y="279.44" width="58.5" height="22.541999999999998" fill="hsl(325,55%,75%)"><title>750 x 289 mm</title></rect>
+<rect class="piece" x="575.5147048" y="125.78" width="29.874000000000006" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="559.3687048" y="256.50800000000004" width="56.940000000000005" height="22.541999999999998" fill="hsl(160,55%,75%)"><title>730 x 289 mm</title></rect>
+<rect class="piece" x="616.6987048" y="247.928" width="27.924" height="60.684" fill="hsl(142,55%,75%)"><title>358 x 778 mm</title></rect>
+<rect class="piece" x="616.6987048" y="186.85399999999998" width="27.924" height="60.684" fill="hsl(142,55%,75%)"><title>358 x 778 mm</title></rect>
+<rect class="piece" x="605.7787048" y="125.78" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="555.8587048" y="186.85399999999998" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="586.2787048" y="186.85399999999998" width="30.03000000000001" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<text class="sub" x="550" y="332.32">Board 2: 9 pieces</text>
+<rect x="385" y="350" width="95.16000000000003" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="425.61136768" y="350.97097832000003" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="387.39136768000003" y="350.97097832000003" width="37.83" height="69.264" fill="hsl(95,55%,75%)"><title>485 x 888 mm</title></rect>
+<rect class="piece" x="419.83936768" y="490.27897832" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<rect class="piece" x="388.09336768000003" y="490.27897832" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<rect class="piece" x="456.03136768" y="352.76497832" width="23.322" height="67.47" fill="hsl(13,55%,75%)"><title>299 x 865 mm</title></rect>
+<rect class="piece" x="444.01936768" y="420.62497832" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="415.70536768" y="420.62497832" width="27.924" height="69.264" fill="hsl(143,55%,75%)"><title>358 x 888 mm</title></rect>
+<rect class="piece" x="387.39136768000003" y="420.62497832" width="27.924" height="69.264" fill="hsl(143,55%,75%)"><title>358 x 888 mm</title></rect>
+<rect class="piece" x="418.98136768" y="530.05897832" width="31.200000000000003" height="9.282" fill="hsl(102,55%,75%)"><title>400 x 119 mm</title></rect>
+<rect class="piece" x="387.39136768000003" y="530.05897832" width="31.200000000000003" height="9.282" fill="hsl(102,55%,75%)"><title>400 x 119 mm</title></rect>
+<rect class="piece" x="469.05736768" y="490.27897832" width="9.282" height="35.1" fill="hsl(334,55%,75%)"><title>119 x 450 mm</title></rect>
+<rect class="piece" x="450.57136768" y="490.27897832" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<rect class="piece" x="450.57136768" y="514.22497832" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<text class="sub" x="385" y="557.3199999999999">Board 3: 13 pieces</text>
+<rect x="550" y="350" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="551.62396624" y="420.06632984000004" width="29.874" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="551.15596624" y="481.14032984000005" width="22.541999999999998" height="58.812000000000005" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<rect class="piece" x="581.88796624" y="429.03865268000004" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="621.12196624" y="429.03865268000004" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="574.08796624" y="490.11265268" width="70.044" height="23.322" fill="hsl(203,55%,75%)"><title>898 x 299 mm</title></rect>
+<rect class="piece" x="574.08796624" y="513.82465268" width="70.044" height="23.322" fill="hsl(203,55%,75%)"><title>898 x 299 mm</title></rect>
+<rect class="piece" x="600.37396624" y="350.88265268000004" width="42.822" height="77.766" fill="hsl(162,55%,75%)"><title>549 x 997 mm</title></rect>
+<rect class="piece" x="581.88796624" y="358.60465268" width="18.096000000000007" height="70.044" fill="hsl(140,55%,75%)"><title>232 x 898 mm</title></rect>
+<rect class="piece" x="551.77996624" y="350.41232984000004" width="29.718000000000004" height="69.264" fill="hsl(107,55%,75%)"><title>381 x 888 mm</title></rect>
+<text class="sub" x="550" y="557.3199999999999">Board 4: 9 pieces</text>
+<rect x="385" y="575" width="95.16" height="190.32000000000005" fill="white" stroke="#40576a"/>
+<rect class="piece" x="408.74737534" y="708.30515198" width="22.541999999999998" height="56.940000000000005" fill="hsl(160,55%,75%)"><title>289 x 730 mm</title></rect>
+<rect class="piece" x="408.74737534" y="649.80515198" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="385.50337534" y="575.70515198" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="387.68737534" y="636.77915198" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<rect class="piece" x="387.68737534" y="697.85315198" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<rect class="piece" x="454.61137534" y="579.37115198" width="24.882" height="70.044" fill="hsl(304,55%,75%)"><title>319 x 898 mm</title></rect>
+<rect class="piece" x="408.74737534" y="575.70515198" width="22.541999999999998" height="73.71000000000001" fill="hsl(7,55%,75%)"><title>289 x 945 mm</title></rect>
+<rect class="piece" x="431.67937534" y="575.70515198" width="22.54200000000002" height="73.71000000000001" fill="hsl(7,55%,75%)"><title>289 x 945 mm</title></rect>
+<rect class="piece" x="453.51937534" y="649.80515198" width="20.67" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="432.45937534" y="649.80515198" width="20.670000000000016" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="455.62537534" y="745.97915198" width="23.556" height="18.096" fill="hsl(346,55%,75%)"><title>302 x 232 mm</title></rect>
+<rect class="piece" x="431.67937534" y="745.97915198" width="23.55600000000002" height="18.096" fill="hsl(346,55%,75%)"><title>302 x 232 mm</title></rect>
+<text class="sub" x="385" y="782.32">Board 5: 12 pieces</text>
+<rect x="550" y="575" width="95.16" height="190.31999999999996" fill="white" stroke="#40576a"/>
+<rect class="piece" x="552.74551888" y="582.99585566" width="37.83" height="69.264" fill="hsl(95,55%,75%)"><title>485 x 888 mm</title></rect>
+<rect class="piece" x="590.96551888" y="582.99585566" width="29.718000000000004" height="69.264" fill="hsl(107,55%,75%)"><title>381 x 888 mm</title></rect>
+<rect class="piece" x="581.89726774" y="723.0838556599999" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="550.15126774" y="723.0838556599999" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="550.38173746" y="652.64985566" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="597.80573746" y="652.64985566" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="621.07351888" y="582.21585566" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="574.09373746" y="652.64985566" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="613.64326774" y="723.0838556599999" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<rect class="piece" x="621.51773746" y="652.64985566" width="23.321999999999992" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<text class="sub" x="550" y="782.3199999999999">Board 6: 10 pieces</text>
+<rect x="385" y="800" width="95.16000000000003" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="456.50861926" y="919.70505716" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="385.37261926" y="919.70505716" width="23.322" height="68.796" fill="hsl(286,55%,75%)"><title>299 x 882 mm</title></rect>
+<rect class="piece" x="432.79661926" y="915.02505716" width="23.322" height="73.71000000000001" fill="hsl(346,55%,75%)"><title>299 x 945 mm</title></rect>
+<rect class="piece" x="409.08461926" y="915.02505716" width="23.322" height="73.71000000000001" fill="hsl(346,55%,75%)"><title>299 x 945 mm</title></rect>
+<rect class="piece" x="432.79661926" y="800.36505716" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="409.08461926" y="800.36505716" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="385.37261926" y="800.36505716" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<rect class="piece" x="456.50861926" y="800.36505716" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<text class="sub" x="385" y="1007.3199999999999">Board 7: 8 pieces</text>
+<rect x="550" y="800" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="614.272" y="800.78" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="614.272" y="870.434" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="614.272" y="940.088" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<rect class="piece" x="609.514" y="979.8679999999999" width="35.1" height="9.282" fill="hsl(334,55%,75%)"><title>450 x 119 mm</title></rect>
+<rect class="piece" x="567.316" y="973.16" width="41.808" height="14.664000000000001" fill="hsl(215,55%,75%)"><title>536 x 188 mm</title></rect>
+<rect class="piece" x="582.526" y="800.78" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<rect class="piece" x="550.78" y="800.78" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<text class="sub" x="550" y="1007.3199999999999">Board 8: 7 pieces</text>
+<text x="750" y="82" font-size="16" font-weight="bold">Best measured study winner</text>
+<text class="sub" x="750" y="101">8 boards | remnant 2.361 m2 | cutters 111.475 m</text>
+<rect x="750" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="750.0" y="244.652" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="750.0" y="174.998" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="780.42" y="244.652" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="810.84" y="244.652" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="780.42" y="174.998" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="810.84" y="174.998" width="29.718000000000004" height="69.264" fill="hsl(107,55%,75%)"><title>381 x 888 mm</title></rect>
+<rect class="piece" x="750.0" y="144.89000000000001" width="69.264" height="29.718000000000004" fill="hsl(107,55%,75%)"><title>888 x 381 mm</title></rect>
+<rect class="piece" x="750.0" y="126.40400000000001" width="70.044" height="18.096" fill="hsl(140,55%,75%)"><title>898 x 232 mm</title></rect>
+<rect class="piece" x="819.654" y="151.05200000000002" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<rect class="piece" x="820.434" y="127.10600000000001" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<text class="sub" x="750" y="332.32">Board 1: 10 pieces</text>
+<rect x="915" y="125" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="915.702" y="236.696" width="42.822" height="77.766" fill="hsl(162,55%,75%)"><title>549 x 997 mm</title></rect>
+<rect class="piece" x="958.914" y="195.512" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<rect class="piece" x="982.626" y="200.192" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="915.702" y="140.522" width="20.67" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="936.7620000000001" y="140.522" width="20.67" height="95.784" fill="hsl(209,55%,75%)"><title>265 x 1228 mm</title></rect>
+<rect class="piece" x="957.822" y="125.85799999999999" width="27.924" height="69.264" fill="hsl(143,55%,75%)"><title>358 x 888 mm</title></rect>
+<rect class="piece" x="986.136" y="126.092" width="23.322" height="73.71000000000001" fill="hsl(346,55%,75%)"><title>299 x 945 mm</title></rect>
+<rect class="piece" x="915.702" y="130.85" width="35.1" height="9.282" fill="hsl(334,55%,75%)"><title>450 x 119 mm</title></rect>
+<text class="sub" x="915" y="332.32">Board 2: 8 pieces</text>
+<rect x="750" y="350" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="750.546" y="425.075" width="23.322" height="114.27000000000001" fill="hsl(52,55%,75%)"><title>299 x 1465 mm</title></rect>
+<rect class="piece" x="774.258" y="502.49" width="69.264" height="37.83" fill="hsl(95,55%,75%)"><title>888 x 485 mm</title></rect>
+<rect class="piece" x="774.258" y="464.27" width="69.264" height="37.83" fill="hsl(95,55%,75%)"><title>888 x 485 mm</title></rect>
+<rect class="piece" x="774.258" y="435.956" width="69.264" height="27.924" fill="hsl(143,55%,75%)"><title>888 x 358 mm</title></rect>
+<rect class="piece" x="774.258" y="410.68399999999997" width="70.044" height="24.882" fill="hsl(304,55%,75%)"><title>898 x 319 mm</title></rect>
+<rect class="piece" x="750.546" y="350.975" width="23.322" height="73.71000000000001" fill="hsl(346,55%,75%)"><title>299 x 945 mm</title></rect>
+<rect class="piece" x="774.258" y="382.37" width="60.684" height="27.924" fill="hsl(142,55%,75%)"><title>778 x 358 mm</title></rect>
+<rect class="piece" x="774.258" y="354.056" width="60.684" height="27.924" fill="hsl(142,55%,75%)"><title>778 x 358 mm</title></rect>
+<rect class="piece" x="835.332" y="375.19399999999996" width="9.282" height="35.1" fill="hsl(334,55%,75%)"><title>119 x 450 mm</title></rect>
+<text class="sub" x="750" y="557.3199999999999">Board 3: 9 pieces</text>
+<rect x="915" y="350" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="915.819" y="366.692" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<rect class="piece" x="947.565" y="366.692" width="31.356" height="171.99" fill="hsl(39,55%,75%)"><title>402 x 2205 mm</title></rect>
+<rect class="piece" x="979.311" y="420.512" width="23.322" height="118.95" fill="hsl(20,55%,75%)"><title>299 x 1525 mm</title></rect>
+<rect class="piece" x="979.311" y="350.858" width="30.03" height="69.264" fill="hsl(293,55%,75%)"><title>385 x 888 mm</title></rect>
+<rect class="piece" x="915.819" y="351.638" width="41.808" height="14.664000000000001" fill="hsl(215,55%,75%)"><title>536 x 188 mm</title></rect>
+<text class="sub" x="915" y="557.3199999999999">Board 4: 5 pieces</text>
+<rect x="750" y="575" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="750.585" y="704.285" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="789.819" y="704.285" width="38.844" height="60.684" fill="hsl(174,55%,75%)"><title>498 x 778 mm</title></rect>
+<rect class="piece" x="750.585" y="643.211" width="29.874" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="780.849" y="643.211" width="29.874" height="60.684" fill="hsl(10,55%,75%)"><title>383 x 778 mm</title></rect>
+<rect class="piece" x="811.113" y="635.0989999999999" width="23.322" height="68.796" fill="hsl(286,55%,75%)"><title>299 x 882 mm</title></rect>
+<rect class="piece" x="750.585" y="575.351" width="23.322" height="67.47" fill="hsl(13,55%,75%)"><title>299 x 865 mm</title></rect>
+<rect class="piece" x="774.297" y="582.1370000000001" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="797.541" y="576.599" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="821.253" y="576.599" width="23.322" height="58.11" fill="hsl(227,55%,75%)"><title>299 x 745 mm</title></rect>
+<rect class="piece" x="829.053" y="733.769" width="9.282" height="31.200000000000003" fill="hsl(102,55%,75%)"><title>119 x 400 mm</title></rect>
+<rect class="piece" x="834.825" y="702.179" width="9.282" height="31.200000000000003" fill="hsl(102,55%,75%)"><title>119 x 400 mm</title></rect>
+<text class="sub" x="750" y="782.3199999999999">Board 5: 11 pieces</text>
+<rect x="915" y="575" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="915.663" y="725.9300000000001" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<rect class="piece" x="946.395" y="725.9300000000001" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<rect class="piece" x="978.141" y="725.9300000000001" width="31.356" height="39.39" fill="hsl(166,55%,75%)"><title>402 x 505 mm</title></rect>
+<text class="sub" x="915" y="782.3199999999999">Board 6: 3 pieces</text>
+<rect x="750" y="800" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="750.663" y="929.636" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<rect class="piece" x="750.663" y="868.562" width="20.67" height="60.684" fill="hsl(337,55%,75%)"><title>265 x 778 mm</title></rect>
+<rect class="piece" x="771.723" y="929.636" width="22.854000000000003" height="60.684" fill="hsl(195,55%,75%)"><title>293 x 778 mm</title></rect>
+<rect class="piece" x="771.723" y="870.434" width="22.541999999999998" height="58.812000000000005" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<rect class="piece" x="794.967" y="931.508" width="22.541999999999998" height="58.812000000000005" fill="hsl(17,55%,75%)"><title>289 x 754 mm</title></rect>
+<rect class="piece" x="817.899" y="931.8199999999999" width="22.541999999999998" height="58.5" fill="hsl(325,55%,75%)"><title>289 x 750 mm</title></rect>
+<rect class="piece" x="750.663" y="811.232" width="22.541999999999998" height="56.940000000000005" fill="hsl(160,55%,75%)"><title>289 x 730 mm</title></rect>
+<rect class="piece" x="773.595" y="813.104" width="22.541999999999998" height="56.940000000000005" fill="hsl(160,55%,75%)"><title>289 x 730 mm</title></rect>
+<rect class="piece" x="794.655" y="888.062" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="796.527" y="846.488" width="31.356" height="41.184" fill="hsl(136,55%,75%)"><title>402 x 528 mm</title></rect>
+<rect class="piece" x="796.527" y="806.708" width="30.342" height="39.39" fill="hsl(256,55%,75%)"><title>389 x 505 mm</title></rect>
+<rect class="piece" x="826.401" y="907.874" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<text class="sub" x="750" y="1007.3199999999999">Board 7: 12 pieces</text>
+<rect x="915" y="800" width="95.16" height="190.32" fill="white" stroke="#40576a"/>
+<rect class="piece" x="915.741" y="915.518" width="22.541999999999998" height="73.71000000000001" fill="hsl(7,55%,75%)"><title>289 x 945 mm</title></rect>
+<rect class="piece" x="915.741" y="841.418" width="22.541999999999998" height="73.71000000000001" fill="hsl(7,55%,75%)"><title>289 x 945 mm</title></rect>
+<rect class="piece" x="938.673" y="919.184" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="938.673" y="848.75" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="962.385" y="919.184" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="986.097" y="919.184" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="962.385" y="848.75" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="986.097" y="848.75" width="23.322" height="70.044" fill="hsl(203,55%,75%)"><title>299 x 898 mm</title></rect>
+<rect class="piece" x="938.673" y="825.038" width="70.044" height="23.322" fill="hsl(203,55%,75%)"><title>898 x 299 mm</title></rect>
+<rect class="piece" x="915.0" y="801.326" width="70.044" height="23.322" fill="hsl(203,55%,75%)"><title>898 x 299 mm</title></rect>
+<rect class="piece" x="985.434" y="801.092" width="18.096" height="23.556" fill="hsl(346,55%,75%)"><title>232 x 302 mm</title></rect>
+<text class="sub" x="915" y="1007.3199999999999">Board 8: 11 pieces</text>
+</svg>

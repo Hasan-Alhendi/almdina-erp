@@ -1,0 +1,62 @@
+name: ALNS Research Checks
+
+on:
+  push:
+    branches: [feature/cutting-abc-search-20261105]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  alns-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install test dependencies
+        run: python -m pip install '.[test]'
+      - name: Check research and protected cutting contracts
+        run: |
+          python -m pytest -q \
+            almdina_erp/tests/test_alns_research.py \
+            almdina_erp/tests/test_fixed_board_layout_search.py \
+            almdina_erp/tests/test_alns_recalculation.py \
+            almdina_erp/tests/test_compound_layout_refinement.py \
+            almdina_erp/tests/test_pattern_layout_search.py \
+            almdina_erp/tests/test_coupled_corner_frames.py \
+            almdina_erp/tests/test_board_regrouping.py \
+            almdina_erp/tests/test_same_count_layout_quality.py \
+            almdina_erp/tests/test_cutting_plan_application.py \
+            almdina_erp/tests/test_plan_preview_session_exact_commit.py \
+            almdina_erp/tests/test_plan_fingerprint_compatibility.py \
+            almdina_erp/tests/test_dco_recovery_state_ownership_contract.py \
+            almdina_erp/tests/test_cutting_domain_architecture.py \
+            almdina_erp/tests/test_stage13_quality_gates.py \
+            almdina_erp/tests/test_stage15_documentation_contract.py \
+            almdina_erp/tests/test_cutting_kerf_clearance.py \
+            almdina_erp/tests/test_piece_mirroring_policy.py \
+            --junitxml=alns-regression.xml
+      - name: Check Recalculate preview and exact-save UI contracts
+        run: |
+          node almdina_erp/tests/js/plan_candidate_gallery.test.js
+          node almdina_erp/tests/js/plan_preview_state_ownership.test.js
+          node almdina_erp/tests/js/plan_preview_save_phase_lock.test.js
+          node almdina_erp/tests/js/plan_preview_locale.test.js
+      - name: Audit frozen fixed-board observations
+        run: python scripts/summarize_fixed_board_layout.py --output /tmp/alns-evidence-audit
+      - name: Audit frozen coupled corner observations
+        run: python scripts/summarize_corner_search.py
+      - name: Retain test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alns-regression
+          path: alns-regression.xml
+          if-no-files-found: error

@@ -1,0 +1,10 @@
+{
+  "trace": {
+    "status": "not_solved",
+    "rows": 1792,
+    "slots": 8,
+    "transpose": true
+  },
+  "wall": 9.14100000000326,
+  "trial": null
+}

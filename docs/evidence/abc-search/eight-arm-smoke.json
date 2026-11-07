@@ -1,0 +1,587 @@
+{
+  "source_sha": "6e676fc7473de7aae204b5fef59d0dd197d6a306",
+  "source_tree": "68f4613e5d757fd85548fce9eb2c072bc0231dc6",
+  "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+  "working_tree_dirty": false,
+  "platform": "Windows-10-10.0.26200-SP0",
+  "python": "3.11.3 (tags/v3.11.3:f3909b8, Apr  4 2023, 23:49:59) [MSC v.1934 64 bit (AMD64)]",
+  "versions": {
+    "pytest": "9.2.0",
+    "ezdxf": "1.4.5",
+    "ortools": "9.15.6755"
+  },
+  "provenance": "reconstructed input-only; not a live production comparison",
+  "records": [
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "000",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 7.30452449999575,
+      "cpu": 7.03125,
+      "peak_rss_kib": 29288,
+      "overrun": 2.3045244999957504,
+      "native_elapsed": 5.359,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 1,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.62544,
+          124,
+          6776.3,
+          25,
+          3
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.6254399999999998,
+          "estimated_cut_count": 124,
+          "estimated_cut_length_cm": 6776.300000000003,
+          "rotation_count": 25,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 40,
+        "adjacent": 79,
+        "alignment_ratio": 0.5063291139240507,
+        "group_splits": 4
+      },
+      "real_cut_profile": [
+        46391.0,
+        80,
+        3588.5
+      ],
+      "geometry_signature": "67eb3b47bc9736a902d4e98394cad83822ee0a0a73880cc5abde2d0e11625bc3",
+      "abc": null,
+      "gallery_count": 4,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "001",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 7.730287300000782,
+      "cpu": 7.390625,
+      "peak_rss_kib": 29408,
+      "overrun": 2.730287300000782,
+      "native_elapsed": 5.078,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 0,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          98,
+          6556.3,
+          8,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 98,
+          "estimated_cut_length_cm": 6556.300000000004,
+          "rotation_count": 8,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 48,
+        "adjacent": 81,
+        "alignment_ratio": 0.5925925925925926,
+        "group_splits": 1
+      },
+      "real_cut_profile": [
+        45220.0,
+        64,
+        6304.5
+      ],
+      "geometry_signature": "05687c7868a7bdce449df699a2bd1d3681984701893d2b93607bb7f8fe3f0eb8",
+      "abc": {
+        "generated": 21,
+        "validated": 20,
+        "rejected": 1,
+        "nominated": 0,
+        "followup_regroups": 0,
+        "side_pool_peak": 0,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 0,
+          "templates": 4
+        },
+        "measured_profiles": 0
+      },
+      "gallery_count": 5,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "010",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 6.564092799992068,
+      "cpu": 6.34375,
+      "peak_rss_kib": 28928,
+      "overrun": 1.5640927999920677,
+      "native_elapsed": 5.0,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 1,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          111,
+          6243.6,
+          6,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 111,
+          "estimated_cut_length_cm": 6243.6,
+          "rotation_count": 6,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 42,
+        "adjacent": 81,
+        "alignment_ratio": 0.5185185185185185,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        46839.0,
+        75,
+        5059.0
+      ],
+      "geometry_signature": "97e08b7694f4dcbf41dba22820b65b1e3fecac517ceca8f7981e90879e902320",
+      "abc": {
+        "generated": 20,
+        "validated": 18,
+        "rejected": 2,
+        "nominated": 1,
+        "followup_regroups": 0,
+        "side_pool_peak": 3,
+        "reason": "retention_only",
+        "local_packing_calls": {
+          "regroup": 0,
+          "templates": 0
+        },
+        "measured_profiles": 12
+      },
+      "gallery_count": 2,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "011",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 8.03271460000542,
+      "cpu": 7.703125,
+      "peak_rss_kib": 29120,
+      "overrun": 3.03271460000542,
+      "native_elapsed": 5.531,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 0,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          114,
+          6418.2,
+          18,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 114,
+          "estimated_cut_length_cm": 6418.200000000004,
+          "rotation_count": 18,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 40,
+        "adjacent": 86,
+        "alignment_ratio": 0.46511627906976744,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        45531.0,
+        77,
+        4345.5
+      ],
+      "geometry_signature": "7d6504733c2cb82571d975be31a62fffa11b3ae6a442d9a239a6f4461984b2d7",
+      "abc": {
+        "generated": 20,
+        "validated": 19,
+        "rejected": 1,
+        "nominated": 0,
+        "followup_regroups": 0,
+        "side_pool_peak": 3,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 0,
+          "templates": 3
+        },
+        "measured_profiles": 12
+      },
+      "gallery_count": 4,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "100",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 7.3531093999918085,
+      "cpu": 7.125,
+      "peak_rss_kib": 29388,
+      "overrun": 2.3531093999918085,
+      "native_elapsed": 5.234,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 1,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          111,
+          6243.6,
+          6,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 111,
+          "estimated_cut_length_cm": 6243.6,
+          "rotation_count": 6,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 42,
+        "adjacent": 81,
+        "alignment_ratio": 0.5185185185185185,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        46839.0,
+        75,
+        5059.0
+      ],
+      "geometry_signature": "97e08b7694f4dcbf41dba22820b65b1e3fecac517ceca8f7981e90879e902320",
+      "abc": {
+        "generated": 21,
+        "validated": 20,
+        "rejected": 1,
+        "nominated": 0,
+        "followup_regroups": 0,
+        "side_pool_peak": 0,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 4,
+          "templates": 0
+        },
+        "measured_profiles": 0
+      },
+      "gallery_count": 5,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "101",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 7.910181300001568,
+      "cpu": 7.53125,
+      "peak_rss_kib": 29432,
+      "overrun": 2.910181300001568,
+      "native_elapsed": 5.328,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 0,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          114,
+          6418.2,
+          18,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 114,
+          "estimated_cut_length_cm": 6418.200000000004,
+          "rotation_count": 18,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 40,
+        "adjacent": 86,
+        "alignment_ratio": 0.46511627906976744,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        45531.0,
+        77,
+        4345.5
+      ],
+      "geometry_signature": "7d6504733c2cb82571d975be31a62fffa11b3ae6a442d9a239a6f4461984b2d7",
+      "abc": {
+        "generated": 21,
+        "validated": 20,
+        "rejected": 1,
+        "nominated": 0,
+        "followup_regroups": 1,
+        "side_pool_peak": 0,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 2,
+          "templates": 2
+        },
+        "measured_profiles": 0
+      },
+      "gallery_count": 5,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "110",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 8.103877600005944,
+      "cpu": 7.8125,
+      "peak_rss_kib": 29620,
+      "overrun": 3.1038776000059443,
+      "native_elapsed": 5.578,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 1,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          112,
+          6237.9,
+          6,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 112,
+          "estimated_cut_length_cm": 6237.900000000001,
+          "rotation_count": 6,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 41,
+        "adjacent": 81,
+        "alignment_ratio": 0.5061728395061729,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        46899.0,
+        75,
+        5059.0
+      ],
+      "geometry_signature": "cb7a9bb63029421e322477c13a0a50e61996acd149ccdda22bfc16d5b4cf61d7",
+      "abc": {
+        "generated": 21,
+        "validated": 20,
+        "rejected": 1,
+        "nominated": 1,
+        "followup_regroups": 0,
+        "side_pool_peak": 3,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 4,
+          "templates": 0
+        },
+        "measured_profiles": 12
+      },
+      "gallery_count": 5,
+      "strict_import": true,
+      "repeat": 0
+    },
+    {
+      "status": "completed",
+      "source_digest": "4b9c9a34f4a393f3a1b9bd5690812c6ded72b862f2bf718d9caf3130af2ba5e2",
+      "case": "regular-48",
+      "arm": "111",
+      "budget": 5.0,
+      "share": 0.2,
+      "trim_mm": 0.0,
+      "exact_piece_limit": 40,
+      "input_sha256": "18eefc2ecda65769d5abedb7cc9cb0a015f0454f00e8dfbd224bca5dd77a5050",
+      "elapsed": 7.8499726000009105,
+      "cpu": 7.46875,
+      "peak_rss_kib": 29792,
+      "overrun": 2.8499726000009105,
+      "native_elapsed": 5.547,
+      "valid": true,
+      "final": {
+        "smallest_repeated_size": [
+          16.4,
+          17.2
+        ],
+        "small_piece_board_splits": 0,
+        "boards": 3,
+        "unplaced": 0,
+        "rank": [
+          0,
+          3,
+          0,
+          -2.505876,
+          107,
+          6333.2,
+          10,
+          4
+        ],
+        "industrial": {
+          "unplaced_count": 0,
+          "board_count": 3,
+          "waste_area_m2": 3.183706000000001,
+          "largest_reusable_free_area_m2": 2.5058759999999998,
+          "estimated_cut_count": 107,
+          "estimated_cut_length_cm": 6333.200000000004,
+          "rotation_count": 10,
+          "panel_saw_non_guillotine_penalty": 0
+        },
+        "aligned": 44,
+        "adjacent": 84,
+        "alignment_ratio": 0.5238095238095238,
+        "group_splits": 3
+      },
+      "real_cut_profile": [
+        45851.0,
+        73,
+        3884.5
+      ],
+      "geometry_signature": "bbfc5ba8270c1e6c54bf20e51f4fb065622c2ecd697c450e8e11066dc966029d",
+      "abc": {
+        "generated": 21,
+        "validated": 19,
+        "rejected": 2,
+        "nominated": 1,
+        "followup_regroups": 1,
+        "side_pool_peak": 3,
+        "reason": "started",
+        "local_packing_calls": {
+          "regroup": 2,
+          "templates": 2
+        },
+        "measured_profiles": 12
+      },
+      "gallery_count": 5,
+      "strict_import": true,
+      "repeat": 0
+    }
+  ]
+}

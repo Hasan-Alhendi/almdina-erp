@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="27" time="6.716" timestamp="2026-11-06T01:37:02.550881+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_compound_repair_can_remove_boards_with_original_shape_and_guest_instances[False]" time="1.725" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_compound_repair_can_remove_boards_with_original_shape_and_guest_instances[True]" time="1.995" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_forbidden_turns_are_not_used_by_rotated_blocks" time="0.683" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_unsupported_resource_or_machine_never_reaches_skeleton_construction[Panel Saw]" time="0.003" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_unsupported_resource_or_machine_never_reaches_skeleton_construction[sheet_offcut]" time="0.004" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_unsupported_resource_or_machine_never_reaches_skeleton_construction[source_offcut]" time="0.003" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_expired_stage_cannot_start_compound_work" time="0.003" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_large_guest_preference_is_an_ordered_proposal_not_a_fake_piece" time="0.189" /><testcase classname="almdina_erp.tests.test_compound_layout_refinement" name="test_rigid_contact_moves_a_complete_nest_and_shortens_its_actual_network" time="0.022" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-L-Shaped Corner]" time="0.069" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-Clipped Corner]" time="0.073" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-L-Shaped Corner]" time="0.069" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-Clipped Corner]" time="0.058" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_pinned_mirror_is_not_implicitly_authorized" time="0.004" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_generator_cannot_move_a_pinned_shape_even_if_bounds_still_fit" time="0.005" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0]" time="0.666"><failure message="AssertionError: assert 1 == 2&#10; +  where 1 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's..._rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'})).required_boards&#10;[+1 more line; full report in element text]">trim = 0
+
+    @pytest.mark.parametrize('trim', [0, .3])
+    def test_application_real_refinement_is_no_worse_and_roundtrips(trim):
+        from scripts.benchmark_alns import strict_check
+        rows, _, plan = fixture('exchange')
+        # Identical operational copies belong to one quantity row. Two synthetic
+        # indistinguishable source rows make source-number binding ambiguous in
+        # the legacy geometric importer, unrelated to layout identity inventory.
+        rows = [dict(rows[0], qty=2), rows[2], rows[3]]
+        rows = [dict(row, piece_instance_id=f'smart:{i}') for i, row in enumerate(rows, 1)]
+        sources = expand_piece_groups(rows)
+        for sheet in plan['sheets']:
+            sheet['pieces'] = [make_placed_piece(sources[p['id']-1], p['x'], p['y'], p['w'], p['h'], p['rotated'])
+                               for p in sheet['pieces']]
+        baseline = optimize_order_plan(command(rows, seconds=0, trim=trim), engine=FrozenEngine(plan))
+        result = optimize_order_plan(command(rows, trim=trim), engine=FrozenEngine(plan))
+        assert result.snapshot['validation']['is_valid']
+        assert result.snapshot['smart_search']['alns']['attempts'] &gt; 0
+        assert final_system_sort_keys([baseline.snapshot, result.snapshot])[1] &lt;= final_system_sort_keys([baseline.snapshot, result.snapshot])[0]
+&gt;       assert result.required_boards == baseline.required_boards == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's..._rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'})).required_boards
+E        +  and   2 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's...rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'},)).required_boards
+
+almdina_erp\tests\test_alns_recalculation.py:112: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0.3]" time="0.160"><failure message="AssertionError: assert 1 == 2&#10; +  where 1 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's..._rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'})).required_boards&#10;[+1 more line; full report in element text]">trim = 0.3
+
+    @pytest.mark.parametrize('trim', [0, .3])
+    def test_application_real_refinement_is_no_worse_and_roundtrips(trim):
+        from scripts.benchmark_alns import strict_check
+        rows, _, plan = fixture('exchange')
+        # Identical operational copies belong to one quantity row. Two synthetic
+        # indistinguishable source rows make source-number binding ambiguous in
+        # the legacy geometric importer, unrelated to layout identity inventory.
+        rows = [dict(rows[0], qty=2), rows[2], rows[3]]
+        rows = [dict(row, piece_instance_id=f'smart:{i}') for i, row in enumerate(rows, 1)]
+        sources = expand_piece_groups(rows)
+        for sheet in plan['sheets']:
+            sheet['pieces'] = [make_placed_piece(sources[p['id']-1], p['x'], p['y'], p['w'], p['h'], p['rotated'])
+                               for p in sheet['pieces']]
+        baseline = optimize_order_plan(command(rows, seconds=0, trim=trim), engine=FrozenEngine(plan))
+        result = optimize_order_plan(command(rows, trim=trim), engine=FrozenEngine(plan))
+        assert result.snapshot['validation']['is_valid']
+        assert result.snapshot['smart_search']['alns']['attempts'] &gt; 0
+        assert final_system_sort_keys([baseline.snapshot, result.snapshot])[1] &lt;= final_system_sort_keys([baseline.snapshot, result.snapshot])[0]
+&gt;       assert result.required_boards == baseline.required_boards == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's..._rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'})).required_boards
+E        +  and   2 = OptimizationOutcome(snapshot={'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 's...rank': (0, 2, 0, -0.006, 10, 39.5, 0, 0), 'score': 2000010.0033500001, 'kerf_cm': 0.5, 'machine_type': 'CNC Router'},)).required_boards
+
+almdina_erp\tests\test_alns_recalculation.py:112: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[0]" time="0.009" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[-1]" time="0.007" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[nan]" time="0.006" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[inf]" time="0.009" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_fast_calculation_does_not_call_alns" time="0.007" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_invalid_proposal_cannot_replace_the_completed_native_snapshot" time="0.017" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_stage_budget_is_capped_and_is_additional_to_native" time="0.007" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[False]" time="0.214" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[True]" time="0.094" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_global_refill_keeps_real_identity_and_its_whole_pool_cap" time="0.017" /></testsuite></testsuites>

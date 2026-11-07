@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="8" skipped="0" tests="43" time="4.689" timestamp="2026-11-05T23:36:02.708026+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-L-Shaped Corner]" time="0.020"><failure message="KeyError: 'method_key'">kind = 'L-Shaped Corner', mirror = False
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+&gt;       _, sources, plan = mixed_fixture(kind, mirror)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'L-Shaped Corner', mirror = False
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-Clipped Corner]" time="0.002"><failure message="KeyError: 'method_key'">kind = 'Clipped Corner', mirror = False
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+&gt;       _, sources, plan = mixed_fixture(kind, mirror)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'Clipped Corner', mirror = False
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-L-Shaped Corner]" time="0.002"><failure message="KeyError: 'method_key'">kind = 'L-Shaped Corner', mirror = True
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+&gt;       _, sources, plan = mixed_fixture(kind, mirror)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'L-Shaped Corner', mirror = True
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-Clipped Corner]" time="0.002"><failure message="KeyError: 'method_key'">kind = 'Clipped Corner', mirror = True
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+&gt;       _, sources, plan = mixed_fixture(kind, mirror)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:56: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'Clipped Corner', mirror = True
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_pinned_mirror_is_not_implicitly_authorized" time="0.002"><failure message="KeyError: 'method_key'">def test_pinned_mirror_is_not_implicitly_authorized():
+&gt;       _, sources, plan = mixed_fixture(mirror=True)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'Clipped Corner', mirror = True
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_generator_cannot_move_a_pinned_shape_even_if_bounds_still_fit" time="0.002"><failure message="KeyError: 'method_key'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x000001B29CBAF050&gt;
+
+    def test_generator_cannot_move_a_pinned_shape_even_if_bounds_still_fit(monkeypatch):
+&gt;       _, sources, plan = mixed_fixture()
+                           ^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:81: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kind = 'Clipped Corner', mirror = False
+
+    def mixed_fixture(kind='Clipped Corner', mirror=False):
+        rows, _, plan = fixture('grid')
+        rows.append(dict(width_cm=2, length_cm=2, qty=1, allow_rotation=1,
+            piece_type=kind, clipped_corner_position='Top Right',
+            clipped_corner_width_cm=.6, clipped_corner_length_cm=.7, piece_instance_id='smart:3'))
+        sources = expand_piece_groups(rows)
+        plan['sheets'][0]['pieces'].append(_placed_corner(sources[-1], x_cm=7.5, y_cm=7.5,
+                                                       mirrored=mirror, turns=0))
+&gt;       plan = enrich_plan_metrics(plan, plan['method_key'], 'CNC Router', **METRICS)
+                                         ^^^^^^^^^^^^^^^^^^
+E       KeyError: 'method_key'
+
+almdina_erp\tests\test_alns_recalculation.py:47: KeyError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0]" time="1.313"><failure message="AssertionError: Strict import changed family geometry">trim = 0
+
+    @pytest.mark.parametrize('trim', [0, .3])
+    def test_application_real_refinement_is_no_worse_and_roundtrips(trim):
+        from scripts.benchmark_alns import strict_check
+        rows, _, plan = fixture('exchange')
+        baseline = optimize_order_plan(command(rows, seconds=0, trim=trim), engine=FrozenEngine(plan))
+        result = optimize_order_plan(command(rows, trim=trim), engine=FrozenEngine(plan))
+        assert result.snapshot['validation']['is_valid']
+        assert result.snapshot['smart_search']['alns']['attempts'] &gt; 0
+        assert final_system_sort_keys([baseline.snapshot, result.snapshot])[1] &lt;= final_system_sort_keys([baseline.snapshot, result.snapshot])[0]
+        assert result.required_boards == baseline.required_boards == 2
+        assert len(result.candidate_snapshots) &lt;= 5
+        for snapshot in result.candidate_snapshots:
+&gt;           assert strict_check(snapshot, rows)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+plan = {'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 'smart', 'machine_type': 'CNC Router', ...}
+rows = [{'width_cm': 4, 'length_cm': 4, 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 4, 'length_cm': 4, 'qty': 1, 'p..., 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 5.5, 'length_cm': 5.5, 'qty': 1, 'piece_type': 'Regular', ...}]
+
+    def strict_check(plan, rows):
+        from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+        from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+        reloaded = json.loads(json.dumps(plan))
+        with tempfile.TemporaryDirectory() as directory:
+            imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, Path(directory)))
+        def material(p):
+            return sorted(tuple(sorted((v["source_piece_no"], *(round(v[k], 4) for k in ("x", "y", "w", "h")))
+                for v in s["pieces"])) for s in p["sheets"])
+        if material(imported) != material(reloaded):
+&gt;           raise AssertionError("Strict import changed family geometry")
+E           AssertionError: Strict import changed family geometry
+
+scripts\benchmark_alns.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0.3]" time="0.472"><failure message="AssertionError: Strict import changed family geometry">trim = 0.3
+
+    @pytest.mark.parametrize('trim', [0, .3])
+    def test_application_real_refinement_is_no_worse_and_roundtrips(trim):
+        from scripts.benchmark_alns import strict_check
+        rows, _, plan = fixture('exchange')
+        baseline = optimize_order_plan(command(rows, seconds=0, trim=trim), engine=FrozenEngine(plan))
+        result = optimize_order_plan(command(rows, trim=trim), engine=FrozenEngine(plan))
+        assert result.snapshot['validation']['is_valid']
+        assert result.snapshot['smart_search']['alns']['attempts'] &gt; 0
+        assert final_system_sort_keys([baseline.snapshot, result.snapshot])[1] &lt;= final_system_sort_keys([baseline.snapshot, result.snapshot])[0]
+        assert result.required_boards == baseline.required_boards == 2
+        assert len(result.candidate_snapshots) &lt;= 5
+        for snapshot in result.candidate_snapshots:
+&gt;           assert strict_check(snapshot, rows)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_alns_recalculation.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+plan = {'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 'smart', 'machine_type': 'CNC Router', ...}
+rows = [{'width_cm': 4, 'length_cm': 4, 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 4, 'length_cm': 4, 'qty': 1, 'p..., 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 5.5, 'length_cm': 5.5, 'qty': 1, 'piece_type': 'Regular', ...}]
+
+    def strict_check(plan, rows):
+        from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+        from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+        reloaded = json.loads(json.dumps(plan))
+        with tempfile.TemporaryDirectory() as directory:
+            imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, Path(directory)))
+        def material(p):
+            return sorted(tuple(sorted((v["source_piece_no"], *(round(v[k], 4) for k in ("x", "y", "w", "h")))
+                for v in s["pieces"])) for s in p["sheets"])
+        if material(imported) != material(reloaded):
+&gt;           raise AssertionError("Strict import changed family geometry")
+E           AssertionError: Strict import changed family geometry
+
+scripts\benchmark_alns.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[0]" time="0.010" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[-1]" time="0.010" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[nan]" time="0.007" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[inf]" time="0.006" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_fast_calculation_does_not_call_alns" time="0.010" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_invalid_proposal_cannot_replace_the_completed_native_snapshot" time="0.027" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_stage_budget_is_capped_and_is_additional_to_native" time="0.011" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[False]" time="0.539" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[True]" time="0.432" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_global_refill_keeps_real_identity_and_its_whole_pool_cap" time="0.024" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_partial_neighborhood_grows_remnant_without_changing_board_count[exchange]" time="0.034" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_partial_neighborhood_grows_remnant_without_changing_board_count[frontier]" time="0.016" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_zero_kerf_native_touching_repair_fails_closed_with_original_spacing" time="0.026" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_grid_joins_real_cut_network_and_preserves_the_protected_rectangle" time="0.070" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_caps_and_incumbent_survive_failed_proposals[exchange]" time="0.026" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_caps_and_incumbent_survive_failed_proposals[frontier]" time="0.005" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_caps_and_incumbent_survive_failed_proposals[grid]" time="0.005" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_caps_and_incumbent_survive_failed_proposals[relocate]" time="0.009" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_caps_and_incumbent_survive_failed_proposals[repack]" time="0.009" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_expired_deadline_cannot_start_repair" time="0.002" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_one_piece_cap_cannot_start_a_two_piece_relocation" time="0.004" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_region_qualification_matches_native_metric_at_dimension_boundary" time="0.001" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_completed_improvement_survives_cancellation" time="0.010" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[Glass]" time="0.002" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[L-Shaped Corner]" time="0.003" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[Clipped Corner]" time="0.003" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[Special]" time="0.003" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[OFFCUT]" time="0.003" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[geometry]" time="0.003" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_protected_manufacturing_cohorts_are_not_moved[extra_liner]" time="0.002" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_panel_saw_is_exact_native_fallback" time="0.002" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_material_identity_ignores_equal_copy_swaps_but_validation_retains_ids" time="0.004" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_fixed_work_adaptive_trace_is_reproducible" time="0.246" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_partial_search_actual_application_export_strict_import[0]" time="0.252" /><testcase classname="almdina_erp.tests.test_fixed_board_layout_search" name="test_partial_search_actual_application_export_strict_import[0.3]" time="0.212" /></testsuite></testsuites>

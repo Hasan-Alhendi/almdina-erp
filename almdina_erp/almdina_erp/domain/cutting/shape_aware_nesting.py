@@ -1203,6 +1203,8 @@ def _seat_void_guests(
     quarter_turns_only: bool = False,
     deadline: float | None = None,
     contact_anchors: bool = False,
+    area_first: bool = False,
+    preferred_guest_ids: frozenset[int] = frozenset(),
 ) -> list[dict[str, Any]]:
     complements = [block for block in blocks if block["kind"] != "single"]
     singles = [block for block in blocks if block["kind"] == "single"]
@@ -1226,6 +1228,13 @@ def _seat_void_guests(
     ]
     voids = [void for block in seated for void in block["voids"]]
     orders = _guest_orders(candidates, voids)
+    if preferred_guest_ids and orders:
+        # A compound repair may nominate a dimension family whose long members
+        # are hard to reinsert elsewhere. This is a proposal order only; every
+        # guest still passes the same material/kerf/orientation gates below.
+        orders = [sorted(orders[0], key=lambda p: (
+            int(p['id']) not in preferred_guest_ids,
+            -num(p.get('width_cm'))*num(p.get('length_cm')), int(p['id'])))]
     best_guests: list[tuple[int, dict[str, Any]]] | None = None
     best_score: tuple[int, float] | None = None
     best_trial = seated
@@ -1261,7 +1270,7 @@ def _seat_void_guests(
             trial[block_index]["guests"].append(guest)
             placed.append((block_index, guest))
         area = sum(num(guest.get("w")) * num(guest.get("h")) for _index, guest in placed)
-        score = (len(placed), area)
+        score = (area, len(placed)) if area_first else (len(placed), area)
         if best_score is None or score > best_score:
             best_score = score
             best_guests = placed

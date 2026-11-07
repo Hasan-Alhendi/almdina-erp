@@ -1,0 +1,36 @@
+.................F.........................................              [100%]
+================================== FAILURES ===================================
+_______ test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned ________
+
+tmp_path = WindowsPath('C:/Users/HorizonTech/Documents/ChatGPT/Cutting/almdina-erp-abc/.pytest_cache/alns-isolated-test_final_cut_line_alignment/test_uploaded_non_aligned_dxf_0')
+
+    def test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned(tmp_path):
+        """Strict importer must not turn optional System alignment into a validation rule."""
+        import ezdxf
+>       from almdina_erp.tests.test_cutter_center_paths import (
+            _import, _order, _piece, _rect, _sheet,
+        )
+
+almdina_erp\tests\test_final_cut_line_alignment.py:246: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\_pytest\assertion\rewrite.py:185: in exec_module
+    exec(co, module.__dict__)
+almdina_erp\tests\test_cutter_center_paths.py:31: in <module>
+    from almdina_erp.almdina_erp.services import dxf_import_service
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    from __future__ import annotations
+    
+    import os
+    from copy import deepcopy
+    from dataclasses import replace
+    from collections import Counter
+    from typing import Any, Sequence
+    
+>   import frappe
+E   ModuleNotFoundError: No module named 'frappe'
+
+almdina_erp\almdina_erp\services\dxf_import_service.py:9: ModuleNotFoundError
+=========================== short test summary info ===========================
+FAILED almdina_erp/tests/test_final_cut_line_alignment.py::test_uploaded_non_aligned_dxf_is_accepted_and_not_repositioned
+1 failed, 58 passed in 65.51s (0:01:05)
