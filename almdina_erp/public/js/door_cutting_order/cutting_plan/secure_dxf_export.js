@@ -1158,25 +1158,25 @@
         return rows[group - 1] || null;
     }
 
-    function applyManufacturingNotch(piece, frm, row) {
+    function applyManufacturingNotch(piece, frm, row, deductEdgeThickness) {
         const liner = window.AlmdinaLinerGeometry;
         if (!row || !liner || typeof liner.contourNotchFromOrder !== "function") return;
         if (String(row.piece_type || "") !== "L-Shaped Corner") return;
         if (piece.geometry && Array.isArray(piece.geometry.outer)) return;
-        const notch = liner.contourNotchFromOrder(frm, row);
+        const notch = liner.contourNotchFromOrder(frm, row, deductEdgeThickness);
         piece.piece_type = row.piece_type;
         piece.clipped_corner_position = row.clipped_corner_position || piece.clipped_corner_position;
         piece.clipped_corner_width_cm = notch.cutWidthCm;
         piece.clipped_corner_length_cm = notch.cutLengthCm;
     }
 
-    function applyOrderLinerSpecs(plan, frm) {
+    function applyOrderLinerSpecs(plan, frm, deductEdgeThickness) {
         const rows = (frm && frm.doc && frm.doc.pieces) || [];
         if (!rows.length) return;
         (plan.sheets || []).forEach(sheet => {
             (sheet.pieces || []).forEach(piece => {
                 const row = orderRowForPlanPiece(rows, piece);
-                applyManufacturingNotch(piece, frm, row);
+                applyManufacturingNotch(piece, frm, row, deductEdgeThickness);
                 const engine = window.AlmdinaMachiningOverlay;
                 const addons = engine && Array.isArray(engine.ADDONS) ? engine.ADDONS : null;
                 if (!addons) {
@@ -1221,7 +1221,10 @@
     function downloadValidatedPlan(data, orderName, frm, ownsExport = null) {
         if (ownsExport && !ownsExport()) return null;
         const plan = (data && data.plan) || {};
-        applyOrderLinerSpecs(plan, frm);
+        const deductEdgeThickness = data && Object.prototype.hasOwnProperty.call(data, "deduct_edge_thickness")
+            ? data.deduct_edge_thickness
+            : undefined;
+        applyOrderLinerSpecs(plan, frm, deductEdgeThickness);
         if (!(plan.sheets || []).length) {
             frappe.throw(__("Validated cutting plan contains no sheets to export."));
         }

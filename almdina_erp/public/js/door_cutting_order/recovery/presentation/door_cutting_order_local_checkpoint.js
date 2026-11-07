@@ -309,6 +309,15 @@
         return translate(messages[String(snapshot && snapshot.state || "")] || "");
     }
 
+    function shouldPaintRecoveryStatus(previousState, snapshot) {
+        const next = String(snapshot && snapshot.state || "");
+        return !(
+            previousState === "LOCAL_SAVED"
+            && (next === "DIRTY" || next === "LOCAL_SAVING")
+            && String(snapshot && snapshot.dirty_scope || "") === "PLAN"
+        );
+    }
+
     function renderCheckpointStatus(frm, state, snapshot) {
         const message = checkpointStatusText(snapshot);
         let element = state && state.statusElement;
@@ -335,6 +344,10 @@
         }
         if (state) state.statusElement = element;
         else if (snapshot && snapshot.state === "ERROR") ownErrorStatusForGeneration(frm, element);
+        if (
+            element.dataset.recoveryState === String(snapshot && snapshot.state || "")
+            && element.textContent === message
+        ) return element;
         element.hidden = !message;
         element.dataset.recoveryState = String(snapshot && snapshot.state || "");
         element.className = "dco-recovery-status alert";
@@ -451,6 +464,8 @@
                     : null,
                 capture: ({ dirtyScope }) => workspaceProjection(frm, state, dirtyScope),
                 onStateChange: (snapshot) => {
+                    const previous = state.statusElement && state.statusElement.dataset.recoveryState;
+                    if (!shouldPaintRecoveryStatus(previous, snapshot)) return;
                     renderCheckpointStatus(frm, state, snapshot);
                     if (snapshot.state === factory.STATES.ERROR) {
                         console.debug("DCO local recovery checkpoint failed safely", snapshot.error);
@@ -1526,6 +1541,7 @@
         initializeNewForm,
         continueDraft,
         markDirty,
+        shouldPaintRecoveryStatus,
         flush: flushState,
         snapshot: (frm) => {
             const state = currentState(frm);

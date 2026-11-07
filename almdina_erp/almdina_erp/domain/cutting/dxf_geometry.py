@@ -114,6 +114,88 @@ def assemble_contours(
     return contours
 
 
+def consistent_directed_rings(
+    segments: Iterable[Segment],
+    tolerance: float,
+) -> list[list[Point]]:
+    """Return cycles whose every stored segment already points the same way.
+
+    An unordered or partly reversed component is omitted. Callers may use a
+    returned ring as orientation evidence. They must not invent a direction
+    for a component this function skips.
+    """
+
+    usable = [segment for segment in segments if segment_length(segment) > EPSILON]
+    if not usable:
+        return []
+
+    outgoing: dict[tuple[int, int], list[int]] = defaultdict(list)
+    undirected: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for index, (start, end) in enumerate(usable):
+        start_key = _node_key(start, tolerance)
+        end_key = _node_key(end, tolerance)
+        outgoing[start_key].append(index)
+        undirected[start_key].append(index)
+        undirected[end_key].append(index)
+
+    seen: set[int] = set()
+    rings: list[list[Point]] = []
+    for seed in range(len(usable)):
+        if seed in seen:
+            continue
+        component: set[int] = set()
+        stack = [seed]
+        while stack:
+            edge_index = stack.pop()
+            if edge_index in component:
+                continue
+            component.add(edge_index)
+            start, end = usable[edge_index]
+            for node in (_node_key(start, tolerance), _node_key(end, tolerance)):
+                for linked in undirected[node]:
+                    if linked not in component:
+                        stack.append(linked)
+        seen.update(component)
+
+        nodes: set[tuple[int, int]] = set()
+        incoming: dict[tuple[int, int], int] = defaultdict(int)
+        for edge_index in component:
+            start, end = usable[edge_index]
+            start_key = _node_key(start, tolerance)
+            end_key = _node_key(end, tolerance)
+            nodes.add(start_key)
+            nodes.add(end_key)
+            incoming[end_key] += 1
+        if any(
+            len([edge for edge in outgoing[node] if edge in component]) != 1
+            or incoming[node] != 1
+            for node in nodes
+        ):
+            continue
+
+        start_edge = min(component)
+        points = [usable[start_edge][0]]
+        edge_index = start_edge
+        closed = False
+        for _ in range(len(component) + 1):
+            end = usable[edge_index][1]
+            points.append(end)
+            if _node_key(end, tolerance) == _node_key(points[0], tolerance) and len(points) > 3:
+                closed = True
+                break
+            followers = [
+                candidate
+                for candidate in outgoing[_node_key(end, tolerance)]
+                if candidate in component
+            ]
+            if len(followers) != 1 or followers[0] == start_edge:
+                break
+            edge_index = followers[0]
+        if closed and len(points) - 1 == len(component):
+            rings.append(points[:-1])
+    return rings
+
+
 def simplify_polygon(points: Sequence[Point], tolerance: float) -> list[Point]:
     if not points:
         return []

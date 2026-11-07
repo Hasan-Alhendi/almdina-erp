@@ -302,12 +302,21 @@
         return Math.round(num(value) * 1000) / 1000;
     }
 
+    function edgeDeductionDisabled(value) {
+        if (value === false || value === 0) return true;
+        const token = String(value == null ? "" : value).trim().toLowerCase();
+        return token === "0" || token === "false" || token === "no" || token === "off";
+    }
+
     function contourNotchCm(input) {
         const source = input || {};
         const finished = {
             cutWidthCm: num(source.notchWidthCm),
             cutLengthCm: num(source.notchLengthCm),
         };
+        // An explicit off choice keeps the finished notch. A missing flag stays
+        // on, matching the historical cut. Thickness is not subtracted here.
+        if (edgeDeductionDisabled(source.deductEdgeThickness)) return finished;
         if (source.pieceType !== L_SHAPED) return finished;
         if (source.edgeBreak && (source.innerMm === null || source.innerMm === undefined)) {
             return finished;
@@ -1203,7 +1212,7 @@
         return buildMachiningOverlay(piece, linerSpec(piece), "toolpath");
     }
 
-    function contourNotchFromOrder(frm, row) {
+    function contourNotchFromOrder(frm, row, deductEdgeThickness) {
         const source = row || {};
         const banding = window.AlmdinaMultiEdgeBanding;
         const calculated = banding && typeof banding.calculate === "function"
@@ -1228,6 +1237,7 @@
             sideThicknessMm: thickness,
             edgeBreak: Boolean(Number(source.edge_break)),
             innerMm: inner,
+            deductEdgeThickness,
         });
     }
 

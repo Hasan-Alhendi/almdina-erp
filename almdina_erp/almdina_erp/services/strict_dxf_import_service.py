@@ -940,6 +940,17 @@ def _l_break_thickness_unproven(
     return measure_l_remainings_cm(outer, rotated=bool(piece.get("rotated"))) is not None
 
 
+def _drop_directed_contour_evidence(snapshot: dict[str, Any]) -> None:
+    """Remove import-only orientation evidence before a snapshot can be stored."""
+
+    for sheet in snapshot.get("sheets") or []:
+        if not isinstance(sheet, dict):
+            continue
+        for piece in sheet.get("pieces") or []:
+            if isinstance(piece, dict):
+                piece.pop("directed_contour_mm", None)
+
+
 def _outer_ring_mm(piece: dict[str, Any]) -> list[list[float]] | None:
     geometry = piece.get("geometry")
     if not isinstance(geometry, dict):
@@ -1050,6 +1061,7 @@ def _bind_corner_edge_rotation(
 
     outer = _outer_ring_mm(piece)
     notch_width_cm, notch_length_cm = _contour_notch_cm(spec)
+    directed = piece.get("directed_contour_mm")
     match = (
         match_corner_contour(
             outer,
@@ -1060,6 +1072,7 @@ def _bind_corner_edge_rotation(
             cut_width_cm=notch_width_cm,
             cut_length_cm=notch_length_cm,
             edge_bands=_corner_band_tokens(spec),
+            directed_ring_mm=directed if isinstance(directed, list) else None,
         )
         if outer is not None
         else None
@@ -2002,6 +2015,7 @@ def parse_production_dxf(
         "edge_markers_from_order": True,
         "rotation_owned_by_renderer": True,
     }
+    _drop_directed_contour_evidence(snapshot)
     return snapshot
 
 

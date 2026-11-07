@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from copy import deepcopy
 from dataclasses import replace
@@ -107,6 +108,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
+    consistent_directed_rings,
     is_axis_aligned_rectangle,
     polygon_area,
     polygon_distance,
@@ -2343,6 +2345,47 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
         ) from exc
 
 
+def _same_undirected_ring(
+    left: Sequence[tuple[float, float]],
+    right: Sequence[tuple[float, float]],
+    tolerance: float,
+) -> bool:
+    def edges(points: Sequence[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+        ring = list(points)
+        if len(ring) > 1 and math.dist(ring[0], ring[-1]) <= tolerance:
+            ring = ring[:-1]
+        return [
+            (ring[index], ring[(index + 1) % len(ring)])
+            for index in range(len(ring))
+        ]
+
+    left_edges = edges(left)
+    right_edges = edges(right)
+    if len(left_edges) != len(right_edges) or len(left_edges) < 3:
+        return False
+    unused = set(range(len(right_edges)))
+    for start, end in left_edges:
+        match = next(
+            (
+                index
+                for index in unused
+                if (
+                    math.dist(start, right_edges[index][0]) <= tolerance
+                    and math.dist(end, right_edges[index][1]) <= tolerance
+                )
+                or (
+                    math.dist(start, right_edges[index][1]) <= tolerance
+                    and math.dist(end, right_edges[index][0]) <= tolerance
+                )
+            ),
+            None,
+        )
+        if match is None:
+            return False
+        unused.remove(match)
+    return not unused
+
+
 def _extract_pieces(
     topology: ResolvedTopology,
     *,
@@ -2350,6 +2393,7 @@ def _extract_pieces(
     trim_mm: float,
     usable_width_cm: float,
     usable_length_cm: float,
+    directed_rings_mm: Sequence[Sequence[tuple[float, float]]] | None = None,
 ) -> list[dict[str, Any]]:
     issues: list[DxfValidationIssue] = []
     pieces: list[dict[str, Any]] = []
@@ -2409,6 +2453,16 @@ def _extract_pieces(
             polygon_area(hole) for hole in holes_mm
         )
         piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
+        for ring in directed_rings_mm or ():
+            ring_points = [(float(point[0]), float(point[1])) for point in ring]
+            if not _same_undirected_ring(points_mm, ring_points, CONNECTIVITY_TOLERANCE_MM):
+                continue
+            piece["_directed_outline_cm"] = _to_plan_points(
+                ring_points,
+                sheet=target_sheet,
+                trim_mm=trim_mm,
+            )
+            break
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
     if issues:
@@ -2899,6 +2953,14 @@ def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece["geometry"] = serialize_geometry_from_cm(
         _piece_material_geometry(piece, units="cm")
     )
+    directed = piece.get("_directed_outline_cm")
+    if isinstance(directed, list) and len(directed) >= 3:
+        # Import-only orientation evidence. Strict validation removes it before
+        # the uploaded snapshot can be stored.
+        public_piece["directed_contour_mm"] = [
+            [float(point[0]) * 10.0, float(point[1]) * 10.0]
+            for point in directed
+        ]
     return public_piece
 
 
@@ -3281,6 +3343,7 @@ def parse_production_dxf(
     if missing_issues:
         raise DxfImportError(issues=missing_issues)
 
+    directed_rings = consistent_directed_rings(cut_segments, CONNECTIVITY_TOLERANCE_MM)
     sheet_contours = assemble_contours(sheet_segments, CONNECTIVITY_TOLERANCE_MM)
     sheets = _validate_sheet_contours(
         sheet_contours,
@@ -3295,6 +3358,7 @@ def parse_production_dxf(
         trim_mm=trim_mm,
         usable_width_cm=usable_board_width_cm,
         usable_length_cm=usable_board_length_cm,
+        directed_rings_mm=directed_rings,
     )
     offcut_polygons = _closed_polygons_from_segments(offcut_segments)
     offcut_indexes = _offcut_piece_indexes(pieces, offcut_polygons)

@@ -327,7 +327,10 @@
     }
 
     async function runRecalculation(frm) {
-        if (frm.__almdinaRecalculateInflight) return false;
+        if (frm.__almdinaRecalculateInflight) {
+            frappe.msgprint(translate("Wait until the current preview or save finishes."));
+            return false;
+        }
         frm.__almdinaRecalculateInflight = true;
         try {
             return await runRecalculationNow(frm);
@@ -344,10 +347,9 @@
             return false;
         }
 
-        const settings = activeSettings(frm);
         const previews = previewOwner();
         const transport = api();
-        if (!settings || !transport) {
+        if (!transport) {
             frappe.msgprint(translate("Could not prepare the cutting plan service. Reload the page and try again."));
             return false;
         }
@@ -355,20 +357,33 @@
         if (!(await persistPendingOrderInputs(frm))) return false;
 
         try {
-            if (!hasSystemDraft(frm)) {
+            const firstPlan = !hasSystemDraft(frm);
+            if (firstPlan && !workspaceEditing(frm)) {
                 const editor = window.AlmdinaPlanEditSessionUX;
-                if (!editor?.startEditing || !(await editor.startEditing(frm))) return false;
-                if (!previews?.preview) return false;
-                return Boolean(await previews.preview(frm, settings));
+                if (!editor || typeof editor.startEditing !== "function") {
+                    frappe.msgprint(translate("Could not prepare the cutting plan service. Reload the page and try again."));
+                    return false;
+                }
+                if (!(await editor.startEditing(frm))) return false;
             }
-
-            if (!previews || typeof previews.preview !== "function") return false;
+            const settings = activeSettings(frm);
+            if (!settings || !previews || typeof previews.preview !== "function") {
+                frappe.msgprint(translate("Could not prepare the cutting plan service. Reload the page and try again."));
+                return false;
+            }
             const ok = await previews.preview(frm, settings);
-            if (ok) {
+            if (ok && !firstPlan) {
                 frappe.show_alert({
                     message: translate("A new preview was created. Review it, then press “Save” to apply this change to the plan."),
                     indicator: "blue",
                 }, 5);
+            } else if (!ok) {
+                const snapshot = typeof previews.snapshot === "function" ? previews.snapshot(frm) : null;
+                frappe.msgprint(translate(
+                    snapshot && snapshot.error
+                        ? snapshot.error
+                        : "Could not create the preview."
+                ));
             }
             return Boolean(ok);
         } catch (error) {
@@ -509,12 +524,16 @@
 
     function bindRecalculateDelegation(frm, wrapper) {
         const node = wrapper.get(0);
-        if (!node || node.__almdinaRecalculateDelegated) return;
+        if (!node) return;
+        node.__almdinaRecalculateFrm = frm;
+        if (node.__almdinaRecalculateDelegated) return;
         node.__almdinaRecalculateDelegated = true;
         wrapper.on("click.almdinaRecalculate", ".dco-recalculate-plan", (event) => {
             event.preventDefault();
             event.stopPropagation();
-            runRecalculation(frm);
+            const current = node.__almdinaRecalculateFrm || frm;
+            if (current !== window.cur_frm) return;
+            runRecalculation(current);
         });
     }
 
@@ -581,42 +600,12 @@
         simplifyActions(frm);
     }
 
-    function scheduleSimplify(frm) {
-        if (frm.__dcoSimplePlanControlsScheduled) return;
-        frm.__dcoSimplePlanControlsScheduled = true;
-        const run = () => {
-            frm.__dcoSimplePlanControlsScheduled = false;
-            simplifyActions(frm);
-        };
-        const context = documentContext();
-        if (context && typeof context.scheduleFrame === "function") {
-            context.scheduleFrame(frm, "simple-plan-controls", run);
-            return;
-        }
-        requestAnimationFrame(() => {
-            if (window.cur_frm === frm) run();
-        });
-    }
-
-    function observeActions(frm) {
-        const field = frm.fields_dict && frm.fields_dict.plan_control_actions;
-        const node = field && field.$wrapper && field.$wrapper[0];
-        if (!node || frm.__dcoSimplePlanControlsObserver) return;
-        frm.__dcoSimplePlanControlsObserver = new MutationObserver(() => scheduleSimplify(frm));
-        frm.__dcoSimplePlanControlsObserver.observe(node, { childList: true, subtree: true });
-        const context = documentContext();
-        if (context && typeof context.registerObserver === "function") {
-            context.registerObserver(frm, "simple-plan-controls-observer", frm.__dcoSimplePlanControlsObserver);
-        }
-    }
-
     function refresh(frm) {
         const context = documentContext();
         const token = context && typeof context.capture === "function" ? context.capture(frm) : null;
         const run = () => {
             if (context && !context.isCurrent(frm, token)) return;
             apply(frm);
-            observeActions(frm);
         };
         if (context && typeof context.ensureStageContext === "function") {
             context.ensureStageContext(frm).then(run);

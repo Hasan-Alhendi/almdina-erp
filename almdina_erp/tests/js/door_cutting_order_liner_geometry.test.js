@@ -831,6 +831,22 @@ assert.deepEqual(
     })),
     { cutWidthCm: 54, cutLengthCm: 23 }
 );
+for (const deductEdgeThickness of [false, 0, "0", "false", "off"]) {
+    assert.deepEqual(
+        copy(geometry.contourNotchCm({
+            pieceType: "L-Shaped Corner",
+            notchWidthCm: 10,
+            notchLengthCm: 10,
+            position: "Top Right",
+            sideThicknessMm: { long_right: 1, width_top: 2 },
+            edgeBreak: true,
+            innerMm: 1,
+            deductEdgeThickness,
+        })),
+        { cutWidthCm: 10, cutLengthCm: 10 },
+        `deduct ${deductEdgeThickness} keeps the finished notch`
+    );
+}
 
 function polygonBounds(points) {
     const xs = points.map(point => point[0]);

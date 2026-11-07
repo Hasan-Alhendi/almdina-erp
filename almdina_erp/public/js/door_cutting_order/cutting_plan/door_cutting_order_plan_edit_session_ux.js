@@ -819,6 +819,42 @@
         store.patchDraft({ [fieldname]: value });
     }
 
+    function editorStructureKey(frm, specs) {
+        const fields = (specs || []).map((spec) => {
+            const options = (spec.options || [])
+                .map((option) => `${option.value}${option.available === false ? "!" : ""}`)
+                .join(",");
+            return `${spec.fieldname}:${spec.fieldtype}:${options}`;
+        }).join("|");
+        return `${frm && frm.doc && frm.doc.name || ""}::${uiDirection()}::${fields}`;
+    }
+
+    function rememberEditorFocus() {
+        const active = typeof document !== "undefined" ? document.activeElement : null;
+        if (!active || !active.id || !String(active.id).startsWith("dco-plan-setting-")) return null;
+        return {
+            id: active.id,
+            start: active.selectionStart,
+            end: active.selectionEnd,
+        };
+    }
+
+    function restoreEditorFocus(host, memory) {
+        if (!host || !memory || !memory.id) return;
+        const control = host.find(`[id="${memory.id}"]`).first();
+        if (!control.length) return;
+        const node = control.get(0);
+        if (node && typeof node.focus === "function") node.focus();
+        if (
+            node
+            && memory.start != null
+            && memory.end != null
+            && typeof node.setSelectionRange === "function"
+        ) {
+            node.setSelectionRange(memory.start, memory.end);
+        }
+    }
+
     function mountDraftControls(frm) {
         const store = storeFor(frm);
         const state = store && store.snapshot();
@@ -826,8 +862,16 @@
         if (!store || !state || !state.editing || !host) return false;
 
         installEditorStyles();
-        host.children(EDITOR_SELECTOR).remove();
         const specs = planSettingSpecs(frm, state.draft || {});
+        const structureKey = editorStructureKey(frm, specs);
+        const current = host.children(EDITOR_SELECTOR).first();
+        if (current.length && current.attr("data-editor-structure") === structureKey) {
+            markEditorDirty(host, state.dirty);
+            return true;
+        }
+
+        const focusMemory = rememberEditorFocus();
+        host.children(EDITOR_SELECTOR).remove();
         const groups = groupPlanSettingSpecs(specs);
         const draft = state.draft || {};
         const planFields = groups.plan
@@ -837,7 +881,7 @@
             .map((spec) => fieldMarkup(spec, draft[spec.fieldname]))
             .join("");
         host.prepend(`
-            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
+            <section class="dco-plan-settings-editor${state.dirty ? " is-dirty" : ""}" data-editor-structure="${escapeHtml(structureKey)}" dir="${escapeHtml(uiDirection())}" aria-label="${escapeHtml(translate("Cutting plan settings"))}">
                 <div class="dco-plan-settings-editor__sheet">
                     <div class="dco-plan-settings-editor__settings-row">
                         <div class="dco-plan-settings-editor__lead">
@@ -867,6 +911,7 @@
                 const current = store.snapshot();
                 markEditorDirty(host, Boolean(current && current.dirty));
             });
+        restoreEditorFocus(host, focusMemory);
         return true;
     }
 
