@@ -279,22 +279,23 @@
                 return { ok: false, code: decision.code, reason: reasonMessage(decision.code), commands: [] };
             }
             const piece = session.pieces[key];
-            let detachHost = false;
-            const host = piece.glass_host_key ? session.pieces[piece.glass_host_key] : null;
-            if (host && !moving.has(piece.glass_host_key)) {
-                const trial = {
-                    ...piece,
-                    sheet_no: decision.sheet_no,
-                    local_x_mm: decision.local_x_mm,
-                    local_y_mm: decision.local_y_mm,
-                };
-                if (
-                    Number(trial.sheet_no) !== Number(host.sheet_no)
-                    || !guestRemainsInHost(trial, host)
-                ) {
-                    detachHost = true;
-                }
-            }
+            const trial = {
+                ...piece,
+                sheet_no: decision.sheet_no,
+                local_x_mm: decision.local_x_mm,
+                local_y_mm: decision.local_y_mm,
+                outline_mm: reframePoints(
+                    piece.outline_mm,
+                    session.boards,
+                    piece.sheet_no,
+                    decision.sheet_no,
+                    decision.delta_x_mm,
+                    decision.delta_y_mm
+                ),
+            };
+            const hosting = (piece.glass_host_key && moving.has(piece.glass_host_key))
+                ? { detach_host: false, attach_host_key: null, attach_host_piece_id: null }
+                : resolveHostRelationship(session, piece, trial);
             commands.push({
                 piece_key: key,
                 target_sheet_no: decision.sheet_no,
@@ -302,7 +303,9 @@
                 local_y_mm: decision.local_y_mm,
                 delta_x_mm: decision.delta_x_mm,
                 delta_y_mm: decision.delta_y_mm,
-                detach_host: detachHost,
+                detach_host: hosting.detach_host,
+                attach_host_key: hosting.attach_host_key,
+                attach_host_piece_id: hosting.attach_host_piece_id,
             });
         }
         return { ok: true, commands, dx: num(dx), dy: num(dy) };
@@ -455,6 +458,76 @@
         return pointInPolygon(a[0], b) || pointInPolygon(b[0], a);
     }
 
+    function polygonStrictlyContainsPolygon(container, nested) {
+        // Mirror domain dxf_topology.polygon_strictly_contains_polygon for session drops.
+        if (!Array.isArray(container) || !Array.isArray(nested) || container.length < 3 || nested.length < 3) {
+            return false;
+        }
+        for (let i = 0; i < nested.length; i += 1) {
+            if (!pointInPolygon(nested[i], container)) return false;
+        }
+        for (let i = 0; i < nested.length; i += 1) {
+            const n1 = nested[i];
+            const n2 = nested[(i + 1) % nested.length];
+            for (let j = 0; j < container.length; j += 1) {
+                if (segmentsIntersect(n1, n2, container[j], container[(j + 1) % container.length])) {
+                    return false;
+                }
+            }
+        }
+        return polygonDistance(container, nested) > 1e-9;
+    }
+
+    function holeRing(piece) {
+        const hole = piece && piece.glass_hole_local_mm;
+        if (!Array.isArray(hole) || hole.length < 3) return null;
+        return hole.map((point) => [num(point[0]), num(point[1])]);
+    }
+
+    function footprintPoints(fp) {
+        if (fp && Array.isArray(fp.points) && fp.points.length >= 3) {
+            return fp.points.map((point) => [num(point[0]), num(point[1])]);
+        }
+        if (!fp || !fp.bounds) return null;
+        const b = fp.bounds;
+        return [
+            [num(b.x), num(b.y)],
+            [num(b.x) + num(b.w), num(b.y)],
+            [num(b.x) + num(b.w), num(b.y) + num(b.h)],
+            [num(b.x), num(b.y) + num(b.h)],
+        ];
+    }
+
+    function nestedInHole(guestFp, hostPiece) {
+        const hole = holeRing(hostPiece);
+        const guest = footprintPoints(guestFp);
+        if (!hole || !guest) return false;
+        return polygonStrictlyContainsPolygon(hole, guest);
+    }
+
+    function holeKerfConflict(guestFp, hostPiece, kerfMm) {
+        const hole = holeRing(hostPiece);
+        const guest = footprintPoints(guestFp);
+        const gap = Math.max(0, num(kerfMm));
+        if (!hole || !guest || gap <= 0) return null;
+        if (polygonDistance(hole, guest) + 1e-9 < gap) return DROP_KERF;
+        return null;
+    }
+
+    function materialPairConflict(pieceA, fpA, pieceB, fpB, kerfMm) {
+        // Material is outer minus holes. A guest wholly inside the other's opening
+        // does not collide with host stock; kerf is measured to the hole wall.
+        if (nestedInHole(fpA, pieceB)) return holeKerfConflict(fpA, pieceB, kerfMm);
+        if (nestedInHole(fpB, pieceA)) return holeKerfConflict(fpB, pieceA, kerfMm);
+        return pairConflict(fpA, fpB, kerfMm);
+    }
+
+    function trustedHostKey(piece) {
+        return piece && piece.source_glass_host_key
+            ? String(piece.source_glass_host_key)
+            : null;
+    }
+
     function pointSegmentDistance(point, a, b) {
         const dx = num(b[0]) - num(a[0]);
         const dy = num(b[1]) - num(a[1]);
@@ -571,8 +644,14 @@
                 if (movingKeys.has(otherKey)) continue;
                 if (other.distribution === "excluded") continue;
                 if (Number(other.sheet_no) !== Number(target.sheet_no)) continue;
-                if (other.glass_host_key === pieceKey || piece.glass_host_key === otherKey) continue;
-                const conflict = pairConflict(movedLocal, footprint(other), session.kerf_mm || 0);
+                // Host/guest relationship alone never skips material checks.
+                const conflict = materialPairConflict(
+                    moved,
+                    movedLocal,
+                    other,
+                    footprint(other),
+                    session.kerf_mm || 0
+                );
                 if (conflict) return { ok: false, code: conflict, delta_x_mm: dx, delta_y_mm: dy };
             }
         }
@@ -587,6 +666,39 @@
         };
     }
 
+    function resolveHostRelationship(session, piece, trial) {
+        const activeKey = piece.glass_host_key ? String(piece.glass_host_key) : null;
+        const sourceKey = trustedHostKey(piece);
+        const result = {
+            detach_host: false,
+            attach_host_key: null,
+            attach_host_piece_id: null,
+        };
+        if (activeKey && session.pieces[activeKey]) {
+            const host = session.pieces[activeKey];
+            if (
+                Number(trial.sheet_no) !== Number(host.sheet_no)
+                || !guestRemainsInHost(trial, host)
+            ) {
+                result.detach_host = true;
+            }
+            return result;
+        }
+        // Re-attach only to the source-declared host; never invent a forged host.
+        if (sourceKey && session.pieces[sourceKey]) {
+            const host = session.pieces[sourceKey];
+            if (
+                Number(trial.sheet_no) === Number(host.sheet_no)
+                && guestRemainsInHost(trial, host)
+                && !holeKerfConflict(footprint(trial), host, session.kerf_mm || 0)
+            ) {
+                result.attach_host_key = sourceKey;
+                result.attach_host_piece_id = host.piece_id == null ? null : Number(host.piece_id);
+            }
+        }
+        return result;
+    }
+
     function proposePieceDrop(session, pieceKeyOrInstance, worldX, worldY) {
         const pieceKey = resolvePieceKey(session, pieceKeyOrInstance);
         const decision = validatePieceDrop(session, pieceKey, worldX, worldY);
@@ -598,21 +710,21 @@
             };
         }
         const piece = session.pieces[pieceKey];
-        let detachHost = false;
-        if (piece && piece.glass_host_key && session.pieces[piece.glass_host_key]) {
-            const trial = {
-                ...piece,
-                sheet_no: decision.sheet_no,
-                local_x_mm: decision.local_x_mm,
-                local_y_mm: decision.local_y_mm,
-            };
-            if (
-                Number(trial.sheet_no) !== Number(session.pieces[piece.glass_host_key].sheet_no)
-                || !guestRemainsInHost(trial, session.pieces[piece.glass_host_key])
-            ) {
-                detachHost = true;
-            }
-        }
+        const trial = {
+            ...piece,
+            sheet_no: decision.sheet_no,
+            local_x_mm: decision.local_x_mm,
+            local_y_mm: decision.local_y_mm,
+            outline_mm: reframePoints(
+                piece.outline_mm,
+                session.boards,
+                piece.sheet_no,
+                decision.sheet_no,
+                decision.delta_x_mm,
+                decision.delta_y_mm
+            ),
+        };
+        const hosting = resolveHostRelationship(session, piece, trial);
         return {
             ok: true,
             target_sheet_no: decision.sheet_no,
@@ -620,24 +732,30 @@
             local_y_mm: decision.local_y_mm,
             delta_x_mm: decision.delta_x_mm,
             delta_y_mm: decision.delta_y_mm,
-            detach_host: detachHost,
+            detach_host: hosting.detach_host,
+            attach_host_key: hosting.attach_host_key,
+            attach_host_piece_id: hosting.attach_host_piece_id,
             piece_key: pieceKey,
         };
     }
 
     function guestRemainsInHost(guest, host) {
-        const hole = host.glass_hole_local_mm;
         const guestFp = footprint(guest);
-        if (Array.isArray(hole) && hole.length >= 3) {
-            const xs = hole.map((point) => num(point[0]));
-            const ys = hole.map((point) => num(point[1]));
-            const holeRect = {
-                x: Math.min(...xs),
-                y: Math.min(...ys),
-                w: Math.max(...xs) - Math.min(...xs),
-                h: Math.max(...ys) - Math.min(...ys),
-            };
-            return isContained(guestFp.bounds, holeRect);
+        if (nestedInHole(guestFp, host)) return true;
+        const hole = holeRing(host);
+        if (hole) {
+            // Fallback AABB only when guest has no outline points.
+            if (!footprintPoints(guestFp)) {
+                const xs = hole.map((point) => point[0]);
+                const ys = hole.map((point) => point[1]);
+                return isContained(guestFp.bounds, {
+                    x: Math.min(...xs),
+                    y: Math.min(...ys),
+                    w: Math.max(...xs) - Math.min(...xs),
+                    h: Math.max(...ys) - Math.min(...ys),
+                });
+            }
+            return false;
         }
         return Number(guest.sheet_no) === Number(host.sheet_no);
     }
@@ -675,7 +793,16 @@
             guest.local_y_mm = guestFp.bounds.y;
         });
 
-        if (command.detach_host || (piece.glass_host_key && next.pieces[piece.glass_host_key])) {
+        if (command.attach_host_key && next.pieces[command.attach_host_key]) {
+            const host = next.pieces[command.attach_host_key];
+            const trusted = trustedHostKey(piece);
+            if (trusted && trusted === String(command.attach_host_key)) {
+                piece.glass_host_key = String(command.attach_host_key);
+                piece.glass_host_piece_id = command.attach_host_piece_id == null
+                    ? (host.piece_id == null ? null : Number(host.piece_id))
+                    : Number(command.attach_host_piece_id);
+            }
+        } else if (command.detach_host || (piece.glass_host_key && next.pieces[piece.glass_host_key])) {
             const host = piece.glass_host_key ? next.pieces[piece.glass_host_key] : null;
             if (
                 command.detach_host
@@ -683,6 +810,7 @@
                 || Number(piece.sheet_no) !== Number(host.sheet_no)
                 || !guestRemainsInHost(piece, host)
             ) {
+                // Clear live hosting only; source_glass_host_* stays for safe re-entry.
                 piece.glass_host_key = null;
                 piece.glass_host_piece_id = null;
             }
@@ -741,7 +869,10 @@
         applyBoardMove,
         boardsOverlap,
         pairConflict,
+        materialPairConflict,
+        guestRemainsInHost,
         polygonDistance,
+        polygonStrictlyContainsPolygon,
         resolvePieceKey,
         pieceKeyFromInstance,
     });

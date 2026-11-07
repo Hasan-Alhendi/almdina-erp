@@ -72,6 +72,8 @@ def _session():
                 "editable": True,
                 "glass_host_key": "instance:a",
                 "glass_host_piece_id": 1,
+                "source_glass_host_key": "instance:a",
+                "source_glass_host_piece_id": 1,
             },
             "instance:c": {
                 "piece_key": "instance:c",
@@ -223,6 +225,7 @@ class TestBoardEditorSessionEdit(unittest.TestCase):
             kerf_mm=session["kerf_mm"],
         )
         self.assertTrue(decision["ok"])
+        self.assertTrue(decision.get("detach_host"))
         next_session = apply_piece_move(
             session,
             piece_key="instance:b",
@@ -231,8 +234,58 @@ class TestBoardEditorSessionEdit(unittest.TestCase):
             local_y_mm=decision["local_y_mm"],
             delta_x_mm=decision["delta_x_mm"],
             delta_y_mm=decision["delta_y_mm"],
+            detach_host=decision.get("detach_host", False),
         )
         self.assertIsNone(next_session["pieces"]["instance:b"]["glass_host_key"])
+        self.assertEqual(
+            next_session["pieces"]["instance:b"]["source_glass_host_key"],
+            "instance:a",
+        )
+
+    def test_partial_exit_onto_glass_material_is_rejected(self):
+        session = _session()
+        before = session["pieces"]["instance:b"]["local_x_mm"]
+        # Guest 100..150; hole 80..180. Shift left onto host stock around x=50..80.
+        decision = validate_piece_drop(
+            piece=session["pieces"]["instance:b"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=40,
+            world_y_mm=36 + 100,
+            kerf_mm=session["kerf_mm"],
+        )
+        self.assertFalse(decision["ok"])
+        self.assertEqual(decision["code"], DROP_OVERLAP)
+        self.assertEqual(session["pieces"]["instance:b"]["local_x_mm"], before)
+        self.assertEqual(session["pieces"]["instance:b"]["glass_host_key"], "instance:a")
+
+    def test_reenter_trusted_host_restores_relationship(self):
+        session = _session()
+        session["pieces"]["instance:b"]["glass_host_key"] = None
+        session["pieces"]["instance:b"]["glass_host_piece_id"] = None
+        decision = validate_piece_drop(
+            piece=session["pieces"]["instance:b"],
+            pieces=session["pieces"],
+            boards=session["boards"],
+            world_x_mm=110,
+            world_y_mm=36 + 110,
+            kerf_mm=session["kerf_mm"],
+        )
+        self.assertTrue(decision["ok"], decision)
+        self.assertEqual(decision.get("attach_host_key"), "instance:a")
+        next_session = apply_piece_move(
+            session,
+            piece_key="instance:b",
+            sheet_no=decision["sheet_no"],
+            local_x_mm=decision["local_x_mm"],
+            local_y_mm=decision["local_y_mm"],
+            delta_x_mm=decision["delta_x_mm"],
+            delta_y_mm=decision["delta_y_mm"],
+            attach_host_key=decision.get("attach_host_key"),
+            attach_host_piece_id=decision.get("attach_host_piece_id"),
+        )
+        self.assertEqual(next_session["pieces"]["instance:b"]["glass_host_key"], "instance:a")
+        self.assertEqual(next_session["pieces"]["instance:b"]["glass_host_piece_id"], 1)
 
     def test_l_cutout_accepts_nested_piece_with_kerf(self):
         # L 1000×1000 with free cutout from (400,400) to (1000,1000).

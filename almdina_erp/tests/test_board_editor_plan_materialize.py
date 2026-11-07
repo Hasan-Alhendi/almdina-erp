@@ -127,6 +127,8 @@ def source_snapshot(pieces, sheets=None):
                         "cut_path": {"stale": True, "path": [[0, 0], [1, 1]]},
                         "overlays": [{"kind": "old", "geometry": {"path": [[0, 0]]}}],
                         "glass_host_piece_id": piece.get("glass_host_piece_id"),
+                        # Manufacturing field stays piece-local when present on the projection piece.
+                        "glass_hole_local_mm": piece.get("glass_hole_local_mm"),
                         "geometry": {
                             "schema_version": 1,
                             "unit": "mm",
@@ -326,6 +328,78 @@ class BoardEditorMaterializeTests(unittest.TestCase):
         self.assertEqual(by_id["GUEST"]["glass_host_piece_id"], 1)
         self.assertEqual(by_id["HOST"]["id"], 1)
         self.assertEqual(by_id["GUEST"]["id"], 2)
+
+    def test_piece_local_hole_no_op_materialize_keeps_frames(self):
+        hole_local = rect(50, 50, 700, 700)
+        pieces = [
+            projection_piece(
+                "HOST",
+                1,
+                500,
+                800,
+                800,
+                800,
+                hole=hole_local,
+                piece_type="Glass",
+            ),
+            projection_piece("GUEST", 2, 600, 900, 300, 300, host=1),
+        ]
+        sheets = {
+            1: {
+                "sheet_no": 1,
+                "resource_kind": "FULL_BOARD",
+                "usable_width_mm": 2440,
+                "usable_length_mm": 2440,
+            }
+        }
+        elements = [
+            {
+                "kind": "finished_outline",
+                "piece_instance_id": "HOST",
+                "geometry": {"outer": rect(500, 800, 800, 800)},
+            },
+            {
+                "kind": "finished_outline",
+                "piece_instance_id": "GUEST",
+                "geometry": {"outer": rect(600, 900, 300, 300)},
+            },
+        ]
+        proj = projection(pieces, sheets=sheets, elements=elements)
+        source = source_snapshot(
+            pieces,
+            sheets={
+                1: {
+                    "sheet_no": 1,
+                    "resource_kind": "FULL_BOARD",
+                    "w": 244.0,
+                    "h": 244.0,
+                    "usable_width_cm": 244.0,
+                    "usable_length_cm": 244.0,
+                    "full_width_cm": 244.0,
+                    "full_length_cm": 244.0,
+                    "source_area_m2": 2.44 * 2.44,
+                }
+            },
+        )
+        layout = layout_rows(pieces)
+        snapshot = materialize_plan_snapshot(
+            draft=draft_payload(layout),
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        by_id = {piece["piece_instance_id"]: piece for piece in snapshot["sheets"][0]["pieces"]}
+        host = by_id["HOST"]
+        self.assertEqual(host["glass_hole_local_mm"][0], [50, 50])
+        self.assertEqual(host["geometry"]["holes"][0][0], [550.0, 850.0])
+        self.assertEqual(host["geometry"]["holes"][0][2], [1250.0, 1550.0])
+        self.assertEqual(by_id["GUEST"]["glass_host_piece_id"], 1)
+        self.assertAlmostEqual(host["x"], 50.0)
+        self.assertAlmostEqual(host["y"], 80.0)
 
     def test_rejects_excluded_overlap_and_source_change(self):
         pieces = [

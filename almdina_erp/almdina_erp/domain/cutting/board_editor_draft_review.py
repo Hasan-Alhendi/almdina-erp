@@ -69,6 +69,54 @@ ERROR = "error"
 WARNING = "warning"
 
 
+def _clone_ring_mm(ring: Any) -> list[list[float]] | None:
+    if not isinstance(ring, list) or len(ring) < 3:
+        return None
+    points: list[list[float]] = []
+    for point in ring:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            return None
+        points.append([num(point[0]), num(point[1])])
+    return points
+
+
+def usable_sheet_hole_from_piece_local(
+    ring: Any,
+    placement_cm: Mapping[str, Any] | None,
+) -> list[list[float]] | None:
+    """Lift manufacturing piece-local glass_hole_local_mm into usable-sheet mm."""
+
+    local = _clone_ring_mm(ring)
+    if local is None:
+        return None
+    placement = placement_cm or {}
+    ox = num(placement.get("x")) * 10.0
+    oy = num(placement.get("y")) * 10.0
+    return [[point[0] + ox, point[1] + oy] for point in local]
+
+
+def resolve_trusted_glass_hole_mm(
+    *,
+    piece: Mapping[str, Any],
+    geometry_holes: Any = None,
+) -> list[list[float]] | None:
+    """Resolve one glass opening into the same usable-sheet frame as outline_mm.
+
+    Prefer finished_outline geometry.holes (already usable-sheet). Otherwise lift
+    manufacturing glass_hole_local_mm once from entry placement_cm. Do not change
+    the manufacturing meaning of the source field outside this review pose.
+    """
+
+    if isinstance(geometry_holes, list) and geometry_holes:
+        first = _clone_ring_mm(geometry_holes[0])
+        if first is not None:
+            return first
+    return usable_sheet_hole_from_piece_local(
+        piece.get("glass_hole_local_mm"),
+        piece.get("placement_cm") if isinstance(piece.get("placement_cm"), Mapping) else None,
+    )
+
+
 def trusted_model_from_projection(
     projection: Mapping[str, Any],
     *,
@@ -77,13 +125,18 @@ def trusted_model_from_projection(
     """Trusted geometry for a review. Display settings are not included."""
 
     outlines: dict[str, list] = {}
+    outline_holes: dict[str, list] = {}
     for element in projection.get("elements") or []:
         if not isinstance(element, Mapping) or element.get("kind") != "finished_outline":
             continue
         instance = str(element.get("piece_instance_id") or "").strip()
-        outer = (element.get("geometry") or {}).get("outer") if isinstance(element.get("geometry"), Mapping) else None
+        geometry = element.get("geometry") if isinstance(element.get("geometry"), Mapping) else {}
+        outer = geometry.get("outer") if isinstance(geometry, Mapping) else None
         if instance and isinstance(outer, list) and len(outer) >= 3:
             outlines[instance] = outer
+        holes = geometry.get("holes") if isinstance(geometry, Mapping) else None
+        if instance and isinstance(holes, list) and holes and instance not in outline_holes:
+            outline_holes[instance] = holes
     pieces: dict[str, dict[str, Any]] = {}
     for piece in projection.get("pieces") or []:
         if not isinstance(piece, Mapping):
@@ -112,6 +165,11 @@ def trusted_model_from_projection(
                     [local_x + width, local_y + length],
                     [local_x, local_y + length],
                 ]
+        # Review pose stores the opening in usable-sheet mm (same frame as outline_mm).
+        session_hole = resolve_trusted_glass_hole_mm(
+            piece=piece,
+            geometry_holes=outline_holes.get(instance),
+        )
         pieces[instance] = {
             "piece_instance_id": instance,
             "piece_id": piece.get("piece_id"),
@@ -122,7 +180,7 @@ def trusted_model_from_projection(
             "width_mm": width,
             "length_mm": length,
             "outline_mm": outline,
-            "glass_hole_local_mm": piece.get("glass_hole_local_mm"),
+            "glass_hole_local_mm": session_hole,
             "glass_host_piece_id": piece.get("glass_host_piece_id"),
             "allow_rotation": piece.get("allow_rotation") is True,
             "allow_rotation_proven": piece.get("allow_rotation_proven") is True,

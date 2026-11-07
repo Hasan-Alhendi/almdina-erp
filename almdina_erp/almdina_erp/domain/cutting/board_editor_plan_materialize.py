@@ -353,10 +353,13 @@ def _materialize_piece(
         original_h = source.get("original_h", length_mm / 10.0)
 
     outline = posed.get("outline_mm")
+    # Posed glass_hole_local_mm is usable-sheet (review frame). Use it only for
+    # geometry.holes. Manufacturing glass_hole_local_mm stays piece-local from source.
     holes = []
     hole = posed.get("glass_hole_local_mm")
     if isinstance(hole, list) and len(hole) >= 3:
         holes.append(hole)
+    manufacturing_hole = source.get("glass_hole_local_mm")
     piece_type = str(trusted.get("piece_type") or source.get("piece_type") or "")
     geometry_source = str(
         trusted.get("geometry_source") or source.get("geometry_source") or ""
@@ -418,6 +421,10 @@ def _materialize_piece(
         piece["geometry"] = geometry
     else:
         piece.pop("geometry", None)
+    if isinstance(manufacturing_hole, list) and len(manufacturing_hole) >= 3:
+        piece["glass_hole_local_mm"] = deepcopy(manufacturing_hole)
+    else:
+        piece.pop("glass_hole_local_mm", None)
     # Preserve manufacturing Special contracts from source; layout pose is x/y/w/h.
     if piece_type == "Special":
         if source.get("special_shape_geometry_json") not in (None, ""):

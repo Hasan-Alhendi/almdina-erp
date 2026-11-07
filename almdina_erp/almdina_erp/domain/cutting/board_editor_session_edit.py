@@ -280,6 +280,46 @@ def _pair_conflict(
     return None
 
 
+def _nested_in_hole(guest_fp: Mapping[str, Any], host: Mapping[str, Any]) -> bool:
+    hole = host.get("glass_hole_local_mm")
+    guest_points = guest_fp.get("points")
+    if isinstance(hole, list) and len(hole) >= 3 and guest_points:
+        return polygon_strictly_contains_polygon(hole, guest_points)
+    return False
+
+
+def _hole_kerf_conflict(
+    guest_fp: Mapping[str, Any],
+    host: Mapping[str, Any],
+    kerf_mm: float,
+) -> str | None:
+    hole = host.get("glass_hole_local_mm")
+    guest_points = guest_fp.get("points")
+    gap = max(0.0, num(kerf_mm))
+    if not isinstance(hole, list) or len(hole) < 3 or not guest_points or gap <= 0:
+        return None
+    if polygon_distance(hole, guest_points) + EPSILON < gap:
+        return DROP_KERF
+    return None
+
+
+def _material_pair_conflict(
+    piece_a: Mapping[str, Any],
+    fp_a: Mapping[str, Any],
+    piece_b: Mapping[str, Any],
+    fp_b: Mapping[str, Any],
+    *,
+    kerf_mm: float,
+) -> str | None:
+    """Outer-minus-holes material rule for session drops."""
+
+    if _nested_in_hole(fp_a, piece_b):
+        return _hole_kerf_conflict(fp_a, piece_b, kerf_mm)
+    if _nested_in_hole(fp_b, piece_a):
+        return _hole_kerf_conflict(fp_b, piece_a, kerf_mm)
+    return _pair_conflict(fp_a, fp_b, kerf_mm=kerf_mm)
+
+
 def resolve_drop_sheet(
     *,
     footprint_world: Mapping[str, Any],
@@ -395,15 +435,35 @@ def validate_piece_drop(
                 continue
             if other.get("sheet_no") != target["sheet_no"]:
                 continue
-            # Host/guest sharing a hole are allowed to nest; skip kerf between declared nest pair.
-            if (
-                other.get("glass_host_key") == piece.get("piece_key")
-                or piece.get("glass_host_key") == other_key
-            ):
-                continue
-            conflict = _pair_conflict(moved_local, piece_footprint_mm(other), kerf_mm=kerf_mm)
+            # Relationship alone never skips material checks; openings use outer-holes.
+            conflict = _material_pair_conflict(
+                moved,
+                moved_local,
+                other,
+                piece_footprint_mm(other),
+                kerf_mm=kerf_mm,
+            )
             if conflict:
                 return {"ok": False, "code": conflict, "message": conflict}
+
+    attach_host_key = None
+    attach_host_piece_id = None
+    detach_host = False
+    active_key = piece.get("glass_host_key")
+    source_key = piece.get("source_glass_host_key")
+    if active_key and active_key in pieces:
+        host = pieces[active_key]
+        if target["sheet_no"] != host.get("sheet_no") or not _guest_remains_in_host(moved, host):
+            detach_host = True
+    elif source_key and source_key in pieces:
+        host = pieces[source_key]
+        if (
+            target["sheet_no"] == host.get("sheet_no")
+            and _guest_remains_in_host(moved, host)
+            and _hole_kerf_conflict(moved_local, host, kerf_mm) is None
+        ):
+            attach_host_key = source_key
+            attach_host_piece_id = host.get("piece_id")
 
     return {
         "ok": True,
@@ -413,6 +473,9 @@ def validate_piece_drop(
         "local_y_mm": target["local_y_mm"],
         "delta_x_mm": dx,
         "delta_y_mm": dy,
+        "detach_host": detach_host,
+        "attach_host_key": attach_host_key,
+        "attach_host_piece_id": attach_host_piece_id,
     }
 
 
@@ -518,6 +581,9 @@ def apply_piece_move(
     local_y_mm: float,
     delta_x_mm: float,
     delta_y_mm: float,
+    detach_host: bool = False,
+    attach_host_key: str | None = None,
+    attach_host_piece_id: Any = None,
 ) -> dict[str, Any]:
     """Apply one accepted piece move, including hosted guests once."""
 
@@ -559,15 +625,28 @@ def apply_piece_move(
         guest["local_x_mm"] = guest_fp["bounds"]["x"]
         guest["local_y_mm"] = guest_fp["bounds"]["y"]
 
-    # Independent guest that left its host hole loses hosting.
-    host_key = piece.get("glass_host_key")
-    if host_key and host_key in pieces and piece_key not in _guest_keys(pieces, host_key):
-        pass
-    if host_key and host_key in pieces:
-        host = pieces[host_key]
-        if sheet_no != host.get("sheet_no") or not _guest_remains_in_host(piece, host):
-            piece["glass_host_key"] = None
-            piece["glass_host_piece_id"] = None
+    trusted = piece.get("source_glass_host_key")
+    if attach_host_key and attach_host_key in pieces and trusted == attach_host_key:
+        host = pieces[attach_host_key]
+        piece["glass_host_key"] = attach_host_key
+        piece["glass_host_piece_id"] = (
+            attach_host_piece_id
+            if attach_host_piece_id not in (None, "")
+            else host.get("piece_id")
+        )
+    else:
+        host_key = piece.get("glass_host_key")
+        if detach_host or (host_key and host_key in pieces):
+            host = pieces.get(host_key) if host_key else None
+            if (
+                detach_host
+                or host is None
+                or sheet_no != host.get("sheet_no")
+                or not _guest_remains_in_host(piece, host)
+            ):
+                # Clear live hosting only; source_glass_host_* remains for re-entry.
+                piece["glass_host_key"] = None
+                piece["glass_host_piece_id"] = None
 
     _mark_sheet_artifacts_stale(next_session, previous_sheet)
     _mark_sheet_artifacts_stale(next_session, sheet_no)

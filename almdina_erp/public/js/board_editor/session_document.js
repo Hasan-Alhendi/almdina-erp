@@ -164,6 +164,11 @@
                 base_outline_mm: resolvedOutline ? clone(resolvedOutline) : null,
                 glass_host_piece_id: piece.glass_host_piece_id == null ? null : Number(piece.glass_host_piece_id),
                 glass_host_key: null,
+                // Immutable source hosting from the projection; live glass_host_* may detach.
+                source_glass_host_piece_id: piece.glass_host_piece_id == null
+                    ? null
+                    : Number(piece.glass_host_piece_id),
+                source_glass_host_key: null,
                 // Session stores the hole in the same usable-sheet frame as outline_mm.
                 glass_hole_local_mm: sessionHole,
                 base_hole_mm: sessionHole ? clone(sessionHole) : null,
@@ -219,6 +224,15 @@
             if (piece.glass_host_piece_id == null) return;
             const host = Object.values(pieceMap).find((row) => Number(row.piece_id) === Number(piece.glass_host_piece_id));
             piece.glass_host_key = host ? host.piece_key : null;
+            piece.source_glass_host_key = piece.glass_host_key;
+        });
+        Object.values(pieceMap).forEach((piece) => {
+            if (piece.source_glass_host_piece_id == null) return;
+            if (piece.source_glass_host_key) return;
+            const host = Object.values(pieceMap).find(
+                (row) => Number(row.piece_id) === Number(piece.source_glass_host_piece_id)
+            );
+            piece.source_glass_host_key = host ? host.piece_key : null;
         });
 
         // System labels carry piece_instance_id on the element. Guessing ownership

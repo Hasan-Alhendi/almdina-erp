@@ -9,8 +9,13 @@ from pathlib import Path
 from almdina_erp.almdina_erp.application.cutting.board_editor_draft_review import (
     draft_review_allowed,
 )
+from almdina_erp.almdina_erp.application.cutting.board_editor_draft_review import (
+    review_editor_draft,
+)
 from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
+    resolve_trusted_glass_hole_mm,
     review_saved_draft,
+    trusted_model_from_projection,
 )
 
 APP = Path(__file__).resolve().parents[1] / "almdina_erp"
@@ -738,6 +743,248 @@ class BoardEditorDraftReviewTests(unittest.TestCase):
         layout = {
             "schema": 1,
             "pieces": [row("pi-miss", 10, 10)],
+            "boards": boards(1),
+        }
+        result = review_saved_draft(draft(layout), trusted)
+        self.assertFalse(result["ready"])
+        self.assertIn("geometry_unproven", codes(result))
+
+    def test_piece_local_glass_hole_no_op_draft_is_ready(self):
+        """Manufacturing glass_hole_local_mm is piece-local; review needs usable-sheet."""
+
+        hole_local = rect(50, 50, 700, 700)
+        placed_hole = rect(550, 850, 700, 700)
+        host_outer = rect(500, 800, 800, 800)
+        guest_outer = rect(600, 900, 300, 300)
+        projection = {
+            "board": {"kerf_cm": 0.4},
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "resource_kind": "FULL_BOARD",
+                    "usable_width_cm": 244,
+                    "usable_length_cm": 244,
+                    "full_width_cm": 244,
+                    "full_length_cm": 244,
+                }
+            ],
+            "pieces": [
+                {
+                    "piece_instance_id": "pi-host",
+                    "piece_id": 1,
+                    "label": "HOST",
+                    "sheet_no": 1,
+                    "piece_type": "Glass",
+                    "placement_cm": {"x": 50, "y": 80, "w": 80, "h": 80},
+                    "glass_hole_local_mm": hole_local,
+                    "allow_rotation": True,
+                    "allow_rotation_proven": True,
+                },
+                {
+                    "piece_instance_id": "pi-guest",
+                    "piece_id": 2,
+                    "label": "GUEST",
+                    "sheet_no": 1,
+                    "placement_cm": {"x": 60, "y": 90, "w": 30, "h": 30},
+                    "glass_host_piece_id": 1,
+                    "allow_rotation": True,
+                    "allow_rotation_proven": True,
+                },
+            ],
+            "elements": [
+                {
+                    "kind": "finished_outline",
+                    "piece_instance_id": "pi-host",
+                    "geometry": {"outer": host_outer},
+                },
+                {
+                    "kind": "finished_outline",
+                    "piece_instance_id": "pi-guest",
+                    "geometry": {"outer": guest_outer},
+                },
+            ],
+        }
+        trusted = trusted_model_from_projection(projection, machine_type="CNC Router")
+        host = trusted["pieces"]["pi-host"]
+        self.assertEqual(host["glass_hole_local_mm"][0], [550.0, 850.0])
+        self.assertEqual(host["glass_hole_local_mm"][2], [1250.0, 1550.0])
+        layout = {
+            "schema": 1,
+            "pieces": [
+                row("pi-host", 500, 800, host=None),
+                row("pi-guest", 600, 900, host=1),
+            ],
+            "boards": boards(1),
+        }
+        result = review_editor_draft(
+            draft=draft(layout),
+            projection=projection,
+            machine_type="CNC Router",
+        )
+        self.assertTrue(result["ready"], result["issues"])
+        self.assertNotIn("hosting_not_contained", codes(result))
+        self.assertNotIn("piece_overlap", codes(result))
+        # Same formula as Frontend resolveSessionHoleMm without geometry.holes.
+        self.assertEqual(
+            resolve_trusted_glass_hole_mm(
+                piece=projection["pieces"][0],
+                geometry_holes=None,
+            )[0],
+            placed_hole[0],
+        )
+
+    def test_geometry_holes_win_without_double_offset(self):
+        placed = rect(550, 850, 700, 700)
+        projection = {
+            "board": {"kerf_cm": 0.4},
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "resource_kind": "FULL_BOARD",
+                    "usable_width_cm": 244,
+                    "usable_length_cm": 244,
+                    "full_width_cm": 244,
+                    "full_length_cm": 244,
+                }
+            ],
+            "pieces": [
+                {
+                    "piece_instance_id": "pi-host",
+                    "piece_id": 1,
+                    "label": "HOST",
+                    "sheet_no": 1,
+                    "placement_cm": {"x": 50, "y": 80, "w": 80, "h": 80},
+                    # Corrupt piece-local ring — geometry.holes must win.
+                    "glass_hole_local_mm": rect(1, 1, 2, 2),
+                }
+            ],
+            "elements": [
+                {
+                    "kind": "finished_outline",
+                    "piece_instance_id": "pi-host",
+                    "geometry": {
+                        "outer": rect(500, 800, 800, 800),
+                        "holes": [placed],
+                    },
+                }
+            ],
+        }
+        trusted = trusted_model_from_projection(projection, machine_type="CNC Router")
+        hole = trusted["pieces"]["pi-host"]["glass_hole_local_mm"]
+        self.assertEqual(hole[0], [550.0, 850.0])
+        self.assertNotEqual(hole[0], [1050.0, 1650.0])
+
+    def test_guest_outside_opening_still_rejected(self):
+        projection = {
+            "board": {"kerf_cm": 0.4},
+            "sheets": [
+                {
+                    "sheet_no": 1,
+                    "resource_kind": "FULL_BOARD",
+                    "usable_width_cm": 244,
+                    "usable_length_cm": 244,
+                    "full_width_cm": 244,
+                    "full_length_cm": 244,
+                }
+            ],
+            "pieces": [
+                {
+                    "piece_instance_id": "pi-host",
+                    "piece_id": 1,
+                    "sheet_no": 1,
+                    "placement_cm": {"x": 50, "y": 80, "w": 80, "h": 80},
+                    "glass_hole_local_mm": rect(50, 50, 700, 700),
+                },
+                {
+                    "piece_instance_id": "pi-guest",
+                    "piece_id": 2,
+                    "sheet_no": 1,
+                    "placement_cm": {"x": 10, "y": 10, "w": 20, "h": 20},
+                    "glass_host_piece_id": 1,
+                },
+            ],
+            "elements": [
+                {
+                    "kind": "finished_outline",
+                    "piece_instance_id": "pi-host",
+                    "geometry": {"outer": rect(500, 800, 800, 800)},
+                },
+                {
+                    "kind": "finished_outline",
+                    "piece_instance_id": "pi-guest",
+                    "geometry": {"outer": rect(100, 100, 200, 200)},
+                },
+            ],
+        }
+        layout = {
+            "schema": 1,
+            "pieces": [row("pi-host", 500, 800), row("pi-guest", 100, 100, host=1)],
+            "boards": boards(1),
+        }
+        result = review_editor_draft(
+            draft=draft(layout),
+            projection=projection,
+            machine_type="CNC Router",
+        )
+        self.assertFalse(result["ready"])
+        self.assertIn("hosting_not_contained", codes(result))
+
+    def test_guest_on_other_sheet_is_rejected(self):
+        # Draft normalize rejects cross-sheet hosting as forged_host before
+        # hosting_cross_sheet rules run; either code blocks readiness.
+        trusted = model(
+            [
+                piece("pi-host", 1, 0, 0, 400, 400, hole=rect(50, 50, 200, 200)),
+                piece("pi-guest", 2, 80, 80, 40, 40, host=1),
+            ],
+            sheets={
+                1: {"resource_kind": "FULL_BOARD", "usable_width_mm": 1200, "usable_length_mm": 2400},
+                2: {"resource_kind": "FULL_BOARD", "usable_width_mm": 1200, "usable_length_mm": 2400},
+            },
+        )
+        layout = {
+            "schema": 1,
+            "pieces": [
+                row("pi-host", 0, 0, sheet=1),
+                row("pi-guest", 80, 80, sheet=2, host=1),
+            ],
+            "boards": boards(1, 2),
+        }
+        result = review_saved_draft(draft(layout), trusted)
+        self.assertFalse(result["ready"])
+        self.assertTrue(
+            {"forged_host", "hosting_cross_sheet"} & set(codes(result)),
+            result["issues"],
+        )
+
+    def test_guest_inside_hole_but_below_kerf_is_rejected(self):
+        # Hole usable-sheet 100..300; guest 104..180 leaves only 4mm to the wall.
+        trusted = model(
+            [
+                piece("pi-host", 1, 0, 0, 400, 400, hole=rect(100, 100, 200, 200)),
+                piece("pi-guest", 2, 104, 150, 40, 40, host=1),
+            ],
+            kerf=10,
+        )
+        layout = {
+            "schema": 1,
+            "pieces": [row("pi-host", 0, 0), row("pi-guest", 104, 150, host=1)],
+            "boards": boards(1),
+        }
+        result = review_saved_draft(draft(layout), trusted)
+        self.assertFalse(result["ready"])
+        self.assertIn("hole_kerf_clearance", codes(result))
+
+    def test_missing_glass_hole_reports_geometry_unproven(self):
+        trusted = model(
+            [
+                piece("pi-host", 1, 0, 0, 400, 400, hole=None),
+                piece("pi-guest", 2, 80, 80, 40, 40, host=1),
+            ]
+        )
+        layout = {
+            "schema": 1,
+            "pieces": [row("pi-host", 0, 0), row("pi-guest", 80, 80, host=1)],
             "boards": boards(1),
         }
         result = review_saved_draft(draft(layout), trusted)
