@@ -136,7 +136,7 @@ const projection = {
     pieces: [
         { piece_id: 1, piece_instance_id: "pi-a", label: "A", sheet_no: 1, placement_cm: { x: 10, y: 10, w: 20, h: 20 }, allow_rotation: true, allow_rotation_proven: true },
         { piece_id: 2, piece_instance_id: "pi-b", label: "B", sheet_no: 2, placement_cm: { x: 15, y: 12, w: 18, h: 16 }, allow_rotation: true, allow_rotation_proven: true },
-        { piece_id: 3, piece_instance_id: "pi-host", label: "HOST", sheet_no: 1, placement_cm: { x: 40, y: 40, w: 30, h: 30 }, glass_hole_local_mm: [[450, 450], [550, 450], [550, 550], [450, 550]] },
+        { piece_id: 3, piece_instance_id: "pi-host", label: "HOST", sheet_no: 1, placement_cm: { x: 40, y: 40, w: 30, h: 30 }, glass_hole_local_mm: [[50, 50], [150, 50], [150, 150], [50, 150]] },
         { piece_id: 4, piece_instance_id: "pi-guest", label: "GUEST", sheet_no: 1, placement_cm: { x: 46, y: 46, w: 6, h: 6 }, glass_host_piece_id: 3 },
         { piece_id: 5, piece_instance_id: "pi-edge", label: "EDGE", sheet_no: 1, placement_cm: { x: 88, y: 10, w: 8, h: 8 } },
         { piece_id: 6, piece_instance_id: "pi-locked", label: "LOCKED", sheet_no: 1, placement_cm: { x: 2, y: 80, w: 8, h: 8 } },

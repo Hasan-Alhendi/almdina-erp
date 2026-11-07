@@ -90,7 +90,7 @@ const projection = {
             label: "HOST",
             sheet_no: 1,
             placement_cm: { x: 40, y: 40, w: 30, h: 30 },
-            glass_hole_local_mm: [[450, 450], [550, 450], [550, 550], [450, 550]],
+            glass_hole_local_mm: [[50, 50], [150, 50], [150, 150], [50, 150]],
         },
         {
             piece_id: 3,

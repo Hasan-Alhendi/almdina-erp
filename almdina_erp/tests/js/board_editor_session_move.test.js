@@ -55,11 +55,12 @@ const projection = {
             label: "HOST",
             sheet_no: 1,
             placement_cm: { x: 10, y: 10, w: 40, h: 40 },
+            // Piece-local manufacturing ring (placement 10×10 cm → usable 100,100).
             glass_hole_local_mm: [
+                [50, 50],
+                [150, 50],
                 [150, 150],
-                [250, 150],
-                [250, 250],
-                [150, 250],
+                [50, 150],
             ],
         },
         {

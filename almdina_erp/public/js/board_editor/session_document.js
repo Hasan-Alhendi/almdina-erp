@@ -15,6 +15,50 @@
         return null;
     }
 
+    function cloneRing(ring) {
+        if (!Array.isArray(ring) || ring.length < 3) return null;
+        return ring.map((point) => [Number(point[0]) || 0, Number(point[1]) || 0]);
+    }
+
+    function usableSheetHoleFromPieceLocal(ring, placementCm) {
+        // Manufacturing glass_hole_local_mm is piece-local (see glass_hole_ring_mm /
+        // opening_board_rect). Session outline_mm is usable-sheet, so lift once.
+        const local = cloneRing(ring);
+        if (!local) return null;
+        const ox = (Number(placementCm && placementCm.x) || 0) * 10;
+        const oy = (Number(placementCm && placementCm.y) || 0) * 10;
+        return local.map((point) => [point[0] + ox, point[1] + oy]);
+    }
+
+    function holesFromRelatedGeometry(related) {
+        // Parametric / DXF finished_outline holes are already usable-sheet mm.
+        const outline = (related || []).find((element) => (
+            element
+            && element.kind === "finished_outline"
+            && element.geometry
+            && Array.isArray(element.geometry.holes)
+            && element.geometry.holes.length
+            && Array.isArray(element.geometry.holes[0])
+            && element.geometry.holes[0].length >= 3
+        ));
+        if (!outline) return null;
+        return outline.geometry.holes
+            .map((hole) => cloneRing(hole))
+            .filter(Boolean);
+    }
+
+    function resolveSessionHoleMm(piece, related) {
+        const fromGeometry = holesFromRelatedGeometry(related);
+        if (fromGeometry && fromGeometry.length) {
+            // One authoritative Glass opening in session (matches current move/rotate APIs).
+            return fromGeometry[0];
+        }
+        return usableSheetHoleFromPieceLocal(
+            piece && piece.glass_hole_local_mm,
+            piece && piece.placement_cm
+        );
+    }
+
     function hasMovableGeometry(piece, related) {
         if (related.some((element) => (
             (element.kind === "finished_outline" || element.kind === "placement_rect")
@@ -106,6 +150,7 @@
                     resolvedOutline = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
                 }
             }
+            const sessionHole = resolveSessionHoleMm(piece, related);
             const sessionPiece = {
                 piece_key: key,
                 piece_id: pieceId,
@@ -119,8 +164,9 @@
                 base_outline_mm: resolvedOutline ? clone(resolvedOutline) : null,
                 glass_host_piece_id: piece.glass_host_piece_id == null ? null : Number(piece.glass_host_piece_id),
                 glass_host_key: null,
-                glass_hole_local_mm: clone(piece.glass_hole_local_mm),
-                base_hole_mm: piece.glass_hole_local_mm ? clone(piece.glass_hole_local_mm) : null,
+                // Session stores the hole in the same usable-sheet frame as outline_mm.
+                glass_hole_local_mm: sessionHole,
+                base_hole_mm: sessionHole ? clone(sessionHole) : null,
                 editable,
                 block_reason: !instanceId
                     ? "missing_piece_instance_id"
@@ -513,6 +559,8 @@
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.SessionDocument = Object.freeze({
+        resolveSessionHoleMm,
+        usableSheetHoleFromPieceLocal,
         buildFromProjection,
         boardPositions,
         relayoutUnmovedBoards,

@@ -11,7 +11,7 @@
     const MODULES = Object.freeze([
         `${ASSET_ROOT}/api.js?v=19`,
         `${ASSET_ROOT}/history.js?v=18`,
-        `${ASSET_ROOT}/session_document.js?v=21`,
+        `${ASSET_ROOT}/session_document.js?v=22`,
         `${ASSET_ROOT}/distribution.js?v=18`,
         `${ASSET_ROOT}/move_geometry.js?v=19`,
         `${ASSET_ROOT}/snap_geometry.js?v=18`,
