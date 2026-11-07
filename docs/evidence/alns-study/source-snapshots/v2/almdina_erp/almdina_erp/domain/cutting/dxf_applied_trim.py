@@ -1,0 +1,256 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+from almdina_erp.almdina_erp.domain.cutting.adaptive_trim import (
+    AdaptiveTrimDecision,
+    AppliedTrim,
+    PlanQuality,
+    TRIM_PRECISION_CM,
+)
+
+
+class DxfAppliedTrimError(ValueError):
+    def __init__(self, message: str, *, details: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.details = details or {}
+
+
+def _minimum_violation(snapshot: dict[str, Any], trim: AppliedTrim) -> dict[str, Any] | None:
+    for sheet_index, sheet in enumerate(snapshot.get("sheets") or [], start=1):
+        full_w = _number(sheet.get("full_width_cm") or snapshot.get("full_board_width_cm"))
+        full_h = _number(sheet.get("full_length_cm") or snapshot.get("full_board_length_cm"))
+        sheet_no = sheet.get("sheet_no") or sheet.get("sheet_index") or sheet_index
+        for piece in sheet.get("pieces") or []:
+            x, y = _number(piece.get("x")), _number(piece.get("y"))
+            w, h = _number(piece.get("w")), _number(piece.get("h"))
+            gaps = {
+                "left": x * 10,
+                "right": (full_w - x - w) * 10,
+                "top": y * 10,
+                "bottom": (full_h - y - h) * 10,
+            }
+            for edge, actual_mm in gaps.items():
+                required_mm = (trim.width_trim_cm if edge in {"left", "right"} else trim.length_trim_cm) * 10
+                if actual_mm < required_mm - 1e-6:
+                    return {
+                        "sheet_no": sheet_no,
+                        "edge": edge,
+                        "actual_margin_mm": actual_mm,
+                        "required_trim_mm": required_mm,
+                        "source_piece_no": piece.get("source_piece_no"),
+                        "copy_no": piece.get("copy_no"),
+                        "label": piece.get("piece_label") or piece.get("label"),
+                    }
+    return None
+
+
+def _number(value: Any) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _piece_fits(piece: dict[str, Any], *, full_w: float, full_h: float, trim: AppliedTrim) -> bool:
+    x = _number(piece.get("x"))
+    y = _number(piece.get("y"))
+    w = _number(piece.get("w"))
+    h = _number(piece.get("h"))
+    # Keep trim feasibility aligned with persisted-export boundary precision.
+    # The old 0.01 mm allowance could select a trim larger than the material gap.
+    tolerance = 1e-8
+    return (
+        x >= trim.width_trim_cm - tolerance
+        and y >= trim.length_trim_cm - tolerance
+        and x + w <= full_w - trim.width_trim_cm + tolerance
+        and y + h <= full_h - trim.length_trim_cm + tolerance
+    )
+
+
+def _quality(snapshot: dict[str, Any], trim: AppliedTrim) -> PlanQuality:
+    failures = 0
+    sheets = snapshot.get("sheets") or []
+    for sheet in sheets:
+        full_w = _number(sheet.get("full_width_cm") or snapshot.get("full_board_width_cm"))
+        full_h = _number(sheet.get("full_length_cm") or snapshot.get("full_board_length_cm"))
+        for piece in sheet.get("pieces") or []:
+            failures += 0 if _piece_fits(piece, full_w=full_w, full_h=full_h, trim=trim) else 1
+    return PlanQuality(unplaced_count=failures, board_count=len(sheets))
+
+
+def _shift_points(points: Any, *, dx_mm: float, dy_mm: float) -> Any:
+    if not isinstance(points, list):
+        return points
+    shifted_points = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            shifted_points.append(point)
+            continue
+        shifted_points.append([float(point[0]) - dx_mm, float(point[1]) - dy_mm])
+    return shifted_points
+
+
+def _shift_geometry(geometry: Any, *, dx_mm: float, dy_mm: float) -> Any:
+    if not isinstance(geometry, dict):
+        return geometry
+    shifted = dict(geometry)
+    shifted["outer"] = _shift_points(geometry.get("outer"), dx_mm=dx_mm, dy_mm=dy_mm)
+    shifted["holes"] = [
+        _shift_points(hole, dx_mm=dx_mm, dy_mm=dy_mm)
+        for hole in (geometry.get("holes") or [])
+    ]
+    return shifted
+
+
+def _shift_overlay_geometry(geometry: Any, *, dx_mm: float, dy_mm: float) -> Any:
+    if not isinstance(geometry, dict):
+        return geometry
+    shifted = dict(geometry)
+    if "path" in geometry:
+        shifted["path"] = _shift_points(geometry.get("path"), dx_mm=dx_mm, dy_mm=dy_mm)
+    return shifted
+
+
+def _trim_policy(*, preferred: AppliedTrim, decision: AdaptiveTrimDecision) -> dict[str, Any]:
+    return {
+        "mode": decision.mode,
+        "policy": "mandatory_minimum_v1",
+        "preferred_trim_mm": round(preferred.width_trim_cm * 10.0, 2),
+        "applied_width_trim_mm": round(decision.applied.width_trim_cm * 10.0, 2),
+        "applied_length_trim_mm": round(decision.applied.length_trim_cm * 10.0, 2),
+        "relaxed_axes": list(decision.relaxed_axes),
+        "precision_mm": round(TRIM_PRECISION_CM * 10.0, 2),
+        "preferred_quality": {
+            "unplaced_count": decision.preferred_quality.unplaced_count,
+            "board_count": decision.preferred_quality.board_count,
+        },
+        "applied_quality": {
+            "unplaced_count": decision.applied_quality.unplaced_count,
+            "board_count": decision.applied_quality.board_count,
+        },
+    }
+
+
+def apply_adaptive_trim_to_fixed_dxf_layout(
+    snapshot: dict[str, Any],
+    *,
+    preferred_trim_mm: float,
+) -> dict[str, Any]:
+    """Resolve ALMADINA-138 Applied Trim for an already validated physical DXF layout.
+
+    The imported layout is fixed: no optimizer is rerun and no geometry is
+    repacked. Candidate trims are evaluated only against each piece's physical
+    position inside its physical board. Physical board bounds therefore remain
+    absolute; adaptive trim can only relax the preferred usable inset.
+    """
+    preferred_cm = max(0.0, _number(preferred_trim_mm)) / 10.0
+    preferred = AppliedTrim(preferred_cm, preferred_cm)
+    preferred_quality = _quality(snapshot, preferred)
+    # Uploaded layouts are immutable evidence. Validate them against the
+    # requested minimum; never relax the margin or move an invalid layout to
+    # make it appear valid.
+    decision = AdaptiveTrimDecision(
+        preferred=preferred,
+        applied=preferred,
+        preferred_quality=preferred_quality,
+        applied_quality=preferred_quality,
+    )
+    if decision.applied_quality.unplaced_count:
+        raise DxfAppliedTrimError(
+            "dxf_layout_exceeds_physical_board_or_applied_trim",
+            details=_minimum_violation(snapshot, preferred) or {},
+        )
+
+    result = deepcopy(snapshot)
+    applied = decision.applied
+    full_w = _number(result.get("full_board_width_cm"))
+    full_h = _number(result.get("full_board_length_cm"))
+    usable_w = applied.usable_width_cm(full_width_cm=full_w)
+    usable_h = applied.usable_length_cm(full_length_cm=full_h)
+
+    result["usable_board_width_cm"] = usable_w
+    result["usable_board_length_cm"] = usable_h
+    # trim_cm remains the Preferred Trim compatibility value, matching System
+    # optimization snapshots. Applied Trim is axis-specific below.
+    result["trim_cm"] = preferred_cm
+    result["applied_trim_width_cm"] = applied.width_trim_cm
+    result["applied_trim_length_cm"] = applied.length_trim_cm
+    result["trim_policy"] = _trim_policy(preferred=preferred, decision=decision)
+    result["margin_policy"] = {
+        "mode": decision.mode,
+        "preferred_margin_mm": round(preferred_cm * 10.0, 2),
+        "left_mm": round(applied.width_trim_cm * 10.0, 2),
+        "right_mm": round(applied.width_trim_cm * 10.0, 2),
+        "top_mm": round(applied.length_trim_cm * 10.0, 2),
+        "bottom_mm": round(applied.length_trim_cm * 10.0, 2),
+        "notes": [],
+    }
+
+    for sheet in result.get("sheets") or []:
+        # A tight board cannot discard the preferred trim of a different board.
+        # Resolve each fixed physical layout independently; never repack pieces.
+        single_sheet = {
+            "sheets": [sheet],
+            "full_board_width_cm": full_w,
+            "full_board_length_cm": full_h,
+        }
+        sheet_quality = _quality(single_sheet, preferred)
+        sheet_decision = AdaptiveTrimDecision(
+            preferred=preferred,
+            applied=preferred,
+            preferred_quality=sheet_quality,
+            applied_quality=sheet_quality,
+        )
+        if sheet_decision.applied_quality.unplaced_count:
+            raise DxfAppliedTrimError(
+                "dxf_layout_exceeds_physical_board_or_applied_trim",
+                details=_minimum_violation(single_sheet, preferred) or {},
+            )
+        sheet_applied = sheet_decision.applied
+        sheet["applied_trim_width_cm"] = sheet_applied.width_trim_cm
+        sheet["applied_trim_length_cm"] = sheet_applied.length_trim_cm
+        sheet_full_w = _number(sheet.get("full_width_cm") or full_w)
+        sheet_full_h = _number(sheet.get("full_length_cm") or full_h)
+        sheet_usable_w = sheet_applied.usable_width_cm(full_width_cm=sheet_full_w)
+        sheet_usable_h = sheet_applied.usable_length_cm(full_length_cm=sheet_full_h)
+        sheet["usable_width_cm"] = sheet_usable_w
+        sheet["usable_length_cm"] = sheet_usable_h
+        sheet["w"] = sheet_usable_w
+        sheet["h"] = sheet_usable_h
+        dx_mm = sheet_applied.width_trim_cm * 10.0
+        dy_mm = sheet_applied.length_trim_cm * 10.0
+        for piece in sheet.get("pieces") or []:
+            piece["x"] = _number(piece.get("x")) - sheet_applied.width_trim_cm
+            piece["y"] = _number(piece.get("y")) - sheet_applied.length_trim_cm
+            if "geometry" in piece:
+                piece["geometry"] = _shift_geometry(
+                    piece["geometry"],
+                    dx_mm=dx_mm,
+                    dy_mm=dy_mm,
+                )
+            overlays = piece.get("overlays")
+            if isinstance(overlays, list):
+                for overlay in overlays:
+                    if isinstance(overlay, dict) and "geometry" in overlay:
+                        overlay["geometry"] = _shift_overlay_geometry(
+                            overlay["geometry"],
+                            dx_mm=dx_mm,
+                            dy_mm=dy_mm,
+                        )
+        labels = sheet.get("text_labels")
+        if isinstance(labels, list):
+            for label in labels:
+                if not isinstance(label, dict):
+                    continue
+                label["x_mm"] = _number(label.get("x_mm")) - dx_mm
+                label["y_mm"] = _number(label.get("y_mm")) - dy_mm
+
+    return result
+
+
+__all__ = [
+    "DxfAppliedTrimError",
+    "apply_adaptive_trim_to_fixed_dxf_layout",
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "case": "holdout-01",
+    "file": "holdout-01.json",
+    "sha256": "c4a08bf80150950b3c648403d945c44461601f6f66c71df7631cd4c1a975bf90",
+    "pieces": 48
+  },
+  {
+    "case": "holdout-02",
+    "file": "holdout-02.json",
+    "sha256": "002beb073704ea7fe5fe8b4d17d55ea3bc4e3e1a8f4bcd51dc38f2cfc4e9e19b",
+    "pieces": 66
+  },
+  {
+    "case": "holdout-03",
+    "file": "holdout-03.json",
+    "sha256": "66d454f48e0cf7b0a271df6a3f6d022f1f61194c513a151a133ddebf0b94673b",
+    "pieces": 80
+  },
+  {
+    "case": "holdout-04",
+    "file": "holdout-04.json",
+    "sha256": "f724e1b6683c01be0f6560b73abcb38e3d4db2a077353610f1342ab8195c8286",
+    "pieces": 46
+  },
+  {
+    "case": "holdout-05",
+    "file": "holdout-05.json",
+    "sha256": "afae721c5c0492c958715ad8c346666ccf54098bb17103eddd3655b696a0aa06",
+    "pieces": 68
+  },
+  {
+    "case": "holdout-06",
+    "file": "holdout-06.json",
+    "sha256": "ff4d93f4fba6136f8cc87c29914fdda6865d80849ea4d5b32b0b25f51704ccd3",
+    "pieces": 54
+  },
+  {
+    "case": "holdout-07",
+    "file": "holdout-07.json",
+    "sha256": "70328ff068c1117b4de5a7bbd8d5aaed6bbca9ace431a9ea9db6e6c72bcc6991",
+    "pieces": 68
+  },
+  {
+    "case": "holdout-08",
+    "file": "holdout-08.json",
+    "sha256": "9a59827e223e41978cf0b6d6ba1e06d9286c5069dc72f31dbb8d8565b5f525d4",
+    "pieces": 76
+  }
+]

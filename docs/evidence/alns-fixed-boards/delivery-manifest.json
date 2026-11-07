@@ -1,0 +1,1540 @@
+{
+  "provenance": {
+    "sha": "09576ea557ac6fadac11bc3fe407d7efc3dcd4cb",
+    "branch": "feature/cutting-abc-search-20261105",
+    "python": "3.11.3 (tags/v3.11.3:f3909b8, Apr  4 2023, 23:49:59) [MSC v.1934 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "versions": {
+      "ortools": "9.15.6755",
+      "ezdxf": "1.4.5",
+      "pytest": "9.2.0"
+    },
+    "observations": 120,
+    "strict_roundtrips": 244,
+    "tests": {
+      "name": "pytest",
+      "errors": "0",
+      "failures": "0",
+      "skipped": "0",
+      "tests": "330",
+      "time": "27.667",
+      "timestamp": "2026-11-05T22:26:47.475315+03:00",
+      "hostname": "DESKTOP-6CA4VOG"
+    },
+    "unchanged_existing_production_files": true,
+    "new_optional_domain_module": "almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py",
+    "post_measurement_changes": [
+      "Guard two-piece relocation when max_removed=1; default measured cap24 unchanged",
+      "Two additional resource/qualification unit tests",
+      "Explicit rejection of unsupported frozen-cohort CLI settings; measured defaults unchanged"
+    ],
+    "input_hashes": {
+      "docs\\evidence\\alns-study\\input-263.json": "886064f9cd03d15b7150ba24e33cff367f32174a451f66cdf5283c1d62cc2bb7",
+      "docs\\evidence\\alns-study\\input-298.json": "ca973fcd3c8208236e89ffa9d636ba98406d4b33e245f3a812b9f4a39c355864",
+      "docs\\evidence\\alns-study\\followup\\263-checkpoint-adaptive-r0.json": "29a6b6fb6cd1a708fbbb30cd9f0c38bf943a9af19bce47eb0826c1e84a7f659c",
+      "docs\\evidence\\alns-study\\followup\\298-checkpoint-adaptive-r0.json": "d9e4929739e7e9b738aeca28ff3c77b4c710b726c77c58e02a383a0277f3e542"
+    }
+  },
+  "files": {
+    "almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py": {
+      "bytes": 24077,
+      "sha256": "882eba18bc7d0c940002d76a8646e62f808e908d1fd3ebdb7d00482e1b04fc61"
+    },
+    "almdina_erp\\tests\\test_fixed_board_layout_search.py": {
+      "bytes": 10224,
+      "sha256": "aff3889c204af9200c93968f4832b4cc88cc206b4d339b523255ef02934cc8e5"
+    },
+    "scripts\\benchmark_fixed_board_layout.py": {
+      "bytes": 9682,
+      "sha256": "404225440dec987c87a7f2c9ba095225a74f5f241650b292493041b2f1770b17"
+    },
+    "scripts\\benchmark_fixed_continuation.py": {
+      "bytes": 5221,
+      "sha256": "87891a572c2848e82a553477e48a5c07894e36f28bc81670ed08dba203cf42cc"
+    },
+    "scripts\\summarize_fixed_board_layout.py": {
+      "bytes": 6776,
+      "sha256": "b7c1f719fcac61fa0caf7f7a4384968dba93319a4d5ebf40cf0f71156e67a129"
+    },
+    "scripts\\benchmark_alns.py": {
+      "bytes": 11167,
+      "sha256": "7cecaccc83c5874ca5470a9154928f8db83f3a09bb9b893fbe9b187b0c8f7bb6"
+    },
+    "scripts\\benchmark_abc.py": {
+      "bytes": 10350,
+      "sha256": "3a68da91b929dc2a6e5a4ccd43c2c6d21add71e902fdc8a623d8fb943c8e4ce1"
+    },
+    "scripts\\alns_research.py": {
+      "bytes": 16179,
+      "sha256": "1f01ee9289ae530b280fa543bfb90742503484bf0f74360262b22496a00ea535"
+    },
+    "docs\\evidence\\alns-study\\input-263.json": {
+      "bytes": 20920,
+      "sha256": "886064f9cd03d15b7150ba24e33cff367f32174a451f66cdf5283c1d62cc2bb7"
+    },
+    "docs\\evidence\\alns-study\\input-298.json": {
+      "bytes": 34034,
+      "sha256": "ca973fcd3c8208236e89ffa9d636ba98406d4b33e245f3a812b9f4a39c355864"
+    },
+    "docs\\evidence\\alns-study\\followup\\263-checkpoint-adaptive-r0.json": {
+      "bytes": 182773,
+      "sha256": "29a6b6fb6cd1a708fbbb30cd9f0c38bf943a9af19bce47eb0826c1e84a7f659c"
+    },
+    "docs\\evidence\\alns-study\\followup\\298-checkpoint-adaptive-r0.json": {
+      "bytes": 240010,
+      "sha256": "d9e4929739e7e9b738aeca28ff3c77b4c710b726c77c58e02a383a0277f3e542"
+    },
+    "docs\\evidence\\alns-fixed-boards\\comparison-263.svg": {
+      "bytes": 17602,
+      "sha256": "7a740468b8af3044e954ef4d8297e1d13187ae05da2686c2ec0fd96f173dad61"
+    },
+    "docs\\evidence\\alns-fixed-boards\\comparison-298.svg": {
+      "bytes": 25602,
+      "sha256": "d85d02602ab1c80c836bd544c1d355ef648971948dcdcec942ec2a7b4821dcca"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\263-adaptive-r0.json": {
+      "bytes": 325499,
+      "sha256": "708df9694d83de986ac71d0436f4c83617cf780668456d02a575a47dc388c531"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\263-adaptive-r1.json": {
+      "bytes": 325497,
+      "sha256": "147392df265339b7a66181a9890ecb2f76936a58304fd5bbdcd1b6509311f9fb"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\263-baseline-r0.json": {
+      "bytes": 812678,
+      "sha256": "8ec08ad6622c40bc02c3cf88bf8113ba66292bac06baf6866bcf0e8377f10809"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\263-baseline-r1.json": {
+      "bytes": 812678,
+      "sha256": "1b9afbba76aebb76a055a263c840dd546f0a3ac1b084fc9faa0a9245786047ae"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\298-adaptive-r0.json": {
+      "bytes": 817742,
+      "sha256": "ef930c42c5bebd76c4c7ae4427aaf68042f232cd3379c5ba992b85bb12bc173f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\298-adaptive-r1.json": {
+      "bytes": 817764,
+      "sha256": "b082ee7c6854f930351ad2a674ecee2d6723113b8966fc742811a64ea5680060"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\298-baseline-r0.json": {
+      "bytes": 1158920,
+      "sha256": "a53c85d84a03c6a19798632523af954c18758712b47786994295c3bc4478d0ca"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\298-baseline-r1.json": {
+      "bytes": 1158921,
+      "sha256": "575bb1e6ad5e9fa903658f895ddb259789d85a4c80c51af16c5f53db6fe50b74"
+    },
+    "docs\\evidence\\alns-fixed-boards\\continuation\\index.json": {
+      "bytes": 1912,
+      "sha256": "6c7b5e64194428707500995c79f54b5489917bb5811b5b7d9beee92da692e324"
+    },
+    "docs\\evidence\\alns-fixed-boards\\observations.csv": {
+      "bytes": 35484,
+      "sha256": "80a8b784a543a187c2a8d7565d48ac3b60252dc2afe59d365ddd83f28843e772"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-aa-r0.json": {
+      "bytes": 681863,
+      "sha256": "7d596577ac1df274f1f3788fb431b27cf05fce01c268f797dabe8925f4dc5d42"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-aa-r1.json": {
+      "bytes": 681859,
+      "sha256": "4ef89dce985d67bff913260d063717e8b810ec884b9d550d41c42b01db927f73"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-adaptive-r0.json": {
+      "bytes": 565549,
+      "sha256": "03e4fc2d359c65cc1fcfcdcc58c6f6aa1daa731bc2d268718cb11f53634b57fa"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-adaptive-r1.json": {
+      "bytes": 567243,
+      "sha256": "64784313ff99265b57b16a752eae691ad451f66c5ac50fbc3767e88a3f5337c9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-align-r0.json": {
+      "bytes": 681867,
+      "sha256": "3954be84bb117bc52bcc418f15a3d85b7c24ee3307727f249e6ca76a33017b5b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-align-r1.json": {
+      "bytes": 681866,
+      "sha256": "a470eb3182c664c8618c1f793a41d194ff61fa61cf6ad84c75bd39798bb0357a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-baseline-r0.json": {
+      "bytes": 681868,
+      "sha256": "bb665de6825d5c3ec76fe364f6639f0767b4d46a0dcb7c92d445dddfdd2d4bb6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-baseline-r1.json": {
+      "bytes": 681868,
+      "sha256": "17834b8adefb761fbc68821b2c452bd930b1da376e421a01c3f813e5c875ce71"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-fixed-r0.json": {
+      "bytes": 569757,
+      "sha256": "4bfb900e9d145143a701b96e3e1481df5e107b49d0df3f9aa02b198ab40101ca"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-fixed-r1.json": {
+      "bytes": 577573,
+      "sha256": "38f0c9b555a45e31808cc32fdf9d2053bd523451c02bd01435aef0557f488799"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-previous-r0.json": {
+      "bytes": 559989,
+      "sha256": "1f2b80ff99cee9f3f452ecdd9355ea1a81d485cd1d534ea0bf3c8c4df958de69"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\263-previous-r1.json": {
+      "bytes": 559670,
+      "sha256": "b657d64a4aade8071162bda500775f1fdead27494c2d6eb2a836b7f812a77bad"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-aa-r0.json": {
+      "bytes": 1157989,
+      "sha256": "a0f314a5c08085ba858c1b9edaef4329a9f00b5ee144130d696634d039f9e101"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-aa-r1.json": {
+      "bytes": 1158010,
+      "sha256": "a1da00a780310ca8596def6e92d8ed7e6a2d1cd9e7427037d323efcf85ccf425"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-adaptive-r0.json": {
+      "bytes": 794204,
+      "sha256": "e76afe0ef615da83ccb9f78374e5a862bc408f24501c25d95e914744541182f0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-adaptive-r1.json": {
+      "bytes": 1168638,
+      "sha256": "349d05a7f7ed26d545b3eeeb81f7602293f9e9ded7bbbc7872ab083733c332f1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-align-r0.json": {
+      "bytes": 1157937,
+      "sha256": "33d158d3f7fb830b6e823f5d70092cb3bb16df42237e897727ab4a2a26fdf55a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-align-r1.json": {
+      "bytes": 1157944,
+      "sha256": "b30fb9c0ba7357cfb94fdfee49457735589bfcea3b9a6ac828334e34bc5b2a03"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-baseline-r0.json": {
+      "bytes": 1157995,
+      "sha256": "30cc5ba38b3d2a6ce9b8784beba51508615f72aeabb7098484df75aac623e8ba"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-baseline-r1.json": {
+      "bytes": 1157996,
+      "sha256": "4137fa57ce803584a0a98d1a368040d56fe424a0e55373e3c5911b09bcd16dd9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-fixed-r0.json": {
+      "bytes": 796803,
+      "sha256": "0f59bcd5fa9902fc94f009ac16c7c649b66b0e363e5327dda6d129bb3449a52e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-fixed-r1.json": {
+      "bytes": 1169419,
+      "sha256": "169da6eb9cb41ac6bedb6747972a5e2d93a41c04068c0e39a9b06086dae5b21e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-previous-r0.json": {
+      "bytes": 1168675,
+      "sha256": "20375cf1b8f323a70f7f7dbf2cae0b7bb7096b29634586328ccd593079370631"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\298-previous-r1.json": {
+      "bytes": 1168685,
+      "sha256": "ac38ca761ef134a5c108ead1902429cc8eec6e2ebcfbf1d52744cce0c1d4dcae"
+    },
+    "docs\\evidence\\alns-fixed-boards\\operational\\index.json": {
+      "bytes": 39903,
+      "sha256": "a0c1c25fffa8227ad22d7bb399d234833b360a3de481c5b6b2ae3be93340cc9e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-adaptive.json": {
+      "bytes": 337087,
+      "sha256": "5f2b906302ee928d1e0f5ddb716a2d23e8fb9af1292522ddf8f9cf7b86e4c1db"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-align.json": {
+      "bytes": 275042,
+      "sha256": "223741d49a89f876338173e2b02cc82c3a626b905d69b5f1ecd6b10e7a306f3d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-grid-02.json": {
+      "bytes": 370020,
+      "sha256": "6862bc1ba38ddcad6954edae58ded3e5bff193e2a09db7c761dab6df958f5cb8"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-grid-04.json": {
+      "bytes": 392174,
+      "sha256": "6e59c6ecc96176a6bede2b22c9fd09c90e224cc8b530134bb81ba2644a51a7d6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-grid-05.json": {
+      "bytes": 379385,
+      "sha256": "04296f2f4e973a4472bddc31e12fa46c80d901c2ea3f0a205b4442ae94f1edf2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-grid-refine.json": {
+      "bytes": 370044,
+      "sha256": "63b8e2bf044e65cfe64a63118fc0a4b9e6babbee35bce3a64a3bc8524cc9d6bd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-grid.json": {
+      "bytes": 323854,
+      "sha256": "61559694d8b0f927ac8a3a8125fcb4a86abbd770c2a546595fe97b37368c1e34"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-263-relocate.json": {
+      "bytes": 320215,
+      "sha256": "2081a56c2ee4b1614189593993e2e2c86c2f94242f86a973818e3f3c58533af3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-298-adaptive-02.json": {
+      "bytes": 821697,
+      "sha256": "0fbdbd7492366acca20182e493235c8e1d1a7a09c62732b1c704d3642b4e8811"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-01\\benchmark_fixed_board_layout.py": {
+      "bytes": 8853,
+      "sha256": "7aae138d517a1986a75c02aabff2b49089c2035e0beb169317a90a5c76b65687"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-01\\same_count_layout_search.py": {
+      "bytes": 19297,
+      "sha256": "ee006610b2d9fafe511ec1cb3531398c2b680fb7d2f7eb3014aea7ebef543aa3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-02\\benchmark_fixed_board_layout.py": {
+      "bytes": 8853,
+      "sha256": "7aae138d517a1986a75c02aabff2b49089c2035e0beb169317a90a5c76b65687"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-02\\same_count_layout_search.py": {
+      "bytes": 19575,
+      "sha256": "4804dd9adb6609fb02a27d76c34fb7e9f918132d18d1ee0f381eee9f51a8ed5a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-03\\benchmark_fixed_board_layout.py": {
+      "bytes": 9069,
+      "sha256": "4959bab43dae0f7178d27c2fba726a7d7860b5340f08549133d58e250b7f2512"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-03\\same_count_layout_search.py": {
+      "bytes": 20692,
+      "sha256": "19680bef2e0eca6b086d3bf271a890cea1505b01a05aa89c37f985fdea5b87a6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-04\\benchmark_fixed_board_layout.py": {
+      "bytes": 9069,
+      "sha256": "4959bab43dae0f7178d27c2fba726a7d7860b5340f08549133d58e250b7f2512"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-04\\same_count_layout_search.py": {
+      "bytes": 21318,
+      "sha256": "69f3b0ff509fe6ad4a307b023bc08f3e0f1b0411b397d08dc781fe559f555aed"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-05\\benchmark_fixed_board_layout.py": {
+      "bytes": 9069,
+      "sha256": "4959bab43dae0f7178d27c2fba726a7d7860b5340f08549133d58e250b7f2512"
+    },
+    "docs\\evidence\\alns-fixed-boards\\pilot-source-05\\same_count_layout_search.py": {
+      "bytes": 22329,
+      "sha256": "33c9660fb81878844a9bbe1253cc7adf15bc06c7831b5eba721a1d93316f2348"
+    },
+    "docs\\evidence\\alns-fixed-boards\\protocol-ar.md": {
+      "bytes": 11296,
+      "sha256": "dc7fdab8ba5aea2707c9849d5101db3d2b4e186e21c1226b50b179754b9f5525"
+    },
+    "docs\\evidence\\alns-fixed-boards\\provenance.json": {
+      "bytes": 1632,
+      "sha256": "e4276008fa072158afc3df98d86eeb6a3c9726db314cfa3d6d623cb80a1b2cad"
+    },
+    "docs\\evidence\\alns-fixed-boards\\README-ar.md": {
+      "bytes": 18219,
+      "sha256": "fe65ffb4bac547436b83c53c652390d03fdef88d2eb7b391118f8145fc83ca64"
+    },
+    "docs\\evidence\\alns-fixed-boards\\regression-04.xml": {
+      "bytes": 38208,
+      "sha256": "7145e7e8e4794ffa3e65f05477d79fe133b0440e39b42c87b2dcc89974f1fbd2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-aa-r0.json": {
+      "bytes": 275187,
+      "sha256": "325899fdd4f3ee49ee0d4c029965d4c2db070c949ff0bee3f555ff6afb2d47e4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-aa-r1.json": {
+      "bytes": 275187,
+      "sha256": "9ac341172df928c47831eb7b128022a29826deaa9df32c3a6b15082e173afcab"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-adaptive-r0.json": {
+      "bytes": 323374,
+      "sha256": "ad4e8608a53ee2cd6d6f67469fcec572f8493a428f8473c3f5ace23f5c0f36c1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-adaptive-r1.json": {
+      "bytes": 323372,
+      "sha256": "11a5b907f9c08a59e745e26b89fc9d36e75d9a66486fab5f10971e2bde3c7c60"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-align-r0.json": {
+      "bytes": 275193,
+      "sha256": "73c1859f0a80bdf5071223184501c41c595c28de26da51d83a93c77ceb8904dc"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-align-r1.json": {
+      "bytes": 275192,
+      "sha256": "a6abef5e873b67f55c97b73c6d5178387b054a4203f1b35dd62e58a542645848"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-baseline-r0.json": {
+      "bytes": 275192,
+      "sha256": "13b2e687b28e107119b4709bdb8c20a30b802ea43ea5d32305fce320dd93e7a4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-baseline-r1.json": {
+      "bytes": 275194,
+      "sha256": "5dcba7b015dc3b3c66d4944db8b97806b9ca422657e46f919e0a3a5e02689f19"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-exchange-r0.json": {
+      "bytes": 293615,
+      "sha256": "f9e74a747041b87a64fdeb91ab08e5a180f928ca109e35f89bc7c2b734ec28d0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-exchange-r1.json": {
+      "bytes": 293617,
+      "sha256": "2b57341ca8d22365cfab01ab2c5f9053224c1d0f0bff5d7f49dd63abd3f2b02d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-fixed-r0.json": {
+      "bytes": 323981,
+      "sha256": "f81f9253658f6610311db29a8f20ee6d6d3b5917ed9d24350aac78d0d51e1cc9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-fixed-r1.json": {
+      "bytes": 323982,
+      "sha256": "4dd31eced5157ff618b4036a4050ae2311d049ec875871e9b31048db55b26df5"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-frontier-r0.json": {
+      "bytes": 275526,
+      "sha256": "21646881360fc3803f36ef13b1f5c0af6fe00fde3212741c5c8c56b8bc863138"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-frontier-r1.json": {
+      "bytes": 275527,
+      "sha256": "288c62bb6e456d7d6469e2f2e7004dbf5d55d9ac026f52a2b5b900b7a36ca3e3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-grid-r0.json": {
+      "bytes": 340832,
+      "sha256": "aa7d582e43c205bad2944c613b7e44f7bec1eb12c61ebee54e6b81b99df75438"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-grid-r1.json": {
+      "bytes": 340831,
+      "sha256": "37410d2eeb203ada6fc7b199d0c1e20b792401f897da5d5a1f8c57ed697cc528"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-relocate-r0.json": {
+      "bytes": 312967,
+      "sha256": "9fba56346cb7e4d3394da22019e12ae16467c2e3bcaf20836687186e7e1f2b8a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-relocate-r1.json": {
+      "bytes": 312720,
+      "sha256": "6195fdb6660b72afe336ec81dda8bbd4a15dac9724f5222c6ae170c6a1f10d4c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-repack-r0.json": {
+      "bytes": 280183,
+      "sha256": "fe3bc6c465d8810bd4c13e3839815157f7e8eda014ee192e2d59edb3097baaaf"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\263-repack-r1.json": {
+      "bytes": 280184,
+      "sha256": "2f1613b497ee99995009a1bb52e31fb60fb83b15d91d7ec831d07e101716066c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-aa-r0.json": {
+      "bytes": 389135,
+      "sha256": "b78c55fdc1c3633f7abf7e5c3988a8878ce4d27e51954fd026a744b1baa0e14a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-aa-r1.json": {
+      "bytes": 389139,
+      "sha256": "77c65cb9c5b3f42dc48fea0668f5aa7359d02050121801d920bc203c01675e80"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-adaptive-r0.json": {
+      "bytes": 431764,
+      "sha256": "990d4c92f505efd89250a1af480f46e2436ea0acaa42435dd1eb092614d80488"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-adaptive-r1.json": {
+      "bytes": 431759,
+      "sha256": "0e66a2262eefc232087781d4ac4ff4957070e0392a19f0625c7c11a84e5f2e1c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-align-r0.json": {
+      "bytes": 389194,
+      "sha256": "a43b472ad343551689d64d252beba578031b3b3599fb7801661c97757a5589ff"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-align-r1.json": {
+      "bytes": 389194,
+      "sha256": "5ce92f24083e1e2e08014485fddd70fe47804c03b1f96fce0e6e15ecc8fb34d0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-baseline-r0.json": {
+      "bytes": 389146,
+      "sha256": "e6881ebd3e5d5a7d7bfb918cd4dbe3d4dd05dd97989b28d084268a1db52d77a6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-baseline-r1.json": {
+      "bytes": 389144,
+      "sha256": "f6c428e0c1902d65eda882317949da255e8ede3b5232a66743d6d48fe5f5e626"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-exchange-r0.json": {
+      "bytes": 399563,
+      "sha256": "427aaf000c157ec665d9da5a6833bd4148f0408b2ac853d21a7c2aef3208a440"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-exchange-r1.json": {
+      "bytes": 399562,
+      "sha256": "04e5473557f2b133f2e5c7fa52650755c3f37789f51e8ff267e11079f8c2c042"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-fixed-r0.json": {
+      "bytes": 433214,
+      "sha256": "531d53df2a784ed99780fbf6429a0e435501af909e3f830e5a1f2bfd669bbf9e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-fixed-r1.json": {
+      "bytes": 433214,
+      "sha256": "431f2efb4ac08f53f5e96e84e710521bd2875281a1e622f5a8b12d81b75d4279"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-frontier-r0.json": {
+      "bytes": 389477,
+      "sha256": "5cef42ac37a23e54f25364afe3bf84754eea031df8634be97be151fc662190f6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-frontier-r1.json": {
+      "bytes": 389477,
+      "sha256": "776c2a0a4472f992c5d6b5ad97eb1cacb1d357317686e0d87ec1a334254d5dda"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-grid-r0.json": {
+      "bytes": 449626,
+      "sha256": "03ca8ccb456ea324b02a92347f56bb16dd3d3fd5c7c9b528e1cace2c32101359"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-grid-r1.json": {
+      "bytes": 449622,
+      "sha256": "263ff24c6133f960927ec77ab012cee2e583167cf5073eeefa02cb5b629788f5"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-relocate-r0.json": {
+      "bytes": 611610,
+      "sha256": "279a2b9367fbe1291fbd54a7fe7870dbd021411c27e40ca7d271ad1fa7650875"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-relocate-r1.json": {
+      "bytes": 608780,
+      "sha256": "0ffcbea9166ab30b3d29bdc3603511daa414aa18a64c82a73d4560a8c08d2dd7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-repack-r0.json": {
+      "bytes": 813432,
+      "sha256": "67d1cb38ced7b23bb44b6c4c4a38a2e7ebdbd6eb2723cb581a71a9c1e6214c57"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\298-repack-r1.json": {
+      "bytes": 813429,
+      "sha256": "7abc2e4e78a6f4fb2eb980a70188fa36cbf66fadb90af1ab08394c1246156c11"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay\\index.json": {
+      "bytes": 51265,
+      "sha256": "8d86e8d4505de3434dd072621fd992330d916efd92e82fb7dcfa3ad06b8b3647"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-aa-r0.json": {
+      "bytes": 275188,
+      "sha256": "ad2b0ebf4040be2845f70d5a6e66cb463e6cd16376125a45904e571967ab98e2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-aa-r1.json": {
+      "bytes": 275189,
+      "sha256": "0f4565943a9204454ea097b73e1490c138cec5801bb5027fc017d58619bdd4c9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-adaptive-r0.json": {
+      "bytes": 325561,
+      "sha256": "fcb1dc80ce8eb955ad5e592347d3a0773a28c84dbe28a1f21becbb1e1fcc25ed"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-adaptive-r1.json": {
+      "bytes": 325564,
+      "sha256": "8f633054d4068b95388cc5c97433ac948f8c6f1a14bbfd1187b4b05f640ea599"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-align-r0.json": {
+      "bytes": 275193,
+      "sha256": "7946aa5ee6a5e52dad4e4cf489e32ea0f137b20e0972668953e1eb634881d345"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-align-r1.json": {
+      "bytes": 275192,
+      "sha256": "abaeef5e3652a34483edb292e19df7fb6fee4344139f85e859e8cbe6a48756d9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-baseline-r0.json": {
+      "bytes": 275195,
+      "sha256": "9f1883ad69d726798968d156e7d34c5eb33bd75328ca38421c2eff36e924f960"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-baseline-r1.json": {
+      "bytes": 275194,
+      "sha256": "d59220caf6ab4fcc1463a1a314f363ecea57e297a69c1a8b0d9c9f2f557e49b2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-fixed-r0.json": {
+      "bytes": 326387,
+      "sha256": "2c1ec534e18950346171aaab9b6597916b614d2aa682a8a577c58c1d62664273"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-fixed-r1.json": {
+      "bytes": 326373,
+      "sha256": "7b7e3cf746b4d08f5293ba9506937d330039f6cf844c63d18ab61d40591f073c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-grid-r0.json": {
+      "bytes": 348795,
+      "sha256": "7b11b699b19a110f768ff7deccf82db5495a080299a416347ee08a2992c20ba9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-grid-r1.json": {
+      "bytes": 348807,
+      "sha256": "06f0c39f77c3d621e5b4b6d04622d0af2821de3e7b6f460711111b30d8431bcd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-relocate-r0.json": {
+      "bytes": 313033,
+      "sha256": "f839cd3f81e7d0fe8f24a6f303a05a65579e3023e1df9a27952421d6466118c9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-relocate-r1.json": {
+      "bytes": 313033,
+      "sha256": "f55b74db2a666f7a4d5e1775f8a626bb42b1da310cb958d5ca93297b900bc1cc"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-repack-r0.json": {
+      "bytes": 280185,
+      "sha256": "dc5035249230d53a59a2da2a2c19f5687bf9d8726f11c158f2eeabc9a73dbab5"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\263-repack-r1.json": {
+      "bytes": 280180,
+      "sha256": "49a10d488ff711c075fa485937ebfd68484c212bdecc6ed76f79ad97aff61ab0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-aa-r0.json": {
+      "bytes": 389138,
+      "sha256": "2b879301ac62b0a5b3b34c2e160595961081e92aac10e76d827d278d222a4f4f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-aa-r1.json": {
+      "bytes": 389137,
+      "sha256": "5a44ac4eb4fa06bdadd73905e60cc4c968cae3d4baa003c87d2b633b4a55e8cc"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-adaptive-r0.json": {
+      "bytes": 817796,
+      "sha256": "ff48163ac706f4296b10922911241922fdd3414ab9aa586e7f86fea51a3fec7c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-adaptive-r1.json": {
+      "bytes": 817791,
+      "sha256": "d33f92b0f5444b866a3176a1536a3c14e6575785a64b0d33d9f2f9d85d4a7878"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-align-r0.json": {
+      "bytes": 389192,
+      "sha256": "81ace8e5179100fa8aca4e3120a1e04e0efe4144b7a96501f7fda7221cc1844b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-align-r1.json": {
+      "bytes": 389194,
+      "sha256": "2d04b7d815d7fdd09b8bc1b949565971ccf860454965b60d1c4efaaf71cf9772"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-baseline-r0.json": {
+      "bytes": 389145,
+      "sha256": "3afed0461eb89c37328e4c8c05e965162479461cd6ef22f03dc20a937c736008"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-baseline-r1.json": {
+      "bytes": 389143,
+      "sha256": "a60d6b90ea7ab2a009234cc290703addc37f346ad1fb8a78f0f242321f78cd32"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-fixed-r0.json": {
+      "bytes": 818103,
+      "sha256": "469203d01ac503d805daa08b4b498b83f6639f22d958efcb58ec5b07326bc076"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-fixed-r1.json": {
+      "bytes": 818103,
+      "sha256": "b7c3cd66cab31ad56965c07997acdcd17fa6a0fe5b98a3aa569afcd42750afee"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-grid-r0.json": {
+      "bytes": 644921,
+      "sha256": "45a21d3c1c00913bd89d7771f9b7cca280c75a75b22b15225ea7d8348543fa74"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-grid-r1.json": {
+      "bytes": 644917,
+      "sha256": "2f1c74dcf6878c37dcf96d93914fe49cbc679f19a629ffbff9bcd3f48388f04a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-relocate-r0.json": {
+      "bytes": 611339,
+      "sha256": "b1cf7f0eaf8f4b3d5e0dc5d59e5b823f06a40f1666f44794d6b34f5f1dab7642"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-relocate-r1.json": {
+      "bytes": 608329,
+      "sha256": "08ca2cd18ee2b1908deca62015c49bace10c03c899f14068af2f12290cd84f7a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-repack-r0.json": {
+      "bytes": 813420,
+      "sha256": "cec0fc05e3fecf76c96115f0f06e44766af07479e524e9d34b58e13bafbb2be5"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\298-repack-r1.json": {
+      "bytes": 813420,
+      "sha256": "3e3befaef0bfcc2894460019cb27d80be0c232ede43dc93889f01b88db74015f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\replay-v2\\index.json": {
+      "bytes": 43759,
+      "sha256": "276ce64df89e475c7e643dd85b382d784a4024a827592e67b6641aa4904d978a"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\__init__.py": {
+      "bytes": 61,
+      "sha256": "39f130f478fac1a5350f16d22baef6be1f46cbad380b03c08c2b9056989da52c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\execution_trace.py": {
+      "bytes": 7000,
+      "sha256": "7ef60e10ae1834021036ccba1e330656fc6f8567481bb4d9427520835dcd742f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\optimize_order_plan.py": {
+      "bytes": 30589,
+      "sha256": "f92ab1796389d89a0df56517f0b49474f61e869bbd82fb125c37d23c1db6cc39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\plan_preview_session.py": {
+      "bytes": 4574,
+      "sha256": "e37680d62399238d4a3be5748837c3ac8d3b9a4a82b294708962cf99c6e89b68"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\plan_reuse.py": {
+      "bytes": 2838,
+      "sha256": "243177a9fcff040e25db6d47bcdc35871d643dcbd26672857a684bda5089b784"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\plan_revisions.py": {
+      "bytes": 3501,
+      "sha256": "2417e0d75a308baec41780989a083500d96f7165207f6ab4e85ab6475aaa5897"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\refresh_plan_metadata.py": {
+      "bytes": 2330,
+      "sha256": "db53933495f924979bcf53ab89837d644eccd164b47fd6cfbc5ab706f2a6ee39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\system_plan_recalculation_job.py": {
+      "bytes": 5684,
+      "sha256": "7c27c65afa5ef1a28e15f7b0ccabf01977e9a3a8d130c4a17dfd93dca20cd4e4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\application\\cutting\\version.py": {
+      "bytes": 68,
+      "sha256": "0d0cef8cf54742c99d6bac0c85a2fcec9f910c6337edbac33826d1c94f671871"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\__init__.py": {
+      "bytes": 2785,
+      "sha256": "cae4a5f8243ce1e36e72b2052eb5dfa3b10a3c9d26069dc0d51cafdf1b3a0394"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\abc_search.py": {
+      "bytes": 6744,
+      "sha256": "8d80e7179fc8369ca64c6734174d70a11de39feaa45bdf0350248e1670f216f3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\adaptive_trim.py": {
+      "bytes": 7294,
+      "sha256": "6413beb20e62bc8471207d81bb1434d22380a5b6b444a9349a1735159855dd1e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\catalog.py": {
+      "bytes": 8321,
+      "sha256": "cf9d37ff9fe602e9bde0fda16770bb215a9a9785b16c641b9a098ffefdccefa2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\corner_contour_rotation.py": {
+      "bytes": 20616,
+      "sha256": "aa7ab00e0a02115db5eb13017fe2d5a80e46699c63148eadea2182774ff8c9db"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\cut_line_quality.py": {
+      "bytes": 6366,
+      "sha256": "6465e2896cbeadfa5b42bb326c7900f1a0463b176e30a1bc68322db07854048d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\cutter_center_paths.py": {
+      "bytes": 14471,
+      "sha256": "2494de9a10f1cf68364c593462bc3a4e1d7e1aee7c5ab4be8d28901aecdad4ce"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_applied_trim.py": {
+      "bytes": 10978,
+      "sha256": "830f14bf847c3c7cede830a3e1f5f952c6c9baba7c48a095f6d080f92e15c938"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_default_layer.py": {
+      "bytes": 4377,
+      "sha256": "b302f08afbe7254689f9dd2b2ca4151a6d75d97d3888a147c342f773dfd48de6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry.py": {
+      "bytes": 13100,
+      "sha256": "ba1944771f3121fc9a466a6b571f405c71c0f1fff0866ffa0c82bd795f9eea9e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry_snapshot.py": {
+      "bytes": 18056,
+      "sha256": "faf810097d293229c0cc10dc96a9cc1906d874c2b3e1c714974d3d2ee6cb7ccd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_issue.py": {
+      "bytes": 17217,
+      "sha256": "fef834aba6946b6e7edb07cbdbaf2f6544a707a29d2254ef7516fd51a17bb7d7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_text_labels.py": {
+      "bytes": 3181,
+      "sha256": "128a81379cb757e66da6b1d9680e45fa73e23085bbba1702079f064ac5bf6c56"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_topology.py": {
+      "bytes": 50633,
+      "sha256": "a1d2a28d96c8ea667ef9b2b7526f0666b4c7ec52813051df93e656ae5feb1f55"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\evaluation.py": {
+      "bytes": 16360,
+      "sha256": "0ab37caca5a0c53a797ddc96186b282490d4f2775d088cc2172b2392493f118f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\extra_overlays.py": {
+      "bytes": 13662,
+      "sha256": "d6cbcc6f347cc12c9ecce37294075a1973f6fb230ae7c5d52550de07a43427fe"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\final_cut_line_alignment.py": {
+      "bytes": 31853,
+      "sha256": "9dbc241900238fdcf780e02fb9546b10828a5ce7407c4dd4dd5c6ec54667617b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\geometry_nesting.py": {
+      "bytes": 18473,
+      "sha256": "09ca5bd061d5ec91c8238d6ffb1cab4ecb754abc41c4744f961eb4391de6809e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_dxf.py": {
+      "bytes": 21946,
+      "sha256": "0b9c101100d7f8bbbb15fe9a57d9aa53782c7c9568cb039781b95e96bbebc7fd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_nesting.py": {
+      "bytes": 50868,
+      "sha256": "c86d914b5552b607d9d0b1fc80db3d1677665c7d4b72586d5090d40f3a18534d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\joint_nesting.py": {
+      "bytes": 11368,
+      "sha256": "65242d4410fd84dae23dfd3c561e7fc25cd738c357daa0a7eb2c866ccf2b21b7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\kerf_layout.py": {
+      "bytes": 5617,
+      "sha256": "2a29b6f03cf8f297d3a3d6cdab986b7dad5350f5185b5a0370b82ad05747c3b1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\layout_diagnostics.py": {
+      "bytes": 2396,
+      "sha256": "fc9ea03182b5787c41daeb99e48d14456741b4f4bd07e0cba42ddcbb2c6fbe94"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\liner_geometry.py": {
+      "bytes": 94854,
+      "sha256": "50261da1ea670f316d8bff3a90e240a5e99d136a837f579af014476385ca9a98"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\machining_overlay.py": {
+      "bytes": 7803,
+      "sha256": "cb87e58703b48ad91652a4ff9eaa3214e4e8fcb4dad30a58150e9385ad8abae9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\manufacturing_requirements.py": {
+      "bytes": 7528,
+      "sha256": "651f6ab485efed9c53506b51f1a2b54f45038aeba6b8b6141e5e435473b7c685"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\nesting_consolidation.py": {
+      "bytes": 47267,
+      "sha256": "2daf612c43ebc94b8a86c719429649fab56b972ae130961b1b444e3ff6eeee6f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\offcut_policy.py": {
+      "bytes": 21117,
+      "sha256": "6e930defbd4dedaf8216208e32ef5300458876e81ccc7681207ff0cad82ff766"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\optimizer.py": {
+      "bytes": 60869,
+      "sha256": "0b1a8f241b22be611112ba75fb130d087c745aaf7713f9819828d5566f4a829c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\physical_execution_contract.py": {
+      "bytes": 2495,
+      "sha256": "7cda7ee76182c91c247ba8c32b82957a21e3535f4d14687ab94c6bb3904dc366"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\piece_cut_dimensions.py": {
+      "bytes": 11394,
+      "sha256": "d2675c81734c3b08439a617d6f62dfa47250f72cad711773f477adc744de68d6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\placement_orientation.py": {
+      "bytes": 4825,
+      "sha256": "f765ccab49866615a35825122ace4bc482ca4f61fd290f5e675c2b8ff1ea5398"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_fingerprint_contract.py": {
+      "bytes": 9947,
+      "sha256": "ee3f7cf05fd47bee67d38fdc4750c2fb7397b3c235cc75cca36aba76b980d056"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_freshness.py": {
+      "bytes": 4399,
+      "sha256": "7ea499ca00a8ede70b7d9ac72509e5fea8fe2d173f70cf84b24a976d466384ad"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_lifecycle.py": {
+      "bytes": 3994,
+      "sha256": "94473a612452ea26f2ff338abc2c1ddaa34efef2b58bdf5b57f85a9535babad0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_portfolio.py": {
+      "bytes": 9997,
+      "sha256": "1fe1600db4ec3dd7b9c36ea42adccf28f13f29e2830a89c1090834dfb4a79bb0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_search.py": {
+      "bytes": 48170,
+      "sha256": "e5ebcaa8dfca7ab835ed056d6c3b7c5d09d01a2ccf3ddbb83bc077e94c359c3f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_settings.py": {
+      "bytes": 5575,
+      "sha256": "773ff155830a56be7600041d0817820870f2f29c8f81b7d535a217de60d95a59"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\primitives.py": {
+      "bytes": 13988,
+      "sha256": "7cca94eb5e14e8def808e623431bc3af3e701574e25965b2fa636506fe916774"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\registry.py": {
+      "bytes": 7348,
+      "sha256": "a829949e9c434c4a1ace0de0b7a9d4fc31bdd46d5f8b84b4cb344f69a714422d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_machining_orientation.py": {
+      "bytes": 6944,
+      "sha256": "2c91ed1e793d55cddc86b2ea3c918a3e0cf58e04c2e2622a7dd4522d4311b0f1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_templates.py": {
+      "bytes": 5693,
+      "sha256": "e176a6652830b8c5050b22cf0f8cd3a1cb99b95b9067571acc503ef95f0ab775"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py": {
+      "bytes": 24031,
+      "sha256": "13bc1ed5835e56fedc77b7e5a3d02e74040548edadc702bfee7d810fdf7e6a39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\shape_aware_nesting.py": {
+      "bytes": 83372,
+      "sha256": "4b3025b22e264ef1b4da2553f9bb3b616afb0c7e16992a049c67db6d7a0ff5e3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\sheet_edge_trim.py": {
+      "bytes": 13234,
+      "sha256": "d73a02a53e794d95b4dd2fa1ebbbddf998ee434fabadff7fccfa1acd905f4ec0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\small_piece_safety.py": {
+      "bytes": 3406,
+      "sha256": "3b3a62b5bb7f22056988f11ffaa27879dbd4b00028c192b7612b59c272f77385"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\special_addon_match.py": {
+      "bytes": 14123,
+      "sha256": "2d85e560e833ca50b67f895838a20995275dd4f7715a7ec987e78cdc6a15b902"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\__init__.py": {
+      "bytes": 1147,
+      "sha256": "b04f496041e0c2c1c4be0b302b3a1a4472d6ac53503ca4f6a5b0a94a5dd4df92"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\guillotine.py": {
+      "bytes": 5110,
+      "sha256": "7f9e7453342f4e7bc969874db1b483a8cf8ea8e8aad7ceebf65c3c44b0bddd75"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\maxrects.py": {
+      "bytes": 5611,
+      "sha256": "e65fe5b61f50d725c86413011378d54f0a926b95ecc54b53325114242e112ffd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\shelf.py": {
+      "bytes": 10998,
+      "sha256": "721ea0cce70b6d9d126bdd6766eafc6176664864b3e95cc8339d21747c93cc30"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\skyline.py": {
+      "bytes": 6130,
+      "sha256": "59c0390a5ab43c6d1755c7d664caa8b0153d2438095a85b49a918d0b0eb8060c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\__init__.py": {
+      "bytes": 52,
+      "sha256": "59e3b1360f68e08fc3c8ff4ea02af4d71fd295dfc43c8ee714681326c3dcd796"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\domain_engine.py": {
+      "bytes": 2524,
+      "sha256": "c9ce0cfe0d36fc50217ff71a413fca39fc804f847b18e4033bbdd580141a7156"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\dxf_reader.py": {
+      "bytes": 13869,
+      "sha256": "384057bdd4371a379585e9b2d3eb8ae431d34b6196785d60cf2974ef749e1d13"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\almdina_erp\\tests\\test_fixed_board_layout_search.py": {
+      "bytes": 9389,
+      "sha256": "6755057a8e2d5bd6ea16a9843ce567921129b9c61adf7b49c1e55d42523f0e3d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\scripts\\alns_dxf_inputs.py": {
+      "bytes": 7041,
+      "sha256": "a8773aa7ece8731fa8e374644f0e03b26bded4ced2e6dc092d22c7c5be567a38"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\scripts\\alns_research.py": {
+      "bytes": 16179,
+      "sha256": "1f01ee9289ae530b280fa543bfb90742503484bf0f74360262b22496a00ea535"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\scripts\\benchmark_alns.py": {
+      "bytes": 11167,
+      "sha256": "7cecaccc83c5874ca5470a9154928f8db83f3a09bb9b893fbe9b187b0c8f7bb6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\scripts\\benchmark_fixed_board_layout.py": {
+      "bytes": 9528,
+      "sha256": "814596bbd30d8d534fdcf8e4571d9340e71b124ed530177f336c61c6af5165d1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\continuation\\scripts\\benchmark_fixed_continuation.py": {
+      "bytes": 5067,
+      "sha256": "3ac08e5efcdda848f09cc6798e3057cc963ed5353e1b1c341689e8930a798bfb"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\__init__.py": {
+      "bytes": 61,
+      "sha256": "39f130f478fac1a5350f16d22baef6be1f46cbad380b03c08c2b9056989da52c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\execution_trace.py": {
+      "bytes": 7000,
+      "sha256": "7ef60e10ae1834021036ccba1e330656fc6f8567481bb4d9427520835dcd742f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\optimize_order_plan.py": {
+      "bytes": 30589,
+      "sha256": "f92ab1796389d89a0df56517f0b49474f61e869bbd82fb125c37d23c1db6cc39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\plan_preview_session.py": {
+      "bytes": 4574,
+      "sha256": "e37680d62399238d4a3be5748837c3ac8d3b9a4a82b294708962cf99c6e89b68"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\plan_reuse.py": {
+      "bytes": 2838,
+      "sha256": "243177a9fcff040e25db6d47bcdc35871d643dcbd26672857a684bda5089b784"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\plan_revisions.py": {
+      "bytes": 3501,
+      "sha256": "2417e0d75a308baec41780989a083500d96f7165207f6ab4e85ab6475aaa5897"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\refresh_plan_metadata.py": {
+      "bytes": 2330,
+      "sha256": "db53933495f924979bcf53ab89837d644eccd164b47fd6cfbc5ab706f2a6ee39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\system_plan_recalculation_job.py": {
+      "bytes": 5684,
+      "sha256": "7c27c65afa5ef1a28e15f7b0ccabf01977e9a3a8d130c4a17dfd93dca20cd4e4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\application\\cutting\\version.py": {
+      "bytes": 68,
+      "sha256": "0d0cef8cf54742c99d6bac0c85a2fcec9f910c6337edbac33826d1c94f671871"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\__init__.py": {
+      "bytes": 2785,
+      "sha256": "cae4a5f8243ce1e36e72b2052eb5dfa3b10a3c9d26069dc0d51cafdf1b3a0394"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\abc_search.py": {
+      "bytes": 6744,
+      "sha256": "8d80e7179fc8369ca64c6734174d70a11de39feaa45bdf0350248e1670f216f3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\adaptive_trim.py": {
+      "bytes": 7294,
+      "sha256": "6413beb20e62bc8471207d81bb1434d22380a5b6b444a9349a1735159855dd1e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\catalog.py": {
+      "bytes": 8321,
+      "sha256": "cf9d37ff9fe602e9bde0fda16770bb215a9a9785b16c641b9a098ffefdccefa2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\corner_contour_rotation.py": {
+      "bytes": 20616,
+      "sha256": "aa7ab00e0a02115db5eb13017fe2d5a80e46699c63148eadea2182774ff8c9db"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\cut_line_quality.py": {
+      "bytes": 6366,
+      "sha256": "6465e2896cbeadfa5b42bb326c7900f1a0463b176e30a1bc68322db07854048d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\cutter_center_paths.py": {
+      "bytes": 14471,
+      "sha256": "2494de9a10f1cf68364c593462bc3a4e1d7e1aee7c5ab4be8d28901aecdad4ce"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_applied_trim.py": {
+      "bytes": 10978,
+      "sha256": "830f14bf847c3c7cede830a3e1f5f952c6c9baba7c48a095f6d080f92e15c938"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_default_layer.py": {
+      "bytes": 4377,
+      "sha256": "b302f08afbe7254689f9dd2b2ca4151a6d75d97d3888a147c342f773dfd48de6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry.py": {
+      "bytes": 13100,
+      "sha256": "ba1944771f3121fc9a466a6b571f405c71c0f1fff0866ffa0c82bd795f9eea9e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry_snapshot.py": {
+      "bytes": 18056,
+      "sha256": "faf810097d293229c0cc10dc96a9cc1906d874c2b3e1c714974d3d2ee6cb7ccd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_issue.py": {
+      "bytes": 17217,
+      "sha256": "fef834aba6946b6e7edb07cbdbaf2f6544a707a29d2254ef7516fd51a17bb7d7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_text_labels.py": {
+      "bytes": 3181,
+      "sha256": "128a81379cb757e66da6b1d9680e45fa73e23085bbba1702079f064ac5bf6c56"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_topology.py": {
+      "bytes": 50633,
+      "sha256": "a1d2a28d96c8ea667ef9b2b7526f0666b4c7ec52813051df93e656ae5feb1f55"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\evaluation.py": {
+      "bytes": 16360,
+      "sha256": "0ab37caca5a0c53a797ddc96186b282490d4f2775d088cc2172b2392493f118f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\extra_overlays.py": {
+      "bytes": 13662,
+      "sha256": "d6cbcc6f347cc12c9ecce37294075a1973f6fb230ae7c5d52550de07a43427fe"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\final_cut_line_alignment.py": {
+      "bytes": 31853,
+      "sha256": "9dbc241900238fdcf780e02fb9546b10828a5ce7407c4dd4dd5c6ec54667617b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\geometry_nesting.py": {
+      "bytes": 18473,
+      "sha256": "09ca5bd061d5ec91c8238d6ffb1cab4ecb754abc41c4744f961eb4391de6809e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_dxf.py": {
+      "bytes": 21946,
+      "sha256": "0b9c101100d7f8bbbb15fe9a57d9aa53782c7c9568cb039781b95e96bbebc7fd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_nesting.py": {
+      "bytes": 50868,
+      "sha256": "c86d914b5552b607d9d0b1fc80db3d1677665c7d4b72586d5090d40f3a18534d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\joint_nesting.py": {
+      "bytes": 11368,
+      "sha256": "65242d4410fd84dae23dfd3c561e7fc25cd738c357daa0a7eb2c866ccf2b21b7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\kerf_layout.py": {
+      "bytes": 5617,
+      "sha256": "2a29b6f03cf8f297d3a3d6cdab986b7dad5350f5185b5a0370b82ad05747c3b1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\layout_diagnostics.py": {
+      "bytes": 2396,
+      "sha256": "fc9ea03182b5787c41daeb99e48d14456741b4f4bd07e0cba42ddcbb2c6fbe94"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\liner_geometry.py": {
+      "bytes": 94854,
+      "sha256": "50261da1ea670f316d8bff3a90e240a5e99d136a837f579af014476385ca9a98"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\machining_overlay.py": {
+      "bytes": 7803,
+      "sha256": "cb87e58703b48ad91652a4ff9eaa3214e4e8fcb4dad30a58150e9385ad8abae9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\manufacturing_requirements.py": {
+      "bytes": 7528,
+      "sha256": "651f6ab485efed9c53506b51f1a2b54f45038aeba6b8b6141e5e435473b7c685"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\nesting_consolidation.py": {
+      "bytes": 47267,
+      "sha256": "2daf612c43ebc94b8a86c719429649fab56b972ae130961b1b444e3ff6eeee6f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\offcut_policy.py": {
+      "bytes": 21117,
+      "sha256": "6e930defbd4dedaf8216208e32ef5300458876e81ccc7681207ff0cad82ff766"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\optimizer.py": {
+      "bytes": 60869,
+      "sha256": "0b1a8f241b22be611112ba75fb130d087c745aaf7713f9819828d5566f4a829c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\physical_execution_contract.py": {
+      "bytes": 2495,
+      "sha256": "7cda7ee76182c91c247ba8c32b82957a21e3535f4d14687ab94c6bb3904dc366"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\piece_cut_dimensions.py": {
+      "bytes": 11394,
+      "sha256": "d2675c81734c3b08439a617d6f62dfa47250f72cad711773f477adc744de68d6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\placement_orientation.py": {
+      "bytes": 4825,
+      "sha256": "f765ccab49866615a35825122ace4bc482ca4f61fd290f5e675c2b8ff1ea5398"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_fingerprint_contract.py": {
+      "bytes": 9947,
+      "sha256": "ee3f7cf05fd47bee67d38fdc4750c2fb7397b3c235cc75cca36aba76b980d056"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_freshness.py": {
+      "bytes": 4399,
+      "sha256": "7ea499ca00a8ede70b7d9ac72509e5fea8fe2d173f70cf84b24a976d466384ad"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_lifecycle.py": {
+      "bytes": 3994,
+      "sha256": "94473a612452ea26f2ff338abc2c1ddaa34efef2b58bdf5b57f85a9535babad0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_portfolio.py": {
+      "bytes": 9997,
+      "sha256": "1fe1600db4ec3dd7b9c36ea42adccf28f13f29e2830a89c1090834dfb4a79bb0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_search.py": {
+      "bytes": 48170,
+      "sha256": "e5ebcaa8dfca7ab835ed056d6c3b7c5d09d01a2ccf3ddbb83bc077e94c359c3f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_settings.py": {
+      "bytes": 5575,
+      "sha256": "773ff155830a56be7600041d0817820870f2f29c8f81b7d535a217de60d95a59"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\primitives.py": {
+      "bytes": 13988,
+      "sha256": "7cca94eb5e14e8def808e623431bc3af3e701574e25965b2fa636506fe916774"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\registry.py": {
+      "bytes": 7348,
+      "sha256": "a829949e9c434c4a1ace0de0b7a9d4fc31bdd46d5f8b84b4cb344f69a714422d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_machining_orientation.py": {
+      "bytes": 6944,
+      "sha256": "2c91ed1e793d55cddc86b2ea3c918a3e0cf58e04c2e2622a7dd4522d4311b0f1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_templates.py": {
+      "bytes": 5693,
+      "sha256": "e176a6652830b8c5050b22cf0f8cd3a1cb99b95b9067571acc503ef95f0ab775"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py": {
+      "bytes": 24031,
+      "sha256": "13bc1ed5835e56fedc77b7e5a3d02e74040548edadc702bfee7d810fdf7e6a39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\shape_aware_nesting.py": {
+      "bytes": 83372,
+      "sha256": "4b3025b22e264ef1b4da2553f9bb3b616afb0c7e16992a049c67db6d7a0ff5e3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\sheet_edge_trim.py": {
+      "bytes": 13234,
+      "sha256": "d73a02a53e794d95b4dd2fa1ebbbddf998ee434fabadff7fccfa1acd905f4ec0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\small_piece_safety.py": {
+      "bytes": 3406,
+      "sha256": "3b3a62b5bb7f22056988f11ffaa27879dbd4b00028c192b7612b59c272f77385"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\special_addon_match.py": {
+      "bytes": 14123,
+      "sha256": "2d85e560e833ca50b67f895838a20995275dd4f7715a7ec987e78cdc6a15b902"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\__init__.py": {
+      "bytes": 1147,
+      "sha256": "b04f496041e0c2c1c4be0b302b3a1a4472d6ac53503ca4f6a5b0a94a5dd4df92"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\guillotine.py": {
+      "bytes": 5110,
+      "sha256": "7f9e7453342f4e7bc969874db1b483a8cf8ea8e8aad7ceebf65c3c44b0bddd75"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\maxrects.py": {
+      "bytes": 5611,
+      "sha256": "e65fe5b61f50d725c86413011378d54f0a926b95ecc54b53325114242e112ffd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\shelf.py": {
+      "bytes": 10998,
+      "sha256": "721ea0cce70b6d9d126bdd6766eafc6176664864b3e95cc8339d21747c93cc30"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\skyline.py": {
+      "bytes": 6130,
+      "sha256": "59c0390a5ab43c6d1755c7d664caa8b0153d2438095a85b49a918d0b0eb8060c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\__init__.py": {
+      "bytes": 52,
+      "sha256": "59e3b1360f68e08fc3c8ff4ea02af4d71fd295dfc43c8ee714681326c3dcd796"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\domain_engine.py": {
+      "bytes": 2524,
+      "sha256": "c9ce0cfe0d36fc50217ff71a413fca39fc804f847b18e4033bbdd580141a7156"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\dxf_reader.py": {
+      "bytes": 13869,
+      "sha256": "384057bdd4371a379585e9b2d3eb8ae431d34b6196785d60cf2974ef749e1d13"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\almdina_erp\\tests\\test_fixed_board_layout_search.py": {
+      "bytes": 9389,
+      "sha256": "6755057a8e2d5bd6ea16a9843ce567921129b9c61adf7b49c1e55d42523f0e3d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\scripts\\alns_dxf_inputs.py": {
+      "bytes": 7041,
+      "sha256": "a8773aa7ece8731fa8e374644f0e03b26bded4ced2e6dc092d22c7c5be567a38"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\scripts\\alns_research.py": {
+      "bytes": 16179,
+      "sha256": "1f01ee9289ae530b280fa543bfb90742503484bf0f74360262b22496a00ea535"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\scripts\\benchmark_alns.py": {
+      "bytes": 11167,
+      "sha256": "7cecaccc83c5874ca5470a9154928f8db83f3a09bb9b893fbe9b187b0c8f7bb6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\final\\scripts\\benchmark_fixed_board_layout.py": {
+      "bytes": 9528,
+      "sha256": "814596bbd30d8d534fdcf8e4571d9340e71b124ed530177f336c61c6af5165d1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\__init__.py": {
+      "bytes": 61,
+      "sha256": "39f130f478fac1a5350f16d22baef6be1f46cbad380b03c08c2b9056989da52c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\execution_trace.py": {
+      "bytes": 7000,
+      "sha256": "7ef60e10ae1834021036ccba1e330656fc6f8567481bb4d9427520835dcd742f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\optimize_order_plan.py": {
+      "bytes": 30589,
+      "sha256": "f92ab1796389d89a0df56517f0b49474f61e869bbd82fb125c37d23c1db6cc39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\plan_preview_session.py": {
+      "bytes": 4574,
+      "sha256": "e37680d62399238d4a3be5748837c3ac8d3b9a4a82b294708962cf99c6e89b68"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\plan_reuse.py": {
+      "bytes": 2838,
+      "sha256": "243177a9fcff040e25db6d47bcdc35871d643dcbd26672857a684bda5089b784"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\plan_revisions.py": {
+      "bytes": 3501,
+      "sha256": "2417e0d75a308baec41780989a083500d96f7165207f6ab4e85ab6475aaa5897"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\refresh_plan_metadata.py": {
+      "bytes": 2330,
+      "sha256": "db53933495f924979bcf53ab89837d644eccd164b47fd6cfbc5ab706f2a6ee39"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\system_plan_recalculation_job.py": {
+      "bytes": 5684,
+      "sha256": "7c27c65afa5ef1a28e15f7b0ccabf01977e9a3a8d130c4a17dfd93dca20cd4e4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\application\\cutting\\version.py": {
+      "bytes": 68,
+      "sha256": "0d0cef8cf54742c99d6bac0c85a2fcec9f910c6337edbac33826d1c94f671871"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\__init__.py": {
+      "bytes": 2785,
+      "sha256": "cae4a5f8243ce1e36e72b2052eb5dfa3b10a3c9d26069dc0d51cafdf1b3a0394"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\abc_search.py": {
+      "bytes": 6744,
+      "sha256": "8d80e7179fc8369ca64c6734174d70a11de39feaa45bdf0350248e1670f216f3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\adaptive_trim.py": {
+      "bytes": 7294,
+      "sha256": "6413beb20e62bc8471207d81bb1434d22380a5b6b444a9349a1735159855dd1e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\catalog.py": {
+      "bytes": 8321,
+      "sha256": "cf9d37ff9fe602e9bde0fda16770bb215a9a9785b16c641b9a098ffefdccefa2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\corner_contour_rotation.py": {
+      "bytes": 20616,
+      "sha256": "aa7ab00e0a02115db5eb13017fe2d5a80e46699c63148eadea2182774ff8c9db"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\cut_line_quality.py": {
+      "bytes": 6366,
+      "sha256": "6465e2896cbeadfa5b42bb326c7900f1a0463b176e30a1bc68322db07854048d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\cutter_center_paths.py": {
+      "bytes": 14471,
+      "sha256": "2494de9a10f1cf68364c593462bc3a4e1d7e1aee7c5ab4be8d28901aecdad4ce"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_applied_trim.py": {
+      "bytes": 10978,
+      "sha256": "830f14bf847c3c7cede830a3e1f5f952c6c9baba7c48a095f6d080f92e15c938"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_default_layer.py": {
+      "bytes": 4377,
+      "sha256": "b302f08afbe7254689f9dd2b2ca4151a6d75d97d3888a147c342f773dfd48de6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry.py": {
+      "bytes": 13100,
+      "sha256": "ba1944771f3121fc9a466a6b571f405c71c0f1fff0866ffa0c82bd795f9eea9e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry_snapshot.py": {
+      "bytes": 18056,
+      "sha256": "faf810097d293229c0cc10dc96a9cc1906d874c2b3e1c714974d3d2ee6cb7ccd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_issue.py": {
+      "bytes": 17217,
+      "sha256": "fef834aba6946b6e7edb07cbdbaf2f6544a707a29d2254ef7516fd51a17bb7d7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_text_labels.py": {
+      "bytes": 3181,
+      "sha256": "128a81379cb757e66da6b1d9680e45fa73e23085bbba1702079f064ac5bf6c56"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\dxf_topology.py": {
+      "bytes": 50633,
+      "sha256": "a1d2a28d96c8ea667ef9b2b7526f0666b4c7ec52813051df93e656ae5feb1f55"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\evaluation.py": {
+      "bytes": 16360,
+      "sha256": "0ab37caca5a0c53a797ddc96186b282490d4f2775d088cc2172b2392493f118f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\extra_overlays.py": {
+      "bytes": 13662,
+      "sha256": "d6cbcc6f347cc12c9ecce37294075a1973f6fb230ae7c5d52550de07a43427fe"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\final_cut_line_alignment.py": {
+      "bytes": 31853,
+      "sha256": "9dbc241900238fdcf780e02fb9546b10828a5ce7407c4dd4dd5c6ec54667617b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\geometry_nesting.py": {
+      "bytes": 18473,
+      "sha256": "09ca5bd061d5ec91c8238d6ffb1cab4ecb754abc41c4744f961eb4391de6809e"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_dxf.py": {
+      "bytes": 21946,
+      "sha256": "0b9c101100d7f8bbbb15fe9a57d9aa53782c7c9568cb039781b95e96bbebc7fd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_nesting.py": {
+      "bytes": 50868,
+      "sha256": "c86d914b5552b607d9d0b1fc80db3d1677665c7d4b72586d5090d40f3a18534d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\joint_nesting.py": {
+      "bytes": 11368,
+      "sha256": "65242d4410fd84dae23dfd3c561e7fc25cd738c357daa0a7eb2c866ccf2b21b7"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\kerf_layout.py": {
+      "bytes": 5617,
+      "sha256": "2a29b6f03cf8f297d3a3d6cdab986b7dad5350f5185b5a0370b82ad05747c3b1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\layout_diagnostics.py": {
+      "bytes": 2396,
+      "sha256": "fc9ea03182b5787c41daeb99e48d14456741b4f4bd07e0cba42ddcbb2c6fbe94"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\liner_geometry.py": {
+      "bytes": 94854,
+      "sha256": "50261da1ea670f316d8bff3a90e240a5e99d136a837f579af014476385ca9a98"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\machining_overlay.py": {
+      "bytes": 7803,
+      "sha256": "cb87e58703b48ad91652a4ff9eaa3214e4e8fcb4dad30a58150e9385ad8abae9"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\manufacturing_requirements.py": {
+      "bytes": 7528,
+      "sha256": "651f6ab485efed9c53506b51f1a2b54f45038aeba6b8b6141e5e435473b7c685"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\nesting_consolidation.py": {
+      "bytes": 47267,
+      "sha256": "2daf612c43ebc94b8a86c719429649fab56b972ae130961b1b444e3ff6eeee6f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\offcut_policy.py": {
+      "bytes": 21117,
+      "sha256": "6e930defbd4dedaf8216208e32ef5300458876e81ccc7681207ff0cad82ff766"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\optimizer.py": {
+      "bytes": 60869,
+      "sha256": "0b1a8f241b22be611112ba75fb130d087c745aaf7713f9819828d5566f4a829c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\physical_execution_contract.py": {
+      "bytes": 2495,
+      "sha256": "7cda7ee76182c91c247ba8c32b82957a21e3535f4d14687ab94c6bb3904dc366"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\piece_cut_dimensions.py": {
+      "bytes": 11394,
+      "sha256": "d2675c81734c3b08439a617d6f62dfa47250f72cad711773f477adc744de68d6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\placement_orientation.py": {
+      "bytes": 4825,
+      "sha256": "f765ccab49866615a35825122ace4bc482ca4f61fd290f5e675c2b8ff1ea5398"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_fingerprint_contract.py": {
+      "bytes": 9947,
+      "sha256": "ee3f7cf05fd47bee67d38fdc4750c2fb7397b3c235cc75cca36aba76b980d056"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_freshness.py": {
+      "bytes": 4399,
+      "sha256": "7ea499ca00a8ede70b7d9ac72509e5fea8fe2d173f70cf84b24a976d466384ad"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_lifecycle.py": {
+      "bytes": 3994,
+      "sha256": "94473a612452ea26f2ff338abc2c1ddaa34efef2b58bdf5b57f85a9535babad0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_portfolio.py": {
+      "bytes": 9997,
+      "sha256": "1fe1600db4ec3dd7b9c36ea42adccf28f13f29e2830a89c1090834dfb4a79bb0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_search.py": {
+      "bytes": 48170,
+      "sha256": "e5ebcaa8dfca7ab835ed056d6c3b7c5d09d01a2ccf3ddbb83bc077e94c359c3f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\plan_settings.py": {
+      "bytes": 5575,
+      "sha256": "773ff155830a56be7600041d0817820870f2f29c8f81b7d535a217de60d95a59"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\primitives.py": {
+      "bytes": 13988,
+      "sha256": "7cca94eb5e14e8def808e623431bc3af3e701574e25965b2fa636506fe916774"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\registry.py": {
+      "bytes": 7348,
+      "sha256": "a829949e9c434c4a1ace0de0b7a9d4fc31bdd46d5f8b84b4cb344f69a714422d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_machining_orientation.py": {
+      "bytes": 6944,
+      "sha256": "2c91ed1e793d55cddc86b2ea3c918a3e0cf58e04c2e2622a7dd4522d4311b0f1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\regular_templates.py": {
+      "bytes": 5693,
+      "sha256": "e176a6652830b8c5050b22cf0f8cd3a1cb99b95b9067571acc503ef95f0ab775"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py": {
+      "bytes": 23880,
+      "sha256": "d5b503e7f924a5026654850d77b18da4811196779e2a9beb650efc7ba60d06be"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\shape_aware_nesting.py": {
+      "bytes": 83372,
+      "sha256": "4b3025b22e264ef1b4da2553f9bb3b616afb0c7e16992a049c67db6d7a0ff5e3"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\sheet_edge_trim.py": {
+      "bytes": 13234,
+      "sha256": "d73a02a53e794d95b4dd2fa1ebbbddf998ee434fabadff7fccfa1acd905f4ec0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\small_piece_safety.py": {
+      "bytes": 3406,
+      "sha256": "3b3a62b5bb7f22056988f11ffaa27879dbd4b00028c192b7612b59c272f77385"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\special_addon_match.py": {
+      "bytes": 14123,
+      "sha256": "2d85e560e833ca50b67f895838a20995275dd4f7715a7ec987e78cdc6a15b902"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\__init__.py": {
+      "bytes": 1147,
+      "sha256": "b04f496041e0c2c1c4be0b302b3a1a4472d6ac53503ca4f6a5b0a94a5dd4df92"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\guillotine.py": {
+      "bytes": 5110,
+      "sha256": "7f9e7453342f4e7bc969874db1b483a8cf8ea8e8aad7ceebf65c3c44b0bddd75"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\maxrects.py": {
+      "bytes": 5611,
+      "sha256": "e65fe5b61f50d725c86413011378d54f0a926b95ecc54b53325114242e112ffd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\shelf.py": {
+      "bytes": 10998,
+      "sha256": "721ea0cce70b6d9d126bdd6766eafc6176664864b3e95cc8339d21747c93cc30"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\skyline.py": {
+      "bytes": 6130,
+      "sha256": "59c0390a5ab43c6d1755c7d664caa8b0153d2438095a85b49a918d0b0eb8060c"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\__init__.py": {
+      "bytes": 52,
+      "sha256": "59e3b1360f68e08fc3c8ff4ea02af4d71fd295dfc43c8ee714681326c3dcd796"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\domain_engine.py": {
+      "bytes": 2524,
+      "sha256": "c9ce0cfe0d36fc50217ff71a413fca39fc804f847b18e4033bbdd580141a7156"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\almdina_erp\\infrastructure\\cutting\\dxf_reader.py": {
+      "bytes": 13869,
+      "sha256": "384057bdd4371a379585e9b2d3eb8ae431d34b6196785d60cf2974ef749e1d13"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\almdina_erp\\tests\\test_fixed_board_layout_search.py": {
+      "bytes": 9389,
+      "sha256": "6755057a8e2d5bd6ea16a9843ce567921129b9c61adf7b49c1e55d42523f0e3d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\scripts\\alns_dxf_inputs.py": {
+      "bytes": 7041,
+      "sha256": "a8773aa7ece8731fa8e374644f0e03b26bded4ced2e6dc092d22c7c5be567a38"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\scripts\\alns_research.py": {
+      "bytes": 16179,
+      "sha256": "1f01ee9289ae530b280fa543bfb90742503484bf0f74360262b22496a00ea535"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\scripts\\benchmark_alns.py": {
+      "bytes": 11167,
+      "sha256": "7cecaccc83c5874ca5470a9154928f8db83f3a09bb9b893fbe9b187b0c8f7bb6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\source-snapshots\\replay-v1\\scripts\\benchmark_fixed_board_layout.py": {
+      "bytes": 9528,
+      "sha256": "814596bbd30d8d534fdcf8e4571d9340e71b124ed530177f336c61c6af5165d1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\summary.json": {
+      "bytes": 26007,
+      "sha256": "ea70ebf1c55be8cf025ebf321681e79bff3a3183ddc6952366135a3ce4544be5"
+    },
+    "docs\\evidence\\alns-fixed-boards\\unit-01.xml": {
+      "bytes": 5085,
+      "sha256": "72ba614ad1f8404a4226722094f15ee89eabcb04c9d076a11ee93d13f63c9fd2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\unit-02.xml": {
+      "bytes": 10183,
+      "sha256": "4236816a0505d24e7bed9ec953b1b8688299ba068e20b5791defc1cac32b18c6"
+    },
+    "docs\\evidence\\alns-fixed-boards\\unit-03.xml": {
+      "bytes": 3800,
+      "sha256": "664c7a2bfbbf2d2b4e0ff529f076b97418bcde7e5a9f7eebf95cac34b5973b0b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-aa-r0.json": {
+      "bytes": 275186,
+      "sha256": "bd06ff5dc1477bd76014c7b9d230b84c7cba4994e6ea9a0e950bf6d0b6be4e4f"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-aa-r1.json": {
+      "bytes": 275190,
+      "sha256": "22944684071a9c4c7127303edd7c868563c80b3d0add4abb51993846eab6bf04"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-adaptive-r0.json": {
+      "bytes": 325566,
+      "sha256": "6ef88dbd7f97e3d1d489161917a47f3c92873507865b29b57b1905d6fc2750f2"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-adaptive-r1.json": {
+      "bytes": 325563,
+      "sha256": "fe224ab24afe895e027fc4f87eea88ccd4cfa7407b8df9469710db8f0c6ac3fd"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-baseline-r0.json": {
+      "bytes": 275197,
+      "sha256": "d035a5ea6f26a81bd8829086859a0575fc37b0ce6baae71f3d12404e83e45853"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-baseline-r1.json": {
+      "bytes": 275195,
+      "sha256": "efbe87bd7f123e80b720551cbe3f56f03962f11ea916fc6cb230933fc1920216"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-fixed-r0.json": {
+      "bytes": 326388,
+      "sha256": "9bc40802a384c51d38ac4001f56fcd5992d7c0c4ec57917776bf6bc42813d18b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\263-fixed-r1.json": {
+      "bytes": 326389,
+      "sha256": "0692564fb8dafa0201ec3c94daf2d3b71a639937dbc7a5e814071360a65b7752"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-aa-r0.json": {
+      "bytes": 389191,
+      "sha256": "4f6b226667c4a724d8ac91fd93f7eac20fbade033362aa059ad745a781a315b1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-aa-r1.json": {
+      "bytes": 389190,
+      "sha256": "7d5e37cc4c34b20c0e4d78e1707adffdc79db2152dc9f4203b56c5e20dcdcce1"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-adaptive-r0.json": {
+      "bytes": 817802,
+      "sha256": "9ef751fab9c6d04f2d7464cdace836f242488a12113b2af4a125f8e83054d154"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-adaptive-r1.json": {
+      "bytes": 817828,
+      "sha256": "ee6b07539c6e0c0e9702689eac9ca2e6c30ffab64540eba13e2bf41eac6e054b"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-baseline-r0.json": {
+      "bytes": 389198,
+      "sha256": "2ebf4df639d40ee368363bbf8da9ee0a5b168b6498831932514784763ff6cee4"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-baseline-r1.json": {
+      "bytes": 389197,
+      "sha256": "3c46f18b4515ba22a673b187b6f5ad322beeb91ac039a4866852c9614fdc97c0"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-fixed-r0.json": {
+      "bytes": 818139,
+      "sha256": "e58bafc553728570cc7f03105ee3b9903145d312e29c2b16cb7c26e03d06d23d"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\298-fixed-r1.json": {
+      "bytes": 818132,
+      "sha256": "9d2c918ec727670e6e8fae15d92403473513f48714f543f4c1999c2b06e2a730"
+    },
+    "docs\\evidence\\alns-fixed-boards\\with-alignment\\index.json": {
+      "bytes": 26666,
+      "sha256": "d05c2011b501a21e5826ecdad0e4d5c015e4bf837e099326ad23e00caa1bd492"
+    }
+  }
+}

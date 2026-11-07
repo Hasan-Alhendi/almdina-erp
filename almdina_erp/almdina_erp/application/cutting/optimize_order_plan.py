@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
 )
 from almdina_erp.almdina_erp.domain.cutting.evaluation import placement_permission_errors
 from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
+from almdina_erp.almdina_erp.domain.cutting.abc_search import ABCSearchPolicy
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_dxf import placed_glass_hole_mm
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
@@ -51,6 +52,7 @@ class CuttingPlanEngine(Protocol):
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
         mirroring_allowed: bool = False,
+        research_abc: ABCSearchPolicy | None = None,
     ) -> dict[str, Any]: ...
 
     def validate(
@@ -100,6 +102,10 @@ class OptimizerOptions:
     min_remnant_area_m2: float
     max_centerable_edge_gap_cm: float = 5.0
     alignment_search_budget_sec: float = 1.0
+    research_abc: ABCSearchPolicy | None = None
+    alns_search_budget_sec: float = 0.0
+    pattern_search_budget_sec: float = 0.0
+    corner_search_budget_sec: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +171,12 @@ def optimize_order_plan(
     plan = preferred_plan
 
     raw_candidates = plan.pop('smart_candidates', []) if smart else []
+    # Internal research nominees never replace native warm finalists before
+    # real Application projection. No RPC/settings surface enables this path.
+    research_candidates = plan.pop('smart_research_candidates', []) if smart else []
+    native_count = len(raw_candidates)
+    if command.optimizer.research_abc is not None and command.optimizer.research_abc.retention:
+        raw_candidates = [*raw_candidates, *research_candidates[:1]]
     # A shared, finite allowance across the gallery; never extend native search.
     # Begin the shared tail allowance when the first alignment actually starts.
     alignment_budget = {"deadline": None}
@@ -174,7 +186,7 @@ def optimize_order_plan(
     for candidate_index, raw in enumerate(raw_candidates):
         # Reserve a fair portion of the shared tail allowance for every
         # displayed candidate, without extending the total elapsed deadline.
-        alignment_budget["remaining_candidates"] = len(raw_candidates) - candidate_index
+        alignment_budget["remaining_candidates"] = max(1, native_count - candidate_index)
         result = _snapshot_outcome(command,engine,deepcopy(raw),expanded,applied_trim,trim_decision,plan_settings,
                                    alignment_budget=alignment_budget)
         if result.snapshot['validation']['is_valid']:
@@ -210,7 +222,79 @@ def optimize_order_plan(
             if signature not in seen:
                 seen.add(signature)
                 unique.append(snapshot)
-        snapshots = unique
+        snapshots = unique[:5]
+        # Preserve the completed native gallery, including its full alignment
+        # allowance. Refinement has its own *additional*, bounded stage; it
+        # never steals discoveries or alignment time from this incumbent.
+        configured_alns = command.optimizer.alns_search_budget_sec
+        alns_seconds = (min(10.0, configured_alns, max(0.0, command.optimizer.time_limit_sec))
+                        if math.isfinite(configured_alns) and configured_alns > 0 else 0.0)
+        alns_trace = None
+        extra_records = []
+        configured_patterns = command.optimizer.pattern_search_budget_sec
+        pattern_seconds = (min(10.0, configured_patterns, max(0.0,command.optimizer.time_limit_sec))
+            if math.isfinite(configured_patterns) and configured_patterns>0 else 0.0)
+        formation_seeds = []
+        if snapshots and raw_seeds and alns_seconds > 0:
+            additions, alns_trace = _refine_smart_gallery(command, engine, expanded,
+                raw_seeds[0], snapshots[0], applied_trim, trim_decision, plan_settings, alns_seconds,
+                formation_seeds=formation_seeds if pattern_seconds>0 else None)
+            if additions:
+                extra_records.extend(additions)
+                native_by_signature = {geometry_signature(snapshot): seed for snapshot, seed in reversed(ranked)}
+                records = [(snapshot, native_by_signature[geometry_signature(snapshot)]) for snapshot in snapshots]
+                records.extend(additions)
+                keys = final_system_sort_keys([snapshot for snapshot, _ in records])
+                ordered = [record for _, record in sorted(zip(keys, records), key=lambda item: item[0])]
+                seen = set()
+                selected = []
+                for snapshot, seed in ordered:
+                    signature = geometry_signature(snapshot)
+                    if signature not in seen:
+                        seen.add(signature)
+                        selected.append((snapshot, seed))
+                snapshots = [snapshot for snapshot, _ in selected[:5]]
+                # Keep visible seed correspondence first, then remaining native
+                # warm discoveries. Continuation still receives at most five.
+                raw_seeds = [seed for _, seed in selected[:5]] + raw_seeds
+        pattern_trace = None
+        if snapshots and raw_seeds and pattern_seconds>0:
+            additions,pattern_trace = _refine_pattern_gallery(command,engine,expanded,raw_seeds,
+                snapshots[0],applied_trim,trim_decision,plan_settings,pattern_seconds,formation_seeds)
+            if additions:
+                extra_records.extend(additions)
+                seed_by_signature = {geometry_signature(s):r for s,r in [*ranked,*extra_records]}
+                records = [(s,seed_by_signature[geometry_signature(s)]) for s in snapshots]
+                records.extend(additions)
+                keys = final_system_sort_keys([s for s,_ in records])
+                selected,seen = [],set()
+                for _,record in sorted(zip(keys,records),key=lambda item:item[0]):
+                    signature = geometry_signature(record[0])
+                    if signature not in seen:
+                        seen.add(signature)
+                        selected.append(record)
+                snapshots = [s for s,_ in selected[:5]]
+                raw_seeds = [r for _,r in selected[:5]] + raw_seeds
+        corner_trace = None
+        configured_corners=command.optimizer.corner_search_budget_sec
+        corner_seconds=(min(10.0,configured_corners,max(0.,command.optimizer.time_limit_sec))
+            if math.isfinite(configured_corners) and configured_corners>0 else 0.)
+        if (snapshots and raw_seeds and corner_seconds>0
+                and any(p.get('piece_type') in {'L-Shaped Corner','Clipped Corner'} for p in expanded)):
+            additions,corner_trace=_refine_pattern_gallery(command,engine,expanded,raw_seeds,
+                snapshots[0],applied_trim,trim_decision,plan_settings,corner_seconds,corner_only=True)
+            if additions:
+                seed_by_signature={geometry_signature(s):r for s,r in [*ranked,*extra_records]}
+                records=[(s,seed_by_signature[geometry_signature(s)]) for s in snapshots]+additions
+                keys=final_system_sort_keys([s for s,_ in records])
+                selected,seen=[],set()
+                for _,record in sorted(zip(keys,records),key=lambda item:item[0]):
+                    signature=geometry_signature(record[0])
+                    if signature not in seen:
+                        seen.add(signature)
+                        selected.append(record)
+                snapshots=[s for s,_ in selected[:5]]
+                raw_seeds=[r for _,r in selected[:5]]+raw_seeds
         if snapshots:
             outcome = replace(
                 outcome,
@@ -223,7 +307,130 @@ def optimize_order_plan(
         outcome.snapshot['search_time_limit_sec'] = command.optimizer.time_limit_sec
         outcome.snapshot['total_elapsed_sec'] = round(time.monotonic()-started,3)
         outcome.snapshot['smart_search']['trim_evaluations'] = 1
+        if alns_trace is not None:
+            outcome.snapshot['smart_search']['alns'] = alns_trace
+        if pattern_trace is not None:
+            outcome.snapshot['smart_search']['pattern_search'] = pattern_trace
+        if corner_trace is not None:
+            outcome.snapshot['smart_search']['corner_search'] = corner_trace
     return replace(outcome,candidate_snapshots=tuple(snapshots),search_seeds=tuple(raw_seeds))
+
+
+def _refine_smart_gallery(command, engine, expanded, raw, incumbent, applied_trim,
+                          trim_decision, plan_settings, seconds, *, formation_seeds=None):
+    """One shared refinement deadline, then the existing snapshot/validation port.
+
+    Called for a new System calculation only. Saved/uploaded snapshots are never
+    loaded here. A proposal that projects worse cannot remove the native winner.
+    """
+    from almdina_erp.almdina_erp.domain.cutting.same_count_layout_search import material_signature
+    from almdina_erp.almdina_erp.domain.cutting.system_layout_refinement import refine_system_layout
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    board = command.board
+    started = time.monotonic()
+    deadline = started + seconds
+    width = applied_trim.usable_width_cm(full_width_cm=board.full_width_cm)
+    height = applied_trim.usable_length_cm(full_length_cm=board.full_length_cm)
+    projection_reserve = min(1.5, seconds*.15)
+    def collect(skeleton):
+        if len(formation_seeds)<12:
+            formation_seeds.append(skeleton)
+    proposals, trace = refine_system_layout(raw, expanded, width, height, board.kerf_cm,
+        deadline=deadline-projection_reserve, machine_type=command.optimizer.machine_type,
+        mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+            min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+            min_remnant_area_m2=command.optimizer.min_remnant_area_m2),
+        **({'pattern_sink':collect} if formation_seeds is not None else {}))
+    original = material_signature(raw)
+    # Reserve projection time cooperatively within the same stage deadline.
+    # Completed Domain improvements remain available at expiry: validation is
+    # atomic and may finish after the cooperative deadline, as in native search.
+    additions = []
+    for index, proposal in enumerate(proposals[1:]):
+        if index and time.monotonic() >= deadline:
+            break
+        if material_signature(proposal) == original:
+            continue
+        configured_alignment = command.optimizer.alignment_search_budget_sec
+        alignment_share = (min(.15, configured_alignment) if math.isfinite(configured_alignment)
+                           and configured_alignment > 0 else 0.0)
+        result = _snapshot_outcome(command, engine, deepcopy(proposal), expanded,
+            applied_trim, trim_decision, plan_settings,
+            alignment_budget={"deadline": min(deadline,time.monotonic()+alignment_share),
+                              "remaining_candidates": 1})
+        if result.snapshot['validation']['is_valid']:
+            before, after = final_system_sort_keys([incumbent, result.snapshot])
+            if after < before:
+                additions.append((result.snapshot, proposal))
+    summary = {key: trace[key] for key in (
+        'attempts', 'stop', 'operators', 'weights', 'movable_pieces', 'pinned_pieces',
+        'skeletons', 'compound_attempts', 'compound_improvements') if key in trace}
+    summary.update(budget_sec=seconds, elapsed_sec=round(time.monotonic()-started, 3),
+        projected_improvements=len(additions), additional_to_native_search=True)
+    return additions, summary
+
+
+def _refine_pattern_gallery(command,engine,expanded,seeds,incumbent,applied_trim,
+                            trim_decision,plan_settings,seconds,formation_seeds=(),*,corner_only=False):
+    from almdina_erp.almdina_erp.domain.cutting.pattern_layout_search import refine_pattern_layout
+    from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import final_system_sort_keys
+    started = time.monotonic()
+    deadline = started+seconds
+    board = command.board
+    # All raw proposals use usable coordinates. Supply the physical frame for
+    # actual cutter metrics too; usable borders are not original board edges.
+    def physical_frames(plans):
+        copies = deepcopy(plans)
+        for plan in copies:
+            for sheet in plan['sheets']:
+                sheet.update(full_width_cm=board.full_width_cm,full_length_cm=board.full_length_cm,
+                    applied_trim_width_cm=applied_trim.width_trim_cm,
+                    applied_trim_length_cm=applied_trim.length_trim_cm,
+                    usable_width_cm=sheet['w'],usable_length_cm=sheet['h'])
+        return copies
+    seeds = physical_frames(seeds[:5])
+    formation_seeds = physical_frames(formation_seeds)
+    try:
+        refiner=refine_pattern_layout
+        if corner_only:
+            from almdina_erp.almdina_erp.domain.cutting.corner_frame_search import refine_corner_layout
+            refiner=refine_corner_layout
+        proposals,trace = refiner(seeds[0],seeds,expanded,
+            applied_trim.usable_width_cm(full_width_cm=board.full_width_cm),
+            applied_trim.usable_length_cm(full_length_cm=board.full_length_cm),board.kerf_cm,
+            deadline=deadline-min(1.5,seconds*.15),machine_type=command.optimizer.machine_type,
+            mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+            metric_kwargs=dict(min_remnant_width_cm=command.optimizer.min_remnant_width_cm,
+                min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
+                min_remnant_area_m2=command.optimizer.min_remnant_area_m2),
+            solver=getattr(engine,'solve_pattern_master',None),formation_seeds=formation_seeds,
+            row_solver=getattr(engine,'solve_shelf_master',None))
+    except Exception as error:
+        return [],dict(stop='refinement_error',error_type=type(error).__name__,budget_sec=seconds,
+            elapsed_sec=round(time.monotonic()-started,3),additional_to_completed_alns=True)
+    additions = []
+    for index,proposal in enumerate(proposals[1:]):
+        if index and time.monotonic()>=deadline:
+            break
+        configured = command.optimizer.alignment_search_budget_sec
+        share = min(.15,configured) if math.isfinite(configured) and configured>0 else 0.
+        try:
+            result = _snapshot_outcome(command,engine,deepcopy(proposal),expanded,applied_trim,
+                trim_decision,plan_settings,alignment_budget=dict(deadline=min(deadline,time.monotonic()+share),
+                                                               remaining_candidates=1))
+        except Exception as error:
+            trace.setdefault('projection_errors',[]).append(type(error).__name__)
+            continue
+        if result.snapshot['validation']['is_valid']:
+            before,after = final_system_sort_keys([incumbent,result.snapshot])
+            if after<before:
+                additions.append((result.snapshot,proposal))
+    trace.update(budget_sec=seconds,elapsed_sec=round(time.monotonic()-started,3),
+        projected_improvements=len(additions),additional_to_completed_alns=True)
+    if corner_only:
+        trace['additional_to_completed_patterns']=True
+    return additions,trace
 
 
 def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decision, plan_settings, *,
@@ -529,6 +736,8 @@ def _run_engine(
         min_remnant_length_cm=command.optimizer.min_remnant_length_cm,
         min_remnant_area_m2=command.optimizer.min_remnant_area_m2,
         mirroring_allowed=piece_mirroring_allowed(command.allow_piece_mirroring),
+        **({'research_abc': command.optimizer.research_abc}
+           if command.optimizer.research_abc is not None else {}),
         **({'seed_plans':command.seed_plans,'search_round':command.search_round}
            if command.seed_plans or command.search_round else {}),
     )

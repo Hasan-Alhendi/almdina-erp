@@ -1,0 +1,36 @@
+{
+  "sha": "09576ea557ac6fadac11bc3fe407d7efc3dcd4cb",
+  "branch": "feature/cutting-abc-search-20261105",
+  "python": "3.11.3 (tags/v3.11.3:f3909b8, Apr  4 2023, 23:49:59) [MSC v.1934 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "versions": {
+    "ortools": "9.15.6755",
+    "ezdxf": "1.4.5",
+    "pytest": "9.2.0"
+  },
+  "observations": 120,
+  "strict_roundtrips": 244,
+  "tests": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "330",
+    "time": "27.667",
+    "timestamp": "2026-11-05T22:26:47.475315+03:00",
+    "hostname": "DESKTOP-6CA4VOG"
+  },
+  "unchanged_existing_production_files": true,
+  "new_optional_domain_module": "almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py",
+  "post_measurement_changes": [
+    "Guard two-piece relocation when max_removed=1; default measured cap24 unchanged",
+    "Two additional resource/qualification unit tests",
+    "Explicit rejection of unsupported frozen-cohort CLI settings; measured defaults unchanged"
+  ],
+  "input_hashes": {
+    "docs\\evidence\\alns-study\\input-263.json": "886064f9cd03d15b7150ba24e33cff367f32174a451f66cdf5283c1d62cc2bb7",
+    "docs\\evidence\\alns-study\\input-298.json": "ca973fcd3c8208236e89ffa9d636ba98406d4b33e245f3a812b9f4a39c355864",
+    "docs\\evidence\\alns-study\\followup\\263-checkpoint-adaptive-r0.json": "29a6b6fb6cd1a708fbbb30cd9f0c38bf943a9af19bce47eb0826c1e84a7f659c",
+    "docs\\evidence\\alns-study\\followup\\298-checkpoint-adaptive-r0.json": "d9e4929739e7e9b738aeca28ff3c77b4c710b726c77c58e02a383a0277f3e542"
+  }
+}

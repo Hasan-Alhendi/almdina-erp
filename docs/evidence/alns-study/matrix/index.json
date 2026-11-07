@@ -1,0 +1,3092 @@
+{
+  "records": [
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "263-operational-baseline-r0.json",
+      "sha256": "0efca3899263dc40f1ff3204179b7d329b919fbde72e443b1e28dd465e9f292f",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.162781100007123,
+      "peak_rss_kib": 59712,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "aa",
+      "repeat": 0,
+      "file": "263-operational-aa-r0.json",
+      "sha256": "b4f0143820b02d015ee34eea3d5ae808c5e2bceb63ffcba4fb900cf49dfb4c57",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.218967000007979,
+      "peak_rss_kib": 59568,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "263-operational-fixed-r0.json",
+      "sha256": "00dedceddb62c80597a0326bc69820ae7cbd9f1825abd4cab6b8e99db1e0d843",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.79985549999401,
+      "peak_rss_kib": 59624,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 10
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "263-operational-adaptive-r0.json",
+      "sha256": "fee2ba10338291cef39c76590325fb356d1313fa77e63227c7d79a7e817a5549",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.84615159999521,
+      "peak_rss_kib": 59436,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 10
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "263-operational-adaptive-r1.json",
+      "sha256": "0a4ed0b81cd28d8e1ddd98dd3875fb9f83dff43b3ded95eb0ea69bc3897fa5de",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.767142700002296,
+      "peak_rss_kib": 59352,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 9
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "263-operational-fixed-r1.json",
+      "sha256": "695460d30a668547612b096e9a2e2e8f333cb0e6f34a37189bef6250d23456a5",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.7935770000040065,
+      "peak_rss_kib": 59408,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 5
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "aa",
+      "repeat": 1,
+      "file": "263-operational-aa-r1.json",
+      "sha256": "85e7fa2ab19c219d2852f20ba2c5035b8835740c1b4c4671e47a34cb4858e657",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.112832399987383,
+      "peak_rss_kib": 59460,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "263",
+      "phase": "operational",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "263-operational-baseline-r1.json",
+      "sha256": "53429ce37280162c14169c962df8b85069395ca4c1b893d96317bf83e612dec2",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.202440900000511,
+      "peak_rss_kib": 59376,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "263-checkpoint-baseline-r0.json",
+      "sha256": "677027963c880950fe2887153b148892b3b430b0a6f76fb412f9c4714e1c33eb",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 1.04975989999366,
+      "peak_rss_kib": 58036,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "board",
+      "repeat": 0,
+      "file": "263-checkpoint-board-r0.json",
+      "sha256": "a66f36455887c62709f3e8ba3ced89b9130c78c6705b5e399cdcd50966fb5dc8",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 7.6470000999979675,
+      "peak_rss_kib": 58176,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "repeat": 0,
+      "file": "263-checkpoint-repeated-r0.json",
+      "sha256": "581c44163eb77a5bd7d7b853a4a87047ea9b20666ac4a0181b1e4dddef8e32f9",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.938669600000139,
+      "peak_rss_kib": 58336,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "repeat": 0,
+      "file": "263-checkpoint-gap-r0.json",
+      "sha256": "8c7cb3e5e7f76e39c727b34addc1f499619f4deffce3a77c4764deeb719ee5d6",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.956317000003764,
+      "peak_rss_kib": 58132,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "repeat": 0,
+      "file": "263-checkpoint-disruptive-r0.json",
+      "sha256": "b8a274ce75a9081e49f3faa11a3fcd7ae23595ab3119a53250366fc9df0b00f6",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.576416899988544,
+      "peak_rss_kib": 58372,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "repeat": 0,
+      "file": "263-checkpoint-cross-r0.json",
+      "sha256": "e87b91b8a8eb16eef5ccc3f4494a3eed9b9fa56f437ab6d3d06a8ea39096865a",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.469403499999316,
+      "peak_rss_kib": 57904,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "repeat": 0,
+      "file": "263-checkpoint-geometry-r0.json",
+      "sha256": "0227a387b2412d6434ec420b9b03a3e3ba3699aec584531efbd6269f172d8ec4",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 8.017076199990697,
+      "peak_rss_kib": 58328,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "263-checkpoint-fixed-r0.json",
+      "sha256": "93db5e6a1aea941fc9a836ca304b85acfebc6e92512fcfccbbfa43f651915cd5",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 7.607090300007258,
+      "peak_rss_kib": 58612,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "263-checkpoint-adaptive-r0.json",
+      "sha256": "c293ca8807b446caa52f4b072803aebae6b34adaf402165e35016adeece51531",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.0114228000020375,
+      "peak_rss_kib": 57988,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "263-checkpoint-adaptive-r1.json",
+      "sha256": "a94c885b832d615a824e388e7052a2f46ff86de0415245f0e6a904cdeabb40a4",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.248006100009661,
+      "peak_rss_kib": 58028,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "263-checkpoint-fixed-r1.json",
+      "sha256": "fdc185659688ce92fe0c5443f4b80cfe41e7d300b72c2f7cb818f8178ea5e9f0",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.325102300004801,
+      "peak_rss_kib": 58216,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "repeat": 1,
+      "file": "263-checkpoint-geometry-r1.json",
+      "sha256": "0e2ceec72d5adfdb7f3e8bea43f965ac9e3ed85581f9c358eda4dc8852c7aad0",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.482431900003576,
+      "peak_rss_kib": 58272,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "repeat": 1,
+      "file": "263-checkpoint-cross-r1.json",
+      "sha256": "a9cb7273fd52a2ce70b4cc38f39d4f24c4200ca99d2aef9df4a47a110188db40",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 7.096037099996465,
+      "peak_rss_kib": 58460,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "repeat": 1,
+      "file": "263-checkpoint-disruptive-r1.json",
+      "sha256": "01e7f6ee110591563e94e9699e19572daec2031706936d1fc9a791c45ec4ef0c",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 6.7913695000024745,
+      "peak_rss_kib": 58732,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "repeat": 1,
+      "file": "263-checkpoint-gap-r1.json",
+      "sha256": "65853fd1345e03d345e52e3b7b4d9e8626e7f233998488a13b1b9b33c46f9af8",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.481575999991037,
+      "peak_rss_kib": 58376,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "repeat": 1,
+      "file": "263-checkpoint-repeated-r1.json",
+      "sha256": "3d3e25fa38a23ff2b5f810ce51f4b772373713e12ffe2e7c25c3dbe4e4af2900",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 5.280638600001112,
+      "peak_rss_kib": 58256,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "board",
+      "repeat": 1,
+      "file": "263-checkpoint-board-r1.json",
+      "sha256": "5edeb26ee6c67d9f95d37ea68847bb64c8f46255c7cd4944046fff2d356db9d7",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 7.282136500012712,
+      "peak_rss_kib": 58412,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "263-checkpoint-baseline-r1.json",
+      "sha256": "b365432739b8ba7c121244e504efa852c90b90ae7dd9588c6593a8ab244b21c2",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          4
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "elapsed": 0.9663182000076631,
+      "peak_rss_kib": 58244,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "298-operational-baseline-r0.json",
+      "sha256": "665e631646e7c28a991ffbd41f5b3f6581e42b2dc2f32b410076fbaaf2de8115",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 5.755296000003,
+      "peak_rss_kib": 61288,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "aa",
+      "repeat": 0,
+      "file": "298-operational-aa-r0.json",
+      "sha256": "dbf60e5bb130d2630a5dd53fe8fb9edd52c0eef97828be41aee0b099f0aed294",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 5.79032859999279,
+      "peak_rss_kib": 61440,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "298-operational-fixed-r0.json",
+      "sha256": "388d46942f5a18928c46f80c64b043dc6b17d58f2513ca9ef67d889e62bd7d5f",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          172,
+          14414.3,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 87,
+        "alignment_ratio": 0.6896551724137931,
+        "family_splits": 9,
+        "cutter_profile": [
+          113899.5,
+          121,
+          17077.5
+        ],
+        "signature": "936535b9b36630688eba817ea051bbedc5256fd024adaa58c2ed2ee008b81a7e"
+      },
+      "elapsed": 5.162287200000719,
+      "peak_rss_kib": 61092,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "298-operational-adaptive-r0.json",
+      "sha256": "e311de29c0c58d30e869e3228e2c55b6aff5410a73a69f72cb2ba5761057d343",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          172,
+          14414.3,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 87,
+        "alignment_ratio": 0.6896551724137931,
+        "family_splits": 9,
+        "cutter_profile": [
+          113899.5,
+          121,
+          17077.5
+        ],
+        "signature": "936535b9b36630688eba817ea051bbedc5256fd024adaa58c2ed2ee008b81a7e"
+      },
+      "elapsed": 5.123150099985651,
+      "peak_rss_kib": 61224,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "298-operational-adaptive-r1.json",
+      "sha256": "322ae4bb0886b3e468daf915768898f4eaa408c387445d9abf4fe7acedc1c728",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          172,
+          14414.3,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 87,
+        "alignment_ratio": 0.6896551724137931,
+        "family_splits": 9,
+        "cutter_profile": [
+          113899.5,
+          121,
+          17077.5
+        ],
+        "signature": "936535b9b36630688eba817ea051bbedc5256fd024adaa58c2ed2ee008b81a7e"
+      },
+      "elapsed": 4.991335400001844,
+      "peak_rss_kib": 61108,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "298-operational-fixed-r1.json",
+      "sha256": "402d3adc9014cd4e8e51bd103cb7f8ff280671c2fda81c7131cadea734755678",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          172,
+          14414.3,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 87,
+        "alignment_ratio": 0.6896551724137931,
+        "family_splits": 9,
+        "cutter_profile": [
+          113899.5,
+          121,
+          17077.5
+        ],
+        "signature": "936535b9b36630688eba817ea051bbedc5256fd024adaa58c2ed2ee008b81a7e"
+      },
+      "elapsed": 5.158362000001944,
+      "peak_rss_kib": 60712,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "aa",
+      "repeat": 1,
+      "file": "298-operational-aa-r1.json",
+      "sha256": "054729f6260f298603f15cf1be01bc86d316a2f875d544cd477cb4a991900beb",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 5.793141700007254,
+      "peak_rss_kib": 61052,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "operational",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "298-operational-baseline-r1.json",
+      "sha256": "32a7e97029ba6ea877f14696e955af353e57e07296b353503d27e0c9523d20ac",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 5.741486200000509,
+      "peak_rss_kib": 61232,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "298-checkpoint-baseline-r0.json",
+      "sha256": "b5177528c0456ca42fed3614581fc2f767527244f9add793291ebd77b10a55f2",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 0.8158436999947298,
+      "peak_rss_kib": 59448,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "board",
+      "repeat": 0,
+      "file": "298-checkpoint-board-r0.json",
+      "sha256": "aea536603fdf3c89e8cb885137dc154114113534110c2bb8ea207f8c421ce749",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 0.9425530000007711,
+      "peak_rss_kib": 59776,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "repeat": 0,
+      "file": "298-checkpoint-repeated-r0.json",
+      "sha256": "c8445861fba954aac1c0e2b0c0c5ff0532188be8d15a26cac3b933183024b338",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          167,
+          14529.8,
+          34,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 62,
+        "adjacent": 98,
+        "alignment_ratio": 0.6326530612244898,
+        "family_splits": 7,
+        "cutter_profile": [
+          112239.0,
+          122,
+          16355.5
+        ],
+        "signature": "8144bd9237a95e7d4aa87f2faa9995cc167cf14893fb276fc35d826e76264078"
+      },
+      "elapsed": 4.804883499993593,
+      "peak_rss_kib": 61356,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "repeat": 0,
+      "file": "298-checkpoint-gap-r0.json",
+      "sha256": "b6723edefbdfaffbe19a16aaf85768847ea7dff79d573ca0930b4474eb7610cd",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.00568,
+          169,
+          13507.9,
+          44,
+          9
+        ],
+        "reusable_m2": 2.00568,
+        "aligned": 59,
+        "adjacent": 90,
+        "alignment_ratio": 0.6555555555555556,
+        "family_splits": 11,
+        "cutter_profile": [
+          114073.0,
+          124,
+          15222.0
+        ],
+        "signature": "8ae2ebf5edb600b82d4b2b0aa3b9e0137f383121913ec4f401fab4ede62f9b24"
+      },
+      "elapsed": 5.845932500000345,
+      "peak_rss_kib": 60968,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "repeat": 0,
+      "file": "298-checkpoint-disruptive-r0.json",
+      "sha256": "8ee1ef828a37f6aaee59dd1deb2afc197a1ebdfee0e16cc117c0825222848de2",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 4.210207700001774,
+      "peak_rss_kib": 61512,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "repeat": 0,
+      "file": "298-checkpoint-cross-r0.json",
+      "sha256": "17d3410aba9235f42b76899c624d028d54a87a24b2d289bf10c447cd5138b4a7",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          181,
+          14614.2,
+          36,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 56,
+        "adjacent": 95,
+        "alignment_ratio": 0.5894736842105263,
+        "family_splits": 10,
+        "cutter_profile": [
+          113374.5,
+          128,
+          15305.5
+        ],
+        "signature": "e071841c04e5e122aa945e047a9ecebabf3eb6c00e8a657b8bde6ed39a469344"
+      },
+      "elapsed": 4.163992300003883,
+      "peak_rss_kib": 61568,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "repeat": 0,
+      "file": "298-checkpoint-geometry-r0.json",
+      "sha256": "aa6907e36509f61378f44ceca73417e972a2d279840d6121563e4324b7d336ba",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 4.16533960000379,
+      "peak_rss_kib": 61836,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "298-checkpoint-fixed-r0.json",
+      "sha256": "ebbea3acf08a95ef313c73c836ae9c4364cb9a24f280ab61b159120af9ad019c",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 2.300545999998576,
+      "peak_rss_kib": 59788,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "298-checkpoint-adaptive-r0.json",
+      "sha256": "0f4040328ec00bf1915dc0bfc3dfe200a2a798ebe285a73a5276b660903616cd",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 2.577102499999455,
+      "peak_rss_kib": 59712,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "298-checkpoint-adaptive-r1.json",
+      "sha256": "89372d04ea7130cfa6923a7616114f1fcc0b966ebbae45f2b3166c3d9ea8b910",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 2.2105889999947976,
+      "peak_rss_kib": 59792,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "298-checkpoint-fixed-r1.json",
+      "sha256": "7ec3b17ccd6909bfb93d60f6fabaf791c1f4ae6b6875876490096587a1c36382",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 2.606276099992101,
+      "peak_rss_kib": 59940,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "repeat": 1,
+      "file": "298-checkpoint-geometry-r1.json",
+      "sha256": "607ad7dcd7fbe49075e5aeba165adf4ea90141bf171155574d4a311b2f6082ff",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 4.162109299999429,
+      "peak_rss_kib": 61232,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "repeat": 1,
+      "file": "298-checkpoint-cross-r1.json",
+      "sha256": "1c688fa0cf954cafb9a765913db0bc137da4f97aef784db3e5528f97886b4725",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          181,
+          14614.2,
+          36,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 56,
+        "adjacent": 95,
+        "alignment_ratio": 0.5894736842105263,
+        "family_splits": 10,
+        "cutter_profile": [
+          113374.5,
+          128,
+          15305.5
+        ],
+        "signature": "e071841c04e5e122aa945e047a9ecebabf3eb6c00e8a657b8bde6ed39a469344"
+      },
+      "elapsed": 4.144147700004396,
+      "peak_rss_kib": 61996,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "repeat": 1,
+      "file": "298-checkpoint-disruptive-r1.json",
+      "sha256": "7412e131aea3986a4cc2dacb273a780793fa22d847e5f36ad4b5cd0c6a900ed5",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 4.9805103999970015,
+      "peak_rss_kib": 61600,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "repeat": 1,
+      "file": "298-checkpoint-gap-r1.json",
+      "sha256": "2dd3a66ec3bbcc28f2c1f7e87970a0d06f339bb046ad98a82bcd50600a8b1047",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.00568,
+          169,
+          13507.9,
+          44,
+          9
+        ],
+        "reusable_m2": 2.00568,
+        "aligned": 59,
+        "adjacent": 90,
+        "alignment_ratio": 0.6555555555555556,
+        "family_splits": 11,
+        "cutter_profile": [
+          114073.0,
+          124,
+          15222.0
+        ],
+        "signature": "8ae2ebf5edb600b82d4b2b0aa3b9e0137f383121913ec4f401fab4ede62f9b24"
+      },
+      "elapsed": 5.628329400002258,
+      "peak_rss_kib": 61024,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "repeat": 1,
+      "file": "298-checkpoint-repeated-r1.json",
+      "sha256": "257124f4e38b00b575f18b50a30a6873331c4ee89755ca0d3e4bbfe57639b1b7",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          167,
+          14529.8,
+          34,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 62,
+        "adjacent": 98,
+        "alignment_ratio": 0.6326530612244898,
+        "family_splits": 7,
+        "cutter_profile": [
+          112239.0,
+          122,
+          16355.5
+        ],
+        "signature": "8144bd9237a95e7d4aa87f2faa9995cc167cf14893fb276fc35d826e76264078"
+      },
+      "elapsed": 4.9089117999974405,
+      "peak_rss_kib": 61396,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 32
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "board",
+      "repeat": 1,
+      "file": "298-checkpoint-board-r1.json",
+      "sha256": "d8eae50aefaef8fa7a2be8caff7b80fb6b3aa6d75eeb3beed9cc3dd3e65551cd",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 0.9950955999956932,
+      "peak_rss_kib": 59612,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "298-checkpoint-baseline-r1.json",
+      "sha256": "d6626870a6f84c9393a062c0c3680ca22849b18fd11c551ab632d6e217dfb8dc",
+      "status": "completed",
+      "valid": true,
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -1.68848,
+          170,
+          14310.4,
+          43,
+          9
+        ],
+        "reusable_m2": 1.68848,
+        "aligned": 60,
+        "adjacent": 88,
+        "alignment_ratio": 0.6818181818181818,
+        "family_splits": 9,
+        "cutter_profile": [
+          113813.5,
+          120,
+          17075.0
+        ],
+        "signature": "efc60a0dbba24466bbc0877452591fd1b9a4dcef3d48a7e5def2b115e5292c5c"
+      },
+      "elapsed": 0.7370972000062466,
+      "peak_rss_kib": 59704,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        },
+        {
+          "candidate": 3,
+          "passed": true
+        },
+        {
+          "candidate": 4,
+          "passed": true
+        }
+      ],
+      "attempts": null
+    }
+  ],
+  "source_manifest": {
+    "almdina_erp\\almdina_erp\\application\\cutting\\__init__.py": "39f130f478fac1a5350f16d22baef6be1f46cbad380b03c08c2b9056989da52c",
+    "almdina_erp\\almdina_erp\\application\\cutting\\execution_trace.py": "7ef60e10ae1834021036ccba1e330656fc6f8567481bb4d9427520835dcd742f",
+    "almdina_erp\\almdina_erp\\application\\cutting\\optimize_order_plan.py": "f92ab1796389d89a0df56517f0b49474f61e869bbd82fb125c37d23c1db6cc39",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_preview_session.py": "e37680d62399238d4a3be5748837c3ac8d3b9a4a82b294708962cf99c6e89b68",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_reuse.py": "243177a9fcff040e25db6d47bcdc35871d643dcbd26672857a684bda5089b784",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_revisions.py": "2417e0d75a308baec41780989a083500d96f7165207f6ab4e85ab6475aaa5897",
+    "almdina_erp\\almdina_erp\\application\\cutting\\refresh_plan_metadata.py": "db53933495f924979bcf53ab89837d644eccd164b47fd6cfbc5ab706f2a6ee39",
+    "almdina_erp\\almdina_erp\\application\\cutting\\system_plan_recalculation_job.py": "7c27c65afa5ef1a28e15f7b0ccabf01977e9a3a8d130c4a17dfd93dca20cd4e4",
+    "almdina_erp\\almdina_erp\\application\\cutting\\version.py": "0d0cef8cf54742c99d6bac0c85a2fcec9f910c6337edbac33826d1c94f671871",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\__init__.py": "cae4a5f8243ce1e36e72b2052eb5dfa3b10a3c9d26069dc0d51cafdf1b3a0394",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\abc_search.py": "8d80e7179fc8369ca64c6734174d70a11de39feaa45bdf0350248e1670f216f3",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\adaptive_trim.py": "6413beb20e62bc8471207d81bb1434d22380a5b6b444a9349a1735159855dd1e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\catalog.py": "cf9d37ff9fe602e9bde0fda16770bb215a9a9785b16c641b9a098ffefdccefa2",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\corner_contour_rotation.py": "aa7ab00e0a02115db5eb13017fe2d5a80e46699c63148eadea2182774ff8c9db",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\cut_line_quality.py": "6465e2896cbeadfa5b42bb326c7900f1a0463b176e30a1bc68322db07854048d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\cutter_center_paths.py": "2494de9a10f1cf68364c593462bc3a4e1d7e1aee7c5ab4be8d28901aecdad4ce",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_applied_trim.py": "830f14bf847c3c7cede830a3e1f5f952c6c9baba7c48a095f6d080f92e15c938",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_default_layer.py": "b302f08afbe7254689f9dd2b2ca4151a6d75d97d3888a147c342f773dfd48de6",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry.py": "ba1944771f3121fc9a466a6b571f405c71c0f1fff0866ffa0c82bd795f9eea9e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry_snapshot.py": "faf810097d293229c0cc10dc96a9cc1906d874c2b3e1c714974d3d2ee6cb7ccd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_issue.py": "fef834aba6946b6e7edb07cbdbaf2f6544a707a29d2254ef7516fd51a17bb7d7",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_text_labels.py": "128a81379cb757e66da6b1d9680e45fa73e23085bbba1702079f064ac5bf6c56",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_topology.py": "a1d2a28d96c8ea667ef9b2b7526f0666b4c7ec52813051df93e656ae5feb1f55",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\evaluation.py": "0ab37caca5a0c53a797ddc96186b282490d4f2775d088cc2172b2392493f118f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\extra_overlays.py": "d6cbcc6f347cc12c9ecce37294075a1973f6fb230ae7c5d52550de07a43427fe",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\final_cut_line_alignment.py": "9dbc241900238fdcf780e02fb9546b10828a5ce7407c4dd4dd5c6ec54667617b",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\geometry_nesting.py": "09ca5bd061d5ec91c8238d6ffb1cab4ecb754abc41c4744f961eb4391de6809e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_dxf.py": "0b9c101100d7f8bbbb15fe9a57d9aa53782c7c9568cb039781b95e96bbebc7fd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_nesting.py": "c86d914b5552b607d9d0b1fc80db3d1677665c7d4b72586d5090d40f3a18534d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\joint_nesting.py": "65242d4410fd84dae23dfd3c561e7fc25cd738c357daa0a7eb2c866ccf2b21b7",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\kerf_layout.py": "2a29b6f03cf8f297d3a3d6cdab986b7dad5350f5185b5a0370b82ad05747c3b1",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\layout_diagnostics.py": "fc9ea03182b5787c41daeb99e48d14456741b4f4bd07e0cba42ddcbb2c6fbe94",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\liner_geometry.py": "50261da1ea670f316d8bff3a90e240a5e99d136a837f579af014476385ca9a98",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\machining_overlay.py": "cb87e58703b48ad91652a4ff9eaa3214e4e8fcb4dad30a58150e9385ad8abae9",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\manufacturing_requirements.py": "651f6ab485efed9c53506b51f1a2b54f45038aeba6b8b6141e5e435473b7c685",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\nesting_consolidation.py": "2daf612c43ebc94b8a86c719429649fab56b972ae130961b1b444e3ff6eeee6f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\offcut_policy.py": "6e930defbd4dedaf8216208e32ef5300458876e81ccc7681207ff0cad82ff766",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\optimizer.py": "0b1a8f241b22be611112ba75fb130d087c745aaf7713f9819828d5566f4a829c",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\physical_execution_contract.py": "7cda7ee76182c91c247ba8c32b82957a21e3535f4d14687ab94c6bb3904dc366",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\piece_cut_dimensions.py": "d2675c81734c3b08439a617d6f62dfa47250f72cad711773f477adc744de68d6",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\placement_orientation.py": "f765ccab49866615a35825122ace4bc482ca4f61fd290f5e675c2b8ff1ea5398",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_fingerprint_contract.py": "ee3f7cf05fd47bee67d38fdc4750c2fb7397b3c235cc75cca36aba76b980d056",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_freshness.py": "7ea499ca00a8ede70b7d9ac72509e5fea8fe2d173f70cf84b24a976d466384ad",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_lifecycle.py": "94473a612452ea26f2ff338abc2c1ddaa34efef2b58bdf5b57f85a9535babad0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_portfolio.py": "1fe1600db4ec3dd7b9c36ea42adccf28f13f29e2830a89c1090834dfb4a79bb0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_search.py": "e5ebcaa8dfca7ab835ed056d6c3b7c5d09d01a2ccf3ddbb83bc077e94c359c3f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_settings.py": "773ff155830a56be7600041d0817820870f2f29c8f81b7d535a217de60d95a59",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\primitives.py": "7cca94eb5e14e8def808e623431bc3af3e701574e25965b2fa636506fe916774",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\registry.py": "a829949e9c434c4a1ace0de0b7a9d4fc31bdd46d5f8b84b4cb344f69a714422d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\regular_machining_orientation.py": "2c91ed1e793d55cddc86b2ea3c918a3e0cf58e04c2e2622a7dd4522d4311b0f1",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\regular_templates.py": "e176a6652830b8c5050b22cf0f8cd3a1cb99b95b9067571acc503ef95f0ab775",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\shape_aware_nesting.py": "4b3025b22e264ef1b4da2553f9bb3b616afb0c7e16992a049c67db6d7a0ff5e3",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\sheet_edge_trim.py": "d73a02a53e794d95b4dd2fa1ebbbddf998ee434fabadff7fccfa1acd905f4ec0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\small_piece_safety.py": "3b3a62b5bb7f22056988f11ffaa27879dbd4b00028c192b7612b59c272f77385",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\special_addon_match.py": "2d85e560e833ca50b67f895838a20995275dd4f7715a7ec987e78cdc6a15b902",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\__init__.py": "b04f496041e0c2c1c4be0b302b3a1a4472d6ac53503ca4f6a5b0a94a5dd4df92",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\guillotine.py": "7f9e7453342f4e7bc969874db1b483a8cf8ea8e8aad7ceebf65c3c44b0bddd75",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\maxrects.py": "e65fe5b61f50d725c86413011378d54f0a926b95ecc54b53325114242e112ffd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\shelf.py": "721ea0cce70b6d9d126bdd6766eafc6176664864b3e95cc8339d21747c93cc30",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\skyline.py": "59c0390a5ab43c6d1755c7d664caa8b0153d2438095a85b49a918d0b0eb8060c",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\__init__.py": "59e3b1360f68e08fc3c8ff4ea02af4d71fd295dfc43c8ee714681326c3dcd796",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\domain_engine.py": "c9ce0cfe0d36fc50217ff71a413fca39fc804f847b18e4033bbdd580141a7156",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\dxf_reader.py": "384057bdd4371a379585e9b2d3eb8ae431d34b6196785d60cf2974ef749e1d13",
+    "scripts\\alns_dxf_inputs.py": "a8773aa7ece8731fa8e374644f0e03b26bded4ced2e6dc092d22c7c5be567a38",
+    "scripts\\alns_research.py": "ee3c11fcd4a765119f3b8c14bda6a9bf37a28e807954f04f70d75ff403a4a329",
+    "scripts\\benchmark_alns.py": "d695e58876c5fa7e2988e48184ede1b48e533c87d9479a6b7bd338cb1f98bbcf"
+  }
+}

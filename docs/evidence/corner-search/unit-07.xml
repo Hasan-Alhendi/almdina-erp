@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="10" time="4.053" timestamp="2026-11-06T21:09:42.506089+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_mixed_guest_row_escapes_native_first_fit_trap_and_keeps_real_kerf" time="1.128" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_guest_rotation_permissions_and_deadline" time="0.036" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_fresh_frames_cover_every_corner_once_and_never_reuse_guests[False]" time="0.010" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_fresh_frames_cover_every_corner_once_and_never_reuse_guests[True]" time="0.932" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_unsupported_corner_stage_returns_the_untouched_baseline" time="0.002" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_repeated_guest_bundle_is_not_starved_by_larger_single_rows" time="0.042" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_application_corner_stage_preserves_baseline_on_exception" time="0.118" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_cut_work_is_an_optional_numeric_nomination_and_keeps_legacy_height_objective" time="0.046" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_contact_repair_uses_right_hand_kerf_anchor_after_a_first_placement" time="0.002" /><testcase classname="almdina_erp.tests.test_coupled_corner_frames" name="test_coupled_guest_material_survives_real_js_and_strict_roundtrip" time="1.229"><failure message="assert [((0.0, 0.0),... 181.0)), ...] == [((0.0, 0.0),... 181.0)), ...]&#10;  &#10;  At index 0 diff: ((0.0, 0.0), (0.0, 27.0), (33.0, 70.0), (59.9, 0.0), (59.9, 70.0)) != ((0.0, 0.0), (0.0, 70.0), (26.9, 70.0), (59.9, 0.0), (59.9, 27.0))&#10;  Use -v to get more diff">tmp_path = WindowsPath('C:/Users/HorizonTech/Documents/ChatGPT/Cutting/almdina-erp-abc/.pytest_cache/corner-unit-07-temp/test_coupled_guest_material_su0')
+
+    def test_coupled_guest_material_survives_real_js_and_strict_roundtrip(tmp_path):
+        from almdina_erp.almdina_erp.domain.cutting.primitives import make_placed_piece
+        from almdina_erp.almdina_erp.domain.cutting.optimizer import enrich_plan_metrics
+        from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
+            BoardGeometry,OptimizerOptions,OptimizeOrderPlanCommand,optimize_order_plan)
+        from almdina_erp.tests.test_alns_recalculation import FrozenEngine
+        from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+        from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+        rows=[dict(row,piece_instance_id=f'smart:{i}') for i,row in enumerate(source_rows(),1)]
+        sources=expand_piece_groups(rows)
+        block=shape._take_quad(sources[:4],122,244,.5,mirroring_allowed=True)['block']
+        bundle=guest_row_blocks(block,sources,.5,122,244,deadline=time.monotonic()+2,limit=1)[0]
+        pieces=deepcopy(bundle['pieces'])
+        used={p['id'] for p in pieces}
+        x=0.
+        for p in sources:
+            if p['id'] not in used:
+                pieces.append(make_placed_piece(p,x,141,p['width_cm'],p['length_cm'],False))
+                x+=p['width_cm']+.5
+        native=enrich_plan_metrics(dict(sheets=[dict(sheet_no=1,w=122,h=244,pieces=pieces)],unplaced=[]),
+            'MaxRects Contact Point','CNC Router')
+        native.update(kerf_cm=.5,machine_type='CNC Router')
+        command=OptimizeOrderPlanCommand('coupled-test','coupled-test',BoardGeometry(122,244,0,.5),
+            OptimizerOptions('smart','CNC Router',.1,40,30,30,.09,alignment_search_budget_sec=0),
+            tuple(rows),allow_piece_mirroring=True)
+        outcome=optimize_order_plan(command,engine=FrozenEngine(native))
+        assert outcome.snapshot['validation']['is_valid']
+        imported=import_saved_plan(outcome.snapshot,rows,export_real_js(outcome.snapshot,tmp_path))
+        import json
+        (tmp_path/'before.json').write_text(json.dumps(outcome.snapshot),encoding='utf-8')
+        (tmp_path/'after.json').write_text(json.dumps(imported),encoding='utf-8')
+        from almdina_erp.almdina_erp.domain.cutting.cut_line_quality import _part_geometry
+        # Imported snapshots own explicit geometry.outer in mm; source corner
+        # fields are not the authority for their physical placed outline.
+        polygons=lambda plan:sorted(tuple(sorted((round(x,4),round(y,4)) for x,y in
+            _part_geometry(p).outer)) for s in plan['sheets'] for p in s['pieces'])
+&gt;       assert polygons(imported)==polygons(outcome.snapshot)
+E       assert [((0.0, 0.0),... 181.0)), ...] == [((0.0, 0.0),... 181.0)), ...]
+E         
+E         At index 0 diff: ((0.0, 0.0), (0.0, 27.0), (33.0, 70.0), (59.9, 0.0), (59.9, 70.0)) != ((0.0, 0.0), (0.0, 70.0), (26.9, 70.0), (59.9, 0.0), (59.9, 27.0))
+E         Use -v to get more diff
+
+almdina_erp\tests\test_coupled_corner_frames.py:167: AssertionError</failure></testcase></testsuite></testsuites>

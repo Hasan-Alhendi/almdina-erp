@@ -1,0 +1,120 @@
+initial patterns 55
+built patterns 451 seconds 5.73399999999674
+stage1 FEASIBLE
+stage2 OPTIMAL
+{
+  "case": "298",
+  "augment": true,
+  "initial_patterns": 55,
+  "total_patterns": 451,
+  "pool_build_sec": 5.73399999999674,
+  "stage1": {
+    "status": "FEASIBLE",
+    "wall_sec": 2.062000000005355,
+    "bound": 2244190.160723541
+  },
+  "stage2": {
+    "status": "OPTIMAL",
+    "wall_sec": 1.062999999994645
+  },
+  "selected": [
+    {
+      "index": 49,
+      "origin": "frozen_alns",
+      "remnant": 1.7104399999999997
+    },
+    {
+      "index": 256,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    },
+    {
+      "index": 257,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    },
+    {
+      "index": 259,
+      "origin": "regular_pool",
+      "remnant": 0.30869100000000005
+    },
+    {
+      "index": 260,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    },
+    {
+      "index": 261,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    },
+    {
+      "index": 262,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    },
+    {
+      "index": 263,
+      "origin": "regular_pool",
+      "remnant": 0.0
+    }
+  ],
+  "rejected": {},
+  "before": {
+    "boards": 8,
+    "pieces": 69,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      8,
+      0,
+      -1.71044,
+      167,
+      14741.1,
+      29,
+      9
+    ],
+    "reusable_m2": 1.7104399999999997,
+    "aligned": 59,
+    "adjacent": 94,
+    "alignment_ratio": 0.6276595744680851,
+    "family_splits": 9,
+    "cutter_profile": [
+      112423.5,
+      119,
+      16044.5
+    ],
+    "signature": "d5929b7089d1e23626993ab958be763f4e67c20ac53724720703dfae5ff9a598"
+  },
+  "after": {
+    "boards": 8,
+    "pieces": 69,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      8,
+      0,
+      -1.71044,
+      179,
+      15029.1,
+      34,
+      9
+    ],
+    "reusable_m2": 1.7104399999999997,
+    "aligned": 55,
+    "adjacent": 99,
+    "alignment_ratio": 0.5555555555555556,
+    "family_splits": 8,
+    "cutter_profile": [
+      111871.5,
+      126,
+      14398.5
+    ],
+    "signature": "8815f8f5099fd276afedf9892b3acb492c491f303a290402386a62c41986066b"
+  },
+  "strict_roundtrip": true,
+  "comparison": "better",
+  "solver_backend": "Cbc 2.10.12",
+  "script_sha256": "71f65f651237f8102a4f490a1856f2b082554a26c9d11bf00fe694aa8be0d3e7",
+  "warning": "Offline upper-potential experiment with historical multi-budget pool, not a cold/equal-budget benchmark or global optimality proof"
+}

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="18" time="4.068" timestamp="2026-11-06T01:07:12.016366+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-L-Shaped Corner]" time="0.038"><failure message="assert 0 &gt; 0">kind = 'L-Shaped Corner', mirror = False
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+        _, sources, plan = mixed_fixture(kind, mirror)
+        original = deepcopy((plan, sources))
+        candidates, trace = search.improve_fixed_board_layout(plan, sources, 10, 10, .5,
+            deadline=time.monotonic()+5, metric_kwargs=METRICS, mirroring_allowed=mirror,
+            policy=search.FixedBoardSearchPolicy(operators=('grid',), pinned_shapes=True, max_attempts=24))
+        assert trace['pinned_pieces'] == 1
+&gt;       assert trace['operators']['grid']['improvements'] &gt; 0
+E       assert 0 &gt; 0
+
+almdina_erp\tests\test_alns_recalculation.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[False-Clipped Corner]" time="0.009"><failure message="assert 0 &gt; 0">kind = 'Clipped Corner', mirror = False
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+        _, sources, plan = mixed_fixture(kind, mirror)
+        original = deepcopy((plan, sources))
+        candidates, trace = search.improve_fixed_board_layout(plan, sources, 10, 10, .5,
+            deadline=time.monotonic()+5, metric_kwargs=METRICS, mirroring_allowed=mirror,
+            policy=search.FixedBoardSearchPolicy(operators=('grid',), pinned_shapes=True, max_attempts=24))
+        assert trace['pinned_pieces'] == 1
+&gt;       assert trace['operators']['grid']['improvements'] &gt; 0
+E       assert 0 &gt; 0
+
+almdina_erp\tests\test_alns_recalculation.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-L-Shaped Corner]" time="0.009"><failure message="assert 0 &gt; 0">kind = 'L-Shaped Corner', mirror = True
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+        _, sources, plan = mixed_fixture(kind, mirror)
+        original = deepcopy((plan, sources))
+        candidates, trace = search.improve_fixed_board_layout(plan, sources, 10, 10, .5,
+            deadline=time.monotonic()+5, metric_kwargs=METRICS, mirroring_allowed=mirror,
+            policy=search.FixedBoardSearchPolicy(operators=('grid',), pinned_shapes=True, max_attempts=24))
+        assert trace['pinned_pieces'] == 1
+&gt;       assert trace['operators']['grid']['improvements'] &gt; 0
+E       assert 0 &gt; 0
+
+almdina_erp\tests\test_alns_recalculation.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_mixed_grid_improves_regulars_and_pins_corner_exactly[True-Clipped Corner]" time="0.008"><failure message="assert 0 &gt; 0">kind = 'Clipped Corner', mirror = True
+
+    @pytest.mark.parametrize('kind', ['L-Shaped Corner', 'Clipped Corner'])
+    @pytest.mark.parametrize('mirror', [False, True])
+    def test_mixed_grid_improves_regulars_and_pins_corner_exactly(kind, mirror):
+        _, sources, plan = mixed_fixture(kind, mirror)
+        original = deepcopy((plan, sources))
+        candidates, trace = search.improve_fixed_board_layout(plan, sources, 10, 10, .5,
+            deadline=time.monotonic()+5, metric_kwargs=METRICS, mirroring_allowed=mirror,
+            policy=search.FixedBoardSearchPolicy(operators=('grid',), pinned_shapes=True, max_attempts=24))
+        assert trace['pinned_pieces'] == 1
+&gt;       assert trace['operators']['grid']['improvements'] &gt; 0
+E       assert 0 &gt; 0
+
+almdina_erp\tests\test_alns_recalculation.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_pinned_mirror_is_not_implicitly_authorized" time="0.004" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_generator_cannot_move_a_pinned_shape_even_if_bounds_still_fit" time="0.009" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0]" time="1.596" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_application_real_refinement_is_no_worse_and_roundtrips[0.3]" time="0.794" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[0]" time="0.009" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[-1]" time="0.010" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[nan]" time="0.011" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_disabled_or_invalid_allowance_cannot_start_refinement[inf]" time="0.012" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_fast_calculation_does_not_call_alns" time="0.008" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_invalid_proposal_cannot_replace_the_completed_native_snapshot" time="0.021" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_stage_budget_is_capped_and_is_additional_to_native" time="0.009" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[False]" time="0.526" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag[True]" time="0.405" /><testcase classname="almdina_erp.tests.test_alns_recalculation" name="test_global_refill_keeps_real_identity_and_its_whole_pool_cap" time="0.022" /></testsuite></testsuites>
