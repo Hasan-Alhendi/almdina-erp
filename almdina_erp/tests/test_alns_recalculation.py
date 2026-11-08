@@ -174,7 +174,7 @@ def test_recalculate_workspace_wires_the_actual_stage_and_order_mirror_flag(monk
     monkeypatch.setattr(workspace, '_board_dimensions_mm', lambda order: (100,100))
     monkeypatch.setattr(workspace, '_validated_plan_settings', lambda plan: PlanSettings('smart','CNC Router',5,5,0))
     monkeypatch.setattr(workspace, 'plan_input_fingerprint', lambda *a, **k: 'current-inputs')
-    monkeypatch.setattr(workspace, '_piece_rows', lambda order: tuple(rows))
+    monkeypatch.setattr(workspace, '_piece_rows', lambda order, plan=None: tuple(rows))
     monkeypatch.setattr(workspace, 'domain_cutting_engine', FrozenEngine(plan))
     applied = []
     commands=[]

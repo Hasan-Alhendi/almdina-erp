@@ -611,6 +611,9 @@
     function simplifyActions(frm) {
         const wrapper = actionWrapper(frm);
         if (!wrapper || !workspaceReady(frm)) return;
+        // Retired algorithm shortcuts must not reappear beside the one
+        // current-settings recalculation action on a refreshed plan tab.
+        wrapper.find(DUPLICATED_ACTIONS).remove();
         syncRecalculateButton(frm);
     }
 
