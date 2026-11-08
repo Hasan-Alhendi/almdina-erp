@@ -244,7 +244,7 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         from almdina_erp.tests.geometry_nesting_cases import source_rows
         from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
         band='P5-BAND-'+frappe.generate_hash(length=10)
-        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0,disabled=0))
+        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0.1,disabled=0))
         try:
             rows=source_rows('P5-addon-ambiguous')
             rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
