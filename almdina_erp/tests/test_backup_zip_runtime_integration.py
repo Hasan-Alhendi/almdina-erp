@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils.backups import get_backup_path
+from frappe.utils.password import get_encryption_key
 
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import FrappeBackupEngine
 from almdina_erp.almdina_erp.infrastructure.backups.history import DOCTYPE, FrappeBackupHistory
@@ -16,6 +17,9 @@ from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import (
 class TestBackupZipRuntimeIntegration(FrappeTestCase):
     def test_native_backup_download_import_and_restore_eligibility(self):
         frappe.set_user("Administrator")
+        # A restorable site must have its original key; Frappe creates it on first use.
+        get_encryption_key()
+        live_config = Path(frappe.get_site_path("site_config.json")).read_bytes()
         engine = FrappeBackupEngine(ephemeral=True)
         operation_id = ""
         bundle = None
@@ -42,6 +46,7 @@ class TestBackupZipRuntimeIntegration(FrappeTestCase):
                                  {"database", "public_files", "private_files", "site_config"})
                 validate_import_restore(history.get(operation_id)["import_app_versions"], selected)
                 self.assertEqual(imported.total_size, bundle.total_size)
+                self.assertEqual(Path(frappe.get_site_path("site_config.json")).read_bytes(), live_config)
         finally:
             engine.release(bundle)
             if operation_id:
