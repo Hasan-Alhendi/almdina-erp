@@ -1,0 +1,1515 @@
+{
+  "source_manifest": {
+    "almdina_erp\\almdina_erp\\application\\cutting\\__init__.py": "39f130f478fac1a5350f16d22baef6be1f46cbad380b03c08c2b9056989da52c",
+    "almdina_erp\\almdina_erp\\application\\cutting\\execution_trace.py": "7ef60e10ae1834021036ccba1e330656fc6f8567481bb4d9427520835dcd742f",
+    "almdina_erp\\almdina_erp\\application\\cutting\\optimize_order_plan.py": "f92ab1796389d89a0df56517f0b49474f61e869bbd82fb125c37d23c1db6cc39",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_preview_session.py": "e37680d62399238d4a3be5748837c3ac8d3b9a4a82b294708962cf99c6e89b68",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_reuse.py": "243177a9fcff040e25db6d47bcdc35871d643dcbd26672857a684bda5089b784",
+    "almdina_erp\\almdina_erp\\application\\cutting\\plan_revisions.py": "2417e0d75a308baec41780989a083500d96f7165207f6ab4e85ab6475aaa5897",
+    "almdina_erp\\almdina_erp\\application\\cutting\\refresh_plan_metadata.py": "db53933495f924979bcf53ab89837d644eccd164b47fd6cfbc5ab706f2a6ee39",
+    "almdina_erp\\almdina_erp\\application\\cutting\\system_plan_recalculation_job.py": "7c27c65afa5ef1a28e15f7b0ccabf01977e9a3a8d130c4a17dfd93dca20cd4e4",
+    "almdina_erp\\almdina_erp\\application\\cutting\\version.py": "0d0cef8cf54742c99d6bac0c85a2fcec9f910c6337edbac33826d1c94f671871",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\__init__.py": "cae4a5f8243ce1e36e72b2052eb5dfa3b10a3c9d26069dc0d51cafdf1b3a0394",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\abc_search.py": "8d80e7179fc8369ca64c6734174d70a11de39feaa45bdf0350248e1670f216f3",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\adaptive_trim.py": "6413beb20e62bc8471207d81bb1434d22380a5b6b444a9349a1735159855dd1e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\catalog.py": "cf9d37ff9fe602e9bde0fda16770bb215a9a9785b16c641b9a098ffefdccefa2",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\corner_contour_rotation.py": "aa7ab00e0a02115db5eb13017fe2d5a80e46699c63148eadea2182774ff8c9db",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\cut_line_quality.py": "6465e2896cbeadfa5b42bb326c7900f1a0463b176e30a1bc68322db07854048d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\cutter_center_paths.py": "2494de9a10f1cf68364c593462bc3a4e1d7e1aee7c5ab4be8d28901aecdad4ce",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_applied_trim.py": "830f14bf847c3c7cede830a3e1f5f952c6c9baba7c48a095f6d080f92e15c938",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_default_layer.py": "b302f08afbe7254689f9dd2b2ca4151a6d75d97d3888a147c342f773dfd48de6",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry.py": "ba1944771f3121fc9a466a6b571f405c71c0f1fff0866ffa0c82bd795f9eea9e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_geometry_snapshot.py": "faf810097d293229c0cc10dc96a9cc1906d874c2b3e1c714974d3d2ee6cb7ccd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_issue.py": "fef834aba6946b6e7edb07cbdbaf2f6544a707a29d2254ef7516fd51a17bb7d7",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_text_labels.py": "128a81379cb757e66da6b1d9680e45fa73e23085bbba1702079f064ac5bf6c56",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\dxf_topology.py": "a1d2a28d96c8ea667ef9b2b7526f0666b4c7ec52813051df93e656ae5feb1f55",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\evaluation.py": "0ab37caca5a0c53a797ddc96186b282490d4f2775d088cc2172b2392493f118f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\extra_overlays.py": "d6cbcc6f347cc12c9ecce37294075a1973f6fb230ae7c5d52550de07a43427fe",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\final_cut_line_alignment.py": "9dbc241900238fdcf780e02fb9546b10828a5ce7407c4dd4dd5c6ec54667617b",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\geometry_nesting.py": "09ca5bd061d5ec91c8238d6ffb1cab4ecb754abc41c4744f961eb4391de6809e",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_dxf.py": "0b9c101100d7f8bbbb15fe9a57d9aa53782c7c9568cb039781b95e96bbebc7fd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\glass_opening_nesting.py": "c86d914b5552b607d9d0b1fc80db3d1677665c7d4b72586d5090d40f3a18534d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\joint_nesting.py": "65242d4410fd84dae23dfd3c561e7fc25cd738c357daa0a7eb2c866ccf2b21b7",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\kerf_layout.py": "2a29b6f03cf8f297d3a3d6cdab986b7dad5350f5185b5a0370b82ad05747c3b1",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\layout_diagnostics.py": "fc9ea03182b5787c41daeb99e48d14456741b4f4bd07e0cba42ddcbb2c6fbe94",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\liner_geometry.py": "50261da1ea670f316d8bff3a90e240a5e99d136a837f579af014476385ca9a98",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\machining_overlay.py": "cb87e58703b48ad91652a4ff9eaa3214e4e8fcb4dad30a58150e9385ad8abae9",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\manufacturing_requirements.py": "651f6ab485efed9c53506b51f1a2b54f45038aeba6b8b6141e5e435473b7c685",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\nesting_consolidation.py": "2daf612c43ebc94b8a86c719429649fab56b972ae130961b1b444e3ff6eeee6f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\offcut_policy.py": "6e930defbd4dedaf8216208e32ef5300458876e81ccc7681207ff0cad82ff766",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\optimizer.py": "0b1a8f241b22be611112ba75fb130d087c745aaf7713f9819828d5566f4a829c",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\physical_execution_contract.py": "7cda7ee76182c91c247ba8c32b82957a21e3535f4d14687ab94c6bb3904dc366",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\piece_cut_dimensions.py": "d2675c81734c3b08439a617d6f62dfa47250f72cad711773f477adc744de68d6",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\placement_orientation.py": "f765ccab49866615a35825122ace4bc482ca4f61fd290f5e675c2b8ff1ea5398",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_fingerprint_contract.py": "ee3f7cf05fd47bee67d38fdc4750c2fb7397b3c235cc75cca36aba76b980d056",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_freshness.py": "7ea499ca00a8ede70b7d9ac72509e5fea8fe2d173f70cf84b24a976d466384ad",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_lifecycle.py": "94473a612452ea26f2ff338abc2c1ddaa34efef2b58bdf5b57f85a9535babad0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_portfolio.py": "1fe1600db4ec3dd7b9c36ea42adccf28f13f29e2830a89c1090834dfb4a79bb0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_search.py": "e5ebcaa8dfca7ab835ed056d6c3b7c5d09d01a2ccf3ddbb83bc077e94c359c3f",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\plan_settings.py": "773ff155830a56be7600041d0817820870f2f29c8f81b7d535a217de60d95a59",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\primitives.py": "7cca94eb5e14e8def808e623431bc3af3e701574e25965b2fa636506fe916774",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\registry.py": "a829949e9c434c4a1ace0de0b7a9d4fc31bdd46d5f8b84b4cb344f69a714422d",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\regular_machining_orientation.py": "2c91ed1e793d55cddc86b2ea3c918a3e0cf58e04c2e2622a7dd4522d4311b0f1",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\regular_templates.py": "e176a6652830b8c5050b22cf0f8cd3a1cb99b95b9067571acc503ef95f0ab775",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\same_count_layout_search.py": "13bc1ed5835e56fedc77b7e5a3d02e74040548edadc702bfee7d810fdf7e6a39",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\shape_aware_nesting.py": "4b3025b22e264ef1b4da2553f9bb3b616afb0c7e16992a049c67db6d7a0ff5e3",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\sheet_edge_trim.py": "d73a02a53e794d95b4dd2fa1ebbbddf998ee434fabadff7fccfa1acd905f4ec0",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\small_piece_safety.py": "3b3a62b5bb7f22056988f11ffaa27879dbd4b00028c192b7612b59c272f77385",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\special_addon_match.py": "2d85e560e833ca50b67f895838a20995275dd4f7715a7ec987e78cdc6a15b902",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\__init__.py": "b04f496041e0c2c1c4be0b302b3a1a4472d6ac53503ca4f6a5b0a94a5dd4df92",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\guillotine.py": "7f9e7453342f4e7bc969874db1b483a8cf8ea8e8aad7ceebf65c3c44b0bddd75",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\maxrects.py": "e65fe5b61f50d725c86413011378d54f0a926b95ecc54b53325114242e112ffd",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\shelf.py": "721ea0cce70b6d9d126bdd6766eafc6176664864b3e95cc8339d21747c93cc30",
+    "almdina_erp\\almdina_erp\\domain\\cutting\\strategies\\skyline.py": "59c0390a5ab43c6d1755c7d664caa8b0153d2438095a85b49a918d0b0eb8060c",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\__init__.py": "59e3b1360f68e08fc3c8ff4ea02af4d71fd295dfc43c8ee714681326c3dcd796",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\domain_engine.py": "c9ce0cfe0d36fc50217ff71a413fca39fc804f847b18e4033bbdd580141a7156",
+    "almdina_erp\\almdina_erp\\infrastructure\\cutting\\dxf_reader.py": "384057bdd4371a379585e9b2d3eb8ae431d34b6196785d60cf2974ef749e1d13",
+    "scripts\\alns_dxf_inputs.py": "a8773aa7ece8731fa8e374644f0e03b26bded4ced2e6dc092d22c7c5be567a38",
+    "scripts\\alns_research.py": "1f01ee9289ae530b280fa543bfb90742503484bf0f74360262b22496a00ea535",
+    "scripts\\benchmark_alns.py": "7cecaccc83c5874ca5470a9154928f8db83f3a09bb9b893fbe9b187b0c8f7bb6",
+    "scripts\\benchmark_fixed_board_layout.py": "814596bbd30d8d534fdcf8e4571d9340e71b124ed530177f336c61c6af5165d1",
+    "almdina_erp\\tests\\test_fixed_board_layout_search.py": "6755057a8e2d5bd6ea16a9843ce567921129b9c61adf7b49c1e55d42523f0e3d"
+  },
+  "records": [
+    {
+      "case": "263",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "263-baseline-r0.json",
+      "sha256": "9f1883ad69d726798968d156e7d34c5eb33bd75328ca38421c2eff36e924f960",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 0.16610339999897406,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "263",
+      "arm": "aa",
+      "repeat": 0,
+      "file": "263-aa-r0.json",
+      "sha256": "ad2b0ebf4040be2845f70d5a6e66cb463e6cd16376125a45904e571967ab98e2",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 0.1579343999910634,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "263",
+      "arm": "grid",
+      "repeat": 0,
+      "file": "263-grid-r0.json",
+      "sha256": "7b11b699b19a110f768ff7deccf82db5495a080299a416347ee08a2992c20ba9",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 1.146027700015111,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "263",
+      "arm": "relocate",
+      "repeat": 0,
+      "file": "263-relocate-r0.json",
+      "sha256": "f839cd3f81e7d0fe8f24a6f303a05a65579e3023e1df9a27952421d6466118c9",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 4.405286499997601,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "263",
+      "arm": "repack",
+      "repeat": 0,
+      "file": "263-repack-r0.json",
+      "sha256": "dc5035249230d53a59a2da2a2c19f5687bf9d8726f11c158f2eeabc9a73dbab5",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 0.8706727000244427,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 20
+    },
+    {
+      "case": "263",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "263-fixed-r0.json",
+      "sha256": "2c1ec534e18950346171aaab9b6597916b614d2aa682a8a577c58c1d62664273",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 3.1896431000204757,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 158
+    },
+    {
+      "case": "263",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "263-adaptive-r0.json",
+      "sha256": "fcb1dc80ce8eb955ad5e592347d3a0773a28c84dbe28a1f21becbb1e1fcc25ed",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 3.2453884000133257,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 158
+    },
+    {
+      "case": "263",
+      "arm": "align",
+      "repeat": 0,
+      "file": "263-align-r0.json",
+      "sha256": "7946aa5ee6a5e52dad4e4cf489e32ea0f137b20e0972668953e1eb634881d345",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          116,
+          6862.3,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 45,
+        "adjacent": 86,
+        "alignment_ratio": 0.5232558139534884,
+        "family_splits": 4,
+        "cutter_profile": [
+          46191.0,
+          74,
+          7034.0
+        ],
+        "signature": "db15aa4cf035e7224b17914ae2194791549ac42a3f2f3f2579a549e03a96b8cd"
+      },
+      "wall": 0.4712048999790568,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "263",
+      "arm": "align",
+      "repeat": 1,
+      "file": "263-align-r1.json",
+      "sha256": "abaeef5e3652a34483edb292e19df7fb6fee4344139f85e859e8cbe6a48756d9",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          116,
+          6862.3,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 45,
+        "adjacent": 86,
+        "alignment_ratio": 0.5232558139534884,
+        "family_splits": 4,
+        "cutter_profile": [
+          46191.0,
+          74,
+          7034.0
+        ],
+        "signature": "db15aa4cf035e7224b17914ae2194791549ac42a3f2f3f2579a549e03a96b8cd"
+      },
+      "wall": 0.5378320000017993,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "263",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "263-adaptive-r1.json",
+      "sha256": "8f633054d4068b95388cc5c97433ac948f8c6f1a14bbfd1187b4b05f640ea599",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 2.8746655999857467,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 158
+    },
+    {
+      "case": "263",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "263-fixed-r1.json",
+      "sha256": "7b7e3cf746b4d08f5293ba9506937d330039f6cf844c63d18ab61d40591f073c",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 3.0787004999874625,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 158
+    },
+    {
+      "case": "263",
+      "arm": "repack",
+      "repeat": 1,
+      "file": "263-repack-r1.json",
+      "sha256": "49a10d488ff711c075fa485937ebfd68484c212bdecc6ed76f79ad97aff61ab0",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 1.0109350999991875,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 20
+    },
+    {
+      "case": "263",
+      "arm": "relocate",
+      "repeat": 1,
+      "file": "263-relocate-r1.json",
+      "sha256": "f55b74db2a666f7a4d5e1775f8a626bb42b1da310cb958d5ca93297b900bc1cc",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 5.0855395999969915,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "263",
+      "arm": "grid",
+      "repeat": 1,
+      "file": "263-grid-r1.json",
+      "sha256": "06f0c39f77c3d621e5b4b6d04622d0af2821de3e7b6f460711111b30d8431bcd",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 1.2387452000111807,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "263",
+      "arm": "aa",
+      "repeat": 1,
+      "file": "263-aa-r1.json",
+      "sha256": "0f4565943a9204454ea097b73e1490c138cec5801bb5027fc017d58619bdd4c9",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 0.23206609999760985,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "263",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "263-baseline-r1.json",
+      "sha256": "d59220caf6ab4fcc1463a1a314f363ecea57e297a69c1a8b0d9c9f2f557e49b2",
+      "status": "completed",
+      "final": {
+        "boards": 3,
+        "pieces": 48,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          3,
+          0,
+          -2.68644,
+          117,
+          6861.8,
+          11,
+          0
+        ],
+        "reusable_m2": 2.6864399999999997,
+        "aligned": 44,
+        "adjacent": 86,
+        "alignment_ratio": 0.5116279069767442,
+        "family_splits": 4,
+        "cutter_profile": [
+          46245.0,
+          74,
+          7034.0
+        ],
+        "signature": "8a0bf426d1779fd6db12ef0f82008b286724b03bb0e53661f8e467c0278d572b"
+      },
+      "wall": 0.18048589999671094,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "baseline",
+      "repeat": 0,
+      "file": "298-baseline-r0.json",
+      "sha256": "3afed0461eb89c37328e4c8c05e965162479461cd6ef22f03dc20a937c736008",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          189,
+          15583.1,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 55,
+        "adjacent": 102,
+        "alignment_ratio": 0.5392156862745098,
+        "family_splits": 10,
+        "cutter_profile": [
+          111475.0,
+          130,
+          17050.5
+        ],
+        "signature": "458bf97e4c4c18adba08b11edcd176517075a99674f9cac3ef530edfb9f5bdce"
+      },
+      "wall": 0.17488540001795627,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "aa",
+      "repeat": 0,
+      "file": "298-aa-r0.json",
+      "sha256": "2b879301ac62b0a5b3b34c2e160595961081e92aac10e76d827d278d222a4f4f",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          189,
+          15583.1,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 55,
+        "adjacent": 102,
+        "alignment_ratio": 0.5392156862745098,
+        "family_splits": 10,
+        "cutter_profile": [
+          111475.0,
+          130,
+          17050.5
+        ],
+        "signature": "458bf97e4c4c18adba08b11edcd176517075a99674f9cac3ef530edfb9f5bdce"
+      },
+      "wall": 0.1588521999947261,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "grid",
+      "repeat": 0,
+      "file": "298-grid-r0.json",
+      "sha256": "45a21d3c1c00913bd89d7771f9b7cca280c75a75b22b15225ea7d8348543fa74",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          185,
+          15493.9,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 102,
+        "alignment_ratio": 0.5490196078431373,
+        "family_splits": 10,
+        "cutter_profile": [
+          111158.5,
+          127,
+          16744.0
+        ],
+        "signature": "9d08d437b22d0a992a4a605c5043ba3397087de367cccad23a77bc345cab5080"
+      },
+      "wall": 2.5630884999991395,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "298",
+      "arm": "relocate",
+      "repeat": 0,
+      "file": "298-relocate-r0.json",
+      "sha256": "b1cf7f0eaf8f4b3d5e0dc5d59e5b823f06a40f1666f44794d6b34f5f1dab7642",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          186,
+          15584.6,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 103,
+        "alignment_ratio": 0.5436893203883495,
+        "family_splits": 10,
+        "cutter_profile": [
+          111153.0,
+          128,
+          16926.5
+        ],
+        "signature": "e4ea242e34bb9298b02a04facbb6702a592116890086d87e169a040b45ca55f8"
+      },
+      "wall": 5.570056800002931,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        }
+      ],
+      "attempts": 124
+    },
+    {
+      "case": "298",
+      "arm": "repack",
+      "repeat": 0,
+      "file": "298-repack-r0.json",
+      "sha256": "cec0fc05e3fecf76c96115f0f06e44766af07479e524e9d34b58e13bafbb2be5",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          178,
+          15256.8,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 105,
+        "alignment_ratio": 0.5333333333333333,
+        "family_splits": 10,
+        "cutter_profile": [
+          111183.0,
+          124,
+          16267.5
+        ],
+        "signature": "d45e860bfae03d2f3e57e63e81b8b3571754bc55c9c97364c75193abd7c2fd49"
+      },
+      "wall": 2.700936300010653,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "298",
+      "arm": "fixed",
+      "repeat": 0,
+      "file": "298-fixed-r0.json",
+      "sha256": "469203d01ac503d805daa08b4b498b83f6639f22d958efcb58ec5b07326bc076",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          182,
+          15495.4,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 103,
+        "alignment_ratio": 0.5533980582524272,
+        "family_splits": 10,
+        "cutter_profile": [
+          110836.5,
+          125,
+          16620.0
+        ],
+        "signature": "f9a7f66b4d228cc47542774b0c7db7f08c377dd33fd64a66b837178708a2c637"
+      },
+      "wall": 3.737336599995615,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 157
+    },
+    {
+      "case": "298",
+      "arm": "adaptive",
+      "repeat": 0,
+      "file": "298-adaptive-r0.json",
+      "sha256": "ff48163ac706f4296b10922911241922fdd3414ab9aa586e7f86fea51a3fec7c",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          182,
+          15495.4,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 103,
+        "alignment_ratio": 0.5533980582524272,
+        "family_splits": 10,
+        "cutter_profile": [
+          110836.5,
+          125,
+          16620.0
+        ],
+        "signature": "f9a7f66b4d228cc47542774b0c7db7f08c377dd33fd64a66b837178708a2c637"
+      },
+      "wall": 3.5663086000131443,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 157
+    },
+    {
+      "case": "298",
+      "arm": "align",
+      "repeat": 0,
+      "file": "298-align-r0.json",
+      "sha256": "81ace8e5179100fa8aca4e3120a1e04e0efe4144b7a96501f7fda7221cc1844b",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          185,
+          15721.5,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 101,
+        "alignment_ratio": 0.5643564356435643,
+        "family_splits": 10,
+        "cutter_profile": [
+          111080.5,
+          129,
+          16284.5
+        ],
+        "signature": "12e117b2a33971d2d8e46e2a438f3f8abcfbbef5f30126082445f8f7def2a0f8"
+      },
+      "wall": 0.4420979999995325,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "align",
+      "repeat": 1,
+      "file": "298-align-r1.json",
+      "sha256": "2d04b7d815d7fdd09b8bc1b949565971ccf860454965b60d1c4efaaf71cf9772",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          185,
+          15721.5,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 101,
+        "alignment_ratio": 0.5643564356435643,
+        "family_splits": 10,
+        "cutter_profile": [
+          111080.5,
+          129,
+          16284.5
+        ],
+        "signature": "12e117b2a33971d2d8e46e2a438f3f8abcfbbef5f30126082445f8f7def2a0f8"
+      },
+      "wall": 0.4833863000094425,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "adaptive",
+      "repeat": 1,
+      "file": "298-adaptive-r1.json",
+      "sha256": "d33f92b0f5444b866a3176a1536a3c14e6575785a64b0d33d9f2f9d85d4a7878",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          182,
+          15495.4,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 103,
+        "alignment_ratio": 0.5533980582524272,
+        "family_splits": 10,
+        "cutter_profile": [
+          110836.5,
+          125,
+          16620.0
+        ],
+        "signature": "f9a7f66b4d228cc47542774b0c7db7f08c377dd33fd64a66b837178708a2c637"
+      },
+      "wall": 3.241238299990073,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 157
+    },
+    {
+      "case": "298",
+      "arm": "fixed",
+      "repeat": 1,
+      "file": "298-fixed-r1.json",
+      "sha256": "b7c3cd66cab31ad56965c07997acdcd17fa6a0fe5b98a3aa569afcd42750afee",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          182,
+          15495.4,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 57,
+        "adjacent": 103,
+        "alignment_ratio": 0.5533980582524272,
+        "family_splits": 10,
+        "cutter_profile": [
+          110836.5,
+          125,
+          16620.0
+        ],
+        "signature": "f9a7f66b4d228cc47542774b0c7db7f08c377dd33fd64a66b837178708a2c637"
+      },
+      "wall": 3.446118599997135,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 157
+    },
+    {
+      "case": "298",
+      "arm": "repack",
+      "repeat": 1,
+      "file": "298-repack-r1.json",
+      "sha256": "3e3befaef0bfcc2894460019cb27d80be0c232ede43dc93889f01b88db74015f",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          178,
+          15256.8,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 105,
+        "alignment_ratio": 0.5333333333333333,
+        "family_splits": 10,
+        "cutter_profile": [
+          111183.0,
+          124,
+          16267.5
+        ],
+        "signature": "d45e860bfae03d2f3e57e63e81b8b3571754bc55c9c97364c75193abd7c2fd49"
+      },
+      "wall": 2.4681194000004325,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        },
+        {
+          "candidate": 2,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "298",
+      "arm": "relocate",
+      "repeat": 1,
+      "file": "298-relocate-r1.json",
+      "sha256": "08ca2cd18ee2b1908deca62015c49bace10c03c899f14068af2f12290cd84f7a",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          186,
+          15584.6,
+          11,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 103,
+        "alignment_ratio": 0.5436893203883495,
+        "family_splits": 10,
+        "cutter_profile": [
+          111153.0,
+          128,
+          16926.5
+        ],
+        "signature": "e4ea242e34bb9298b02a04facbb6702a592116890086d87e169a040b45ca55f8"
+      },
+      "wall": 5.509467900003074,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        }
+      ],
+      "attempts": 111
+    },
+    {
+      "case": "298",
+      "arm": "grid",
+      "repeat": 1,
+      "file": "298-grid-r1.json",
+      "sha256": "2f1c74dcf6878c37dcf96d93914fe49cbc679f19a629ffbff9bcd3f48388f04a",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          185,
+          15493.9,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 56,
+        "adjacent": 102,
+        "alignment_ratio": 0.5490196078431373,
+        "family_splits": 10,
+        "cutter_profile": [
+          111158.5,
+          127,
+          16744.0
+        ],
+        "signature": "9d08d437b22d0a992a4a605c5043ba3397087de367cccad23a77bc345cab5080"
+      },
+      "wall": 2.209963700006483,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        },
+        {
+          "candidate": 1,
+          "passed": true
+        }
+      ],
+      "attempts": 160
+    },
+    {
+      "case": "298",
+      "arm": "aa",
+      "repeat": 1,
+      "file": "298-aa-r1.json",
+      "sha256": "5a44ac4eb4fa06bdadd73905e60cc4c968cae3d4baa003c87d2b633b4a55e8cc",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          189,
+          15583.1,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 55,
+        "adjacent": 102,
+        "alignment_ratio": 0.5392156862745098,
+        "family_splits": 10,
+        "cutter_profile": [
+          111475.0,
+          130,
+          17050.5
+        ],
+        "signature": "458bf97e4c4c18adba08b11edcd176517075a99674f9cac3ef530edfb9f5bdce"
+      },
+      "wall": 0.160161000007065,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    },
+    {
+      "case": "298",
+      "arm": "baseline",
+      "repeat": 1,
+      "file": "298-baseline-r1.json",
+      "sha256": "a60d6b90ea7ab2a009234cc290703addc37f346ad1fb8a78f0f242321f78cd32",
+      "status": "completed",
+      "final": {
+        "boards": 8,
+        "pieces": 69,
+        "unplaced": 0,
+        "industrial_rank": [
+          0,
+          8,
+          0,
+          -2.3607,
+          189,
+          15583.1,
+          12,
+          0
+        ],
+        "reusable_m2": 2.3607,
+        "aligned": 55,
+        "adjacent": 102,
+        "alignment_ratio": 0.5392156862745098,
+        "family_splits": 10,
+        "cutter_profile": [
+          111475.0,
+          130,
+          17050.5
+        ],
+        "signature": "458bf97e4c4c18adba08b11edcd176517075a99674f9cac3ef530edfb9f5bdce"
+      },
+      "wall": 0.15072170001803897,
+      "valid": true,
+      "strict": [
+        {
+          "candidate": 0,
+          "passed": true
+        }
+      ],
+      "attempts": 0
+    }
+  ]
+}

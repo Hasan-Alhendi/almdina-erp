@@ -9,6 +9,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     DxfGeometrySnapshotError,
     DxfTopologyError,
@@ -17,12 +20,15 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CATEGORY_CONTOUR,
     CATEGORY_LAYOUT,
+    CATEGORY_OVERLAY,
     CUT_INVALID_GEOMETRY,
     DxfIssueTarget,
     DxfValidationIssue,
     KERF_VIOLATION,
+    TOOL_DIAMETER_INVALID,
     contour_pair_target,
     issue,
+    piece_target,
     topology_error_to_issue,
 )
 from almdina_erp.almdina_erp.domain.orders.extra_addons import (
@@ -33,10 +39,12 @@ from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SYSTEM,
     UPLOADED_DXF,
     is_current_manufacturing_candidate,
+    manufacturing_actions_allowed,
 )
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import layout_pair_fault
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -369,6 +377,11 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
             latest_plan(order.name, source_type=UPLOADED_DXF, status=DRAFT)
             or latest_plan(order.name, source_type=UPLOADED_DXF)
         )
+    if normalized in {"board editor", "board_editor", "boardeditor", "edited", "manual"}:
+        return (
+            latest_plan(order.name, source_type=BOARD_EDITOR, status=DRAFT)
+            or latest_plan(order.name, source_type=BOARD_EDITOR)
+        )
     if normalized == "approved":
         return approved_plan_for_order(order)
     frappe.throw(_("مصدر خطة القص المحدد للتصدير غير مدعوم."), frappe.ValidationError)
@@ -377,6 +390,41 @@ def _saved_plan_for_source(order: Any, plan_source: str | None) -> Any | None:
 
 def _required_saved_plan(order: Any, plan_source: str | None = None) -> Any:
     plan = _saved_plan_for_source(order, plan_source)
+    if plan and not manufacturing_actions_allowed(_plan_field(plan, "source_type")):
+        frappe.throw(
+            _("مصدر خطة القص المحدد لا يدعم التصدير التصنيعي."),
+            frappe.ValidationError,
+        )
+    if plan and str(_plan_field(plan, "source_type") or "") == BOARD_EDITOR:
+        from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
+            BoardEditorManufacturingError,
+            assert_board_editor_manufacturing_ready,
+        )
+
+        snapshot = frappe.parse_json(_plan_field(plan, "snapshot_json") or "{}") or {}
+        try:
+            assert_board_editor_manufacturing_ready(
+                snapshot,
+                machine_type=str(_plan_field(plan, "machine_type") or ""),
+                kerf_mm=flt(_plan_field(plan, "kerf_mm") or 0),
+            )
+        except BoardEditorManufacturingError as exc:
+            messages = {
+                "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصدير."),
+                "missing_geometry": _(
+                    "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن تصديرها."
+                ),
+                "machine_rotation_forbidden": _(
+                    "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
+                ),
+                "material_layout_invalid": _(
+                    "التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح)."
+                ),
+            }
+            frappe.throw(
+                messages.get(exc.code) or _("خطة محرر الألواح غير جاهزة للتصدير."),
+                frappe.ValidationError,
+            )
     belongs_to_order = bool(
         plan
         and str(_plan_field(plan, "door_cutting_order") or "") == str(order.name)
@@ -472,7 +520,20 @@ def _include_saw_centers_for_export(
         return True
     if order is not None and _is_current_approved_plan(order, plan):
         return True
-    if normalized in {"system", "custom", "uploaded", "uploaded dxf", "uploaded_dxf", "dxf"}:
+    if normalized in {
+        "system",
+        "custom",
+        "uploaded",
+        "uploaded dxf",
+        "uploaded_dxf",
+        "dxf",
+        "board editor",
+        "board_editor",
+        "boardeditor",
+        "edited",
+        "manual",
+    }:
+        # Design export of a draft surface never publishes manufacturing CUT_PATH.
         return False
     return str(getattr(plan, "status", "") or "") == APPROVED
 
@@ -708,6 +769,45 @@ def normalize_dxf_for_autocad(
     }
 
 
+def _with_tool_diameters(snapshot: dict[str, Any], plan: Any) -> dict[str, Any]:
+    """Attach the plan's own diameters without rewriting the stored snapshot."""
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    resolved = diameters_for_record(plan)
+    exported = dict(snapshot)
+    exported["kerf_mm"] = resolved["kerf_mm"]
+    exported["liner_tool_diameter_mm"] = resolved["liner_tool_diameter_mm"]
+    exported["handle_recess_tool_diameter_mm"] = resolved["handle_recess_tool_diameter_mm"]
+    exported["rear_groove_tool_diameter_mm"] = resolved["rear_groove_tool_diameter_mm"]
+    return exported
+
+
+def _assert_layer_tool_diameters(snapshot: dict[str, Any]) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import snapshot_tool_errors
+    from almdina_erp.almdina_erp.presentation.cutting.dxf_error_presenter import render_error_cards_html
+
+    errors = snapshot_tool_errors(snapshot, snapshot)
+    if not errors:
+        return
+    issues = [
+        issue(
+            TOOL_DIAMETER_INVALID,
+            CATEGORY_OVERLAY,
+            target=piece_target(label=item.get("label") or None),
+            params={"overlay_kind": item.get("kind") or "", "reason": item.get("code") or ""},
+        )
+        for item in errors
+    ]
+    frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
+
+
+def _export_deduct_edge_thickness(value: object) -> int:
+    """Return the plan's stored deduction choice. Missing stays on; explicit 0 stays off."""
+
+    return 1 if coerce_deduct_edge_thickness(value) else 0
+
+
 @frappe.whitelist()
 def get_validated_dxf_plan(
     order_name: str | None = None,
@@ -745,10 +845,16 @@ def get_validated_dxf_plan(
             frappe.throw(render_error_cards_html(issues, context="export"), title=_("تعذر تصدير DXF"))
         snapshot = apply_extra_double_text_flags_to_snapshot(snapshot, order.pieces)
         _assert_export_kerf(snapshot, fallback_kerf_mm=flt(plan.kerf_mm))
+        snapshot = _with_tool_diameters(snapshot, plan)
         include_saw_centers = _include_saw_centers_for_export(plan, plan_source, order)
         prefer_original = prefer_original_uploaded_download(order, plan)
+        if not prefer_original:
+            _assert_layer_tool_diameters(snapshot)
         return {
             "plan": snapshot,
+            "deduct_edge_thickness": _export_deduct_edge_thickness(
+                getattr(plan, "deduct_edge_thickness", None)
+            ),
             "manifest": _plan_manifest(order, plan),
             "cutting_plan": str(plan.name or ""),
             "plan_revision": cint(plan.revision),
@@ -778,6 +884,9 @@ def get_validated_dxf_plan(
     )
     return {
         "plan": snapshot,
+        "deduct_edge_thickness": _export_deduct_edge_thickness(
+            payload.get("deduct_edge_thickness")
+        ),
         "manifest": _draft_manifest(editable, snapshot),
         # Unsaved / draft desk export is for designer editing, not CNC.
         "include_saw_centers": False,

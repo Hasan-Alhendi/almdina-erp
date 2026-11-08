@@ -78,6 +78,7 @@ const context = vm.createContext({
     "drawing/door_cutting_order_clipped_corner_ux.js",
     "drawing/door_cutting_order_liner_geometry.js",
     "cutting_plan/door_cutting_order_piece_geometry.js",
+    "cutting_plan/door_cutting_order_edge_display.js",
 ].forEach((relativePath) => {
     vm.runInContext(read(relativePath), context, { filename: relativePath });
 });

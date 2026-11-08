@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>ABE production shell measure</title>
+  <link rel="stylesheet" href="/dev-css-bypass" />
+  <style>
+    /* Minimal Frappe-like shell + production board_editor rules under test. */
+    html, body { margin: 0; width: 720px; height: 420px; overflow: hidden; background: #64748b; }
+    .page-body {
+      direction: rtl;
+      overflow: hidden;
+      width: 720px;
+      height: 420px;
+      position: relative;
+      background: #94a3b8;
+    }
+    .layout-main-section {
+      direction: rtl;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+    }
+
+    .abe-shell-host,
+    .page-body:has(.abe-page),
+    .layout-main-section:has(.abe-page) {
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+
+    .abe-page {
+      --abe-ui-zoom: 0.9;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+      background: #f3f5f8;
+      color: #172033;
+      direction: ltr;
+      width: calc(100% / var(--abe-ui-zoom));
+      height: calc(100% / var(--abe-ui-zoom));
+      max-width: none;
+      box-sizing: border-box;
+      transform: scale(var(--abe-ui-zoom));
+      transform-origin: top left;
+    }
+    .abe-body {
+      direction: ltr;
+      display: grid;
+      grid-template-columns: 208px 1fr;
+      grid-template-areas: "sidebar canvas";
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+    }
+    .abe-sidebar-host {
+      grid-area: sidebar;
+      background: #1d4ed8;
+      color: #fff;
+      overflow: auto;
+      padding: 8px;
+      box-sizing: border-box;
+      font: 14px sans-serif;
+      direction: rtl;
+      unicode-bidi: isolate;
+    }
+    .abe-canvas-host {
+      grid-area: canvas;
+      background: #e2e8f0;
+      font: 14px sans-serif;
+    }
+
+    /* Legacy broken combo kept for before-metrics via ?mode=legacy */
+    body.legacy .page-body,
+    body.legacy .layout-main-section {
+      direction: rtl !important;
+    }
+    body.legacy .abe-page {
+      transform: none;
+      zoom: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-body" id="host">
+    <div class="layout-main-section" id="section">
+      <div class="abe-page" id="page" dir="rtl">
+        <div class="abe-body" id="body">
+          <aside class="abe-sidebar-host" id="sidebar">طبقات<br>ألواح<br>قطع-اسم-طويل</aside>
+          <div class="abe-canvas-host" id="canvas">canvas</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    if (new URLSearchParams(location.search).get("mode") === "legacy") {
+      document.body.classList.add("legacy");
+    }
+    function measure() {
+      const host = document.getElementById("host");
+      const page = document.getElementById("page");
+      const body = document.getElementById("body");
+      const sidebar = document.getElementById("sidebar");
+      const canvas = document.getElementById("canvas");
+      const hr = host.getBoundingClientRect();
+      const pr = page.getBoundingClientRect();
+      const br = body.getBoundingClientRect();
+      const sr = sidebar.getBoundingClientRect();
+      const cr = canvas.getBoundingClientRect();
+      return {
+        mode: document.body.classList.contains("legacy") ? "legacy" : "fixed",
+        hostDirection: getComputedStyle(host).direction,
+        sectionDirection: getComputedStyle(document.getElementById("section")).direction,
+        pageDirection: getComputedStyle(page).direction,
+        host: { left: hr.left, width: hr.width },
+        page: {
+          left: pr.left - hr.left,
+          width: pr.width,
+          clientWidth: page.clientWidth,
+          ratio: pr.width / Math.max(page.clientWidth, 1),
+        },
+        body: { left: br.left - hr.left, width: br.width },
+        sidebar: {
+          left: sr.left - hr.left,
+          width: sr.width,
+          right: sr.right - hr.left,
+        },
+        canvas: { left: cr.left - hr.left, width: cr.width },
+        clippedLeft: (sr.left - hr.left) < -0.5,
+        sidebarLayoutWidth: sidebar.clientWidth,
+        labelsLikelyVisible: (sr.left - hr.left) >= -0.5 && sr.width >= 180,
+      };
+    }
+    window.__ABE_SHELL_MEASURE__ = measure();
+    document.title = JSON.stringify(window.__ABE_SHELL_MEASURE__);
+  </script>
+</body>
+</html>

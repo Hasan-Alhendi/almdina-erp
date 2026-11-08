@@ -1,0 +1,71 @@
+{
+  "width": 122.0,
+  "height": 244.0,
+  "rows": [
+    {
+      "width_cm": 51.239999999999995,
+      "length_cm": 70.75999999999999,
+      "qty": 4,
+      "piece_type": "L-Shaped Corner",
+      "clipped_corner_position": "Top Right",
+      "clipped_corner_width_cm": 12.0,
+      "clipped_corner_length_cm": 17.0,
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-06:corners"
+    },
+    {
+      "width_cm": 19.7,
+      "length_cm": 104.7,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-06:regular:0"
+    },
+    {
+      "width_cm": 24.41,
+      "length_cm": 76.4,
+      "qty": 10,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-06:regular:1"
+    },
+    {
+      "width_cm": 19.92,
+      "length_cm": 67.1,
+      "qty": 10,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-06:regular:2"
+    },
+    {
+      "width_cm": 24.63,
+      "length_cm": 91.3,
+      "qty": 6,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-06:regular:3"
+    },
+    {
+      "width_cm": 24.74,
+      "length_cm": 59.2,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-06:regular:4"
+    },
+    {
+      "width_cm": 29.15,
+      "length_cm": 59.2,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-06:regular:5"
+    }
+  ],
+  "test_settings": {
+    "kerf_mm": 6.0,
+    "trim_mm": 3.0,
+    "allow_mirroring": true
+  },
+  "provenance": "Synthetic seed 719041 revision 2: distinct source geometries after original cohort failed legacy strict import in all arms; optimizer source remains frozen; no reference poses or designer dimensions"
+}

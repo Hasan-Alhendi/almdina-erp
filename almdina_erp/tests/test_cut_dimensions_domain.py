@@ -25,6 +25,33 @@ class TestCutDimensionsDomain(unittest.TestCase):
         self.assertEqual(result.cut_length_cm, 50)
         self.assertEqual(result.width_deduction_mm, 2)
         self.assertEqual(result.length_deduction_mm, 0)
+        self.assertEqual(result.edge_long_right_thickness_mm, 2)
+
+    def test_disabled_deduction_keeps_thickness_and_finished_size(self) -> None:
+        result = calculate_cut_dimensions(
+            CutDimensionInput(
+                final_width_cm=60,
+                final_length_cm=40,
+                edge_long_right=1,
+                edge_long_left=1,
+                edge_width_top=1,
+                edge_width_bottom=1,
+                edge_long_right_thickness_mm=1,
+                edge_long_left_thickness_mm=2,
+                edge_width_top_thickness_mm=1,
+                edge_width_bottom_thickness_mm=2,
+                deduct_edge_thickness=False,
+            )
+        )
+
+        self.assertEqual(result.cut_width_cm, 60)
+        self.assertEqual(result.cut_length_cm, 40)
+        self.assertEqual(result.width_deduction_mm, 0)
+        self.assertEqual(result.length_deduction_mm, 0)
+        self.assertEqual(result.edge_long_right_thickness_mm, 1)
+        self.assertEqual(result.edge_long_left_thickness_mm, 2)
+        self.assertEqual(result.edge_width_top_thickness_mm, 1)
+        self.assertEqual(result.edge_width_bottom_thickness_mm, 2)
 
     def test_one_width_edge_deducts_its_own_profile_from_length(self) -> None:
         result = calculate_cut_dimensions(

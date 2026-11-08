@@ -359,6 +359,20 @@
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     }
 
+    function layerDiametersMm(plan, cutterMm) {
+        const fields = {
+            liner: "liner_tool_diameter_mm",
+            recessed_handle_cutout: "handle_recess_tool_diameter_mm",
+            back_groove: "rear_groove_tool_diameter_mm",
+        };
+        const map = {};
+        Object.keys(fields).forEach(kind => {
+            const explicit = positiveKerf(plan && plan[fields[kind]]);
+            map[kind] = explicit != null ? explicit : cutterMm;
+        });
+        return map;
+    }
+
     function cutterDiameterMm(plan) {
         const millimetres = positiveKerf(plan && plan.kerf_mm);
         const centimetres = positiveKerf(plan && plan.kerf_cm);
@@ -380,8 +394,8 @@
     function linerExportError(piece, code, addon) {
         const noun = translate(addon && addon.nounMessageId || "the liner");
         const messages = {
-            cutter_diameter_invalid: "Specify a saw blade thickness above zero before exporting {0} toolpaths.",
-            liner_narrower_than_cutter: "The width of {0} is less than the saw blade thickness.",
+            cutter_diameter_invalid: "Specify a tool diameter above zero before exporting {0} toolpaths.",
+            liner_narrower_than_cutter: "The width of {0} is less than its tool diameter.",
             liner_extension_hits_piece: "The {0} cutter extension overlaps an adjacent piece.",
             liner_extension_unsafe: "Could not extend the {0} toolpath to the cutting line.",
             strip_outside: "The {0} strip extends beyond the door.",
@@ -414,11 +428,11 @@
         };
     }
 
-    function exportOverlays(piece, kerfMm, board) {
+    function exportOverlays(piece, kerfMm, board, diameters, obstacles) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         const engine = window.AlmdinaMachiningOverlay;
         if (engine && typeof engine.completeToolpaths === "function") {
-            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board);
+            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board, diameters, obstacles);
             if (completed && completed.error) {
                 throw linerExportError(piece, completed.error.code, completed.error.addon);
             }
@@ -443,8 +457,8 @@
         return overlays.concat(synthetic);
     }
 
-    function persistedOverlays(piece, kerfMm, board) {
-        const overlays = exportOverlays(piece, kerfMm, board);
+    function persistedOverlays(piece, kerfMm, board, diameters, obstacles) {
+        const overlays = exportOverlays(piece, kerfMm, board, diameters, obstacles);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {
@@ -843,6 +857,7 @@
         const includeSawCenters = Boolean(options && options.includeSawCenters);
         const cutterMm = cutterDiameterMm(plan);
         if (cutterMm && cutterMm.linerExport) throw cutterMm;
+        const layerDiameters = layerDiametersMm(plan, cutterMm);
         assertRequiredGlassOpenings(plan);
         const sheets = plan.sheets || [];
         const perRow = 2;
@@ -909,9 +924,10 @@
             if (liner && typeof liner.extensionConflict === "function") {
                 const trim = transform.appliedTrim || { width: 0, length: 0 };
                 let conflictDetails = null;
+                const overlayDiameter = layerDiameters[overlay.kind] || cutterMm;
                 const conflict = liner.extensionConflict(
                     overlay.path,
-                    cutterMm,
+                    overlayDiameter,
                     usableBoardMm(plan, sheet, trim),
                     overlayObstacles(sheet, piece),
                     details => { conflictDetails = details; }
@@ -976,7 +992,9 @@
                 const overlays = persistedOverlays(
                     piece,
                     cutterMm,
-                    usableBoardMm(plan, sheet, appliedTrim)
+                    usableBoardMm(plan, sheet, appliedTrim),
+                    layerDiameters,
+                    overlayObstacles(sheet, piece)
                 );
                 overlays.forEach(overlay => {
                     entities += emitOverlayEntity(overlay, placement, sheet, piece);
@@ -986,7 +1004,20 @@
                     ? regionEngine.ADDONS
                     : [{ kind: "liner" }];
                 const regionEmitted = new Set();
+                // Board Editor free-angle plans bake machining into usable-sheet
+                // overlays. Do not rebuild from unrotated side parameters.
+                const posedOverlayKinds = new Set(
+                    (Array.isArray(piece.overlays) ? piece.overlays : [])
+                        .map(item => item && item.kind)
+                        .filter(Boolean)
+                );
+                const trustPosedOverlays = piece.apply_rotated_to_geometry === false
+                    && posedOverlayKinds.size > 0;
                 regionAddons.forEach(addon => {
+                    if (trustPosedOverlays && posedOverlayKinds.has(addon.kind)) {
+                        regionEmitted.add(addon.kind);
+                        return;
+                    }
                     const specs = addon.kind === "liner"
                         && regionEngine
                         && typeof regionEngine.linerSpecsFrom === "function"
@@ -1144,25 +1175,25 @@
         return rows[group - 1] || null;
     }
 
-    function applyManufacturingNotch(piece, frm, row) {
+    function applyManufacturingNotch(piece, frm, row, deductEdgeThickness) {
         const liner = window.AlmdinaLinerGeometry;
         if (!row || !liner || typeof liner.contourNotchFromOrder !== "function") return;
         if (String(row.piece_type || "") !== "L-Shaped Corner") return;
         if (piece.geometry && Array.isArray(piece.geometry.outer)) return;
-        const notch = liner.contourNotchFromOrder(frm, row);
+        const notch = liner.contourNotchFromOrder(frm, row, deductEdgeThickness);
         piece.piece_type = row.piece_type;
         piece.clipped_corner_position = row.clipped_corner_position || piece.clipped_corner_position;
         piece.clipped_corner_width_cm = notch.cutWidthCm;
         piece.clipped_corner_length_cm = notch.cutLengthCm;
     }
 
-    function applyOrderLinerSpecs(plan, frm) {
+    function applyOrderLinerSpecs(plan, frm, deductEdgeThickness) {
         const rows = (frm && frm.doc && frm.doc.pieces) || [];
         if (!rows.length) return;
         (plan.sheets || []).forEach(sheet => {
             (sheet.pieces || []).forEach(piece => {
                 const row = orderRowForPlanPiece(rows, piece);
-                applyManufacturingNotch(piece, frm, row);
+                applyManufacturingNotch(piece, frm, row, deductEdgeThickness);
                 const engine = window.AlmdinaMachiningOverlay;
                 const addons = engine && Array.isArray(engine.ADDONS) ? engine.ADDONS : null;
                 if (!addons) {
@@ -1207,7 +1238,10 @@
     function downloadValidatedPlan(data, orderName, frm, ownsExport = null) {
         if (ownsExport && !ownsExport()) return null;
         const plan = (data && data.plan) || {};
-        applyOrderLinerSpecs(plan, frm);
+        const deductEdgeThickness = data && Object.prototype.hasOwnProperty.call(data, "deduct_edge_thickness")
+            ? data.deduct_edge_thickness
+            : undefined;
+        applyOrderLinerSpecs(plan, frm, deductEdgeThickness);
         if (!(plan.sheets || []).length) {
             frappe.throw(__("Validated cutting plan contains no sheets to export."));
         }

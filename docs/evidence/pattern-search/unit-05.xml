@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="26" time="3.394" timestamp="2026-11-06T15:29:46.112632+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_master_minimizes_boards_before_remnant_and_covers_quantities_exactly" time="0.056" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_master_deadline_and_bad_models_return_no_selection" time="0.001" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_family_equivalence_preserves_axes_row_banding_and_permissions" time="0.022" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_69_piece_pool_is_not_disabled_and_reconstructs_every_original_copy" time="0.885" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_pool_rejects_wrong_axes_and_forbidden_rotation" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_invalid_backend_answer_cannot_corrupt_incumbent" time="0.034" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_unsupported_machine_keeps_original[Panel Saw]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_unsupported_machine_keeps_original[Unsupported]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_application_pattern_stage_keeps_native_and_old_alns_baseline" time="0.486" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_invalid_or_disabled_pattern_budget_does_not_invoke_stage" time="0.023" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_global_rows_cover_all_copies_and_respect_source_axes[False]" time="0.013" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_global_rows_cover_all_copies_and_respect_source_axes[True]" time="0.015" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_free_space_partition_protects_kerf_across_artificial_seams" time="0.001" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_rows_reject_backend_answer_without_exact_quantity_coverage" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_expired_global_search_does_not_touch_sources_or_backend" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_backend_exception_is_diagnosed_and_completed_geometry_survives" time="0.027" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_machined_or_protected_sources_keep_the_existing_pipeline[extra_liner]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_machined_or_protected_sources_keep_the_existing_pipeline[extra_back_groove]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_machined_or_protected_sources_keep_the_existing_pipeline[extra_recessed_handle_cutout]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_machined_or_protected_sources_keep_the_existing_pipeline[extra_double]" time="0.002" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_corner_permission_is_checked_before_pattern_collection[False]" time="0.003" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_corner_permission_is_checked_before_pattern_collection[True]" time="0.029" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_new_gallery_passes_real_js_and_strict_import_with_requested_trim[0]" time="1.003"><failure message="AssertionError: Strict import changed family geometry">trim = 0
+
+    @pytest.mark.parametrize('trim',[0,.3])
+    def test_new_gallery_passes_real_js_and_strict_import_with_requested_trim(trim):
+        from scripts.benchmark_alns import strict_check
+        rows,_,plan=fixture()
+        cmd=command(rows,seconds=0,trim=trim)
+        cmd=replace(cmd,optimizer=replace(cmd.optimizer,pattern_search_budget_sec=1))
+        result=optimize_order_plan(cmd,engine=FrozenEngine(plan))
+        for snapshot in result.candidate_snapshots:
+            assert snapshot['validation']['is_valid']
+&gt;           assert strict_check(snapshot,rows)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_pattern_layout_search.py:223: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+plan = {'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 'smart', 'machine_type': 'CNC Router', ...}
+rows = [{'width_cm': 4, 'length_cm': 4, 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 4, 'length_cm': 4, 'qty': 1, 'p..., 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 5.5, 'length_cm': 5.5, 'qty': 1, 'piece_type': 'Regular', ...}]
+
+    def strict_check(plan, rows):
+        from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+        from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+        reloaded = json.loads(json.dumps(plan))
+        with tempfile.TemporaryDirectory() as directory:
+            imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, Path(directory)))
+        def material(p):
+            return sorted(tuple(sorted((v["source_piece_no"], *(round(v[k], 4) for k in ("x", "y", "w", "h")))
+                for v in s["pieces"])) for s in p["sheets"])
+        if material(imported) != material(reloaded):
+&gt;           raise AssertionError("Strict import changed family geometry")
+E           AssertionError: Strict import changed family geometry
+
+scripts\benchmark_alns.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_new_gallery_passes_real_js_and_strict_import_with_requested_trim[0.3]" time="0.177"><failure message="AssertionError: Strict import changed family geometry">trim = 0.3
+
+    @pytest.mark.parametrize('trim',[0,.3])
+    def test_new_gallery_passes_real_js_and_strict_import_with_requested_trim(trim):
+        from scripts.benchmark_alns import strict_check
+        rows,_,plan=fixture()
+        cmd=command(rows,seconds=0,trim=trim)
+        cmd=replace(cmd,optimizer=replace(cmd.optimizer,pattern_search_budget_sec=1))
+        result=optimize_order_plan(cmd,engine=FrozenEngine(plan))
+        for snapshot in result.candidate_snapshots:
+            assert snapshot['validation']['is_valid']
+&gt;           assert strict_check(snapshot,rows)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+almdina_erp\tests\test_pattern_layout_search.py:223: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+plan = {'engine_version': 'alns-test', 'input_fingerprint': 'alns-test', 'optimization_mode': 'smart', 'machine_type': 'CNC Router', ...}
+rows = [{'width_cm': 4, 'length_cm': 4, 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 4, 'length_cm': 4, 'qty': 1, 'p..., 'qty': 1, 'piece_type': 'Regular', ...}, {'width_cm': 5.5, 'length_cm': 5.5, 'qty': 1, 'piece_type': 'Regular', ...}]
+
+    def strict_check(plan, rows):
+        from almdina_erp.tests.test_cutting_industrial_gaps import export_real_js
+        from almdina_erp.tests.test_smart_cutting_manufacturing import import_saved_plan
+        reloaded = json.loads(json.dumps(plan))
+        with tempfile.TemporaryDirectory() as directory:
+            imported = import_saved_plan(reloaded, rows, export_real_js(reloaded, Path(directory)))
+        def material(p):
+            return sorted(tuple(sorted((v["source_piece_no"], *(round(v[k], 4) for k in ("x", "y", "w", "h")))
+                for v in s["pieces"])) for s in p["sheets"])
+        if material(imported) != material(reloaded):
+&gt;           raise AssertionError("Strict import changed family geometry")
+E           AssertionError: Strict import changed family geometry
+
+scripts\benchmark_alns.py:62: AssertionError</failure></testcase><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_new_projection_rejects_invalid_geometry_and_keeps_native" time="0.022" /><testcase classname="almdina_erp.tests.test_pattern_layout_search" name="test_pattern_stage_is_capped_and_receives_multiple_native_seeds" time="0.013" /></testsuite></testsuites>

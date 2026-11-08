@@ -20,8 +20,12 @@ PLAN_FIELDS = {
     "packing_mode",
     "cutting_machine_type",
     "kerf_mm",
+    "liner_tool_diameter_mm",
+    "handle_recess_tool_diameter_mm",
+    "rear_groove_tool_diameter_mm",
     "trim_margin_mm",
     "optimization_time_limit_sec",
+    "deduct_edge_thickness",
 }
 COST_FIELDS = {"board_rate_usd", "cutting_cost_per_board_usd"}
 DEFERRED_BOARD_FIELDS = {"board_length_cm", "board_width_cm"}
@@ -145,7 +149,7 @@ def test_retired_plan_settings_are_not_restored_to_dco_schema():
     plan_fields = {row["fieldname"] for row in _schema(PLAN_SCHEMA)["fields"]}
 
     assert PLAN_FIELDS.isdisjoint(dco_fields)
-    assert {"optimization_mode", "machine_type", "kerf_mm", "trim_margin_mm", "optimization_time_limit_sec"} <= plan_fields
+    assert {"optimization_mode", "machine_type", "kerf_mm", "trim_margin_mm", "optimization_time_limit_sec", "deduct_edge_thickness"} <= plan_fields
 
 
 def test_each_tab_has_its_own_local_edit_save_cancel_toolbar():

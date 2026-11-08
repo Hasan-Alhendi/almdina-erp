@@ -425,8 +425,7 @@ assert.match(summary.html, /\$ 12\.50/);
 direction = "ltr";
 controls.apply(order);
 assert.equal(recalc.text, "Recalculer avec les réglages actuels");
-assert.equal(shell.attrs.dir, "ltr");
-assert.equal(note.text, "Appuyez sur Modifier.");
+assert.equal(String(actionHost.html || "").includes("Cutting plan commands"), false);
 
 session.reset(order);
 editing = true;

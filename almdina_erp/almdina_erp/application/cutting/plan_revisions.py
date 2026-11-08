@@ -92,6 +92,7 @@ def update_settings(
             optimization_time_limit_sec=command.settings.optimization_time_limit_sec,
             kerf_mm=command.settings.kerf_mm,
             preferred_trim_mm=command.settings.preferred_trim_mm,
+            deduct_edge_thickness=command.settings.deduct_edge_thickness,
         )
     except PlanSettingsValidationError as error:
         raise CuttingPlanLifecycleError(str(error)) from error

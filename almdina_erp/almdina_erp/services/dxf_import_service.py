@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from copy import deepcopy
 from dataclasses import replace
@@ -107,6 +108,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
     assemble_contours,
     bbox,
+    consistent_directed_rings,
     is_axis_aligned_rectangle,
     polygon_area,
     polygon_distance,
@@ -146,6 +148,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     canonical_path,
     liner_parameters_active,
     localize_path,
+    obstacles_in_toolpath_frame,
     sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
@@ -1444,6 +1447,7 @@ def _expected_order_pieces(order: Any) -> list[dict[str, Any]]:
                     "edge_width_bottom": cint(getattr(row, "edge_width_bottom", 0)),
                     "edge_long_thickness_mm": _num(getattr(row, "edge_long_thickness_mm", 0)),
                     "edge_width_thickness_mm": _num(getattr(row, "edge_width_thickness_mm", 0)),
+                    "deduct_edge_thickness": bool(getattr(row, "deduct_edge_thickness", True)),
                     "source_piece_no": group_index,
                     "copy_no": copy_no,
                     "selected_codes": selected_codes,
@@ -1481,6 +1485,7 @@ def _expected_topology_evidence(order: Any) -> tuple[ExpectedPieceEvidence, ...]
                 piece, "edge_width_bottom", "edge_width_thickness_mm"
             ),
             width_top_mm=_side_band_mm(piece, "edge_width_top", "edge_width_thickness_mm"),
+            deduct_edge_thickness=bool(piece.get("deduct_edge_thickness", True)),
             clipped_cut_width_mm=_num(piece.get("clipped_corner_width_cm")) * 10.0,
             clipped_cut_length_mm=_num(piece.get("clipped_corner_length_cm")) * 10.0,
             clipped_corner_position=str(piece.get("clipped_corner_position") or ""),
@@ -1710,6 +1715,7 @@ def _glass_opening_issues(labeled: list[dict[str, Any]]) -> list[DxfValidationIs
             tolerance=GEOMETRY_TOLERANCE_MM,
             finished_width_mm=spec.get("finished_width_mm"),
             finished_length_mm=spec.get("finished_length_mm"),
+            deduct_edge_thickness=bool(spec.get("deduct_edge_thickness", True)),
         )
         if decision.ok:
             continue
@@ -1757,6 +1763,7 @@ def _apply_expected_identity(
         "allow_rotation": bool(candidate.get("allow_rotation")),
         "finished_width_mm": _num(candidate.get("finished_width_cm")) * 10.0,
         "finished_length_mm": _num(candidate.get("finished_length_cm")) * 10.0,
+        "deduct_edge_thickness": bool(candidate.get("deduct_edge_thickness", True)),
     }
     piece["_extra_selected_codes"] = tuple(candidate.get("selected_codes") or ())
     piece["_liner_side"] = str(candidate.get("liner_reference_side") or "")
@@ -1816,6 +1823,7 @@ def _regular_addon_candidates(
     sheets: Sequence[dict[str, Any]],
     trim_mm: float,
     cutter_diameter_mm: float | None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> frozenset[int]:
     """Constrain the existing group matcher using the existing machining matcher."""
     sheet = next(sheet for sheet in sheets if sheet["sheet_no"] == piece["_sheet_no"])
@@ -1849,6 +1857,16 @@ def _regular_addon_candidates(
             # still owns the physical orientation and edge binding.
             edge_bands={},
             cutter_diameter_mm=cutter_diameter_mm,
+            cutter_diameters_mm=cutter_diameters_mm,
+            obstacles=obstacles_in_toolpath_frame(
+                sheet.get("pieces") or (),
+                piece,
+                outer,
+                mirrored=False,
+                quarter_turns=0,
+                width_mm=float(width) * 10.0,
+                height_mm=float(height) * 10.0,
+            ) or None,
             origin_mm=(piece["x"] * 10.0, piece["y"] * 10.0),
             board_mm=(
                 -trim_mm, -trim_mm,
@@ -1870,6 +1888,7 @@ def _reconcile_addon_groups(
     piece_type: str = "Special",
     sheets: Sequence[dict[str, Any]] = (),
     trim_mm: float = 0.0,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> None:
     """Reassign interchangeable doors as a group before enforcing selection."""
 
@@ -1929,6 +1948,7 @@ def _reconcile_addon_groups(
             compatible_expected_indexes=(
                 _regular_addon_candidates(
                     piece, group_expected, assigned, sheets, trim_mm, cutter_diameter_mm,
+                    cutter_diameters_mm,
                 )
                 if piece_type == "Regular" else None
             ),
@@ -2335,6 +2355,47 @@ def _resolve_cut_topology(contours: list[dict[str, object]], order: Any) -> Reso
         ) from exc
 
 
+def _same_undirected_ring(
+    left: Sequence[tuple[float, float]],
+    right: Sequence[tuple[float, float]],
+    tolerance: float,
+) -> bool:
+    def edges(points: Sequence[tuple[float, float]]) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+        ring = list(points)
+        if len(ring) > 1 and math.dist(ring[0], ring[-1]) <= tolerance:
+            ring = ring[:-1]
+        return [
+            (ring[index], ring[(index + 1) % len(ring)])
+            for index in range(len(ring))
+        ]
+
+    left_edges = edges(left)
+    right_edges = edges(right)
+    if len(left_edges) != len(right_edges) or len(left_edges) < 3:
+        return False
+    unused = set(range(len(right_edges)))
+    for start, end in left_edges:
+        match = next(
+            (
+                index
+                for index in unused
+                if (
+                    math.dist(start, right_edges[index][0]) <= tolerance
+                    and math.dist(end, right_edges[index][1]) <= tolerance
+                )
+                or (
+                    math.dist(start, right_edges[index][1]) <= tolerance
+                    and math.dist(end, right_edges[index][0]) <= tolerance
+                )
+            ),
+            None,
+        )
+        if match is None:
+            return False
+        unused.remove(match)
+    return not unused
+
+
 def _extract_pieces(
     topology: ResolvedTopology,
     *,
@@ -2342,6 +2403,7 @@ def _extract_pieces(
     trim_mm: float,
     usable_width_cm: float,
     usable_length_cm: float,
+    directed_rings_mm: Sequence[Sequence[tuple[float, float]]] | None = None,
 ) -> list[dict[str, Any]]:
     issues: list[DxfValidationIssue] = []
     pieces: list[dict[str, Any]] = []
@@ -2401,6 +2463,16 @@ def _extract_pieces(
             polygon_area(hole) for hole in holes_mm
         )
         piece["_material_area_m2"] = max(0.0, material_area_mm2) / 1_000_000.0
+        for ring in directed_rings_mm or ():
+            ring_points = [(float(point[0]), float(point[1])) for point in ring]
+            if not _same_undirected_ring(points_mm, ring_points, CONNECTIVITY_TOLERANCE_MM):
+                continue
+            piece["_directed_outline_cm"] = _to_plan_points(
+                ring_points,
+                sheet=target_sheet,
+                trim_mm=trim_mm,
+            )
+            break
         pieces.append(piece)
         target_sheet["pieces"].append(piece)
     if issues:
@@ -2640,6 +2712,15 @@ def _regular_liner_issue(
                 height_mm=height_mm,
             )
         )
+    frame_obstacles = obstacles_in_toolpath_frame(
+        sheet.get("pieces") or (),
+        piece,
+        outline,
+        mirrored=False,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    ) or None
     if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
         specs = liner_specs or (
             {
@@ -2655,6 +2736,7 @@ def _regular_liner_issue(
             specs,
             width_cm,
             cutter_diameter_mm,
+            obstacles=frame_obstacles,
         )
     else:
         try:
@@ -2687,6 +2769,7 @@ def _regular_liner_issue(
             params["length_cm"],
             start_sawn=start_sawn,
             end_sawn=end_sawn,
+            obstacles=frame_obstacles,
         )
     return _liner_issue(
         measurement,
@@ -2697,21 +2780,43 @@ def _regular_liner_issue(
     )
 
 
+def _import_tool_diameters(order: Any) -> tuple[float | None, dict[str, float | None]]:
+    """Assignment uses the largest tool. Each layer is measured with its own."""
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        LAYER_FIELDS,
+        diameters_for_record,
+    )
+
+    resolved = diameters_for_record(order, kerf_mm=flt(getattr(order, "kerf_mm", 0)))
+    largest = max(resolved["kerf_mm"], *(resolved[field] for _kind, field in LAYER_FIELDS))
+    kind_diameters = {
+        kind: resolved[kind] if resolved[kind] > 0 else None
+        for kind, _field in LAYER_FIELDS
+    }
+    return (largest if largest > 0 else None), kind_diameters
+
+
 def _regular_machining_issues(
     piece: dict[str, Any],
     items,
     sheet: dict[str, Any],
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ):
     issues = []
     for addon in MACHINING_ADDONS:
+        if cutter_diameters_mm is not None:
+            diameter = cutter_diameters_mm.get(addon.kind)
+        else:
+            diameter = cutter_diameter_mm
         found = _regular_liner_issue(
             piece,
             items,
             sheet,
             trim_mm,
-            cutter_diameter_mm,
+            diameter,
             addon.kind,
         )
         if found is not None:
@@ -2727,6 +2832,7 @@ def _attach_extra_overlays(
     trim_mm: float,
     cutter_diameter_mm: float | None = None,
     validate_regular_machining: bool = True,
+    cutter_diameters_mm: dict[str, float | None] | None = None,
 ) -> None:
     hosts = tuple(
         ExtraOverlayHost(
@@ -2775,6 +2881,7 @@ def _attach_extra_overlays(
                     sheet,
                     trim_mm,
                     cutter_diameter_mm,
+                    cutter_diameters_mm,
                 )
             )
         if liner_issues:
@@ -2867,6 +2974,14 @@ def _public_piece(piece: dict[str, Any]) -> dict[str, Any]:
     public_piece["geometry"] = serialize_geometry_from_cm(
         _piece_material_geometry(piece, units="cm")
     )
+    directed = piece.get("_directed_outline_cm")
+    if isinstance(directed, list) and len(directed) >= 3:
+        # Import-only orientation evidence. Strict validation removes it before
+        # the uploaded snapshot can be stored.
+        public_piece["directed_contour_mm"] = [
+            [float(point[0]) * 10.0, float(point[1]) * 10.0]
+            for point in directed
+        ]
     return public_piece
 
 
@@ -3133,28 +3248,31 @@ def _identify_imported_pieces(
 ):
     """Canonical identity/add-on pipeline, shared by import and read-only diagnosis."""
     labeled = _match_pieces_to_order(pieces, order)
-    cutter_diameter_mm = flt(order.kerf_mm)
+    cutter_diameter_mm, kind_diameters = _import_tool_diameters(order)
     _reconcile_addon_groups(
         labeled,
         order,
         overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=kind_diameters,
     )
     _reconcile_addon_groups(
         labeled,
         order,
         overlays,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
         piece_type="Regular",
         sheets=sheets,
         trim_mm=trim_mm,
+        cutter_diameters_mm=kind_diameters,
     )
     _attach_extra_overlays(
         labeled,
         overlays=overlays,
         sheets=sheets,
         trim_mm=trim_mm,
-        cutter_diameter_mm=cutter_diameter_mm if cutter_diameter_mm > 0 else None,
+        cutter_diameter_mm=cutter_diameter_mm,
+        cutter_diameters_mm=kind_diameters,
         validate_regular_machining=validate_regular_machining,
     )
     return labeled
@@ -3246,6 +3364,7 @@ def parse_production_dxf(
     if missing_issues:
         raise DxfImportError(issues=missing_issues)
 
+    directed_rings = consistent_directed_rings(cut_segments, CONNECTIVITY_TOLERANCE_MM)
     sheet_contours = assemble_contours(sheet_segments, CONNECTIVITY_TOLERANCE_MM)
     sheets = _validate_sheet_contours(
         sheet_contours,
@@ -3260,6 +3379,7 @@ def parse_production_dxf(
         trim_mm=trim_mm,
         usable_width_cm=usable_board_width_cm,
         usable_length_cm=usable_board_length_cm,
+        directed_rings_mm=directed_rings,
     )
     offcut_polygons = _closed_polygons_from_segments(offcut_segments)
     offcut_indexes = _offcut_piece_indexes(pieces, offcut_polygons)

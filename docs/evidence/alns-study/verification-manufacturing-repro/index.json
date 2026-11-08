@@ -1,0 +1,17 @@
+[
+  {
+    "module": "test_smart_cutting_manufacturing",
+    "returncode": 3221225477,
+    "command": [
+      "C:\\Users\\HorizonTech\\Documents\\ChatGPT\\Cutting\\almdina-erp-abc\\.venv\\Scripts\\python.exe",
+      "-c",
+      "from almdina_erp.tests.frappe_test_stub import install_if_unavailable; install_if_unavailable(); import pytest, sys; raise SystemExit(pytest.main(sys.argv[1:]))",
+      "-q",
+      "almdina_erp/tests/test_smart_cutting_manufacturing.py",
+      "--basetemp",
+      ".pytest_cache/alns-isolated-test_smart_cutting_manufacturing",
+      "--junitxml",
+      "docs\\evidence\\alns-study\\verification-manufacturing-repro\\test_smart_cutting_manufacturing.xml"
+    ]
+  }
+]

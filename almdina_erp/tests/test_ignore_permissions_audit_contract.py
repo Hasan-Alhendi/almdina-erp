@@ -20,6 +20,8 @@ _REVIEWED_SITES: dict[str, str] = {
     "almdina_erp/doctype/board_remnant/board_remnant.py": "LEGACY_INACTIVE",
     "almdina_erp/infrastructure/backups/history.py": "SAFE",  # Internal backup operation audit records, not a public insert endpoint.
     "almdina_erp/infrastructure/backups/restore_runner.py": "MIGRATION",  # Privileged background restore finalizer, not an HTTP request.
+    "almdina_erp/infrastructure/frappe/board_editor_draft_store.py": "SAFE",  # Internal draft insert after service-level USE_BOARD_EDITOR and source-plan authorization; versioned draft key prevents duplication.
+    "almdina_erp/infrastructure/frappe/board_editor_plan_create_adapter.py": "SAFE",  # Guarded create rollback; only its incomplete Draft Board Editor plan is deleted after status/source checks.
     "almdina_erp/infrastructure/frappe/canonical_permission_state_repository.py": "MIGRATION",
     "almdina_erp/infrastructure/frappe/cutting_plan_surface_metadata.py": "SAFE",
     "almdina_erp/infrastructure/frappe/final_price_approval_gateway.py": "SAFE",  # Authorized price commands and same-transaction basis invalidation; guarded history flags.

@@ -33,6 +33,7 @@ _CUTTING_PLAN_CREATE_COMMAND_CAPABILITIES = frozenset(
     {
         Capability.EDIT_COST_SETTINGS,
         Capability.EDIT_OPTIMIZER_SETTINGS,
+        Capability.USE_BOARD_EDITOR,
         Capability.RECALCULATE_PLAN,
         Capability.UPLOAD_DXF,
         Capability.REPLACE_DXF,

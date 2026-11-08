@@ -1,0 +1,76 @@
+{
+  "width": 130.0,
+  "height": 260.0,
+  "rows": [
+    {
+      "width_cm": 24.3,
+      "length_cm": 104.7,
+      "qty": 10,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:0"
+    },
+    {
+      "width_cm": 28.6,
+      "length_cm": 91.3,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:1"
+    },
+    {
+      "width_cm": 19.7,
+      "length_cm": 83.6,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:2"
+    },
+    {
+      "width_cm": 24.3,
+      "length_cm": 67.1,
+      "qty": 6,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:3"
+    },
+    {
+      "width_cm": 24.3,
+      "length_cm": 83.6,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-02:regular:4"
+    },
+    {
+      "width_cm": 33.4,
+      "length_cm": 67.1,
+      "qty": 10,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:5"
+    },
+    {
+      "width_cm": 38.2,
+      "length_cm": 76.4,
+      "qty": 6,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:6"
+    },
+    {
+      "width_cm": 38.2,
+      "length_cm": 76.4,
+      "qty": 10,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-02:regular:7"
+    }
+  ],
+  "test_settings": {
+    "kerf_mm": 5.0,
+    "trim_mm": 3.0,
+    "allow_mirroring": false
+  },
+  "provenance": "Synthetic seed 719041; no reference poses or designer dimensions; fixed before final benchmark"
+}

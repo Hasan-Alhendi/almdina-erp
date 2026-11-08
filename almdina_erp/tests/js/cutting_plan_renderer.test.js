@@ -59,6 +59,10 @@ vm.runInContext(contractSource, context, {
 vm.runInContext(pieceGeometrySource, context, {
     filename: "door_cutting_order_piece_geometry.js",
 });
+vm.runInContext(fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js"),
+    "utf8"
+), context, { filename: "door_cutting_order_edge_display.js" });
 vm.runInContext(source, context, {
     filename: "door_cutting_order_cutting_plan_renderer.js",
 });

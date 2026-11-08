@@ -687,6 +687,22 @@ def present_issue(issue: DxfValidationIssue) -> PresentedDxfError:
             code,
             issue.category,
         )
+    if code == codes.TOOL_DIAMETER_INVALID:
+        kind_name = _OVERLAY_KIND_AR.get(str(params.get("overlay_kind") or ""), "الأداة")
+        reason = str(params.get("reason") or "cutter_diameter_invalid")
+        if reason == "liner_narrower_than_cutter":
+            problem = f"قطر ريشة {kind_name} أكبر من عرض منطقة التشغيل، ولا يمكن إنتاج الهندسة المطلوبة."
+        elif reason == "cutter_diameter_invalid":
+            problem = f"عرض ريشة {kind_name} غير صالح. يجب أن يكون رقمًا أكبر من صفر."
+        else:
+            problem = f"لا يمكن توليد مسار {kind_name} بقطر الريشة الحالي بأمان."
+        return PresentedDxfError(
+            problem,
+            target_text,
+            "صحّح قطر الريشة أو أبعاد الإضافة ثم أعد التصدير. لن يُنشأ ملف تصنيع غير آمن.",
+            code,
+            issue.category,
+        )
     if code == codes.SHEET_OPEN:
         return PresentedDxfError(
             "حدود اللوح غير مغلقة.",

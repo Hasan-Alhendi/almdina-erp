@@ -12,6 +12,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     SUPERSEDED,
     UPLOADED_DXF,
     CuttingPlanLifecycleError,
+    is_board_editor_source,
     normalize_source_type,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
@@ -81,16 +82,29 @@ class CuttingPlan(Document):
         if str(parent.door_cutting_order or "") != str(self.door_cutting_order or ""):
             frappe.throw(_("The source Cutting Plan revision belongs to another order."))
 
-        # Creating a revision is allowed only from the currently Approved plan;
-        # that invariant is also enforced by the application create-revision use
-        # case. After the child exists, its immutable lineage remains valid when
-        # the parent later becomes Superseded or Cancelled as part of normal
-        # approval replacement/cancellation. Re-validating an existing child must
-        # therefore accept all immutable historical parent states.
-        if self.is_new() and parent.status != APPROVED:
-            frappe.throw(_("A new Cutting Plan revision must be based on an approved plan."))
-        if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:
-            frappe.throw(_("A Cutting Plan revision must reference an immutable historical plan."))
+        # Approved-revision cycle: a normal new revision must base on the current
+        # Approved plan. Board Editor copies are a separate lineage — they record
+        # the editable source (Draft or Approved) they were materialized from and
+        # must not be forced through the approval-revision gate.
+        board_editor_copy = is_board_editor_source(self.source_type)
+        if board_editor_copy:
+            if parent.status not in {DRAFT, APPROVED, SUPERSEDED, CANCELLED}:
+                frappe.throw(
+                    _("A board editor cutting plan copy must reference a valid source plan.")
+                )
+        else:
+            # Creating a revision is allowed only from the currently Approved plan;
+            # that invariant is also enforced by the application create-revision use
+            # case. After the child exists, its immutable lineage remains valid when
+            # the parent later becomes Superseded or Cancelled as part of normal
+            # approval replacement/cancellation. Re-validating an existing child must
+            # therefore accept all immutable historical parent states.
+            if self.is_new() and parent.status != APPROVED:
+                frappe.throw(_("A new Cutting Plan revision must be based on an approved plan."))
+            if not self.is_new() and parent.status not in IMMUTABLE_STATUSES:
+                frappe.throw(
+                    _("A Cutting Plan revision must reference an immutable historical plan.")
+                )
         if cint(self.revision) <= cint(parent.revision):
             frappe.throw(_("The new Cutting Plan revision must be newer than its source revision."))
 
@@ -104,6 +118,7 @@ class CuttingPlan(Document):
                 optimization_time_limit_sec=self.optimization_time_limit_sec,
                 kerf_mm=self.kerf_mm,
                 preferred_trim_mm=self.trim_margin_mm,
+                deduct_edge_thickness=getattr(self, "deduct_edge_thickness", None),
             )
         except PlanSettingsValidationError:
             frappe.throw(_("Invalid Cutting Plan settings."), frappe.ValidationError)
@@ -114,6 +129,7 @@ class CuttingPlan(Document):
         self.optimization_time_limit_sec = settings.optimization_time_limit_sec
         self.kerf_mm = settings.kerf_mm
         self.trim_margin_mm = settings.preferred_trim_mm
+        self.deduct_edge_thickness = 1 if settings.deduct_edge_thickness else 0
 
     def _populate_source_identity_snapshots(self) -> None:
         order = frappe.get_doc("Door Cutting Order", self.door_cutting_order)

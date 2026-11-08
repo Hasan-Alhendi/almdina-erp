@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="7.919" timestamp="2026-11-05T20:16:26.194130+03:00" hostname="DESKTOP-6CA4VOG"><testcase classname="almdina_erp.tests.test_smart_cutting_manufacturing" name="test_real_243_discovery_snapshot_reload_export_strict_import[0.1]" time="7.390"><failure message="AssertionError: assert 4 == 3&#10; +  where 4 = len([{'sheet_no': 4, 'w': 121.98, 'h': 243.98, 'pieces': [{'id': 45, 'label': '8.14', 'source_piece_no': 8, 'copy_no': 14,...ource_piece_no': 1, 'copy_no': 5, ...}, {'id': 6, 'label': '1.6', 'source_piece_no': 1, 'copy_no': 6, ...}, ...], ...}])">trim_mm = 0.1
+tmp_path = WindowsPath('C:/Users/HorizonTech/Documents/ChatGPT/Cutting/almdina-erp-abc/.pytest_cache/alns-existing-243-point1/test_real_243_discovery_snapsh0')
+
+    @pytest.mark.parametrize("trim_mm", [0, .1, 1, 2, 3])
+    def test_real_243_discovery_snapshot_reload_export_strict_import(trim_mm, tmp_path):
+        from almdina_erp.tests.cutting_243_cases import source_case
+        from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import geometry_signature
+    
+        rows = [dict(row, piece_instance_id=f"smart:{i}")
+            for i, row in enumerate(rows_with_identity(source_case()["rows"]), 1)]
+        outcome = optimize_order_plan(OptimizeOrderPlanCommand(
+            engine_version="real-243-regression", input_fingerprint="real-243-regression",
+            board=BoardGeometry(122, 244, trim_mm/10, .5),
+            optimizer=OptimizerOptions("smart", "CNC Router", 5, 40, 30, 30, .09),
+            piece_rows=tuple(rows),
+        ), engine=domain_cutting_engine)
+        snapshot = outcome.snapshot
+&gt;       assert outcome.required_boards == len(snapshot["sheets"]) == 3
+E       AssertionError: assert 4 == 3
+E        +  where 4 = len([{'sheet_no': 4, 'w': 121.98, 'h': 243.98, 'pieces': [{'id': 45, 'label': '8.14', 'source_piece_no': 8, 'copy_no': 14,...ource_piece_no': 1, 'copy_no': 5, ...}, {'id': 6, 'label': '1.6', 'source_piece_no': 1, 'copy_no': 6, ...}, ...], ...}])
+
+almdina_erp\tests\test_smart_cutting_manufacturing.py:73: AssertionError</failure></testcase></testsuite></testsuites>

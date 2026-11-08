@@ -817,6 +817,7 @@ def compare_liner_path(
     *,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> LinerMeasurement:
     """Compare a canonical-frame path with the ordered liner band or toolpath.
 
@@ -844,6 +845,22 @@ def compare_liner_path(
         )
         if tool.ok:
             return tool
+        if tool.reason_code == "extension_short" and obstacles:
+            proven = _measure_toolpath(
+                path,
+                piece,
+                side,
+                offset_cm,
+                width_cm,
+                float(cutter_diameter_mm or 0),
+                start_cm,
+                length_cm,
+                start_sawn=start_sawn,
+                end_sawn=end_sawn,
+                obstacles=obstacles,
+            )
+            if proven.ok:
+                return proven
         if tool.reason_code in {"end_not_closed", "extension_short"}:
             legacy = _measure_toolpath(
                 path,
@@ -1101,6 +1118,7 @@ def _cutter_passes(
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> tuple[list[list[Point]], bool, bool]:
     """Parallel cutter passes for one liner span.
 
@@ -1143,12 +1161,24 @@ def _cutter_passes(
         if len(line) < 2:
             raise LinerGeometryError("liner_flat_end_unmachinable")
         if extend_start or extend_end:
+            start_extension = (
+                _safe_line_extension(line, polygon, radius, obstacles, at_start=True)
+                if extend_start and obstacles
+                else None
+            )
+            end_extension = (
+                _safe_line_extension(line, polygon, radius, obstacles, at_start=False)
+                if extend_end and obstacles
+                else None
+            )
             line = _extend_centerline(
                 line,
                 radius,
                 polygon,
                 extend_start=extend_start,
                 extend_end=extend_end,
+                start_extension=start_extension,
+                end_extension=end_extension,
             )
         lines.append(line)
     return lines, saw_start, saw_end
@@ -1227,6 +1257,7 @@ def liner_toolpath_mm(
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> list[Point]:
     """Parallel cutter passes, with a straight close only where no saw finishes the end.
 
@@ -1250,6 +1281,7 @@ def liner_toolpath_mm(
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         flat_contour=flat_contour,
+        obstacles=obstacles,
     )
     path: list[Point] = []
     for index, line in enumerate(lines):
@@ -1303,6 +1335,143 @@ def _ray_exit(origin: Point, direction: Point, polygon: Sequence[Point]) -> Poin
     return (origin[0] + direction[0] * best, origin[1] + direction[1] * best)
 
 
+def _end_ray(points: Sequence[Point], *, at_start: bool) -> tuple[Point, Point, Point]:
+    """Unextended vertex, the vertex behind it, and the outward unit direction."""
+
+    origin = points[0] if at_start else points[-1]
+    toward = points[1] if at_start else points[-2]
+    raw = (origin[0] - toward[0], origin[1] - toward[1])
+    length = math.hypot(raw[0], raw[1]) or 1.0
+    return origin, toward, (raw[0] / length, raw[1] / length)
+
+
+def _boundary_hit(origin: Point, direction: Point, polygon: Sequence[Point]) -> Point:
+    if _boundary_distance(origin, polygon) <= GEOMETRY_TOLERANCE_MM:
+        return origin
+    hit = _ray_exit(origin, direction, polygon)
+    if hit is None:
+        raise LinerGeometryError("liner_extension_unsafe")
+    return hit
+
+
+def _coverage_retreat_limit_mm(radius: float) -> float:
+    """Most negative extension that still covers the strip end within tolerance.
+
+    An edge pass sits one radius in from the strip side. Pulling the center
+    back by ``|E|`` leaves the boundary corner outside the disk by
+    ``radius - sqrt(radius^2 - E^2)``. That miss stays within
+    ``GEOMETRY_TOLERANCE_MM``.
+    """
+
+    epsilon = GEOMETRY_TOLERANCE_MM
+    slack = (2.0 * radius * epsilon) - (epsilon * epsilon)
+    if slack <= 0.0:
+        return 0.0
+    return -math.sqrt(slack)
+
+
+def _extension_blocked(
+    start: Point,
+    end: Point,
+    radius: float,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+    margin: float,
+) -> bool:
+    """True when this centerline segment would fail the cutter-body check.
+
+    ``margin`` 0 rejects entry into material (tangent is still clear).
+    ``margin`` of one tolerance requires the extra safety gap used when an
+    extension has to be shortened.
+    """
+
+    # Inflating by the conflict tolerance makes the threshold radius + margin,
+    # so margin 0 still treats a tangent cutter as clear. The micrometre slack
+    # absorbs centimetre-to-millimetre rounding on an exactly tangent end.
+    tangent_slack = 1e-6 if margin <= 0.0 else 0.0
+    probe_diameter = 2.0 * (radius + margin + GEOMETRY_TOLERANCE_MM - tangent_slack)
+    return extension_conflict_details((start, end), probe_diameter, None, obstacles) is not None
+
+
+def safe_end_extension_mm(
+    *,
+    hit: Point,
+    direction: Point,
+    previous: Point,
+    nominal_mm: float,
+    radius_mm: float,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None,
+) -> float:
+    """Largest extension at or below the nominal radius whose body stays clear.
+
+    The nominal value is returned unchanged when that extension does not enter
+    neighboring material. Otherwise the end is shortened, possibly to a
+    negative value, so the disk stops ``GEOMETRY_TOLERANCE_MM`` short of the
+    obstacle. The strip end must remain covered within that same tolerance.
+    """
+
+    if not obstacles:
+        return float(nominal_mm)
+    epsilon = GEOMETRY_TOLERANCE_MM
+    radius = float(radius_mm)
+    nominal = float(nominal_mm)
+
+    def at(amount: float) -> Point:
+        return (hit[0] + direction[0] * amount, hit[1] + direction[1] * amount)
+
+    span = (previous[0] - hit[0]) * -direction[0] + (previous[1] - hit[1]) * -direction[1]
+    span = max(0.0, span)
+
+    def probe(amount: float) -> tuple[Point, Point]:
+        inner = min(0.0, amount) - min(1.0, radius)
+        if span > epsilon:
+            inner = max(inner, -(span - epsilon))
+        else:
+            inner = min(0.0, amount)
+        outer = amount
+        if outer < inner:
+            inner, outer = outer, inner
+        return at(inner), at(outer)
+
+    if not _extension_blocked(*probe(nominal), radius, obstacles, 0.0):
+        return nominal
+    floor = _coverage_retreat_limit_mm(radius)
+    if span > epsilon:
+        floor = max(floor, -(span - epsilon))
+    else:
+        floor = max(floor, 0.0)
+    if floor > nominal or _extension_blocked(*probe(floor), radius, obstacles, epsilon):
+        raise LinerGeometryError("liner_extension_hits_piece")
+    low = floor
+    high = nominal
+    for _ in range(48):
+        mid = (low + high) / 2.0
+        if _extension_blocked(*probe(mid), radius, obstacles, epsilon):
+            high = mid
+        else:
+            low = mid
+    return low
+
+
+def _safe_line_extension(
+    line: Sequence[Point],
+    polygon: Sequence[Point],
+    radius: float,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+    *,
+    at_start: bool,
+) -> float:
+    origin, previous, direction = _end_ray(line, at_start=at_start)
+    hit = _boundary_hit(origin, direction, polygon)
+    return safe_end_extension_mm(
+        hit=hit,
+        direction=direction,
+        previous=previous,
+        nominal_mm=radius,
+        radius_mm=radius,
+        obstacles=obstacles,
+    )
+
+
 def _extend_centerline(
     polyline: Sequence[Point],
     extension: float,
@@ -1318,25 +1487,17 @@ def _extend_centerline(
         raise LinerGeometryError("liner_extension_unsafe")
     ends = []
     if extend_start:
-        ends.append((0, 1))
+        ends.append(True)
     if extend_end:
-        ends.append((-1, -2))
-    for index, other_index in ends:
-        origin = points[index]
-        toward = points[other_index]
-        direction = (origin[0] - toward[0], origin[1] - toward[1])
-        length = math.hypot(direction[0], direction[1]) or 1.0
-        direction = (direction[0] / length, direction[1] / length)
-        if _boundary_distance(origin, polygon) <= GEOMETRY_TOLERANCE_MM:
-            hit = origin
-        else:
-            hit = _ray_exit(origin, direction, polygon)
-            if hit is None:
-                raise LinerGeometryError("liner_extension_unsafe")
+        ends.append(False)
+    for at_start in ends:
+        _origin, _toward, direction = _end_ray(points, at_start=at_start)
+        hit = _boundary_hit(_origin, direction, polygon)
         amount = extension
-        if index == 0 and start_extension is not None:
+        index = 0 if at_start else -1
+        if at_start and start_extension is not None:
             amount = start_extension
-        if index != 0 and end_extension is not None:
+        if not at_start and end_extension is not None:
             amount = end_extension
         points[index] = (
             hit[0] + direction[0] * amount,
@@ -1412,6 +1573,7 @@ def _measure_toolpath(
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> LinerMeasurement:
     try:
         expected = liner_toolpath_mm(
@@ -1425,6 +1587,7 @@ def _measure_toolpath(
             start_sawn=start_sawn,
             end_sawn=end_sawn,
             flat_contour=flat_contour,
+            obstacles=obstacles,
         )
         centers = cutter_center_offsets_mm(_mm(width_cm), cutter_diameter_mm)
         reference, clipped, start_mm, end_mm, boundary_start, boundary_end = _prepared_reference(
@@ -1499,6 +1662,7 @@ def _measure_toolpath(
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         flat_contour=flat_contour,
+        obstacles=obstacles,
     )
     if not saw_start and not _span_present(path, [line[0] for line in passes]):
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "start", side, "", "end_not_closed", side)
@@ -1543,6 +1707,7 @@ def contour_notch_cm(
     side_thickness_mm: dict | None = None,
     edge_break: bool = False,
     edge_break_thickness_mm: float | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> tuple[float, float]:
     """Notch used by the liner and by the L cut contour.
 
@@ -1564,6 +1729,7 @@ def contour_notch_cm(
             side_thickness_mm=side_thickness_mm or {},
             edge_break=edge_break,
             edge_break_thickness_mm=edge_break_thickness_mm,
+            deduct_edge_thickness=deduct_edge_thickness,
         )
     except CutDimensionError:
         return finished
@@ -1910,6 +2076,125 @@ def obstacle_geometry_mm(piece: Mapping[str, Any]) -> dict[str, Any]:
         "holes": [],
         "source": "placed_parametric_polygon",
     }
+
+
+def same_placed_piece(left: Mapping[str, Any] | None, right: Mapping[str, Any] | None) -> bool:
+    """Identity used to keep a door from being its own machining obstacle."""
+
+    if not left or not right:
+        return False
+    if left is right:
+        return True
+    left_id = left.get("id")
+    right_id = right.get("id")
+    if left_id not in (None, "") and right_id not in (None, "") and str(left_id) == str(right_id):
+        return True
+    left_instance = str(left.get("piece_instance_id") or "").strip()
+    right_instance = str(right.get("piece_instance_id") or "").strip()
+    if left_instance and left_instance == right_instance:
+        return True
+    return bool(left.get("label")) and str(left.get("label")) == str(right.get("label") or "") and float(
+        left.get("x") or 0
+    ) == float(right.get("x") or 0) and float(left.get("y") or 0) == float(right.get("y") or 0)
+
+
+def neighbor_obstacles_mm(
+    pieces: Sequence[Mapping[str, Any]],
+    host: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Other placed doors, in usable-sheet millimetres, with glass holes as voids."""
+
+    obstacles: list[dict[str, Any]] = []
+    for piece in pieces or ():
+        if same_placed_piece(piece, host):
+            continue
+        geometry = obstacle_geometry_mm(piece)
+        outer = geometry.get("outer") or ()
+        if len(outer) < 3:
+            continue
+        obstacles.append(
+            {
+                "polygon": list(outer),
+                "holes": list(geometry.get("holes") or ()),
+            }
+        )
+    return obstacles
+
+
+def canonicalize_obstacles(
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width_mm: float,
+    height_mm: float,
+) -> list[dict[str, Any]]:
+    """Rotate localized obstacle rings into the canonical machining frame."""
+
+    canonical: list[dict[str, Any]] = []
+    for obstacle in obstacles or ():
+        outer, holes = _obstacle_material(obstacle)
+        if len(outer) < 3:
+            continue
+        canonical.append(
+            {
+                "polygon": canonical_path(
+                    outer,
+                    mirrored=mirrored,
+                    quarter_turns=quarter_turns,
+                    width_mm=width_mm,
+                    height_mm=height_mm,
+                ),
+                "holes": [
+                    canonical_path(
+                        hole,
+                        mirrored=mirrored,
+                        quarter_turns=quarter_turns,
+                        width_mm=width_mm,
+                        height_mm=height_mm,
+                    )
+                    for hole in holes
+                ],
+            }
+        )
+    return canonical
+
+
+def obstacles_in_toolpath_frame(
+    pieces: Sequence[Mapping[str, Any]],
+    host: Mapping[str, Any],
+    host_outer: Sequence[Point],
+    *,
+    mirrored: bool,
+    quarter_turns: int,
+    width_mm: float,
+    height_mm: float,
+) -> list[dict[str, Any]]:
+    """Neighbor material in the same frame as a canonical machining toolpath.
+
+    ``host_outer`` is the ring already used to localize that toolpath. An empty
+    result means no neighbor was available, so the historical full extension
+    stays the expected path.
+    """
+
+    if len(host_outer) < 3:
+        return []
+    localized = []
+    for obstacle in neighbor_obstacles_mm(pieces, host):
+        outer = obstacle["polygon"]
+        localized.append(
+            {
+                "polygon": localize_path(outer, host_outer),
+                "holes": [localize_path(hole, host_outer) for hole in obstacle["holes"]],
+            }
+        )
+    return canonicalize_obstacles(
+        localized,
+        mirrored=mirrored,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    )
 
 
 def _segments_cross(a: Point, b: Point, c: Point, d: Point) -> bool:
@@ -2290,6 +2575,7 @@ def merged_liner_toolpaths_mm(
     start_sawn: Sequence[bool | None] | None = None,
     end_sawn: Sequence[bool | None] | None = None,
     flat_contour: bool = False,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> list[list[Point]]:
     """Zigzag cutter-center paths covering the union of overlapping mill bands.
 
@@ -2321,6 +2607,7 @@ def merged_liner_toolpaths_mm(
                 start_sawn=None if not start_sawn else start_sawn[0],
                 end_sawn=None if not end_sawn else end_sawn[0],
                 flat_contour=flat_contour,
+                obstacles=obstacles,
             )
         ]
 
@@ -2345,6 +2632,7 @@ def merged_liner_toolpaths_mm(
                         start_sawn=None if not start_sawn else start_sawn[index],
                         end_sawn=None if not end_sawn else end_sawn[index],
                         flat_contour=flat_contour,
+                        obstacles=obstacles,
                     )
                 )
                 covered.append(regions[index])
@@ -2360,6 +2648,7 @@ def merged_liner_toolpaths_mm(
                 start_sawn=None if not start_sawn else start_sawn[index],
                 end_sawn=None if not end_sawn else end_sawn[index],
                 flat_contour=flat_contour,
+                obstacles=obstacles,
             )
             clipped: list[list[Point]] = []
             for line in lines:
@@ -2459,6 +2748,7 @@ def compare_liner_set_paths(
     *,
     start_sawn: Sequence[bool | None] | None = None,
     end_sawn: Sequence[bool | None] | None = None,
+    obstacles: Sequence[Mapping[str, Any] | Sequence[Point]] | None = None,
 ) -> LinerMeasurement:
     """Judge imported Liner entities against the ordered mill union, not entity count."""
 
@@ -2481,6 +2771,7 @@ def compare_liner_set_paths(
             length_cm,
             start_sawn=None if not start_sawn else start_sawn[0],
             end_sawn=None if not end_sawn else end_sawn[0],
+            obstacles=obstacles,
         )
     if not imported:
         return LinerMeasurement(False, LINER_SHAPE_MISMATCH, "shape", "", "", "empty_path")
@@ -2526,6 +2817,39 @@ def compare_liner_set_paths(
         matched += 1
     if matched == len(expected) and not unused:
         return LinerMeasurement(True)
+    if obstacles:
+        try:
+            safe_expected = merged_liner_toolpaths_mm(
+                piece,
+                items,
+                width_cm,
+                diameter,
+                start_sawn=start_sawn,
+                end_sawn=end_sawn,
+                obstacles=obstacles,
+            )
+        except LinerGeometryError as error:
+            code = (
+                LINER_WIDTH_MISMATCH
+                if error.code == "liner_narrower_than_cutter"
+                else LINER_SHAPE_MISMATCH
+            )
+            return LinerMeasurement(False, code, "shape", "", "", error.code)
+        unused = list(range(len(imported)))
+        matched = 0
+        tolerance = max(GEOMETRY_TOLERANCE_MM * 4, radius * 0.35)
+        for expected_path in safe_expected:
+            found = None
+            for index in unused:
+                if _paths_match(imported[index], expected_path, tolerance):
+                    found = index
+                    break
+            if found is None:
+                continue
+            unused.remove(found)
+            matched += 1
+        if safe_expected and matched == len(safe_expected) and not unused:
+            return LinerMeasurement(True)
 
     cover_tolerance = radius + GEOMETRY_TOLERANCE_MM
     for region in regions:
@@ -2582,6 +2906,7 @@ __all__ = [
     "SIDE_TOP",
     "available_liner_sides",
     "canonical_path",
+    "canonicalize_obstacles",
     "center_recessed_handle",
     "compare_liner_path",
     "compare_liner_set_paths",
@@ -2592,6 +2917,10 @@ __all__ = [
     "cutter_center_offsets_mm",
     "extension_conflict",
     "extension_conflict_details",
+    "neighbor_obstacles_mm",
+    "obstacles_in_toolpath_frame",
+    "same_placed_piece",
+    "safe_end_extension_mm",
     "liner_toolpath_mm",
     "liner_region_polygon_mm",
     "liner_strip_polygon_mm",

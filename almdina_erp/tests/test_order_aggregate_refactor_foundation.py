@@ -190,7 +190,7 @@ def test_costing_lifecycle_tracks_preliminary_and_approved_prices() -> None:
 
 def test_cutting_plan_schema_owns_working_optimizer_settings() -> None:
     fields = _field_map(_doctype_json("Cutting Plan"))
-    assert fields["source_type"]["options"] == "System\nUploaded DXF"
+    assert fields["source_type"]["options"] == "System\nUploaded DXF\nBoard Editor"
     assert fields["based_on_plan"]["options"] == "Cutting Plan"
     for fieldname in (
         "optimization_mode",

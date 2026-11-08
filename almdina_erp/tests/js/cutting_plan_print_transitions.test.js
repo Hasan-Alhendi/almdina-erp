@@ -104,6 +104,7 @@ function harness({ sourceFirst = false, arabic = false } = {}) {
         "drawing/door_cutting_order_machining_overlay.js",
         "order_entry/edge_banding/door_cutting_order_multi_edge_ux.js",
         "cutting_plan/door_cutting_order_piece_geometry.js",
+        "cutting_plan/door_cutting_order_edge_display.js",
         "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "cutting_plan/door_cutting_order_plan_source_presentation.js",
         "cutting_plan/door_cutting_order_plan_tabs_ux.js",

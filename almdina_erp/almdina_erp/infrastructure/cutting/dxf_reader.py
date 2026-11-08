@@ -130,6 +130,85 @@ def _effective_layer(raw_layer: Any, inherited_layer: str | None) -> str:
     return layer
 
 
+def _entity_display_attrs(entity: Any) -> dict[str, Any]:
+    """Capture colour/linetype sources when ezdxf exposes them.
+
+    ``256`` is AutoCAD BYLAYER for ACI colour. Unsupported sources stay BYLAYER
+    rather than inventing entity-level values.
+    """
+
+    color_source = "BYLAYER"
+    aci_color = None
+    try:
+        raw_color = getattr(entity.dxf, "color", 256)
+        color_value = int(raw_color)
+        if color_value not in (256, 0):
+            color_source = "BYENTITY"
+            aci_color = color_value
+    except (TypeError, ValueError, AttributeError):
+        color_source = "BYLAYER"
+
+    linetype_source = "BYLAYER"
+    linetype = None
+    try:
+        raw_linetype = str(getattr(entity.dxf, "linetype", "BYLAYER") or "BYLAYER").strip()
+        if raw_linetype and raw_linetype.upper() not in {"BYLAYER", "BYBLOCK"}:
+            linetype_source = "BYENTITY"
+            linetype = raw_linetype
+    except AttributeError:
+        linetype_source = "BYLAYER"
+
+    return {
+        "color_source": color_source,
+        "aci_color": aci_color,
+        "linetype_source": linetype_source,
+        "linetype": linetype,
+    }
+
+
+def _layer_defs_from_document(
+    document: Any,
+    *,
+    occupied_match_keys: set[str],
+) -> list[dict[str, Any]]:
+    """Return the DXF LAYER table, including defined-but-empty layers."""
+
+    layer_defs: list[dict[str, Any]] = []
+    try:
+        layers = document.layers
+    except Exception:
+        return layer_defs
+
+    for layer in layers:
+        try:
+            original_name = str(getattr(layer.dxf, "name", "") or "").strip()
+        except Exception:
+            continue
+        if not original_name:
+            continue
+        match_key = _normalize_layer(original_name)
+        try:
+            aci_color = int(getattr(layer.dxf, "color", 7) or 7)
+        except (TypeError, ValueError):
+            aci_color = 7
+        try:
+            linetype = str(getattr(layer.dxf, "linetype", "CONTINUOUS") or "CONTINUOUS")
+        except Exception:
+            linetype = "CONTINUOUS"
+        layer_defs.append(
+            {
+                "original_name": original_name,
+                "match_key": match_key,
+                "aci_color": aci_color,
+                "linetype": linetype,
+                "color_source": "BYLAYER",
+                "linetype_source": "BYLAYER",
+                "is_empty": match_key not in occupied_match_keys,
+            }
+        )
+    return layer_defs
+
+
 def _is_minsert(entity: Any) -> bool:
     return int(getattr(entity.dxf, "row_count", 1) or 1) > 1 or int(
         getattr(entity.dxf, "column_count", 1) or 1
@@ -208,12 +287,27 @@ def _geometry_from_legacy_rows(
                 "entity_type": entity_type,
                 "start": (float(row.get("x1") or 0), float(row.get("y1") or 0)),
                 "end": (float(row.get("x2") or 0), float(row.get("y2") or 0)),
+                "color_source": "BYLAYER",
+                "linetype_source": "BYLAYER",
             }
         )
+    layer_defs = [
+        {
+            "original_name": name,
+            "match_key": name,
+            "aci_color": 7,
+            "linetype": "CONTINUOUS",
+            "color_source": "BYLAYER",
+            "linetype_source": "BYLAYER",
+            "is_empty": False,
+        }
+        for name in sorted(detected_layers)
+    ]
     return {
         "segments": segments,
         "annotations": annotations,
         "unsupported": [],
+        "layer_defs": layer_defs,
         "diagnostics": _diagnostics(
             detected_layers=detected_layers,
             relevant_layers=relevant_layers,
@@ -228,7 +322,8 @@ def _geometry_from_legacy_rows(
 def read_dxf_geometry(
     file_path: str,
     *,
-    relevant_layers: set[str],
+    relevant_layers: set[str] | None = None,
+    include_all_layers: bool = False,
     legacy_line_parser: Callable[[], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Read DXF geometry and normalize curves to validation-only segments.
@@ -237,12 +332,26 @@ def read_dxf_geometry(
     entities so INSERT translation, rotation and scaling are applied by the DXF
     library. AutoCAD layer-0 inheritance is resolved explicitly after expansion.
     The source DXF is never rewritten.
+
+    ``include_all_layers`` is for display enrichment only (board editor). It does
+    not change manufacturing import callers that pass an explicit relevant set.
     """
-    normalized_relevant_layers = {_normalize_layer(layer) for layer in relevant_layers}
+    if include_all_layers:
+        normalized_relevant_layers: set[str] | None = None
+    else:
+        normalized_relevant_layers = {
+            _normalize_layer(layer) for layer in (relevant_layers or set())
+        }
+
+    def layer_is_relevant(layer: str) -> bool:
+        if normalized_relevant_layers is None:
+            return True
+        return layer in normalized_relevant_layers
+
     try:
         ezdxf, ezpath = _import_ezdxf()
     except ImportError:
-        if legacy_line_parser is None:
+        if legacy_line_parser is None or normalized_relevant_layers is None:
             raise DxfReadError(
                 "مكتبة قراءة DXF غير متوفرة على الخادم.",
                 code="DXF_LIBRARY_MISSING",
@@ -312,7 +421,7 @@ def read_dxf_geometry(
                 continue
 
             if matches_text_label_layer(layer):
-                if layer not in normalized_relevant_layers:
+                if not layer_is_relevant(layer):
                     continue
                 if entity_type in TEXT_ANNOTATION_ENTITY_TYPES:
                     annotation = _annotation_from_entity(entity, layer=layer)
@@ -320,7 +429,7 @@ def read_dxf_geometry(
                         annotations.append(annotation)
                 continue
 
-            if layer not in normalized_relevant_layers:
+            if not layer_is_relevant(layer):
                 continue
             if entity_type not in SUPPORTED_DXF_ENTITY_TYPES:
                 unsupported.append({"layer": layer, "entity_type": entity_type})
@@ -342,6 +451,7 @@ def read_dxf_geometry(
                 ) from exc
             entity_seq += 1
             closed = _entity_is_closed(entity)
+            display_attrs = _entity_display_attrs(entity)
             for start, end in _segments_from_points(flattened):
                 segments.append(
                     {
@@ -351,20 +461,54 @@ def read_dxf_geometry(
                         "closed": closed,
                         "start": start,
                         "end": end,
+                        "color_source": display_attrs["color_source"],
+                        "aci_color": display_attrs["aci_color"],
+                        "linetype_source": display_attrs["linetype_source"],
+                        "linetype": display_attrs["linetype"],
                     }
                 )
 
     visit(doc.modelspace(), inherited_layer=None, depth=0)
+    diagnostics_relevant = (
+        detected_layers
+        if normalized_relevant_layers is None
+        else normalized_relevant_layers
+    )
     return {
         "segments": segments,
         "annotations": annotations,
         "unsupported": unsupported,
+        "layer_defs": _layer_defs_from_document(
+            doc,
+            occupied_match_keys=detected_layers,
+        ),
         "diagnostics": _diagnostics(
             detected_layers=detected_layers,
-            relevant_layers=normalized_relevant_layers,
+            relevant_layers=diagnostics_relevant,
             entity_counts=entity_counts,
             has_inserts=has_inserts,
             block_names=block_names,
             expanded_entities=expanded_entities,
         ),
     }
+
+
+def read_dxf_geometry_bytes(
+    content: bytes,
+    *,
+    include_all_layers: bool = True,
+    relevant_layers: set[str] | None = None,
+) -> dict[str, Any]:
+    """Read DXF bytes through a temporary file without rewriting the source."""
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory(prefix="almdina-board-editor-dxf-") as folder:
+        path = Path(folder) / "source.dxf"
+        path.write_bytes(content)
+        return read_dxf_geometry(
+            str(path),
+            relevant_layers=relevant_layers,
+            include_all_layers=include_all_layers,
+        )

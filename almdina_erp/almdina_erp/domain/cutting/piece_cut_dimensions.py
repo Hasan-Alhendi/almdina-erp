@@ -59,11 +59,45 @@ def normalize_cut_cm(value: object) -> Decimal:
     return decimal_value(value).quantize(CUT_DIMENSION_QUANTUM_CM, rounding=ROUND_HALF_UP)
 
 
+def coerce_deduct_edge_thickness(value: object, *, missing: bool = True) -> bool:
+    """Preserve an explicit off value and treat a missing historical value as on.
+
+    ``0`` and ``False`` are stored choices. ``None`` and an empty token mean the
+    field did not exist, which keeps the deduction the product already applied.
+    """
+
+    if value is None:
+        return missing
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in {"", "none"}:
+            return missing
+        if token in {"0", "false", "no", "off"}:
+            return False
+        if token in {"1", "true", "yes", "on"}:
+            return True
+        raise CutDimensionError("خيار خصم سماكة القشاط غير صالح.")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise CutDimensionError("خيار خصم سماكة القشاط غير صالح.") from exc
+    if not number.is_finite():
+        raise CutDimensionError("خيار خصم سماكة القشاط غير صالح.")
+    if number == 0:
+        return False
+    if number == 1:
+        return True
+    raise CutDimensionError("خيار خصم سماكة القشاط غير صالح.")
+
+
 def calculate_cut_dimensions(
     *,
     finished_width_cm: object,
     finished_length_cm: object,
     side_thickness_mm: Mapping[str, object] | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> CutDimensionResult:
     width = normalize_cut_cm(finished_width_cm)
     length = normalize_cut_cm(finished_length_cm)
@@ -85,6 +119,9 @@ def calculate_cut_dimensions(
 
     width_deduction_mm = sum((sides[side] for side in WIDTH_DEDUCTION_SIDES), Decimal("0"))
     length_deduction_mm = sum((sides[side] for side in LENGTH_DEDUCTION_SIDES), Decimal("0"))
+    if not deduct_edge_thickness:
+        width_deduction_mm = Decimal("0")
+        length_deduction_mm = Decimal("0")
 
     cut_width = normalize_cut_cm(width - (width_deduction_mm / MM_PER_CM))
     cut_length = normalize_cut_cm(length - (length_deduction_mm / MM_PER_CM))
@@ -102,6 +139,25 @@ def calculate_cut_dimensions(
         width_deduction_mm=width_deduction_mm,
         length_deduction_mm=length_deduction_mm,
         side_thickness_mm=sides,
+    )
+
+
+def persisted_cut_matches_policy(
+    *,
+    persisted_width_cm: object,
+    persisted_length_cm: object,
+    expected_width_cm: object,
+    expected_length_cm: object,
+) -> bool:
+    """True only when the saved cut equals the size this policy calculates.
+
+    The expected size comes from the selected edge thicknesses. A saved size
+    does not match merely because it differs from the finished size.
+    """
+
+    return (
+        normalize_cut_cm(persisted_width_cm) == normalize_cut_cm(expected_width_cm)
+        and normalize_cut_cm(persisted_length_cm) == normalize_cut_cm(expected_length_cm)
     )
 
 
@@ -213,8 +269,14 @@ def l_shaped_raw_cut(
     side_thickness_mm: Mapping[str, object] | None = None,
     edge_break: bool = False,
     edge_break_thickness_mm: object | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> LCornerRawCut:
-    """Derive the raw L notch from finished corner distances and band thickness."""
+    """Derive the raw L notch from finished corner distances and band thickness.
+
+    When deduction is off, the raw notch and both remnants stay on the finished
+    distances. Outer and inner thicknesses remain inputs for costing, but they
+    do not move the cut.
+    """
 
     width = normalize_cut_cm(finished_width_cm)
     length = normalize_cut_cm(finished_length_cm)
@@ -251,6 +313,7 @@ def l_shaped_raw_cut(
         notch_side_mm=sides[notch_long],
         finished_notch_cm=notch_width,
         inner_mm=inner,
+        deduct_edge_thickness=deduct_edge_thickness,
     )
     length_axis = _axis_cut(
         finished_remaining_cm=length - notch_length,
@@ -258,8 +321,9 @@ def l_shaped_raw_cut(
         notch_side_mm=sides[notch_width_side],
         finished_notch_cm=notch_length,
         inner_mm=inner,
+        deduct_edge_thickness=deduct_edge_thickness,
     )
-    proven = inner is not None
+    proven = True if not deduct_edge_thickness else inner is not None
     return LCornerRawCut(
         proven=proven,
         raw_notch_width_cm=width_axis.raw_notch_cm if proven else None,
@@ -297,7 +361,16 @@ def _axis_cut(
     notch_side_mm: Decimal,
     finished_notch_cm: Decimal,
     inner_mm: Decimal | None,
+    deduct_edge_thickness: bool = True,
 ) -> _AxisMath:
+    if not deduct_edge_thickness:
+        return _AxisMath(
+            finished_remaining_cm,
+            terminator_mm,
+            Decimal("0"),
+            finished_remaining_cm,
+            finished_notch_cm,
+        )
     if inner_mm is None:
         return _AxisMath(finished_remaining_cm, terminator_mm, None, None, None)
     band_mm = terminator_mm + inner_mm

@@ -1003,6 +1003,9 @@ class TestDxfCutSizeDiagnostics(unittest.TestCase):
             patch.object(dxf_service, "_read_normalized_geometry", return_value=([], [], [])),
             patch.object(dxf_service, "_collect_extra_overlay_candidates", return_value=[]),
             patch.object(dxf_service, "_segments_for_layer", side_effect=segments_for_layer),
+            # This fixture uses string sentinels to test OFFCUT counting, not
+            # real geometric segments for directed-ring orientation analysis.
+            patch.object(dxf_service, "consistent_directed_rings", return_value=[]),
             patch.object(dxf_service, "assemble_contours", side_effect=assemble),
             patch.object(dxf_service, "_validate_sheet_contours", return_value=[]),
         ):

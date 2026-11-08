@@ -1,0 +1,10 @@
+{
+  "commit": "bbb59317e3201286a9d7def3199945490f2e1c4e",
+  "run_id": 42178728401,
+  "job_id": 127763113410,
+  "url": "https://github.com/Hasan-Alhendi/almdina-erp/actions/runs/42178728401/job/127763113410",
+  "failed_test": "TestDcoRecoveryStateOwnershipContract.test_cutting_plan_fingerprint_is_deterministic_versioned_input",
+  "reason": "Test pins ENGINE_VERSION = 2.1.0-fast-save while release intentionally uses 2.2.0-alns-refinement",
+  "correction": "Update only the expected version literal; retain fingerprint independence checks. Add this contract module to focused ALNS CI.",
+  "runtime_changed_by_correction": false
+}

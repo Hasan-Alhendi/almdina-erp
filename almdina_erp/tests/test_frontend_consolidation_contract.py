@@ -288,7 +288,8 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertIn("dco-drawing-plan-panel-host", source)
         self.assertIn("dco-drawing-plan-panel", source)
         self.assertNotIn("grid-template-columns:repeat(2,minmax(190px,1fr))", source)
-        self.assertIn("grid-template-columns:repeat(2,minmax(190px,1fr))", styles)
+        self.assertNotIn("grid-template-columns:repeat(2,minmax(190px,1fr))", styles)
+        self.assertIn("dco-plan-calculate-host", styles)
         self.assertIn("renderInboxPanel", drawing)
         self.assertIn("buildDrawingPanelHtml", drawing)
 
@@ -317,7 +318,15 @@ class TestFrontendConsolidationContract(unittest.TestCase):
         self.assertNotIn("order_plan_permission_service.recalculate_order", plan_controls)
         self.assertNotIn("frappe.call", plan_controls)
         self.assertIn('can(frm, "recalculate_plan")', plan_controls)
-        self.assertIn('can(frm, "edit_optimizer_settings")', plan_controls)
+        edit_session = (
+            ROOT
+            / "public"
+            / "js"
+            / "door_cutting_order"
+            / "cutting_plan"
+            / "door_cutting_order_plan_edit_session_ux.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn('can(frm, "edit_optimizer_settings")', edit_session)
         self.assertNotIn("frm.save", plan_controls)
         self.assertNotIn("frm.reload_doc", plan_controls)
 
@@ -381,14 +390,10 @@ class TestFrontendConsolidationContract(unittest.TestCase):
             "function apply(frm)", 1
         )[0]
 
-        self.assertIn('.children(".dco-plan-actions-shell").first()', simplify)
+        self.assertIn("syncRecalculateButton(frm)", simplify)
         self.assertNotIn("field.$wrapper.empty()", simplify)
-        self.assertIn("window.AlmdinaDoorCuttingPlanUX", simplify)
-        self.assertIn("presenter.refresh(frm)", simplify)
-        self.assertLess(
-            simplify.index("presenter.refresh(frm)"),
-            simplify.index("installApprovalAction(frm, shell)"),
-        )
+        self.assertNotIn("installApprovalAction(frm, shell)", simplify)
+        self.assertNotIn("Cutting plan commands", controls)
 
     def test_plan_surface_waits_for_stage_context_before_readiness_check(self) -> None:
         presenter = PLAN_UX.read_text(encoding="utf-8")

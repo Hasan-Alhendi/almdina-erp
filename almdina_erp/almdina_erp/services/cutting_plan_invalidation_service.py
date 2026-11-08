@@ -11,6 +11,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     decide_uploaded_plan_mismatch,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
+    BOARD_EDITOR,
     DRAFT,
     UPLOADED_DXF,
     cancel_approval_transition,
@@ -203,6 +204,10 @@ def invalidate_stale_draft_plans(order: Any) -> tuple[str, ...]:
     invalidated: list[str] = []
     for plan_name in plan_names:
         plan = frappe.get_doc("Cutting Plan", plan_name)
+        # Manual Board Editor copies keep their frozen layout until an explicit
+        # recreate. Auto-invalidation must not flag them as optimizer work.
+        if str(getattr(plan, "source_type", None) or "") == BOARD_EDITOR:
+            continue
         already_stale = bool(cint(plan.plan_needs_recalculation))
         expected = _expected_fingerprint(order, plan)
         if expected is None:

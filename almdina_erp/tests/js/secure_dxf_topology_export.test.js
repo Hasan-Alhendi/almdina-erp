@@ -879,7 +879,7 @@ async function run() {
 
     nextPlan = linerPlan({});
     downloadedDxf = "";
-    await assert.rejects(savedPlanExport(), /Specify a saw blade thickness/);
+    await assert.rejects(savedPlanExport(), /Specify a tool diameter above zero/);
     assert.equal(downloadedDxf, "");
 
     nextPlan = {

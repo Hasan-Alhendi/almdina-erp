@@ -135,6 +135,8 @@ def expand_piece_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     **_edge_metadata(row),
                 }
             )
+            if "deduct_edge_thickness" in row:
+                pieces[-1]["deduct_edge_thickness"] = row.get("deduct_edge_thickness")
             margin = row.get("glass_margin_mm")
             if (row.get("piece_type") or "") == "Glass" and margin not in (None, "", 0, 0.0):
                 pieces[-1]["glass_margin_mm"] = num(margin)

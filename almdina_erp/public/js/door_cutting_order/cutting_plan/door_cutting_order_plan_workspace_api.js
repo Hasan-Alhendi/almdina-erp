@@ -53,9 +53,16 @@
         return call(READ_METHOD, { order_name: orderName });
     }
 
+    function edgeDeductionArg(values) {
+        if (!Object.prototype.hasOwnProperty.call(values, "deduct_edge_thickness")) return undefined;
+        const value = values.deduct_edge_thickness;
+        if (value === false || value === 0 || value === "0" || String(value).toLowerCase() === "false") return 0;
+        return 1;
+    }
+
     function settingsArgs(orderName, settings) {
         const values = settings || {};
-        return {
+        const args = {
             order_name: orderName,
             packing_mode: values.packing_mode,
             cutting_machine_type: values.cutting_machine_type,
@@ -63,12 +70,25 @@
             trim_margin_mm: values.trim_margin_mm,
             optimization_time_limit_sec: values.optimization_time_limit_sec,
         };
+        const deduct = edgeDeductionArg(values);
+        if (deduct !== undefined) args.deduct_edge_thickness = deduct;
+        return args;
     }
 
     function saveSettings(orderName, settings) {
+        const values = settings || {};
+        const args = settingsArgs(orderName, settings);
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             SAVE_SETTINGS_METHOD,
-            settingsArgs(orderName, settings),
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_SAVE_SETTINGS),
@@ -109,14 +129,27 @@
         );
     }
 
-    function commitPreview(orderName, previewId, candidateId) {
+    function commitPreview(orderName, previewId, candidateId, toolSettings) {
+        const args = {
+            order_name: orderName,
+            preview_id: previewId,
+            candidate_id: candidateId,
+        };
+        // Layer diameters travel with the commit so one save writes the nesting
+        // snapshot and the bits. They are not optimizer settings and are omitted
+        // from preview fingerprints.
+        const values = toolSettings || {};
+        [
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
+        ].forEach((fieldname) => {
+            const number = Number(values[fieldname]);
+            if (Number.isFinite(number) && number > 0) args[fieldname] = number;
+        });
         return call(
             COMMIT_PREVIEW_METHOD,
-            {
-                order_name: orderName,
-                preview_id: previewId,
-                candidate_id: candidateId,
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_COMMIT),
@@ -124,13 +157,22 @@
         );
     }
 
-    function approve(orderName, source) {
+    function approve(orderName, source, planName = null) {
+        const normalized = String(source || "").trim();
+        let planSource = "System";
+        if (normalized === "Custom") planSource = "Custom";
+        else if (normalized === "BoardEditor" || normalized === "Board Editor") {
+            planSource = "Board Editor";
+        }
+        const args = {
+            order_name: orderName,
+            plan_source: planSource,
+        };
+        const explicitPlan = String(planName || "").trim();
+        if (explicitPlan) args.plan_name = explicitPlan;
         return call(
             APPROVE_METHOD,
-            {
-                order_name: orderName,
-                plan_source: source === "Custom" ? "Custom" : "System",
-            },
+            args,
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_APPROVE),

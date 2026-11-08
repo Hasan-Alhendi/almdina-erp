@@ -101,6 +101,11 @@ CAPABILITY_PRESENTATION: dict[str, dict[str, str]] = {
         "Change the cutting algorithm offered by the system, the margins, kerf, and search settings, then recalculate and view the result in 'System plan'. This permission is fully independent of 'Edit order': whoever can edit an order cannot change the algorithm without it.",
         "sensitive",
     ),
+    Capability.USE_BOARD_EDITOR: _presentation(
+        "Use Board Editor",
+        "Open and use the board editor to rearrange pieces, add boards, change piece resource classifications, save drafts, and apply layouts to cutting plans.",
+        "sensitive",
+    ),
     Capability.PRINT_CUTTING_PLAN: _presentation("Print cutting plan", "Print the plan you are authorized to view."),
     Capability.SET_OFFCUT_EXECUTION_OWNER: _presentation(
         "Set source and execution of shortage pieces",
@@ -181,6 +186,7 @@ _COST_VIEW_ACTIONS = frozenset({
 _PLAN_VIEW_ACTIONS = frozenset({
     Capability.RECALCULATE_PLAN,
     Capability.EDIT_OPTIMIZER_SETTINGS,
+    Capability.USE_BOARD_EDITOR,
     Capability.PRINT_CUTTING_PLAN,
     Capability.APPROVE_DXF,
 })

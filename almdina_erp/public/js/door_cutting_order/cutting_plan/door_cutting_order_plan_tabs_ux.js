@@ -13,6 +13,11 @@
 			capability: "view_uploaded_cutting_plan",
 		}),
 		Object.freeze({
+			id: "BoardEditor",
+			label: "Edited plan",
+			capability: "view_system_cutting_plan",
+		}),
+		Object.freeze({
 			id: "Approved",
 			label: "Approved plan",
 			capability: "view_approved_cutting_plan",
@@ -77,14 +82,36 @@
 	}
 
 	function isSourceTabLocked(frm, tabId) {
-		return isPlanEditing(frm) && String(tabId || "") !== "System";
+		const tab = String(tabId || "");
+		return isPlanEditing(frm) && tab !== "System" && tab !== "BoardEditor";
+	}
+
+	function hasBoardEditorPlan(frm) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const row = owner && typeof owner.planForTab === "function"
+			? owner.planForTab(frm, "BoardEditor")
+			: null;
+		if (row && String(row.name || "").trim()) return true;
+		// Keep the Edited tab reachable while an apply-return visit waits for the
+		// authorized board_editor_draft row, including the first-apply race.
+		const pending = owner && typeof owner.ensureApplyReturnState === "function"
+			? owner.ensureApplyReturnState(frm)
+			: (owner && typeof owner.applyReturnState === "function" ? owner.applyReturnState(frm) : null);
+		return Boolean(
+			pending
+			&& ["pending", "waiting_row", "failed", "newer"].includes(String(pending.status || ""))
+		);
 	}
 
 	function visibleTabs(frm) {
 		// The server normalizes legacy umbrella grants into granular tab grants.
 		// The browser must never widen an explicit denial by guessing that the
 		// umbrella permission means all tabs.
-		return PLAN_TABS.filter((tab) => canCapability(frm, tab.capability));
+		return PLAN_TABS.filter((tab) => {
+			if (!canCapability(frm, tab.capability)) return false;
+			if (tab.id === "BoardEditor") return hasBoardEditorPlan(frm);
+			return true;
+		});
 	}
 
 	function parseJsonField(raw) {
@@ -128,6 +155,13 @@
 		if (tab === "Approved") {
 			return getCachedApprovedPlan(frm);
 		}
+		if (tab === "BoardEditor") {
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const row = owner && typeof owner.planForTab === "function"
+				? owner.planForTab(frm, "BoardEditor")
+				: null;
+			return parseJsonField(row && row.snapshot_json);
+		}
 		return (
 			parseJsonField(frm.doc.system_plan_json) ||
 			parseJsonField(frm.doc.cutting_plan_json) ||
@@ -141,7 +175,81 @@
 			const row = preview && preview.displayedPreviewRow && preview.displayedPreviewRow(frm);
 			if (row) return parseJsonField(row.snapshot_json);
 		}
+		if (tab === "BoardEditor") {
+			return getPlanForTab(frm, "BoardEditor");
+		}
 		return getPlanForTab(frm, tab);
+	}
+
+	function consumePreferredPlanTab(frm, allowedTabs) {
+		const orderName = String((frm && frm.doc && frm.doc.name) || "").trim();
+		if (!orderName || typeof window === "undefined" || !window.sessionStorage) {
+			return "";
+		}
+		const key = `almdina.dco.planTab.${orderName}`;
+		try {
+			const preferred = String(window.sessionStorage.getItem(key) || "").trim();
+			if (!preferred) return "";
+			// Do not consume the preference before the Edited tab is authorized to
+			// appear (first apply). Leaving it stored keeps the return intent.
+			if (Array.isArray(allowedTabs) && !allowedTabs.includes(preferred)) {
+				return "";
+			}
+			window.sessionStorage.removeItem(key);
+			return preferred;
+		} catch (error) {
+			return "";
+		}
+	}
+
+	function applyReturnBanner(frm) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const pending = owner && typeof owner.applyReturnState === "function"
+			? owner.applyReturnState(frm)
+			: null;
+		// Prefer the in-memory visit state after load() has hydrated it. Do not
+		// create a new visit from sessionStorage during paint-only calls.
+		if (!pending) return "";
+		const status = String(pending.status || "");
+		if (status === "waiting_row" || status === "pending") {
+			return `
+				<div class="dco-plan-apply-return-banner" data-status="${frappe.utils.escape_html(status)}" role="status" aria-live="polite">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Updating the edited plan"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("Waiting for the edited cutting plan to appear..."))}</span>
+				</div>
+			`;
+		}
+		if (status === "failed") {
+			return `
+				<div class="dco-plan-apply-return-banner is-error" data-status="failed" role="alert" aria-live="assertive">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Could not refresh the edited plan"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("The edited cutting plan could not be refreshed after apply. Retry loading the plan."))}</span>
+					<button type="button" class="btn btn-sm btn-default dco-plan-apply-return-retry">${frappe.utils.escape_html(translate("Retry loading the plan"))}</button>
+				</div>
+			`;
+		}
+		if (status === "newer") {
+			return `
+				<div class="dco-plan-apply-return-banner is-warning" data-status="newer" role="status" aria-live="polite">
+					<strong class="dco-plan-apply-return-banner__title">${frappe.utils.escape_html(translate("Newer edited plan available"))}</strong>
+					<span class="dco-plan-apply-return-banner__summary">${frappe.utils.escape_html(pending.message || translate("A newer edited cutting plan is shown."))}</span>
+				</div>
+			`;
+		}
+		return "";
+	}
+
+	function bindApplyReturnRetry(frm, wrapper) {
+		if (!wrapper || typeof wrapper.find !== "function") return;
+		const button = wrapper.find(".dco-plan-apply-return-retry");
+		if (!button || !button.length || typeof button.off !== "function") return;
+		button.off("click.almdinaApplyReturn").on("click.almdinaApplyReturn", () => {
+			const owner = window.AlmdinaPlanWorkspaceState;
+			if (!owner || typeof owner.retryApplyReturnRead !== "function") return;
+			Promise.resolve(owner.retryApplyReturnRead(frm)).catch(() => {
+				// Workspace state owns error/retry presentation.
+			});
+		});
 	}
 
 	function defaultTab(frm) {
@@ -158,6 +266,15 @@
 		const preferred = frm.__almdina_active_plan_tab;
 		if (preferred && allowed.includes(preferred)) {
 			return preferred;
+		}
+
+		// After applying a board-editor layout, return to the Edited plan tab
+		// without changing approved_plan. Consumed once the tab is visible so
+		// later opens keep the normal Approved/System preference.
+		const remembered = consumePreferredPlanTab(frm, allowed);
+		if (remembered && allowed.includes(remembered)) {
+			frm.__almdina_active_plan_tab = remembered;
+			return remembered;
 		}
 
 		if (frm.doc.approved_plan && allowed.includes("Approved")) {
@@ -308,6 +425,37 @@
 		return historicalBanner(frm, tab) || (mismatched ? mismatchBanner(frm, tab) : "");
 	}
 
+	function planPaintIdentity(frm, tab) {
+		const owner = window.AlmdinaPlanWorkspaceState;
+		const row = owner && typeof owner.planForTab === "function"
+			? owner.planForTab(frm, tab)
+			: null;
+		if (!row || !String(row.name || "").trim()) {
+			return `${tab}::empty`;
+		}
+		const content = String(row.content_identity || "").trim();
+		if (content) return `${tab}::${content}`;
+		return [
+			tab,
+			String(row.name || ""),
+			String(row.revision || ""),
+			String(row.modified || ""),
+			String(row.status || ""),
+			String((row.validation && row.validation.freshness_state) || ""),
+		].join("::");
+	}
+
+	function unappliedEditorDraftBanner(row) {
+		const draft = row && row.editor_draft;
+		if (!draft || !draft.present || !draft.unapplied) return "";
+		return `
+			<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+				<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Unapplied board-editor draft"))}</strong>
+				<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(translate("The board editor has saved changes that are not applied to this cutting plan yet. The layout below is the last applied plan, not those unapplied edits."))}</span>
+			</div>
+		`;
+	}
+
 	function renderTabContent(frm, tab) {
 		if (tab === "Custom") {
 			if (!hasCustomPlan(frm)) {
@@ -315,6 +463,38 @@
 			}
 			const banner = planStatusBanner(frm, "Custom");
 			return `${banner}${renderPlanHtml(frm, getPlanForTab(frm, "Custom"))}`;
+		}
+
+		if (tab === "BoardEditor") {
+			const returnBanner = applyReturnBanner(frm);
+			const plan = getPlanForTab(frm, "BoardEditor");
+			if (!plan || !plan.sheets || !plan.sheets.length) {
+				if (returnBanner) {
+					return `${returnBanner}${emptyState("Waiting for the edited cutting plan to appear...")}`;
+				}
+				return emptyState("There is no edited board-editor plan yet.");
+			}
+			const owner = window.AlmdinaPlanWorkspaceState;
+			const row = owner && typeof owner.planForTab === "function"
+				? owner.planForTab(frm, "BoardEditor")
+				: null;
+			let block = returnBanner;
+			if (row && row.manufacturing_blocked) {
+				const reason = String(row.manufacturing_block_reason || "").trim();
+				const summary = reason === "board_editor_plan_not_ready"
+					? translate("This edited plan is not ready for approval or DXF export yet. Fix validation issues, then re-apply the layout.")
+					: translate("This edited plan cannot be approved or exported for a specific manufacturing reason.");
+				block = `${block}
+					<div class="dco-plan-historical-banner" role="status" aria-live="polite">
+						<strong class="dco-plan-historical-banner__title">${frappe.utils.escape_html(translate("Edited plan blocked"))}</strong>
+						<span class="dco-plan-historical-banner__summary">${frappe.utils.escape_html(summary)}</span>
+					</div>
+				`;
+			} else {
+				block = `${block}${planStatusBanner(frm, "BoardEditor") || ""}`;
+			}
+			block = `${unappliedEditorDraftBanner(row)}${block}`;
+			return `${block}${renderPlanHtml(frm, plan)}`;
 		}
 
 		if (tab === "Approved") {
@@ -381,18 +561,29 @@
 
 		const selectedTab = activeTab(frm);
 		frm.__almdina_active_plan_tab = selectedTab;
+		const paintKey = planPaintIdentity(frm, selectedTab);
+		const previousPaintKey = String(frm.__almdina_plan_paint_key || "");
 		const content = renderTabContent(frm, selectedTab);
 		const orderName = String(frm.doc.name || "");
 		const escapedOrderName = frappe.utils.escape_html(orderName);
+		const escapedPaintKey = frappe.utils.escape_html(paintKey);
+		// Tab switches never mutate approved_plan. Paint identity includes plan
+		// name + content revision so a retained DOM cannot keep an older layout.
+		frm.__almdina_plan_paint_key = paintKey;
+		if (previousPaintKey && previousPaintKey !== paintKey) {
+			frm.__almdina_plan_paint_generation = Number(frm.__almdina_plan_paint_generation || 0) + 1;
+		}
 		wrapper
 			.attr("data-almdina-order", orderName)
+			.attr("data-almdina-plan-paint-key", paintKey)
 			.html(`
 				${buildTabBar(frm, selectedTab, tabs)}
 				<div class="dco-plan-context-actions-host" data-almdina-order="${escapedOrderName}"></div>
-				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}">${content}</div>
+				<div class="dco-plan-tab-content" data-almdina-order="${escapedOrderName}" data-almdina-plan-paint-key="${escapedPaintKey}">${content}</div>
 			`);
 		renderContextActions(frm, wrapper);
-        window.AlmdinaPlanPreviewPresenter?.bindGallery?.(frm, wrapper);
+		bindApplyReturnRetry(frm, wrapper);
+		window.AlmdinaPlanPreviewPresenter?.bindGallery?.(frm, wrapper);
 		wrapper.find("[data-plan-tab]").on("click", function onTabClick() {
 			const nextTab = $(this).attr("data-plan-tab");
 			if (this && this.disabled) return;

@@ -24,6 +24,7 @@ _DELIVERED_PLAN_MUTATIONS = frozenset({
     Capability.REPLACE_DXF,
     Capability.RECALCULATE_PLAN,
     Capability.EDIT_OPTIMIZER_SETTINGS,
+    Capability.USE_BOARD_EDITOR,
     Capability.SET_OFFCUT_EXECUTION_OWNER,
 })
 

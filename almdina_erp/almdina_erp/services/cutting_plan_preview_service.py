@@ -16,7 +16,10 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     sanitize_plan_snapshot,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, SYSTEM
-from almdina_erp.almdina_erp.domain.cutting.plan_settings import settings_for_system_search
+from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
+    plan_settings_field_values,
+    settings_for_system_search,
+)
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import OptimizationOutcome
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import seed_plan_settings
 from almdina_erp.almdina_erp.services.export_validation_service import validate_cutting_plan_issues
@@ -66,6 +69,7 @@ _SETTING_TO_PLAN_FIELD = {
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 
 
@@ -93,6 +97,14 @@ def _apply_settings(plan: Any, settings: dict[str, Any]) -> None:
         setattr(plan, plan_field, settings[setting_name])
 
 
+def _preview_deducts_edge_thickness(plan: Any) -> bool:
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    return coerce_deduct_edge_thickness(getattr(plan, "deduct_edge_thickness", None))
+
+
 def _preview_cost_summary(plan: Any) -> dict[str, float]:
     return {
         "board_rate_usd": flt(plan.board_rate_usd),
@@ -116,6 +128,7 @@ def _preview_summary(
             "kerf_mm": plan.kerf_mm,
             "trim_margin_mm": plan.trim_margin_mm,
             "optimization_time_limit_sec": plan.optimization_time_limit_sec,
+            "deduct_edge_thickness": 1 if _preview_deducts_edge_thickness(plan) else 0,
         },
         "engine": {
             "method_key": str(plan.method_key or ""),
@@ -165,9 +178,7 @@ def _system_draft(order: Any, capability: str) -> Any:
     plan.door_cutting_order = order.name
     plan.source_type, plan.status, plan.plan_kind = SYSTEM,DRAFT,"Order"
     plan.revision = int((approved or latest or {}).get('revision') or 0)+1
-    _apply_settings(plan,dict(packing_mode=settings.optimization_mode,cutting_machine_type=settings.machine_type,
-        kerf_mm=settings.kerf_mm,trim_margin_mm=settings.preferred_trim_mm,
-        optimization_time_limit_sec=settings.optimization_time_limit_sec))
+    _apply_settings(plan, plan_settings_field_values(settings))
     from almdina_erp.almdina_erp.domain.orders.plan_fingerprint import fingerprint_payload
     plan.modified = "new:"+fingerprint_payload(dict(latest=latest,approved=approved,settings=_settings_from_plan(plan).__dict__
         if hasattr(settings,'__dict__') else {k:getattr(plan,v) for k,v in _SETTING_TO_PLAN_FIELD.items()}))
@@ -312,6 +323,7 @@ def preview_cutting_plan(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Calculate a disposable System-plan preview without any DB mutation."""
 
@@ -327,12 +339,21 @@ def preview_cutting_plan(
     _assert_recalculation_state(order)
 
     source_plan = _system_draft(order, Capability.RECALCULATE_PLAN)
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    if deduct_edge_thickness is None:
+        deduct_edge_thickness = 1 if coerce_deduct_edge_thickness(
+            getattr(source_plan, "deduct_edge_thickness", None)
+        ) else 0
     requested_settings = {
         "packing_mode": packing_mode,
         "cutting_machine_type": cutting_machine_type,
         "kerf_mm": kerf_mm,
         "trim_margin_mm": trim_margin_mm,
         "optimization_time_limit_sec": optimization_time_limit_sec,
+        "deduct_edge_thickness": deduct_edge_thickness,
     }
     # Validate any explicit historical API mode, then apply the same trusted
     # server policy used by calculation before creating the preview fingerprint.
@@ -400,8 +421,33 @@ def discard_cutting_plan_preview(order_name: str,preview_id: str):
     return {'discarded': True}
 
 
+def _apply_committed_tool_diameters(plan: Any, **updates: Any) -> None:
+    """Persist explicit layer diameters on the draft being committed.
+
+    ``None`` means the operator did not change that bit. The fingerprint check
+    has already passed; these fields are not part of it.
+    """
+
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import ToolDiameterError
+    from almdina_erp.almdina_erp.services.cutting_plan_command_service import (
+        _apply_tool_diameters,
+    )
+
+    try:
+        _apply_tool_diameters(plan, updates)
+    except ToolDiameterError:
+        frappe.throw(_("إحدى قيم عروض الريش غير صالحة."), frappe.ValidationError)
+
+
 @frappe.whitelist()
-def commit_cutting_plan_preview(order_name: str, preview_id: str, candidate_id: str | None = None) -> dict[str, Any]:
+def commit_cutting_plan_preview(
+    order_name: str,
+    preview_id: str,
+    candidate_id: str | None = None,
+    liner_tool_diameter_mm: float | None = None,
+    handle_recess_tool_diameter_mm: float | None = None,
+    rear_groove_tool_diameter_mm: float | None = None,
+) -> dict[str, Any]:
     """Commit exactly one trusted preview; never execute the optimizer again."""
 
     name = str(order_name or "").strip()
@@ -421,6 +467,13 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str, candidate_id: 
     _assert_recalculation_state(order)
 
     session,source = _session(order,token)
+    from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+        coerce_deduct_edge_thickness,
+    )
+
+    previous_deduct = coerce_deduct_edge_thickness(
+        getattr(source, "deduct_edge_thickness", None)
+    )
     candidate = _candidate(session,candidate_id)
     consumed = FrappeCuttingPlanPreviewStore().consume(token)
     if not consumed:
@@ -438,7 +491,25 @@ def commit_cutting_plan_preview(order_name: str, preview_id: str, candidate_id: 
         expected_input_fingerprint=session.input_fingerprint,
     )
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
+    # Diameters are applied only after the preview fingerprint matches. They are
+    # not part of that fingerprint, so a bit change cannot rewrite the layout,
+    # and the same save persists them on this System Draft.
+    _apply_committed_tool_diameters(
+        plan,
+        liner_tool_diameter_mm=liner_tool_diameter_mm,
+        handle_recess_tool_diameter_mm=handle_recess_tool_diameter_mm,
+        rear_groove_tool_diameter_mm=rear_groove_tool_diameter_mm,
+    )
     repository.save_document(plan)
+    committed_deduct = coerce_deduct_edge_thickness(
+        getattr(plan, "deduct_edge_thickness", None)
+    )
+    if committed_deduct != previous_deduct:
+        from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+            sync_order_cut_dimensions,
+        )
+
+        sync_order_cut_dimensions(order, deduct_edge_thickness=committed_deduct)
     refresh_order_commercial_totals(order, plan)
     from almdina_erp.almdina_erp.services.final_price_approval_service import (
         maybe_invalidate_final_price_approval,

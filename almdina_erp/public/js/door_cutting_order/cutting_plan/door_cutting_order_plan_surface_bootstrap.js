@@ -11,6 +11,10 @@
             asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js",
         }),
         Object.freeze({
+            global: "AlmdinaEdgeDisplay",
+            asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js",
+        }),
+        Object.freeze({
             global: "AlmdinaCuttingPlanRender",
             asset: "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         }),
@@ -227,7 +231,12 @@
             && wrapperAttached(frm, layout)
             && wrapperOrder(actions) === orderName
             && wrapperOrder(layout) === orderName
-            && actions.find(".dco-plan-actions-shell").length
+            && (
+                actions.attr("data-almdina-plan-actions") === "ready"
+                || actions.find(".dco-plan-actions-shell").length
+                || actions.find(".dco-recalculate-plan").length
+                || actions.find(".dco-plan-settings-editor").length
+            )
             && layout.find(".dco-plan-tab-content").length
             && layout.children().length
             && contextActionsReady(frm, layout)

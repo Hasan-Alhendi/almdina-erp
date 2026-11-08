@@ -28,14 +28,19 @@ def test_accepted_dxf_piece_inherits_all_four_semantic_edge_flags():
 def test_edge_contract_keeps_order_orientation_and_renderer_owns_rotation():
     strict = _source(STRICT)
     renderer = _source(RENDERER)
+    edge_display = _source(CUTTING_PLAN / "door_cutting_order_edge_display.js")
 
     assert '"rotation_owned_by_renderer": True' in strict
-    # Display mapping stays renderer-owned: 90° clockwise remaps semantic sides.
-    assert "else if (piece.rotated)" in renderer
-    assert "top = semantic.long_left ? 1 : 0;" in renderer
-    assert "bottom = semantic.long_right ? 1 : 0;" in renderer
-    assert "right = semantic.width_top ? 1 : 0;" in renderer
-    assert "left = semantic.width_bottom ? 1 : 0;" in renderer
+    # Shared AlmdinaEdgeDisplay owns the 90° semantic→display remap for rectangles.
+    assert "else if (piece && piece.rotated)" in edge_display
+    assert "top = semantic.long_left ? 1 : 0;" in edge_display
+    assert "bottom = semantic.long_right ? 1 : 0;" in edge_display
+    assert "right = semantic.width_top ? 1 : 0;" in edge_display
+    assert "left = semantic.width_bottom ? 1 : 0;" in edge_display
+    # Corner plans: import quarter-turns vs Board Editor posed usable-sheet copies.
+    assert "function resolveCornerEdgePiece" in renderer
+    assert "isPosedUsableSheetGeometry" in renderer
+    assert "piece.rotated && !posed" in renderer
 
 
 def test_custom_dxf_and_system_plan_share_the_same_print_renderer():
