@@ -213,6 +213,7 @@ def finalize_restore(request_path: str, status: str, error_code: str = "") -> No
             "requested_on": payload.get("source_requested_on") or payload.get("requested_on") or now(),
             "completed_on": payload.get("source_completed_on") or payload.get("source_requested_on") or now(),
             "operation_type": payload.get("source_operation_type") or "Manual",
+            "import_app_versions": payload.get("source_app_versions") or None,
             "target": "Local",
             "status": "Completed",
         },

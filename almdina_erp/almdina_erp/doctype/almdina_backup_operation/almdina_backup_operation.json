@@ -20,11 +20,12 @@
     "schedule_key",
     "source_operation_id",
     "error_summary",
-    "artifact_manifest"
+    "artifact_manifest",
+    "import_app_versions"
   ],
   "fields": [
     {"fieldname":"operation_id","fieldtype":"Data","in_list_view":1,"label":"Operation ID","read_only":1,"reqd":1,"unique":1},
-    {"fieldname":"operation_type","fieldtype":"Select","in_list_view":1,"label":"Operation Type","options":"Manual\nScheduled\nSafety\nRestore","read_only":1,"reqd":1},
+    {"fieldname":"operation_type","fieldtype":"Select","in_list_view":1,"label":"Operation Type","options":"Manual\nScheduled\nSafety\nImported\nRestore","read_only":1,"reqd":1},
     {"fieldname":"target","fieldtype":"Select","in_list_view":1,"label":"Target","options":"Local\nExternal\nRestore","read_only":1,"reqd":1},
     {"fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Queued\nRunning\nPrepared\nCompleted\nFailed","read_only":1,"reqd":1},
     {"fieldname":"backup_identifier","fieldtype":"Data","label":"Backup Identifier","read_only":1},
@@ -38,7 +39,8 @@
     {"fieldname":"schedule_key","fieldtype":"Data","label":"Schedule Key","read_only":1,"unique":1},
     {"fieldname":"source_operation_id","fieldtype":"Data","label":"Source Operation ID","read_only":1},
     {"fieldname":"error_summary","fieldtype":"Small Text","label":"Safe Error Summary","read_only":1},
-    {"fieldname":"artifact_manifest","fieldtype":"Code","label":"Artifact Manifest","options":"JSON","read_only":1}
+    {"fieldname":"artifact_manifest","fieldtype":"Code","label":"Artifact Manifest","options":"JSON","read_only":1},
+    {"fieldname":"import_app_versions","fieldtype":"Code","label":"Imported App Versions","options":"JSON","read_only":1}
   ],
   "index_web_pages_for_search": 0,
   "is_submittable": 0,

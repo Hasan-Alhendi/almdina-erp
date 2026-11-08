@@ -59,6 +59,7 @@ def write_restore_request(
     target: BackupBundle,
     safety_operation_id: str,
     safety: BackupBundle,
+    source_app_versions: str = "",
 ) -> Path:
     folder = Path(frappe.get_site_path("private", REQUEST_FOLDER)).resolve()
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -72,6 +73,7 @@ def write_restore_request(
         "operation_id": operation_id,
         "source_operation_id": source_operation_id,
         "source_operation_type": source_operation_type,
+        "source_app_versions": source_app_versions,
         "source_requested_by": source_requested_by,
         "source_requested_on": source_requested_on,
         "source_completed_on": source_completed_on,
