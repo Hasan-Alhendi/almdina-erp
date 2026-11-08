@@ -128,7 +128,8 @@
                         try { window.localStorage.removeItem(pendingKey); } catch (_ignored) { /* Optional persistence. */ }
                     }
                 }
-                if (busy) setBusy(true, $body.data("backupUploadProgress") || t("Verifying backup..."));
+                if (busy) setBusy(true, watchedKind === "create" ? t("Creating backup...") :
+                    $body.data("backupUploadProgress") || t("Verifying backup..."));
                 const running = (snapshot.history || []).some(row =>
                     ["Queued", "Running", "Prepared"].includes(row.status) &&
                     (row.operation_type !== "Imported" || row.status === "Running"));

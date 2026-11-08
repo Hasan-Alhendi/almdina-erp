@@ -3492,3 +3492,4 @@ External backup upload failed.,فشل إرسال النسخة إلى الخاد�
 A local backup is already in progress.,توجد نسخة محلية قيد الإنشاء. انتظر اكتمالها.
 The site database is unavailable. Restore has not started.,قاعدة بيانات الموقع غير متاحة. لم تبدأ الاستعادة.
 Selected backup is no longer compatible with this site.,النسخة المحددة لم تعد متوافقة مع هذا الموقع.
+Creating backup...,جاري إنشاء النسخة الاحتياطية...
