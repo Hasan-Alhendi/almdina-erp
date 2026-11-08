@@ -244,11 +244,17 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         from almdina_erp.tests.geometry_nesting_cases import source_rows
         from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
         band='P5-BAND-'+frappe.generate_hash(length=10)
-        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0,disabled=0))
+        self._insert('Edge Banding Type',dict(name=band,thickness_mm=1,disabled=0))
         try:
             rows=source_rows('P5-addon-ambiguous')
+            # All four outer edges and the inner L strap use the same
+            # 1 mm band. The inner strap consumes the second millimetre of
+            # each 10 cm remnant, matching the generated 9.8 cm raw notch.
+            # Without the inner strap, the strict importer correctly expects
+            # 9.9 cm instead and must reject that geometry.
             rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
-                           edge_long_type=band,edge_width_type=band)
+                           edge_long_type=band,edge_width_type=band,
+                           edge_break=1,edge_type=band)
             for side in ('edge_long_left','edge_long_right','edge_width_top','edge_width_bottom'):
                 rows[0][side+'_type_override']=band
             order,rows=self._order(45.3,45.3,0,rows)
@@ -261,8 +267,17 @@ class TestSmartCuttingIntegration(FrappeTestCase):
             self.assertEqual(json.loads(plan.snapshot_json),selected['plan'])
             self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
             self.assertEqual(previews.validate_cutting_plan_issues(plan),[])
+            # The synthetic order helper normally copies finished dimensions into
+            # persisted cut fields. Here the 1 mm profiles on both opposing
+            # edges give a 2 mm deduction per axis. The strict importer must
+            # compare against the resulting cut dimensions, not 40 x 40.
+            roundtrip_rows=[dict(row) for row in rows]
+            band_cm=0.1
+            roundtrip_rows[0]['cut_width_cm']=rows[0]['width_cm']-2*band_cm
+            roundtrip_rows[0]['cut_length_cm']=rows[0]['length_cm']-2*band_cm
+            self.assertEqual((roundtrip_rows[0]['cut_width_cm'],roundtrip_rows[0]['cut_length_cm']), (39.8,39.8))
             with TemporaryDirectory() as directory:
-                imported=import_saved_plan(selected['plan'],rows,export_real_js(_plan_to_export_snapshot(plan),Path(directory)))
+                imported=import_saved_plan(selected['plan'],roundtrip_rows,export_real_js(_plan_to_export_snapshot(plan),Path(directory)))
             self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),2)
         finally:
             frappe.db.delete('Edge Banding Type',{'name':band})

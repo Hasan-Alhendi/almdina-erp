@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+from frappe.utils import cint
 
 
 MEMBERSHIP_FIELD = "custom_almdina_workforce_member"
@@ -9,7 +10,7 @@ LEGACY_ALMDINA_APP = "almdina_erp"
 
 
 def sync_workforce_membership_metadata() -> None:
-    """Create the app-owned workforce membership marker and backfill legacy sites.
+    """Maintain only the app-owned membership field's metadata.
 
     Older releases used User.default_app as a membership flag. That couples
     membership to Frappe navigation and can override Role.home_page. The marker
@@ -38,6 +39,19 @@ def sync_workforce_membership_metadata() -> None:
         update=True,
     )
 
+    frappe.clear_cache(doctype="User")
+
+
+def backfill_legacy_workforce_membership() -> int:
+    """Transition historic workforce users once; never run on every migrate.
+
+    Existing membership flags (including intentionally removed membership) are
+    left untouched by subsequent app deployments because this runs as a Patch.
+    Replays are safe: users already marked are not written again.
+    """
+    if not frappe.db.exists("DocType", "User"):
+        return 0
+
     # Legacy users that were explicitly placed in Almdina scope retain their
     # membership, but their existing Frappe default_app/default_workspace values
     # are preserved. Administrators can clear or change those native settings.
@@ -64,17 +78,33 @@ def sync_workforce_membership_metadata() -> None:
         for user in (*legacy_users, *audited_users)
         if user and str(user) not in {"Administrator", "Guest"}
     }
-    for user in sorted(members):
-        if frappe.db.exists("User", user):
-            frappe.db.set_value(
-                "User",
-                user,
-                MEMBERSHIP_FIELD,
-                1,
-                update_modified=False,
-            )
+    if not members:
+        return 0
 
-    frappe.clear_cache(doctype="User")
+    # Read current flags in one query. The migration must not UPDATE every
+    # User row on every deployment; even no-op writes can collide with
+    # concurrent user/session maintenance and abort the whole migration.
+    existing = frappe.get_all(
+        "User",
+        filters={"name": ["in", sorted(members)]},
+        fields=["name", MEMBERSHIP_FIELD],
+        limit=0,
+    )
+    updated = 0
+    for row in existing:
+        if cint(row.get(MEMBERSHIP_FIELD)) == 1:
+            continue
+        frappe.db.set_value(
+            "User", row["name"], MEMBERSHIP_FIELD, 1, update_modified=False
+        )
+        updated += 1
 
+    if updated:
+        frappe.clear_cache(doctype="User")
+    return updated
 
-__all__ = ["MEMBERSHIP_FIELD", "sync_workforce_membership_metadata"]
+__all__ = [
+    "MEMBERSHIP_FIELD",
+    "sync_workforce_membership_metadata",
+    "backfill_legacy_workforce_membership",
+]

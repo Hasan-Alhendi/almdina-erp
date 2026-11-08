@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install optimizer test dependency
+      - name: Install optimizer smoke test dependencies
         shell: bash
         run: |
-          python -m pip install --disable-pip-version-check 'ortools>=9.15,<10'
+          python -m pip install --disable-pip-version-check 'ortools>=9.15,<10' 'pytest>=9.0,<10'
 
       - name: Validate JSON and Python syntax
         shell: bash
@@ -45,20 +45,7 @@ jobs:
       # this gate to drift after refactors while the canonical suites stayed green.
       - name: Validate advanced cutting optimizer smoke baseline
         shell: bash
-        run: |
-          python - <<'PY'
-          from almdina_erp.tests import test_advanced_cutting_optimizer as checks
-
-          tests = [
-              getattr(checks, name)
-              for name in dir(checks)
-              if name.startswith('test_') and callable(getattr(checks, name))
-          ]
-          for test in tests:
-              print(f'Running {test.__name__}...')
-              test()
-          print(f'Validated {len(tests)} advanced optimizer regression checks')
-          PY
+        run: python -m pytest -q almdina_erp/tests/test_advanced_cutting_optimizer.py
 
       - name: Validate JavaScript syntax
         shell: bash
