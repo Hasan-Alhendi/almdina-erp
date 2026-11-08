@@ -556,6 +556,12 @@ def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> s
     return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 
 
+def _plan_machining_diameters(plan: Any) -> dict[str, float]:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    return diameters_for_record(plan)
+
+
 def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=0) -> OptimizationOutcome:
     """Calculate one Draft System plan without mutating Door Cutting Order.
 
@@ -609,6 +615,7 @@ def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=
             allow_piece_mirroring=piece_mirroring_allowed(
                 getattr(order, "allow_piece_mirroring", None)
             ),
+            machining_diameters_mm=_plan_machining_diameters(plan),
         ),
         engine=domain_cutting_engine,
     )

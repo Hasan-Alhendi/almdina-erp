@@ -2969,6 +2969,7 @@ def _expected_saw_center_segments(
     sheets: Sequence[dict[str, Any]],
     *,
     kerf_mm: float,
+    clearance_limit_mm: float | None = None,
 ) -> list[tuple[tuple[float, float], tuple[float, float]]]:
     """Saw centers from finished DXF outlines in absolute file coordinates."""
 
@@ -3004,7 +3005,14 @@ def _expected_saw_center_segments(
             min_x + float(sheet.get("full_width_mm") or 0.0),
             min_y + float(sheet.get("full_height_mm") or 0.0),
         )
-        expected.extend(cutter_center_segments(shapes, radius, board=board))
+        expected.extend(
+            cutter_center_segments(
+                shapes,
+                radius,
+                board=board,
+                clearance_limit_mm=clearance_limit_mm,
+            )
+        )
     return expected
 
 
@@ -3015,13 +3023,19 @@ def _classify_modern_saw_centers(
     *,
     kerf_mm: float,
     geometry_format: bool,
+    clearance_limit_mm: float | None = None,
 ) -> str:
     """Return snapshot status for modern GEOMETRY files; legacy stays Legacy."""
 
     if not geometry_format:
         return "Legacy"
     observed = _segments_for_layer(rows, CUT_PATH_LAYER)
-    expected = _expected_saw_center_segments(pieces, sheets, kerf_mm=kerf_mm)
+    expected = _expected_saw_center_segments(
+        pieces,
+        sheets,
+        kerf_mm=kerf_mm,
+        clearance_limit_mm=clearance_limit_mm,
+    )
     classification = classify_saw_center_segments(observed, expected)
     if classification == SAW_CENTER_CLASS_INVALID:
         raise DxfImportError(
@@ -3463,12 +3477,14 @@ def parse_production_dxf(
     saw_center_pieces = [
         piece for piece in labeled if not piece.get("_exclusive_offcut")
     ]
+    largest_tool_mm, _layer_diameters = _import_tool_diameters(order)
     saw_center_status = _classify_modern_saw_centers(
         rows,
         saw_center_pieces,
         sheets,
         kerf_mm=flt(order.kerf_mm),
         geometry_format=geometry_format,
+        clearance_limit_mm=largest_tool_mm,
     )
 
     geometry_by_piece_id = {int(piece["id"]): piece["_outline_cm"] for piece in labeled}

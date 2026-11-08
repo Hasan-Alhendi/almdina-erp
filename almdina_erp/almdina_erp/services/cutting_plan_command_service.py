@@ -674,10 +674,12 @@ def save_system_plan_settings(
         plan = repository.get_document(plan.name)
         if "deduct_edge_thickness" in changed:
             _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
-    # Layer diameters do not move doors. Persist them without marking the
-    # nesting plan stale and without rewriting an approved snapshot.
+    # A larger machining bit can widen a facing gap on the next calculation.
+    # Mark this draft stale. Approved snapshots are a different document and
+    # are not rewritten here.
     diameter_changed = _apply_tool_diameters(plan, updates)
     if diameter_changed:
+        plan.plan_needs_recalculation = 1
         repository.save_document(plan)
         plan = repository.get_document(plan.name)
     result = plan_payload(plan, order)

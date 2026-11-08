@@ -53,6 +53,7 @@ class CuttingPlanEngine(Protocol):
         min_remnant_area_m2: float,
         mirroring_allowed: bool = False,
         research_abc: ABCSearchPolicy | None = None,
+        machining_diameters_mm: dict[str, Any] | None = None,
     ) -> dict[str, Any]: ...
 
     def validate(
@@ -119,6 +120,7 @@ class OptimizeOrderPlanCommand:
     allow_piece_mirroring: bool = False
     seed_plans: tuple[dict[str, Any], ...] = ()
     search_round: int = 0
+    machining_diameters_mm: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +537,10 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
             baseline_proof=baseline_proof,
         )
 
+    plan = _restore_machining_clearance(
+        plan, command, usable_width_cm, usable_length_cm, metric_options,
+    )
+
     def validate_snapshot_plan() -> list[str]:
         errors = list(
             engine.validate(plan, expanded, usable_width_cm, usable_length_cm)
@@ -558,6 +564,9 @@ def _snapshot_outcome(command, engine, plan, expanded, applied_trim, trim_decisi
     if validation_errors and plan.get("sheets") != original_sheets:
         plan["sheets"] = original_sheets
         plan = _enrich_final_geometry_metrics(plan, metric_options)
+        plan = _restore_machining_clearance(
+            plan, command, usable_width_cm, usable_length_cm, metric_options,
+        )
         validation_errors = validate_snapshot_plan()
 
     metrics = dict(plan.get("industrial_metrics") or {})
@@ -714,6 +723,41 @@ def _canonical_trace_settings(command: OptimizeOrderPlanCommand) -> PlanSettings
     )
 
 
+def _restore_machining_clearance(
+    plan: dict[str, Any],
+    command: OptimizeOrderPlanCommand,
+    usable_width_cm: float,
+    usable_length_cm: float,
+    metric_options: dict[str, Any],
+) -> dict[str, Any]:
+    """Re-open a facing gap after centering or cut-line alignment closes it."""
+
+    diameters = command.machining_diameters_mm
+    if not isinstance(diameters, dict) or not diameters:
+        return plan
+    from almdina_erp.almdina_erp.domain.cutting.machining_clearance import (
+        apply_machining_clearance,
+        mark_unresolved_clearance,
+    )
+
+    applied = apply_machining_clearance(
+        plan,
+        kerf_cm=command.board.kerf_cm,
+        board_w_cm=usable_width_cm,
+        board_h_cm=usable_length_cm,
+        diameters=diameters,
+    )
+    if applied is None:
+        return mark_unresolved_clearance(
+            plan,
+            kerf_cm=command.board.kerf_cm,
+            diameters=diameters,
+        )
+    if applied is not plan:
+        return _enrich_final_geometry_metrics(applied, metric_options)
+    return applied
+
+
 def _run_engine(
     command: OptimizeOrderPlanCommand,
     *,
@@ -740,6 +784,8 @@ def _run_engine(
            if command.optimizer.research_abc is not None else {}),
         **({'seed_plans':command.seed_plans,'search_round':command.search_round}
            if command.seed_plans or command.search_round else {}),
+        **({'machining_diameters_mm': command.machining_diameters_mm}
+           if command.machining_diameters_mm else {}),
     )
 
 

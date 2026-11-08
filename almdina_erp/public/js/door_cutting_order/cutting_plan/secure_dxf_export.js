@@ -652,7 +652,163 @@
         return [start[0] + direction[0] * step, start[1] + direction[1] * step];
     }
 
-    function cutterCenterPaths(shapes, radius) {
+    function clearingCenters(gap, diameter) {
+        const overlap = 0.5;
+        if (!(gap > 0) || !(diameter > 0) || gap + 1e-6 < diameter) return [];
+        if (gap <= diameter + 1e-6) return [gap / 2];
+        const span = gap - diameter;
+        const maxStep = diameter - overlap;
+        if (maxStep <= 1e-6) return [];
+        const steps = Math.max(1, Math.ceil((span / maxStep) - 1e-9));
+        const step = span / steps;
+        const centers = [];
+        for (let index = 0; index <= steps; index += 1) {
+            centers.push(diameter / 2 + step * index);
+        }
+        const radius = diameter / 2;
+        if (centers[0] - radius > 1e-6 || centers[centers.length - 1] + radius < gap - 1e-6) return [];
+        for (let index = 1; index < centers.length; index += 1) {
+            const covered = (centers[index - 1] + radius) - (centers[index] - radius);
+            if (covered + 1e-6 < overlap) return [];
+        }
+        return centers;
+    }
+
+    function distanceToRing(point, ring) {
+        let best = Infinity;
+        for (let index = 0; index < ring.length; index += 1) {
+            const start = ring[index];
+            const end = ring[(index + 1) % ring.length];
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const denom = dx * dx + dy * dy;
+            const t = denom <= 1e-12 ? 0 : Math.max(0, Math.min(1,
+                ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / denom
+            ));
+            best = Math.min(best, Math.hypot(point[0] - (start[0] + t * dx), point[1] - (start[1] + t * dy)));
+        }
+        return best;
+    }
+
+    function strictMaterial(point, shapes) {
+        return shapes.some(shape => (
+            pointInRing(point, shape.outer)
+            && distanceToRing(point, shape.outer) > COLLINEAR_TOLERANCE_MM
+            && !(shape.holes || []).some(hole => pointInRing(point, hole))
+        ));
+    }
+
+    function gapClearingSegments(shapes, diameter, clearanceLimit) {
+        if (!(diameter > COLLINEAR_TOLERANCE_MM) || !(clearanceLimit > diameter + COLLINEAR_TOLERANCE_MM)) {
+            return [];
+        }
+        const rings = [];
+        shapes.forEach((shape, index) => {
+            rings.push([index, shape.outer]);
+            (shape.holes || []).forEach(hole => {
+                if (hole.length >= 2) rings.push([index, hole]);
+            });
+        });
+        const segments = [];
+        const seen = new Set();
+        rings.forEach(([shapeA, ringA], leftIndex) => {
+            rings.slice(leftIndex + 1).forEach(([shapeB, ringB]) => {
+                if (shapeA === shapeB) return;
+                ringEdges(ringA).forEach(edgeA => {
+                    ringEdges(ringB).forEach(edgeB => {
+                        const slot = facingSlot(edgeA, edgeB, shapes, diameter, clearanceLimit);
+                        if (!slot || seen.has(slot.key)) return;
+                        seen.add(slot.key);
+                        slot.segments.forEach(segment => segments.push(segment));
+                    });
+                });
+            });
+        });
+        return segments;
+    }
+
+    function ringEdges(ring) {
+        if (!ring || ring.length < 2) return [];
+        const closed = ring.slice();
+        if (Math.hypot(closed[0][0] - closed[closed.length - 1][0], closed[0][1] - closed[closed.length - 1][1]) > 1e-9) {
+            closed.push(closed[0]);
+        }
+        const edges = [];
+        for (let index = 1; index < closed.length; index += 1) {
+            if (Math.hypot(closed[index][0] - closed[index - 1][0], closed[index][1] - closed[index - 1][1]) > COLLINEAR_TOLERANCE_MM) {
+                edges.push([closed[index - 1], closed[index]]);
+            }
+        }
+        return edges;
+    }
+
+    function facingSlot(edgeA, edgeB, shapes, diameter, limit) {
+        const startA = edgeA[0];
+        const endA = edgeA[1];
+        const lengthA = Math.hypot(endA[0] - startA[0], endA[1] - startA[1]);
+        const direction = [(endA[0] - startA[0]) / lengthA, (endA[1] - startA[1]) / lengthA];
+        const startB = edgeB[0];
+        const endB = edgeB[1];
+        const lengthB = Math.hypot(endB[0] - startB[0], endB[1] - startB[1]);
+        const other = [(endB[0] - startB[0]) / lengthB, (endB[1] - startB[1]) / lengthB];
+        if (Math.abs(direction[0] * other[0] + direction[1] * other[1]) < 1 - 1e-4) return null;
+        const normal = [-direction[1], direction[0]];
+        const across = point => (point[0] - startA[0]) * normal[0] + (point[1] - startA[1]) * normal[1];
+        const along = point => (point[0] - startA[0]) * direction[0] + (point[1] - startA[1]) * direction[1];
+        const distStart = across(startB);
+        if (Math.abs(distStart - across(endB)) > Math.max(COLLINEAR_TOLERANCE_MM, 0.05)) return null;
+        const gap = Math.abs(distStart);
+        if (gap <= diameter + COLLINEAR_TOLERANCE_MM || gap > limit + COLLINEAR_TOLERANCE_MM) return null;
+        const sign = distStart > 0 ? 1 : -1;
+        const toward = [normal[0] * sign, normal[1] * sign];
+        const low = Math.max(0, Math.min(along(startB), along(endB)));
+        const high = Math.min(lengthA, Math.max(along(startB), along(endB)));
+        if (high - low <= COLLINEAR_TOLERANCE_MM) return null;
+        const midT = (low + high) / 2;
+        const mid = [startA[0] + direction[0] * midT, startA[1] + direction[1] * midT];
+        const probe = Math.min(1, diameter * 0.25);
+        const outerA = [mid[0] - toward[0] * probe, mid[1] - toward[1] * probe];
+        const far = [mid[0] + toward[0] * gap, mid[1] + toward[1] * gap];
+        const outerB = [far[0] + toward[0] * probe, far[1] + toward[1] * probe];
+        const gapMid = [mid[0] + toward[0] * gap / 2, mid[1] + toward[1] * gap / 2];
+        if (!isMaterial(outerA, shapes) || !isMaterial(outerB, shapes) || isMaterial(gapMid, shapes)) return null;
+        const centers = clearingCenters(gap, diameter);
+        if (!centers.length) return null;
+        const at = (station, center) => [
+            startA[0] + direction[0] * station + toward[0] * center,
+            startA[1] + direction[1] * station + toward[1] * center,
+        ];
+        const produced = [];
+        const radius = diameter / 2;
+        centers.forEach(center => {
+            if (Math.abs(center - radius) <= COLLINEAR_TOLERANCE_MM) return;
+            if (Math.abs(center - (gap - radius)) <= COLLINEAR_TOLERANCE_MM) return;
+            produced.push([at(low, center), at(high, center)]);
+        });
+        for (let index = 1; index < centers.length; index += 1) {
+            [low, high].forEach(station => {
+                const connector = [at(station, centers[index - 1]), at(station, centers[index])];
+                const inside = [0, 1, 2, 3, 4].some(step => {
+                    const weight = step / 4;
+                    return strictMaterial([
+                        connector[0][0] + (connector[1][0] - connector[0][0]) * weight,
+                        connector[0][1] + (connector[1][1] - connector[0][1]) * weight,
+                    ], shapes);
+                });
+                if (!inside) produced.push(connector);
+            });
+        }
+        return {
+            key: [
+                gapMid[0].toFixed(3), gapMid[1].toFixed(3),
+                Math.abs(direction[0]).toFixed(3), Math.abs(direction[1]).toFixed(3),
+                gap.toFixed(3),
+            ].join("|"),
+            segments: produced,
+        };
+    }
+
+    function cutterCenterPaths(shapes, radius, clearanceLimit) {
         const safeRadius = Math.max(0, num(radius));
         const prepared = shapes.map(shape => ({
             outer: openRing(shape.outer),
@@ -673,15 +829,16 @@
                 });
             });
         });
+        const extras = gapClearingSegments(prepared, safeRadius * 2, num(clearanceLimit));
         const merged = mergeCollinear(segments);
         const length = items => items.reduce((total, [start, end]) => (
             total + Math.hypot(end[0] - start[0], end[1] - start[1])
         ), 0);
         // Match Python: preserve closed rings unless centers actually overlap.
         if (length(segments) - length(merged) > COLLINEAR_TOLERANCE_MM) {
-            return merged.map(segment => ({ points: segment, closed: false }));
+            return mergeCollinear(segments.concat(extras)).map(segment => ({ points: segment, closed: false }));
         }
-        return closedPaths;
+        return closedPaths.concat(extras.map(segment => ({ points: segment, closed: false })));
     }
 
     function mergeCollinear(segments) {
@@ -1058,7 +1215,11 @@
             });
             // Separation/trim CUT_PATH is manufacturing-only after plan approval.
             if (includeSawCenters) {
-                cutterCenterPaths(shapes, num(cutterMm) / 2).forEach(path => {
+                const clearanceLimit = Math.max(
+                    num(cutterMm),
+                    ...Object.keys(layerDiameters).map(kind => num(layerDiameters[kind]))
+                );
+                cutterCenterPaths(shapes, num(cutterMm) / 2, clearanceLimit).forEach(path => {
                     entities += path.closed
                         ? lwpolyline(SAW_CENTER_LAYER, path.points, true)
                         : line(

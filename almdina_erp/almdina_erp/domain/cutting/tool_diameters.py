@@ -7,8 +7,12 @@ A missing value inherits that plan's kerf, so a plan saved before these fields
 keeps the historical shared blade and is not rewritten when factory defaults
 change. An explicit value must be finite and greater than zero.
 
-These diameters are not part of the packing fingerprint. Changing one does not
-move doors. Changing kerf still does, through the existing nesting contract.
+These diameters are not part of the packing fingerprint. Changing kerf still
+moves every facing gap through the existing nesting contract. Changing a layer
+diameter does not rewrite an approved snapshot. On the next calculation, a
+tool whose path actually extends toward a neighbour, and whose diameter is
+larger than kerf, widens only that facing gap. The draft is marked stale when
+a stored diameter changes so the next calculation can apply it.
 """
 
 from __future__ import annotations

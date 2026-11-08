@@ -348,6 +348,13 @@ class FrappeOrderPlanAdapter:
             self.document.total_cost_usd = flt(self.document.edge_cost_usd)
         self.costing.calculate_special_shape_pricing()
 
+    def _machining_diameters(self) -> dict[str, float]:
+        from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+            diameters_for_record,
+        )
+
+        return diameters_for_record(self.document)
+
     def calculate_cutting_plan(self, input_fingerprint: str) -> None:
         settings = self.access.settings
         outcome = optimize_order_plan(
@@ -401,6 +408,7 @@ class FrappeOrderPlanAdapter:
                 allow_piece_mirroring=piece_mirroring_allowed(
                     getattr(self.document, "allow_piece_mirroring", None)
                 ),
+                machining_diameters_mm=self._machining_diameters(),
             ),
             engine=domain_cutting_engine,
         )

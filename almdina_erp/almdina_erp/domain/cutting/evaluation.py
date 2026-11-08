@@ -406,6 +406,12 @@ def validate_plan(
 
     if plan.get("unplaced"):
         errors.append(f"Plan contains {len(plan['unplaced'])} unplaced piece(s).")
+    if isinstance(plan.get("machining_diameters_mm"), dict):
+        from .machining_clearance import machining_clearance_problems
+
+        errors.extend(
+            machining_clearance_problems(plan, kerf_cm=required_kerf_cm)
+        )
     return errors
 
 

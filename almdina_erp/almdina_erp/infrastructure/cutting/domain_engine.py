@@ -35,6 +35,7 @@ class DomainCuttingEngineAdapter:
         seed_plans: tuple[dict[str, Any], ...] = (),
         search_round: int = 0,
         research_abc: ABCSearchPolicy | None = None,
+        machining_diameters_mm: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         plan = optimize_plan(
             pieces,
@@ -51,6 +52,7 @@ class DomainCuttingEngineAdapter:
             mirroring_allowed=mirroring_allowed,
             seed_plans=seed_plans, search_round=search_round,
             **({'research_abc': research_abc} if research_abc is not None else {}),
+            machining_diameters_mm=machining_diameters_mm,
         )
         plan["kerf_cm"] = max(0.0, float(kerf_cm or 0))
         return plan

@@ -191,12 +191,8 @@
                         || (node && typeof node.attr === "function" && node.attr("data-almdina-plan-setting"))
                         || ""
                     );
-                    // A layer bit does not move doors. Leave the current nesting
-                    // preview valid so Save can persist the bit without a new layout.
-                    if (DIAMETER_FIELDS.includes(fieldname)) {
-                        syncSaveButton(frm);
-                        return;
-                    }
+                    // A larger machining bit can widen a facing gap, so the
+                    // preview becomes stale and must be calculated again.
                     const owner = previewOwner();
                     const changed = Boolean(owner && owner.invalidate(frm));
                     if (changed) {

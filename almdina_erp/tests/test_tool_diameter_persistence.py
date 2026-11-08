@@ -148,7 +148,7 @@ class TestToolDiameterPersistence(FrappeTestCase):
         self.assertEqual(flt(stored.handle_recess_tool_diameter_mm), handle)
         self.assertEqual(flt(stored.rear_groove_tool_diameter_mm), groove)
         self.assertEqual(flt(stored.kerf_mm), 3)
-        self.assertEqual(int(stored.plan_needs_recalculation or 0), 0)
+        self.assertEqual(int(stored.plan_needs_recalculation or 0), 1)
         self.assertEqual(stored.snapshot_json, '{"sentinel":"layout"}')
         reloaded = frappe.get_doc("Cutting Plan", plan_name)
         self.assertEqual(flt(reloaded.liner_tool_diameter_mm), liner)
@@ -168,7 +168,7 @@ class TestToolDiameterPersistence(FrappeTestCase):
         order, plan_name = self._seed()
         result = save_plan_settings(order.name, liner_tool_diameter_mm=4)
         self.assertIn("liner_tool_diameter_mm", result["changed_fields"])
-        self.assertEqual(int(result["plan_needs_recalculation"]), 0)
+        self.assertEqual(int(result["plan_needs_recalculation"]), 1)
         self.assertEqual(result["cutting_plan"], plan_name)
         self._assert_saved(order, plan_name, liner=4, handle=6, groove=5)
 

@@ -1017,6 +1017,51 @@ def _layout_signature(plan: dict[str, Any]) -> str:
     return geometry_signature(plan)
 
 
+def _compensate_machining_clearance(
+    plan: dict[str, Any],
+    *,
+    kerf_cm: float,
+    board_w_cm: float,
+    board_h_cm: float,
+    diameters: Any,
+) -> dict[str, Any] | None:
+    if not isinstance(diameters, dict) or not diameters:
+        return plan
+    from .machining_clearance import apply_machining_clearance
+
+    return apply_machining_clearance(
+        plan,
+        kerf_cm=kerf_cm,
+        board_w_cm=board_w_cm,
+        board_h_cm=board_h_cm,
+        diameters=diameters,
+    )
+
+
+def _publish_machining_clearance(
+    plan: dict[str, Any],
+    *,
+    kerf_cm: float,
+    board_w_cm: float,
+    board_h_cm: float,
+    diameters: Any,
+) -> dict[str, Any]:
+    if not isinstance(diameters, dict) or not diameters:
+        return plan
+    applied = _compensate_machining_clearance(
+        plan,
+        kerf_cm=kerf_cm,
+        board_w_cm=board_w_cm,
+        board_h_cm=board_h_cm,
+        diameters=diameters,
+    )
+    if applied is not None:
+        return applied
+    from .machining_clearance import mark_unresolved_clearance
+
+    return mark_unresolved_clearance(plan, kerf_cm=kerf_cm, diameters=diameters)
+
+
 def smart_search(
     pieces: list[dict[str, Any]], board_w_cm: float, board_h_cm: float,
     kerf_cm: float, machine_type: str = "Auto", time_limit_sec: float = 10.0,
@@ -1025,6 +1070,7 @@ def smart_search(
     discarded_direct_callback: Any = None,
     experimental_regrouping: bool = False,
     research_abc: ABCSearchPolicy | None = None,
+    machining_diameters_mm: dict[str, Any] | None = None,
     **metric_kwargs: Any,
 ) -> dict[str, Any]:
     """Finish diverse seeds before selection; retain five distinct valid finals.
@@ -1057,6 +1103,13 @@ def smart_search(
     def offer(candidate):
         nonlocal deadline
         from .plan_portfolio import manufacturing_export_rejection
+        candidate = _compensate_machining_clearance(
+            candidate, kerf_cm=kerf_cm, board_w_cm=board_w_cm, board_h_cm=board_h_cm,
+            diameters=machining_diameters_mm,
+        )
+        if candidate is None:
+            rejected_finals['machining_clearance'] = rejected_finals.get('machining_clearance', 0) + 1
+            return
         rejection = manufacturing_export_rejection(candidate)
         if rejection:
             rejected_finals[rejection] = rejected_finals.get(rejection,0)+1
@@ -1107,7 +1160,8 @@ def smart_search(
         end = min(deadline,time.monotonic()+max(0,share))
         result = _finish_plan_search(raw,pieces,board_w_cm,board_h_cm,kerf_cm,machine_type,
             max(0,end-time.monotonic()),mirroring_allowed,metric_kwargs,
-            search_deadline=end,require_importable_geometry=True,final_candidate_callback=offer)
+            search_deadline=end,require_importable_geometry=True,final_candidate_callback=offer,
+            machining_diameters_mm=machining_diameters_mm)
         completed += 1
         offer(result)
         return result
@@ -1304,6 +1358,7 @@ def optimize_plan(
     seed_plans: tuple[dict[str, Any], ...] = (),
     search_round: int = 0,
     research_abc: ABCSearchPolicy | None = None,
+    machining_diameters_mm: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     mode = selected_mode or AUTO_FAST
     metric_kwargs = {
@@ -1313,10 +1368,19 @@ def optimize_plan(
     }
 
     if mode == SMART_SEARCH:
-        return smart_search(
+        plan = smart_search(
             pieces, board_w_cm, board_h_cm, kerf_cm, machine_type, time_limit_sec,
             exact_piece_limit, mirroring_allowed, seed_plans, search_round,
-            **({'research_abc': research_abc} if research_abc is not None else {}), **metric_kwargs,
+            **({'research_abc': research_abc} if research_abc is not None else {}),
+            machining_diameters_mm=machining_diameters_mm,
+            **metric_kwargs,
+        )
+        return _publish_machining_clearance(
+            plan,
+            kerf_cm=kerf_cm,
+            board_w_cm=board_w_cm,
+            board_h_cm=board_h_cm,
+            diameters=machining_diameters_mm,
         )
     if mode == AUTO_FAST:
         baseline = auto_fast(
@@ -1374,9 +1438,16 @@ def optimize_plan(
         baseline["optimization_mode"] = "Manual"
         baseline["attempts"] = 1
 
-    return _finish_plan_search(
-        baseline, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
-        time_limit_sec, mirroring_allowed, metric_kwargs,
+    return _publish_machining_clearance(
+        _finish_plan_search(
+            baseline, pieces, board_w_cm, board_h_cm, kerf_cm, machine_type,
+            time_limit_sec, mirroring_allowed, metric_kwargs,
+            machining_diameters_mm=machining_diameters_mm,
+        ),
+        kerf_cm=kerf_cm,
+        board_w_cm=board_w_cm,
+        board_h_cm=board_h_cm,
+        diameters=machining_diameters_mm,
     )
 
 
@@ -1388,6 +1459,7 @@ def _finish_plan_search(
     require_importable_geometry: bool = False,
     final_candidates: list[dict[str, Any]] | None = None,
     final_candidate_callback: Any = None,
+    machining_diameters_mm: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from .glass_opening_nesting import nest_glass_openings
     from .plan_search import improve_plan_search
@@ -1477,6 +1549,12 @@ def _finish_plan_search(
             machine_type,
             **metric_kwargs,
         )
+        candidate = _compensate_machining_clearance(
+            candidate, kerf_cm=kerf_cm, board_w_cm=board_w_cm, board_h_cm=board_h_cm,
+            diameters=machining_diameters_mm,
+        )
+        if candidate is None:
+            continue
         # Both validators read sheets/unplaced and the fixed request arguments.
         # Reuse the existing exact no-op proof; every changed layout still passes
         # full validation. Better-ranked metadata must still reach the portfolio.

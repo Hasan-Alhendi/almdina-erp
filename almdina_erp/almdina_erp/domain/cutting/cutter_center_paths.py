@@ -15,13 +15,20 @@ import math
 from dataclasses import dataclass
 from typing import Sequence
 
-from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
+from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import (
+    point_in_polygon,
+    point_to_polygon_distance,
+)
 
 Point = tuple[float, float]
 Segment = tuple[Point, Point]
 Shape = tuple[Sequence[Point], Sequence[Sequence[Point]]]
 
 COLLINEAR_TOLERANCE_MM = 0.05
+# Neighbouring clearing passes overlap by this much so a tangent contact
+# cannot leave a hairline of material. The step is then checked by coverage,
+# not accepted from ceil(gap / diameter) alone.
+MIN_CLEARING_OVERLAP_MM = 0.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,12 +45,16 @@ def cutter_center_paths(
     *,
     tolerance: float = COLLINEAR_TOLERANCE_MM,
     board: Sequence[float] | None = None,
+    clearance_limit_mm: float | None = None,
 ) -> list[CutterCenterPath]:
     """Offset every finished edge toward waste, including physical board edges.
 
     ``board`` is retained for caller compatibility; it never clips cutter
     centers. Independent rings remain closed. Shared centers use the existing
     merged segment network so the same physical cut is exported only once.
+    When ``clearance_limit_mm`` is wider than the cutter, facing gaps up to
+    that width gain extra parallel centers so the smaller cutter removes the
+    whole slot. Wider waste, including an offcut, is left alone.
     Material bounds and machine travel/clamp safety are separate validations.
     """
 
@@ -63,13 +74,21 @@ def cutter_center_paths(
             paths.append(CutterCenterPath(tuple(offset), True))
             segments.extend(zip(offset, [*offset[1:], offset[0]]))
 
+    extras = gap_clearing_segments(
+        prepared,
+        radius * 2.0,
+        0.0 if clearance_limit_mm is None else clearance_limit_mm,
+        tolerance=tolerance,
+    )
     merged = _merge_collinear(segments, tolerance)
     # Only overlapping centers reduce total length. Touching collinear sides
     # alone must not discard independent closed contours.
     if sum(math.dist(*segment) for segment in segments) - sum(
         math.dist(*segment) for segment in merged
     ) > tolerance:
-        return [CutterCenterPath((start, end), False) for start, end in merged]
+        network = _merge_collinear([*segments, *extras], tolerance)
+        return [CutterCenterPath((start, end), False) for start, end in network]
+    paths.extend(CutterCenterPath((start, end), False) for start, end in extras)
     return paths
 
 
@@ -79,6 +98,7 @@ def cutter_center_segments(
     *,
     tolerance: float = COLLINEAR_TOLERANCE_MM,
     board: Sequence[float] | None = None,
+    clearance_limit_mm: float | None = None,
 ) -> list[Segment]:
     """Return the canonical segment-network view of the exported paths.
 
@@ -93,6 +113,7 @@ def cutter_center_segments(
         radius_mm,
         tolerance=tolerance,
         board=board,
+        clearance_limit_mm=clearance_limit_mm,
     ):
         segments.extend(zip(path.points, path.points[1:]))
         if path.closed and len(path.points) >= 3:
@@ -367,6 +388,229 @@ def saw_center_segments_match(
     return not remaining
 
 
+def clearing_centers_mm(
+    gap_mm: float,
+    diameter_mm: float,
+    *,
+    min_overlap_mm: float = MIN_CLEARING_OVERLAP_MM,
+) -> list[float]:
+    """Centers, measured from one door, whose swept disks clear ``gap_mm``.
+
+    Centers stay in ``[radius, gap - radius]`` so the cutter is tangent to
+    both doors. An empty result means the cutter cannot clear the slot
+    without entering a door, or the overlap rule cannot be met.
+    """
+
+    gap = float(gap_mm or 0.0)
+    diameter = float(diameter_mm or 0.0)
+    overlap = max(0.0, float(min_overlap_mm or 0.0))
+    if gap <= 0.0 or diameter <= 0.0 or gap + 1e-6 < diameter:
+        return []
+    if gap <= diameter + 1e-6:
+        return [gap / 2.0]
+    span = gap - diameter
+    max_step = diameter - overlap
+    if max_step <= 1e-6:
+        return []
+    steps = max(1, math.ceil((span / max_step) - 1e-9))
+    step = span / steps
+    centers = [diameter / 2.0 + step * index for index in range(steps + 1)]
+    if not swept_covers_gap(centers, gap, diameter, min_overlap_mm=overlap):
+        return []
+    return centers
+
+
+def swept_covers_gap(
+    centers_mm: Sequence[float],
+    gap_mm: float,
+    diameter_mm: float,
+    *,
+    min_overlap_mm: float = MIN_CLEARING_OVERLAP_MM,
+) -> bool:
+    """True when the cutter disks cover the slot and consecutive passes overlap."""
+
+    gap = float(gap_mm or 0.0)
+    diameter = float(diameter_mm or 0.0)
+    if gap <= 0.0 or diameter <= 0.0 or not centers_mm:
+        return False
+    radius = diameter / 2.0
+    ordered = sorted(float(center) for center in centers_mm)
+    if ordered[0] - radius > 1e-6 or ordered[-1] + radius < gap - 1e-6:
+        return False
+    if any(center < radius - 1e-6 or center > gap - radius + 1e-6 for center in ordered):
+        return False
+    required = max(0.0, float(min_overlap_mm or 0.0))
+    for previous, current in zip(ordered, ordered[1:]):
+        covered = (previous + radius) - (current - radius)
+        if covered + 1e-6 < required:
+            return False
+    return True
+
+
+def gap_clearing_segments(
+    shapes: Sequence[tuple[list[Point], list[list[Point]]]],
+    diameter_mm: float,
+    clearance_limit_mm: float,
+    *,
+    tolerance: float = COLLINEAR_TOLERANCE_MM,
+) -> list[Segment]:
+    """Extra centers and end connectors for facing gaps wider than the cutter.
+
+    ``shapes`` are prepared open rings. Boundary offsets already exist, so a
+    center at ``radius`` or ``gap - radius`` is not repeated. Connectors are
+    dropped when they would enter another door.
+    """
+
+    diameter = float(diameter_mm or 0.0)
+    limit = float(clearance_limit_mm or 0.0)
+    if diameter <= tolerance or limit <= diameter + tolerance:
+        return []
+    rings: list[tuple[int, list[Point]]] = []
+    for index, (outer, holes) in enumerate(shapes):
+        if len(outer) >= 2:
+            rings.append((index, outer))
+        for hole in holes:
+            if len(hole) >= 2:
+                rings.append((index, hole))
+    segments: list[Segment] = []
+    seen: set[tuple[float, float, float, float, float]] = set()
+    for left_index, (shape_a, ring_a) in enumerate(rings):
+        for shape_b, ring_b in rings[left_index + 1 :]:
+            if shape_a == shape_b:
+                continue
+            for edge_a in _ring_edges(ring_a):
+                for edge_b in _ring_edges(ring_b):
+                    slot = _facing_slot(edge_a, edge_b, shapes, diameter, limit, tolerance)
+                    if slot is None or slot[0] in seen:
+                        continue
+                    seen.add(slot[0])
+                    segments.extend(slot[1])
+    return segments
+
+
+def _ring_edges(ring: Sequence[Point]) -> list[tuple[Point, Point]]:
+    if len(ring) < 2:
+        return []
+    closed = list(ring)
+    if math.dist(closed[0], closed[-1]) > 1e-9:
+        closed.append(closed[0])
+    return [
+        (start, end)
+        for start, end in zip(closed, closed[1:])
+        if math.dist(start, end) > COLLINEAR_TOLERANCE_MM
+    ]
+
+
+def _facing_slot(
+    edge_a: tuple[Point, Point],
+    edge_b: tuple[Point, Point],
+    shapes: Sequence[tuple[list[Point], list[list[Point]]]],
+    diameter: float,
+    limit: float,
+    tolerance: float,
+) -> tuple[tuple[float, float, float, float, float], list[Segment]] | None:
+    start_a, end_a = edge_a
+    start_b, end_b = edge_b
+    length_a = math.dist(start_a, end_a)
+    direction = ((end_a[0] - start_a[0]) / length_a, (end_a[1] - start_a[1]) / length_a)
+    length_b = math.dist(start_b, end_b)
+    other = ((end_b[0] - start_b[0]) / length_b, (end_b[1] - start_b[1]) / length_b)
+    if abs(direction[0] * other[0] + direction[1] * other[1]) < 1.0 - 1e-4:
+        return None
+    normal = (-direction[1], direction[0])
+
+    def across(point: Point) -> float:
+        return (point[0] - start_a[0]) * normal[0] + (point[1] - start_a[1]) * normal[1]
+
+    def along(point: Point) -> float:
+        return (point[0] - start_a[0]) * direction[0] + (point[1] - start_a[1]) * direction[1]
+
+    dist_start = across(start_b)
+    dist_end = across(end_b)
+    if abs(dist_start - dist_end) > max(tolerance, 0.05):
+        return None
+    gap = abs(dist_start)
+    if gap <= diameter + tolerance or gap > limit + tolerance:
+        return None
+    sign = 1.0 if dist_start > 0.0 else -1.0
+    toward = (normal[0] * sign, normal[1] * sign)
+    low = max(0.0, min(along(start_b), along(end_b)))
+    high = min(length_a, max(along(start_b), along(end_b)))
+    if high - low <= tolerance:
+        return None
+    mid_t = (low + high) / 2.0
+    mid = (start_a[0] + direction[0] * mid_t, start_a[1] + direction[1] * mid_t)
+    probe = min(1.0, diameter * 0.25)
+    outer_a = (mid[0] - toward[0] * probe, mid[1] - toward[1] * probe)
+    far = (mid[0] + toward[0] * gap, mid[1] + toward[1] * gap)
+    outer_b = (far[0] + toward[0] * probe, far[1] + toward[1] * probe)
+    gap_mid = (mid[0] + toward[0] * gap / 2.0, mid[1] + toward[1] * gap / 2.0)
+    if not (_is_material(outer_a, shapes) and _is_material(outer_b, shapes)):
+        return None
+    if _is_material(gap_mid, shapes):
+        return None
+    centers = clearing_centers_mm(gap, diameter)
+    if not centers:
+        return None
+    key = (
+        round(gap_mid[0], 3),
+        round(gap_mid[1], 3),
+        round(abs(direction[0]), 3),
+        round(abs(direction[1]), 3),
+        round(gap, 3),
+    )
+
+    def at(station: float, center: float) -> Point:
+        return (
+            start_a[0] + direction[0] * station + toward[0] * center,
+            start_a[1] + direction[1] * station + toward[1] * center,
+        )
+
+    radius = diameter / 2.0
+    produced: list[Segment] = []
+    for center in centers:
+        if abs(center - radius) <= tolerance or abs(center - (gap - radius)) <= tolerance:
+            continue
+        produced.append((at(low, center), at(high, center)))
+    for previous, current in zip(centers, centers[1:]):
+        for station in (low, high):
+            connector = (at(station, previous), at(station, current))
+            if _connector_stays_in_waste(connector, shapes):
+                produced.append(connector)
+    return key, produced
+
+
+def _connector_stays_in_waste(
+    segment: Segment,
+    shapes: Sequence[tuple[list[Point], list[list[Point]]]],
+) -> bool:
+    start, end = segment
+    for step in range(5):
+        weight = step / 4.0
+        point = (
+            start[0] + (end[0] - start[0]) * weight,
+            start[1] + (end[1] - start[1]) * weight,
+        )
+        if _strict_material(point, shapes):
+            return False
+    return True
+
+
+def _strict_material(
+    point: Point,
+    shapes: Sequence[tuple[list[Point], list[list[Point]]]],
+) -> bool:
+    for outer, holes in shapes:
+        if not point_in_polygon(point, outer):
+            continue
+        if point_to_polygon_distance(point, outer) <= COLLINEAR_TOLERANCE_MM:
+            continue
+        if any(point_in_polygon(point, hole) for hole in holes):
+            continue
+        return True
+    return False
+
+
 def classify_saw_center_segments(
     observed: Sequence[Segment],
     expected: Sequence[Segment],
@@ -395,7 +639,10 @@ __all__ = [
     "SAW_CENTER_INVALID",
     "SAW_CENTER_MATCH",
     "classify_saw_center_segments",
+    "clearing_centers_mm",
     "cutter_center_paths",
     "cutter_center_segments",
+    "gap_clearing_segments",
     "saw_center_segments_match",
+    "swept_covers_gap",
 ]
