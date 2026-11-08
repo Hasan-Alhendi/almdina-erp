@@ -518,6 +518,129 @@
         };
     }
 
+    function endRay(points, atStart) {
+        const origin = atStart ? points[0] : points[points.length - 1];
+        const toward = atStart ? points[1] : points[points.length - 2];
+        const raw = [origin[0] - toward[0], origin[1] - toward[1]];
+        const length = Math.hypot(raw[0], raw[1]) || 1;
+        return { origin, toward, direction: [raw[0] / length, raw[1] / length] };
+    }
+
+    function boundaryHit(origin, direction, polygon) {
+        if (boundaryDistance(origin, polygon) <= TOLERANCE_MM) return origin.slice();
+        const hit = rayExit(origin, direction, polygon);
+        if (!hit) fail("liner_extension_unsafe");
+        return hit;
+    }
+
+    function coverageRetreatLimitMm(radius) {
+        const slack = (2 * radius * TOLERANCE_MM) - (TOLERANCE_MM * TOLERANCE_MM);
+        if (!(slack > 0)) return 0;
+        return -Math.sqrt(slack);
+    }
+
+    function extensionBlocked(start, end, radius, obstacles, margin) {
+        // The conflict check rejects only inside radius - tolerance. Inflating the
+        // probe by that tolerance makes the threshold radius + margin. A zero
+        // margin therefore means "tangent is clear". One micrometre of slack
+        // keeps a mathematically tangent end from looking blocked after the
+        // centimetre-to-millimetre rounding used by placed doors.
+        const tangentSlack = margin <= 0 ? 1e-6 : 0;
+        const probeDiameter = 2 * (radius + margin + TOLERANCE_MM - tangentSlack);
+        return Boolean(extensionConflictDetails([start, end], probeDiameter, null, obstacles));
+    }
+
+    function safeEndExtensionMm(hit, direction, previous, nominalMm, radiusMm, obstacles) {
+        if (!obstacles || !obstacles.length) return nominalMm;
+        const radius = num(radiusMm);
+        const nominal = num(nominalMm);
+        function at(amount) {
+            return [hit[0] + direction[0] * amount, hit[1] + direction[1] * amount];
+        }
+        const span = Math.max(0, ((previous[0] - hit[0]) * -direction[0]) + ((previous[1] - hit[1]) * -direction[1]));
+        function probe(amount) {
+            let inner = Math.min(0, amount) - Math.min(1, radius);
+            if (span > TOLERANCE_MM) inner = Math.max(inner, -(span - TOLERANCE_MM));
+            else inner = Math.min(0, amount);
+            let outer = amount;
+            if (outer < inner) {
+                const swap = inner;
+                inner = outer;
+                outer = swap;
+            }
+            return [at(inner), at(outer)];
+        }
+        const nominalProbe = probe(nominal);
+        if (!extensionBlocked(nominalProbe[0], nominalProbe[1], radius, obstacles, 0)) return nominal;
+        let floor = coverageRetreatLimitMm(radius);
+        floor = span > TOLERANCE_MM ? Math.max(floor, -(span - TOLERANCE_MM)) : Math.max(floor, 0);
+        const floorProbe = probe(floor);
+        if (floor > nominal || extensionBlocked(floorProbe[0], floorProbe[1], radius, obstacles, TOLERANCE_MM)) {
+            fail("liner_extension_hits_piece");
+        }
+        let low = floor;
+        let high = nominal;
+        for (let step = 0; step < 48; step += 1) {
+            const mid = (low + high) / 2;
+            const sample = probe(mid);
+            if (extensionBlocked(sample[0], sample[1], radius, obstacles, TOLERANCE_MM)) high = mid;
+            else low = mid;
+        }
+        return low;
+    }
+
+    function safeLineExtension(line, polygon, radius, obstacles, atStart) {
+        const ray = endRay(line, atStart);
+        const hit = boundaryHit(ray.origin, ray.direction, polygon);
+        return safeEndExtensionMm(hit, ray.direction, ray.toward, radius, radius, obstacles);
+    }
+
+    function inverseTransformPoint(point, mirrored, quarterTurns, width, height) {
+        let x = point[0];
+        let y = point[1];
+        let boxWidth = width;
+        let boxHeight = height;
+        const turns = ((Number(quarterTurns) % 4) + 4) % 4;
+        for (let index = 0; index < turns; index += 1) {
+            const swap = boxWidth;
+            boxWidth = boxHeight;
+            boxHeight = swap;
+        }
+        for (let index = 0; index < turns; index += 1) {
+            const nextX = y;
+            y = boxWidth - x;
+            x = nextX;
+            const swap = boxWidth;
+            boxWidth = boxHeight;
+            boxHeight = swap;
+        }
+        if (mirrored) x = width - x;
+        return [x, y];
+    }
+
+    function sheetObstaclesToLocal(piece, linerPiece, obstacles) {
+        const originX = num(piece && piece.x) * 10;
+        const originY = num(piece && piece.y) * 10;
+        const mirrored = Boolean(piece && piece.corner_mirrored);
+        const turns = pieceQuarterTurns(piece);
+        const width = linerPiece.widthCm * 10;
+        const height = linerPiece.lengthCm * 10;
+        return (obstacles || []).map(obstacle => {
+            const material = obstacleMaterial(obstacle);
+            const convert = point => inverseTransformPoint(
+                [point[0] - originX, point[1] - originY],
+                mirrored,
+                turns,
+                width,
+                height
+            );
+            return {
+                polygon: material.outer.map(convert),
+                holes: material.holes.map(hole => hole.map(convert)),
+            };
+        }).filter(item => item.polygon.length >= 3);
+    }
+
     function extendCenterline(polyline, extension, polygon, ends) {
         const points = polyline.map(point => point.slice());
         if (points.length < 2) fail("liner_extension_unsafe");
@@ -526,23 +649,16 @@
         if (which.start) pairs.push([0, 1]);
         if (which.end) pairs.push([points.length - 1, points.length - 2]);
         pairs.forEach(pair => {
-            const origin = points[pair[0]];
-            const toward = points[pair[1]];
-            const delta = [origin[0] - toward[0], origin[1] - toward[1]];
-            const length = Math.hypot(delta[0], delta[1]) || 1;
-            const direction = [delta[0] / length, delta[1] / length];
-            const hit = boundaryDistance(origin, polygon) <= TOLERANCE_MM
-                ? origin
-                : rayExit(origin, direction, polygon);
-            if (!hit) {
-                const error = new Error("liner_extension_unsafe");
-                error.code = "liner_extension_unsafe";
-                throw error;
-            }
-            const amount = pair[0] === 0
+            const atStart = pair[0] === 0;
+            const ray = endRay(points, atStart);
+            const hit = boundaryHit(ray.origin, ray.direction, polygon);
+            const amount = atStart
                 ? (which.startExtension != null ? which.startExtension : extension)
                 : (which.endExtension != null ? which.endExtension : extension);
-            points[pair[0]] = [hit[0] + (direction[0] * amount), hit[1] + (direction[1] * amount)];
+            points[pair[0]] = [
+                hit[0] + (ray.direction[0] * amount),
+                hit[1] + (ray.direction[1] * amount),
+            ];
         });
         return points;
     }
@@ -791,9 +907,16 @@
             if (trimEnd) line = subpolyline(line, 0, polylineLength(line) - trimEnd);
             if (line.length < 2) fail("liner_flat_end_unmachinable");
             if (extendStart || extendEnd) {
+                const obstacles = ends && ends.obstacles;
                 line = extendCenterline(line, radius, polygon, {
                     start: extendStart,
                     end: extendEnd,
+                    startExtension: extendStart && obstacles && obstacles.length
+                        ? safeLineExtension(line, polygon, radius, obstacles, true)
+                        : null,
+                    endExtension: extendEnd && obstacles && obstacles.length
+                        ? safeLineExtension(line, polygon, radius, obstacles, false)
+                        : null,
                 });
             }
             return line;
@@ -1117,7 +1240,11 @@
                 if (!(diameter > TOLERANCE_MM)) {
                     return { kind, layer, synthetic: true, error: "cutter_diameter_invalid" };
                 }
-                const ends = piece.board ? sawnBoundaryEnds(host, linerPiece, piece.board) : null;
+                const ends = piece.board ? sawnBoundaryEnds(host, linerPiece, piece.board) : {};
+                const sheetObstacles = piece.machining_obstacles || piece.obstacles;
+                if (sheetObstacles && sheetObstacles.length) {
+                    ends.obstacles = sheetObstaclesToLocal(piece, linerPiece, sheetObstacles);
+                }
                 local = generateToolpath({
                     type: kind,
                     piece: linerPiece,
@@ -1488,6 +1615,9 @@
         centerlineMm,
         centerRecessedHandle,
         toolpathMm,
+        safeEndExtensionMm,
+        sheetObstaclesToLocal,
+        inverseTransformPoint,
         generateToolpath,
         buildMachiningOverlay,
         extensionConflict,

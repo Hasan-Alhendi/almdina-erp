@@ -1019,6 +1019,83 @@ assert.ok(longSpan.maxX - longSpan.minX > (shortSpan.maxX - shortSpan.minX) * 2)
 assert.ok(Math.abs((longSpan.maxY - longSpan.minY) - (shortSpan.maxY - shortSpan.minY)) < 0.2);
 assert.doesNotMatch(longPreview, /data-machining-kind="recessed_handle_cutout"[^>]*stroke-dasharray/);
 
+function extent(path) {
+    return {
+        minX: Math.min(...path.map(point => point[0])),
+        maxX: Math.max(...path.map(point => point[0])),
+    };
+}
+function obstructingNeighbor(gap) {
+    const edge = 400 + gap;
+    return [{ polygon: [[edge, -80], [edge + 400, -80], [edge + 400, 200], [edge, 200]] }];
+}
+const extensionPiece = geometry.pieceFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+});
+const equalGap = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.5, 5, null, null, {
+    obstacles: obstructingNeighbor(5),
+});
+const equalBare = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.5, 5);
+assert.deepEqual(equalGap, equalBare);
+assert.equal(geometry.extensionConflict(equalGap, 5, null, obstructingNeighbor(5)), "");
+
+const widerBare = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.8, 8);
+const widerSafe = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.8, 8, null, null, {
+    obstacles: obstructingNeighbor(5),
+});
+assert.equal(extent(widerSafe).minX, extent(widerBare).minX);
+assert.ok(Math.abs(extent(widerSafe).maxX - 400.75) < 1e-6);
+assert.equal(geometry.extensionConflict(widerBare, 8, null, obstructingNeighbor(5)), "liner_extension_hits_piece");
+assert.equal(geometry.extensionConflict(widerSafe, 8, null, obstructingNeighbor(5)), "");
+
+const negative = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 1.2, 12, null, null, {
+    obstacles: obstructingNeighbor(5),
+});
+assert.ok(Math.abs(extent(negative).maxX - 398.75) < 1e-6);
+assert.ok(extent(negative).maxX < 400);
+assert.equal(geometry.extensionConflict(negative, 12, null, obstructingNeighbor(5)), "");
+
+const openGap = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.8, 8, null, null, {
+    obstacles: obstructingNeighbor(10),
+});
+assert.deepEqual(openGap, widerBare);
+assert.ok(extent(openGap).maxX > extent(widerSafe).maxX);
+
+const startOnly = [{ polygon: [[-400, -80], [-5, -80], [-5, 200], [-400, 200]] }];
+const startPath = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.8, 8, null, null, {
+    obstacles: startOnly,
+});
+assert.ok(Math.abs(extent(startPath).minX - (-0.75)) < 1e-6);
+assert.equal(extent(startPath).maxX, extent(widerBare).maxX);
+
+const lateral = [{ polygon: [[120, -2], [280, -2], [280, 12], [120, 12]] }];
+const lateralPath = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 0.8, 8, null, null, {
+    obstacles: lateral,
+});
+assert.equal(geometry.extensionConflict(lateralPath, 8, null, lateral), "liner_extension_hits_piece");
+assert.throws(
+    () => geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 1.2, 12, null, null, {
+        obstacles: obstructingNeighbor(1),
+    }),
+    error => error.code === "liner_extension_hits_piece"
+);
+
+const hole = {
+    polygon: [[350, -80], [900, -80], [900, 80], [350, 80]],
+    holes: [[[360, -40], [700, -40], [700, 40], [360, 40]]],
+};
+const solidHole = { polygon: [[360, -40], [700, -40], [700, 40], [360, 40]] };
+assert.equal(geometry.extensionConflict([[380, 4], [420, 4]], 8, null, [hole]), "");
+assert.equal(geometry.extensionConflict([[380, 4], [420, 4]], 8, null, [solidHole]), "liner_extension_hits_piece");
+
+const passes = geometry.toolpathMm(extensionPiece, "edge_width_top", 0, 2, 8, null, null, {
+    obstacles: obstructingNeighbor(5),
+});
+const passEnds = new Set(passes.filter(point => point[0] > 390).map(point => point[0].toFixed(3)));
+assert.deepEqual(passEnds, new Set(["400.750"]));
+
 async function persistenceChecks() {
 context.frappe.msgprint = () => {};
 context.frappe.model = { set_value() { throw new Error("stale row write"); } };
