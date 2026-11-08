@@ -214,6 +214,31 @@
                     { fieldname: "remote_backup_path", fieldtype: "Data", label: t("Remote Backup Path"), description: t("Absolute non-root POSIX path. The server key must be registered beforehand in known_hosts for the bench user."), default: values.remote_backup_path || "" },
                 ];
             }
+            if (section === "db_restore") {
+                return [
+                    {
+                        fieldname: "db_restore_type",
+                        fieldtype: "Select",
+                        label: t("Database Type"),
+                        options: "MariaDB\nPostgreSQL\nSQLite",
+                        default: values.db_restore_type || "MariaDB",
+                        description: t("Used only for restore readiness. Does not change the site application database login."),
+                    },
+                    { fieldname: "db_restore_host", fieldtype: "Data", label: t("Database Host"), default: values.db_restore_host || "" },
+                    { fieldname: "db_restore_port", fieldtype: "Int", label: t("Database Port"), default: values.db_restore_port || 3306 },
+                    { fieldname: "db_restore_root_username", fieldtype: "Data", label: t("Root Username"), default: values.db_restore_root_username || "root" },
+                    {
+                        fieldname: "db_restore_root_password",
+                        fieldtype: "Password",
+                        label: t("Root Password"),
+                        description: values.db_restore_custom_password_configured
+                            ? t("Password is saved. Leave the field empty to keep it.")
+                            : (values.db_restore_root_password_configured
+                                ? t("A Frappe operational root password is available. Enter a value only to store an Almadina-specific override.")
+                                : t("Stored encrypted through Frappe and never returned to the browser.")),
+                    },
+                ];
+            }
             return [
                 { fieldname: "default_production_routing", fieldtype: "Select", label: t("Default production route (optional)"), options: ["", ...(current.routing_options || [])].join("\n"), default: values.default_production_routing || "", reqd: 0 },
                 { fieldname: "allow_stage_override", fieldtype: "Check", label: t("Allow bypassing stage sequence"), default: values.allow_stage_override },
@@ -228,6 +253,7 @@
             if (section === "print_identity") return t("Edit print sheet identity");
             if (section === "whatsapp_messages") return t("Edit WhatsApp messages");
             if (section === "backup_restore") return t("Backup & Restore settings");
+            if (section === "db_restore") return t("Database & Restore Settings");
             return t("Edit production controls");
         }
 

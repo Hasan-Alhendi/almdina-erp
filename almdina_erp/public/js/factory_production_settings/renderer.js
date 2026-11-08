@@ -279,7 +279,79 @@
             }).join("")}</div>`;
         }
 
-        function backupHtml(snapshot = {}) {
+        function dbRestoreOption(value, selected, label) {
+            const isSelected = String(selected || "") === String(value || "");
+            return `<option value="${esc(value)}"${isSelected ? " selected" : ""}>${esc(label || value)}</option>`;
+        }
+
+        function dbRestoreSettingsHtml(snapshot = {}, { open = false } = {}) {
+            const canManageDbRestore = Boolean(
+                snapshot.permissions && snapshot.permissions.can_manage_db_restore_settings
+            );
+            if (!canManageDbRestore) return "";
+            const db = snapshot.db_root && typeof snapshot.db_root === "object" ? snapshot.db_root : {};
+            const selectedType = db.db_restore_type || "MariaDB";
+            const passwordHint = db.db_restore_custom_password_configured
+                ? t("Password is saved. Leave the field empty to keep it.")
+                : (db.db_restore_root_password_configured
+                    ? t("A Frappe operational root password is available. Enter a value only to store an Almadina-specific override.")
+                    : t("Stored encrypted through Frappe and never returned to the browser."));
+            const readiness = db.db_restore_ready ? t("Ready for restore") : t("Incomplete");
+            const source = db.db_restore_source === "custom"
+                ? t("Almadina settings")
+                : t("Frappe operational settings");
+            return `
+                <details class="aps-db-restore" data-db-restore-settings${open ? " open" : ""}>
+                    <summary>
+                        <span class="aps-legacy-summary-copy">
+                            <span class="aps-legacy-icon" aria-hidden="true">⚙</span>
+                            <span>
+                                <strong>${t("Database & Restore Settings")}</strong>
+                                <small>${t("Configure privileged database connection for restore readiness without changing the site application login.")}</small>
+                            </span>
+                        </span>
+                        <span class="aps-readonly-chip">${esc(readiness)}</span>
+                    </summary>
+                    <div class="aps-db-restore-body">
+                        <div class="aps-db-restore-note">${t("Save these settings before using Test Connection. The test always uses the last saved values, with fallback to Frappe operational configuration when Almadina overrides are empty.")}</div>
+                        <div class="aps-db-restore-meta">${t("Credential source")}: <strong>${esc(source)}</strong></div>
+                        <div class="aps-db-restore-grid">
+                            <label class="aps-db-restore-field">
+                                <span>${t("Database Type")}</span>
+                                <select class="aps-db-restore-input" data-db-restore-field="db_restore_type" dir="ltr">
+                                    ${dbRestoreOption("MariaDB", selectedType, t("MariaDB"))}
+                                    ${dbRestoreOption("PostgreSQL", selectedType, t("PostgreSQL"))}
+                                    ${dbRestoreOption("SQLite", selectedType, t("SQLite"))}
+                                </select>
+                            </label>
+                            <label class="aps-db-restore-field">
+                                <span>${t("Database Host")}</span>
+                                <input class="aps-db-restore-input aps-ltr-value" data-db-restore-field="db_restore_host" type="text" dir="ltr" autocomplete="off" value="${esc(db.db_restore_host || "")}">
+                            </label>
+                            <label class="aps-db-restore-field">
+                                <span>${t("Database Port")}</span>
+                                <input class="aps-db-restore-input aps-ltr-value" data-db-restore-field="db_restore_port" type="number" min="1" max="65535" dir="ltr" value="${esc(db.db_restore_port == null ? "" : db.db_restore_port)}">
+                            </label>
+                            <label class="aps-db-restore-field">
+                                <span>${t("Root Username")}</span>
+                                <input class="aps-db-restore-input aps-ltr-value" data-db-restore-field="db_restore_root_username" type="text" dir="ltr" autocomplete="off" value="${esc(db.db_restore_root_username || "")}">
+                            </label>
+                            <label class="aps-db-restore-field aps-db-restore-field--wide">
+                                <span>${t("Root Password")}</span>
+                                <input class="aps-db-restore-input" data-db-restore-field="db_restore_root_password" type="password" autocomplete="new-password" value="" placeholder="${esc(db.db_restore_root_password_configured ? t("Saved securely") : "")}">
+                                <small>${esc(passwordHint)}</small>
+                            </label>
+                        </div>
+                        <div class="aps-db-restore-actions">
+                            ${uiButton({ label: t("Save database settings"), variant: "primary", className: "aps-db-restore-save" })}
+                            ${uiButton({ label: t("Test Connection"), variant: "secondary", className: "aps-backup-test-db" })}
+                        </div>
+                    </div>
+                </details>
+            `;
+        }
+
+        function backupHtml(snapshot = {}, options = {}) {
             const canManage = Boolean(snapshot.permissions && snapshot.permissions.can_manage);
             const canRestore = Boolean(snapshot.permissions && snapshot.permissions.can_restore);
             return `
@@ -297,14 +369,21 @@
                         ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
                     </div>
                 </div>
-                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until DB root credentials are configured in the operational Frappe settings.")}</div>` : ""}
+                ${dbRestoreSettingsHtml(snapshot, { open: Boolean(options.dbRestoreOpen) })}
+                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.")}</div>` : ""}
                 ${backupHistoryHtml(snapshot)}
             `;
         }
 
         function renderBackup(snapshot) {
             const $root = $body.find("[data-backup-root]");
-            if ($root.length) $root.html(backupHtml(snapshot));
+            if (!$root.length) return;
+            let dbRestoreOpen = false;
+            if (typeof $root.find === "function") {
+                const $details = $root.find("[data-db-restore-settings]");
+                dbRestoreOpen = Boolean($details && typeof $details.prop === "function" && $details.prop("open"));
+            }
+            $root.html(backupHtml(snapshot || {}, { dbRestoreOpen }));
         }
 
         function renderBackupError(message) {

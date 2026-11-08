@@ -71,6 +71,10 @@
         return request(`${BACKUPS}.test_ssh_connection`, {}, options).then(data => data || {});
     }
 
+    function testDbConnection(options = {}) {
+        return request(`${BACKUPS}.test_db_connection`, {}, options).then(data => data || {});
+    }
+
     function requestRestore(operationId, confirmation, options = {}) {
         return request(`${BACKUPS}.request_restore`, {
             operation_id: operationId,
@@ -89,6 +93,7 @@
         getBackupContext,
         createBackupNow,
         testSshConnection,
+        testDbConnection,
         requestRestore,
     });
 })();

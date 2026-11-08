@@ -3,17 +3,22 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import frappe
-from frappe.utils import now
+from frappe.utils import get_datetime, now, now_datetime
 
 from almdina_erp.almdina_erp.application.backups.management import (
     BackupArtifact,
     BackupBundle,
 )
 from almdina_erp.almdina_erp.domain.backups.policy import backup_group_identifier
+from almdina_erp.almdina_erp.domain.backups.schedule_reliability import (
+    ACTIVE_SCHEDULE_STATUSES,
+    is_stale_backup_operation,
+)
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import bundle_manifest
 
 
@@ -63,7 +68,60 @@ class FrappeBackupHistory:
         return operation_id
 
     def exists_for_schedule(self, schedule_key: str) -> bool:
-        return bool(frappe.db.exists(DOCTYPE, {"schedule_key": schedule_key}))
+        """True only when an active/completed operation still owns the schedule key.
+
+        Failed or reclaimed rows release ``schedule_key`` so a later tick can retry
+        the same slot without treating a dead record as success.
+        """
+
+        key = str(schedule_key or "").strip()
+        if not key:
+            return False
+        return bool(
+            frappe.db.exists(
+                DOCTYPE,
+                {
+                    "schedule_key": key,
+                    "status": ["in", sorted(ACTIVE_SCHEDULE_STATUSES)],
+                },
+            )
+        )
+
+    def reclaim_stale_operations(self, *, now: datetime | None = None) -> int:
+        """Mark stuck Queued/Running/Prepared operations Failed and release their schedule keys."""
+
+        current = now or now_datetime()
+        rows = frappe.get_all(
+            DOCTYPE,
+            filters={"status": ["in", ["Queued", "Running", "Prepared"]]},
+            fields=["operation_id", "status", "requested_on", "started_on", "schedule_key"],
+            limit_page_length=500,
+        )
+        reclaimed = 0
+        for row in rows:
+            requested_on = get_datetime(row.requested_on) if row.requested_on else None
+            started_on = get_datetime(row.started_on) if row.started_on else None
+            if not is_stale_backup_operation(
+                status=row.status,
+                requested_on=requested_on,
+                started_on=started_on,
+                now=current,
+            ):
+                continue
+            self._update(
+                row.operation_id,
+                {
+                    "status": "Failed",
+                    "completed_on": now(),
+                    "error_summary": "backup_operation_stale_timeout",
+                    "schedule_key": None,
+                },
+            )
+            reclaimed += 1
+        return reclaimed
+
+    def release_schedule_key(self, operation_id: str) -> None:
+        self._update(operation_id, {"schedule_key": None})
 
     def mark_running(self, operation_id: str) -> None:
         self._update(operation_id, {"status": "Running", "started_on": now(), "error_summary": None})
@@ -116,15 +174,15 @@ class FrappeBackupHistory:
             },
         )
 
-    def mark_failed(self, operation_id: str, error_code: str) -> None:
-        self._update(
-            operation_id,
-            {
-                "status": "Failed",
-                "completed_on": now(),
-                "error_summary": str(error_code or "backup_operation_failed")[:140],
-            },
-        )
+    def mark_failed(self, operation_id: str, error_code: str, *, release_schedule: bool = True) -> None:
+        values: dict[str, Any] = {
+            "status": "Failed",
+            "completed_on": now(),
+            "error_summary": str(error_code or "backup_operation_failed")[:140],
+        }
+        if release_schedule:
+            values["schedule_key"] = None
+        self._update(operation_id, values)
 
     @staticmethod
     def _update(operation_id: str, values: dict[str, Any]) -> None:

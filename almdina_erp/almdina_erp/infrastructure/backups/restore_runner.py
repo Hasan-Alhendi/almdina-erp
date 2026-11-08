@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+SUPPORTED_REQUEST_VERSIONS = frozenset({1, 2})
+
+
 def _checksum(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -22,7 +25,7 @@ def _read_request(path: str) -> dict[str, Any]:
     if request_path.suffix != ".json" or request_path.parent.name != "backup_restore_requests":
         raise ValueError("Restore request path is invalid.")
     payload = json.loads(request_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or payload.get("version") != 1:
+    if not isinstance(payload, dict) or payload.get("version") not in SUPPORTED_REQUEST_VERSIONS:
         raise ValueError("Restore request format is invalid.")
     bench_path = Path(str(payload.get("bench_path") or "")).resolve(strict=True)
     site = str(payload.get("site") or "").strip()
@@ -77,7 +80,9 @@ def _bench_command(payload: dict[str, Any], *arguments: str) -> list[str]:
     ]
 
 
-def _restore_command(payload: dict[str, Any], bundle: dict[str, str]) -> list[str]:
+def _legacy_restore_command(payload: dict[str, Any], bundle: dict[str, str]) -> list[str]:
+    """Version-1 compatibility path: relies on Frappe operational conf only."""
+
     return _bench_command(
         payload,
         "restore",
@@ -90,6 +95,31 @@ def _restore_command(payload: dict[str, Any], bundle: dict[str, str]) -> list[st
     )
 
 
+def _db_root_from_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+    raw = payload.get("db_root")
+    if not isinstance(raw, dict):
+        return None
+    db_type = str(raw.get("db_type") or "").strip().lower()
+    if db_type == "sqlite":
+        return {"db_type": "sqlite"}
+    username = str(raw.get("username") or "").strip()
+    password = str(raw.get("password") or "")
+    host = str(raw.get("host") or "").strip()
+    try:
+        port = int(raw.get("port") or 0)
+    except (TypeError, ValueError):
+        port = 0
+    if not (db_type and username and password and host and 1 <= port <= 65535):
+        raise ValueError("Restore database credentials are incomplete.")
+    return {
+        "db_type": db_type,
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+    }
+
+
 def _run(
     command: list[str],
     *,
@@ -97,6 +127,67 @@ def _run(
     runner: Callable[..., Any] = subprocess.run,
 ) -> None:
     runner(command, cwd=str(cwd), check=True, stdin=subprocess.DEVNULL)
+
+
+def _run_restore_with_credentials(
+    payload: dict[str, Any],
+    bundle: dict[str, str],
+    db_root: dict[str, Any],
+    *,
+    sites_path: Path,
+    runner: Callable[..., Any] | None = None,
+) -> None:
+    """Restore without placing the root password on a process command line."""
+
+    if runner is not None:
+        # Tests inject a command runner; keep the privileged argv free of secrets.
+        command = _legacy_restore_command(payload, bundle)
+        if "--db-root-password" in command or any(
+            str(db_root.get("password") or "") and str(db_root.get("password")) in part
+            for part in command
+        ):
+            raise AssertionError("Restore command must not include the DB root password.")
+        _run(command, cwd=sites_path, runner=runner)
+        return
+
+    if db_root.get("db_type") == "sqlite":
+        _run(_legacy_restore_command(payload, bundle), cwd=sites_path)
+        return
+
+    import frappe
+    from frappe.commands.site import _restore
+
+    frappe.init(site=str(payload["site"]), sites_path=str(sites_path))
+    original_host = frappe.conf.db_host
+    original_port = frappe.conf.db_port
+    try:
+        frappe.conf.db_host = db_root["host"]
+        frappe.conf.db_port = db_root["port"]
+        try:
+            _restore(
+                site=str(payload["site"]),
+                sql_file_path=bundle["database"],
+                db_root_username=db_root["username"],
+                db_root_password=db_root["password"],
+                force=True,
+                with_public_files=bundle["public_files"],
+                with_private_files=bundle["private_files"],
+            )
+        except SystemExit as exc:
+            code = int(exc.code or 0) if not isinstance(exc.code, str) else 1
+            if code != 0:
+                raise RuntimeError("restore_failed") from exc
+    finally:
+        frappe.conf.db_host = original_host
+        frappe.conf.db_port = original_port
+        frappe.flags.root_login = None
+        frappe.flags.root_password = None
+        if getattr(frappe.local, "flags", None) is not None:
+            frappe.local.flags.root_connection = None
+        try:
+            frappe.destroy()
+        except Exception:
+            pass
 
 
 def execute_restore(
@@ -111,20 +202,34 @@ def execute_restore(
     backup_root = (sites_path / str(payload["site"]) / "private" / "backups").resolve()
     target = _validate_bundle(payload["target"], backup_root)
     safety = _validate_bundle(payload["safety"], backup_root)
+    db_root = _db_root_from_payload(payload)
     if settle_seconds > 0:
         time.sleep(settle_seconds)
 
     status = "Completed"
     error_code = ""
+
+    def restore_one(bundle: dict[str, str]) -> None:
+        if db_root is not None:
+            _run_restore_with_credentials(
+                payload,
+                bundle,
+                db_root,
+                sites_path=sites_path,
+                runner=runner if runner is not subprocess.run else None,
+            )
+            return
+        _run(_legacy_restore_command(payload, bundle), cwd=sites_path, runner=runner)
+
     try:
-        _run(_restore_command(payload, target), cwd=sites_path, runner=runner)
+        restore_one(target)
         _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
         _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
     except Exception:
         status = "Failed"
         error_code = "restore_failed_safety_recovery_started"
         try:
-            _run(_restore_command(payload, safety), cwd=sites_path, runner=runner)
+            restore_one(safety)
             _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
             _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
             error_code = "restore_failed_safety_recovery_completed"
@@ -172,6 +277,11 @@ def finalize_restore(request_path: str, status: str, error_code: str = "") -> No
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("site") != frappe.local.site:
         raise ValueError("Restore request belongs to another site.")
+
+    # Drop privileged credentials from disk as soon as audit finalization starts.
+    if isinstance(payload.get("db_root"), dict):
+        payload["db_root"] = {"db_type": payload["db_root"].get("db_type"), "redacted": True}
+        path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
 
     def upsert(operation_id: str, values: dict[str, Any]) -> None:
         if frappe.db.exists(DOCTYPE, operation_id):

@@ -50,12 +50,20 @@ def test_frappe_engine_is_reused_without_custom_dump_or_restore_sql() -> None:
 def test_secrets_use_frappe_password_fields_and_history_has_no_credentials() -> None:
     settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
     fields = {field["fieldname"]: field for field in settings["fields"]}
-    for fieldname in ("ssh_password", "ssh_private_key", "ssh_private_key_passphrase"):
+    for fieldname in (
+        "ssh_password",
+        "ssh_private_key",
+        "ssh_private_key_passphrase",
+        "db_restore_root_password",
+    ):
         assert fields[fieldname]["fieldtype"] == "Password"
+    assert fields["db_restore_section"]["label"] == "Database & Restore Settings"
 
     history = json.loads(HISTORY.read_text(encoding="utf-8"))
     history_fields = {field["fieldname"] for field in history["fields"]}
-    assert not history_fields.intersection({"ssh_password", "ssh_private_key", "credential", "secret"})
+    assert not history_fields.intersection(
+        {"ssh_password", "ssh_private_key", "credential", "secret", "db_restore_root_password"}
+    )
 
 
 def test_restore_endpoint_accepts_operation_id_not_client_path() -> None:

@@ -122,3 +122,27 @@ def test_restore_rejects_artifact_outside_site_backup_scope(tmp_path: Path) -> N
         assert "outside the backup scope" in str(exc)
     else:
         raise AssertionError("outside restore artifact was accepted")
+
+
+def test_version2_restore_keeps_password_off_command_line(tmp_path: Path) -> None:
+    path = request_file(tmp_path)
+    payload = json.loads(path.read_text())
+    payload["version"] = 2
+    payload["db_root"] = {
+        "db_type": "mariadb",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "username": "root",
+        "password": "super-secret-root",
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def runner(command: list[str], **_kwargs: object) -> None:
+        joined = " ".join(command)
+        assert "super-secret-root" not in joined
+        assert "--db-root-password" not in command
+        calls.append(command)
+
+    assert execute_restore(str(path), runner=runner, settle_seconds=0) == 0
+    assert any("restore" in command for command in calls)

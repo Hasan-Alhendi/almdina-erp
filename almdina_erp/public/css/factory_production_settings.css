@@ -446,6 +446,99 @@
     background: var(--alm-card);
 }
 
+.aps-db-restore {
+    overflow: hidden;
+    margin: 12px 0 14px;
+    border: 1px solid var(--alm-border-hover);
+    border-radius: var(--aps-radius-md);
+    background: var(--alm-card);
+}
+
+.aps-db-restore summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 15px;
+    transition: background 0.15s ease;
+}
+
+.aps-db-restore summary:hover {
+    background: var(--alm-surface-muted);
+}
+
+.aps-db-restore summary::-webkit-details-marker {
+    display: none;
+}
+
+.aps-db-restore-body {
+    border-top: 1px solid var(--alm-border-subtle);
+    padding: 12px 15px 15px;
+}
+
+.aps-db-restore-note,
+.aps-db-restore-meta {
+    color: var(--alm-text-subtle);
+    font-size: 10px;
+    line-height: 1.7;
+}
+
+.aps-db-restore-note {
+    margin-bottom: 8px;
+}
+
+.aps-db-restore-meta {
+    margin-bottom: 12px;
+}
+
+.aps-db-restore-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.aps-db-restore-field {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.aps-db-restore-field--wide {
+    grid-column: 1 / -1;
+}
+
+.aps-db-restore-field > span {
+    color: var(--alm-text-subtle);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.aps-db-restore-field > small {
+    color: var(--alm-text-subtle);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.aps-db-restore-input {
+    width: 100%;
+    min-height: 34px;
+    padding: 7px 10px;
+    border: 1px solid var(--alm-border-subtle);
+    border-radius: 9px;
+    background: var(--alm-surface-muted);
+    color: var(--alm-text-strong);
+    font-size: 12px;
+}
+
+.aps-db-restore-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
 .aps-legacy summary {
     cursor: pointer;
     list-style: none;
@@ -745,7 +838,8 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .aps-legacy-grid {
+    .aps-legacy-grid,
+    .aps-db-restore-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
@@ -775,7 +869,8 @@
 }
 
 @media(max-width:480px) {
-    .aps-legacy-grid {
+    .aps-legacy-grid,
+    .aps-db-restore-grid {
         grid-template-columns: 1fr;
     }
 

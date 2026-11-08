@@ -142,13 +142,33 @@ renderer.renderBackup({
         requested_on: "2026-10-13",
         total_size: 2048,
     }],
-    permissions: {},
+    permissions: { can_manage: true, can_manage_db_restore_settings: true, can_restore: true },
+    restore_runtime_ready: false,
+    db_root: {
+        db_restore_type: "MariaDB",
+        db_restore_host: "127.0.0.1",
+        db_restore_port: 3306,
+        db_restore_root_username: "root",
+        db_restore_root_password_configured: true,
+        db_restore_custom_password_configured: false,
+        db_restore_source: "frappe",
+        db_restore_ready: false,
+    },
     restorable: [],
 });
 assert.ok(backupHtml.indexOf("aps-section-accent") < backupHtml.indexOf("aps-section-titles"));
 assert.ok(backupHtml.indexOf("aps-section-titles") < backupHtml.indexOf("aps-section-tools"));
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">2.0 KB/);
+assert.match(backupHtml, /data-db-restore-settings/);
+assert.match(backupHtml, /data-db-restore-field="db_restore_type"/);
+assert.match(backupHtml, /data-db-restore-field="db_restore_host"/);
+assert.match(backupHtml, /data-db-restore-field="db_restore_port"/);
+assert.match(backupHtml, /data-db-restore-field="db_restore_root_username"/);
+assert.match(backupHtml, /data-db-restore-field="db_restore_root_password"/);
+assert.match(backupHtml, /type="password"/);
+assert.doesNotMatch(backupHtml, /value="[^"]*secret/);
+assert.match(backupHtml, /aps-db-restore-save/);
 
 renderer.renderWhatsApp({
     session: { status: "ready", name: "Desk", phone: "+963900", push_name: "Factory" },

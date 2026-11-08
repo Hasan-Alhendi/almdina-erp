@@ -11,28 +11,16 @@ from typing import Any
 import frappe
 
 from almdina_erp.almdina_erp.application.backups.management import BackupBundle
+from almdina_erp.almdina_erp.infrastructure.backups.db_root import (
+    credentials_payload,
+    resolve_effective_db_root,
+    restore_runtime_ready,
+)
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import bundle_manifest
 
 
-REQUEST_VERSION = 1
+REQUEST_VERSION = 2
 REQUEST_FOLDER = "backup_restore_requests"
-
-
-def restore_runtime_ready() -> bool:
-    db_type = str(frappe.conf.db_type or "").lower()
-    if db_type == "sqlite":
-        return True
-    if db_type == "mariadb":
-        return bool(
-            frappe.conf.get("mariadb_root_password")
-            or frappe.conf.get("root_password")
-        )
-    if db_type == "postgres":
-        return bool(
-            frappe.conf.get("postgres_root_password")
-            or frappe.conf.get("root_password")
-        )
-    return False
 
 
 def _bundle_payload(bundle: BackupBundle) -> dict[str, Any]:
@@ -60,6 +48,10 @@ def write_restore_request(
     safety_operation_id: str,
     safety: BackupBundle,
 ) -> Path:
+    connection = resolve_effective_db_root()
+    if not restore_runtime_ready():
+        raise ValueError("Restore database credentials are incomplete.")
+
     folder = Path(frappe.get_site_path("private", REQUEST_FOLDER)).resolve()
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(folder, 0o700)
@@ -80,6 +72,7 @@ def write_restore_request(
         "safety_operation_id": safety_operation_id,
         "target": _bundle_payload(target),
         "safety": _bundle_payload(safety),
+        "db_root": credentials_payload(connection),
     }
     request_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
     os.chmod(request_path, stat.S_IRUSR | stat.S_IWUSR)

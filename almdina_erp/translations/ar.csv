@@ -2490,7 +2490,7 @@ Require cutting plan approval before handoff to the next stage,تتطلب اعت
 Reserve stock on approval,حجز المخزون عند الاعتماد
 Restore,استعادة
 Restore backup,استعادة نسخة احتياطية
-Restore is disabled until DB root credentials are configured in the operational Frappe settings.,الاستعادة معطّلة حتى تُضبط بيانات DB root في إعداد Frappe التشغيلي.
+Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.,الاستعادة معطّلة حتى تكتمل إعدادات اتصال DB root في إعدادات Almadina ERP أو إعداد Frappe التشغيلي.
 Restore prepared,تم تجهيز الاستعادة
 Restoring the latest factory settings changes.,يتم استرجاع آخر تغييرات إعدادات المعمل.
 Role permissions saved.,تم حفظ صلاحيات الدور.
@@ -3463,3 +3463,48 @@ You do not have permission to use the board editor.,ليست لديك صلاحي
 Deduct edge banding thickness by default,خصم سماكة القشاط افتراضياً
 Deduct edge banding thickness automatically,خصم سماكة القشاط تلقائياً
 Tool diameters,قياسات الريش
+A Frappe operational root password is available. Enter a value only to store an Almadina-specific override.,تتوفر كلمة مرور root تشغيلية من Frappe. أدخل قيمة فقط لحفظ تجاوز خاص بـ Almadina.
+Almadina settings,إعدادات Almadina
+"Connected successfully, but the account lacks restore privileges.",نجح الاتصال، لكن الحساب لا يملك صلاحيات الاستعادة.
+Could not queue the backup job.,تعذّر إدراج مهمة النسخ في الطابور.
+Could not queue the restore preparation job.,تعذّر إدراج مهمة تجهيز الاستعادة في الطابور.
+Could not reach the database host or port.,تعذّر الوصول إلى مضيف قاعدة البيانات أو المنفذ.
+Could not verify the database root connection.,تعذّر التحقق من اتصال DB root.
+Credential source,مصدر بيانات الاعتماد
+Credential value is too long.,قيمة الاعتماد طويلة جدًا.
+Database & Restore Settings,إعدادات قاعدة البيانات والاستعادة
+Database Host,مضيف قاعدة البيانات
+Database Port,منفذ قاعدة البيانات
+Database Type,نوع قاعدة البيانات
+Database Type is invalid.,نوع قاعدة البيانات غير صالح.
+Database authentication failed. Check the root username and password.,فشلت مصادقة قاعدة البيانات. تحقق من اسم مستخدم root وكلمة المرور.
+Database connection succeeded.,نجح اتصال قاعدة البيانات.
+Database connection succeeded with restore privileges.,نجح اتصال قاعدة البيانات مع صلاحيات الاستعادة.
+Database connection test failed,فشل اختبار اتصال قاعدة البيانات
+Database connection test failed.,فشل اختبار اتصال قاعدة البيانات.
+Database restore settings are incomplete.,إعدادات استعادة قاعدة البيانات غير مكتملة.
+Frappe operational settings,إعدادات Frappe التشغيلية
+Incomplete,غير مكتمل
+Ready for restore,جاهز للاستعادة
+Restore requires complete database root connection settings.,تتطلب الاستعادة إعدادات اتصال DB root مكتملة.
+Root Password,كلمة مرور Root
+Root Username,اسم مستخدم Root
+Test Connection,اختبار الاتصال
+Testing database root connection...,جاري اختبار اتصال DB root...
+Used only for restore readiness. Does not change the site application database login.,يُستخدم فقط لجاهزية الاستعادة. لا يغيّر تسجيل دخول قاعدة بيانات التطبيق للموقع.
+{0} must be between 1 and 65535.,يجب أن يكون {0} بين 1 و 65535.
+Configure privileged database connection for restore readiness without changing the site application login.,اضبط اتصال قاعدة البيانات ذي الصلاحيات لجاهزية الاستعادة دون تغيير تسجيل دخول تطبيق الموقع.
+"Save these settings before using Test Connection. The test always uses the last saved values, with fallback to Frappe operational configuration when Almadina overrides are empty.",احفظ هذه الإعدادات قبل استخدام اختبار الاتصال. يعتمد الاختبار دائمًا على آخر قيم محفوظة، مع التراجع إلى إعداد Frappe التشغيلي عندما تكون تجاوزات Almadina فارغة.
+Save database settings,حفظ إعدادات قاعدة البيانات
+Saving database settings...,جاري حفظ إعدادات قاعدة البيانات...
+Database restore settings saved.,تم حفظ إعدادات استعادة قاعدة البيانات.
+Could not save database restore settings.,تعذّر حفظ إعدادات استعادة قاعدة البيانات.
+MariaDB,MariaDB
+PostgreSQL,PostgreSQL
+SQLite,SQLite
+Manage database restore settings,إدارة إعدادات استعادة قاعدة البيانات
+Configure and test privileged database root connection settings used for restore readiness. Does not grant ordinary backup scheduling or restore execution.,ضبط واختبار إعدادات اتصال DB root ذي الصلاحيات لجاهزية الاستعادة. لا تمنح جدولة النسخ العادية ولا تنفيذ الاستعادة.
+"Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore or database root credential changes.",ضبط الجدولة والاحتفاظ واتصال SSH، وإنشاء النسخ اليدوية وعرض سجلها. لا تمنح الاستعادة ولا تغيير بيانات اعتماد DB root.
+Privileged database root connection used only for restore readiness. Does not change the site application login.,اتصال DB root ذو صلاحيات يُستخدم فقط لجاهزية الاستعادة. لا يغيّر تسجيل دخول تطبيق الموقع.
+Restore readiness,جاهزية الاستعادة
+You do not have permission to manage database restore settings.,ليست لديك صلاحية إدارة إعدادات استعادة قاعدة البيانات.

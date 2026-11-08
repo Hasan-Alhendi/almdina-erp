@@ -15,6 +15,7 @@ class FactorySettingsSection:
     PRINT_IDENTITY = "print_identity"
     WHATSAPP_MESSAGES = "whatsapp_messages"
     BACKUP_RESTORE = "backup_restore"
+    DB_RESTORE = "db_restore"
 
 
 SECTION_FIELDS = MappingProxyType(
@@ -100,6 +101,15 @@ SECTION_FIELDS = MappingProxyType(
                 "remote_backup_path",
             }
         ),
+        FactorySettingsSection.DB_RESTORE: frozenset(
+            {
+                "db_restore_type",
+                "db_restore_host",
+                "db_restore_port",
+                "db_restore_root_username",
+                "db_restore_root_password",
+            }
+        ),
     }
 )
 SECTION_CAPABILITIES = MappingProxyType(
@@ -111,6 +121,7 @@ SECTION_CAPABILITIES = MappingProxyType(
         FactorySettingsSection.PRINT_IDENTITY: Capability.EDIT_FACTORY_PRINT_IDENTITY,
         FactorySettingsSection.WHATSAPP_MESSAGES: Capability.EDIT_WHATSAPP_MESSAGES,
         FactorySettingsSection.BACKUP_RESTORE: Capability.MANAGE_BACKUPS,
+        FactorySettingsSection.DB_RESTORE: Capability.MANAGE_DB_RESTORE_SETTINGS,
     }
 )
 ALL_SETTINGS_FIELDS = frozenset().union(*SECTION_FIELDS.values())
@@ -143,6 +154,7 @@ def settings_context(capabilities: Iterable[str] | None) -> dict[str, object]:
         "can_view": Capability.VIEW_FACTORY_SETTINGS in granted,
         "can_manage_whatsapp_session": Capability.MANAGE_WHATSAPP_SESSION in granted,
         "can_manage_backups": Capability.MANAGE_BACKUPS in granted,
+        "can_manage_db_restore_settings": Capability.MANAGE_DB_RESTORE_SETTINGS in granted,
         "can_restore_backups": Capability.RESTORE_BACKUPS in granted,
         "sections": {
             section: {

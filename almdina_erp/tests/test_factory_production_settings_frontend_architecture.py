@@ -68,6 +68,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "get_backup_context",
             "create_backup_now",
             "test_ssh_connection",
+            "test_db_connection",
             "request_restore",
         ):
             self.assertIn(endpoint, self.api)
@@ -132,9 +133,13 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "aps-section",
             "aps-permission",
             "aps-legacy",
+            "aps-db-restore",
+            "data-db-restore-settings",
+            "data-db-restore-field",
             "aps-whatsapp",
             "aps-audit",
             "Edit this section",
+            "Database & Restore Settings",
         ):
             self.assertIn(marker, self.renderer)
         for forbidden in (
@@ -212,12 +217,37 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             ".aps-sections",
             ".aps-section",
             ".aps-legacy",
+            ".aps-db-restore",
             ".aps-whatsapp",
             "@media(max-width:",
         ):
             self.assertIn(marker, self.css)
         self.assertNotIn("<style", self.renderer)
         self.assertNotIn("<style", self.controller)
+
+    def test_backup_panel_exposes_collapsible_db_restore_fields_and_save(self) -> None:
+        backup_panel = (MODULE_ROOT / "backup_panel.js").read_text(encoding="utf-8")
+        self.assertIn("aps-db-restore-save", backup_panel)
+        self.assertIn("saveDbRestoreSettings", backup_panel)
+        self.assertIn("db_restore_type", backup_panel)
+        self.assertIn("db_restore_host", backup_panel)
+        self.assertIn("db_restore_port", backup_panel)
+        self.assertIn("db_restore_root_username", backup_panel)
+        self.assertIn("db_restore_root_password", backup_panel)
+        self.assertIn("updateSettings", backup_panel)
+        self.assertIn("testDbConnection", backup_panel)
+        # Password must never be treated as a required echo from the server payload.
+        self.assertNotIn("db_restore_root_password:", self.renderer)
+        self.assertIn('type="password"', self.renderer)
+        self.assertIn("Save these settings before using Test Connection", self.renderer)
+        for fieldname in (
+            "db_restore_type",
+            "db_restore_host",
+            "db_restore_port",
+            "db_restore_root_username",
+            "db_restore_root_password",
+        ):
+            self.assertIn(f'data-db-restore-field="{fieldname}"', self.renderer)
 
 
 if __name__ == "__main__":

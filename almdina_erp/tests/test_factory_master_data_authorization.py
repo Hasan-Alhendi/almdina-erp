@@ -13,6 +13,9 @@ from almdina_erp.almdina_erp.application.security.permission_matrix import (
 )
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.domain.security.factory_settings import (
+    ALL_SETTINGS_FIELDS,
+    FactorySettingsSection,
+    SECTION_FIELDS,
     decide_settings_update,
     expand_factory_settings_capabilities,
     settings_context,
@@ -93,6 +96,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
                 Capability.EDIT_FACTORY_PRINT_IDENTITY,
                 Capability.EDIT_WHATSAPP_MESSAGES,
                 Capability.MANAGE_BACKUPS,
+                Capability.MANAGE_DB_RESTORE_SETTINGS,
             }
         )
         self.assertIn(Capability.VIEW_FACTORY_SETTINGS, expanded)
@@ -101,6 +105,7 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         self.assertFalse(context["can_manage_whatsapp_session"])
         self.assertTrue(all(section["editable"] for section in context["sections"].values()))
         self.assertTrue(context["can_manage_backups"])
+        self.assertTrue(context["can_manage_db_restore_settings"])
         self.assertFalse(context["can_restore_backups"])
 
         session_only = expand_factory_settings_capabilities(
@@ -211,6 +216,55 @@ class TestFactoryMasterDataAuthorization(unittest.TestCase):
         )
         self.assertFalse(empty.allowed)
         self.assertEqual(empty.code, "empty_update")
+
+    def test_db_restore_settings_require_dedicated_capability_not_manage_backups(self) -> None:
+        payload = {
+            "db_restore_type": "MariaDB",
+            "db_restore_host": "127.0.0.1",
+            "db_restore_port": 3306,
+            "db_restore_root_username": "root",
+            "db_restore_root_password": "new-secret",
+        }
+        for fieldname in payload:
+            self.assertIn(fieldname, SECTION_FIELDS[FactorySettingsSection.DB_RESTORE])
+            self.assertNotIn(fieldname, SECTION_FIELDS[FactorySettingsSection.BACKUP_RESTORE])
+            self.assertIn(fieldname, ALL_SETTINGS_FIELDS)
+
+        allowed = decide_settings_update({Capability.MANAGE_DB_RESTORE_SETTINGS}, payload)
+        self.assertTrue(allowed.allowed)
+        self.assertEqual(allowed.code, "allowed")
+
+        manage_backups_only = decide_settings_update({Capability.MANAGE_BACKUPS}, payload)
+        self.assertFalse(manage_backups_only.allowed)
+        self.assertEqual(manage_backups_only.code, "missing_capability")
+
+        restore_only = decide_settings_update({Capability.RESTORE_BACKUPS}, payload)
+        self.assertFalse(restore_only.allowed)
+        self.assertEqual(restore_only.code, "missing_capability")
+
+        backup_schedule_still_allowed = decide_settings_update(
+            {Capability.MANAGE_BACKUPS},
+            {"local_backup_enabled": 1, "ssh_host": "backup.internal"},
+        )
+        self.assertTrue(backup_schedule_still_allowed.allowed)
+
+        context = settings_context({Capability.MANAGE_BACKUPS})
+        self.assertTrue(context["can_manage_backups"])
+        self.assertFalse(context["can_manage_db_restore_settings"])
+        self.assertFalse(context["sections"]["db_restore"]["editable"])
+
+        adminish = settings_context({Capability.MANAGE_DB_RESTORE_SETTINGS})
+        self.assertTrue(adminish["can_manage_db_restore_settings"])
+        self.assertTrue(adminish["sections"]["db_restore"]["editable"])
+        self.assertFalse(adminish["can_manage_backups"])
+
+        still_unknown = decide_settings_update(
+            {Capability.MANAGE_DB_RESTORE_SETTINGS},
+            {"db_restore_host": "127.0.0.1", "not_a_settings_field": 1},
+        )
+        self.assertFalse(still_unknown.allowed)
+        self.assertEqual(still_unknown.code, "unknown_fields")
+        self.assertIn("not_a_settings_field", still_unknown.reason)
 
         messages_cannot_edit_print = decide_settings_update(
             {Capability.EDIT_WHATSAPP_MESSAGES},

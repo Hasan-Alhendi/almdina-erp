@@ -9,6 +9,17 @@ from frappe.utils import cint, now, now_datetime
 from almdina_erp.almdina_erp.application.backups.management import run_backup
 from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
+from almdina_erp.almdina_erp.infrastructure.backups.db_root import (
+    DbRootAuthenticationError,
+    DbRootConnectionError,
+    DbRootHostUnreachable,
+    DbRootInsufficientPrivileges,
+    DbRootSettingsIncomplete,
+    public_db_root_settings,
+    resolve_effective_db_root,
+    restore_runtime_ready,
+    test_db_root_connection,
+)
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
     FrappeBackupEngine,
     FrappeLocalRetention,
@@ -16,7 +27,6 @@ from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
 from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
 from almdina_erp.almdina_erp.infrastructure.backups.restore import (
     launch_restore_runner,
-    restore_runtime_ready,
     write_restore_request,
 )
 from almdina_erp.almdina_erp.infrastructure.backups.sftp import (
@@ -108,6 +118,20 @@ def _enqueue_backup(operation_id: str, target: str) -> None:
     )
 
 
+def _safe_db_root_error_message(exc: Exception) -> str:
+    if isinstance(exc, DbRootSettingsIncomplete):
+        return _("Database restore settings are incomplete.")
+    if isinstance(exc, DbRootAuthenticationError):
+        return _("Database authentication failed. Check the root username and password.")
+    if isinstance(exc, DbRootHostUnreachable):
+        return _("Could not reach the database host or port.")
+    if isinstance(exc, DbRootInsufficientPrivileges):
+        return _("Connected successfully, but the account lacks restore privileges.")
+    if isinstance(exc, DbRootConnectionError):
+        return _("Database connection test failed.")
+    return _("Database connection test failed.")
+
+
 @frappe.whitelist()
 def get_backup_context() -> dict[str, Any]:
     require_any_doctype_capability(
@@ -115,17 +139,23 @@ def get_backup_context() -> dict[str, Any]:
         message=_("You do not have permission to access backup management."),
     )
     can_manage = doctype_has_capability(Capability.MANAGE_BACKUPS)
+    can_manage_db_restore = doctype_has_capability(Capability.MANAGE_DB_RESTORE_SETTINGS)
     can_restore = doctype_has_capability(Capability.RESTORE_BACKUPS)
     history = FrappeBackupHistory()
-    return {
+    ready = bool(restore_runtime_ready())
+    payload: dict[str, Any] = {
         "permissions": {
             "can_manage": can_manage,
+            "can_manage_db_restore_settings": can_manage_db_restore,
             "can_restore": can_restore,
         },
         "history": history.list_recent(30),
         "restorable": history.restorable(30) if can_restore else [],
-        "restore_runtime_ready": bool(can_restore and restore_runtime_ready()),
+        "restore_runtime_ready": bool(can_restore and ready),
     }
+    if can_manage_db_restore:
+        payload["db_root"] = public_db_root_settings()
+    return payload
 
 
 @frappe.whitelist()
@@ -140,7 +170,12 @@ def create_backup_now() -> dict[str, str]:
         target="Local",
         requested_by=frappe.session.user,
     )
-    _enqueue_backup(operation_id, "local")
+    try:
+        _enqueue_backup(operation_id, "local")
+    except Exception:
+        history.mark_failed(operation_id, "backup_enqueue_failed")
+        frappe.db.commit()
+        frappe.throw(_("Could not queue the backup job."), frappe.ValidationError)
     return {"operation_id": operation_id, "status": "Queued"}
 
 
@@ -158,6 +193,27 @@ def test_ssh_connection() -> dict[str, bool]:
 
 
 @frappe.whitelist()
+def test_db_connection() -> dict[str, Any]:
+    require_doctype_capability(
+        Capability.MANAGE_DB_RESTORE_SETTINGS,
+        message=_("You do not have permission to manage database restore settings."),
+    )
+    try:
+        result = test_db_root_connection(resolve_effective_db_root())
+    except DbRootConnectionError as exc:
+        frappe.throw(_safe_db_root_error_message(exc), frappe.ValidationError)
+    except ValueError:
+        frappe.throw(_("Database restore settings are incomplete."), frappe.ValidationError)
+    return {
+        "ok": True,
+        "authenticated": bool(result.get("authenticated")),
+        "has_restore_privileges": bool(result.get("has_restore_privileges")),
+        "source": str(result.get("source") or ""),
+        "safe_code": str(result.get("safe_code") or "db_root_connection_ok"),
+    }
+
+
+@frappe.whitelist()
 def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
     require_doctype_capability(
         Capability.RESTORE_BACKUPS,
@@ -165,7 +221,7 @@ def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
     )
     if not restore_runtime_ready():
         frappe.throw(
-            _("Restore requires the database root password in Frappe site/common configuration."),
+            _("Restore requires complete database root connection settings."),
             frappe.ValidationError,
         )
     history = FrappeBackupHistory()
@@ -179,15 +235,20 @@ def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
         requested_by=frappe.session.user,
         source_operation_id=str(operation_id or "").strip(),
     )
-    frappe.enqueue(
-        _RESTORE_JOB_METHOD,
-        queue="long",
-        timeout=6 * 60 * 60,
-        enqueue_after_commit=True,
-        job_id=f"almdina-restore-prepare-{restore_id}",
-        deduplicate=True,
-        operation_id=restore_id,
-    )
+    try:
+        frappe.enqueue(
+            _RESTORE_JOB_METHOD,
+            queue="long",
+            timeout=6 * 60 * 60,
+            enqueue_after_commit=True,
+            job_id=f"almdina-restore-prepare-{restore_id}",
+            deduplicate=True,
+            operation_id=restore_id,
+        )
+    except Exception:
+        history.mark_failed(restore_id, "restore_enqueue_failed")
+        frappe.db.commit()
+        frappe.throw(_("Could not queue the restore preparation job."), frappe.ValidationError)
     return {"operation_id": restore_id, "status": "Queued"}
 
 
@@ -197,6 +258,12 @@ def scheduled_backup_tick() -> None:
     settings = _settings()
     current = now_datetime()
     history = FrappeBackupHistory()
+    try:
+        history.reclaim_stale_operations(now=current)
+        frappe.db.commit()
+    except Exception:
+        frappe.logger("almdina_backup").error("Failed reclaiming stale backup operations", exc_info=True)
+
     for prefix, target in (("local", "Local"), ("external", "External")):
         if not cint(settings.get(f"{prefix}_backup_enabled")):
             continue
@@ -218,7 +285,17 @@ def scheduled_backup_tick() -> None:
             if history.exists_for_schedule(schedule_key):
                 continue
             raise
-        _enqueue_backup(operation_id, prefix)
+        try:
+            _enqueue_backup(operation_id, prefix)
+            frappe.db.commit()
+        except Exception:
+            history.mark_failed(operation_id, "backup_enqueue_failed")
+            frappe.db.commit()
+            frappe.logger("almdina_backup").error(
+                "Failed to enqueue scheduled %s backup",
+                prefix,
+                exc_info=True,
+            )
 
 
 def run_backup_job(operation_id: str, target: str) -> None:
@@ -322,5 +399,6 @@ __all__ = [
     "request_restore",
     "run_backup_job",
     "scheduled_backup_tick",
+    "test_db_connection",
     "test_ssh_connection",
 ]

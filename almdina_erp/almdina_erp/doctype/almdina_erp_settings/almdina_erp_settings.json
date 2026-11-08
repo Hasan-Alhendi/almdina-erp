@@ -13,7 +13,8 @@
     "whatsapp_messages_section","whatsapp_measurements_text","whatsapp_measurement_amendments_text","whatsapp_invoice_text","whatsapp_stage_messages","whatsapp_session_id","whatsapp_session_name",
     "backup_restore_section","local_backup_enabled","local_backup_frequency","local_backup_time","local_backup_weekday","local_backup_day_of_month","local_backup_retention",
     "external_backup_section","external_backup_enabled","external_backup_frequency","external_backup_time","external_backup_weekday","external_backup_day_of_month","external_backup_retention",
-    "ssh_backup_section","ssh_host","ssh_port","ssh_username","ssh_auth_method","ssh_password","ssh_private_key","ssh_private_key_passphrase","remote_backup_path"
+    "ssh_backup_section","ssh_host","ssh_port","ssh_username","ssh_auth_method","ssh_password","ssh_private_key","ssh_private_key_passphrase","remote_backup_path",
+    "db_restore_section","db_restore_type","db_restore_host","db_restore_port","db_restore_root_username","db_restore_root_password"
   ],
   "fields": [
     {"fieldname":"cutting_defaults_section","fieldtype":"Section Break","label":"Cutting Defaults"},
@@ -91,7 +92,13 @@
     {"fieldname":"ssh_password","fieldtype":"Password","label":"SSH Password"},
     {"fieldname":"ssh_private_key","fieldtype":"Password","label":"SSH Private Key"},
     {"fieldname":"ssh_private_key_passphrase","fieldtype":"Password","label":"SSH Private Key Passphrase"},
-    {"description":"Absolute non-root POSIX directory. The SSH host key must exist in the bench user's known_hosts file.","fieldname":"remote_backup_path","fieldtype":"Data","label":"Remote Backup Path"}
+    {"description":"Absolute non-root POSIX directory. The SSH host key must exist in the bench user's known_hosts file.","fieldname":"remote_backup_path","fieldtype":"Data","label":"Remote Backup Path"},
+    {"fieldname":"db_restore_section","fieldtype":"Section Break","label":"Database & Restore Settings"},
+    {"description":"Used only for restore readiness and privileged restore connections. Does not change the site application database login.","fieldname":"db_restore_type","fieldtype":"Select","label":"Database Type","options":"\nMariaDB\nPostgreSQL\nSQLite"},
+    {"fieldname":"db_restore_host","fieldtype":"Data","label":"Database Host"},
+    {"fieldname":"db_restore_port","fieldtype":"Int","label":"Database Port","non_negative":1},
+    {"fieldname":"db_restore_root_username","fieldtype":"Data","label":"Root Username"},
+    {"description":"Stored encrypted through Frappe. Never returned to the browser. Leave empty to keep the saved value or fall back to Frappe operational configuration.","fieldname":"db_restore_root_password","fieldtype":"Password","label":"Root Password"}
   ],
   "issingle":1,
   "links":[],

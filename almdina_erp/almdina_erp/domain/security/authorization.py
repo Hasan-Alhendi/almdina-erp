@@ -86,6 +86,7 @@ class Capability:
     MANAGE_WHATSAPP_SESSION = "manage_whatsapp_session"
     EDIT_WHATSAPP_MESSAGES = "edit_whatsapp_messages"
     MANAGE_BACKUPS = "manage_backups"
+    MANAGE_DB_RESTORE_SETTINGS = "manage_db_restore_settings"
     RESTORE_BACKUPS = "restore_backups"
 
     # Master data
@@ -224,6 +225,12 @@ _CAPABILITY_DEFINITIONS = (
     CapabilityDefinition(Capability.MANAGE_WHATSAPP_SESSION, Capability.MANAGE_WHATSAPP_SESSION, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.EDIT_WHATSAPP_MESSAGES, Capability.EDIT_WHATSAPP_MESSAGES, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.MANAGE_BACKUPS, Capability.MANAGE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
+    CapabilityDefinition(
+        Capability.MANAGE_DB_RESTORE_SETTINGS,
+        Capability.MANAGE_DB_RESTORE_SETTINGS,
+        _SETTINGS_DOCTYPE,
+        "factory_settings",
+    ),
     CapabilityDefinition(Capability.RESTORE_BACKUPS, Capability.RESTORE_BACKUPS, _SETTINGS_DOCTYPE, "factory_settings"),
     CapabilityDefinition(Capability.VIEW_PRODUCTION_ROUTINGS, "read", _ROUTING_DOCTYPE, "master_data", False),
     CapabilityDefinition(Capability.CREATE_PRODUCTION_ROUTINGS, "create", _ROUTING_DOCTYPE, "master_data", False),

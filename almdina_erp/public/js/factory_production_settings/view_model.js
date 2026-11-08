@@ -32,6 +32,14 @@
             return Boolean(current && current.permissions && current.permissions.can_manage_backups);
         }
 
+        function canManageDbRestoreSettings(current) {
+            return Boolean(
+                current
+                && current.permissions
+                && current.permissions.can_manage_db_restore_settings
+            );
+        }
+
         function canRestoreBackups(current) {
             return Boolean(current && current.permissions && current.permissions.can_restore_backups);
         }
@@ -141,6 +149,14 @@
                     [t("Remote path"), source.remote_backup_path || t("Not configured")],
                     [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
                 ], current)] : []),
+                ...(canManageDbRestoreSettings(current) ? [section("db_restore", t("Database & Restore Settings"), t("Privileged database root connection used only for restore readiness. Does not change the site application login."), [
+                    [t("Database Type"), t(source.db_restore_type || "MariaDB")],
+                    [t("Database Host"), source.db_restore_host ? `${source.db_restore_host}:${display(source.db_restore_port, 3306)}` : t("Not configured")],
+                    [t("Root Username"), source.db_restore_root_username || t("Not configured")],
+                    [t("Root Password"), source.db_restore_root_password_configured ? t("Saved securely") : t("Not set up")],
+                    [t("Credential source"), source.db_restore_source === "custom" ? t("Almadina settings") : t("Frappe operational settings")],
+                    [t("Restore readiness"), source.db_restore_ready ? t("Ready for restore") : t("Incomplete")],
+                ], current)] : []),
             ];
         }
 
@@ -167,7 +183,11 @@
                 legacy: legacy(current),
                 hasLegacy: Boolean(current.legacy_values && typeof current.legacy_values === "object"),
                 canManageWhatsAppSession: canManageWhatsAppSession(current),
-                showBackupPanel: canManageBackups(current) || canRestoreBackups(current),
+                showBackupPanel: (
+                    canManageBackups(current)
+                    || canManageDbRestoreSettings(current)
+                    || canRestoreBackups(current)
+                ),
             };
         }
 
@@ -176,6 +196,7 @@
             sectionEditable,
             canManageWhatsAppSession,
             canManageBackups,
+            canManageDbRestoreSettings,
             canRestoreBackups,
             yesNo,
             display,

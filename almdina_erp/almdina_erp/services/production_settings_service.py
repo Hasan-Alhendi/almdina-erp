@@ -68,7 +68,12 @@ WHATSAPP_MESSAGE_DEFAULTS = {
 _WHATSAPP_MESSAGE_FIELDS = tuple(WHATSAPP_MESSAGE_DEFAULTS)
 _WHATSAPP_STAGE_MESSAGES_FIELD = "whatsapp_stage_messages"
 _BACKUP_SECRET_FIELDS = frozenset(
-    {"ssh_password", "ssh_private_key", "ssh_private_key_passphrase"}
+    {
+        "ssh_password",
+        "ssh_private_key",
+        "ssh_private_key_passphrase",
+        "db_restore_root_password",
+    }
 )
 _BACKUP_BOOLEAN_FIELDS = frozenset(
     {"local_backup_enabled", "external_backup_enabled"}
@@ -80,6 +85,7 @@ _BACKUP_INTEGER_FIELDS = frozenset(
         "external_backup_day_of_month",
         "external_backup_retention",
         "ssh_port",
+        "db_restore_port",
     }
 )
 _BACKUP_TEXT_FIELDS = frozenset(
@@ -94,8 +100,12 @@ _BACKUP_TEXT_FIELDS = frozenset(
         "ssh_username",
         "ssh_auth_method",
         "remote_backup_path",
+        "db_restore_type",
+        "db_restore_host",
+        "db_restore_root_username",
     }
 )
+_DB_RESTORE_TYPES = frozenset({"", "MariaDB", "PostgreSQL", "SQLite"})
 _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
     {
         Capability.VIEW_FACTORY_SETTINGS,
@@ -446,10 +456,15 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
         settings.set(fieldname, 1 if cint(payload[fieldname]) else 0)
 
     for fieldname in _BACKUP_INTEGER_FIELDS.intersection(payload):
-        value = cint(payload[fieldname])
-        if fieldname == "ssh_port":
+        raw = payload[fieldname]
+        if fieldname == "db_restore_port" and raw in (None, ""):
+            settings.set(fieldname, None)
+            continue
+        value = cint(raw)
+        if fieldname in {"ssh_port", "db_restore_port"}:
             if not 1 <= value <= 65535:
-                frappe.throw(_("SSH Port must be between 1 and 65535."), frappe.ValidationError)
+                label = _("Database Port") if fieldname == "db_restore_port" else _("SSH Port")
+                frappe.throw(_("{0} must be between 1 and 65535.").format(label), frappe.ValidationError)
         elif fieldname.endswith("day_of_month"):
             if not 1 <= value <= 31:
                 frappe.throw(_("Backup day of month must be between 1 and 31."), frappe.ValidationError)
@@ -466,14 +481,18 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
                 value = normalize_remote_path(value)
             except ValueError as exc:
                 frappe.throw(_(str(exc)), frappe.ValidationError)
+        if fieldname == "db_restore_type":
+            if value not in _DB_RESTORE_TYPES:
+                frappe.throw(_("Database Type is invalid."), frappe.ValidationError)
         settings.set(fieldname, value)
 
     for fieldname in _BACKUP_SECRET_FIELDS.intersection(payload):
         value = str(payload[fieldname] or "")
         if not value:
             continue
-        if len(value) > 20000:
-            frappe.throw(_("SSH credential is too long."), frappe.ValidationError)
+        limit = 1024 if fieldname == "db_restore_root_password" else 20000
+        if len(value) > limit:
+            frappe.throw(_("Credential value is too long."), frappe.ValidationError)
         settings.set(fieldname, value)
 
     if set(payload).intersection(
@@ -686,14 +705,42 @@ def whatsapp_stage_message_template(stage_type: object) -> str:
     return stored or STAGE_COMPLETION_TEXT_TEMPLATE
 
 
-def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str, Any]:
+_DB_RESTORE_STORED_FIELDS = frozenset(
+    {
+        "db_restore_type",
+        "db_restore_host",
+        "db_restore_port",
+        "db_restore_root_username",
+    }
+)
+_DB_RESTORE_PUBLIC_FIELDS = frozenset(
+    {
+        *_DB_RESTORE_STORED_FIELDS,
+        "db_restore_root_password_configured",
+        "db_restore_custom_password_configured",
+        "db_restore_source",
+        "db_restore_ready",
+        "db_restore_frappe_defaults",
+    }
+)
+_BACKUP_SETTINGS_FIELDS = (
+    _BACKUP_BOOLEAN_FIELDS | _BACKUP_INTEGER_FIELDS | _BACKUP_TEXT_FIELDS
+) - _DB_RESTORE_STORED_FIELDS
+
+
+def _settings_values(
+    settings: Any,
+    *,
+    include_backups: bool = True,
+    include_db_restore: bool = False,
+) -> dict[str, Any]:
     values: dict[str, Any] = {}
     print_values = _print_identity_values(settings)
     whatsapp_values = _whatsapp_message_values(settings)
     for fieldname in _SETTINGS_FIELDS:
-        if not include_backups and fieldname in (
-            _BACKUP_BOOLEAN_FIELDS | _BACKUP_INTEGER_FIELDS | _BACKUP_TEXT_FIELDS
-        ):
+        if not include_backups and fieldname in _BACKUP_SETTINGS_FIELDS:
+            continue
+        if not include_db_restore and fieldname in _DB_RESTORE_STORED_FIELDS:
             continue
         if fieldname in print_values:
             values[fieldname] = print_values[fieldname]
@@ -732,6 +779,13 @@ def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str
         values["ssh_private_key_passphrase_configured"] = bool(
             settings.get_password("ssh_private_key_passphrase", raise_exception=False)
         )
+    if include_db_restore:
+        from almdina_erp.almdina_erp.infrastructure.backups.db_root import public_db_root_settings
+
+        values.update(public_db_root_settings(settings))
+    else:
+        for fieldname in _DB_RESTORE_PUBLIC_FIELDS:
+            values.pop(fieldname, None)
     return values
 
 
@@ -776,6 +830,7 @@ def get_production_settings() -> dict[str, Any]:
     values = _settings_values(
         settings,
         include_backups=Capability.MANAGE_BACKUPS in granted,
+        include_db_restore=Capability.MANAGE_DB_RESTORE_SETTINGS in granted,
     )
     catalog = optimization_catalog()
     machines = machine_type_catalog()
