@@ -3448,3 +3448,4 @@ A backup with these files already exists.,توجد نسخة بهذه الملف�
 Backup encryption key does not match this site.,مفتاح تشفير النسخة لا يطابق هذا الموقع.
 Backup upload was interrupted.,انقطع رفع النسخة الاحتياطية.
 Backup package validation failed.,فشل التحقق من حزمة النسخة الاحتياطية.
+Imported backup is no longer compatible with this site.,النسخة المستوردة لم تعد متوافقة مع هذا الموقع.

@@ -161,6 +161,23 @@ def _verify_inner(path: Path, kind: str, site: str, config_key: str) -> None:
                             pass
 
 
+def validate_import_restore(versions_json: str, bundle: BackupBundle) -> None:
+    """Recheck compatibility after later app/key changes, before any restore work."""
+    try:
+        versions = json.loads(versions_json or "null")
+    except (TypeError, ValueError) as exc:
+        raise ValueError("versions") from exc
+    if versions != app_versions():
+        raise ValueError("versions")
+    by_kind = {artifact.kind: Path(artifact.path) for artifact in bundle.artifacts}
+    _verify_inner(by_kind["site_config"], "site_config", str(frappe.local.site), str(frappe.conf.get("encryption_key") or ""))
+    with gzip.open(by_kind["database"], "rb") as stream:
+        header = stream.read(4096)
+    current = importlib.import_module("frappe").__version__
+    if f"version = {current}".encode() not in header and f"Frappe {current}".encode() not in header:
+        raise ValueError("versions")
+
+
 def import_zip(source: Path, operation_id: str, history: FrappeBackupHistory) -> BackupBundle:
     """Extract to private staging, then publish four files without overwriting."""
     from frappe.utils.backups import get_backup_path
@@ -230,6 +247,7 @@ def import_zip(source: Path, operation_id: str, history: FrappeBackupHistory) ->
                     destination = root / artifact.filename
                     os.link(staging / artifact.filename, destination)  # EEXIST, never replace.
                     published.append(destination)
+                history.set_import_app_versions(operation_id, manifest["apps"])
                 history.mark_completed(operation_id, bundle)
                 frappe.db.commit()  # Files and their history become visible together to later requests.
             return bundle

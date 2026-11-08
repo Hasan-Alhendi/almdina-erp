@@ -20,7 +20,7 @@ from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
 )
 from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
 from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import (
-    download_response, import_zip, upload_limit,
+    download_response, import_zip, upload_limit, validate_import_restore,
 )
 from almdina_erp.almdina_erp.infrastructure.backups.restore import (
     launch_restore_runner,
@@ -312,6 +312,12 @@ def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
         )
     history = FrappeBackupHistory()
     bundle = history.resolve_local_bundle(operation_id)
+    source_row = history.get(str(operation_id or "").strip())
+    if source_row and source_row.get("operation_type") == "Imported":
+        try:
+            validate_import_restore(source_row.get("import_app_versions") or "", bundle)
+        except (ValueError, OSError) as exc:
+            raise frappe.ValidationError(_("Imported backup is no longer compatible with this site.")) from exc
     expected = f"RESTORE {bundle.identifier}"
     if str(confirmation or "").strip() != expected:
         frappe.throw(_("Restore confirmation does not match the selected backup."), frappe.ValidationError)
@@ -419,6 +425,8 @@ def prepare_restore_job(operation_id: str) -> None:
         if not source_row:
             raise ValueError("Restore source operation is unavailable.")
         target = history.resolve_local_bundle(source_operation_id)
+        if source_row.get("operation_type") == "Imported":
+            validate_import_restore(source_row.get("import_app_versions") or "", target)
 
         safety_operation_id = history.create(
             operation_type="Safety",
@@ -434,6 +442,7 @@ def prepare_restore_job(operation_id: str) -> None:
             operation_id=operation_id,
             source_operation_id=source_operation_id,
             source_operation_type=source_row.get("operation_type") or "Manual",
+            source_app_versions=source_row.get("import_app_versions") or "",
             source_requested_by=source_row.get("requested_by") or "Administrator",
             source_requested_on=str(source_row.get("requested_on") or now()),
             source_completed_on=str(source_row.get("completed_on") or source_row.get("requested_on") or now()),

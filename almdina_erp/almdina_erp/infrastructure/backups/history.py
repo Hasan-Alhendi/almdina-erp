@@ -71,6 +71,9 @@ class FrappeBackupHistory:
     def set_upload_size(self, operation_id: str, size: int) -> None:
         self._update(operation_id, {"total_size": size})
 
+    def set_import_app_versions(self, operation_id: str, versions: dict[str, str]) -> None:
+        self._update(operation_id, {"import_app_versions": json.dumps(versions, sort_keys=True)})
+
     def mark_prepared(self, operation_id: str, bundle: BackupBundle) -> None:
         manifest = _canonical_manifest(bundle)
         self._update(
@@ -173,6 +176,7 @@ class FrappeBackupHistory:
                 "completed_on",
                 "source_operation_id",
                 "total_size",
+                "import_app_versions",
             ],
             as_dict=True,
         )

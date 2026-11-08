@@ -87,6 +87,10 @@ def exported(module, source):
 class History:
     def __init__(self):
         self.completed = None
+        self.versions = None
+
+    def set_import_app_versions(self, _operation_id, versions):
+        self.versions = versions
 
     def mark_completed(self, operation_id, result):
         self.completed = (operation_id, result)
@@ -111,6 +115,7 @@ def test_download_import_round_trip_keeps_current_database_untouched(transfer, t
     assert result.identifier == source.identifier
     assert len(list(target.glob("*.gz"))) == 1
     assert history.completed[0] == "op"
+    assert history.versions == {"frappe": "16.17.5"}
     assert (target / f".almdina-imported-{source.identifier}").exists()
     with pytest.raises(ValueError, match="duplicate"):
         module.import_zip(input_zip, "again", History())
@@ -185,6 +190,17 @@ def test_publication_failure_rolls_back_partial_files(transfer, tmp_path, monkey
     assert not list(destination.glob(".almdina-imported-*"))
 
 
+def test_restore_rejects_version_drift_after_import(transfer):
+    module, root, frappe = transfer
+    source = bundle(root)
+    module.validate_import_restore(json.dumps({"frappe": "16.17.5"}), source)
+    with pytest.raises(ValueError, match="versions"):
+        module.validate_import_restore(json.dumps({"frappe": "17.0.0"}), source)
+    frappe.conf.get = lambda key, default=None: "changed" if key == "encryption_key" else default
+    with pytest.raises(ValueError, match="encryption_key"):
+        module.validate_import_restore(json.dumps({"frappe": "16.17.5"}), source)
+
+
 def test_inner_archive_with_other_site_path_is_rejected(transfer, tmp_path):
     module, root, _frappe = transfer
     source = bundle(root)
@@ -256,6 +272,7 @@ def test_restore_finalization_preserves_imported_source(transfer, tmp_path, monk
     path = folder / "restore-op.json"
     path.write_text(json.dumps({
         "site": "site.local", "source_operation_id": "import-op", "source_operation_type": "Imported",
+        "source_app_versions": '{"frappe":"16.17.5"}',
         "safety_operation_id": "safety-op", "operation_id": "restore-op", "target": target,
         "safety": target, "requested_by": "owner@example.com",
     }))
@@ -276,6 +293,7 @@ def test_restore_finalization_preserves_imported_source(transfer, tmp_path, monk
     runner.finalize_restore(str(path), "Completed")
     assert rows["import-op"]["operation_type"] == "Imported"
     assert rows["import-op"]["status"] == "Completed"
+    assert rows["import-op"]["import_app_versions"] == '{"frappe":"16.17.5"}'
     assert not path.exists()
 
 
@@ -307,7 +325,7 @@ def test_chunk_upload_enforces_owner_order_and_separate_restore_capability(trans
         "frappe_backup": {"FrappeBackupEngine": object, "FrappeLocalRetention": object},
         "restore": {"launch_restore_runner": lambda *_: None, "restore_runtime_ready": lambda: False, "write_restore_request": lambda **_: None},
         "sftp": {"SFTPBackupGateway": object, "SFTPGatewayError": ValueError, "SSHConfig": object},
-        "zip_transfer": {"download_response": zip_module.download_response, "import_zip": zip_module.import_zip, "upload_limit": lambda: 100},
+            "zip_transfer": {"download_response": zip_module.download_response, "import_zip": zip_module.import_zip, "upload_limit": lambda: 100, "validate_import_restore": zip_module.validate_import_restore},
     }.items():
         stub = types.ModuleType(f"{package.__name__}.{suffix}")
         stub.__dict__.update(attributes)
