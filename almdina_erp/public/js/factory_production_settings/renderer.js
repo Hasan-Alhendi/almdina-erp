@@ -384,6 +384,7 @@
                 </div>
                 ${dbRestoreSettingsHtml(snapshot, { open: Boolean(options.dbRestoreOpen) })}
                 ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.")}</div>` : ""}
+                ${canRestore && snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).")}</div>` : ""}
                 ${backupHistoryHtml(snapshot)}
             `;
         }

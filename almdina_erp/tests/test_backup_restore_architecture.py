@@ -107,8 +107,10 @@ def test_import_endpoint_accepts_file_identifiers_not_disk_paths() -> None:
     history_src = (ROOT / "almdina_erp" / "infrastructure" / "backups" / "history.py").read_text(
         encoding="utf-8"
     )
-    assert 'RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety")' in history_src
+    assert 'RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety", "Imported")' in history_src
     assert "Imported" in history_src
+    assert "has_active_restore" in history_src
+    assert "verify_restored_site" in RESTORE_RUNNER.read_text(encoding="utf-8")
     export_src = EXPORT_ADAPTER.read_text(encoding="utf-8")
     assert "DOWNLOADABLE_LOCAL_OPERATION_TYPES" in export_src
     assert "extractall" not in (ROOT / "almdina_erp" / "infrastructure" / "backups" / "import_zip.py").read_text(

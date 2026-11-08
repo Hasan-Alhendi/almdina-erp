@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -21,6 +22,8 @@ from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import bundle_
 
 REQUEST_VERSION = 2
 REQUEST_FOLDER = "backup_restore_requests"
+# Keep headroom beyond the selected backup size for the Safety Backup artifacts.
+DISK_SAFETY_MARGIN_BYTES = 512 * 1024 * 1024
 
 
 def _bundle_payload(bundle: BackupBundle) -> dict[str, Any]:
@@ -32,6 +35,43 @@ def _bundle_payload(bundle: BackupBundle) -> dict[str, Any]:
         "paths": {kind: artifact.path for kind, artifact in by_kind.items()},
         "total_size": bundle.total_size,
     }
+
+
+def restore_request_path(operation_id: str) -> Path:
+    return Path(frappe.get_site_path("private", REQUEST_FOLDER, f"{operation_id}.json")).resolve()
+
+
+def redact_restore_request_credentials(request_path: str | Path) -> bool:
+    """Remove db_root secrets from a restore request file. Never logs secret values."""
+
+    path = Path(request_path)
+    try:
+        if not path.is_file():
+            return False
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return False
+        raw = payload.get("db_root")
+        if not isinstance(raw, dict) or raw.get("redacted"):
+            return False
+        payload["db_root"] = {"db_type": raw.get("db_type"), "redacted": True}
+        path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+def assert_restore_preflight(*, required_bytes: int) -> None:
+    """Fail closed when DB root is incomplete or free disk is insufficient for Safety Backup."""
+
+    if not restore_runtime_ready():
+        raise ValueError("restore_runtime_not_configured")
+    private_root = Path(frappe.get_site_path("private")).resolve()
+    private_root.mkdir(parents=True, exist_ok=True)
+    free = int(shutil.disk_usage(str(private_root)).free)
+    needed = max(int(required_bytes or 0) * 2, int(required_bytes or 0) + DISK_SAFETY_MARGIN_BYTES)
+    if free < needed:
+        raise ValueError("restore_insufficient_disk_space")
 
 
 def write_restore_request(
@@ -105,9 +145,13 @@ def launch_restore_runner(request_path: Path) -> int:
 
 
 __all__ = [
+    "DISK_SAFETY_MARGIN_BYTES",
     "REQUEST_FOLDER",
     "REQUEST_VERSION",
+    "assert_restore_preflight",
     "launch_restore_runner",
+    "redact_restore_request_credentials",
+    "restore_request_path",
     "restore_runtime_ready",
     "write_restore_request",
 ]

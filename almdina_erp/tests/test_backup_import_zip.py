@@ -295,10 +295,10 @@ def test_import_rejects_corrupt_crc(import_env) -> None:
     assert list(import_env.backups.iterdir()) == []
 
 
-def test_imported_is_downloadable_but_not_restorable_by_default() -> None:
+def test_imported_is_downloadable_and_restorable() -> None:
     from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
 
-    assert "Imported" not in FrappeBackupHistory.RESTORABLE_OPERATION_TYPES
+    assert "Imported" in FrappeBackupHistory.RESTORABLE_OPERATION_TYPES
     assert "Imported" in FrappeBackupHistory.DOWNLOADABLE_LOCAL_OPERATION_TYPES
     assert set(FrappeBackupHistory.RESTORABLE_OPERATION_TYPES) <= set(
         FrappeBackupHistory.DOWNLOADABLE_LOCAL_OPERATION_TYPES

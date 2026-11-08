@@ -44,11 +44,14 @@ from .retry import (
     is_transient_backup_error,
 )
 from .schedule_reliability import (
+    ACTIVE_RESTORE_STATUSES,
+    RESTORE_PREPARED_STALE_AFTER,
     is_schedule_blocking_status,
     is_stale_backup_operation,
 )
 
 __all__ = [
+    "ACTIVE_RESTORE_STATUSES",
     "AGE_CIPHERTEXT_SUFFIX",
     "AGE_ENCRYPTION_SCHEME",
     "BackupSchedule",
@@ -60,6 +63,7 @@ __all__ = [
     "ExportComponent",
     "ExportManifest",
     "MAX_BACKUP_ATTEMPTS",
+    "RESTORE_PREPARED_STALE_AFTER",
     "RetryDecision",
     "archive_member_name",
     "backup_group_identifier",

@@ -460,7 +460,7 @@
                     {
                         fieldname: "warning",
                         fieldtype: "HTML",
-                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("Warning: Restore replaces the current database and files."))}</strong><span>${escapeHtml(t("The system will first create a full backup, then use Frappe Restore and run migrate."))}</span><code>${escapeHtml(phrase)}</code></div>`,
+                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("Warning: Restore replaces the current database and files."))}</strong><span>${escapeHtml(t("The system will first create a full backup, then use Frappe Restore and run migrate."))}</span><span>${escapeHtml(t("The packaged site_config backup is verified for integrity but is not automatically applied to the live site configuration."))}</span><code>${escapeHtml(phrase)}</code></div>`,
                     },
                     { fieldname: "confirmation", fieldtype: "Data", label: t("Type the confirmation phrase as shown above"), reqd: 1 },
                 ],

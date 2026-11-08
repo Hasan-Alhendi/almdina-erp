@@ -1,8 +1,8 @@
 # 19 — Backup ZIP Export Format
 
-> **Status:** Canonical export contract (Phase 2)  
-> **Audience:** Developers, QA, DevOps, Coding AI  
-> **Scope:** Downloadable backup packages and Local ZIP Import (`operation_type=Imported`). Restore of imported packages remains out of scope.
+> **Status:** Canonical export / import / restore contract (Phases 2–4)
+> **Audience:** Developers, QA, DevOps, Coding AI
+> **Scope:** Downloadable backup packages, Local ZIP Import (`operation_type=Imported`), and restore of Local restorable operations including Imported. Direct restore of External rows is out of scope.
 
 ## Purpose
 
@@ -96,7 +96,16 @@ Queued / Running / Failed / Restore operations are rejected. The UI button is ga
 
 ## Local ZIP Import
 
-`manage_backups` may upload an `almdina.backup.zip` v1 package. The server validates the root `manifest.json`, component sizes/SHA-256, current-site slug, and current `database_type`, then materializes the four artifacts into `private/backups` and inserts an `Imported` / `Local` / `Completed` history row. Imported identifiers are excluded from automatic local retention in this phase. They are downloadable but not listed by `restorable()`.
+`manage_backups` may upload an `almdina.backup.zip` v1 package. The server validates the root `manifest.json`, component sizes/SHA-256, current-site slug, and current `database_type`, then materializes the four artifacts into `private/backups` and inserts an `Imported` / `Local` / `Completed` history row. Imported identifiers are excluded from automatic local retention. They are downloadable and restorable after the same `resolve_local_bundle` integrity checks used for Manual/Scheduled/Safety.
+
+### Restore (Phase 4)
+
+- Restorable sources: Local `Manual`, `Scheduled`, `Safety`, and `Imported` only. External is never restored directly (encrypted or not).
+- External path: download or offline-decrypt → Import ZIP → Restore. Encrypted External never sends the age private key to the server.
+- `restore_backups` requires explicit confirmation `RESTORE {backup_id}`, blocks concurrent Restore ops, preflights DB root readiness and free disk for Safety Backup, then queues preparation.
+- Preparation creates a Safety Backup, writes a private restore request, launches detached `restore_runner` (Frappe `_restore` + `migrate` + `clear-cache` + post-restore verification). On failure, Safety Recovery uses the same Frappe path.
+- Packaged `site_config` is integrity-checked with the bundle but is **not** automatically applied to the live site configuration (Frappe restore behavior).
+- DB root credentials in the request file are redacted on success, failure, finalize, reclaim of orphaned Prepared Restore, and best-effort `finally` cleanup; they are never logged.
 
 Operational note: Frappe/`nginx` upload size limits remain infrastructure settings. Import code does not impose an application-level fixed ZIP size cap and streams members to disk.
 
@@ -130,4 +139,4 @@ Inputs: directory of `.age` files, operation `artifact_manifest` (or a descripto
 
 ## Explicit non-goals (later phases)
 
-Restoring imported ZIPs, External SFTP import destinations, cross-site imports, overwrite of existing artifact groups, changing how originals are created, and server-side decrypt of encrypted External packages into Import-compatible ZIP.
+External SFTP import destinations, cross-site imports, overwrite of existing artifact groups, changing how originals are created, automatic live `site_config` rewrite from the package, and server-side decrypt of encrypted External packages into Import-compatible ZIP.

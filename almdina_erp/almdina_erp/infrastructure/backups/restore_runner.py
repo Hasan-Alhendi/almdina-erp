@@ -190,12 +190,51 @@ def _run_restore_with_credentials(
             pass
 
 
+def _verify_commands(payload: dict[str, Any]) -> list[str]:
+    return _bench_command(
+        payload,
+        "execute",
+        "almdina_erp.almdina_erp.infrastructure.backups.restore_runner.verify_restored_site",
+    )
+
+
+def verify_restored_site() -> None:
+    """Practical post-restore checks: DB connectivity and basic site loadability.
+
+    Does not re-apply ``site_config_backup.json`` onto the live site config; that
+    remains outside Frappe's standard restore path and is an explicit non-goal.
+    """
+
+    import frappe
+
+    if not getattr(frappe.local, "site", None):
+        raise RuntimeError("restore_verification_site_missing")
+    frappe.connect()
+    try:
+        frappe.db.sql("select 1")
+        # Administrator must resolve after a full-site restore; fail closed otherwise.
+        if not frappe.db.get_value("User", "Administrator", "name"):
+            raise RuntimeError("restore_verification_admin_missing")
+        conf = frappe.get_site_config()
+        if not isinstance(conf, dict) or not conf:
+            raise RuntimeError("restore_verification_site_config_unreadable")
+    finally:
+        try:
+            frappe.db.close()
+        except Exception:
+            pass
+
+
 def execute_restore(
     request_path: str,
     *,
     runner: Callable[..., Any] = subprocess.run,
     settle_seconds: float = 2.0,
 ) -> int:
+    from almdina_erp.almdina_erp.infrastructure.backups.restore import (
+        redact_restore_request_credentials,
+    )
+
     payload = _read_request(request_path)
     bench_path = Path(str(payload["bench_path"])).resolve()
     sites_path = (bench_path / "sites").resolve()
@@ -221,44 +260,52 @@ def execute_restore(
             return
         _run(_legacy_restore_command(payload, bundle), cwd=sites_path, runner=runner)
 
-    try:
-        restore_one(target)
+    def restore_pipeline(bundle: dict[str, str]) -> None:
+        restore_one(bundle)
         _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
         _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
-    except Exception:
-        status = "Failed"
-        error_code = "restore_failed_safety_recovery_started"
-        try:
-            restore_one(safety)
-            _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
-            _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
-            error_code = "restore_failed_safety_recovery_completed"
-        except Exception:
-            error_code = "restore_and_safety_recovery_failed"
+        _run(_verify_commands(payload), cwd=sites_path, runner=runner)
 
-    finalize_kwargs = json.dumps(
-        {
-            "request_path": str(Path(request_path).resolve()),
-            "status": status,
-            "error_code": error_code,
-        },
-        separators=(",", ":"),
-    )
     try:
-        _run(
-            _bench_command(
-                payload,
-                "execute",
-                "almdina_erp.almdina_erp.infrastructure.backups.restore_runner.finalize_restore",
-                "--kwargs",
-                finalize_kwargs,
-            ),
-            cwd=sites_path,
-            runner=runner,
+        try:
+            restore_pipeline(target)
+        except Exception:
+            status = "Failed"
+            error_code = "restore_failed_safety_recovery_started"
+            try:
+                restore_pipeline(safety)
+                error_code = "restore_failed_safety_recovery_completed"
+            except Exception:
+                error_code = "restore_and_safety_recovery_failed"
+
+        # Drop secrets as soon as restore work finishes, before audit finalize.
+        redact_restore_request_credentials(request_path)
+
+        finalize_kwargs = json.dumps(
+            {
+                "request_path": str(Path(request_path).resolve()),
+                "status": status,
+                "error_code": error_code,
+            },
+            separators=(",", ":"),
         )
-    except Exception:
-        return 2
-    return 0 if status == "Completed" else 1
+        try:
+            _run(
+                _bench_command(
+                    payload,
+                    "execute",
+                    "almdina_erp.almdina_erp.infrastructure.backups.restore_runner.finalize_restore",
+                    "--kwargs",
+                    finalize_kwargs,
+                ),
+                cwd=sites_path,
+                runner=runner,
+            )
+        except Exception:
+            return 2
+        return 0 if status == "Completed" else 1
+    finally:
+        redact_restore_request_credentials(request_path)
 
 
 def finalize_restore(request_path: str, status: str, error_code: str = "") -> None:
@@ -268,7 +315,10 @@ def finalize_restore(request_path: str, status: str, error_code: str = "") -> No
     from frappe.utils import now
 
     from almdina_erp.almdina_erp.infrastructure.backups.history import DOCTYPE
-    from almdina_erp.almdina_erp.infrastructure.backups.restore import REQUEST_FOLDER
+    from almdina_erp.almdina_erp.infrastructure.backups.restore import (
+        REQUEST_FOLDER,
+        redact_restore_request_credentials,
+    )
 
     path = Path(request_path).resolve(strict=True)
     allowed = Path(frappe.get_site_path("private", REQUEST_FOLDER)).resolve()
@@ -279,9 +329,8 @@ def finalize_restore(request_path: str, status: str, error_code: str = "") -> No
         raise ValueError("Restore request belongs to another site.")
 
     # Drop privileged credentials from disk as soon as audit finalization starts.
-    if isinstance(payload.get("db_root"), dict):
-        payload["db_root"] = {"db_type": payload["db_root"].get("db_type"), "redacted": True}
-        path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    redact_restore_request_credentials(path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
 
     def upsert(operation_id: str, values: dict[str, Any]) -> None:
         if frappe.db.exists(DOCTYPE, operation_id):
@@ -364,4 +413,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["execute_restore", "finalize_restore"]
+__all__ = ["execute_restore", "finalize_restore", "verify_restored_site"]

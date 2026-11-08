@@ -2521,6 +2521,10 @@ Reserve stock on approval,حجز المخزون عند الاعتماد
 Restore,استعادة
 Restore backup,استعادة نسخة احتياطية
 Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.,الاستعادة معطّلة حتى تكتمل إعدادات اتصال DB root في إعدادات Almadina ERP أو إعداد Frappe التشغيلي.
+Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).,"يمكن استعادة النسخ المحلية من النوع Manual وScheduled وSafety وImported. لا تُستعاد النسخ الخارجية مباشرة — استورد أولاً حزمة almdina.backup.zip (وفك تشفير النسخ الخارجية المشفّرة offline)."
+The packaged site_config backup is verified for integrity but is not automatically applied to the live site configuration.,يتم التحقق من سلامة نسخة site_config داخل الحزمة لكنها لا تُطبَّق تلقائياً على إعدادات الموقع الحي.
+A restore operation is already in progress on this site.,توجد عملية استعادة قيد التنفيذ بالفعل على هذا الموقع.
+Not enough free disk space to create the safety backup before restore.,لا توجد مساحة قرص كافية لإنشاء نسخة الأمان قبل الاستعادة.
 Restore prepared,تم تجهيز الاستعادة
 Restoring the latest factory settings changes.,يتم استرجاع آخر تغييرات إعدادات المعمل.
 Role permissions saved.,تم حفظ صلاحيات الدور.

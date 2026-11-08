@@ -16,10 +16,16 @@ from almdina_erp.almdina_erp.application.backups.management import (
 )
 from almdina_erp.almdina_erp.domain.backups.policy import backup_group_identifier
 from almdina_erp.almdina_erp.domain.backups.schedule_reliability import (
+    ACTIVE_RESTORE_STATUSES,
     ACTIVE_SCHEDULE_STATUSES,
+    RESTORE_PREPARED_STALE_AFTER,
     is_stale_backup_operation,
 )
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import bundle_manifest
+from almdina_erp.almdina_erp.infrastructure.backups.restore import (
+    redact_restore_request_credentials,
+    restore_request_path,
+)
 
 
 DOCTYPE = "Almdina Backup Operation"
@@ -115,6 +121,7 @@ class FrappeBackupHistory:
             filters={"status": ["in", ["Queued", "Running", "Prepared"]]},
             fields=[
                 "operation_id",
+                "operation_type",
                 "status",
                 "requested_on",
                 "started_on",
@@ -134,11 +141,29 @@ class FrappeBackupHistory:
                 # Anchor stale detection to the retry due time, not the original request.
                 requested_on = next_retry_on
             started_on = get_datetime(row.started_on) if row.started_on else None
+
+            prepared_limit = None
+            if row.status == "Prepared" and str(row.operation_type or "") == "Restore":
+                request_file = restore_request_path(str(row.operation_id))
+                if request_file.is_file():
+                    # Detached restore_runner still owns this request; do not reclaim early.
+                    prepared_limit = RESTORE_PREPARED_STALE_AFTER
+                    if not is_stale_backup_operation(
+                        status=row.status,
+                        requested_on=requested_on,
+                        started_on=started_on,
+                        now=current,
+                        prepared_limit=prepared_limit,
+                    ):
+                        continue
+                    redact_restore_request_credentials(request_file)
+
             if not is_stale_backup_operation(
                 status=row.status,
                 requested_on=requested_on,
                 started_on=started_on,
                 now=current,
+                prepared_limit=prepared_limit,
             ):
                 continue
             self._update(
@@ -153,6 +178,19 @@ class FrappeBackupHistory:
             )
             reclaimed += 1
         return reclaimed
+
+    def has_active_restore(self) -> bool:
+        """True when another Restore is still Queued, Running, or Prepared on this site."""
+
+        return bool(
+            frappe.db.exists(
+                DOCTYPE,
+                {
+                    "operation_type": "Restore",
+                    "status": ["in", sorted(ACTIVE_RESTORE_STATUSES)],
+                },
+            )
+        )
 
     def due_external_retries(self, *, now: datetime | None = None) -> list[dict[str, Any]]:
         """Return External operations waiting in Queued whose retry time has arrived."""
@@ -421,6 +459,7 @@ class FrappeBackupHistory:
                 "operation_type",
                 "target",
                 "status",
+                "backup_identifier",
                 "requested_by",
                 "requested_on",
                 "completed_on",
@@ -434,9 +473,9 @@ class FrappeBackupHistory:
         )
         return dict(row) if row else None
 
-    # Restore remains Manual/Scheduled/Safety only. Imported is downloadable
-    # via resolve_local_bundle(..., operation_types=DOWNLOADABLE_LOCAL_OPERATION_TYPES).
-    RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety")
+    # Local plaintext artifacts only. External rows are never restorable directly;
+    # encrypted/unencrypted External must be imported as Local Imported first.
+    RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety", "Imported")
     DOWNLOADABLE_LOCAL_OPERATION_TYPES = ("Manual", "Scheduled", "Safety", "Imported")
 
     def restorable(self, limit: int = 30) -> list[dict[str, Any]]:

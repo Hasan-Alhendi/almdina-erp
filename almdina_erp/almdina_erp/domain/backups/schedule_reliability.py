@@ -7,10 +7,14 @@ from datetime import datetime, timedelta
 QUEUED_STALE_AFTER = timedelta(minutes=30)
 RUNNING_STALE_AFTER = timedelta(hours=8)
 PREPARED_STALE_AFTER = timedelta(hours=8)
+# Detached restore_runner may outlive ordinary Prepared backups; keep the
+# request file alive and only reclaim orphaned restore prep after a full day.
+RESTORE_PREPARED_STALE_AFTER = timedelta(hours=24)
 
 # Terminal Failed never blocks a future schedule slot once its key is released.
 ACTIVE_SCHEDULE_STATUSES = frozenset({"Queued", "Running", "Prepared", "Completed"})
 RECLAIMABLE_STATUSES = frozenset({"Queued", "Running", "Prepared"})
+ACTIVE_RESTORE_STATUSES = frozenset({"Queued", "Running", "Prepared"})
 
 
 def is_schedule_blocking_status(status: object) -> bool:
@@ -23,6 +27,7 @@ def is_stale_backup_operation(
     requested_on: datetime | None,
     started_on: datetime | None,
     now: datetime,
+    prepared_limit: timedelta | None = None,
 ) -> bool:
     """Return True when a non-terminal operation has exceeded its age budget."""
 
@@ -36,15 +41,20 @@ def is_stale_backup_operation(
     anchor = started_on or requested_on
     if anchor is None:
         return True
-    limit = PREPARED_STALE_AFTER if normalized == "Prepared" else RUNNING_STALE_AFTER
+    if normalized == "Prepared":
+        limit = prepared_limit if prepared_limit is not None else PREPARED_STALE_AFTER
+    else:
+        limit = RUNNING_STALE_AFTER
     return now - anchor >= limit
 
 
 __all__ = [
+    "ACTIVE_RESTORE_STATUSES",
     "ACTIVE_SCHEDULE_STATUSES",
     "PREPARED_STALE_AFTER",
     "QUEUED_STALE_AFTER",
     "RECLAIMABLE_STATUSES",
+    "RESTORE_PREPARED_STALE_AFTER",
     "RUNNING_STALE_AFTER",
     "is_schedule_blocking_status",
     "is_stale_backup_operation",

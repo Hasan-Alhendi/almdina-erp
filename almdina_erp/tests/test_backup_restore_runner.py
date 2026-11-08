@@ -84,7 +84,8 @@ def test_restore_uses_frappe_restore_then_migrate_and_finalize(tmp_path: Path) -
     assert "--with-private-files" in calls[0]
     assert "migrate" in calls[1]
     assert "clear-cache" in calls[2]
-    assert "finalize_restore" in " ".join(calls[3])
+    assert "verify_restored_site" in " ".join(calls[3])
+    assert "finalize_restore" in " ".join(calls[4])
 
 
 def test_failed_target_restore_uses_safety_backup_before_finalizing(tmp_path: Path) -> None:
@@ -146,3 +147,41 @@ def test_version2_restore_keeps_password_off_command_line(tmp_path: Path) -> Non
 
     assert execute_restore(str(path), runner=runner, settle_seconds=0) == 0
     assert any("restore" in command for command in calls)
+    redacted = json.loads(path.read_text(encoding="utf-8"))
+    assert redacted["db_root"].get("redacted") is True
+    assert "password" not in redacted["db_root"]
+
+
+def test_post_restore_verification_failure_triggers_safety_recovery(tmp_path: Path) -> None:
+    path = request_file(tmp_path)
+    payload = json.loads(path.read_text())
+    target_database = payload["target"]["paths"]["database"]
+    safety_database = payload["safety"]["paths"]["database"]
+    calls: list[list[str]] = []
+    verify_failures = {"left": 1}
+
+    def runner(command: list[str], **_kwargs: object) -> None:
+        calls.append(command)
+        joined = " ".join(command)
+        if "verify_restored_site" in joined and verify_failures["left"] > 0:
+            verify_failures["left"] -= 1
+            raise subprocess.CalledProcessError(1, command)
+
+    assert execute_restore(str(path), runner=runner, settle_seconds=0) == 1
+    restore_calls = [command for command in calls if "restore" in command]
+    assert target_database in restore_calls[0]
+    assert safety_database in restore_calls[1]
+    assert "restore_failed_safety_recovery_completed" in " ".join(calls[-1])
+
+
+def test_both_target_and_safety_recovery_fail(tmp_path: Path) -> None:
+    path = request_file(tmp_path)
+    calls: list[list[str]] = []
+
+    def runner(command: list[str], **_kwargs: object) -> None:
+        calls.append(command)
+        if "restore" in command:
+            raise subprocess.CalledProcessError(1, command)
+
+    assert execute_restore(str(path), runner=runner, settle_seconds=0) == 1
+    assert "restore_and_safety_recovery_failed" in " ".join(calls[-1])

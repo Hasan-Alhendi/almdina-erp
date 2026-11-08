@@ -46,6 +46,7 @@ from almdina_erp.almdina_erp.infrastructure.backups.import_zip import (
     LocalBackupZipImporter,
 )
 from almdina_erp.almdina_erp.infrastructure.backups.restore import (
+    assert_restore_preflight,
     launch_restore_runner,
     write_restore_request,
 )
@@ -453,7 +454,26 @@ def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
             frappe.ValidationError,
         )
     history = FrappeBackupHistory()
+    if history.has_active_restore():
+        frappe.throw(
+            _("A restore operation is already in progress on this site."),
+            frappe.ValidationError,
+        )
+    # Local restorable types only (Manual/Scheduled/Safety/Imported). External is rejected.
     bundle = history.resolve_local_bundle(operation_id)
+    try:
+        assert_restore_preflight(required_bytes=int(bundle.total_size or 0))
+    except ValueError as exc:
+        code = str(exc)
+        if code == "restore_insufficient_disk_space":
+            frappe.throw(
+                _("Not enough free disk space to create the safety backup before restore."),
+                frappe.ValidationError,
+            )
+        frappe.throw(
+            _("Restore requires complete database root connection settings."),
+            frappe.ValidationError,
+        )
     expected = f"RESTORE {bundle.identifier}"
     if str(confirmation or "").strip() != expected:
         frappe.throw(_("Restore confirmation does not match the selected backup."), frappe.ValidationError)
@@ -615,7 +635,12 @@ def prepare_restore_job(operation_id: str) -> None:
         source_row = history.get(source_operation_id)
         if not source_row:
             raise ValueError("Restore source operation is unavailable.")
+        if str(source_row.get("target") or "") != "Local":
+            history.mark_failed(operation_id, "restore_external_not_supported")
+            frappe.db.commit()
+            return
         target = history.resolve_local_bundle(source_operation_id)
+        assert_restore_preflight(required_bytes=int(target.total_size or 0))
 
         safety_operation_id = history.create(
             operation_type="Safety",
