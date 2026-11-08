@@ -213,6 +213,7 @@ def recalculate_order(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Canonical recalculation facade scoped by current stage assignment."""
 
@@ -240,6 +241,7 @@ def recalculate_order(
         kerf_mm=kerf_mm,
         trim_margin_mm=trim_margin_mm,
         optimization_time_limit_sec=optimization_time_limit_sec,
+        deduct_edge_thickness=deduct_edge_thickness,
     )
 
 

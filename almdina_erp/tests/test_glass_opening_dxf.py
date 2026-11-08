@@ -243,6 +243,18 @@ def test_rotation_uses_existing_quarter_turn_and_rejects_a_mirror():
     assert placed[0] == (65.0, 63.0)
 
 
+def test_disabled_edge_deduction_uses_the_full_glass_margin():
+    full = cut_insets_mm(
+        margin_mm=65,
+        long_left_mm=2,
+        long_right_mm=1,
+        width_bottom_mm=2,
+        width_top_mm=1,
+        deduct_edge_thickness=False,
+    )
+    assert all(value == 65 for value in full.values())
+
+
 def test_no_band_and_band_use_the_finished_margin_on_the_cut_outline():
     plain = cut_insets_mm(margin_mm="65.001")
     banded = cut_insets_mm(

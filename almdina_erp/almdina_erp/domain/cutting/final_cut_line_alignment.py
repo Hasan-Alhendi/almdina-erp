@@ -1,0 +1,664 @@
+"""Bounded, non-packing final alignment of regular System cutter-center lines.
+
+This module is deliberately not called from plan validation or imported DXF.
+Only rigid translations within an existing FULL_BOARD are considered.
+"""
+
+from __future__ import annotations
+
+import math
+import time
+from copy import deepcopy
+from dataclasses import dataclass
+from itertools import zip_longest
+from typing import Any
+
+from .cut_line_quality import sheet_cut_line_quality, final_cut_quality_key
+from .evaluation import placement_permission_errors, validate_plan
+from .optimizer import _largest_reusable_free_area, enrich_plan_metrics
+from .plan_search import _locked_piece_ids
+from .primitives import num
+
+_MAX_PIECES = 64  # per-sheet bounded search, not a whole-order eligibility limit
+_MAX_TRIALS = 24
+_MAX_SWEEPS = 4
+_EPS = 1e-7
+_NETWORK_EPS_MM = 0.05
+
+
+@dataclass(frozen=True, slots=True)
+class _BaselineProof:
+    plan: dict[str, Any]
+    sources: list[dict[str, Any]]
+    context: tuple[float, float, float, bool]
+
+    def matches(self, plan, sources, width, height, kerf, mirroring):
+        return (self.context == (width, height, kerf, mirroring)
+                and self.plan == plan and self.sources == sources)
+
+
+def validate_alignment_baseline(plan, sources, width, height, kerf, *, mirroring_allowed):
+    """An ephemeral full-validation proof, never a snapshot/client trust flag.
+
+    Reuse is restricted to exact complete plan/source/context equality. Any
+    movement, metadata or permission change invalidates it. The final System
+    snapshot still receives its independent full manufacturing validation.
+    """
+    if (validate_plan(plan, sources, width, height, kerf_cm=kerf)
+            or placement_permission_errors(plan, sources, mirroring_allowed=mirroring_allowed)):
+        return None
+    return _BaselineProof(deepcopy(plan), deepcopy(sources), (width, height, kerf, mirroring_allowed))
+
+
+def _sheet_center_profile(
+    sheet: dict[str, Any], kerf_cm: float, *,
+    regular_only: bool = False,
+) -> tuple[float, int, float]:
+    """Shared exact cutter topology, never approximated by finished edges."""
+    value = sheet_cut_line_quality(
+        sheet, kerf_cm,
+        piece_filter=_is_movable_regular if regular_only else None,
+    )
+    if value is None:
+        raise ValueError("final cutter network cannot be proven for this sheet")
+    return value
+
+
+
+def _rectangles(plan: dict[str, Any], kerf_cm: float, *,
+                regular_only: bool = False) -> tuple[float, int]:
+    """Actual canonical cutter centers, summed per board (millimetres)."""
+    profiles = [_sheet_center_profile(sheet, kerf_cm, regular_only=regular_only)
+                for sheet in plan["sheets"]]
+    return sum(p[0] for p in profiles), sum(p[1] for p in profiles)
+
+
+def _is_movable_regular(piece: dict[str, Any]) -> bool:
+    return (
+        (piece.get("piece_type") or "Regular") == "Regular"
+        and (piece.get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+        and not any(piece.get(k) for k in (
+            "geometry", "overlays", "special_shape_geometry_json",
+            "placement_outline_cm", "glass_host_piece_id",
+            "mirrored", "corner_mirrored", "placement_mirrored",
+        ))
+        and not any(piece.get(k) is None for k in ("x", "y", "w", "h"))
+    )
+
+
+def _eligible_ids(sheet: dict[str, Any], sources: dict[int, dict[str, Any]],
+                  locked: set[int]) -> set[int]:
+    if (sheet.get("resource_kind") or "FULL_BOARD") != "FULL_BOARD":
+        return set()
+    if len(sheet.get("pieces") or []) > _MAX_PIECES:
+        return set()  # large sheets need a separate indexed search, not O(n^3)
+    return {
+        int(piece["id"])
+        for piece in sheet.get("pieces") or []
+        if int(piece["id"]) not in locked and _is_movable_regular(piece)
+        and int(piece["id"]) in sources
+        and (sources[int(piece["id"])].get("piece_type") or "Regular") == "Regular"
+        and (sources[int(piece["id"])].get("resource_kind") or "FULL_BOARD") == "FULL_BOARD"
+    }
+
+
+def has_regular_alignment_candidates(plan, sources, machine_type):
+    """Cheap scheduling eligibility; no geometry or manufacturing proof."""
+    if (machine_type not in {"Auto", "CNC Router"} or not sources
+            or plan.get("unplaced") or len(plan.get("industrial_rank") or ()) != 8):
+        return False
+    by_id = {int(p["id"]): p for p in sources}
+    locked = _locked_piece_ids(plan)
+    return any(len(_eligible_ids(sheet, by_id, locked)) >= 2 for sheet in plan.get("sheets") or [])
+
+
+def _axis_alignment_score(plan: dict[str, Any], kerf_cm: float,
+                          eligible_by_sheet: dict[int, set[int]]) -> int:
+    """Secondary visual/coordinate objective, never a fictional shared cut.
+
+    Only disjoint perpendicular bands qualify; nearby touching cuts are scored
+    through the *actual* cutter-center network, not this secondary metric.
+    """
+    score = 0
+    for index, sheet in enumerate(plan["sheets"]):
+        pieces = [p for p in sheet.get("pieces") or []
+                  if int(p["id"]) in eligible_by_sheet.get(index, set())]
+        for i, a in enumerate(pieces):
+            for b in pieces[i + 1:]:
+                for axis, span, cross, cross_span in (
+                    ("x", "w", "y", "h"), ("y", "h", "x", "w")
+                ):
+                    gap = max(
+                        num(a[cross]) - num(b[cross]) - num(b[cross_span]),
+                        num(b[cross]) - num(a[cross]) - num(a[cross_span]),
+                    )
+                    if gap <= kerf_cm + _EPS:
+                        continue
+                    same_start = abs(num(a[axis]) - num(b[axis])) <= _EPS
+                    same_end = abs(num(a[axis]) + num(a[span]) -
+                                   num(b[axis]) - num(b[span])) <= _EPS
+                    score += (int(same_start) + int(same_end)) * int(
+                        round(min(num(a[cross_span]), num(b[cross_span])) * 1000)
+                    )
+    return score
+
+
+def _groups(sheet: dict[str, Any], axis: str) -> list[tuple[int, ...]]:
+    """Singletons plus conservative whole rows/columns, never partial contacts."""
+    pieces = sheet.get("pieces") or []
+    cross, size = ("y", "h") if axis == "x" else ("x", "w")
+    result = {tuple([int(piece["id"])]) for piece in pieces}
+    ordered = sorted(pieces, key=lambda p: (num(p[cross]), num(p[cross]) + num(p[size]), int(p["id"])))
+    groups: list[list[int]] = []
+    group_end = -math.inf
+    for piece in ordered:
+        lo, hi = num(piece[cross]), num(piece[cross]) + num(piece[size])
+        if not groups or lo >= group_end - _EPS:
+            groups.append([])
+            group_end = hi
+        else:
+            group_end = max(group_end, hi)
+        groups[-1].append(int(piece["id"]))
+    for ids in groups:
+        if 1 < len(ids) < len(pieces):
+            result.add(tuple(sorted(ids)))
+    return sorted(result, key=lambda ids: (len(ids), ids))
+
+
+def _shares_cutter_center(
+    first: dict[str, Any], second: dict[str, Any], kerf_cm: float,
+) -> bool:
+    """Existing rectangular shared cutter line, not merely matching axes.
+
+    A valid shared cut requires one Kerf gap on the contact axis and strictly
+    overlapping finished spans on the perpendicular axis. Used for candidate
+    grouping and for conservative barriers near unmodelled special shapes.
+    """
+    for axis, size, cross, cross_size in (
+        ("x", "w", "y", "h"), ("y", "h", "x", "w")
+    ):
+        overlap = min(
+            num(first[cross]) + num(first[cross_size]),
+            num(second[cross]) + num(second[cross_size]),
+        ) - max(num(first[cross]), num(second[cross]))
+        if overlap <= _EPS:
+            continue
+        gap_one = num(second[axis]) - num(first[axis]) - num(first[size])
+        gap_two = num(first[axis]) - num(second[axis]) - num(second[size])
+        if abs(gap_one - kerf_cm) <= _EPS or abs(gap_two - kerf_cm) <= _EPS:
+            return True
+    return False
+
+
+def _contact_preserving_groups(
+    sheet: dict[str, Any], kerf_cm: float, eligible: set[int],
+) -> list[tuple[int, ...]]:
+    """Additional rigid groups from genuine shared-cut contacts.
+
+    Retain all singleton moves independently. A connected chain of doors with
+    Kerf-spaced edges may need to shift together even when their projected
+    bounding boxes do not overlap (and _groups therefore splits the chain).
+    """
+    movable = [p for p in sheet.get("pieces") or []
+               if int(p["id"]) in eligible]
+    neighbors: dict[int, set[int]] = {int(p["id"]): set() for p in movable}
+    for index, first in enumerate(movable):
+        for second in movable[index + 1:]:
+            if not _shares_cutter_center(first, second, kerf_cm):
+                continue
+            left, right = int(first["id"]), int(second["id"])
+            neighbors[left].add(right)
+            neighbors[right].add(left)
+    visited: set[int] = set()
+    result: list[tuple[int, ...]] = []
+    for piece_id in sorted(neighbors):
+        if piece_id in visited:
+            continue
+        stack = [piece_id]
+        members: set[int] = set()
+        while stack:
+            current = stack.pop()
+            if current in members:
+                continue
+            members.add(current)
+            stack.extend(sorted(neighbors[current] - members, reverse=True))
+        visited.update(members)
+        if 1 < len(members) <= 16:
+            result.append(tuple(sorted(members)))
+    return result
+
+
+def _touches_protected_cut(
+    original: dict[str, Any], candidate: dict[str, Any],
+    ids: tuple[int, ...], eligible: set[int], kerf_cm: float,
+) -> bool:
+    """Never optimize with a cut touching geometry omitted from our metric.
+
+    Protected Glass/L/Special/hole contours cannot be scored as plain Regular
+    rectangles. Until their actual toolpath can be measured here, do not
+    translate a Regular piece sharing a cutter line with such a contour.
+    """
+    before = {int(p["id"]): p for p in original.get("pieces") or []}
+    after = {int(p["id"]): p for p in candidate.get("pieces") or []}
+    protected = [p for piece_id, p in before.items() if piece_id not in eligible]
+    return any(
+        _shares_cutter_center(before[piece_id], fixed, kerf_cm)
+        or _shares_cutter_center(after[piece_id], fixed, kerf_cm)
+        for piece_id in ids for fixed in protected
+    )
+
+
+def _movement_range(
+    group: list[dict[str, Any]],
+    fixed: list[dict[str, Any]],
+    sheet: dict[str, Any],
+    axis: str,
+    kerf_cm: float,
+) -> tuple[float, float] | None:
+    """Continuous collision-free interval containing the original placement.
+
+    Crossing a fixed door is disallowed, even if a more distant target would fit.
+    Actual acceptance still uses the independent full-plan validator.
+    """
+    size = "w" if axis == "x" else "h"
+    cross, cross_size = ("y", "h") if axis == "x" else ("x", "w")
+    lo = max(-num(p[axis]) for p in group)
+    hi = min(num(sheet[size]) - num(p[axis]) - num(p[size]) for p in group)
+    for moving in group:
+        a0, a1 = num(moving[axis]), num(moving[axis]) + num(moving[size])
+        for stationary in fixed:
+            gap = max(
+                num(moving[cross]) - num(stationary[cross]) - num(stationary[cross_size]),
+                num(stationary[cross]) - num(moving[cross]) - num(moving[cross_size]),
+            )
+            if gap >= kerf_cm - _EPS:
+                continue
+            b0, b1 = num(stationary[axis]), num(stationary[axis]) + num(stationary[size])
+            if a1 + kerf_cm <= b0 + _EPS:
+                hi = min(hi, b0 - kerf_cm - a1)
+            elif b1 + kerf_cm <= a0 + _EPS:
+                lo = max(lo, b1 + kerf_cm - a0)
+            else:
+                return None
+    return (lo, hi) if lo <= hi + _EPS else None
+
+
+def _projected_axis_gain(
+    sheet: dict[str, Any], axis: str, ids: tuple[int, ...],
+    delta: float, kerf_cm: float, eligible: set[int],
+) -> int:
+    """Cheap, non-authoritative pairwise estimate for candidate ORDER only.
+
+    It never replaces the exact cutter-center/axis/full-plan acceptance gates.
+    Perpendicular gaps must be real; disconnected edges stay disconnected.
+    """
+    members = [p for p in sheet.get("pieces") or [] if int(p["id"]) in ids]
+    fixed = [p for p in sheet.get("pieces") or []
+             if int(p["id"]) not in ids and int(p["id"]) in eligible]
+    span = "w" if axis == "x" else "h"
+    cross, cross_span = ("y", "h") if axis == "x" else ("x", "w")
+    gain = 0
+    for moving in members:
+        m0, m1 = num(moving[axis]), num(moving[axis]) + num(moving[span])
+        for other in fixed:
+            gap = max(
+                num(moving[cross]) - num(other[cross]) - num(other[cross_span]),
+                num(other[cross]) - num(moving[cross]) - num(moving[cross_span]),
+            )
+            if gap <= kerf_cm + _EPS:
+                continue
+            o0, o1 = num(other[axis]), num(other[axis]) + num(other[span])
+            before = int(abs(m0 - o0) <= _EPS) + int(abs(m1 - o1) <= _EPS)
+            after = int(abs(m0 + delta - o0) <= _EPS) + int(
+                abs(m1 + delta - o1) <= _EPS
+            )
+            gain += (after - before) * int(round(
+                min(num(moving[cross_span]), num(other[cross_span])) * 1000
+            ))
+    return gain
+
+
+def _candidate_moves(
+    plan: dict[str, Any], kerf_cm: float,
+    eligible_by_sheet: dict[int, set[int]],
+    deadline: float | None,
+) -> list[tuple[int, str, tuple[int, ...], float]]:
+    """Axis events plus real shared-center contacts; no mm-by-mm scanning."""
+    targets: dict[tuple[int, str, tuple[int, ...], float], int] = {}
+    for sheet_index, sheet in enumerate(plan["sheets"]):
+        pieces = list(sheet.get("pieces") or [])
+        eligible = eligible_by_sheet.get(sheet_index, set())
+        if len(eligible) < 2:
+            continue
+        by_id = {int(p["id"]): p for p in pieces}
+        for axis in ("x", "y"):
+            size = "w" if axis == "x" else "h"
+            cross, cross_size = ("y", "h") if axis == "x" else ("x", "w")
+            candidate_groups = set(_groups(sheet, axis))
+            candidate_groups.update(
+                _contact_preserving_groups(sheet, kerf_cm, eligible)
+            )
+            for ids in sorted(candidate_groups, key=lambda group: (len(group), group)):
+                if deadline is not None and time.monotonic() >= deadline:
+                    break
+                if not set(ids).issubset(eligible):
+                    continue
+                members = [by_id[i] for i in ids]
+                fixed = [p for p in pieces if int(p["id"]) not in ids]
+                movable_range = _movement_range(members, fixed, sheet, axis, kerf_cm)
+                if movable_range is None:
+                    continue
+                lo, hi = movable_range
+                for a in members:
+                    a0, a1 = num(a[axis]), num(a[axis]) + num(a[size])
+                    for b in fixed:
+                        if int(b["id"]) not in eligible:
+                            continue
+                        b0, b1 = num(b[axis]), num(b[axis]) + num(b[size])
+                        gap = max(
+                            num(a[cross]) - num(b[cross]) - num(b[cross_size]),
+                            num(b[cross]) - num(a[cross]) - num(a[cross_size]),
+                        )
+                        # Axis alignment moves *matching* edges only.
+                        # Closing a large inter-row gap merely to create a
+                        # touching cutter path is compaction/repacking, not
+                        # final alignment. Keep it outside this stage.
+                        priority = 2 if gap <= kerf_cm + _EPS else 1
+                        shifts = [(b0 - a0, priority), (b1 - a1, priority)]
+                        for delta, priority in shifts:
+                            if _EPS < abs(delta) and lo - _EPS <= delta <= hi + _EPS:
+                                key = (sheet_index, axis, ids, round(delta, 6))
+                                targets[key] = max(priority, targets.get(key, 0))
+    # Estimate geometric coherence BEFORE the expensive full-plan validation.
+    # Do not mistake this estimate for CNC savings or use it for acceptance.
+    projected = {
+        move: _projected_axis_gain(
+            plan["sheets"][move[0]], move[1], move[2], move[3],
+            kerf_cm, eligible_by_sheet.get(move[0], set()),
+        )
+        for move in targets
+    }
+    # Reserve exploration for real shared cuts and independent axes. Rank
+    # candidates by expected coherence, not merely the smallest displacement.
+    key = lambda item: (-projected[item], -len(item[2]), abs(item[3]),
+                        item[0], item[1], item[2], item[3])
+    shared = sorted((move for move, priority in targets.items() if priority == 2), key=key)
+    axes = sorted((move for move, priority in targets.items() if priority == 1), key=key)
+    result = []
+    for real_cut, axis_only in zip_longest(shared, axes):
+        if real_cut is not None:
+            result.append(real_cut)
+        if axis_only is not None:
+            result.append(axis_only)
+    return result
+
+
+def _translate_if_clear(
+    plan: dict[str, Any], sheet_index: int, axis: str,
+    ids: tuple[int, ...], delta: float, kerf_cm: float,
+) -> dict[str, Any] | None:
+    """Use exact rectangular clearance only as a cheap precheck."""
+    original = plan["sheets"][sheet_index]
+    pieces = list(original.get("pieces") or [])
+    width, height = num(original.get("w")), num(original.get("h"))
+    group = [p for p in pieces if int(p["id"]) in ids]
+    fixed = [p for p in pieces if int(p["id"]) not in ids]
+    for piece in group:
+        x = num(piece["x"]) + (delta if axis == "x" else 0.0)
+        y = num(piece["y"]) + (delta if axis == "y" else 0.0)
+        w, h = num(piece["w"]), num(piece["h"])
+        if x < -_EPS or y < -_EPS or x + w > width + _EPS or y + h > height + _EPS:
+            return None
+        for other in fixed:
+            ox, oy, ow, oh = (num(other[k]) for k in ("x", "y", "w", "h"))
+            dx = max(x - ox - ow, ox - x - w)
+            dy = max(y - oy - oh, oy - y - h)
+            if dx < kerf_cm - _EPS and dy < kerf_cm - _EPS:
+                return None
+    candidate = deepcopy(plan)
+    sheet = candidate["sheets"][sheet_index]
+    for piece in sheet["pieces"]:
+        if int(piece["id"]) in ids:
+            piece[axis] = num(piece[axis]) + delta
+    for cache in ("free_rects", "skyline", "shelves"):
+        sheet.pop(cache, None)
+    return candidate
+
+
+def _translation_validation_scope(candidate, baseline, sources, sheet_index):
+    """Reuse proved sheets only when their complete contents remain identical.
+
+    Sheet geometry is independent. The baseline has already passed full-plan
+    validation, and the changed sheet must retain exactly its original source
+    identities. Thus the unchanged sheets' complete proofs plus a fresh full
+    check of this sheet are equivalent to rechecking the entire candidate.
+    Any unexpected change falls back to the original whole-plan validator.
+    """
+    before, after = baseline.get("sheets") or [], candidate.get("sheets") or []
+    if (len(before) != len(after) or candidate.get("unplaced") != baseline.get("unplaced")
+            or any(a != b for i, (a, b) in enumerate(zip(before, after)) if i != sheet_index)):
+        return candidate, sources, False
+    identities = lambda sheet: sorted((int(p["id"]), str(p.get("piece_instance_id") or ""))
+                                      for p in sheet.get("pieces") or [])
+    if identities(before[sheet_index]) != identities(after[sheet_index]):
+        return candidate, sources, False
+    ids = {int(p["id"]) for p in before[sheet_index].get("pieces") or []}
+    return ({"sheets": [after[sheet_index]], "unplaced": []},
+            [p for p in sources if int(p["id"]) in ids], True)
+
+
+def align_regular_cut_lines(
+    plan: dict[str, Any],
+    sources: list[dict[str, Any]],
+    board_w_cm: float,
+    board_h_cm: float,
+    kerf_cm: float,
+    *,
+    machine_type: str,
+    mirroring_allowed: bool,
+    metric_kwargs: dict[str, Any],
+    deadline_monotonic: float | None = None,
+    diagnostics: dict[str, Any] | None = None,
+    baseline_proof: _BaselineProof | None = None,
+) -> dict[str, Any]:
+    """Bounded post-search improvement; never accept a worse real cut network.
+
+    Axis coherence is a secondary goal only when actual cut length/fragmentation
+    do not worsen. Protected pieces remain in their original position.
+    """
+    diag = diagnostics if diagnostics is not None else {}
+    diag.update(reason="unchanged", candidate_count=0, tested=0, accepted=0)
+    if machine_type not in {"Auto", "CNC Router"} or not sources or not plan.get("sheets"):
+        diag["reason"] = "unsupported"
+        return plan
+    if plan.get("unplaced") or len(plan.get("industrial_rank") or ()) != 8:
+        diag["reason"] = "incomplete"
+        return plan
+    if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+        diag["reason"] = "deadline"
+        return plan
+
+    source_by_id = {int(s["id"]): s for s in sources}
+    locked = _locked_piece_ids(plan)
+    eligible = {index: _eligible_ids(sheet, source_by_id, locked)
+                for index, sheet in enumerate(plan["sheets"])}
+    diag["eligible_pieces"] = sum(len(v) for v in eligible.values())
+    diag["protected_pieces"] = sum(len(s.get("pieces") or []) for s in plan["sheets"]) - diag["eligible_pieces"]
+    diag["large_sheets_skipped"] = sum(
+        len(s.get("pieces") or []) > _MAX_PIECES for s in plan["sheets"]
+    )
+    if all(len(ids) < 2 for ids in eligible.values()):
+        diag["reason"] = "no_eligible_pair"
+        return plan
+    reusable_proof = (isinstance(baseline_proof, _BaselineProof) and baseline_proof.matches(
+        plan, sources, board_w_cm, board_h_cm, kerf_cm, mirroring_allowed))
+    diag["baseline_validation_reused"] = reusable_proof
+    if not reusable_proof and validate_plan(plan, sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm):
+        diag["reason"] = "invalid_initial"
+        return plan
+
+    best = plan
+    # A rigid translation affects only one sheet: caching canonical metrics
+    # avoids repeatedly rebuilding every other board's cutter-center network.
+    # Only sheets with a movable pair may change. Dense and protected-only
+    # sheets remain fixed, so their (possibly expensive/unproven) network is a
+    # constant in every comparison and must not disable another board's search.
+    active_sheets = {i for i, ids in eligible.items() if len(ids) >= 2}
+    sheet_profiles = {
+        index: _sheet_center_profile(sheet, kerf_cm, regular_only=True)
+        for index, sheet in enumerate(best["sheets"])
+        if index in active_sheets
+    }
+    sheet_axes = {
+        index: _axis_alignment_score({"sheets": [sheet]}, kerf_cm,
+                                      {0: eligible[index]})
+        for index, sheet in enumerate(best["sheets"])
+        if index in active_sheets
+    }
+    sheet_remnants: dict[int, float] = {}
+    best_profile = (sum(p[0] for p in sheet_profiles.values()),
+                    sum(p[1] for p in sheet_profiles.values()))
+    best_inboard = sum(p[2] for p in sheet_profiles.values())
+    best_axis = sum(sheet_axes.values())
+    attempts = 0
+
+    def checked_winner(choices):
+        # Compare bounded exact-geometry contenders first. Only a contender
+        # that can win this round pays for authoritative validation/enrichment.
+        # Every published move still passes all original manufacturing gates.
+        for choice in sorted(choices, key=lambda item: item["key"]):
+            if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+                diag["reason"] = "deadline"
+                return None
+            candidate = choice["candidate"]
+            validation_plan, validation_sources, reused = _translation_validation_scope(
+                candidate, best, sources, choice["sheet_index"])
+            diag["candidate_validations"] = diag.get("candidate_validations", 0) + 1
+            diag["unchanged_sheets_reused"] = diag.get("unchanged_sheets_reused", 0) + int(reused)
+            if validate_plan(validation_plan, validation_sources, board_w_cm, board_h_cm, kerf_cm=kerf_cm,
+                             deadline_monotonic=deadline_monotonic):
+                diag["rejected_validation"] = diag.get("rejected_validation", 0) + 1
+                continue
+            if placement_permission_errors(candidate, sources, mirroring_allowed=mirroring_allowed):
+                diag["rejected_permission"] = diag.get("rejected_permission", 0) + 1
+                continue
+            candidate = enrich_plan_metrics(
+                candidate, str(best.get("method_key") or ""), machine_type, **metric_kwargs,
+            )
+            if tuple(candidate["industrial_rank"][:4]) > tuple(best["industrial_rank"][:4]):
+                diag["rejected_rank"] = diag.get("rejected_rank", 0) + 1
+                continue
+            # A completed, validated contender is committed even if its last
+            # metric calculation used the remaining time. Never discard it at
+            # the next deadline check while returning an older incumbent.
+            return {**choice, "candidate": candidate}
+        return None
+
+    for sweep_index in range(_MAX_SWEEPS):
+        if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+            diag["reason"] = "deadline"
+            return best
+        winner = None
+        choices = []
+        moves = _candidate_moves(best, kerf_cm, eligible, deadline_monotonic)
+        diag["candidate_count"] += len(moves)
+        # Reserve part of the existing fixed trial allowance for improvements
+        # in subsequent sweeps. If no win is found in the prefix, continue
+        # trying candidates up to the existing global cap.
+        remaining_sweeps = _MAX_SWEEPS - sweep_index
+        round_quota = max(1, math.ceil((_MAX_TRIALS - attempts) / remaining_sweeps))
+        round_attempts = 0
+        for sheet_index, axis, ids, delta in moves:
+            if round_attempts >= round_quota and choices:
+                winner = checked_winner(choices)
+                choices = []
+                round_attempts = 0
+                if winner is not None:
+                    diag["reserved_for_followup"] = diag.get("reserved_for_followup", 0) + 1
+                    break
+            if attempts >= _MAX_TRIALS:
+                diag["reason"] = "trial_limit"
+                break
+            if deadline_monotonic is not None and time.monotonic() >= deadline_monotonic:
+                diag["reason"] = "deadline"
+                break
+            candidate = _translate_if_clear(best, sheet_index, axis, ids, delta, kerf_cm)
+            if candidate is None:
+                diag["blocked_geometry"] = diag.get("blocked_geometry", 0) + 1
+                continue
+            if _touches_protected_cut(
+                best["sheets"][sheet_index], candidate["sheets"][sheet_index],
+                ids, eligible[sheet_index], kerf_cm,
+            ):
+                diag["blocked_protected_cut"] = diag.get("blocked_protected_cut", 0) + 1
+                continue
+            attempts += 1
+            round_attempts += 1
+            diag["tested"] += 1
+
+            # Exact cutter-center network of the changed sheet, plus cached
+            # unaffected sheets. This is algebraically equivalent to a full
+            # plan recalculation, which remains covered by regression tests.
+            candidate_sheet_profile = _sheet_center_profile(
+                candidate["sheets"][sheet_index], kerf_cm, regular_only=True,
+            )
+            previous_sheet_profile = sheet_profiles[sheet_index]
+            profile = (
+                best_profile[0] - previous_sheet_profile[0] + candidate_sheet_profile[0],
+                best_profile[1] - previous_sheet_profile[1] + candidate_sheet_profile[1],
+            )
+            same_length = abs(profile[0] - best_profile[0]) <= _NETWORK_EPS_MM
+            if profile[0] > best_profile[0] + _NETWORK_EPS_MM or profile[1] > best_profile[1]:
+                diag["rejected_network"] = diag.get("rejected_network", 0) + 1
+                continue
+            candidate_sheet_axis = _axis_alignment_score(
+                {"sheets": [candidate["sheets"][sheet_index]]},
+                kerf_cm, {0: eligible[sheet_index]},
+            )
+            alignment = best_axis - sheet_axes[sheet_index] + candidate_sheet_axis
+            inboard = (best_inboard - previous_sheet_profile[2]
+                       + candidate_sheet_profile[2])
+            if (same_length and profile[1] == best_profile[1]
+                    and inboard <= best_inboard + _NETWORK_EPS_MM
+                    and alignment <= best_axis):
+                diag["rejected_no_improvement"] = diag.get("rejected_no_improvement", 0) + 1
+                continue
+
+            if sheet_index not in sheet_remnants:
+                sheet_remnants[sheet_index] = _largest_reusable_free_area(
+                    {"sheets": [best["sheets"][sheet_index]]},
+                    metric_kwargs["min_remnant_width_cm"],
+                    metric_kwargs["min_remnant_length_cm"],
+                    metric_kwargs["min_remnant_area_m2"],
+                    machine_type=machine_type,
+                )
+            after_remnant = _largest_reusable_free_area(
+                {"sheets": [candidate["sheets"][sheet_index]]},
+                metric_kwargs["min_remnant_width_cm"],
+                metric_kwargs["min_remnant_length_cm"],
+                metric_kwargs["min_remnant_area_m2"],
+                machine_type=machine_type,
+            )
+            if after_remnant + 1e-9 < sheet_remnants[sheet_index]:
+                diag["rejected_remnant"] = diag.get("rejected_remnant", 0) + 1
+                continue
+            # Equal real cut length: prefer one long *internal* cutter route
+            # over a superficially shorter segment list along the sheet border.
+            # Count still cannot regress against the accepted baseline.
+            key = (*final_cut_quality_key((profile[0], profile[1], inboard)),
+                   -alignment, abs(delta), sheet_index, axis, ids, delta)
+            choices.append(dict(key=key, candidate=candidate, profile=profile,
+                alignment=alignment, sheet_index=sheet_index, sheet_profile=candidate_sheet_profile,
+                sheet_axis=candidate_sheet_axis, sheet_remnant=after_remnant, inboard=inboard))
+        if winner is None and choices:
+            winner = checked_winner(choices)
+        if winner is None:
+            return best
+        best, best_profile, best_axis = winner["candidate"], winner["profile"], winner["alignment"]
+        best_inboard = winner["inboard"]
+        sheet_profiles[winner["sheet_index"]] = winner["sheet_profile"]
+        sheet_axes[winner["sheet_index"]] = winner["sheet_axis"]
+        sheet_remnants[winner["sheet_index"]] = winner["sheet_remnant"]
+        diag["accepted"] += 1
+        diag["reason"] = "improved"
+    return best

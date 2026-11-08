@@ -1,0 +1,18 @@
+[
+  {
+    "case": "108",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "108-r0.json",
+    "sha256": "e37cfd3bfb2e9fa6e7f00e3227d70bf512d89efa2cbca71aa4db3e538e7def95",
+    "stderr": ""
+  },
+  {
+    "case": "154",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "154-r0.json",
+    "sha256": "60935fce1c4101361d6147edd28eb9876e9e0c14d92658930a9cb3d9f9f6791d",
+    "stderr": ""
+  }
+]

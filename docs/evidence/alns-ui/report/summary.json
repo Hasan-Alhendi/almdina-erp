@@ -1,0 +1,334 @@
+{
+  "observations": 24,
+  "valid": 24,
+  "strict_roundtrips": 120,
+  "frozen_source_files": 71,
+  "comparisons": [
+    {
+      "case": "108",
+      "repeat": 0,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "108",
+      "repeat": 0,
+      "control": "equal_total_native",
+      "comparison": "better"
+    },
+    {
+      "case": "154",
+      "repeat": 0,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "154",
+      "repeat": 0,
+      "control": "equal_total_native",
+      "comparison": "better"
+    },
+    {
+      "case": "263",
+      "repeat": 0,
+      "control": "native",
+      "comparison": "equal"
+    },
+    {
+      "case": "263",
+      "repeat": 0,
+      "control": "equal_total_native",
+      "comparison": "worse"
+    },
+    {
+      "case": "298",
+      "repeat": 0,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "298",
+      "repeat": 0,
+      "control": "equal_total_native",
+      "comparison": "better"
+    },
+    {
+      "case": "108",
+      "repeat": 1,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "108",
+      "repeat": 1,
+      "control": "equal_total_native",
+      "comparison": "better"
+    },
+    {
+      "case": "154",
+      "repeat": 1,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "154",
+      "repeat": 1,
+      "control": "equal_total_native",
+      "comparison": "better"
+    },
+    {
+      "case": "263",
+      "repeat": 1,
+      "control": "native",
+      "comparison": "equal"
+    },
+    {
+      "case": "263",
+      "repeat": 1,
+      "control": "equal_total_native",
+      "comparison": "worse"
+    },
+    {
+      "case": "298",
+      "repeat": 1,
+      "control": "native",
+      "comparison": "better"
+    },
+    {
+      "case": "298",
+      "repeat": 1,
+      "control": "equal_total_native",
+      "comparison": "better"
+    }
+  ],
+  "designer_comparison": {
+    "108": {
+      "exact_shape_inventory_equal": false,
+      "designer_remnant_m2": 2.59137335553524,
+      "new_remnant_m2": 2.6120200000000002,
+      "designer_cutter_mm": 70133.5306616341,
+      "new_cutter_mm": 70503.0,
+      "designer_segments": 88,
+      "new_segments": 81,
+      "remnant_gain_percent": 0.7967452633044436,
+      "network_length_difference_mm": 369.46933836590324
+    },
+    "154": {
+      "exact_shape_inventory_equal": true,
+      "designer_remnant_m2": 0.5828484491624052,
+      "new_remnant_m2": 0.78392,
+      "designer_cutter_mm": 72771.57813036592,
+      "new_cutter_mm": 74998.57813036592,
+      "designer_segments": 99,
+      "new_segments": 106,
+      "remnant_gain_percent": 34.498084558095485,
+      "network_length_difference_mm": 2227.0
+    }
+  },
+  "groups": [
+    {
+      "case": "108",
+      "arm": "native",
+      "remnants": [
+        1.6238199999999998
+      ],
+      "cutter_mm": [
+        71644.5
+      ],
+      "segments": [
+        87
+      ],
+      "wall_sec": [
+        11.78100000001723,
+        11.921999999991385
+      ]
+    },
+    {
+      "case": "108",
+      "arm": "alns",
+      "remnants": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70503.0
+      ],
+      "segments": [
+        81
+      ],
+      "wall_sec": [
+        22.07799999997951,
+        22.625
+      ]
+    },
+    {
+      "case": "108",
+      "arm": "equal_total_native",
+      "remnants": [
+        1.6238199999999998
+      ],
+      "cutter_mm": [
+        71644.5
+      ],
+      "segments": [
+        87
+      ],
+      "wall_sec": [
+        21.578999999997905,
+        21.719000000011874
+      ]
+    },
+    {
+      "case": "154",
+      "arm": "native",
+      "remnants": [
+        0.35452999999999996
+      ],
+      "cutter_mm": [
+        74554.5436327998
+      ],
+      "segments": [
+        100
+      ],
+      "wall_sec": [
+        13.655999999988126,
+        13.59299999999348
+      ]
+    },
+    {
+      "case": "154",
+      "arm": "alns",
+      "remnants": [
+        0.78392
+      ],
+      "cutter_mm": [
+        74998.57813036592
+      ],
+      "segments": [
+        106
+      ],
+      "wall_sec": [
+        23.062999999994645,
+        23.125
+      ]
+    },
+    {
+      "case": "154",
+      "arm": "equal_total_native",
+      "remnants": [
+        0.43828499999999976
+      ],
+      "cutter_mm": [
+        73543.5436327998
+      ],
+      "segments": [
+        99
+      ],
+      "wall_sec": [
+        23.01600000000326,
+        23.5
+      ]
+    },
+    {
+      "case": "263",
+      "arm": "native",
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        12.35899999999674,
+        12.171999999991385
+      ]
+    },
+    {
+      "case": "263",
+      "arm": "alns",
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        18.85899999999674,
+        19.14100000000326
+      ]
+    },
+    {
+      "case": "263",
+      "arm": "equal_total_native",
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46055.0
+      ],
+      "segments": [
+        69
+      ],
+      "wall_sec": [
+        22.26600000000326,
+        22.421999999991385
+      ]
+    },
+    {
+      "case": "298",
+      "arm": "native",
+      "remnants": [
+        1.68848
+      ],
+      "cutter_mm": [
+        113803.0
+      ],
+      "segments": [
+        119
+      ],
+      "wall_sec": [
+        11.687000000005355,
+        11.78200000000652
+      ]
+    },
+    {
+      "case": "298",
+      "arm": "alns",
+      "remnants": [
+        1.7104399999999997
+      ],
+      "cutter_mm": [
+        112423.5
+      ],
+      "segments": [
+        119
+      ],
+      "wall_sec": [
+        21.562999999994645,
+        20.75
+      ]
+    },
+    {
+      "case": "298",
+      "arm": "equal_total_native",
+      "remnants": [
+        1.68848
+      ],
+      "cutter_mm": [
+        113803.0
+      ],
+      "segments": [
+        119
+      ],
+      "wall_sec": [
+        21.75,
+        21.67200000002049
+      ]
+    }
+  ]
+}

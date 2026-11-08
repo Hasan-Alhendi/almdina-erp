@@ -1543,6 +1543,7 @@ def contour_notch_cm(
     side_thickness_mm: dict | None = None,
     edge_break: bool = False,
     edge_break_thickness_mm: float | None = None,
+    deduct_edge_thickness: bool = True,
 ) -> tuple[float, float]:
     """Notch used by the liner and by the L cut contour.
 
@@ -1564,6 +1565,7 @@ def contour_notch_cm(
             side_thickness_mm=side_thickness_mm or {},
             edge_break=edge_break,
             edge_break_thickness_mm=edge_break_thickness_mm,
+            deduct_edge_thickness=deduct_edge_thickness,
         )
     except CutDimensionError:
         return finished
@@ -1845,7 +1847,7 @@ def placed_polygon_mm(piece: Mapping[str, Any]) -> list[Point]:
     )
     local = piece_polygon_mm(liner)
     turns = piece_quarter_turns(piece)
-    mirrored = bool(piece.get("corner_mirrored"))
+    mirrored = bool(piece.get("corner_mirrored") or piece.get("mirrored"))
     origin_x = float(piece.get("x") or 0) * CM_TO_MM
     origin_y = float(piece.get("y") or 0) * CM_TO_MM
     width = _mm(liner.width_cm)

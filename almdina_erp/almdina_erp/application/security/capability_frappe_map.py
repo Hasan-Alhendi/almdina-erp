@@ -50,6 +50,7 @@ _CONTEXTUAL_RULES: dict[str, tuple[ContextualRule, ...]] = {
     Capability.VIEW_APPROVED_CUTTING_PLAN: ("document_scope",),
     Capability.RECALCULATE_PLAN: ("lifecycle", "document_scope"),
     Capability.EDIT_OPTIMIZER_SETTINGS: ("lifecycle", "document_scope"),
+    Capability.USE_BOARD_EDITOR: ("lifecycle", "document_scope"),
     Capability.APPROVE_DXF: ("lifecycle", "document_scope"),
     Capability.UPLOAD_DXF: ("lifecycle", "document_scope"),
     Capability.REPLACE_DXF: ("lifecycle", "document_scope"),

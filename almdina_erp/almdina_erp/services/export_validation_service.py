@@ -24,7 +24,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_issue import (
     CUT_SIZE_MISMATCH, EXTRA_CUT_PATH, FORBIDDEN_ROTATION,
     KERF_VIOLATION, MANUFACTURING_REQUIREMENTS_MISSING, MATERIAL_OVERLAP,
     PIECE_COUNT_MISMATCH, PIECE_IDENTITY_MISMATCH, PIECE_INVALID_DIMENSIONS,
-    PIECE_MISSING, PIECE_OUTSIDE_SHEET, PLAN_LABEL_DUPLICATE,
+    PIECE_MISSING, PIECE_OUTSIDE_SHEET, APPLIED_TRIM_OVERFLOW, PLAN_LABEL_DUPLICATE,
     PLAN_SOURCE_IDENTITY_MISMATCH, PLAN_SOURCE_MISSING, PLAN_UNPLACED_PIECES,
     PLAN_VALIDATION_FAILED,
     PLAN_UNKNOWN_PIECES, REMNANT_IDENTITY_MISMATCH, REMNANT_NOT_FOUND,
@@ -39,6 +39,13 @@ from almdina_erp.almdina_erp.services.order_board_identity import (
     order_board_color,
     order_board_material,
     order_board_thickness_mm,
+)
+
+# These existing snapshot fields are not stored on child placement rows. Both
+# readers must retain them so unchanged validators/exporters see the same shape.
+_SNAPSHOT_CORNER_TRANSFORMS = (
+    "corner_rotation_quarter_turns", "placement_quarter_turns",
+    "corner_mirrored", "mirrored", "placement_mirrored",
 )
 
 
@@ -125,6 +132,9 @@ def _placed_piece_layout_row(placed: Any, stored: dict[str, Any]) -> dict[str, A
     }
     for key in ("glass_host_piece_id", "glass_hole_local_mm", "glass_margin_mm"):
         if stored.get(key) not in (None, "", []):
+            row[key] = stored[key]
+    for key in _SNAPSHOT_CORNER_TRANSFORMS:
+        if key in stored:
             row[key] = stored[key]
     return row
 
@@ -268,18 +278,81 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
         if width <= 0 or height <= 0:
             issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"actual_width_mm": width, "actual_height_mm": height}))
         resource_kind = str(getattr(source, "resource_kind", "FULL_BOARD") or "FULL_BOARD").upper()
-        if source.source_type == "Full Board" and resource_kind != "OFFCUT":
+        stored_sheet = persisted_sheets.get(sheet_no) or {}
+        stored_piece = next(
+            (
+                row
+                for row in (stored_sheet.get("pieces") or [])
+                if isinstance(row, dict) and cint(row.get("id")) == cint(piece.piece_id)
+            ),
+            {},
+        )
+        posed_outer = (
+            ((stored_piece.get("geometry") or {}).get("outer"))
+            if isinstance(stored_piece.get("geometry"), dict)
+            else None
+        )
+        # Free-angle / Board Editor plans store physical cut dims in w/h and the
+        # true outline in geometry. Outside-sheet must use the posed outline, not
+        # an unrotated AABB rebuilt from order dimensions.
+        if isinstance(posed_outer, list) and len(posed_outer) >= 3:
+            xs = [flt(point[0]) for point in posed_outer if isinstance(point, (list, tuple)) and len(point) >= 2]
+            ys = [flt(point[1]) for point in posed_outer if isinstance(point, (list, tuple)) and len(point) >= 2]
+            if xs and ys:
+                min_x, max_x = min(xs), max(xs)
+                min_y, max_y = min(ys), max(ys)
+                if source.source_type == "Full Board" and resource_kind != "OFFCUT":
+                    trim_source = {
+                        "source_type": source.source_type,
+                        "full_width_cm": flt(source.full_width_mm) / 10,
+                        "full_length_cm": flt(source.full_length_mm) / 10,
+                        "usable_width_cm": usable_w / 10,
+                        "usable_length_cm": usable_h / 10,
+                        **{
+                            key: stored_sheet[key]
+                            for key in ("applied_trim_width_cm", "applied_trim_length_cm")
+                            if key in stored_sheet
+                        },
+                    }
+                    try:
+                        trim_x = resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
+                        trim_y = resolved_sheet_trim_cm(trim_source, snapshot, axis="y") * 10
+                    except DxfGeometrySnapshotError as exc:
+                        issues.append(issue(
+                            CUT_INVALID_GEOMETRY, CATEGORY_LAYOUT, target=sheet_target(sheet_no),
+                            debug={"exception": str(exc)},
+                        ))
+                        continue
+                    out_of_sheet = (
+                        min_x + trim_x < -1e-7
+                        or min_y + trim_y < -1e-7
+                        or max_x + trim_x > flt(source.full_width_mm) + 1e-7
+                        or max_y + trim_y > flt(source.full_length_mm) + 1e-7
+                    )
+                else:
+                    out_of_sheet = (
+                        min_x < -1e-7
+                        or min_y < -1e-7
+                        or max_x > usable_w + 1e-7
+                        or max_y > usable_h + 1e-7
+                    )
+            else:
+                out_of_sheet = False
+        elif source.source_type == "Full Board" and resource_kind != "OFFCUT":
             # Placed coordinates live in the applied-trim frame. Preferred trim
             # is not a physical boundary: rebuild the same frame used by DXF
             # export, including historical missing and explicit-zero trim.
-            stored = persisted_sheets.get(sheet_no) or {}
             trim_source = {
                 "source_type": source.source_type,
                 "full_width_cm": flt(source.full_width_mm) / 10,
                 "full_length_cm": flt(source.full_length_mm) / 10,
                 "usable_width_cm": usable_w / 10,
                 "usable_length_cm": usable_h / 10,
-                **{key: stored[key] for key in ("applied_trim_width_cm", "applied_trim_length_cm") if key in stored},
+                **{
+                    key: stored_sheet[key]
+                    for key in ("applied_trim_width_cm", "applied_trim_length_cm")
+                    if key in stored_sheet
+                },
             }
             try:
                 physical_x = x + resolved_sheet_trim_cm(trim_source, snapshot, axis="x") * 10
@@ -295,6 +368,24 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
                 or physical_y + height > flt(source.full_length_mm) + 1e-7
             )
+            if (snapshot.get("trim_policy") or {}).get("policy") == (
+                "mandatory_minimum_v1"
+            ):
+                minimum_mm = flt(plan.trim_margin_mm)
+                edge_gaps = {
+                    "left": physical_x,
+                    "right": flt(source.full_width_mm) - physical_x - width,
+                    "top": physical_y,
+                    "bottom": flt(source.full_length_mm) - physical_y - height,
+                }
+                for edge, actual_mm in edge_gaps.items():
+                    if actual_mm < minimum_mm - 1e-6:
+                        issues.append(issue(
+                            APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT,
+                            target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)),
+                            params={"sheet_no": sheet_no, "edge": edge, "actual_margin_mm": actual_mm, "required_trim_mm": minimum_mm},
+                        ))
+                        break
         else:
             # Preserve the existing Remnant/OFFCUT usable-frame contract.
             out_of_sheet = (
@@ -543,6 +634,25 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
                 public_piece["geometry"] = geometry
                 consumed_geometry.add(identity)
             stored = stored_pieces.get((sheet_no, piece_id)) or {}
+            # Board Editor (and any posed snapshot) keeps free-angle topology and
+            # machining overlays in the JSON. Child-table AABB/rotated must not
+            # replace that authority during export/print reconstruction.
+            if "rotation_deg" in stored and stored.get("rotation_deg") is not None:
+                public_piece["rotation_deg"] = flt(stored.get("rotation_deg"))
+            if "apply_rotated_to_geometry" in stored:
+                public_piece["apply_rotated_to_geometry"] = bool(
+                    stored.get("apply_rotated_to_geometry")
+                )
+            overlays = stored.get("overlays")
+            if isinstance(overlays, list) and overlays:
+                public_piece["overlays"] = overlays
+            for key in (
+                "rotation_quarter_turns",
+                "corner_rotation_quarter_turns",
+                "corner_mirrored",
+            ):
+                if stored.get(key) not in (None, ""):
+                    public_piece[key] = stored.get(key)
             persisted_holes = (
                 (public_piece.get("geometry") or {}).get("holes")
                 if isinstance(public_piece.get("geometry"), dict)
@@ -555,6 +665,9 @@ def _plan_to_export_snapshot(plan: Any) -> dict[str, Any]:
             host_id = stored.get("glass_host_piece_id")
             if host_id not in (None, ""):
                 public_piece["glass_host_piece_id"] = host_id
+            for key in _SNAPSHOT_CORNER_TRANSFORMS:
+                if key in stored:
+                    public_piece[key] = stored[key]
             sheet_pieces.append(public_piece)
         persisted = persisted_sheets.get(sheet_no) or {}
         rebuilt_sheet = {

@@ -1,0 +1,8 @@
+# Frozen research observations and source snapshots have byte-level SHA256 manifests.
+# Preserve their original bytes on Windows and Linux.
+docs/evidence/alns-study/** -text
+docs/evidence/alns-fixed-boards/** -text
+docs/evidence/alns-ui/** -text
+docs/evidence/alns-next/** -text
+docs/evidence/pattern-search/** -text
+docs/evidence/corner-search/** -text

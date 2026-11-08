@@ -24,6 +24,7 @@ class CutDimensionInput:
     # still provide one profile per axis. Side values always take precedence.
     long_edge_thickness_mm: float = 0
     width_edge_thickness_mm: float = 0
+    deduct_edge_thickness: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +82,8 @@ def calculate_cut_dimensions(piece: CutDimensionInput) -> CutDimensionResult:
         fieldname="edge_width_bottom_thickness",
     )
 
-    width_deduction_mm = right + left
-    length_deduction_mm = top + bottom
+    width_deduction_mm = 0.0 if not piece.deduct_edge_thickness else right + left
+    length_deduction_mm = 0.0 if not piece.deduct_edge_thickness else top + bottom
     cut_width = final_width - (width_deduction_mm / 10)
     cut_length = final_length - (length_deduction_mm / 10)
 

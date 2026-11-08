@@ -1,0 +1,87 @@
+{
+  "width": 130.0,
+  "height": 260.0,
+  "rows": [
+    {
+      "width_cm": 54.6,
+      "length_cm": 75.39999999999999,
+      "qty": 4,
+      "piece_type": "Clipped Corner",
+      "clipped_corner_position": "Top Right",
+      "clipped_corner_width_cm": 12.0,
+      "clipped_corner_length_cm": 17.0,
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:corners"
+    },
+    {
+      "width_cm": 33.4,
+      "length_cm": 83.6,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-05:regular:0"
+    },
+    {
+      "width_cm": 24.41,
+      "length_cm": 59.2,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:regular:1"
+    },
+    {
+      "width_cm": 28.82,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-05:regular:2"
+    },
+    {
+      "width_cm": 24.63,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:regular:3"
+    },
+    {
+      "width_cm": 33.84,
+      "length_cm": 67.1,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:regular:4"
+    },
+    {
+      "width_cm": 29.15,
+      "length_cm": 59.2,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:regular:5"
+    },
+    {
+      "width_cm": 24.96,
+      "length_cm": 83.6,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 0,
+      "piece_instance_id": "holdout-05:regular:6"
+    },
+    {
+      "width_cm": 25.07,
+      "length_cm": 104.7,
+      "qty": 8,
+      "piece_type": "Regular",
+      "allow_rotation": 1,
+      "piece_instance_id": "holdout-05:regular:7"
+    }
+  ],
+  "test_settings": {
+    "kerf_mm": 5.0,
+    "trim_mm": 0.0,
+    "allow_mirroring": false
+  },
+  "provenance": "Synthetic seed 719041 revision 2: distinct source geometries after original cohort failed legacy strict import in all arms; optimizer source remains frozen; no reference poses or designer dimensions"
+}

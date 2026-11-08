@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from almdina_erp.almdina_erp.domain.cutting.abc_search import ABCSearchPolicy
 
 from almdina_erp.almdina_erp.domain.cutting import (
     expand_piece_groups,
@@ -30,6 +31,10 @@ class DomainCuttingEngineAdapter:
         min_remnant_width_cm: float,
         min_remnant_length_cm: float,
         min_remnant_area_m2: float,
+        mirroring_allowed: bool = False,
+        seed_plans: tuple[dict[str, Any], ...] = (),
+        search_round: int = 0,
+        research_abc: ABCSearchPolicy | None = None,
     ) -> dict[str, Any]:
         plan = optimize_plan(
             pieces,
@@ -43,6 +48,9 @@ class DomainCuttingEngineAdapter:
             min_remnant_width_cm=min_remnant_width_cm,
             min_remnant_length_cm=min_remnant_length_cm,
             min_remnant_area_m2=min_remnant_area_m2,
+            mirroring_allowed=mirroring_allowed,
+            seed_plans=seed_plans, search_round=search_round,
+            **({'research_abc': research_abc} if research_abc is not None else {}),
         )
         plan["kerf_cm"] = max(0.0, float(kerf_cm or 0))
         return plan
@@ -61,6 +69,14 @@ class DomainCuttingEngineAdapter:
             board_length_cm,
             kerf_cm=max(0.0, float(plan.get("kerf_cm") or 0)),
         )
+
+    def solve_pattern_master(self, columns, demand, max_boards, *, deadline, hint=()):
+        from .pattern_solver import solve_pattern_master
+        return solve_pattern_master(columns,demand,max_boards,deadline=deadline,hint=hint)
+
+    def solve_shelf_master(self,*args,**kwargs):
+        from .pattern_solver import solve_shelf_master
+        return solve_shelf_master(*args,**kwargs)
 
 
 domain_cutting_engine = DomainCuttingEngineAdapter()

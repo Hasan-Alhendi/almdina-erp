@@ -1,0 +1,95 @@
+initial patterns 30
+built patterns 191 seconds 10.39100000000326
+stage1 OPTIMAL
+stage2 OPTIMAL
+{
+  "case": "263",
+  "augment": true,
+  "initial_patterns": 30,
+  "total_patterns": 191,
+  "pool_build_sec": 10.39100000000326,
+  "stage1": {
+    "status": "OPTIMAL",
+    "wall_sec": 0.09399999998277053,
+    "bound": 2686440.0
+  },
+  "stage2": {
+    "status": "OPTIMAL",
+    "wall_sec": 0.07800000000861473
+  },
+  "selected": [
+    {
+      "index": 24,
+      "origin": "frozen_equal_total_native",
+      "remnant": 2.6864399999999997
+    },
+    {
+      "index": 25,
+      "origin": "frozen_equal_total_native",
+      "remnant": 0.0
+    },
+    {
+      "index": 28,
+      "origin": "frozen_equal_total_native",
+      "remnant": 0.0
+    }
+  ],
+  "rejected": {},
+  "before": {
+    "boards": 3,
+    "pieces": 48,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      3,
+      0,
+      -2.68644,
+      116,
+      6862.3,
+      11,
+      4
+    ],
+    "reusable_m2": 2.6864399999999997,
+    "aligned": 45,
+    "adjacent": 86,
+    "alignment_ratio": 0.5232558139534884,
+    "family_splits": 4,
+    "cutter_profile": [
+      46191.0,
+      74,
+      7034.0
+    ],
+    "signature": "db15aa4cf035e7224b17914ae2194791549ac42a3f2f3f2579a549e03a96b8cd"
+  },
+  "after": {
+    "boards": 3,
+    "pieces": 48,
+    "unplaced": 0,
+    "industrial_rank": [
+      0,
+      3,
+      0,
+      -2.68644,
+      111,
+      6678.8,
+      8,
+      4
+    ],
+    "reusable_m2": 2.6864399999999997,
+    "aligned": 45,
+    "adjacent": 86,
+    "alignment_ratio": 0.5232558139534884,
+    "family_splits": 5,
+    "cutter_profile": [
+      46055.0,
+      69,
+      7107.5
+    ],
+    "signature": "c4d20eec9e7419645e09dc52dce6d948623ab2b3476c54c5b701084d60d3b4c5"
+  },
+  "strict_roundtrip": true,
+  "comparison": "better",
+  "solver_backend": "Cbc 2.10.12",
+  "script_sha256": "71f65f651237f8102a4f490a1856f2b082554a26c9d11bf00fe694aa8be0d3e7",
+  "warning": "Offline upper-potential experiment with historical multi-budget pool, not a cold/equal-budget benchmark or global optimality proof"
+}

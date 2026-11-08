@@ -21,6 +21,7 @@ _SETTING_TO_PLAN_FIELD = {
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
     "optimization_time_limit_sec": "optimization_time_limit_sec",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 
 

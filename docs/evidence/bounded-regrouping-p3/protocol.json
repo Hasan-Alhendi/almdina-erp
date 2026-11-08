@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-02",
+  "baseline_commit": "3d9e35b943c0102e014a9dc74598b847e4519a84",
+  "comparison": "unchanged Smart vs pure P3 only; no P2/P4 hooks",
+  "known_cases": [
+    "263",
+    "296",
+    "297",
+    "298",
+    "300",
+    "243",
+    "3687",
+    "109",
+    "110"
+  ],
+  "new_SYSTEM_cases_before_opening": [
+    "230",
+    "231",
+    "234"
+  ],
+  "new_case_rule": "include every reconstructable Regular-only candidate, list exclusions; no outcome-based replacement",
+  "budgets_sec": [
+    5
+  ],
+  "repeats": 2,
+  "reverse_order_between_repeats": true,
+  "frozen_policy": {
+    "pool": 4,
+    "max_source_pieces": 64,
+    "max_attempts_per_Smart_call": 24,
+    "max_neighborhoods_per_entry": 3,
+    "neighborhood_sizes": [
+      2,
+      3
+    ],
+    "ordering": "fewest pieces then neighborhood size",
+    "methods": [
+      "MaxRects Bottom Left",
+      "MaxRects Contact Point",
+      "MaxRects Best Short Side",
+      "MaxRects Best Area"
+    ],
+    "orders": [
+      "long_side_desc",
+      "area_desc",
+      "short_side_desc"
+    ],
+    "priority": "native cancellation candidates first",
+    "guards": "unlocked Regular full-board sources and placements; no baked geometry or overlays; no Panel Saw"
+  },
+  "acceptance": {
+    "manufacturing": "complete quantities/identities, physical Kerf, allowed transforms, protected nests, actual JS/strict import",
+    "paired_boards": "no increase in any observed paired trial",
+    "paired_final_industrial_rank": "no regression in any observed paired trial, flag any failure for investigation",
+    "benefit": "repeatable improvement in at least two known cases; do not require improvement in every new case",
+    "performance": "median candidate/baseline wall ratio <=1.10 and maximum paired candidate-minus-baseline <=0.50 sec, measured cooperatively; not a hard 5-second response guarantee",
+    "metrics": "physical cutter network and family/alignment indicators diagnostic, report tradeoffs without changing rank"
+  },
+  "change_contract": {
+    "goal": "native Smart-only bounded regroup candidate path",
+    "files": [
+      "domain/cutting/plan_search.py",
+      "domain/cutting/optimizer.py",
+      "focused regression tests and fixtures",
+      "canonical cutting docs and evidence"
+    ],
+    "invariants": [
+      "baseline and native final selection",
+      "no extra boards for organization",
+      "shared deadline",
+      "no P2/P4",
+      "no snapshot/schema/permission/financial/i18n/UI changes"
+    ],
+    "rollback": "remove optional regroup budget passed by Smart; no data migration"
+  }
+}

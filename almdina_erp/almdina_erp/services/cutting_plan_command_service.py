@@ -16,13 +16,18 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     APPROVED,
+    BOARD_EDITOR,
     DRAFT,
     SUPERSEDED,
     SYSTEM,
     UPLOADED_DXF,
+    manufacturing_actions_allowed,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import (
     preserve_offcut_classification,
+)
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettingsValidationError,
@@ -67,10 +72,12 @@ _DCO_TO_PLAN_FIELDS = {
     "optimization_time_limit_sec": "optimization_time_limit_sec",
     "kerf_mm": "kerf_mm",
     "trim_margin_mm": "trim_margin_mm",
+    "deduct_edge_thickness": "deduct_edge_thickness",
 }
 _NUMERIC_SETTING_FIELDS = frozenset(
     {"optimization_time_limit_sec", "kerf_mm", "trim_margin_mm"}
 )
+_CHECK_SETTING_FIELDS = frozenset({"deduct_edge_thickness"})
 _DXF_COMMAND_CAPABILITIES = frozenset({Capability.UPLOAD_DXF, Capability.REPLACE_DXF})
 
 
@@ -97,6 +104,7 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
             optimization_time_limit_sec=value("optimization_time_limit_sec"),
             kerf_mm=value("kerf_mm"),
             preferred_trim_mm=value("trim_margin_mm"),
+            deduct_edge_thickness=value("deduct_edge_thickness"),
         )
     except PlanSettingsValidationError:
         _settings_validation_error()
@@ -104,6 +112,8 @@ def _settings_from_plan(plan: Any, updates: dict[str, Any] | None = None) -> Pla
 
 
 def _same_value(fieldname: str, left: Any, right: Any) -> bool:
+    if fieldname in _CHECK_SETTING_FIELDS:
+        return coerce_deduct_edge_thickness(left) == coerce_deduct_edge_thickness(right)
     if fieldname in _NUMERIC_SETTING_FIELDS:
         return abs(flt(left) - flt(right)) < 0.000001
     return str(left or "").strip() == str(right or "").strip()
@@ -129,6 +139,7 @@ def _requested_updates(
     kerf_mm: float | None,
     trim_margin_mm: float | None,
     optimization_time_limit_sec: float | None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     provided = {
         fieldname: value
@@ -138,6 +149,7 @@ def _requested_updates(
             "kerf_mm": kerf_mm,
             "trim_margin_mm": trim_margin_mm,
             "optimization_time_limit_sec": optimization_time_limit_sec,
+            "deduct_edge_thickness": deduct_edge_thickness,
         }.items()
         if value is not None
     }
@@ -167,6 +179,10 @@ def _requested_updates(
                 "trim_margin_mm",
                 defaults.preferred_trim_mm,
             ),
+            deduct_edge_thickness=provided.get(
+                "deduct_edge_thickness",
+                defaults.deduct_edge_thickness,
+            ),
         )
     except PlanSettingsValidationError:
         _settings_validation_error()
@@ -178,6 +194,7 @@ def _requested_updates(
         "kerf_mm": normalized.kerf_mm,
         "trim_margin_mm": normalized.preferred_trim_mm,
         "optimization_time_limit_sec": normalized.optimization_time_limit_sec,
+        "deduct_edge_thickness": 1 if normalized.deduct_edge_thickness else 0,
     }
     return {fieldname: canonical[fieldname] for fieldname in provided}
 
@@ -201,6 +218,19 @@ def _assert_recalculation_state(order: Any) -> None:
         return
 
     assert_order_editable(order)
+
+
+def _sync_saved_cut_policy(order: Any, value: Any) -> None:
+    """Write derived cut sizes after the manufacturing plan has stored the policy."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+        sync_order_cut_dimensions,
+    )
+
+    sync_order_cut_dimensions(
+        order,
+        deduct_edge_thickness=coerce_deduct_edge_thickness(value),
+    )
 
 
 def recalculation_is_allowed(order: Any) -> bool:
@@ -245,7 +275,11 @@ def _set_approved_plan_relation(order: Any, plan: Any) -> None:
 
 
 def _legacy_plan_source(source_type: str) -> str:
-    return "Custom" if source_type == UPLOADED_DXF else "System"
+    if source_type == UPLOADED_DXF:
+        return "Custom"
+    if source_type == BOARD_EDITOR:
+        return "BoardEditor"
+    return "System"
 
 
 def _canonical_plan_source(plan_source: str) -> str:
@@ -254,13 +288,52 @@ def _canonical_plan_source(plan_source: str) -> str:
         return SYSTEM
     if normalized in {"custom", "uploaded dxf", "uploaded_dxf", "dxf"}:
         return UPLOADED_DXF
+    if normalized in {"board editor", "board_editor", "boardeditor", "edited", "manual"}:
+        return BOARD_EDITOR
     frappe.throw(_("مصدر خطة القص المحدد غير مدعوم."), frappe.ValidationError)
     raise AssertionError("unreachable")
+
+
+def _assert_board_editor_manufacturing_ready(plan: Any) -> None:
+    from almdina_erp.almdina_erp.domain.cutting.board_editor_manufacturing import (
+        BoardEditorManufacturingError,
+        assert_board_editor_manufacturing_ready,
+    )
+
+    snapshot = frappe.parse_json(plan.snapshot_json or "{}") or {}
+    try:
+        assert_board_editor_manufacturing_ready(
+            snapshot,
+            machine_type=str(getattr(plan, "machine_type", None) or ""),
+            kerf_mm=flt(getattr(plan, "kerf_mm", 0)),
+        )
+    except BoardEditorManufacturingError as exc:
+        messages = {
+            "empty_plan": _("خطة محرر الألواح لا تحتوي قطعًا جاهزة للتصنيع."),
+            "missing_geometry": _(
+                "خطة محرر الألواح تفتقد هندسة نهائية لبعض القطع ولا يمكن اعتمادها."
+            ),
+            "machine_rotation_forbidden": _(
+                "زاوية دوران قطعة أو أكثر غير مدعومة لنوع الماكينة المحدد في الخطة."
+            ),
+            "material_layout_invalid": _(
+                "التحقق الهندسي لخطة محرر الألواح فشل (تداخل أو خلوص غير صالح)."
+            ),
+        }
+        frappe.throw(
+            messages.get(exc.code) or _("خطة محرر الألواح غير جاهزة للاعتماد."),
+            frappe.ValidationError,
+        )
 
 
 def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
     if str(plan.status or "") != DRAFT:
         frappe.throw(_("يمكن اعتماد خطة قص في حالة المسودة فقط."), frappe.ValidationError)
+    if not manufacturing_actions_allowed(getattr(plan, "source_type", None)):
+        frappe.throw(
+            _("مصدر خطة القص المحدد لا يدعم الاعتماد والتصنيع."),
+            frappe.ValidationError,
+        )
     if str(plan.validation_status or "") != "Valid" or not str(plan.snapshot_json or "").strip():
         frappe.throw(
             _("خطة القص غير موجودة أو لم تنجح في التحقق الهندسي."),
@@ -317,6 +390,10 @@ def _assert_plan_ready_for_approval(order: Any, plan: Any) -> None:
                 frappe.ValidationError,
             )
 
+    if str(plan.source_type or "") == BOARD_EDITOR:
+        # Re-validate posed geometry on the server. Browser review is not authority.
+        _assert_board_editor_manufacturing_ready(plan)
+
 
 def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
     snapshot_json = str(plan.snapshot_json or "")
@@ -340,6 +417,9 @@ def plan_payload(plan: Any, order: Any | None = None) -> dict[str, Any]:
         "kerf_mm": plan.kerf_mm,
         "trim_margin_mm": plan.trim_margin_mm,
         "optimization_time_limit_sec": plan.optimization_time_limit_sec,
+        "deduct_edge_thickness": 1 if coerce_deduct_edge_thickness(
+            getattr(plan, "deduct_edge_thickness", None)
+        ) else 0,
         "plan_needs_recalculation": int(plan.plan_needs_recalculation or 0),
         "cutting_plan_json": sanitize_plan_snapshot_json(snapshot_json),
         "system_plan_json": sanitize_plan_snapshot_json(snapshot_json),
@@ -426,7 +506,12 @@ def finalize_uploaded_dxf_order_state(order: Any, plan: Any) -> None:
     )
 
 
-def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
+def approve_order_plan(
+    order: Any,
+    plan_source: str,
+    *,
+    plan_name: str | None = None,
+) -> dict[str, Any]:
     """Approve the reviewed Draft Cutting Plan without recalculation, DCO save, or cost entry."""
 
     require_cutting_plan_capability(
@@ -436,25 +521,85 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     )
     source_type = _canonical_plan_source(plan_source)
     repository = FrappeCuttingPlanCommandRepository(Capability.APPROVE_DXF)
-    plan = repository.latest_document(
-        order.name,
-        source_type=source_type,
-        status=DRAFT,
-    )
-    if not plan:
-        message = (
-            _("لا توجد خطة قص من النظام جاهزة للاعتماد. أعد حساب الخطة أولًا.")
-            if source_type == SYSTEM
-            else _("لا توجد خطة DXF صالحة جاهزة للاعتماد. ارفع DXF أولًا.")
+    explicit_name = str(plan_name or "").strip()
+    if explicit_name:
+        if not frappe.db.exists("Cutting Plan", explicit_name):
+            frappe.throw(_("خطة القص المحددة غير موجودة."), frappe.ValidationError)
+        plan = repository.get_document(explicit_name)
+        if str(getattr(plan, "door_cutting_order", None) or "") != str(order.name):
+            frappe.throw(
+                _("خطة القص المحددة لا تنتمي إلى هذا الطلب."),
+                frappe.PermissionError,
+            )
+        if str(getattr(plan, "plan_kind", "Order") or "Order") != "Order":
+            frappe.throw(_("خطة القص المحددة ليست خطة طلب."), frappe.ValidationError)
+        if str(getattr(plan, "source_type", None) or "") != source_type:
+            frappe.throw(
+                _("مصدر خطة القص المحددة لا يطابق تبويب الاعتماد."),
+                frappe.ValidationError,
+            )
+        if str(getattr(plan, "status", None) or "") != DRAFT:
+            frappe.throw(
+                _("يمكن اعتماد خطة قص في حالة المسودة فقط."),
+                frappe.ValidationError,
+            )
+    else:
+        plan = repository.latest_document(
+            order.name,
+            source_type=source_type,
+            status=DRAFT,
         )
+    if not plan:
+        if source_type == SYSTEM:
+            message = _("لا توجد خطة قص من النظام جاهزة للاعتماد. أعد حساب الخطة أولًا.")
+        elif source_type == BOARD_EDITOR:
+            message = _(
+                "لا توجد خطة معدّلة من محرر الألواح جاهزة للاعتماد. "
+                "طبّق التوزيع من المحرر أولًا."
+            )
+        else:
+            message = _("لا توجد خطة DXF صالحة جاهزة للاعتماد. ارفع DXF أولًا.")
         frappe.throw(message, frappe.ValidationError)
+
+    if source_type == BOARD_EDITOR and cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION:
+        # Older Board Editor drafts created before cost wiring still use the
+        # existing plan-cost path; no new formulas.
+        initialize_draft_plan_cost_snapshot(order, plan)
+        apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
+        repository.save_document(plan)
 
     _assert_plan_ready_for_approval(order, plan)
     order.ensure_special_shapes_documented()
 
+    # Re-read under the same transaction before mutating approval pointers so a
+    # concurrent approve cannot leave a partial supersede + wrong approved_plan.
+    current_status = frappe.db.get_value("Cutting Plan", plan.name, "status")
+    if str(current_status or "") != DRAFT:
+        frappe.throw(
+            _("خطة القص لم تعد في حالة المسودة. أعد تحميل مساحة العمل ثم حاول الاعتماد مرة أخرى."),
+            frappe.ValidationError,
+        )
+    current_approved = str(
+        frappe.db.get_value("Door Cutting Order", order.name, "approved_plan") or ""
+    ).strip()
+    if current_approved and current_approved == str(plan.name):
+        frappe.throw(
+            _("هذه الخطة معتمدة بالفعل لهذا الطلب."),
+            frappe.ValidationError,
+        )
+
     for previous in repository.approved_documents(order.name, exclude=plan.name):
         previous.status = SUPERSEDED
         repository.save_document(previous, allow_status_transition=True)
+
+    # Reload after supersede writes so status/fingerprint cannot drift mid-flight.
+    plan = repository.get_document(plan.name)
+    if str(plan.status or "") != DRAFT:
+        frappe.throw(
+            _("تعارض اعتماد: تغيّرت حالة الخطة أثناء العملية ولم يُغيَّر مؤشر الاعتماد."),
+            frappe.ValidationError,
+        )
+    _assert_plan_ready_for_approval(order, plan)
 
     plan.status = APPROVED
     plan.approved_by = frappe.session.user
@@ -485,6 +630,27 @@ def approve_order_plan(order: Any, plan_source: str) -> dict[str, Any]:
     }
 
 
+def _apply_tool_diameters(plan: Any, updates: dict[str, Any]) -> list[str]:
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+        TOOL_DIAMETER_FIELDS,
+        explicit_diameter,
+    )
+
+    changed: list[str] = []
+    for fieldname in TOOL_DIAMETER_FIELDS:
+        if fieldname not in updates or updates[fieldname] is None:
+            continue
+        explicit = explicit_diameter(updates[fieldname], fieldname)
+        if explicit is None:
+            continue
+        current = getattr(plan, fieldname, None)
+        if current is not None and abs(flt(current) - explicit) < 0.000001:
+            continue
+        setattr(plan, fieldname, explicit)
+        changed.append(fieldname)
+    return changed
+
+
 def save_system_plan_settings(
     order: Any,
     updates: dict[str, Any],
@@ -506,8 +672,16 @@ def save_system_plan_settings(
             repository,
         )
         plan = repository.get_document(plan.name)
+        if "deduct_edge_thickness" in changed:
+            _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
+    # Layer diameters do not move doors. Persist them without marking the
+    # nesting plan stale and without rewriting an approved snapshot.
+    diameter_changed = _apply_tool_diameters(plan, updates)
+    if diameter_changed:
+        repository.save_document(plan)
+        plan = repository.get_document(plan.name)
     result = plan_payload(plan, order)
-    result["changed_fields"] = changed
+    result["changed_fields"] = [*changed, *diameter_changed]
     return result
 
 
@@ -523,7 +697,12 @@ def recalculate_system_plan(
     repository = FrappeCuttingPlanCommandRepository(Capability.RECALCULATE_PLAN)
     plan = repository.ensure_system_draft(order)
     initialize_draft_plan_cost_snapshot(order, plan)
-    changed = _changed_settings(plan, updates or {})
+    # Mode is server-owned for new calculations. Validate legacy API input,
+    # but it must neither select the engine nor require settings-edit authority.
+    updates = dict(updates or {})
+    if "packing_mode" in updates:
+        require_executable_optimization_mode(updates.pop("packing_mode"))
+    changed = _changed_settings(plan, updates)
     if changed:
         require_cutting_plan_capability(
             order,
@@ -542,11 +721,9 @@ def recalculate_system_plan(
         )
         plan = repository.get_document(plan.name)
         initialize_draft_plan_cost_snapshot(order, plan)
+        if "deduct_edge_thickness" in changed:
+            _sync_saved_cut_policy(order, updates["deduct_edge_thickness"])
 
-    # A historical known-but-unavailable mode remains readable and unchanged,
-    # but recalculation must ask for an executable choice instead of leaking the
-    # domain exception or silently converting the stored algorithm.
-    require_executable_optimization_mode(plan.optimization_mode)
     backfill_piece_instance_ids(order)
     calculate_system_plan(order, plan)
     apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))
@@ -578,6 +755,7 @@ def recalculate_order_plan(
     kerf_mm: float | None = None,
     trim_margin_mm: float | None = None,
     optimization_time_limit_sec: float | None = None,
+    deduct_edge_thickness: int | str | bool | None = None,
 ) -> dict[str, Any]:
     """Canonical plan-owned replacement for the legacy DCO recalculation save."""
 
@@ -606,6 +784,7 @@ def recalculate_order_plan(
             kerf_mm=kerf_mm,
             trim_margin_mm=trim_margin_mm,
             optimization_time_limit_sec=optimization_time_limit_sec,
+            deduct_edge_thickness=deduct_edge_thickness,
         ),
     )
     order.add_comment(

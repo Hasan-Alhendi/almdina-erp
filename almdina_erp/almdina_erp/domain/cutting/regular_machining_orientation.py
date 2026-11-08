@@ -46,13 +46,22 @@ class RegularOrientationMatch:
 
 
 def physical_edge_tokens(
-    bands: Mapping[str, str], quarter_turns: int
+    bands: Mapping[str, str],
+    quarter_turns: int,
+    *,
+    mirrored: bool = False,
 ) -> tuple[str, str, str, str]:
-    """Physical (left, top, right, bottom) bands after clockwise turns."""
+    """Physical (left, top, right, bottom) bands after an in-plane transform.
+
+    ``mirrored`` is a horizontal reflection and swaps left with right before
+    the clockwise turns. It does not exchange the board faces.
+    """
     left = str(bands.get("left", "0"))
     top = str(bands.get("top", "0"))
     right = str(bands.get("right", "0"))
     bottom = str(bands.get("bottom", "0"))
+    if mirrored:
+        left, right = right, left
     for _ in range(int(quarter_turns) % 4):
         left, top, right, bottom = bottom, left, top, right
     return left, top, right, bottom
@@ -68,6 +77,7 @@ def match_regular_machining_orientation(
     cutter_diameter_mm: float | None,
     origin_mm: Point = (0.0, 0.0),
     board_mm: tuple[float, float, float, float] | None = None,
+    cutter_diameters_mm: Mapping[str, float | None] | None = None,
 ) -> RegularOrientationMatch:
     """Validate all selected machining paths under ONE inverse transform.
 
@@ -101,6 +111,14 @@ def match_regular_machining_orientation(
             if not paths:
                 failures.append((kind, None))
                 continue
+            kind_diameter = cutter_diameter_mm
+            if cutter_diameters_mm is not None:
+                raw_diameter = cutter_diameters_mm.get(kind)
+                try:
+                    candidate_diameter = float(raw_diameter) if raw_diameter not in (None, "") else 0.0
+                except (TypeError, ValueError):
+                    candidate_diameter = 0.0
+                kind_diameter = candidate_diameter if candidate_diameter > 0 else None
             canonical_paths = [
                 canonical_path(
                     path,
@@ -129,7 +147,7 @@ def match_regular_machining_orientation(
                         },
                     ),
                     float(spec.get("width_cm") or 0),
-                    cutter_diameter_mm,
+                    kind_diameter,
                 )
             else:
                 try:
@@ -152,7 +170,7 @@ def match_regular_machining_orientation(
                     side,
                     float(spec.get("offset_cm") or 0),
                     float(spec.get("width_cm") or 0),
-                    cutter_diameter_mm,
+                    kind_diameter,
                     start,
                     length,
                     start_sawn=start_sawn,

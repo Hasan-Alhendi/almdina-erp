@@ -201,6 +201,60 @@ def test_clipped_break_does_not_receive_an_l_thickness():
     assert spec.edge_break_thickness_mm is None
 
 
+def test_disabled_deduction_keeps_finished_size_and_real_side_thickness():
+    result = calculate_cut_dimensions(
+        finished_width_cm=60,
+        finished_length_cm=40,
+        side_thickness_mm={
+            SIDE_LONG_RIGHT: 2,
+            SIDE_LONG_LEFT: 2,
+            SIDE_WIDTH_TOP: 2,
+            SIDE_WIDTH_BOTTOM: 2,
+        },
+        deduct_edge_thickness=False,
+    )
+    assert result.cut_width_cm == Decimal("60.000")
+    assert result.cut_length_cm == Decimal("40.000")
+    assert result.width_deduction_mm == Decimal("0")
+    assert result.length_deduction_mm == Decimal("0")
+    assert result.side_thickness_mm[SIDE_LONG_RIGHT] == Decimal("2")
+
+
+def test_disabled_deduction_keeps_profiles_on_the_order_spec():
+    row = _row(
+        edge_long_right=1,
+        edge_long_left=1,
+        edge_width_top=1,
+        edge_width_bottom=1,
+        piece_type="Clipped Corner",
+    )
+    spec = build_order_piece_cut_specs(
+        _order(row),
+        profile_loader=_profiles,
+        deduct_edge_thickness=False,
+    )[0]
+    assert spec.cut_width_cm == spec.finished_width_cm
+    assert spec.cut_length_cm == spec.finished_length_cm
+    assert spec.side_profiles
+    assert spec.deduct_edge_thickness is False
+
+
+def test_disabled_l_corner_keeps_finished_notch_and_remnants():
+    raw = _l_cut(
+        edge_break=True,
+        edge_break_thickness_mm=None,
+        side_thickness_mm={SIDE_LONG_RIGHT: 2, SIDE_WIDTH_BOTTOM: 1},
+        deduct_edge_thickness=False,
+    )
+    assert raw.proven is True
+    assert raw.raw_notch_width_cm == Decimal("8.000")
+    assert raw.raw_notch_length_cm == Decimal("16.000")
+    assert raw.width.expected_raw_cm == Decimal("32.000")
+    assert raw.length.expected_raw_cm == Decimal("64.000")
+    assert raw.width.band_mm == Decimal("0")
+    assert raw.length.band_mm == Decimal("0")
+
+
 def test_calculation_never_mutates_finished_dimensions():
     row = _row(edge_long_right=1, edge_width_top=1)
     original = (row.width_cm, row.length_cm)

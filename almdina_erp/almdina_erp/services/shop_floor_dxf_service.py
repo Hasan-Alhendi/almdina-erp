@@ -292,10 +292,19 @@ def upload_production_dxf(order_name: str, file_url: str, file_id: str | None = 
     )
 
     try:
+        from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+            manufacturing_plan_document,
+        )
+
+        settings = manufacturing_plan_settings(order.name)
+        plan_document = manufacturing_plan_document(order.name)
         custom_snapshot = parse_production_dxf(
             normalized_url,
             order,
-            settings=manufacturing_plan_settings(order.name),
+            settings=settings,
+            tool_diameters=diameters_for_record(plan_document, kerf_mm=settings.kerf_mm)
+            if plan_document is not None else None,
         )
     except DxfImportError as error:
         _throw_dxf_validation_errors(issues=getattr(error, "issues", None))
@@ -362,6 +371,7 @@ def recalculate_drawing_plan(
 def approve_production_dxf(
     order_name: str,
     plan_source: str = "System",
+    plan_name: str | None = None,
 ) -> dict[str, Any]:
     """Compatibility facade for the focused capability-managed approval service."""
 
@@ -369,7 +379,11 @@ def approve_production_dxf(
         approve_production_dxf as approve_drawing_plan,
     )
 
-    return approve_drawing_plan(order_name=order_name, plan_source=plan_source)
+    return approve_drawing_plan(
+        order_name=order_name,
+        plan_source=plan_source,
+        plan_name=plan_name,
+    )
 
 
 __all__ = [

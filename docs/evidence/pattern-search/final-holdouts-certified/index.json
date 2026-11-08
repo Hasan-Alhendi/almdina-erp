@@ -1,0 +1,218 @@
+[
+  {
+    "case": "holdout-01",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-01-alns.json.gz",
+    "sha256": "9f22fb841fafdc9a1bbdefd5b8c389602a4a73911c68ee67421232f19df34521",
+    "stderr": "",
+    "uncompressed_sha256": "3ded67b0a97c4c3db4b1a47037ca829267fde39c5b2ecc3aea4e3c792feffd39"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-01-patterns.json.gz",
+    "sha256": "94fe728e9866b179c947912b2cc061064cee27ce6e17316fa28d8625a13df276",
+    "stderr": "",
+    "uncompressed_sha256": "1a153b3a3e4d4ec2924c27fee1f18a5088d28c55582dc6a79d98cb04784aecf9"
+  },
+  {
+    "case": "holdout-01",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-01-equal_total_alns.json.gz",
+    "sha256": "84ef446b8a6591c0c3c8b9f171c67d1fc7a4b6f15bbc7c1332502f4056ad59be",
+    "stderr": "",
+    "uncompressed_sha256": "89a110f86a8e6d4b7168851f6312a6780ebfe67947941d2fb4faeb866909129b"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-02-equal_total_alns.json.gz",
+    "sha256": "079e4e37832c0e69e9c859342094d5af7b0908e86b4060faa1f128b5ddd29d16",
+    "stderr": "",
+    "uncompressed_sha256": "4aadbdb7b4c4e3fdb71441d4e88a89d263a0cc67d5d89392b44aaf09a69416cc"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-02-patterns.json.gz",
+    "sha256": "c15a196a5c21bb086e60df0e4e63b9a3c16b829dc81d502fe977cd63cef03256",
+    "stderr": "",
+    "uncompressed_sha256": "0a14edd087132e53899af2fe0ee92ab23f9fa7b554c6a13a5c6bef227046b569"
+  },
+  {
+    "case": "holdout-02",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-02-alns.json.gz",
+    "sha256": "dbff30be804400b20adeaec603de3035c7660a0fcf59682832650f4768b424f7",
+    "stderr": "",
+    "uncompressed_sha256": "b3a0d5d2d382fc271b9c97a97388e05d9afd7bce931b55fef1160b127076783e"
+  },
+  {
+    "case": "holdout-03",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-03-alns.json.gz",
+    "sha256": "5a1f63996c8ce94b516581528b7bc9fd11155cd6b4ef3237dc328e26c5eaba45",
+    "stderr": "",
+    "uncompressed_sha256": "d55b78fc4295640d304cade529e8516c54fd26e6b7b0014cbb8411b7f4930be9"
+  },
+  {
+    "case": "holdout-03",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-03-patterns.json.gz",
+    "sha256": "4f3c497b7e43c64a10bd2d3aa8f2f05d9e41a3002d5143a83b2bee50c193f4b3",
+    "stderr": "",
+    "uncompressed_sha256": "8b788efe0826ac2fa485bbef72c6a5c5f9c7f14e47adf35b5e350d0c3f263ae8"
+  },
+  {
+    "case": "holdout-03",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-03-equal_total_alns.json.gz",
+    "sha256": "b5e604d204626ee9aa41d9581c11923ce4c7c17b625a47d9e1545dabaeb7797c",
+    "stderr": "",
+    "uncompressed_sha256": "2c35c0bbc7f818bc91eccd3cca1d213d35f4f25c1859a4239c3b1bf553664c23"
+  },
+  {
+    "case": "holdout-04",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-04-equal_total_alns.json.gz",
+    "sha256": "1bfe321f2860591eb101fbaa96f4579d3607f7fa3de6b9e25ad1c4b837cb5223",
+    "stderr": "",
+    "uncompressed_sha256": "6e84c7d75c2a314ffc5f898198fcf3438519a9ad74ba8ffb456b934b47c50cd7"
+  },
+  {
+    "case": "holdout-04",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-04-patterns.json.gz",
+    "sha256": "05b8c2de2ec0454b6fb29ad903d51ca540970185476161ea6f97ebec3d3cb9a2",
+    "stderr": "",
+    "uncompressed_sha256": "cbc2f7aa147e8aff290e5ccae6540d231898a1c2142a9635acc3f2045d0995f7"
+  },
+  {
+    "case": "holdout-04",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-04-alns.json.gz",
+    "sha256": "07efae1e77e3df7970c615d37ccd1c7bc224600457861a82997e1b41baaf0194",
+    "stderr": "",
+    "uncompressed_sha256": "7366680c1aa9d202b5af1b3ec501df9968fdfc03e15cb38145b55be5c34e121d"
+  },
+  {
+    "case": "holdout-05",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-05-alns.json.gz",
+    "sha256": "73251cffffe8b932cfe5468a51c14fbecaf9b5db904ffd59689497b7e720f063",
+    "stderr": "",
+    "uncompressed_sha256": "c456e9b908b4a24ccfabefcdfa6501d3df1a9b959745baec937b6f80cfd31a89"
+  },
+  {
+    "case": "holdout-05",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-05-patterns.json.gz",
+    "sha256": "651a649cfda999a74b48ba58cff644444c00e39941af8d55334d4743acdbba64",
+    "stderr": "",
+    "uncompressed_sha256": "563de397c2c1b81767d256e26a523f4f011b59a25603ceac3c2c249574e3d944"
+  },
+  {
+    "case": "holdout-05",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-05-equal_total_alns.json.gz",
+    "sha256": "09b53be616fbb858bf255ea9977f99417f6dc36cdb5d0a5ffdc1d40c02afe0cf",
+    "stderr": "",
+    "uncompressed_sha256": "81d078be7d812f169dbf02f76836398da94498996e69ffe1e358db3ab49703c5"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-06-equal_total_alns.json.gz",
+    "sha256": "a640c5a85dbc1a4eac1fc3f905945103d8c968f7cc2473b2c705fa1af5368a06",
+    "stderr": "",
+    "uncompressed_sha256": "b3b536628d131c5ebaeac53bc3a0fc169d7fb76177525817f1aafea2183516e7"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-06-patterns.json.gz",
+    "sha256": "c87d48f4af565d9cb0537c35326ccf6fe751d356707599e8f9fb262c299bd54e",
+    "stderr": "",
+    "uncompressed_sha256": "1264e8bd700189af40f91ebb2fb95cdacfd397e534f8bd171fa699c1921a73ac"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-06-alns.json.gz",
+    "sha256": "af253da0664fd87085b744ad297b79eac452f0688caec5e32e7153f6e874fede",
+    "stderr": "",
+    "uncompressed_sha256": "fecc79267e90ae552ab95abad4bd93ea06c5e91f4502418aca199f89f6a01418"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-07-alns.json.gz",
+    "sha256": "932f7dcec355e66026e583717130cf604c10649a7945f280518cb605f1ff1fa1",
+    "stderr": "",
+    "uncompressed_sha256": "e9e745ff932c769dca1bdf1f36fddc6f15502a4d2696abaeb83ae3a27e1d3611"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-07-patterns.json.gz",
+    "sha256": "d0d08583d1f3a8d5e42d83a70fc4c3144fb0472454f0241623f36ac79f06f15c",
+    "stderr": "",
+    "uncompressed_sha256": "f2d9b1da890264573220301f3cc3e174c3110cfea8f692bdba43ec51d89a6c7f"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-07-equal_total_alns.json.gz",
+    "sha256": "24f3046a2775195b6afc7322970727abdd93c6e0bdd0244b56479c5df5a07c09",
+    "stderr": "",
+    "uncompressed_sha256": "4d41bd8eb62003fbe34239cc65f56e380864010d31ffb341139f733101fffeab"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "equal_total_alns",
+    "returncode": 0,
+    "file": "holdout-08-equal_total_alns.json.gz",
+    "sha256": "42466fb0d3b1852725c7f4d10fbf413b451f31ebc9276a3eb818f73c80eef6d7",
+    "stderr": "",
+    "uncompressed_sha256": "b177710d39318625812e6566ae97aaf9a217c94f3f87eeeb9ca1abaf09465893"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "patterns",
+    "returncode": 0,
+    "file": "holdout-08-patterns.json.gz",
+    "sha256": "f02eb4e572239d0468bd9e2ccf698bd44ece550d9be38cea66c4fac12c9a0330",
+    "stderr": "",
+    "uncompressed_sha256": "f4974237ddb425f2819180382bedfdf02bbff262593a0cf63091c95fce3b2720"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "alns",
+    "returncode": 0,
+    "file": "holdout-08-alns.json.gz",
+    "sha256": "c4d17e097759503a7a6bbd42d9e1f356064ea156025862eb3c281f579865777b",
+    "stderr": "",
+    "uncompressed_sha256": "027de998a2e180eea57d19526433c37c8f6729b1b14fb2de2fc2324f5c7ad78b"
+  }
+]

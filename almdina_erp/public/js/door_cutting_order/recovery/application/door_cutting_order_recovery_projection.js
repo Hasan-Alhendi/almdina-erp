@@ -16,6 +16,7 @@
         "board_width_cm",
         "default_edge_type",
         "edge_color",
+        "allow_piece_mirroring",
     ]);
     const PIECE_FIELDS = Object.freeze([
         "piece_type",
@@ -68,7 +69,11 @@
         "cutting_machine_type",
         "optimization_time_limit_sec",
         "kerf_mm",
+        "liner_tool_diameter_mm",
+        "handle_recess_tool_diameter_mm",
+        "rear_groove_tool_diameter_mm",
         "trim_margin_mm",
+        "deduct_edge_thickness",
     ]);
     const COST_DRAFT_FIELDS = Object.freeze([
         "board_rate_usd",

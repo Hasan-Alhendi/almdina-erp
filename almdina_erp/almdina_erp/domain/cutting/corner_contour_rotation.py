@@ -45,8 +45,15 @@ def match_corner_contour(
     cut_length_cm: float,
     tolerance_mm: float = GEOMETRY_TOLERANCE_MM,
     edge_bands: Mapping[str, str] | None = None,
+    directed_ring_mm: Sequence[Sequence[float]] | None = None,
 ) -> CornerContourMatch:
-    """Return the unique dihedral transform of the saved corner, or no match."""
+    """Return the unique dihedral transform of the saved corner, or no match.
+
+    ``directed_ring_mm`` is used only when the file itself stores one consistent
+    direction around the same contour. It can separate two transforms that share
+    an undirected edge set. A missing or inconsistent direction leaves the
+    undirected result unchanged, including a real band-moving ambiguity.
+    """
 
     if not is_corner_cut(piece_type):
         return CornerContourMatch(None, "invalid")
@@ -100,6 +107,13 @@ def match_corner_contour(
 
     if not groups:
         return CornerContourMatch(None, "none")
+    groups = _filter_groups_by_directed_ring(
+        groups,
+        canonical=canonical,
+        directed_ring_mm=directed_ring_mm,
+        width=width_mm,
+        height=height_mm,
+    )
     if len(groups) > 1:
         return CornerContourMatch(None, "ambiguous")
     mirrored, quarter_turns = min(
@@ -329,6 +343,66 @@ def _edge_role(start: Point, end: Point, width: float, height: float) -> str:
     if vertical:
         return "inner_vertical"
     return "chord"
+
+
+def _filter_groups_by_directed_ring(
+    groups: dict[frozenset[tuple[int, str]], list[tuple[bool, int]]],
+    *,
+    canonical: Sequence[Point],
+    directed_ring_mm: Sequence[Sequence[float]] | None,
+    width: float,
+    height: float,
+) -> dict[frozenset[tuple[int, str]], list[tuple[bool, int]]]:
+    """Keep transforms whose winding matches a proven directed contour.
+
+    The unordered edge set stays authoritative. Direction is a tie-break only,
+    and only when exactly one band signature survives. Zero or several surviving
+    signatures keep the original groups so a missing proof cannot choose a side.
+    """
+
+    if directed_ring_mm is None or len(groups) < 2:
+        return groups
+    wanted = _winding_sign(directed_ring_mm)
+    if wanted == 0:
+        return groups
+    filtered: dict[frozenset[tuple[int, str]], list[tuple[bool, int]]] = {}
+    for signature, transforms in groups.items():
+        kept = [
+            transform
+            for transform in transforms
+            if _winding_sign(
+                _transform_polygon(
+                    canonical,
+                    mirrored=transform[0],
+                    quarter_turns=transform[1],
+                    width=width,
+                    height=height,
+                )
+            )
+            == wanted
+        ]
+        if kept:
+            filtered[signature] = kept
+    if len(filtered) == 1:
+        return filtered
+    return groups
+
+
+def _winding_sign(points: Sequence[Sequence[float]]) -> int:
+    polygon = [(float(point[0]), float(point[1])) for point in points if len(point) >= 2]
+    if len(polygon) > 1 and math.dist(polygon[0], polygon[-1]) <= 1e-9:
+        polygon = polygon[:-1]
+    count = len(polygon)
+    if count < 3:
+        return 0
+    area = sum(
+        polygon[index][0] * polygon[(index + 1) % count][1]
+        - polygon[(index + 1) % count][0] * polygon[index][1]
+        for index in range(count)
+    )
+    if abs(area) <= 1e-6:
+        return 0
+    return 1 if area > 0 else -1
 
 
 def _contour_signature(

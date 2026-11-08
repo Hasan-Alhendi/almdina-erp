@@ -109,6 +109,8 @@ function buildHarness({
             assets.forEach(asset => {
                 if (asset.endsWith("door_cutting_order_piece_geometry.js")) {
                     fakeWindow.AlmdinaCuttingPlanPieceGeometry = {};
+                } else if (asset.endsWith("door_cutting_order_edge_display.js")) {
+                    fakeWindow.AlmdinaEdgeDisplay = {};
                 } else if (asset.endsWith("door_cutting_order_cutting_plan_renderer.js")) {
                     fakeWindow.AlmdinaCuttingPlanRender = {};
                 } else if (asset.endsWith("door_cutting_order_plan_ux.js")) {
@@ -207,6 +209,7 @@ function buildHarness({
         authorized.requiredAssets,
         [
             "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js",
+            "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_edge_display.js",
             "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
             "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_ux.js",
             "/assets/almdina_erp/js/door_cutting_order/cutting_plan/door_cutting_order_plan_controls_ux.js",

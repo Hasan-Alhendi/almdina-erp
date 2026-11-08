@@ -1,0 +1,1058 @@
+{
+  "observations": 48,
+  "valid": 48,
+  "strict_roundtrips": 196,
+  "frozen_source_files": 76,
+  "controls": "Same frozen 2.3 source with new stage disabled, not a literal 2.2 checkout. Sequential cold workers; allocated budgets are cooperative, actual wall reported.",
+  "comparisons": [
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": -110.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": -110.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0664199999999997,
+      "network_difference_mm": 297.5
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0664199999999997,
+      "network_difference_mm": 297.5
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "equal",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 0.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "worse",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 136.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.31720000000000015,
+      "network_difference_mm": 971.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.31720000000000015,
+      "network_difference_mm": 971.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "repeat": 1,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": -110.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "repeat": 1,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": -110.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "repeat": 1,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.10423999999999989,
+      "network_difference_mm": 211.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "repeat": 1,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.10423999999999989,
+      "network_difference_mm": 211.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "repeat": 1,
+      "control": "alns",
+      "comparison": "equal",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 0.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "repeat": 1,
+      "control": "equal_total_alns",
+      "comparison": "worse",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 136.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "repeat": 1,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.31720000000000015,
+      "network_difference_mm": 971.0
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "repeat": 1,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.31720000000000015,
+      "network_difference_mm": 971.0
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-01",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.16115999999999997,
+      "network_difference_mm": 10.849999999998545
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-01",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.16115999999999997,
+      "network_difference_mm": 10.849999999998545
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-02",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.5493169999999996,
+      "network_difference_mm": 288.8999999999942
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-02",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.5493169999999996,
+      "network_difference_mm": 288.8999999999942
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-03",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.3679519999999996,
+      "network_difference_mm": -585.3999999999651
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-03",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.553148,
+      "network_difference_mm": -1312.4999999999854
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-04",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.3426169499999999,
+      "network_difference_mm": 2873.5499999999884
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-04",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.3426169499999999,
+      "network_difference_mm": 2873.5499999999884
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-05",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "equal",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 0.0
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-05",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "worse",
+      "remnant_difference_m2": -0.015328600000000026,
+      "network_difference_mm": -907.7000000000116
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-06",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": -2.0401382000000003,
+      "network_difference_mm": 6895.900000000009
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-06",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": -2.0401382000000003,
+      "network_difference_mm": 6884.100000000006
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-07",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "equal",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 0.0
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-07",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "equal",
+      "remnant_difference_m2": 0.0,
+      "network_difference_mm": 0.0
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-08",
+      "repeat": 0,
+      "control": "alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.005247600000000352,
+      "network_difference_mm": 498.6999999999971
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-08",
+      "repeat": 0,
+      "control": "equal_total_alns",
+      "comparison": "better",
+      "remnant_difference_m2": 0.005247600000000352,
+      "network_difference_mm": 437.1999999999971
+    }
+  ],
+  "designer_comparison": {
+    "108": {
+      "exact_shape_inventory_equal": false,
+      "reference_remnant_m2": 2.59137335553524,
+      "reference_cutter_mm": 70133.5306616341,
+      "reference_segments": 88,
+      "new_remnants_m2": [
+        2.6120200000000002,
+        2.6120200000000002
+      ],
+      "caveat": "108 has 1 mm notch differences and different stock inset; not a controlled algorithm-only gain"
+    },
+    "154": {
+      "exact_shape_inventory_equal": true,
+      "reference_remnant_m2": 0.5828484491624052,
+      "reference_cutter_mm": 72771.57813036592,
+      "reference_segments": 99,
+      "new_remnants_m2": [
+        0.8503399999999997,
+        0.8881599999999998
+      ],
+      "caveat": ""
+    }
+  },
+  "groups": [
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "arm": "alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70503.0
+      ],
+      "segments": [
+        81
+      ],
+      "wall_sec": [
+        22.5,
+        22.235000000015134
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "arm": "patterns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70393.0
+      ],
+      "segments": [
+        80
+      ],
+      "wall_sec": [
+        28.0,
+        29.23399999999674
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "108",
+      "arm": "equal_total_alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        2.6120200000000002
+      ],
+      "cutter_mm": [
+        70503.0
+      ],
+      "segments": [
+        81
+      ],
+      "wall_sec": [
+        31.953000000008615,
+        32.01600000000326
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "arm": "alns",
+      "boards": [
+        4
+      ],
+      "remnants": [
+        0.78392
+      ],
+      "cutter_mm": [
+        74998.57813036592
+      ],
+      "segments": [
+        106
+      ],
+      "wall_sec": [
+        23.45299999997951,
+        23.469000000011874
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "arm": "patterns",
+      "boards": [
+        4
+      ],
+      "remnants": [
+        0.8503399999999997,
+        0.8881599999999998
+      ],
+      "cutter_mm": [
+        75209.57813036592,
+        75296.07813036592
+      ],
+      "segments": [
+        98,
+        99
+      ],
+      "wall_sec": [
+        32.264999999984866,
+        32.562999999994645
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "154",
+      "arm": "equal_total_alns",
+      "boards": [
+        4
+      ],
+      "remnants": [
+        0.78392
+      ],
+      "cutter_mm": [
+        74998.57813036592
+      ],
+      "segments": [
+        106
+      ],
+      "wall_sec": [
+        33.59299999999348,
+        33.75
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "arm": "alns",
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        20.094000000011874,
+        19.921999999991385
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "arm": "patterns",
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46191.0
+      ],
+      "segments": [
+        74
+      ],
+      "wall_sec": [
+        28.73499999998603,
+        29.719000000011874
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "263",
+      "arm": "equal_total_alns",
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cutter_mm": [
+        46055.0
+      ],
+      "segments": [
+        69
+      ],
+      "wall_sec": [
+        28.546999999991385,
+        28.530999999988126
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "arm": "alns",
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.7104399999999997
+      ],
+      "cutter_mm": [
+        112423.5
+      ],
+      "segments": [
+        119
+      ],
+      "wall_sec": [
+        21.796999999991385,
+        21.796999999991385
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "arm": "patterns",
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.02764
+      ],
+      "cutter_mm": [
+        113394.5
+      ],
+      "segments": [
+        136
+      ],
+      "wall_sec": [
+        31.312999999994645,
+        31.26600000000326
+      ]
+    },
+    {
+      "cohort": "final-matrix",
+      "case": "298",
+      "arm": "equal_total_alns",
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.7104399999999997
+      ],
+      "cutter_mm": [
+        112423.5
+      ],
+      "segments": [
+        119
+      ],
+      "wall_sec": [
+        31.719000000011874,
+        31.719000000011874
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-01",
+      "arm": "alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.0
+      ],
+      "cutter_mm": [
+        65288.4
+      ],
+      "segments": [
+        52
+      ],
+      "wall_sec": [
+        7.125
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-01",
+      "arm": "patterns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.16115999999999997
+      ],
+      "cutter_mm": [
+        65299.25
+      ],
+      "segments": [
+        55
+      ],
+      "wall_sec": [
+        9.437999999994645
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-01",
+      "arm": "equal_total_alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.0
+      ],
+      "cutter_mm": [
+        65288.4
+      ],
+      "segments": [
+        52
+      ],
+      "wall_sec": [
+        9.687000000005355
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-02",
+      "arm": "equal_total_alns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        1.625897
+      ],
+      "cutter_mm": [
+        97683.85
+      ],
+      "segments": [
+        82
+      ],
+      "wall_sec": [
+        8.625
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-02",
+      "arm": "patterns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        2.1752139999999995
+      ],
+      "cutter_mm": [
+        97972.75
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        8.375
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-02",
+      "arm": "alns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        1.625897
+      ],
+      "cutter_mm": [
+        97683.85
+      ],
+      "segments": [
+        81
+      ],
+      "wall_sec": [
+        6.14100000000326
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-03",
+      "arm": "alns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        1.4263020000000004
+      ],
+      "cutter_mm": [
+        110655.09999999998
+      ],
+      "segments": [
+        115
+      ],
+      "wall_sec": [
+        5.547000000020489
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-03",
+      "arm": "patterns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        1.794254
+      ],
+      "cutter_mm": [
+        110069.70000000001
+      ],
+      "segments": [
+        109
+      ],
+      "wall_sec": [
+        7.907000000006519
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-03",
+      "arm": "equal_total_alns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        1.241106
+      ],
+      "cutter_mm": [
+        111382.2
+      ],
+      "segments": [
+        116
+      ],
+      "wall_sec": [
+        8.25
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-04",
+      "arm": "equal_total_alns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        0.19056465
+      ],
+      "cutter_mm": [
+        77729.25
+      ],
+      "segments": [
+        99
+      ],
+      "wall_sec": [
+        7.890999999974156
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-04",
+      "arm": "patterns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        0.5331815999999999
+      ],
+      "cutter_mm": [
+        80602.79999999999
+      ],
+      "segments": [
+        107
+      ],
+      "wall_sec": [
+        8.40600000001723
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-04",
+      "arm": "alns",
+      "boards": [
+        7
+      ],
+      "remnants": [
+        0.19056465
+      ],
+      "cutter_mm": [
+        77729.25
+      ],
+      "segments": [
+        99
+      ],
+      "wall_sec": [
+        5.51500000001397
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-05",
+      "arm": "alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.3383528000000001
+      ],
+      "cutter_mm": [
+        94924.37654780428
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        3.234000000025844
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-05",
+      "arm": "patterns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.3383528000000001
+      ],
+      "cutter_mm": [
+        94924.37654780428
+      ],
+      "segments": [
+        92
+      ],
+      "wall_sec": [
+        6.421999999991385
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-05",
+      "arm": "equal_total_alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        0.35368140000000015
+      ],
+      "cutter_mm": [
+        95832.07654780429
+      ],
+      "segments": [
+        97
+      ],
+      "wall_sec": [
+        7.01600000000326
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-06",
+      "arm": "equal_total_alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        2.4692760000000002
+      ],
+      "cutter_mm": [
+        75011.0
+      ],
+      "segments": [
+        95
+      ],
+      "wall_sec": [
+        7.0
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-06",
+      "arm": "patterns",
+      "boards": [
+        4
+      ],
+      "remnants": [
+        0.42913779999999996
+      ],
+      "cutter_mm": [
+        81895.1
+      ],
+      "segments": [
+        97
+      ],
+      "wall_sec": [
+        6.64000000001397
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-06",
+      "arm": "alns",
+      "boards": [
+        5
+      ],
+      "remnants": [
+        2.4692760000000002
+      ],
+      "cutter_mm": [
+        74999.2
+      ],
+      "segments": [
+        94
+      ],
+      "wall_sec": [
+        4.717999999993481
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-07",
+      "arm": "alns",
+      "boards": [
+        12
+      ],
+      "remnants": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        5.5
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-07",
+      "arm": "patterns",
+      "boards": [
+        12
+      ],
+      "remnants": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        7.217999999993481
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-07",
+      "arm": "equal_total_alns",
+      "boards": [
+        12
+      ],
+      "remnants": [
+        0.790542
+      ],
+      "cutter_mm": [
+        110473.54522995804
+      ],
+      "segments": [
+        124
+      ],
+      "wall_sec": [
+        7.797000000020489
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-08",
+      "arm": "equal_total_alns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        0.8438751999999997
+      ],
+      "cutter_mm": [
+        107786.75
+      ],
+      "segments": [
+        122
+      ],
+      "wall_sec": [
+        5.703000000008615
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-08",
+      "arm": "patterns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        0.8491228000000001
+      ],
+      "cutter_mm": [
+        108223.95
+      ],
+      "segments": [
+        126
+      ],
+      "wall_sec": [
+        6.875
+      ]
+    },
+    {
+      "cohort": "final-holdouts-certified",
+      "case": "holdout-08",
+      "arm": "alns",
+      "boards": [
+        6
+      ],
+      "remnants": [
+        0.8438751999999997
+      ],
+      "cutter_mm": [
+        107725.25
+      ],
+      "segments": [
+        115
+      ],
+      "wall_sec": [
+        4.73499999998603
+      ]
+    }
+  ]
+}

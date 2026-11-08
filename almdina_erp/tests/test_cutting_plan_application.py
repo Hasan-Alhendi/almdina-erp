@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import copy
 import unittest
+from dataclasses import replace
 from typing import Any
 
 from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
     BoardGeometry,
     OptimizeOrderPlanCommand,
     OptimizerOptions,
+    _centering_worsens_industrial_quality,
+    _physical_board_lower_bound,
     optimize_order_plan,
 )
 from almdina_erp.almdina_erp.application.cutting.plan_reuse import (
@@ -250,6 +253,97 @@ class TestOptimizeOrderPlan(unittest.TestCase):
 
 
 class TestAdaptiveTrimBusinessRule(unittest.TestCase):
+    def test_trim_larger_than_board_capacity_is_not_clamped_to_zero(self) -> None:
+        command = self._command((self._piece(1, 1),))
+        command = replace(
+            command,
+            board=BoardGeometry(
+                full_width_cm=1,
+                full_length_cm=1,
+                trim_cm=0.6,
+                kerf_cm=0,
+            ),
+        )
+        outcome = optimize_order_plan(command, engine=AdaptiveTrimGeometryEngine())
+
+        self.assertAlmostEqual(outcome.snapshot["usable_board_width_cm"], -0.2)
+        self.assertEqual(outcome.snapshot["trim_policy"]["applied_width_trim_mm"], 6)
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
+        self.assertEqual(len(outcome.snapshot["sheets"]), 0)
+
+    def test_positive_trim_does_not_stop_at_a_false_l_piece_area_bound(self) -> None:
+        from almdina_erp.almdina_erp.domain.cutting.evaluation import (
+            placement_permission_errors, validate_plan,
+        )
+        from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import (
+            domain_cutting_engine,
+        )
+
+        rows = (
+            {"piece_type": "L-Shaped Corner", "width_cm": 20, "length_cm": 20,
+             "qty": 4, "allow_rotation": 1, "clipped_corner_position": "Top Right",
+             "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8},
+            {"width_cm": 10, "length_cm": 10, "qty": 1, "allow_rotation": 0},
+        )
+        pieces = domain_cutting_engine.expand_pieces(list(rows))
+        kwargs = dict(selected_mode="Auto Pro", machine_type="CNC Router",
+                      time_limit_sec=2, exact_piece_limit=20, min_remnant_width_cm=30,
+                      min_remnant_length_cm=30, min_remnant_area_m2=0.09,
+                      mirroring_allowed=False)
+        # Both plans are produced by the real engine and independently proven.
+        preferred = domain_cutting_engine.optimize(pieces, 40.1, 40.8, 0.3, **kwargs)
+        relaxed = domain_cutting_engine.optimize(pieces, 40.3, 40.8, 0.3, **kwargs)
+        self.assertEqual(2, len(preferred["sheets"]))
+        self.assertEqual(1, len(relaxed["sheets"]))
+        self.assertFalse(validate_plan(preferred, pieces, 40.1, 40.8, kerf_cm=0.3))
+        self.assertFalse(validate_plan(relaxed, pieces, 40.3, 40.8, kerf_cm=0.3))
+        command = OptimizeOrderPlanCommand(
+            engine_version="p2-area-bound-test", input_fingerprint="p2-area-bound-test",
+            board=BoardGeometry(40.3, 41, 0.1, 0.3),
+            optimizer=OptimizerOptions("Auto Pro", "CNC Router", 2, 20, 30, 30, 0.09),
+            piece_rows=rows,
+        )
+        result = optimize_order_plan(command, engine=domain_cutting_engine)
+        # A fixed 1 mm minimum can require an extra board; the old search
+        # silently reduced the width inset to force this into one board.
+        self.assertEqual(2, result.required_boards)
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(0.1, result.snapshot["applied_trim_width_cm"])
+        self.assertEqual(0.1, result.snapshot["applied_trim_length_cm"])
+        self.assertFalse(validate_plan(result.snapshot, pieces, 40.3, 40.8, kerf_cm=0.3))
+        self.assertFalse(placement_permission_errors(
+            result.snapshot, pieces, mirroring_allowed=False,
+        ))
+
+    def test_physical_area_bound_preserves_rectangles_and_handles_shapes_conservatively(self) -> None:
+        board = BoardGeometry(40.3, 40.3, 0.1, 0.3)
+        base = {"width_cm": 20, "length_cm": 20, "clipped_corner_position": "Top Right",
+                "clipped_corner_width_cm": 8, "clipped_corner_length_cm": 8}
+        regular = {"width_cm": 10, "length_cm": 10, "piece_type": "Regular"}
+        for kind, expected in (("Regular", 2), ("L-Shaped Corner", 1), ("Clipped Corner", 1)):
+            with self.subTest(kind=kind):
+                pieces = [dict(base, piece_type=kind) for _ in range(4)] + [regular]
+                self.assertEqual(expected, _physical_board_lower_bound(pieces, board))
+        glass = dict(base, piece_type="Glass", glass_margin_mm=20)
+        self.assertEqual(1, _physical_board_lower_bound([glass] * 5, board))
+        self.assertEqual(1, _physical_board_lower_bound([dict(base, piece_type="Glass")] * 5, board))
+        for geometry in (None, "malformed", {"version": 1, "kind": "polygon", "exact": False}):
+            with self.subTest(special_geometry=geometry):
+                special = dict(base, piece_type="Special", special_shape_geometry_json=geometry)
+                self.assertEqual(1, _physical_board_lower_bound([special] * 5, board))
+        broken = dict(base, piece_type="L-Shaped Corner", clipped_corner_width_cm=25)
+        self.assertEqual(1, _physical_board_lower_bound([broken] * 5, board))
+        self.assertEqual(0, _physical_board_lower_bound([], board))
+        self.assertEqual(0, _physical_board_lower_bound([dict(regular, width_cm=0)], board))
+        large_rectangles = [
+            {"width_cm": w, "length_cm": h}
+            for w, h, count in ((50, 90, 36), (30, 70, 36), (22, 40, 48))
+            for _ in range(count)
+        ]
+        self.assertEqual(10, _physical_board_lower_bound(
+            large_rectangles, BoardGeometry(122, 244, 0, 0.3),
+        ))
+
     @staticmethod
     def _piece(width: float, length: float, piece_id: int = 1) -> dict[str, Any]:
         return {
@@ -300,7 +394,7 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
         self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 5)
         self.assertEqual(len(engine.calls), 1)
 
-    def test_full_length_piece_relaxes_only_length_with_same_mode_and_kerf(self) -> None:
+    def test_full_length_piece_keeps_mandatory_trim_with_same_mode_and_kerf(self) -> None:
         engine = AdaptiveTrimGeometryEngine()
         outcome = optimize_order_plan(
             self._command((self._piece(30, 244),), mode="maxrects", kerf_cm=0.3),
@@ -309,31 +403,34 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
 
         policy = outcome.snapshot["trim_policy"]
         self.assertEqual(policy["applied_width_trim_mm"], 5)
-        self.assertEqual(policy["applied_length_trim_mm"], 0)
-        self.assertEqual(policy["relaxed_axes"], ["length"])
+        self.assertEqual(policy["applied_length_trim_mm"], 5)
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
         self.assertTrue(engine.calls)
         self.assertTrue(all(call["selected_mode"] == "maxrects" for call in engine.calls))
         self.assertTrue(all(abs(call["kerf_cm"] - 0.3) < 1e-9 for call in engine.calls))
 
-    def test_full_width_piece_relaxes_only_width(self) -> None:
+    def test_full_width_piece_keeps_mandatory_trim_on_both_axes(self) -> None:
         outcome = optimize_order_plan(
             self._command((self._piece(122, 30),)),
             engine=AdaptiveTrimGeometryEngine(),
         )
         policy = outcome.snapshot["trim_policy"]
-        self.assertEqual(policy["applied_width_trim_mm"], 0)
+        self.assertEqual(policy["applied_width_trim_mm"], 5)
         self.assertEqual(policy["applied_length_trim_mm"], 5)
-        self.assertEqual(policy["relaxed_axes"], ["width"])
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
 
-    def test_full_board_piece_relaxes_both_axes(self) -> None:
+    def test_full_board_piece_does_not_relax_mandatory_trim(self) -> None:
         outcome = optimize_order_plan(
             self._command((self._piece(122, 244),)),
             engine=AdaptiveTrimGeometryEngine(),
         )
         policy = outcome.snapshot["trim_policy"]
-        self.assertEqual(policy["applied_width_trim_mm"], 0)
-        self.assertEqual(policy["applied_length_trim_mm"], 0)
-        self.assertEqual(policy["relaxed_axes"], ["width", "length"])
+        self.assertEqual(policy["applied_width_trim_mm"], 5)
+        self.assertEqual(policy["applied_length_trim_mm"], 5)
+        self.assertEqual(policy["relaxed_axes"], [])
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
 
     def test_largest_feasible_three_mm_trim_is_preserved(self) -> None:
         preferred = AppliedTrim(0.5, 0.5)
@@ -363,7 +460,7 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
         self.assertAlmostEqual(first.applied.length_trim_cm, 0.3)
         self.assertEqual(first.relaxed_axes, ("length",))
 
-    def test_four_full_length_30cm_pieces_fit_with_real_kerf(self) -> None:
+    def test_four_full_length_30cm_pieces_do_not_bypass_mandatory_trim(self) -> None:
         pieces = tuple(
             self._piece(30, 244, piece_id=index)
             for index in range(1, 5)
@@ -373,13 +470,10 @@ class TestAdaptiveTrimBusinessRule(unittest.TestCase):
             engine=AdaptiveTrimGeometryEngine(),
         )
 
-        self.assertEqual(outcome.required_boards, 1)
-        self.assertTrue(outcome.snapshot["validation"]["is_valid"])
+        self.assertEqual(outcome.required_boards, 0)
+        self.assertFalse(outcome.snapshot["validation"]["is_valid"])
         self.assertEqual(outcome.snapshot["trim_policy"]["applied_width_trim_mm"], 5)
-        self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 0)
-        usable_width = outcome.snapshot["usable_board_width_cm"]
-        self.assertAlmostEqual(usable_width, 121)
-        self.assertLessEqual(4 * 30 + 3 * 0.3, usable_width)
+        self.assertEqual(outcome.snapshot["trim_policy"]["applied_length_trim_mm"], 5)
 
 
 class TestPlanReusePolicy(unittest.TestCase):
@@ -517,6 +611,206 @@ class TestPlanMetadataRefresh(unittest.TestCase):
         self.assertEqual(placed["edge_cost_usd"], 1.4)
         self.assertEqual(refreshed["input_fingerprint"], "new-input")
         self.assertEqual(refreshed["metadata_fingerprint"], "new-meta")
+
+
+def test_centering_rank_uses_remnant_and_board_priorities_before_cnc_line_estimates():
+    before = (0, 1, 0, -2.80722, 2, 300, 0, 0)
+    more_estimated_lines = (0, 1, 0, -2.80722, 4, 578, 0, 0)
+    less_remnant = (0, 1, 0, -2.7, 2, 300, 0, 0)
+
+    assert not _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="CNC Router"
+    )
+    assert not _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="Auto"
+    )
+    assert _centering_worsens_industrial_quality(
+        before, more_estimated_lines, machine_type="Panel Saw"
+    )
+    assert _centering_worsens_industrial_quality(
+        before, less_remnant, machine_type="CNC Router"
+    )
+
+
+def test_snapshot_rank_and_remnant_metrics_match_axis_centered_final_geometry():
+    import pytest
+    from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
+    from almdina_erp.almdina_erp.domain.cutting.optimizer import _largest_reusable_free_area
+    from almdina_erp.almdina_erp.domain.cutting.primitives import expand_piece_groups
+
+    class RowEngine:
+        def expand_pieces(self, rows):
+            return expand_piece_groups(rows)
+
+        def optimize(self, pieces, board_width_cm, board_length_cm, kerf_cm, **kwargs):
+            placed = []
+            for index, source in enumerate(pieces):
+                placed.append({
+                    **source, "x": index * 40.5, "y": 0,
+                    "w": 40, "h": 13.9, "rotated": False,
+                })
+            return {
+                "method_key": "row-test", "method_label": "Row test",
+                "sheets": [{"sheet_no": 1, "w": board_width_cm,
+                            "h": board_length_cm, "pieces": placed}],
+                "unplaced": [], "waste_area_m2": 0,
+            }
+
+        def validate(self, plan, pieces, board_width_cm, board_length_cm):
+            return validate_plan(
+                plan, pieces, board_width_cm, board_length_cm, kerf_cm=0.5
+            )
+
+    outcome = optimize_order_plan(
+        OptimizeOrderPlanCommand(
+            engine_version="axis-centering-test", input_fingerprint="axis-centering-test",
+            board=BoardGeometry(122, 244, 0, 0.5),
+            optimizer=OptimizerOptions("Auto Pro", "CNC Router", 1, 40, 30, 30, .09),
+            piece_rows=({"width_cm": 40, "length_cm": 13.9, "qty": 3},),
+        ),
+        engine=RowEngine(),
+    )
+    snapshot = outcome.snapshot
+    sheet = snapshot["sheets"][0]
+    assert [piece["x"] for piece in sheet["pieces"]] == pytest.approx([0.5, 41, 81.5])
+    assert [piece["y"] for piece in sheet["pieces"]] == [0, 0, 0]
+    actual_remnant = _largest_reusable_free_area(
+        {"sheets": [sheet]}, 30, 30, .09, machine_type="CNC Router"
+    )
+    assert snapshot["industrial_metrics"]["largest_reusable_free_area_m2"] == pytest.approx(actual_remnant)
+    assert actual_remnant == pytest.approx(2.80722)
+    assert snapshot["industrial_rank"][1] == 1
+    assert snapshot["validation"]["is_valid"] is True
+
+
+def test_snapshot_publishes_the_validated_geometry_after_rejected_centering():
+    from unittest.mock import patch
+    from almdina_erp.almdina_erp.domain.cutting.evaluation import validate_plan
+    from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
+
+    def unsafe_translation(sheets, **kwargs):
+        first, second = sheets[0]["pieces"]
+        second.update(x=first["x"], y=first["y"])
+
+    with patch("almdina_erp.almdina_erp.application.cutting.optimize_order_plan.realize_sheet_edge_trim",
+               side_effect=unsafe_translation):
+        outcome = optimize_order_plan(OptimizeOrderPlanCommand(
+            engine_version="centering-rollback", input_fingerprint="centering-rollback",
+            board=BoardGeometry(122, 244, 0, .5),
+            optimizer=OptimizerOptions("Auto", "CNC Router", 1, 40, 30, 30, .09),
+            piece_rows=({"width_cm": 40, "length_cm": 13.9, "qty": 2},),
+        ), engine=domain_cutting_engine)
+    assert outcome.snapshot["validation"]["is_valid"]
+    assert not validate_plan(outcome.snapshot, list(outcome.expanded_pieces), 122, 244, kerf_cm=.5)
+
+
+class TestSmartFallbackProjection(unittest.TestCase):
+    """Project every alternative; build the fallback only when it is needed."""
+
+    def setUp(self):
+        import importlib
+        from almdina_erp.almdina_erp.domain.cutting import optimizer
+        from almdina_erp.almdina_erp.domain.cutting.primitives import create_sheet
+        from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import DomainCuttingEngineAdapter
+
+        self.app = importlib.import_module(
+            "almdina_erp.almdina_erp.application.cutting.optimize_order_plan"
+        )
+        self.adapter = DomainCuttingEngineAdapter()
+        self.rows = ({"width_cm": 6, "length_cm": 3, "qty": 2,
+                      "allow_rotation": 0, "piece_instance_id": "fallback:1"},)
+        pieces = self.adapter.expand_pieces(list(self.rows))
+        self.packed = optimizer.auto_fast(pieces, 10, 10, .5, "CNC Router")
+        self.packed["projection_probe"] = "one-board"
+        self.split = copy.deepcopy(self.packed)
+        self.split["projection_probe"] = "two-boards"
+        self.split["sheets"] = [
+            dict(create_sheet(index+1, 10, 10), pieces=[copy.deepcopy(piece)])
+            for index, piece in enumerate(self.packed["sheets"][0]["pieces"])
+        ]
+        self.split["total_board_area_m2"] = .02
+        self.split["waste_area_m2"] = .02-self.split["used_area_m2"]
+        self.split = optimizer.enrich_plan_metrics(
+            self.split, self.split["method_key"], "CNC Router"
+        )
+        self.invalid = copy.deepcopy(self.packed)
+        self.invalid["projection_probe"] = "invalid"
+        self.invalid["unplaced"] = [pieces[-1]]
+        self.invalid["sheets"][0]["pieces"].pop()
+
+    def run_projection(self, alternatives, *, mode="smart", fallback=None):
+        from unittest.mock import patch
+
+        main = copy.deepcopy(self.split if fallback is None else fallback)
+        main["projection_probe"] = "fallback"
+        adapter = self.adapter
+
+        class Frozen:
+            expand_pieces = adapter.expand_pieces
+            validate = adapter.validate
+
+            def optimize(self, *args, **kwargs):
+                return dict(copy.deepcopy(main), smart_candidates=copy.deepcopy(alternatives))
+
+        calls = []
+        original = self.app._snapshot_outcome
+
+        def project(*args, **kwargs):
+            calls.append(args[2]["projection_probe"])
+            return original(*args, **kwargs)
+
+        command = OptimizeOrderPlanCommand(
+            "deferred-fallback", "deferred-fallback", BoardGeometry(10, 10, 0, .5),
+            OptimizerOptions(mode, "CNC Router", 1, 40, 30, 30, .09), self.rows,
+        )
+        with patch.object(self.app, "_snapshot_outcome", side_effect=project):
+            result = optimize_order_plan(command, engine=Frozen())
+        return result, calls
+
+    def test_all_valid_alternatives_are_projected_and_later_better_plan_wins(self):
+        before = copy.deepcopy((self.split, self.packed))
+        result, calls = self.run_projection([self.split, self.packed])
+        self.assertEqual(calls, ["two-boards", "one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
+        self.assertEqual([len(snapshot["sheets"]) for snapshot in result.candidate_snapshots], [1, 2])
+        self.assertEqual((self.split, self.packed), before)
+        self.assertEqual(len(result.expanded_pieces), 2)
+        self.assertEqual(len(result.search_seeds), 2)
+
+    def test_invalid_alternative_does_not_stop_validation_of_later_valid_plan(self):
+        result, calls = self.run_projection([self.invalid, self.packed])
+        self.assertEqual(calls, ["invalid", "one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(len(result.candidate_snapshots), 1)
+
+    def test_all_invalid_alternatives_still_project_the_valid_fallback(self):
+        result, calls = self.run_projection([self.invalid, self.invalid], fallback=self.packed)
+        self.assertEqual(calls, ["invalid", "invalid", "fallback"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
+        self.assertEqual(result.candidate_snapshots, ())
+
+    def test_missing_portfolio_and_non_smart_modes_keep_the_single_fallback_path(self):
+        for mode, alternatives in [("smart", []), ("auto", [self.packed]), ("auto_pro", [self.packed])]:
+            with self.subTest(mode=mode):
+                result, calls = self.run_projection(alternatives, mode=mode)
+                self.assertEqual(calls, ["fallback"])
+                self.assertTrue(result.snapshot["validation"]["is_valid"])
+                self.assertEqual(result.required_boards, 2)
+
+    def test_invalid_fallback_preserves_the_existing_failure_payload(self):
+        result, calls = self.run_projection([self.invalid], fallback=self.invalid)
+        self.assertEqual(calls, ["invalid", "fallback"])
+        self.assertFalse(result.snapshot["validation"]["is_valid"])
+        self.assertTrue(result.snapshot["validation"]["errors"])
+        self.assertTrue(result.snapshot["unplaced"])
+
+    def test_unused_invalid_fallback_is_not_required_for_a_valid_alternative(self):
+        result, calls = self.run_projection([self.packed], fallback=self.invalid)
+        self.assertEqual(calls, ["one-board"])
+        self.assertTrue(result.snapshot["validation"]["is_valid"])
+        self.assertEqual(result.required_boards, 1)
 
 
 if __name__ == "__main__":

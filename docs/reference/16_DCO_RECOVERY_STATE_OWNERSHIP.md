@@ -99,7 +99,7 @@ Header requirements:
 ```text
 customer, order_date, order_notes, order_cutting_machine,
 board_description, board_length_cm, board_width_cm,
-default_edge_type, edge_color
+default_edge_type, edge_color, allow_piece_mirroring
 ```
 
 Each piece contains a recovery `piece_key` plus only editable requirement fields:
@@ -157,7 +157,7 @@ maps those allowlists to their current owner and restore boundary:
 
 | Input family and exact capture fields | Current owner and mutation/capture point | Permitted recovery boundary |
 |---|---|---|
-| Order header: `customer`, `order_date`, `order_notes`, `order_cutting_machine`, `board_description`, `board_length_cm`, `board_width_cm`, `default_edge_type`, `edge_color` | Frappe `Door Cutting Order` form controls and `frm.doc`; ordinary control changes update the form model. | Capture/restore only these allowlisted inputs to the current form model. Never include read-only note preview/comment, status, production assignment, or derived totals. |
+| Order header: `customer`, `order_date`, `order_notes`, `order_cutting_machine`, `board_description`, `board_length_cm`, `board_width_cm`, `default_edge_type`, `edge_color`, `allow_piece_mirroring` | Frappe `Door Cutting Order` form controls and `frm.doc`; ordinary control changes update the form model. | Capture/restore only these allowlisted inputs to the current form model. Never include read-only note preview/comment, status, production assignment, or derived totals. |
 | Piece identity and dimensions: `piece_type`, `width_cm`, `length_cm`, `qty`, `allow_rotation`, `notes`; clipped-corner inputs `clipped_corner_position`, `clipped_corner_width_cm`, `clipped_corner_length_cm`; glass margin `glass_margin_mm` | `frm.doc.pieces` (`Door Cutting Order Detail`); Fast Entry and row editors mutate the existing child row. `glass_margin_mm` is an editable millimetre requirement with no default, owned by the same child row and validated on the server when `piece_type` is `Glass`. `piece_key` maps persisted child `name` or a NEW recovery-local UUID and is never a DocType field. | Capture values from child rows by `piece_key`; restore only requirement fields, including `glass_margin_mm`. Do not capture row position as identity, Frappe child names into NEW rows, or read-only `piece_no`. |
 | Direct Fast Entry extras: `extra_double`, `extra_double_reference_sides`, `extra_full_door_double`, `extra_liner`, `extra_back_groove`, `extra_recessed_handle_cutout` | Existing Fast Entry and extra-addon controls mutate the same `frm.doc.pieces` row. Double Edge side selection is stored as a canonical JSON array on that child row; calculation/presenter output is downstream. | Capture the six selection inputs only, including the selected-side requirement. Unit rates, totals, and other derived pricing are excluded and remain with Cost/pricing owners. |
 | Liner machining requirement: `liner_reference_side`, `liner_offset_cm`, `liner_width_cm`, `liner_start_cm`, `liner_length_cm`, `liner_specs_json` | The liner add-on configuration/editor mutates the same `frm.doc.pieces` child input row, with the side relative to the door/edge and the numeric offset, width, start, and length expressed in centimeters. Geometry calculation, visualization, and generated toolpaths are downstream consumers, not independent owners of the inputs. | Capture and restore the five editable scalar requirements and the canonical multi-liner input list in `liner_specs_json` with the same `piece_key` as the corresponding DCO row. Preserve the side value and measurements without inferring them from a rendered path. Only existing validation and Save/checkpoint recomputation may update derived geometry; do not capture toolpaths, material costs, or unit prices. |
@@ -165,7 +165,7 @@ maps those allowlists to their current owner and restore boundary:
 | Recessed-handle machining requirement: `recessed_handle_reference_side`, `recessed_handle_offset_cm`, `recessed_handle_width_cm`, `recessed_handle_start_cm`, `recessed_handle_length_cm` | The recessed-handle add-on configuration/editor writes these reference-side and centimeter input values into the current `frm.doc.pieces` row; the machining overlay/CNC shape is derived output. | Capture and restore these five editable DCO inputs with row identity and document-scoped permissions, never the resulting toolpath, drawing cache, or manual/service cost. Preserve the existing single-dirty-owner and server-version conflict rules. |
 | Side selection and bulk edge toggles: `edge_long_right`, `edge_long_left`, `edge_width_top`, `edge_width_bottom`, `edge_break`, `edge_break_only`; profile overrides `edge_long_right_type_override`, `edge_long_left_type_override`, `edge_width_top_type_override`, `edge_width_bottom_type_override` | Existing Fast Entry edge controls, “apply to all four” bulk action, multi-edge editor, and clipped-corner editor mutate the existing child rows. Mutation events and downstream invalidation observe the form model; DOM toggle classes are presentation only. | Capture the resulting selected-side flags and four per-side overrides from `frm.doc.pieces`. Do not capture aggregate `edge_type`, rates, meters, costs, or stale DOM state. Restore runs through the same form/context owner and leaves derived Plan/Cost refresh to the established Save/checkpoint lifecycle. |
 | Shape requirement and documentation reference: `special_shape_geometry_json`, `special_shape_drawing_json` | Manufacturing geometry is DCO child input owned by the shape editor. Drawing reference/metadata is owned by the bounded Special Shape Documentation workspace; the DCO child value is only its last saved reference. | Capture geometry as DCO requirement. In the DCO projection, include only the last saved drawing JSON; capture an independently dirty drawing only through its workspace projection. Restore must not overwrite a newer workspace-saved drawing or persist transient file bytes/URLs. |
-| Plan/Cost working fields: Plan `packing_mode`, `cutting_machine_type`, `optimization_time_limit_sec`, `kerf_mm`, `trim_margin_mm`; Cost `board_rate_usd`, `cutting_cost_per_board_usd` | Existing Plan and Cost `WorkspaceStore` / Edit Session own each mutable draft; current form values are not their owner. | Capture only when that exact workspace is dirty. Cost projection is filtered by current `view_costs` capability and actor/document scope; restore after canonical workspace load and baseline checks. Never copy Plan or Cost drafts into `frm.doc`. |
+| Plan/Cost working fields: Plan `packing_mode`, `cutting_machine_type`, `optimization_time_limit_sec`, `kerf_mm`, `liner_tool_diameter_mm`, `handle_recess_tool_diameter_mm`, `rear_groove_tool_diameter_mm`, `trim_margin_mm`; Cost `board_rate_usd`, `cutting_cost_per_board_usd` | Existing Plan and Cost `WorkspaceStore` / Edit Session own each mutable draft; current form values are not their owner. | Capture only when that exact workspace is dirty. Cost projection is filtered by current `view_costs` capability and actor/document scope; restore after canonical workspace load and baseline checks. Never copy Plan or Cost drafts into `frm.doc`. |
 | Protected manual prices and calculated finance: `special_shape_custom_unit_price_usd`, `clipped_corner_edge_price_usd` and pricing status/notes/set-by/set-on fields; `extra_*_unit_price_usd`, `extra_*_total_usd`, estimates/final prices, rates, costs, quote totals/status | Focused authorized pricing commands and server `Document`/Cost services own protected manual price decisions; server calculations and canonical plan/cost snapshots own computed fields. | Excluded from every recovery projection, including the permission-filtered Cost settings draft. Preserve acknowledged server values; pending price commands require their existing command reconciliation and must not be replayed by recovery. No price or cost data may cross actor/document scope. |
 
 The field sets above must stay aligned with `HEADER_FIELDS`, `PIECE_FIELDS`,
@@ -183,7 +183,9 @@ existing mutable settings:
 baseline: plan_name|null, plan_modified|null, normalized_settings_hash
 draft:
   packing_mode, cutting_machine_type,
-  optimization_time_limit_sec, kerf_mm, trim_margin_mm
+  optimization_time_limit_sec, kerf_mm,
+  liner_tool_diameter_mm, handle_recess_tool_diameter_mm,
+  rear_groove_tool_diameter_mm, trim_margin_mm
 ```
 
 These are the exact names owned by the current Plan `WorkspaceStore`. The
@@ -481,6 +483,18 @@ separately from the input hash. Current invalidation compares the stored input
 fingerprint; it does not make engine-version drift alone stale. Later recovery
 must retain both values, must not put engine version into the v1 hash, and must
 apply an explicit product/migration decision before changing that behavior.
+
+The System ALNS refinement release uses `2.2.0-alns-refinement` as its result
+provenance. This version change preserves the input-fingerprint and freshness
+rules above; it does not invalidate an existing plan by engine version alone.
+
+The subsequent global-pattern release records `2.3.0-pattern-layout` with the
+same provenance-only rule. Explicit Recalculate uses the new engine; existing
+approved or historical snapshots are not regenerated by viewing them.
+
+The coupled-corner release `2.4.0-coupled-corners` follows the same rule:
+explicit System Recalculate opts into the new bounded refinement, without
+adding engine provenance to the input fingerprint or changing historical plans.
 
 Recovery stores raw editable DCO requirements and a Plan workspace settings
 draft. It does not calculate this server fingerprint in the browser. After DCO

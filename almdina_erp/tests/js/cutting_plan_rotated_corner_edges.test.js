@@ -67,6 +67,7 @@ const context = vm.createContext({
     "drawing/door_cutting_order_liner_geometry.js",
     "drawing/door_cutting_order_liner_ux.js",
     "cutting_plan/door_cutting_order_piece_geometry.js",
+    "cutting_plan/door_cutting_order_edge_display.js",
     "cutting_plan/door_cutting_order_cutting_plan_renderer.js",
 ].forEach((relativePath) => {
     vm.runInContext(read(relativePath), context, { filename: relativePath });
@@ -155,6 +156,7 @@ function turnedGeometry(pieceType, turns) {
     };
     const oriented = geometry.pieceForQuarterTurns(visual, turns);
     samePointSet(geometry.points(oriented, width, height), points);
+    samePointSet(geometry.points(visual, width, height), points);
     return {
         visual,
         oriented,
@@ -546,6 +548,150 @@ const unresolvedHtml = renderer.build(frm, planFor(unresolved));
 assert.equal(polylines(unresolvedHtml).length, 0, "DXF corner bands are omitted when the quarter-turn is unknown");
 assert.equal(unresolvedHtml.includes('data-geometry-source="dxf"'), true);
 
+function rotatePointYDown(point, pivot, angleDeg) {
+    const rad = (Number(angleDeg) || 0) * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const x = point[0] - pivot.x;
+    const y = point[1] - pivot.y;
+    return [pivot.x + x * cos + y * sin, pivot.y - x * sin + y * cos];
+}
+
+function posedBoardEditorCorner(pieceType, options = {}) {
+    const angle = Number(options.rotation_deg) || 0;
+    const base = {
+        ...basePiece(pieceType),
+        apply_rotated_to_geometry: false,
+        rotated: false,
+        rotation_deg: angle,
+        edge_width_top: options.edge_width_top != null ? options.edge_width_top : 1,
+        edge_width_bottom: options.edge_width_bottom != null ? options.edge_width_bottom : 0,
+        edge_long_left: options.edge_long_left != null ? options.edge_long_left : 1,
+        edge_long_right: options.edge_long_right != null ? options.edge_long_right : 0,
+        edge_break: options.edge_break != null ? options.edge_break : 1,
+        edge_break_only: options.edge_break_only != null ? options.edge_break_only : 0,
+        edge_width_top_type_override: options.edge_width_top_type_override || "",
+        edge_long_left_type_override: options.edge_long_left_type_override || "",
+        edge_type: options.edge_type || "",
+        default_edge_type_context: options.default_edge_type_context || "",
+    };
+    delete base.corner_rotation_quarter_turns;
+    delete base.corner_mirrored;
+    const widthMm = base.original_w * 10;
+    const heightMm = base.original_h * 10;
+    const local = geometry.points({ ...base, rotated: false }, widthMm, heightMm);
+    const pivot = { x: widthMm / 2, y: heightMm / 2 };
+    const outer = local.map((point) => rotatePointYDown(point, pivot, angle));
+    return {
+        ...base,
+        geometry: {
+            schema_version: 1,
+            unit: "mm",
+            coordinate_space: "usable_sheet",
+            outer,
+            holes: [],
+        },
+    };
+}
+
+function edgePolylineClasses(html) {
+    return [...String(html).matchAll(/<polyline class="([^"]+)"/g)].map((match) => match[1]);
+}
+
+// Board Editor Edited / Approved plans store usable-sheet geometry without import
+// quarter-turns. Bands must render from semantic sides (existing snapshots too).
+const posedL = posedBoardEditorCorner("L-Shaped Corner", {
+    edge_width_top: 1,
+    edge_long_left: 1,
+    edge_break: 1,
+    edge_width_top_type_override: "CUSTOM-TOP",
+});
+frm.doc.default_edge_type = "DEFAULT";
+const posedLHtml = renderer.build(frm, planFor(posedL));
+assert.equal(posedLHtml.includes('data-geometry-source="dxf"'), true);
+assert.ok(polylines(posedLHtml).length >= 3, "posed L keeps top/left/break bands without quarter-turns");
+assert.match(posedLHtml, /stroke="#d00000"/);
+assert.match(posedLHtml, /stroke="#1d4ed8"/);
+assert.match(posedLHtml, /dco-edge-break-svg/);
+assert.equal(
+    edgePolylineClasses(posedLHtml).some((value) => value.includes("dco-edge-line--custom")),
+    true,
+    "empty override inherits; explicit override paints custom blue",
+);
+
+const posedClipBreakOnly = posedBoardEditorCorner("Clipped Corner", {
+    edge_width_top: 0,
+    edge_long_left: 0,
+    edge_long_right: 1,
+    edge_break: 0,
+    edge_break_only: 1,
+    edge_type: "CUSTOM-BREAK",
+});
+const posedClipHtml = renderer.build(frm, planFor(posedClipBreakOnly));
+assert.ok(polylines(posedClipHtml).length >= 2, "clipped break-only + right survive materialize pose");
+assert.match(posedClipHtml, /dco-edge-break-only-svg/);
+
+const posedL90 = posedBoardEditorCorner("L-Shaped Corner", {
+    rotation_deg: 90,
+    edge_width_top: 1,
+    edge_long_left: 0,
+    edge_long_right: 0,
+    edge_break: 1,
+});
+const posedL90Html = renderer.build(frm, planFor(posedL90));
+assert.ok(polylines(posedL90Html).length >= 2, "posed L at 90° still draws physical top + break");
+assert.match(posedL90Html, /dco-edge-break-svg/);
+
+const posedLFree = posedBoardEditorCorner("L-Shaped Corner", {
+    rotation_deg: 37,
+    edge_width_top: 1,
+    edge_long_left: 1,
+    edge_break: 0,
+});
+const posedLFreeHtml = renderer.build(frm, planFor(posedLFree));
+assert.equal(polylines(posedLFreeHtml).length, 2, "free-angle posed L keeps both selected sides");
+assert.doesNotMatch(posedLFreeHtml, /dco-edge-break-svg/);
+
+const posedImportedOriented = {
+    ...posedBoardEditorCorner("L-Shaped Corner", { rotation_deg: 0 }),
+    corner_rotation_quarter_turns: 0,
+    corner_mirrored: false,
+};
+const posedImportedHtml = renderer.build(frm, planFor(posedImportedOriented));
+assert.ok(
+    polylines(posedImportedHtml).length >= 2,
+    "posed copy with quarter-turns still prefers posed semantic path over import fail-closed",
+);
+
+const regularPosed = {
+    id: "regular-posed",
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 80,
+    original_w: 40,
+    original_h: 80,
+    label: "R.1",
+    piece_type: "Regular",
+    apply_rotated_to_geometry: false,
+    rotated: false,
+    rotation_deg: 0,
+    edge_long_left: 1,
+    edge_width_top: 1,
+    geometry: {
+        schema_version: 1,
+        unit: "mm",
+        coordinate_space: "usable_sheet",
+        outer: [[0, 0], [400, 0], [400, 800], [0, 800]],
+        holes: [],
+    },
+};
+const regularPosedHtml = renderer.build(frm, planFor(regularPosed));
+assert.match(regularPosedHtml, /border-left:3px solid #d00000/, "regular posed doors keep bbox markers");
+assert.match(regularPosedHtml, /border-top:3px solid #d00000/);
+assert.doesNotMatch(regularPosedHtml, /dco-edge-break-svg/);
+assert.doesNotMatch(regularPosedHtml, /dco-clipped-corner-piece/);
+
 const rectangle = {
     id: "rect-1",
     x: 0,
@@ -603,6 +749,7 @@ function reflectX(points, width) {
         };
         const oriented = geometry.pieceForQuarterTurns(visual, turns, 1);
         samePointSet(geometry.points(oriented, width, height), points);
+        samePointSet(geometry.points(visual, width, height), points);
         const storedOuter = points.map(([x, y]) => [x + 100, y + 200]);
         const piece = {
             ...visual,
@@ -633,15 +780,19 @@ function reflectX(points, width) {
     });
 });
 
-const systemIgnoringMirror = {
-    ...systemPiece,
+const storedTurns = {
+    ...basePiece("L-Shaped Corner"),
+    w: 80,
+    h: 40,
+    rotated: true,
     corner_mirrored: 1,
     corner_rotation_quarter_turns: 3,
 };
+const drawnTurns = geometry.pieceForQuarterTurns(storedTurns, 3, true);
 assert.deepEqual(
-    polylines(renderer.build(frm, planFor(systemIgnoringMirror))),
-    systemBands,
-    "system plans keep the boolean rotation and ignore imported mirror metadata"
+    polylines(renderer.build(frm, planFor(storedTurns))),
+    polylines(renderer.build(frm, planFor(drawnTurns))),
+    "a system plan draws the stored quarter-turn and mirror once"
 );
 assert.equal(geometry.pieceForQuarterTurns(basePiece("L-Shaped Corner"), 0, "sideways"), null);
 

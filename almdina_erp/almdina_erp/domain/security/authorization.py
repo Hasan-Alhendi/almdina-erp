@@ -40,6 +40,7 @@ class Capability:
     VIEW_APPROVED_CUTTING_PLAN = "view_approved_cutting_plan"
     RECALCULATE_PLAN = "recalculate_plan"
     EDIT_OPTIMIZER_SETTINGS = "edit_optimizer_settings"
+    USE_BOARD_EDITOR = "use_board_editor"
     PRINT_CUTTING_PLAN = "print_cutting_plan"
     VIEW_DRAWING_WORKSPACE = "view_drawing_workspace"
     EDIT_SPECIAL_DRAWING = "edit_special_drawing"
@@ -183,6 +184,7 @@ _CAPABILITY_DEFINITIONS = (
     ),
     CapabilityDefinition(Capability.RECALCULATE_PLAN, Capability.RECALCULATE_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.EDIT_OPTIMIZER_SETTINGS, Capability.EDIT_OPTIMIZER_SETTINGS, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
+    CapabilityDefinition(Capability.USE_BOARD_EDITOR, Capability.USE_BOARD_EDITOR, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.PRINT_CUTTING_PLAN, Capability.PRINT_CUTTING_PLAN, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.APPROVE_DXF, Capability.APPROVE_DXF, CUTTING_PLAN_DOCTYPE, "cutting_plan"),
     CapabilityDefinition(Capability.SET_OFFCUT_EXECUTION_OWNER, Capability.SET_OFFCUT_EXECUTION_OWNER, CUTTING_PLAN_DOCTYPE, "cutting_plan"),

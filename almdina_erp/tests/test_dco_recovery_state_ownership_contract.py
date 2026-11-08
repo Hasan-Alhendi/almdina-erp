@@ -236,6 +236,9 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             "packing_mode",
             "cutting_machine_type",
             "kerf_mm",
+            "liner_tool_diameter_mm",
+            "handle_recess_tool_diameter_mm",
+            "rear_groove_tool_diameter_mm",
             "trim_margin_mm",
             "optimization_time_limit_sec",
         ):
@@ -295,7 +298,7 @@ class TestDcoRecoveryStateOwnershipContract(unittest.TestCase):
             self.assertIn(field, fingerprint_body)
         self.assertNotIn('"description"', fingerprint_body)
         self.assertNotIn("ENGINE_VERSION", fingerprint_body)
-        self.assertIn('ENGINE_VERSION = "2.1.0-fast-save"', version)
+        self.assertIn('ENGINE_VERSION = "2.4.0-coupled-corners"', version)
 
         left = {"settings": {"kerf_mm": 3}, "version": 1, "pieces": []}
         right = {"pieces": [], "version": 1, "settings": {"kerf_mm": 3}}

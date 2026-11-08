@@ -107,11 +107,17 @@ _PRINT_IDENTITY_READ_CAPABILITIES = frozenset(
 )
 _SETTINGS_FIELDS = (
     "default_kerf_mm",
+    "default_deduct_edge_thickness",
+    "default_liner_tool_diameter_mm",
+    "default_handle_recess_tool_diameter_mm",
+    "default_rear_groove_tool_diameter_mm",
     "default_trim_margin_mm",
     "default_packing_mode",
     "default_cutting_machine_type",
     "default_optimization_time_limit_sec",
     "optimal_search_piece_limit",
+    "max_centerable_edge_gap_cm",
+    "alignment_search_budget_sec",
     "default_cutting_cost_per_board_usd",
     "default_special_design_fee_usd",
     "default_special_cnc_fee_usd",
@@ -300,10 +306,34 @@ def _apply_plan_default_values(settings: Any, payload: dict[str, Any]) -> None:
         settings.set(fieldname, canonical[fieldname])
 
 
+def _apply_tool_diameter_defaults(settings: Any, payload: dict[str, Any]) -> None:
+    """Blank keeps the factory field empty so new orders copy the cutting tool."""
+
+    labels = {
+        "default_liner_tool_diameter_mm": _("Default liner tool diameter (mm)"),
+        "default_handle_recess_tool_diameter_mm": _("Default handle recess tool diameter (mm)"),
+        "default_rear_groove_tool_diameter_mm": _("Default rear groove tool diameter (mm)"),
+    }
+    for fieldname, label in labels.items():
+        if fieldname not in payload:
+            continue
+        raw = payload[fieldname]
+        if raw in (None, ""):
+            settings.set(fieldname, None)
+            continue
+        resolved = _finite_non_negative(raw, label)
+        # Zero is not a tool. An empty dialog float arrives as zero and means
+        # "copy the cutting tool onto the next new order".
+        settings.set(fieldname, None if resolved == 0 else flt(resolved))
+
+
 def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     _apply_plan_default_values(settings, payload)
+    _apply_tool_diameter_defaults(settings, payload)
 
     numeric_non_negative = {
+        "max_centerable_edge_gap_cm": _("Maximum centerable edge gap (cm)"),
+        "alignment_search_budget_sec": _("Final Alignment Search Budget (seconds)"),
         "default_cutting_cost_per_board_usd": _("Default Cutting Cost / Board USD"),
         "default_special_design_fee_usd": _("Default Special Design Fee USD"),
         "default_special_cnc_fee_usd": _("Default Special CNC Fee USD"),
@@ -313,6 +343,16 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     for fieldname, label in numeric_non_negative.items():
         if fieldname in payload:
             settings.set(fieldname, flt(_finite_non_negative(payload[fieldname], label)))
+
+    # Alignment is a separately configurable *tail* allowance, bounded by
+    # the user's own optimization timeout rather than an internal magic cap.
+    if flt(settings.get("alignment_search_budget_sec") or 0) > flt(
+        settings.get("default_optimization_time_limit_sec") or 0
+    ):
+        frappe.throw(
+            _("Final alignment search budget must not exceed optimization timeout."),
+            frappe.ValidationError,
+        )
 
     extra_addon_prices = {
         "default_extra_double_unit_price_usd": _("Double Price USD / Door"),
@@ -342,6 +382,15 @@ def _apply_values(settings: Any, payload: dict[str, Any]) -> None:
     for fieldname in ("allow_stage_override", "allow_unplaced_approval"):
         if fieldname in payload:
             settings.set(fieldname, cint(payload[fieldname]) and 1 or 0)
+    if "default_deduct_edge_thickness" in payload:
+        from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+            coerce_deduct_edge_thickness,
+        )
+
+        settings.set(
+            "default_deduct_edge_thickness",
+            1 if coerce_deduct_edge_thickness(payload["default_deduct_edge_thickness"]) else 0,
+        )
 
     print_labels = {
         "print_factory_name": _("Factory Name"),
@@ -656,7 +705,13 @@ def _settings_values(settings: Any, *, include_backups: bool = True) -> dict[str
             values[fieldname] = _stage_messages_dict(settings)
             continue
         value = settings.get(fieldname)
-        if fieldname in {"allow_stage_override", "allow_unplaced_approval", *_BACKUP_BOOLEAN_FIELDS}:
+        if fieldname == "default_deduct_edge_thickness":
+            from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+                coerce_deduct_edge_thickness,
+            )
+
+            value = 1 if coerce_deduct_edge_thickness(value) else 0
+        elif fieldname in {"allow_stage_override", "allow_unplaced_approval", *_BACKUP_BOOLEAN_FIELDS}:
             value = int(value or 0)
         elif fieldname in _BACKUP_INTEGER_FIELDS:
             value = cint(value)

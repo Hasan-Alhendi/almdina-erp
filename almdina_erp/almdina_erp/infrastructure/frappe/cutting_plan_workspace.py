@@ -20,10 +20,19 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 from almdina_erp.almdina_erp.domain.cutting.catalog import DEFAULT_OPTIMIZATION_MODE_ID
 from almdina_erp.almdina_erp.domain.cutting.manufacturing_requirements import (
     build_manufacturing_requirements,
+    require_cut_dimension_cm,
+)
+from almdina_erp.almdina_erp.domain.orders.cut_dimensions import (
+    CutDimensionInput,
+    calculate_cut_dimensions,
 )
 from almdina_erp.almdina_erp.domain.cutting.offcut_policy import decision_from_values
 from almdina_erp.almdina_erp.domain.cutting.physical_execution_contract import (
     with_physical_execution_contract,
+)
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+    persisted_cut_matches_policy,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
@@ -33,6 +42,7 @@ from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     PlanSettings,
     PlanSettingsValidationError,
     normalize_plan_settings,
+    settings_for_system_search,
 )
 from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FINGERPRINT_CONTRACT_KEY,
@@ -43,11 +53,13 @@ from almdina_erp.almdina_erp.domain.cutting.plan_fingerprint_contract import (
     FingerprintCompatibility,
     PlanFingerprintContractError,
     freeze_geometry_piece,
+    freeze_v4_board,
     freeze_v4_execution_settings,
     legacy_omission_is_safe,
     validate_v4_baseline,
 )
 from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError
+from almdina_erp.almdina_erp.domain.orders.piece_mirroring import piece_mirroring_allowed
 from almdina_erp.almdina_erp.domain.cutting.plan_freshness import (
     matching_freshness_fingerprint,
 )
@@ -73,19 +85,128 @@ def _board_dimensions_mm(order: Any) -> tuple[float, float]:
     return width, length
 
 
-def _piece_rows(order: Any) -> tuple[dict[str, Any], ...]:
-    return tuple(
-        FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
-        for row in (order.pieces or [])
+_EDGE_SELECTION_FIELDS = (
+    "edge_long_right",
+    "edge_long_left",
+    "edge_width_top",
+    "edge_width_bottom",
+)
+
+
+def _edge_selected(row: Any) -> bool:
+    return any(cint(getattr(row, fieldname, 0)) for fieldname in _EDGE_SELECTION_FIELDS)
+
+
+def _policy_cut_row(order: Any, row: Any, data: dict[str, Any], *, deduct: bool) -> dict[str, Any]:
+    """Use the saved cut when it already equals the calculated policy size.
+
+    Rows with no selected edge keep their persisted manufacturing identity.
+    A selected edge is overlaid only when the saved size is not the size
+    calculated from that edge's thickness and the active deduction policy.
+    """
+
+    if not _edge_selected(row):
+        return data
+    expected = _expected_policy_cut(order, row, deduct=deduct)
+    if expected is None:
+        return data
+    width_cm, length_cm = expected
+    if persisted_cut_matches_policy(
+        persisted_width_cm=data["width_cm"],
+        persisted_length_cm=data["length_cm"],
+        expected_width_cm=width_cm,
+        expected_length_cm=length_cm,
+    ):
+        return data
+    data["width_cm"] = width_cm
+    data["length_cm"] = length_cm
+    return data
+
+
+def _expected_policy_cut(
+    order: Any, row: Any, *, deduct: bool,
+) -> tuple[float, float] | None:
+    """Return the cut size for this policy, or None when no thickness is provable.
+
+    A real order resolves the selected edge profiles. A historical row that only
+    carries saved axis thicknesses is calculated from those thicknesses. A row
+    with a selected edge and no recorded thickness keeps its saved cut.
+    """
+
+    if hasattr(order, "default_edge_type"):
+        from almdina_erp.almdina_erp.infrastructure.frappe.orders.cut_dimension_adapter import (
+            expected_policy_cut_cm,
+        )
+
+        return expected_policy_cut_cm(
+            order,
+            row,
+            deduct_edge_thickness=deduct,
+        )
+    if not deduct:
+        return _cut_from_recorded_thickness(row, deduct=False)
+    long_selected = cint(getattr(row, "edge_long_right", 0)) or cint(
+        getattr(row, "edge_long_left", 0)
+    )
+    width_selected = cint(getattr(row, "edge_width_top", 0)) or cint(
+        getattr(row, "edge_width_bottom", 0)
+    )
+    if long_selected and flt(getattr(row, "edge_long_thickness_mm", 0)) <= 0:
+        return None
+    if width_selected and flt(getattr(row, "edge_width_thickness_mm", 0)) <= 0:
+        return None
+    return _cut_from_recorded_thickness(row, deduct=True)
+
+
+def _cut_from_recorded_thickness(row: Any, *, deduct: bool) -> tuple[float, float]:
+    result = calculate_cut_dimensions(
+        CutDimensionInput(
+            final_width_cm=flt(getattr(row, "width_cm", 0)),
+            final_length_cm=flt(getattr(row, "length_cm", 0)),
+            edge_long_right=cint(getattr(row, "edge_long_right", 0)),
+            edge_long_left=cint(getattr(row, "edge_long_left", 0)),
+            edge_width_top=cint(getattr(row, "edge_width_top", 0)),
+            edge_width_bottom=cint(getattr(row, "edge_width_bottom", 0)),
+            long_edge_thickness_mm=flt(getattr(row, "edge_long_thickness_mm", 0)),
+            width_edge_thickness_mm=flt(getattr(row, "edge_width_thickness_mm", 0)),
+            deduct_edge_thickness=deduct,
+        )
+    )
+    return (
+        require_cut_dimension_cm(result.cut_width_cm, fieldname="cut_width_cm"),
+        require_cut_dimension_cm(result.cut_length_cm, fieldname="cut_length_cm"),
     )
 
 
-def _manufacturing_requirements(order: Any) -> dict[str, Any]:
-    """Capture persisted cut requirements for the exact plan revision."""
+def _piece_rows(order: Any, plan: Any | None = None) -> tuple[dict[str, Any], ...]:
+    deduct = True if plan is None else coerce_deduct_edge_thickness(
+        _plan_attr(plan, "deduct_edge_thickness", None)
+    )
+    rows = []
+    for row in (order.pieces or []):
+        data = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        if plan is not None:
+            data = _policy_cut_row(order, row, data, deduct=deduct)
+        rows.append(data)
+    return tuple(rows)
 
+
+def _manufacturing_requirements(order: Any, plan: Any | None = None) -> dict[str, Any]:
+    """Capture the cut requirements of one plan revision.
+
+    A plan uses the same policy cut rows as its optimizer. A read without a
+    plan keeps the persisted order sizes used by historical checks, and does
+    not rewrite those rows.
+    """
+
+    policy_rows = _piece_rows(order, plan) if plan is not None else None
     requirements: list[dict[str, Any]] = []
     for source_piece_no, row in enumerate(order.pieces or [], start=1):
-        piece = FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        piece = (
+            policy_rows[source_piece_no - 1]
+            if policy_rows is not None
+            else FrappeCutDimensionPlanAdapter.piece_row_as_dict(row)
+        )
         base_identity = str(getattr(row, "piece_instance_id", "") or "").strip()
         if not base_identity:
             frappe.throw(
@@ -196,6 +317,9 @@ def _validated_plan_settings(plan: Any) -> PlanSettings:
                 _plan_attr(plan, "trim_margin_mm"),
                 DEFAULT_PREFERRED_TRIM_MM,
             ),
+            deduct_edge_thickness=coerce_deduct_edge_thickness(
+                _plan_attr(plan, "deduct_edge_thickness", None)
+            ),
         )
     except PlanSettingsValidationError:
         frappe.throw(_("إعدادات خطة القص الحالية غير صالحة."), frappe.ValidationError)
@@ -213,11 +337,16 @@ def _plan_settings_payload(plan: Any) -> dict[str, Any]:
     }
 
 
-def _geometry_piece_rows(order: Any, *, historical: bool = False) -> list[dict[str, Any]]:
+def _geometry_piece_rows(
+    order: Any,
+    *,
+    historical: bool = False,
+    plan: Any | None = None,
+) -> list[dict[str, Any]]:
     rows = []
     if historical:
         return [historical_geometry_piece(row) for row in (order.pieces or [])]
-    for row in _piece_rows(order):
+    for row in _piece_rows(order, plan):
         piece = dict(row)
         for key in _COMMERCIAL_PIECE_KEYS:
             piece.pop(key, None)
@@ -271,7 +400,7 @@ def plan_input_fingerprint(
     if (version, omitted) not in ((3, ()), *((2, fields) for _, fields in LEGACY_V2_SCHEMAS)):
         raise PlanFingerprintContractError("unsupported_fingerprint_schema")
     width_mm, length_mm = _board_dimensions_mm(order)
-    pieces = _geometry_piece_rows(order, historical=historical)
+    pieces = _geometry_piece_rows(order, historical=historical, plan=plan)
     pieces = [{key: value for key, value in row.items() if key not in omitted} for row in pieces]
     return fingerprint_payload(
         {
@@ -299,16 +428,20 @@ def manufacturing_baseline_v4(order: Any, plan: Any, *, historical: bool = False
     return {
         "version": MANUFACTURING_BASELINE_VERSION,
         "order": str(order.name),
-        "board": {
-            "width_mm": width_mm, "length_mm": length_mm,
-            "material_description": str(getattr(order, "board_description", "") or "").strip(),
-        },
+        "board": freeze_v4_board(
+            width_mm=width_mm,
+            length_mm=length_mm,
+            material_description=str(getattr(order, "board_description", "") or "").strip(),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
+        ),
         "execution_settings": freeze_v4_execution_settings(
             machine_type=_plan_attr(plan, "machine_type"),
             kerf_mm=_plan_attr(plan, "kerf_mm"),
             trim_margin_mm=_plan_attr(plan, "trim_margin_mm"),
         ),
-        "pieces": _geometry_piece_rows(order, historical=historical),
+        "pieces": _geometry_piece_rows(order, historical=historical, plan=plan),
     }
 
 
@@ -341,11 +474,23 @@ def plan_fingerprint_compatibility(
                 or not isinstance(validation, dict) or validation.get("is_valid") is not True
                 or snapshot.get("saved_layout_sha256") != fingerprint_payload({"sheets": snapshot["sheets"]})):
             return FingerprintCompatibility("REVIEW_REQUIRED", "", "v4", "invalid_saved_layout")
-        current = plan_input_fingerprint(order, plan, version=MANUFACTURING_BASELINE_VERSION,
-                                         historical=True)
-        if stored == current:
+        historical = plan_input_fingerprint(
+            order, plan, version=MANUFACTURING_BASELINE_VERSION, historical=True,
+        )
+        if stored == historical:
             return FingerprintCompatibility("MATCH", stored, "v4", "manufacturing_baseline_proven")
-        return FingerprintCompatibility("MISMATCH", current, "v4", "manufacturing_requirements_changed")
+        # A saved plan hashes the cut sizes that plan actually executed. Optional
+        # edge deduction stores that overlay, while the historical reader keeps
+        # the persisted order cuts. Recomputing the same plan against an
+        # unchanged order still matches. An order edit moves this digest too.
+        recorded = plan_input_fingerprint(
+            order, plan, version=MANUFACTURING_BASELINE_VERSION, historical=False,
+        )
+        if stored == recorded:
+            return FingerprintCompatibility("MATCH", stored, "v4", "manufacturing_baseline_proven")
+        return FingerprintCompatibility(
+            "MISMATCH", historical, "v4", "manufacturing_requirements_changed",
+        )
     if declared is not None and (type(declared) is not int or declared != FINGERPRINT_CONTRACT_VERSION):
         return FingerprintCompatibility("REVIEW_REQUIRED", "", reason="unsupported_contract")
     current = plan_input_fingerprint(order, plan, historical=True)
@@ -411,7 +556,7 @@ def freshness_expected_fingerprint(order: Any, plan: Any, stored: str = "") -> s
     return plan_fingerprint_compatibility(order, plan, stored).expected_fingerprint
 
 
-def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
+def calculate_system_plan(order: Any, plan: Any, *, seed_plans=(), search_round=0) -> OptimizationOutcome:
     """Calculate one Draft System plan without mutating Door Cutting Order.
 
     Door Cutting Order is only the source of customer requirements. Optimizer
@@ -420,13 +565,15 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
 
     width_mm, length_mm = _board_dimensions_mm(order)
     factory_settings = frappe.get_cached_doc("Almdina ERP Settings")
-    plan_settings = _validated_plan_settings(plan)
+    plan_settings = settings_for_system_search(_validated_plan_settings(plan))
+    plan.optimization_mode = plan_settings.optimization_mode
     fingerprint = plan_input_fingerprint(order, plan)
     outcome = optimize_order_plan(
         OptimizeOrderPlanCommand(
             engine_version=ENGINE_VERSION,
             input_fingerprint=fingerprint,
             plan_settings=plan_settings,
+            seed_plans=tuple(seed_plans), search_round=int(search_round),
             board=BoardGeometry(
                 full_width_cm=width_mm / 10,
                 full_length_cm=length_mm / 10,
@@ -441,8 +588,27 @@ def calculate_system_plan(order: Any, plan: Any) -> OptimizationOutcome:
                 min_remnant_width_cm=flt(factory_settings.min_remnant_width_mm) / 10,
                 min_remnant_length_cm=flt(factory_settings.min_remnant_length_mm) / 10,
                 min_remnant_area_m2=flt(factory_settings.min_remnant_area_m2),
+                max_centerable_edge_gap_cm=flt(
+                    getattr(factory_settings, "max_centerable_edge_gap_cm", 5.0)
+                ),
+                alignment_search_budget_sec=flt(
+                    getattr(factory_settings, "alignment_search_budget_sec", 1.0)
+                ),
+                # New System calculations from Recalculate/Preview/Continue use
+                # the same bounded ALNS stage. Application caps this allowance
+                # to native search time and ten additional seconds. The native
+                # search and its completed gallery keep their full allowance.
+                alns_search_budget_sec=10.0,
+                pattern_search_budget_sec=10.0,
+                corner_search_budget_sec=10.0,
             ),
-            piece_rows=_piece_rows(order),
+            piece_rows=tuple(
+                {**row, "deduct_edge_thickness": plan_settings.deduct_edge_thickness}
+                for row in _piece_rows(order, plan)
+            ),
+            allow_piece_mirroring=piece_mirroring_allowed(
+                getattr(order, "allow_piece_mirroring", None)
+            ),
         ),
         engine=domain_cutting_engine,
     )
@@ -460,7 +626,7 @@ def _apply_snapshot(
     engine_version_fallback: str = "",
 ) -> None:
     snapshot = with_physical_execution_contract(snapshot)
-    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order)
+    snapshot["manufacturing_requirements"] = _manufacturing_requirements(order, plan)
     baseline = manufacturing_baseline_v4(order, plan)
     generation_fingerprint = fingerprint
     fingerprint = fingerprint_payload(baseline)
@@ -678,7 +844,48 @@ def apply_validated_dxf_snapshot(
     )
 
 
+def apply_board_editor_snapshot(
+    order: Any,
+    plan: Any,
+    raw_snapshot: dict[str, Any],
+    *,
+    method_label: str = "Board Editor",
+    engine_version: str = "board-editor-1",
+) -> None:
+    """Persist one board-editor materialization into a new Draft Cutting Plan.
+
+    Does not mutate the source plan, order approval, or generate CUT_PATH.
+    """
+
+    snapshot = sanitize_plan_snapshot(raw_snapshot)
+    validation = snapshot.get("validation") or {}
+    if not snapshot.get("sheets") or not validation.get("is_valid"):
+        frappe.throw(
+            _("Board editor layout is not ready to save as a cutting plan."),
+            frappe.ValidationError,
+        )
+    fingerprint = plan_input_fingerprint(order, plan)
+    _apply_snapshot(
+        order,
+        plan,
+        snapshot,
+        fingerprint=fingerprint,
+        method_label_fallback=method_label,
+        engine_version_fallback=engine_version,
+    )
+    # Board Editor copies are frozen layouts. Auto-recalc must not treat them as
+    # optimizer work waiting to overwrite the manual placement.
+    plan.plan_needs_recalculation = 0
+    if hasattr(plan, "dxf_file"):
+        plan.dxf_file = None
+    if hasattr(plan, "dxf_status"):
+        plan.dxf_status = ""
+    if hasattr(plan, "saw_center_status"):
+        plan.saw_center_status = "Absent"
+
+
 __all__ = [
+    "apply_board_editor_snapshot",
     "apply_calculation_outcome",
     "apply_validated_dxf_snapshot",
     "backfill_piece_instance_ids",

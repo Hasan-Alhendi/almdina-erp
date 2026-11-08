@@ -17,6 +17,9 @@ from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     UPLOADED_DXF,
     is_current_manufacturing_candidate,
 )
+from almdina_erp.almdina_erp.domain.cutting.piece_cut_dimensions import (
+    coerce_deduct_edge_thickness,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_settings import (
     DEFAULT_KERF_MM,
     DEFAULT_MACHINE_TYPE,
@@ -98,6 +101,9 @@ def factory_default_plan_settings() -> PlanSettings:
             settings.default_trim_margin_mm,
             DEFAULT_PREFERRED_TRIM_MM,
         ),
+        deduct_edge_thickness=coerce_deduct_edge_thickness(
+            getattr(settings, "default_deduct_edge_thickness", None)
+        ),
     )
 
 
@@ -125,6 +131,9 @@ def plan_settings(plan: Any) -> PlanSettings:
             getattr(plan, "trim_margin_mm", None),
             DEFAULT_PREFERRED_TRIM_MM,
         ),
+        deduct_edge_thickness=coerce_deduct_edge_thickness(
+            getattr(plan, "deduct_edge_thickness", None)
+        ),
     )
 
 
@@ -133,6 +142,15 @@ def seed_plan_settings(order_name: str) -> PlanSettings:
 
     existing = latest_plan(order_name)
     return plan_settings(existing) if existing else factory_default_plan_settings()
+
+
+def manufacturing_plan_document(order_name: str) -> Any | None:
+    """The plan whose kerf a system-plan DXF is measured against."""
+
+    system = latest_plan(order_name, source_type=SYSTEM, status=DRAFT)
+    if system is not None:
+        return system
+    return latest_plan(order_name)
 
 
 def manufacturing_plan_settings(order_name: str) -> PlanSettings:

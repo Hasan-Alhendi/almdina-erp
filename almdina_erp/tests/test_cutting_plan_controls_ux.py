@@ -95,7 +95,9 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
     assert "find(DUPLICATED_ACTIONS)" in controls
     assert "duplicated.remove()" in controls
     assert "Recalculate with the current settings" in controls
-    assert "Recalculate with the current settings" in plan
+    # The presenter delegates the one recalculation button to PlanControls;
+    # it no longer duplicates its translated label in the presentation file.
+    assert "controls.syncRecalculateButton(frm)" in plan
 
 
 def test_recalculation_button_uses_preview_session_without_full_document_plan_save():
@@ -120,14 +122,15 @@ def test_recalculation_button_uses_preview_session_without_full_document_plan_sa
         '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"'
         not in controls
     )
-    assert "__almdinaPlanCommandBound" in controls
-    assert "scheduleSimplify" in controls
+    assert "__almdinaRecalculateDelegated" in controls
+    assert 'wrapper.on("click.almdinaRecalculate", ".dco-recalculate-plan"' in controls
     assert "setTextIfChanged" in controls
     assert "preparePlanInputs" in controls
     assert "await preparePlanInputs(frm)" in controls
     assert "await persistPendingOrderInputs(frm)" in controls
     assert 'can(frm, "recalculate_plan")' in controls
-    assert 'can(frm, "edit_optimizer_settings")' in controls
+    # The plan editor owns draft edit state; native DCO optimizer fields are read-only.
+    assert "workspaceEditing(frm)" in controls
     assert "canMutateCurrentStage(frm)" in controls
     assert "canTuneCuttingAlgorithm(frm)" in controls
     assert "frm.doc.current_production_stage" in controls
@@ -162,7 +165,7 @@ def test_cutting_plan_browser_authority_never_depends_on_cost_visibility():
     assert '"view_uploaded_cutting_plan"' in tabs
     assert '"view_approved_cutting_plan"' in tabs
     assert '"recalculate_plan"' in controls
-    assert '"edit_optimizer_settings"' in controls
+    assert "canTuneCuttingAlgorithm(frm)" in controls
 
 
 def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
@@ -179,7 +182,8 @@ def test_kerf_and_trim_are_optimizer_fields_in_the_frontend_permission_owner():
     ):
         assert f'"{fieldname}"' in optimizer_block
 
-    assert 'can(frm, "edit_optimizer_settings")' in controls
+    # Native form settings remain read-only; the scoped plan workspace owns editing.
+    assert 'frm.set_df_property(fieldname, "read_only", 1)' in controls
     assert "function activeSettings(frm)" in controls
     assert "row && row.settings" in controls
     assert "kerf_mm: frm.doc.kerf_mm" not in controls
@@ -223,11 +227,12 @@ def test_piece_financial_fields_are_protected_at_cost_permission_level():
         assert fields[fieldname].get("permlevel") == 1
 
 
-def test_algorithm_selector_consumes_workspace_catalog_without_post_render_label_patch():
+def test_algorithm_selector_is_absent_and_machine_catalog_stays_canonical():
     controls = source(CONTROLS_UX)
     edit_session = source(PLAN_EDIT_SESSION)
 
-    assert 'catalog: "optimization_catalog"' in edit_session
+    assert 'catalog: "optimization_catalog"' not in edit_session
+    assert 'catalog: "machine_type_catalog"' in edit_session
     assert "data[catalogName]" in edit_session
     assert "entry && entry.id" in edit_session
     assert "entry && entry.label" in edit_session

@@ -25,6 +25,14 @@ PLAN_CONTROLS = (
     / "cutting_plan"
     / "door_cutting_order_plan_controls_ux.js"
 )
+PLAN_CONTEXT_ACTIONS = (
+    ROOT
+    / "public"
+    / "js"
+    / "door_cutting_order"
+    / "cutting_plan"
+    / "door_cutting_order_plan_context_actions_ux.js"
+)
 PLAN_WORKSPACE_API = (
     ROOT
     / "public"
@@ -199,10 +207,10 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"',
             controls,
         )
-        self.assertIn("__almdinaPlanCommandBound", controls)
-        self.assertIn("scheduleSimplify", controls)
+        self.assertIn("__almdinaRecalculateDelegated", controls)
+        self.assertIn('.on("click.almdinaRecalculate", ".dco-recalculate-plan"', controls)
+        self.assertIn("syncRecalculateButton(frm)", controls)
         self.assertIn("setTextIfChanged", controls)
-        self.assertIn('.off("click")', controls)
         self.assertNotIn("frm.save", controls)
         self.assertNotIn("frappe.call", controls)
         self.assertIn("secureInvoicePrint", source)
@@ -216,6 +224,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         boundary = APPROVAL_SERVICE.read_text(encoding="utf-8")
         command = PLAN_COMMAND_SERVICE.read_text(encoding="utf-8")
         controls = PLAN_CONTROLS.read_text(encoding="utf-8")
+        context_actions = PLAN_CONTEXT_ACTIONS.read_text(encoding="utf-8")
         plan_api = PLAN_WORKSPACE_API.read_text(encoding="utf-8")
         approval_command = command.split("def approve_order_plan", 1)[1].split(
             "\n\ndef save_system_plan_settings", 1
@@ -231,8 +240,11 @@ class TestCapabilityExecutionContract(unittest.TestCase):
         self.assertIn("plan_needs_recalculation", command)
         self.assertNotIn("recalculate_system_plan", approval_command)
         self.assertNotIn("force_cutting_plan_recalculation", approval_command)
-        self.assertIn('translate(source === "Custom" ? "Approve DXF plan" : "Approve cutting plan")', controls)
+        self.assertIn('"Approve the uploaded plan"', context_actions)
+        self.assertIn('"Approve the system plan"', context_actions)
+        self.assertIn('"Approve the edited plan"', context_actions)
         self.assertIn('can(frm, "approve_dxf")', controls)
+        self.assertIn('source === "BoardEditor"', controls)
         # Browser staleness comes from the Plan read model, not the DCO
         # compatibility projection. Server approval still revalidates under lock.
         self.assertIn("row.validation && row.validation.needs_recalculation", controls)
@@ -242,7 +254,7 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             '"almdina_erp.almdina_erp.services.drawing_approval_service.approve_production_dxf"',
             plan_api,
         )
-        self.assertIn("transport.approve(frm.doc.name, source)", controls)
+        self.assertIn("transport.approve(frm.doc.name, source, planName || null)", controls)
         self.assertNotIn("drawing_approval_service.approve_production_dxf", controls)
 
     def test_dxf_upload_and_replacement_are_separate_server_permissions(self) -> None:

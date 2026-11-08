@@ -1,0 +1,42 @@
+[
+  {
+    "case": "263",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "263-prior-r0.json.gz",
+    "sha256": "07c86cdc14b5be23b749e53eda1a80f16e5d390ee0f84d0c3dcbbe984323dbcc",
+    "stderr": "",
+    "uncompressed_sha256": "62ec4e1b8a8e0f88a789ea40ecc77a29c2797ffd7cb875bc0db7904bdad8b902"
+  },
+  {
+    "case": "263",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "263-coupled-r0.json.gz",
+    "sha256": "8faea2586407f6435fe3bc0e485183b830109e2dd671a707626d0bce75cd9b81",
+    "stderr": "",
+    "uncompressed_sha256": "301a0d040a0fe2e9902dc7f82d176be77494ac3fee861d18de5535d12dc46df7"
+  },
+  {
+    "case": "298",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "298-prior-r0.json.gz",
+    "sha256": "804e8fb7e945492d8e759e73fbc74a3d648b434c10a2556b329bf81933843f3e",
+    "stderr": "",
+    "uncompressed_sha256": "a049fc886d64a4690fa7e5a81ab8498afab771678de3f6be45e3197d80ef14a0"
+  },
+  {
+    "case": "298",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "298-coupled-r0.json.gz",
+    "sha256": "688c534d340148ae72f61799f5ead0dd01142419ebfdb868312db375940f8cc2",
+    "stderr": "",
+    "uncompressed_sha256": "37243d980d9f78ca2ec025c888b8ab4b654482983c8a724b3131ba3364bd0963"
+  }
+]

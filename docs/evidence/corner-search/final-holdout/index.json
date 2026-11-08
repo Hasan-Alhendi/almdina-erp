@@ -1,0 +1,122 @@
+[
+  {
+    "case": "holdout-05",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-05-prior-r0.json.gz",
+    "sha256": "f93fadecb230de71e3e374e9f12f33aad4a8892888f4a131d53914305663694b",
+    "stderr": "",
+    "uncompressed_sha256": "28b76bd26bb91f0cceaef39f9a608899bea5a5558165e33f430e47f333c283a5"
+  },
+  {
+    "case": "holdout-05",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-05-coupled-r0.json.gz",
+    "sha256": "ded0bb2e80dc19e0b7f84f77c38cc13ae962bbcbbb974b9bd508e609dda5b9fa",
+    "stderr": "",
+    "uncompressed_sha256": "1f5058a898ab9ac8b486fe9af28ddb4e3d986a77751fff55df1b7090bdd8e2f6"
+  },
+  {
+    "case": "holdout-05",
+    "arm": "equal_total_prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-05-equal_total_prior-r0.json.gz",
+    "sha256": "a2b291887557a2e6b8ded53d6fa832038aee5ae1a55139d0b73bc9cd59b3ad14",
+    "stderr": "",
+    "uncompressed_sha256": "b838464b31988f7ca39000ed10cad44030f9379e73638038813d560569d926a8"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-06-prior-r0.json.gz",
+    "sha256": "9f89d5b9e05d348c67f5bdf77b889ca04e7df2db84d18e5222f5485880b5ba74",
+    "stderr": "",
+    "uncompressed_sha256": "6a3e672edb336f8575bc419208724f572c87862022668b976a25c5edc2302aaa"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-06-coupled-r0.json.gz",
+    "sha256": "29c4bdaaa1fdf7ba5319ba815c6a3d92f740d74e699a54a3190ce549b54f39bc",
+    "stderr": "",
+    "uncompressed_sha256": "74601e75d619fd476938cf6f736327b8a09763fdef8bbc22c7cf06b245045ba7"
+  },
+  {
+    "case": "holdout-06",
+    "arm": "equal_total_prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-06-equal_total_prior-r0.json.gz",
+    "sha256": "b77bb6e176283fd67eebbaaf9480f1828d86b529445583366a1cb6a9c8287110",
+    "stderr": "",
+    "uncompressed_sha256": "c6b5b336ea5584bd0857f7da4f242c2150e9d1cc2f5ff49d6d134247a10a39fa"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-07-prior-r0.json.gz",
+    "sha256": "9d8a315dd791e1bd4882749e87a05acabcefd31c3cc955c2cd72b0fc40c36b96",
+    "stderr": "",
+    "uncompressed_sha256": "46d432e16e2a7060d84270b63d490132d89cfe367e1158fc4200312f0de7fa18"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-07-coupled-r0.json.gz",
+    "sha256": "be2d5f2a012c00b44e6ef78d5b25306de17c4198073dafa9fc115efb53b3f36a",
+    "stderr": "",
+    "uncompressed_sha256": "c3010fef6793da42cffb0893ad9af0f0a596f0a9baa8aa8c21a8e58cbc676123"
+  },
+  {
+    "case": "holdout-07",
+    "arm": "equal_total_prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-07-equal_total_prior-r0.json.gz",
+    "sha256": "10e19b4c44055c78f8ecea2d8c85838492c47330156c8f9e013f86d4510d9fa3",
+    "stderr": "",
+    "uncompressed_sha256": "dc1e7148f3a637aa254e09e7dbbc3d395e0167649d4232eaf6e99528173833ee"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-08-prior-r0.json.gz",
+    "sha256": "a8f6842bc467191ddaf50af1f8bdc95e0a0916afaed2039fb72ce3186fb78e11",
+    "stderr": "",
+    "uncompressed_sha256": "2c9edb1e9a3038214328a2e72c358b465e4ce33eb922390cf5603ec083f516e9"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "coupled",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-08-coupled-r0.json.gz",
+    "sha256": "07af881fb63326f100f18467d7e9a57e136ba920d50ffdca6e0abab84b72894e",
+    "stderr": "",
+    "uncompressed_sha256": "a733c931069aeab30905668fdf9c7e0fc40d224a84ab112f73aaa31ad7b2234e"
+  },
+  {
+    "case": "holdout-08",
+    "arm": "equal_total_prior",
+    "repeat": 0,
+    "returncode": 0,
+    "file": "holdout-08-equal_total_prior-r0.json.gz",
+    "sha256": "4277d50c348a4a4d5a786ef509796ae17c9efcbc86c63ac7358fadd150a1d3f7",
+    "stderr": "",
+    "uncompressed_sha256": "c6af45514d9af5e60645f8c198c1f6bf930156e0c91af50926ef47d562fe643f"
+  }
+]

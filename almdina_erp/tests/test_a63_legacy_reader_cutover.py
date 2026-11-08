@@ -143,7 +143,7 @@ def test_dxf_geometry_adapter_receives_plan_settings_through_a_transient_proxy()
     assert "trim_margin_mm=settings.trim_margin_mm" in strict
     assert "kerf_mm=settings.kerf_mm" in strict
     assert "_legacy_parse_production_dxf" in strict
-    assert "_proxy_order(order, specs, settings)" in strict
+    assert "_proxy_order(order, specs, settings, tool_diameters=tool_diameters)" in strict
     assert "from almdina_erp.almdina_erp.application.cutting.plan_revisions import PlanSettings" in strict
     assert "order.kerf_mm" in legacy
     assert "order.trim_margin_mm" in legacy

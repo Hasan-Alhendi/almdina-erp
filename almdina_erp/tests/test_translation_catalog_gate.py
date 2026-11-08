@@ -75,6 +75,14 @@ class TestTranslationCatalogGate(unittest.TestCase):
         ]
         self.assertEqual(invalid, [])
 
+    def test_catalog_context_column_is_an_identifier(self) -> None:
+        # Unquoted commas in source strings masquerade as context columns.
+        invalid = [
+            index for index, row in _catalog_rows()
+            if len(row) == 3 and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", row[2])
+        ]
+        self.assertEqual(invalid, [])
+
     def test_catalog_has_no_duplicate_keys(self) -> None:
         seen: dict[str, int] = {}
         duplicates = []

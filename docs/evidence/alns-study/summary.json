@@ -1,0 +1,1021 @@
+{
+  "observations": 84,
+  "valid": 84,
+  "strict_pass": 362,
+  "strict_fail": 0,
+  "comparisons": {
+    "equal": 64,
+    "worse": 4,
+    "better": 16
+  },
+  "groups": [
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "operational",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 6.162781100007123,
+      "elapsed_max": 6.202440900000511
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "operational",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 6.112832399987383,
+      "elapsed_max": 6.218967000007979
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "operational",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        10,
+        5
+      ],
+      "elapsed_min": 5.7935770000040065,
+      "elapsed_max": 5.79985549999401
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "operational",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        10,
+        9
+      ],
+      "elapsed_min": 5.767142700002296,
+      "elapsed_max": 5.84615159999521
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 0.9663182000076631,
+      "elapsed_max": 1.04975989999366
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "board",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 7.282136500012712,
+      "elapsed_max": 7.6470000999979675
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.280638600001112,
+      "elapsed_max": 5.938669600000139
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.481575999991037,
+      "elapsed_max": 5.956317000003764
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.576416899988544,
+      "elapsed_max": 6.7913695000024745
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.469403499999316,
+      "elapsed_max": 7.096037099996465
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.482431900003576,
+      "elapsed_max": 8.017076199990697
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 6.325102300004801,
+      "elapsed_max": 7.607090300007258
+    },
+    {
+      "version": "matrix",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 6.0114228000020375,
+      "elapsed_max": 6.248006100009661
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "operational",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 5.741486200000509,
+      "elapsed_max": 5.755296000003
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "operational",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 5.79032859999279,
+      "elapsed_max": 5.793141700007254
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "operational",
+      "arm": "fixed",
+      "comparisons": {
+        "worse": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113899.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.158362000001944,
+      "elapsed_max": 5.162287200000719
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "operational",
+      "arm": "adaptive",
+      "comparisons": {
+        "worse": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113899.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 4.991335400001844,
+      "elapsed_max": 5.123150099985651
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 0.7370972000062466,
+      "elapsed_max": 0.8158436999947298
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "board",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 0.9425530000007711,
+      "elapsed_max": 0.9950955999956932
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "repeated",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        112239.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 4.804883499993593,
+      "elapsed_max": 4.9089117999974405
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "gap",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.00568
+      ],
+      "cut_mm": [
+        114073.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 5.628329400002258,
+      "elapsed_max": 5.845932500000345
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "disruptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 4.210207700001774,
+      "elapsed_max": 4.9805103999970015
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "cross",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113374.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 4.144147700004396,
+      "elapsed_max": 4.163992300003883
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "geometry",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 4.162109299999429,
+      "elapsed_max": 4.16533960000379
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 2.300545999998576,
+      "elapsed_max": 2.606276099992101
+    },
+    {
+      "version": "matrix",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 2.2105889999947976,
+      "elapsed_max": 2.577102499999455
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "operational",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 6.049459999994724,
+      "elapsed_max": 6.977192499994999
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "operational",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 6.0421688000060385,
+      "elapsed_max": 6.080893100006506
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "operational",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        27,
+        27
+      ],
+      "elapsed_min": 5.67470350000076,
+      "elapsed_max": 5.784813100006431
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "operational",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        30,
+        22
+      ],
+      "elapsed_min": 5.782688200008124,
+      "elapsed_max": 5.7930071000009775
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 0.9836092999903485,
+      "elapsed_max": 1.238529499998549
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "board",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        32,
+        32
+      ],
+      "elapsed_min": 2.9359355999913532,
+      "elapsed_max": 3.325685700008762
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        128,
+        128
+      ],
+      "elapsed_min": 6.373445300007006,
+      "elapsed_max": 6.653324999992037
+    },
+    {
+      "version": "followup",
+      "case": "263",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        3
+      ],
+      "remnants": [
+        2.6864399999999997
+      ],
+      "cut_mm": [
+        46245.0
+      ],
+      "attempts": [
+        128,
+        128
+      ],
+      "elapsed_min": 5.960374600006617,
+      "elapsed_max": 6.156345400013379
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "operational",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 5.970502999989549,
+      "elapsed_max": 6.1205328999931226
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "operational",
+      "arm": "aa",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 5.794177099989611,
+      "elapsed_max": 6.138873200005037
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "operational",
+      "arm": "fixed",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        112347.0
+      ],
+      "attempts": [
+        24,
+        22
+      ],
+      "elapsed_min": 6.13184440000623,
+      "elapsed_max": 6.507889700005762
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "operational",
+      "arm": "adaptive",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.00568
+      ],
+      "cut_mm": [
+        113397.0
+      ],
+      "attempts": [
+        25,
+        24
+      ],
+      "elapsed_min": 6.164770699993824,
+      "elapsed_max": 6.205416199998581
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "baseline",
+      "comparisons": {
+        "equal": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        1.68848
+      ],
+      "cut_mm": [
+        113813.5
+      ],
+      "attempts": [
+        0,
+        0
+      ],
+      "elapsed_min": 0.7931674999999814,
+      "elapsed_max": 0.8107529999979306
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "board",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.3302
+      ],
+      "cut_mm": [
+        114380.0
+      ],
+      "attempts": [
+        128,
+        128
+      ],
+      "elapsed_min": 8.123072599992156,
+      "elapsed_max": 8.749287699989509
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "fixed",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.0056799999999995
+      ],
+      "cut_mm": [
+        111885.0
+      ],
+      "attempts": [
+        128,
+        128
+      ],
+      "elapsed_min": 10.203063199995086,
+      "elapsed_max": 10.35578300000634
+    },
+    {
+      "version": "followup",
+      "case": "298",
+      "phase": "checkpoint",
+      "arm": "adaptive",
+      "comparisons": {
+        "better": 2
+      },
+      "boards": [
+        8
+      ],
+      "remnants": [
+        2.3607
+      ],
+      "cut_mm": [
+        111475.0
+      ],
+      "attempts": [
+        128,
+        128
+      ],
+      "elapsed_min": 6.7388648000051035,
+      "elapsed_max": 6.917625900008716
+    }
+  ]
+}

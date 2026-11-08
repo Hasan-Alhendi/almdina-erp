@@ -23,6 +23,14 @@ class FrontendAssetLoadingContractTest(unittest.TestCase):
         registry = ROOT / "public/js/door_cutting_order/core/door_cutting_order_workspace_asset_registry.js"
         for entry in (*PAGE_ROOT.rglob("*.js"), registry):
             with self.subTest(entry=str(entry.relative_to(ROOT))):
+                source = entry.read_text(encoding="utf-8")
+                if entry == PAGE_ROOT / "board_editor" / "board_editor.js":
+                    # Clean path to Frappe's extension detector, versioned URL to loader.
+                    self.assertIn("const path = splitAt === -1 ? raw : raw.slice(0, splitAt)", source)
+                    self.assertIn("if (splitAt === -1) return frappe.require(path)", source)
+                    self.assertIn("frappe.assets.load_asset(path, url)", source)
+                    self.assertNotIn("frappe.require(raw)", source)
+                    continue
                 self.assertFalse(
                     re.search(r'["\x27`]([^"\x27`\s]+\.js\?[^"\x27`\s]+)["\x27`]', entry.read_text()),
                     "Lazy script declarations must use Frappe's native release cache version.",

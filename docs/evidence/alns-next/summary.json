@@ -1,0 +1,92 @@
+{
+  "base": "ed09369ca6e09d64658691c61e7362e0325c51a4",
+  "rows": [
+    {
+      "case": "108",
+      "patterns": 323,
+      "pool_build_sec": 6.35899999999674,
+      "stage1": "OPTIMAL",
+      "stage2": "OPTIMAL",
+      "before_remnant_m2": 2.6120200000000002,
+      "after_remnant_m2": 2.6120200000000002,
+      "before_mm": 70503.0,
+      "after_mm": 70448.0,
+      "before_segments": 81,
+      "after_segments": 81,
+      "comparison": "better",
+      "strict": true
+    },
+    {
+      "case": "154",
+      "patterns": 378,
+      "pool_build_sec": 17.094000000011874,
+      "stage1": "OPTIMAL",
+      "stage2": "OPTIMAL",
+      "before_remnant_m2": 0.78392,
+      "after_remnant_m2": 0.78392,
+      "before_mm": 74998.57813036592,
+      "after_mm": 74998.57813036592,
+      "before_segments": 106,
+      "after_segments": 106,
+      "comparison": "equal",
+      "strict": true
+    },
+    {
+      "case": "263",
+      "patterns": 191,
+      "pool_build_sec": 10.39100000000326,
+      "stage1": "OPTIMAL",
+      "stage2": "OPTIMAL",
+      "before_remnant_m2": 2.6864399999999997,
+      "after_remnant_m2": 2.6864399999999997,
+      "before_mm": 46191.0,
+      "after_mm": 46055.0,
+      "before_segments": 74,
+      "after_segments": 69,
+      "comparison": "better",
+      "strict": true
+    },
+    {
+      "case": "298",
+      "patterns": 451,
+      "pool_build_sec": 5.73399999999674,
+      "stage1": "FEASIBLE",
+      "stage2": "OPTIMAL",
+      "before_remnant_m2": 1.7104399999999997,
+      "after_remnant_m2": 1.7104399999999997,
+      "before_mm": 112423.5,
+      "after_mm": 111871.5,
+      "before_segments": 119,
+      "after_segments": 126,
+      "comparison": "better",
+      "strict": true
+    }
+  ],
+  "strict_roundtrips": 5,
+  "source_unchanged": true,
+  "solver_backend": "CBC 2.10.12",
+  "environment": {
+    "python": "3.11.3 (tags/v3.11.3:f3909b8, Apr  4 2023, 23:49:59) [MSC v.1934 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "ortools": "9.15.6755"
+  },
+  "negative_probe": {
+    "backend": "CP-SAT",
+    "case": "154",
+    "patterns": 378,
+    "error": "Windows fatal exception: access violation",
+    "frame": "ortools/sat/python/cp_model.py solve; prototype run line 157",
+    "watchdog_sec": 90,
+    "action": "Isolated process terminated; production code untouched. CBC linear model used for final probes."
+  },
+  "pilot_correction": "Initial prototype counted changed legacy complexity metadata as improvement on 154; corrected comparison before all four final probes. Final 154 is equal.",
+  "limitations": [
+    "Historical multi-budget pool, not a cold or equal-budget comparison",
+    "OPTIMAL applies to this finite pool and scalar objectives, not global geometry or the entire production comparator",
+    "No increased remnant in any of four cases",
+    "Pattern generation is not yet targeted pricing",
+    "298 shorter network has seven more segments",
+    "263 recovers a pre-existing native20 result",
+    "CP-SAT backend failed in local Windows environment"
+  ]
+}
