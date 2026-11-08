@@ -206,11 +206,15 @@ class TestV3RequiredRepresentation(unittest.TestCase):
         order.pieces[0].__dict__.update(scenario['piece_overrides'])
         original = FrappeCutDimensionPlanAdapter.piece_row_as_dict
         self.assertEqual(scenario['sha256']['v3'], workspace.plan_input_fingerprint(order, plan))
-        def rounded(row):
+        # In this scenario edge banding is selected, so the canonical policy
+        # restores the cut width even if a raw adapter width is rounded.
+        # Mutate an independent manufacturing input that the policy does not
+        # override to ensure adapter drift still invalidates the V3 fingerprint.
+        def drifted_quantity(row):
             data = original(row)
-            data['width_cm'] = float(round(data['width_cm']))
+            data['qty'] = int(data['qty']) + 1
             return data
-        with patch.object(FrappeCutDimensionPlanAdapter, 'piece_row_as_dict', side_effect=rounded):
+        with patch.object(FrappeCutDimensionPlanAdapter, 'piece_row_as_dict', side_effect=drifted_quantity):
             self.assertNotEqual(scenario['sha256']['v3'], workspace.plan_input_fingerprint(order, plan))
         self.assertEqual(scenario['sha256']['v3'], workspace.plan_input_fingerprint(order, plan))
 
