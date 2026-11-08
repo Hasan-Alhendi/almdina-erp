@@ -135,10 +135,11 @@ assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
 assert.equal(sections[5].rows[1].value, "تعديلات {order_name}");
 assert.equal(sections[5].rows.length, 4);
 assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
-assert.equal(sections[0].rows[1].value, "Same as cutting tool");
-assert.equal(sections[0].rows[5].value, 5);
-assert.equal(sections[0].rows[6].value, "Panel Saw");
-assert.equal(sections[0].rows[7].value, 10);
+assert.equal(sections[0].rows[1].value, "Enabled");
+assert.equal(sections[0].rows[2].value, "Same as cutting tool");
+assert.equal(sections[0].rows[6].value, 5);
+assert.equal(sections[0].rows[7].value, "Panel Saw");
+assert.equal(sections[0].rows[8].value, 10);
 assert.equal(model.catalogLabel(current, "optimization_catalog", "legacy_unknown"), "خوارزمية قديمة");
 assert.equal(model.catalogLabel(current, "optimization_catalog", "ghost_id"), "ghost_id");
 

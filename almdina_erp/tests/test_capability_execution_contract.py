@@ -207,10 +207,10 @@ class TestCapabilityExecutionContract(unittest.TestCase):
             '"almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order.recalculate_order"',
             controls,
         )
-        self.assertIn("__almdinaPlanCommandBound", controls)
-        self.assertIn("scheduleSimplify", controls)
+        self.assertIn("__almdinaRecalculateDelegated", controls)
+        self.assertIn('.on("click.almdinaRecalculate", ".dco-recalculate-plan"', controls)
+        self.assertIn("syncRecalculateButton(frm)", controls)
         self.assertIn("setTextIfChanged", controls)
-        self.assertIn('.off("click")', controls)
         self.assertNotIn("frm.save", controls)
         self.assertNotIn("frappe.call", controls)
         self.assertIn("secureInvoicePrint", source)

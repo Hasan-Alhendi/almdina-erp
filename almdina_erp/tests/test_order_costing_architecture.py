@@ -168,7 +168,11 @@ class TestOrderCostingArchitecture(unittest.TestCase):
         self.assertNotIn("_copy_compatibility_costs_to_plan", source)
         self.assertIn("cost_snapshot_version", source)
         self.assertIn("COST_SNAPSHOT_VERSION", source)
-        self.assertNotIn("apply_plan_costs", approval)
+        # Only legacy Board Editor drafts missing plan costs may be backfilled;
+        # the canonical Cutting Plan owns costs, not DCO.
+        self.assertIn('if source_type == BOARD_EDITOR and cint(getattr(plan, "cost_snapshot_version", 0)) < COST_SNAPSHOT_VERSION:', approval)
+        self.assertIn("initialize_draft_plan_cost_snapshot(order, plan)", approval)
+        self.assertIn("apply_plan_costs(plan, edge_cost_usd=factory_execution_edge_cost(order, plan))", approval)
         self.assertNotIn("board_rate_usd =", approval)
         self.assertNotIn("cutting_cost_per_board_usd =", approval)
         self.assertNotIn("project_plan_costs_to_order", approval)
