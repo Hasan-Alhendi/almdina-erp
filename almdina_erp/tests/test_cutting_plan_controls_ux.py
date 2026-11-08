@@ -95,7 +95,9 @@ def test_simple_controls_keep_only_current_settings_recalculation_action():
     assert "find(DUPLICATED_ACTIONS)" in controls
     assert "duplicated.remove()" in controls
     assert "Recalculate with the current settings" in controls
-    assert "Recalculate with the current settings" in plan
+    # The presenter delegates the one recalculation button to PlanControls;
+    # it no longer duplicates its translated label in the presentation file.
+    assert "controls.syncRecalculateButton(frm)" in plan
 
 
 def test_recalculation_button_uses_preview_session_without_full_document_plan_save():
