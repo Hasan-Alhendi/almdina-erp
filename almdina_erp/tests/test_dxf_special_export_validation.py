@@ -163,6 +163,12 @@ class TestSpecialExportValidation(unittest.TestCase):
             applied_trim_length_cm=0,
         )
         snapshot["sheets"][0]["pieces"][0]["x"] = 0.2
+        # Posed geometry lives in physical sheet coordinates; move the outline
+        # together with its placed row so the gap is really 2 mm.
+        outer = snapshot["sheets"][0]["pieces"][0]["geometry"]["outer"]
+        snapshot["sheets"][0]["pieces"][0]["geometry"]["outer"] = [
+            [point[0] + 2, point[1]] for point in outer
+        ]
         plan.snapshot_json = json.dumps(snapshot)
 
         with patch.object(frappe, "get_doc", return_value=order, create=True):

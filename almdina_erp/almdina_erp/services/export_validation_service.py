@@ -279,6 +279,7 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
             issues.append(issue(PIECE_INVALID_DIMENSIONS, CATEGORY_DIMENSIONS, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"actual_width_mm": width, "actual_height_mm": height}))
         resource_kind = str(getattr(source, "resource_kind", "FULL_BOARD") or "FULL_BOARD").upper()
         stored_sheet = persisted_sheets.get(sheet_no) or {}
+        physical_bounds_mm = None
         stored_piece = next(
             (
                 row
@@ -323,6 +324,10 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                             debug={"exception": str(exc)},
                         ))
                         continue
+                    physical_bounds_mm = (
+                        min_x + trim_x, min_y + trim_y,
+                        max_x + trim_x, max_y + trim_y,
+                    )
                     out_of_sheet = (
                         min_x + trim_x < -1e-7
                         or min_y + trim_y < -1e-7
@@ -363,29 +368,14 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                     debug={"exception": str(exc)},
                 ))
                 continue
+            physical_bounds_mm = (
+                physical_x, physical_y, physical_x + width, physical_y + height,
+            )
             out_of_sheet = (
                 physical_x < -1e-7 or physical_y < -1e-7
                 or physical_x + width > flt(source.full_width_mm) + 1e-7
                 or physical_y + height > flt(source.full_length_mm) + 1e-7
             )
-            if (snapshot.get("trim_policy") or {}).get("policy") == (
-                "mandatory_minimum_v1"
-            ):
-                minimum_mm = flt(plan.trim_margin_mm)
-                edge_gaps = {
-                    "left": physical_x,
-                    "right": flt(source.full_width_mm) - physical_x - width,
-                    "top": physical_y,
-                    "bottom": flt(source.full_length_mm) - physical_y - height,
-                }
-                for edge, actual_mm in edge_gaps.items():
-                    if actual_mm < minimum_mm - 1e-6:
-                        issues.append(issue(
-                            APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT,
-                            target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)),
-                            params={"sheet_no": sheet_no, "edge": edge, "actual_margin_mm": actual_mm, "required_trim_mm": minimum_mm},
-                        ))
-                        break
         else:
             # Preserve the existing Remnant/OFFCUT usable-frame contract.
             out_of_sheet = (
@@ -393,6 +383,38 @@ def validate_cutting_plan_issues(plan: Any) -> list[DxfValidationIssue]:
                 or x + width > usable_w + 1e-7
                 or y + height > usable_h + 1e-7
             )
+        # Both placed rectangles and explicitly posed DXF/Board Editor outlines
+        # must obey the same mandatory *physical* perimeter clearance.
+        if (
+            physical_bounds_mm is not None
+            and source.source_type == "Full Board"
+            and resource_kind != "OFFCUT"
+            and (snapshot.get("trim_policy") or {}).get("policy") == "mandatory_minimum_v1"
+        ):
+            left, top, right, bottom = physical_bounds_mm
+            minimum_mm = flt(plan.trim_margin_mm)
+            edge_gaps = {
+                "left": left,
+                "right": flt(source.full_width_mm) - right,
+                "top": top,
+                "bottom": flt(source.full_length_mm) - bottom,
+            }
+            for edge, actual_mm in edge_gaps.items():
+                if actual_mm < minimum_mm - 1e-6:
+                    issues.append(issue(
+                        APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT,
+                        target=piece_target(
+                            source_piece_no=getattr(piece, "source_piece_no", None),
+                            copy_no=getattr(piece, "copy_no", None),
+                        ),
+                        params={
+                            "sheet_no": sheet_no,
+                            "edge": edge,
+                            "actual_margin_mm": actual_mm,
+                            "required_trim_mm": minimum_mm,
+                        },
+                    ))
+                    break
         if out_of_sheet:
             issues.append(issue(PIECE_OUTSIDE_SHEET, CATEGORY_LAYOUT, target=piece_target(source_piece_no=getattr(piece, "source_piece_no", None), copy_no=getattr(piece, "copy_no", None)), params={"sheet_no": sheet_no}))
 
