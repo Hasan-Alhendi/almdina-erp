@@ -1,0 +1,241 @@
+"""Bounded ZIP streaming and verified import of Frappe's original backup artifacts."""
+from __future__ import annotations
+
+import fcntl
+import gzip
+import hashlib
+import importlib
+import json
+import os
+import stat
+import tarfile
+import tempfile
+import zipfile
+from contextlib import ExitStack
+from pathlib import Path
+from typing import BinaryIO
+
+import frappe
+from werkzeug.wrappers import Response
+
+from almdina_erp.almdina_erp.application.backups.management import BackupArtifact, BackupBundle
+from almdina_erp.almdina_erp.domain.backups.zip_format import FORMAT, VERSION, validate_manifest
+from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
+
+CHUNK = 1024 * 1024
+MAX_MANIFEST = 64 * 1024
+MAX_ZIP = 4 * 1024 ** 3  # Operator can lower this site setting; each HTTP chunk is at most 4 MiB.
+HARD_LIMIT = 32 * 1024 ** 3
+
+
+def upload_limit() -> int:
+    return min(HARD_LIMIT, max(1, int(frappe.conf.get("backup_zip_max_bytes") or MAX_ZIP)))
+
+
+def app_versions() -> dict[str, str]:
+    return {name: str(importlib.import_module(name).__version__) for name in frappe.get_installed_apps()}
+
+
+def _hash(stream: BinaryIO) -> str:
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(CHUNK), b""):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+class _ZipSink:
+    def __init__(self) -> None:
+        self.parts: list[bytes] = []
+        self.offset = 0
+
+    def write(self, data: bytes) -> int:
+        self.parts.append(data)
+        self.offset += len(data)
+        return len(data)
+
+    def tell(self) -> int:
+        return self.offset
+
+    def flush(self) -> None:
+        pass
+
+    def drain(self):
+        parts, self.parts = self.parts, []
+        return parts
+
+
+def download_response(bundle: BackupBundle) -> Response:
+    """Pin file descriptors and verify their bytes before returning response headers."""
+    stack = ExitStack()
+    try:
+        opened: list[tuple[BackupArtifact, BinaryIO]] = []
+        for artifact in bundle.artifacts:
+            fd = os.open(artifact.path, os.O_RDONLY | os.O_NOFOLLOW)
+            stream = stack.enter_context(os.fdopen(fd, "rb"))
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size != artifact.size or _hash(stream) != artifact.checksum:
+                raise ValueError("integrity")
+            stream.seek(0)
+            opened.append((artifact, stream))
+        manifest = {
+            "format": FORMAT, "version": VERSION,
+            "site": str(frappe.local.site), "database_type": str(frappe.conf.db_type),
+            "backup_identifier": bundle.identifier, "apps": app_versions(),
+            "artifacts": [{"kind": a.kind, "filename": a.filename, "size": a.size, "sha256": a.checksum} for a, _ in opened],
+        }
+        validate_manifest(manifest, str(frappe.local.site), str(frappe.conf.db_type), manifest["apps"])
+        raw = json.dumps(manifest, ensure_ascii=False, sort_keys=True).encode()
+        if len(raw) > MAX_MANIFEST:
+            raise ValueError("manifest")
+    except Exception:
+        stack.close()
+        raise
+
+    def generate():
+        sink = _ZipSink()
+        try:
+            with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+                archive.writestr("manifest.json", raw)
+                yield from sink.drain()
+                for artifact, stream in opened:
+                    info = zipfile.ZipInfo(artifact.filename)
+                    info.file_size = artifact.size
+                    info.compress_type = zipfile.ZIP_STORED
+                    with archive.open(info, "w", force_zip64=True) as target:
+                        for block in iter(lambda: stream.read(CHUNK), b""):
+                            target.write(block)
+                            yield from sink.drain()
+                    yield from sink.drain()
+            yield from sink.drain()
+        finally:
+            stack.close()
+
+    response = Response(generate(), mimetype="application/zip", direct_passthrough=True)
+    response.headers["Content-Disposition"] = f'attachment; filename="{bundle.identifier}.zip"'
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.call_on_close(stack.close)
+    return response
+
+
+def _verify_inner(path: Path, kind: str, site: str, config_key: str) -> None:
+    if kind == "site_config":
+        if path.stat().st_size > CHUNK:
+            raise ValueError("config")
+        config = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(config, dict) or not config_key or config.get("encryption_key") != config_key:
+            raise ValueError("encryption_key")
+    elif kind == "database":
+        with gzip.open(path, "rb") as stream:
+            first = stream.read(CHUNK)
+            if not first.startswith(b"-- begin frappe metadata") and not first.startswith(b"-- Backup generated by Frappe"):
+                raise ValueError("database")
+            current_version = importlib.import_module("frappe").__version__
+            if f"version = {current_version}".encode() not in first[:4096] and f"Frappe {current_version}".encode() not in first[:4096]:
+                raise ValueError("versions")
+            total = len(first)
+            for part in iter(lambda: stream.read(CHUNK), b""):
+                total += len(part)
+                if total > 100 * 1024 ** 3:
+                    raise ValueError("database")
+    else:
+        with tarfile.open(path, "r:*") as archive:
+            extracted = 0
+            directory = "public" if kind == "public_files" else "private"
+            for member in archive:
+                normalized = member.name.lstrip("/").removeprefix("./")
+                segments = normalized.split("/")
+                if (segments[:4] != ["sites", site, directory, "files"]
+                    or ".." in segments or member.issym() or member.islnk()
+                    or not (member.isfile() or member.isdir())):
+                    raise ValueError("files")
+                if member.isfile():
+                    extracted += member.size
+                    if extracted > 100 * 1024 ** 3:
+                        raise ValueError("size")
+                    handle = archive.extractfile(member)
+                    if handle is None:
+                        raise ValueError("files")
+                    with handle:
+                        for _ in iter(lambda: handle.read(CHUNK), b""):
+                            pass
+
+
+def import_zip(source: Path, operation_id: str, history: FrappeBackupHistory) -> BackupBundle:
+    """Extract to private staging, then publish four files without overwriting."""
+    from frappe.utils.backups import get_backup_path
+
+    if source.is_symlink() or not source.is_file() or source.stat().st_size > upload_limit():
+        raise ValueError("upload")
+    root = Path(get_backup_path()).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    published: list[Path] = []
+    marker: Path | None = None
+    with tempfile.TemporaryDirectory(prefix=".almdina-import-", dir=root) as tmp:
+        staging = Path(tmp)
+        try:
+            with zipfile.ZipFile(source) as archive:
+                infos = archive.infolist()
+                if len(infos) != 5 or len({i.filename for i in infos}) != 5:
+                    raise ValueError("artifacts")
+                if "manifest.json" not in archive.namelist():
+                    raise ValueError("manifest")
+                manifest_info = archive.getinfo("manifest.json")
+                if not 0 < manifest_info.file_size <= MAX_MANIFEST:
+                    raise ValueError("manifest")
+                with archive.open(manifest_info) as stream:
+                    manifest = json.loads(stream.read(MAX_MANIFEST + 1))
+                identifier, entries = validate_manifest(
+                    manifest, str(frappe.local.site), str(frappe.conf.db_type), app_versions(),
+                )
+                expected = {"manifest.json", *(entry["filename"] for entry in entries)}
+                if set(archive.namelist()) != expected:
+                    raise ValueError("artifacts")
+                if sum(i.file_size for i in infos) > upload_limit() or sum(e["size"] for e in entries) > upload_limit():
+                    raise ValueError("size")
+                artifacts: list[BackupArtifact] = []
+                for entry in entries:
+                    info = archive.getinfo(entry["filename"])
+                    mode = info.external_attr >> 16
+                    if (info.flag_bits & 1 or info.compress_type != zipfile.ZIP_STORED
+                        or info.is_dir() or (mode and stat.S_IFMT(mode) not in (0, stat.S_IFREG))
+                        or info.file_size != entry["size"]):
+                        raise ValueError("artifacts")
+                    staged = staging / entry["filename"]
+                    digest = hashlib.sha256()
+                    with archive.open(info) as inp, staged.open("xb") as out:
+                        size = 0
+                        for block in iter(lambda: inp.read(CHUNK), b""):
+                            size += len(block)
+                            if size > entry["size"]:
+                                raise ValueError("size")
+                            out.write(block)
+                            digest.update(block)
+                    if size != entry["size"] or digest.hexdigest() != entry["sha256"]:
+                        raise ValueError("integrity")
+                    _verify_inner(staged, entry["kind"], str(frappe.local.site), str(frappe.conf.get("encryption_key") or ""))
+                    artifacts.append(BackupArtifact(entry["kind"], str(root / staged.name), staged.name, size, digest.hexdigest()))
+            bundle = BackupBundle(identifier, tuple(artifacts))
+            with (root / ".almdina-backup.lock").open("a+b") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if frappe.db.exists("Almdina Backup Operation", {"backup_identifier": identifier, "status": "Completed"}):
+                    raise ValueError("duplicate")
+                for artifact in artifacts:
+                    if (root / artifact.filename).exists():
+                        raise ValueError("duplicate")
+                marker = root / f".almdina-imported-{identifier}"
+                with marker.open("x"):
+                    pass
+                for artifact in artifacts:
+                    destination = root / artifact.filename
+                    os.link(staging / artifact.filename, destination)  # EEXIST, never replace.
+                    published.append(destination)
+                history.mark_completed(operation_id, bundle)
+                frappe.db.commit()  # Files and their history become visible together to later requests.
+            return bundle
+        except Exception:
+            for path in published:
+                path.unlink(missing_ok=True)
+            if marker is not None:
+                marker.unlink(missing_ok=True)
+            raise
