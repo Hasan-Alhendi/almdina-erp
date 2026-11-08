@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+from frappe.utils import cint
 
 
 MEMBERSHIP_FIELD = "custom_almdina_workforce_member"
