@@ -223,8 +223,9 @@ def test_upload_verifies_size_and_sha256_before_rename(tmp_path: Path) -> None:
     local.write_bytes(b"database")
     bundle = BackupBundle("20261008_020000-site_local", (_artifact(local),))
     sftp = FakeSFTP()
-    reference = gateway(FakeClient(sftp)).upload(bundle)
-    assert reference == "/srv/almadina/20261008_020000-site_local"
+    uploaded = gateway(FakeClient(sftp)).upload(bundle)
+    assert uploaded.reference == "/srv/almadina/20261008_020000-site_local"
+    assert uploaded.stored_bundle.identifier == "20261008_020000-site_local"
     assert sftp.contents[local.name] == b"database"
     assert len(sftp.renames) == 1
     assert sftp.renames[0][1] == local.name

@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from almdina_erp.almdina_erp.application.backups.management import BackupBundle
+from almdina_erp.almdina_erp.application.backups.management import BackupBundle, ExternalUploadResult
 from almdina_erp.almdina_erp.domain.backups.policy import (
     backup_group_identifier,
     normalize_remote_path,
@@ -200,7 +200,7 @@ class SFTPBackupGateway:
                 digest.update(chunk)
         return digest.hexdigest()
 
-    def upload(self, bundle: BackupBundle) -> str:
+    def upload(self, bundle: BackupBundle) -> ExternalUploadResult:
         client, sftp = self._connect()
         uploaded: list[str] = []
         temporary: list[str] = []
@@ -234,7 +234,8 @@ class SFTPBackupGateway:
                 sftp.rename(temp_name, final_name)
                 temporary.remove(temp_name)
                 uploaded.append(final_name)
-            return posixpath.join(self.config.remote_path, bundle.identifier)
+            reference = posixpath.join(self.config.remote_path, bundle.identifier)
+            return ExternalUploadResult(reference=reference, stored_bundle=bundle)
         except Exception as exc:
             for name in (*temporary, *uploaded):
                 try:

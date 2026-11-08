@@ -11,6 +11,10 @@ class BackupArtifact:
     filename: str
     size: int
     checksum: str
+    plaintext_filename: str = ""
+    plaintext_size: int = 0
+    plaintext_checksum: str = ""
+    encryption: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +25,14 @@ class BackupBundle:
     @property
     def total_size(self) -> int:
         return sum(max(0, int(artifact.size)) for artifact in self.artifacts)
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalUploadResult:
+    """Remote reference plus the artifact set actually persisted externally."""
+
+    reference: str
+    stored_bundle: BackupBundle
 
 
 class BackupEngine(Protocol):
@@ -44,7 +56,7 @@ class LocalRetentionGateway(Protocol):
 class ExternalBackupGateway(Protocol):
     def test_connection(self) -> None: ...
 
-    def upload(self, bundle: BackupBundle) -> str: ...
+    def upload(self, bundle: BackupBundle) -> ExternalUploadResult | str: ...
 
     def apply_retention(self, keep_last: int) -> None: ...
 
@@ -74,11 +86,18 @@ def run_backup(
     try:
         bundle = engine.create()
         if normalized_target == "external":
-            reference = external.upload(bundle)
+            uploaded = external.upload(bundle)
+            if isinstance(uploaded, ExternalUploadResult):
+                reference = uploaded.reference
+                stored_bundle = uploaded.stored_bundle
+            else:
+                reference = str(uploaded)
+                stored_bundle = bundle
             external.apply_retention(keep_last)
-        else:
-            reference = bundle.identifier
-            local_retention.apply(keep_last)
+            history.mark_completed(operation_id, stored_bundle, reference)
+            return stored_bundle
+        reference = bundle.identifier
+        local_retention.apply(keep_last)
         history.mark_completed(operation_id, bundle, reference)
         return bundle
     except Exception as exc:
@@ -106,6 +125,7 @@ __all__ = [
     "BackupEngine",
     "BackupHistory",
     "ExternalBackupGateway",
+    "ExternalUploadResult",
     "LocalRetentionGateway",
     "run_backup",
     "test_external_connection",

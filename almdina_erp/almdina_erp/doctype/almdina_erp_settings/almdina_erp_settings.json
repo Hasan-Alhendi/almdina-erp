@@ -12,7 +12,7 @@
     "print_identity_section","print_factory_name","print_factory_description","print_factory_address","print_factory_contacts",
     "whatsapp_messages_section","whatsapp_measurements_text","whatsapp_measurement_amendments_text","whatsapp_invoice_text","whatsapp_stage_messages","whatsapp_session_id","whatsapp_session_name",
     "backup_restore_section","local_backup_enabled","local_backup_frequency","local_backup_time","local_backup_weekday","local_backup_day_of_month","local_backup_retention",
-    "external_backup_section","external_backup_enabled","external_backup_frequency","external_backup_time","external_backup_weekday","external_backup_day_of_month","external_backup_retention",
+    "external_backup_section","external_backup_enabled","external_backup_frequency","external_backup_time","external_backup_weekday","external_backup_day_of_month","external_backup_retention","external_backup_age_public_key",
     "ssh_backup_section","ssh_host","ssh_port","ssh_username","ssh_auth_method","ssh_password","ssh_private_key","ssh_private_key_passphrase","remote_backup_path",
     "db_restore_section","db_restore_type","db_restore_host","db_restore_port","db_restore_root_username","db_restore_root_password"
   ],
@@ -84,6 +84,7 @@
     {"default":"Monday","fieldname":"external_backup_weekday","fieldtype":"Select","label":"External Backup Day of Week","options":"Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday"},
     {"default":"1","fieldname":"external_backup_day_of_month","fieldtype":"Int","label":"External Backup Day of Month","non_negative":1},
     {"default":"4","fieldname":"external_backup_retention","fieldtype":"Int","label":"Keep Last External Backups","non_negative":1},
+    {"description":"age X25519 recipient (age1...). Used only to encrypt external backups before SFTP upload. Never paste the AGE-SECRET-KEY private key here. Losing the private key makes encrypted backups unrecoverable.","fieldname":"external_backup_age_public_key","fieldtype":"Small Text","label":"External Backup age Public Key"},
     {"fieldname":"ssh_backup_section","fieldtype":"Section Break","label":"SSH Backup Server"},
     {"fieldname":"ssh_host","fieldtype":"Data","label":"SSH Host"},
     {"default":"22","fieldname":"ssh_port","fieldtype":"Int","label":"SSH Port","non_negative":1},

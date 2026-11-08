@@ -91,6 +91,7 @@ SECTION_FIELDS = MappingProxyType(
                 "external_backup_weekday",
                 "external_backup_day_of_month",
                 "external_backup_retention",
+                "external_backup_age_public_key",
                 "ssh_host",
                 "ssh_port",
                 "ssh_username",

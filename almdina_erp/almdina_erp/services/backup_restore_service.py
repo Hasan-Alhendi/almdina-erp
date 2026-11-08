@@ -5,11 +5,15 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import cint, now, now_datetime
+from frappe.utils import cint, get_datetime, now, now_datetime
 
 from almdina_erp.almdina_erp.application.backups.import_backup import import_backup_zip as run_import_backup_zip
-from almdina_erp.almdina_erp.application.backups.management import run_backup
+from almdina_erp.almdina_erp.application.backups.management import BackupBundle, run_backup
 from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key
+from almdina_erp.almdina_erp.domain.backups.retry import (
+    MAX_BACKUP_ATTEMPTS,
+    decide_external_backup_retry,
+)
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.backups.db_root import (
     DbRootAuthenticationError,
@@ -22,6 +26,9 @@ from almdina_erp.almdina_erp.infrastructure.backups.db_root import (
     restore_runtime_ready,
     test_db_root_connection,
 )
+from almdina_erp.almdina_erp.domain.backups.encryption import validate_age_public_key
+from almdina_erp.almdina_erp.infrastructure.backups.age_crypto import BackupEncryptionError
+from almdina_erp.almdina_erp.infrastructure.backups.encrypted_external import AgeEncryptedExternalGateway
 from almdina_erp.almdina_erp.infrastructure.backups.export_zip import (
     BackupExportError,
     annotate_downloadable,
@@ -118,6 +125,17 @@ def _ssh_gateway(settings: Any | None = None) -> SFTPBackupGateway:
         raise AssertionError("unreachable")
 
 
+def _external_backup_gateway(settings: Any | None = None) -> AgeEncryptedExternalGateway:
+    """SFTP upload wrapped with age encryption; private keys never enter this path."""
+
+    settings = settings or _settings()
+    try:
+        public_key = validate_age_public_key(settings.get("external_backup_age_public_key"))
+    except ValueError as exc:
+        raise BackupEncryptionError(str(exc) or "backup_encryption_public_key_missing") from exc
+    return AgeEncryptedExternalGateway(_ssh_gateway(settings), public_key=public_key)
+
+
 def _enqueue_backup(operation_id: str, target: str) -> None:
     frappe.enqueue(
         _JOB_METHOD,
@@ -129,6 +147,40 @@ def _enqueue_backup(operation_id: str, target: str) -> None:
         operation_id=operation_id,
         target=target,
     )
+
+
+class _DeferredFailureHistory:
+    """Capture failure codes without marking Failed so External retries can be scheduled."""
+
+    def __init__(self, history: FrappeBackupHistory) -> None:
+        self._history = history
+        self.failure_code: str | None = None
+
+    def mark_running(self, operation_id: str) -> None:
+        # begin_attempt already transitioned Queued -> Running for External retries.
+        return None
+
+    def mark_completed(self, operation_id: str, bundle: BackupBundle, reference: str = "") -> None:
+        self._history.mark_completed(operation_id, bundle, reference)
+
+    def mark_failed(self, operation_id: str, error_code: str) -> None:
+        self.failure_code = str(error_code or "backup_operation_failed")[:140]
+
+
+def _enqueue_due_external_retries(history: FrappeBackupHistory, *, current) -> None:
+    for row in history.due_external_retries(now=current):
+        operation_id = str(row.get("operation_id") or "").strip()
+        if not operation_id:
+            continue
+        try:
+            _enqueue_backup(operation_id, "external")
+            frappe.db.commit()
+        except Exception:
+            frappe.logger("almdina_backup").error(
+                "Failed to enqueue deferred external backup retry for %s",
+                operation_id,
+                exc_info=True,
+            )
 
 
 def _safe_db_root_error_message(exc: Exception) -> str:
@@ -160,6 +212,10 @@ def _safe_export_error_message(exc: BackupExportError) -> str:
         return _("Backup files are incomplete or failed integrity checks.")
     if code in {"backup_export_external_unavailable", "ssh_download_failed", "ssh_connection_failed", "ssh_authentication_failed", "ssh_remote_path_invalid"}:
         return _("Could not fetch the external backup for download.")
+    if code == "backup_export_encrypted_requires_offline_decrypt":
+        return _(
+            "This external backup is encrypted. Download a plaintext ZIP is not available on the server; decrypt the remote .age files offline with the private key, then build an Import-compatible ZIP."
+        )
     return _("Could not prepare the backup download.")
 
 
@@ -436,6 +492,8 @@ def scheduled_backup_tick() -> None:
     except Exception:
         frappe.logger("almdina_backup").error("Failed reclaiming stale backup operations", exc_info=True)
 
+    _enqueue_due_external_retries(history, current=current)
+
     for prefix, target in (("local", "Local"), ("external", "External")):
         if not cint(settings.get(f"{prefix}_backup_enabled")):
             continue
@@ -481,15 +539,47 @@ def run_backup_job(operation_id: str, target: str) -> None:
     try:
         if normalized == "external":
             if row.get("operation_type") == "Scheduled" and not cint(settings.get("external_backup_enabled")):
+                history.mark_failed(operation_id, "external_backup_disabled")
+                frappe.db.commit()
                 raise ValueError("External backup is disabled.")
-            run_backup(
-                operation_id=operation_id,
-                target="external",
-                engine=FrappeBackupEngine(ephemeral=True),
-                history=history,
-                keep_last=_retention(settings, "external"),
-                external=_ssh_gateway(settings),
-            )
+            next_retry_on = get_datetime(row.get("next_retry_on")) if row.get("next_retry_on") else None
+            if next_retry_on and next_retry_on > now_datetime():
+                return
+            attempt = cint(row.get("attempt_count") or 0) + 1
+            if attempt > MAX_BACKUP_ATTEMPTS:
+                history.mark_failed(
+                    operation_id,
+                    "backup_retry_exhausted",
+                    attempt=cint(row.get("attempt_count") or 0),
+                )
+                frappe.db.commit()
+                return
+            history.begin_attempt(operation_id, attempt)
+            deferred = _DeferredFailureHistory(history)
+            try:
+                run_backup(
+                    operation_id=operation_id,
+                    target="external",
+                    engine=FrappeBackupEngine(ephemeral=True),
+                    history=deferred,
+                    keep_last=_retention(settings, "external"),
+                    external=_external_backup_gateway(settings),
+                )
+            except Exception as exc:
+                code = deferred.failure_code or str(getattr(exc, "safe_code", None) or exc.__class__.__name__)[:140]
+                decision = decide_external_backup_retry(attempt=attempt, error_code=code)
+                if decision.action == "retry" and decision.delay_seconds is not None:
+                    history.schedule_retry(
+                        operation_id,
+                        attempt=attempt,
+                        error_code=decision.error_code,
+                        delay_seconds=decision.delay_seconds,
+                    )
+                    frappe.db.commit()
+                    return
+                history.mark_failed(operation_id, decision.error_code, attempt=attempt)
+                frappe.db.commit()
+                raise
         elif normalized == "local":
             if row.get("operation_type") == "Scheduled" and not cint(settings.get("local_backup_enabled")):
                 raise ValueError("Local backup is disabled.")

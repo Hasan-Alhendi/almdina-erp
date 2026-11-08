@@ -96,6 +96,7 @@ _BACKUP_TEXT_FIELDS = frozenset(
         "external_backup_frequency",
         "external_backup_time",
         "external_backup_weekday",
+        "external_backup_age_public_key",
         "ssh_host",
         "ssh_username",
         "ssh_auth_method",
@@ -533,10 +534,20 @@ def _validate_backup_settings(settings: Any) -> None:
         "ssh_host": _("SSH Host"),
         "ssh_username": _("SSH Username"),
         "remote_backup_path": _("Remote Backup Path"),
+        "external_backup_age_public_key": _("External Backup age Public Key"),
     }
     for fieldname, label in required.items():
         if not str(settings.get(fieldname) or "").strip():
             frappe.throw(_("{0} is required before enabling External Backup.").format(label), frappe.ValidationError)
+    try:
+        from almdina_erp.almdina_erp.domain.backups.encryption import validate_age_public_key
+
+        validate_age_public_key(settings.get("external_backup_age_public_key"))
+    except ValueError:
+        frappe.throw(
+            _("External Backup age Public Key must be a valid age1 recipient. Never paste an AGE-SECRET-KEY."),
+            frappe.ValidationError,
+        )
     try:
         normalize_remote_path(settings.get("remote_backup_path"))
     except ValueError as exc:
@@ -778,6 +789,9 @@ def _settings_values(
         values["ssh_private_key_configured"] = bool(settings.get_password("ssh_private_key", raise_exception=False))
         values["ssh_private_key_passphrase_configured"] = bool(
             settings.get_password("ssh_private_key_passphrase", raise_exception=False)
+        )
+        values["external_backup_age_public_key_configured"] = bool(
+            str(settings.get("external_backup_age_public_key") or "").strip()
         )
     if include_db_restore:
         from almdina_erp.almdina_erp.infrastructure.backups.db_root import public_db_root_settings

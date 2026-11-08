@@ -78,6 +78,9 @@ def test_scheduler_respects_independent_enabled_flags(
         def reclaim_stale_operations(self, *, now=None) -> int:
             return 0
 
+        def due_external_retries(self, *, now=None) -> list[dict[str, Any]]:
+            return []
+
         def exists_for_schedule(self, _schedule_key: str) -> bool:
             return False
 
@@ -129,10 +132,14 @@ def test_disabled_automatic_target_rejects_queued_scheduled_job(
     target: str,
 ) -> None:
     expected_target = target.title()
+    failed: list[tuple[str, str]] = []
 
     class History:
         def get(self, _operation_id: str) -> dict[str, str]:
             return {"status": "Queued", "target": expected_target, "operation_type": "Scheduled"}
+
+        def mark_failed(self, operation_id: str, error_code: str, **_kwargs: Any) -> None:
+            failed.append((operation_id, error_code))
 
     monkeypatch.setattr(service, "FrappeBackupHistory", History)
     monkeypatch.setattr(service, "_settings", lambda: FakeSettings({f"{target}_backup_enabled": 0}))
@@ -140,6 +147,10 @@ def test_disabled_automatic_target_rejects_queued_scheduled_job(
 
     with pytest.raises(ValueError, match="disabled"):
         service.run_backup_job("scheduled-op", target)
+    if target == "external":
+        assert failed == [("scheduled-op", "external_backup_disabled")]
+    else:
+        assert failed == []
 
 
 @pytest.mark.parametrize(

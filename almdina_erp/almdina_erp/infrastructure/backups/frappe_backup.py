@@ -159,15 +159,21 @@ class FrappeLocalRetention:
 
 
 def bundle_manifest(bundle: BackupBundle) -> list[dict[str, Any]]:
-    return [
-        {
+    rows: list[dict[str, Any]] = []
+    for artifact in bundle.artifacts:
+        entry: dict[str, Any] = {
             "kind": artifact.kind,
             "filename": artifact.filename,
             "size": artifact.size,
             "checksum": artifact.checksum,
         }
-        for artifact in bundle.artifacts
-    ]
+        if artifact.encryption:
+            entry["encryption"] = artifact.encryption
+            entry["plaintext_filename"] = artifact.plaintext_filename
+            entry["plaintext_size"] = int(artifact.plaintext_size)
+            entry["plaintext_checksum"] = artifact.plaintext_checksum
+        rows.append(entry)
+    return rows
 
 
 __all__ = [

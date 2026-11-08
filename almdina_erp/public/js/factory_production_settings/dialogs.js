@@ -203,6 +203,13 @@
                     { fieldname: "external_backup_weekday", fieldtype: "Select", label: t("Day of Week"), options: weekdays.join("\n"), default: values.external_backup_weekday || "Monday", depends_on: "eval:doc.external_backup_frequency==='Weekly'" },
                     { fieldname: "external_backup_day_of_month", fieldtype: "Int", label: t("Day of Month"), default: values.external_backup_day_of_month || 1, depends_on: "eval:doc.external_backup_frequency==='Monthly'" },
                     { fieldname: "external_backup_retention", fieldtype: "Int", label: t("Keep Last N Backups"), default: values.external_backup_retention || 4, reqd: 1 },
+                    {
+                        fieldname: "external_backup_age_public_key",
+                        fieldtype: "Small Text",
+                        label: t("External Backup age Public Key"),
+                        default: values.external_backup_age_public_key || "",
+                        description: t("Paste an age1 public recipient only. Never paste an AGE-SECRET-KEY. Losing the private key makes encrypted external backups unrecoverable."),
+                    },
                     { fieldname: "ssh_section", fieldtype: "Section Break", label: t("SSH Connection") },
                     { fieldname: "ssh_host", fieldtype: "Data", label: t("SSH Host"), default: values.ssh_host || "" },
                     { fieldname: "ssh_port", fieldtype: "Int", label: t("SSH Port"), default: values.ssh_port || 22 },

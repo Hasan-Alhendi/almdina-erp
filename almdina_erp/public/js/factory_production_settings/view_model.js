@@ -143,6 +143,7 @@
                     [t("External backup"), source.external_backup_enabled ? t("Enabled") : t("Disabled")],
                     [t("External schedule"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
                     [t("External retention"), t("Last {0} backups", [display(source.external_backup_retention, 4)])],
+                    [t("External encryption key"), source.external_backup_age_public_key_configured ? t("Configured") : t("Not configured")],
                     [t("SSH server"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("Not configured")],
                     [t("SSH user"), source.ssh_username || t("Not configured")],
                     [t("Authentication method"), t(source.ssh_auth_method || "Private Key")],

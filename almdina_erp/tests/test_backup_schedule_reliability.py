@@ -66,6 +66,9 @@ def test_scheduler_marks_enqueue_failure_and_allows_retry(monkeypatch: pytest.Mo
         def reclaim_stale_operations(self, *, now=None) -> int:
             return 0
 
+        def due_external_retries(self, *, now=None) -> list[dict[str, Any]]:
+            return []
+
         def exists_for_schedule(self, schedule_key: str) -> bool:
             return exists["value"]
 
@@ -111,6 +114,9 @@ def test_scheduler_skips_active_schedule_but_not_after_failed_release(
         def reclaim_stale_operations(self, *, now=None) -> int:
             return 0
 
+        def due_external_retries(self, *, now=None) -> list[dict[str, Any]]:
+            return []
+
         def exists_for_schedule(self, _schedule_key: str) -> bool:
             return blocking["value"]
 
@@ -147,6 +153,10 @@ def test_scheduler_reclaims_stale_before_creating(monkeypatch: pytest.MonkeyPatc
             events.append("reclaim")
             return 1
 
+        def due_external_retries(self, *, now=None) -> list[dict[str, Any]]:
+            events.append("retries")
+            return []
+
         def exists_for_schedule(self, _schedule_key: str) -> bool:
             events.append("exists")
             return False
@@ -162,5 +172,5 @@ def test_scheduler_reclaims_stale_before_creating(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(service.frappe, "db", type("DB", (), {"commit": staticmethod(lambda: None)})())
 
     service.scheduled_backup_tick()
-    assert events[:2] == ["reclaim", "exists"]
+    assert events[:3] == ["reclaim", "retries", "exists"]
     assert "create" in events and "enqueue" in events

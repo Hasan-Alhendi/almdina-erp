@@ -3,12 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import frappe
-from frappe.utils import get_datetime, now, now_datetime
+from frappe.utils import cint, get_datetime, now, now_datetime
 
 from almdina_erp.almdina_erp.application.backups.management import (
     BackupArtifact,
@@ -41,6 +41,22 @@ def _file_checksum(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _load_retry_log(raw: object) -> list[dict[str, Any]]:
+    if not raw:
+        return []
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [entry for entry in payload if isinstance(entry, dict)]
+
+
+def _dump_retry_log(entries: list[dict[str, Any]]) -> str:
+    return json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
+
+
 class FrappeBackupHistory:
     def create(
         self,
@@ -63,6 +79,9 @@ class FrappeBackupHistory:
                 "requested_on": now(),
                 "schedule_key": schedule_key or None,
                 "source_operation_id": source_operation_id or None,
+                "attempt_count": 0,
+                "next_retry_on": None,
+                "retry_log": "[]",
             }
         ).insert(ignore_permissions=True)
         return operation_id
@@ -94,12 +113,26 @@ class FrappeBackupHistory:
         rows = frappe.get_all(
             DOCTYPE,
             filters={"status": ["in", ["Queued", "Running", "Prepared"]]},
-            fields=["operation_id", "status", "requested_on", "started_on", "schedule_key"],
+            fields=[
+                "operation_id",
+                "status",
+                "requested_on",
+                "started_on",
+                "schedule_key",
+                "next_retry_on",
+            ],
             limit_page_length=500,
         )
         reclaimed = 0
         for row in rows:
+            next_retry_on = get_datetime(row.next_retry_on) if row.next_retry_on else None
+            if row.status == "Queued" and next_retry_on and next_retry_on > current:
+                # Waiting for a deferred external retry; do not reclaim early.
+                continue
             requested_on = get_datetime(row.requested_on) if row.requested_on else None
+            if row.status == "Queued" and next_retry_on and next_retry_on <= current:
+                # Anchor stale detection to the retry due time, not the original request.
+                requested_on = next_retry_on
             started_on = get_datetime(row.started_on) if row.started_on else None
             if not is_stale_backup_operation(
                 status=row.status,
@@ -115,10 +148,88 @@ class FrappeBackupHistory:
                     "completed_on": now(),
                     "error_summary": "backup_operation_stale_timeout",
                     "schedule_key": None,
+                    "next_retry_on": None,
                 },
             )
             reclaimed += 1
         return reclaimed
+
+    def due_external_retries(self, *, now: datetime | None = None) -> list[dict[str, Any]]:
+        """Return External operations waiting in Queued whose retry time has arrived."""
+
+        current = now or now_datetime()
+        rows = frappe.get_all(
+            DOCTYPE,
+            filters={
+                "target": "External",
+                "status": "Queued",
+                "next_retry_on": ["<=", current],
+            },
+            fields=["operation_id", "attempt_count", "next_retry_on", "error_summary"],
+            order_by="next_retry_on asc",
+            limit_page_length=100,
+        )
+        due: list[dict[str, Any]] = []
+        for row in rows:
+            if not row.next_retry_on:
+                continue
+            due.append(dict(row))
+        return due
+
+    def begin_attempt(self, operation_id: str, attempt: int) -> None:
+        """Claim a Queued operation for one attempt; refuses non-Queued rows."""
+
+        current_status = frappe.db.get_value(DOCTYPE, str(operation_id or "").strip(), "status")
+        if current_status != "Queued":
+            raise ValueError("Backup job operation is invalid.")
+        self._update(
+            operation_id,
+            {
+                "status": "Running",
+                "attempt_count": int(attempt),
+                "started_on": now(),
+                "next_retry_on": None,
+                "completed_on": None,
+            },
+        )
+
+    def schedule_retry(
+        self,
+        operation_id: str,
+        *,
+        attempt: int,
+        error_code: str,
+        delay_seconds: int,
+        clock: datetime | None = None,
+    ) -> datetime:
+        """Return the operation to Queued and record the deferred retry metadata."""
+
+        current = clock or now_datetime()
+        next_retry_on = current + timedelta(seconds=max(0, int(delay_seconds)))
+        existing = frappe.db.get_value(DOCTYPE, operation_id, ["retry_log", "started_on"], as_dict=True) or {}
+        entries = _load_retry_log(existing.get("retry_log"))
+        entries.append(
+            {
+                "attempt": int(attempt),
+                "started_on": str(existing.get("started_on") or ""),
+                "finished_on": str(now()),
+                "result": "failed_retryable",
+                "error_code": str(error_code or "backup_operation_failed")[:140],
+                "next_retry_on": str(next_retry_on),
+            }
+        )
+        self._update(
+            operation_id,
+            {
+                "status": "Queued",
+                "attempt_count": int(attempt),
+                "next_retry_on": next_retry_on,
+                "error_summary": str(error_code or "backup_operation_failed")[:140],
+                "retry_log": _dump_retry_log(entries),
+                "completed_on": None,
+            },
+        )
+        return next_retry_on
 
     def release_schedule_key(self, operation_id: str) -> None:
         self._update(operation_id, {"schedule_key": None})
@@ -160,6 +271,25 @@ class FrappeBackupHistory:
 
     def mark_completed(self, operation_id: str, bundle: BackupBundle, reference: str = "") -> None:
         manifest = _canonical_manifest(bundle)
+        existing = frappe.db.get_value(
+            DOCTYPE,
+            operation_id,
+            ["retry_log", "started_on", "attempt_count"],
+            as_dict=True,
+        ) or {}
+        entries = _load_retry_log(existing.get("retry_log"))
+        attempt = cint(existing.get("attempt_count") or 0)
+        if attempt > 0:
+            entries.append(
+                {
+                    "attempt": attempt,
+                    "started_on": str(existing.get("started_on") or ""),
+                    "finished_on": str(now()),
+                    "result": "completed",
+                    "error_code": None,
+                    "next_retry_on": None,
+                }
+            )
         self._update(
             operation_id,
             {
@@ -171,6 +301,8 @@ class FrappeBackupHistory:
                 "artifact_manifest": manifest,
                 "completed_on": now(),
                 "error_summary": None,
+                "next_retry_on": None,
+                "retry_log": _dump_retry_log(entries),
             },
         )
 
@@ -208,12 +340,42 @@ class FrappeBackupHistory:
         )
         return {str(row.backup_identifier) for row in rows if row.backup_identifier}
 
-    def mark_failed(self, operation_id: str, error_code: str, *, release_schedule: bool = True) -> None:
+    def mark_failed(
+        self,
+        operation_id: str,
+        error_code: str,
+        *,
+        release_schedule: bool = True,
+        attempt: int | None = None,
+    ) -> None:
+        existing = frappe.db.get_value(
+            DOCTYPE,
+            operation_id,
+            ["retry_log", "started_on", "attempt_count"],
+            as_dict=True,
+        ) or {}
+        entries = _load_retry_log(existing.get("retry_log"))
+        resolved_attempt = int(attempt) if attempt is not None else cint(existing.get("attempt_count") or 0)
+        if resolved_attempt > 0:
+            entries.append(
+                {
+                    "attempt": resolved_attempt,
+                    "started_on": str(existing.get("started_on") or ""),
+                    "finished_on": str(now()),
+                    "result": "failed",
+                    "error_code": str(error_code or "backup_operation_failed")[:140],
+                    "next_retry_on": None,
+                }
+            )
         values: dict[str, Any] = {
             "status": "Failed",
             "completed_on": now(),
             "error_summary": str(error_code or "backup_operation_failed")[:140],
+            "next_retry_on": None,
+            "retry_log": _dump_retry_log(entries),
         }
+        if attempt is not None:
+            values["attempt_count"] = int(attempt)
         if release_schedule:
             values["schedule_key"] = None
         self._update(operation_id, values)
@@ -242,6 +404,8 @@ class FrappeBackupHistory:
                 "completed_on",
                 "source_operation_id",
                 "error_summary",
+                "artifact_manifest",
+                "attempt_count",
             ],
             order_by="requested_on desc",
             limit_page_length=max(1, min(int(limit), 100)),
@@ -261,6 +425,10 @@ class FrappeBackupHistory:
                 "requested_on",
                 "completed_on",
                 "source_operation_id",
+                "attempt_count",
+                "next_retry_on",
+                "retry_log",
+                "error_summary",
             ],
             as_dict=True,
         )

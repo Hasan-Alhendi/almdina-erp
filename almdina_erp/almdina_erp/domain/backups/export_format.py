@@ -182,15 +182,23 @@ def parse_stored_artifact_manifest(raw: object) -> list[dict[str, Any]]:
     for entry in entries:
         if not isinstance(entry, dict):
             raise ValueError("backup_export_invalid_manifest")
-        components.append(
-            {
-                "name": str(entry.get("kind") or "").strip(),
-                "path": archive_member_name(entry.get("filename")),
-                "size": int(entry.get("size") or 0),
-                "sha256": str(entry.get("checksum") or "").strip().lower(),
-                "required": True,
-            }
-        )
+        item: dict[str, Any] = {
+            "name": str(entry.get("kind") or "").strip(),
+            "path": archive_member_name(entry.get("filename")),
+            "size": int(entry.get("size") or 0),
+            "sha256": str(entry.get("checksum") or "").strip().lower(),
+            "required": True,
+        }
+        encryption = str(entry.get("encryption") or "").strip()
+        if encryption:
+            item["encryption"] = encryption
+            item["plaintext_filename"] = str(entry.get("plaintext_filename") or "").strip()
+            try:
+                item["plaintext_size"] = int(entry.get("plaintext_size") or 0)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("backup_export_invalid_manifest") from exc
+            item["plaintext_checksum"] = str(entry.get("plaintext_checksum") or "").strip().lower()
+        components.append(item)
     return components
 
 

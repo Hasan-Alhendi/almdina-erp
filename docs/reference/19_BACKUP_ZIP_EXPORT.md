@@ -100,6 +100,34 @@ Queued / Running / Failed / Restore operations are rejected. The UI button is ga
 
 Operational note: Frappe/`nginx` upload size limits remain infrastructure settings. Import code does not impose an application-level fixed ZIP size cap and streams members to disk.
 
+## External age encryption
+
+External backups are encrypted with **age X25519** (`pyrage`) before SFTP upload:
+
+- Server stores only the **public** recipient (`external_backup_age_public_key`, `age1…`).
+- Operator keeps the **private** identity (`AGE-SECRET-KEY-…`) offline. It is never stored in the site DB, settings Password fields, SFTP, logs, or retry metadata.
+- Remote filenames use a `.age` suffix. Artifact manifests store ciphertext `size`/`checksum` plus `plaintext_*` fields and `encryption=age-x25519-v1`.
+- Upload still uses `.part` → remote SHA-256 of **ciphertext** → rename.
+- Legacy External rows without `encryption` remain Import-compatible ZIP downloadable.
+- Encrypted External rows intentionally **do not** offer server-side plaintext ZIP Export (that would require the private key on the server). Offline flow: fetch `.age` files from SFTP → `age`/`pyrage` decrypt with the private key → verify plaintext SHA-256 → build `almdina.backup.zip` v1 for Import.
+
+Generate keys offline, for example:
+
+```bash
+# with the age CLI, or via pyrage Identity.generate() in a trusted offline environment
+age-keygen -o backup-external.key
+# public age1… line → Almdina ERP Settings
+# AGE-SECRET-KEY-… → operator vault only
+```
+
+### Offline rebuild of Import ZIP
+
+Encrypted External packages are rebuilt on the operator machine with:
+
+`scripts/offline_external_backup_to_zip.py`
+
+Inputs: directory of `.age` files, operation `artifact_manifest` (or a descriptor object), and the local `AGE-SECRET-KEY` file. The tool decrypts, verifies each `plaintext_checksum`, then writes `almdina.backup.zip` v1 for ZIP Import. The private key never contacts the ERP server. Requires `pyrage`.
+
 ## Explicit non-goals (later phases)
 
-Restoring imported ZIPs, External SFTP import destinations, cross-site imports, overwrite of existing artifact groups, and changing how originals are created.
+Restoring imported ZIPs, External SFTP import destinations, cross-site imports, overwrite of existing artifact groups, changing how originals are created, and server-side decrypt of encrypted External packages into Import-compatible ZIP.

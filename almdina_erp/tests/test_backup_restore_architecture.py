@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "policy.py"
 EXPORT_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "export_format.py"
 IMPORT_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "import_format.py"
+RETRY_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "retry.py"
+ENCRYPTION_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "encryption.py"
 APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "management.py"
 EXPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "export.py"
 IMPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "import_backup.py"
@@ -32,7 +34,16 @@ def imports(path: Path) -> set[str]:
 
 
 def test_domain_and_application_are_framework_free() -> None:
-    for path in (DOMAIN, EXPORT_DOMAIN, IMPORT_DOMAIN, APPLICATION, EXPORT_APPLICATION, IMPORT_APPLICATION):
+    for path in (
+        DOMAIN,
+        EXPORT_DOMAIN,
+        IMPORT_DOMAIN,
+        RETRY_DOMAIN,
+        ENCRYPTION_DOMAIN,
+        APPLICATION,
+        EXPORT_APPLICATION,
+        IMPORT_APPLICATION,
+    ):
         dependencies = imports(path)
         assert not any(value == "frappe" or value.startswith("frappe.") for value in dependencies)
         assert not any("infrastructure" in value or ".services" in value for value in dependencies)

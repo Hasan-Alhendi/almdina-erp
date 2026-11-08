@@ -112,6 +112,7 @@ def backup_group_identifier(filename: object, site_slug: object) -> str | None:
         r"database(?:-enc)?\.sql\.gz|"
         r"files(?:-enc)?\.(?:tar|tgz)|"
         r"private-files(?:-enc)?\.(?:tar|tgz))"
+        r"(?:\.age)?"
     )
     match = re.fullmatch(prefix + suffix, name)
     return match.group("identifier") if match else None

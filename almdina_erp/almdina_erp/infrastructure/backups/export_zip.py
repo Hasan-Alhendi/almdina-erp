@@ -19,6 +19,10 @@ from almdina_erp.almdina_erp.application.backups.export import (
     export_backup_zip,
 )
 from almdina_erp.almdina_erp.application.backups.management import BackupArtifact, BackupBundle
+from almdina_erp.almdina_erp.domain.backups.encryption import (
+    is_encrypted_artifact_entry,
+    manifest_has_encrypted_artifacts,
+)
 from almdina_erp.almdina_erp.domain.backups.export_format import (
     ExportManifest,
     archive_member_name,
@@ -220,6 +224,10 @@ class FrappeExportBundleResolver:
         if self._sftp_factory is None:
             raise BackupExportError("backup_export_external_unavailable")
         components = parse_stored_artifact_manifest(operation.artifact_manifest)
+        if any(is_encrypted_artifact_entry(item) for item in components):
+            # Import-compatible ZIP requires plaintext artifacts. Decrypting here
+            # would need the operator private key on the server — refused by design.
+            raise BackupExportError("backup_export_encrypted_requires_offline_decrypt")
         private_root = Path(frappe.get_site_path("private")).resolve()
         private_root.mkdir(parents=True, exist_ok=True)
         staging = Path(
@@ -324,6 +332,17 @@ def annotate_downloadable(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         if eligible and str(item.get("target") or "").strip() == "Local":
             eligible = str(item.get("backup_identifier") or "") in local_present
+        if eligible and str(item.get("target") or "").strip() == "External":
+            try:
+                import json
+
+                manifest_entries = json.loads(item.get("artifact_manifest") or "[]")
+            except (TypeError, ValueError):
+                manifest_entries = []
+            if manifest_has_encrypted_artifacts(manifest_entries):
+                # Keep Download for legacy plaintext External only until an
+                # offline-decrypt download path is approved.
+                eligible = False
         item["can_download"] = eligible
         annotated.append(item)
     return annotated

@@ -19,6 +19,9 @@
     "completed_on",
     "schedule_key",
     "source_operation_id",
+    "attempt_count",
+    "next_retry_on",
+    "retry_log",
     "error_summary",
     "artifact_manifest"
   ],
@@ -37,6 +40,9 @@
     {"fieldname":"completed_on","fieldtype":"Datetime","label":"Completed On","read_only":1},
     {"fieldname":"schedule_key","fieldtype":"Data","label":"Schedule Key","read_only":1,"unique":1},
     {"fieldname":"source_operation_id","fieldtype":"Data","label":"Source Operation ID","read_only":1},
+    {"default":"0","fieldname":"attempt_count","fieldtype":"Int","label":"Attempt Count","non_negative":1,"read_only":1},
+    {"fieldname":"next_retry_on","fieldtype":"Datetime","label":"Next Retry On","read_only":1},
+    {"fieldname":"retry_log","fieldtype":"Code","label":"Retry Log","options":"JSON","read_only":1},
     {"fieldname":"error_summary","fieldtype":"Small Text","label":"Safe Error Summary","read_only":1},
     {"fieldname":"artifact_manifest","fieldtype":"Code","label":"Artifact Manifest","options":"JSON","read_only":1}
   ],
