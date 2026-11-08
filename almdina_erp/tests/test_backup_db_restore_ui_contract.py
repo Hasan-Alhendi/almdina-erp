@@ -12,6 +12,7 @@ DIALOGS = ROOT / "public" / "js" / "factory_production_settings" / "dialogs.js"
 SERVICE = ROOT / "almdina_erp" / "services" / "backup_restore_service.py"
 SETTINGS_SERVICE = ROOT / "almdina_erp" / "services" / "production_settings_service.py"
 FACTORY_SETTINGS = ROOT / "almdina_erp" / "domain" / "security" / "factory_settings.py"
+API = ROOT / "public" / "js" / "factory_production_settings" / "api.js"
 
 
 class BackupDbRestoreUiContractTest(unittest.TestCase):
@@ -24,6 +25,7 @@ class BackupDbRestoreUiContractTest(unittest.TestCase):
         cls.service = SERVICE.read_text(encoding="utf-8")
         cls.settings_service = SETTINGS_SERVICE.read_text(encoding="utf-8")
         cls.factory_settings = FACTORY_SETTINGS.read_text(encoding="utf-8")
+        cls.api = API.read_text(encoding="utf-8")
 
     def test_backup_management_panel_owns_collapsible_db_fields(self) -> None:
         """Regression: DocType/dialog-only wiring left the Backup History panel without fields."""
@@ -80,6 +82,21 @@ class BackupDbRestoreUiContractTest(unittest.TestCase):
         self.assertIn("MANAGE_DB_RESTORE_SETTINGS", self.service)
         self.assertIn("can_manage_db_restore_settings", self.renderer)
         self.assertIn("canManageDbRestoreSettings", self.view_model)
+
+    def test_download_button_and_endpoint_use_operation_id(self) -> None:
+        self.assertIn("download_backup_zip", self.service)
+        self.assertIn("MANAGE_BACKUPS", self.service)
+        self.assertIn("aps-backup-download", self.renderer)
+        self.assertIn('t("Download")', self.renderer)
+        self.assertIn("can_download", self.renderer)
+        self.assertIn("downloadBackup", self.backup_panel)
+        self.assertIn("downloadBackupZipMethod", self.backup_panel)
+        self.assertIn("parseDownloadErrorPayload", self.backup_panel)
+        self.assertIn('form.method = "POST"', self.backup_panel)
+        self.assertIn("iframe", self.backup_panel)
+        self.assertNotIn("window.open(url", self.backup_panel)
+        self.assertIn("downloadBackupZipMethod", self.api)
+        self.assertIn("operation_id", self.backup_panel)
 
 
 if __name__ == "__main__":

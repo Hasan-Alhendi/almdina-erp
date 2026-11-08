@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.infrastructure.backups.sftp import (
     SSHAuthenticationError,
     SSHConfig,
     SSHConnectionError,
+    SSHDownloadError,
     SSHRemotePathError,
     SSHUploadError,
 )
@@ -66,6 +67,13 @@ class FakeSFTP:
         if self.fail_put:
             raise OSError("disk full")
         self.files[remote] = Path(local).stat().st_size
+
+    def get(self, remote: str, local: str) -> None:
+        if remote not in self.files:
+            raise OSError("missing remote file")
+        if getattr(self, "fail_get_name", None) == remote:
+            raise OSError("transfer interrupted")
+        Path(local).write_bytes(b"x" * int(self.files[remote]))
 
     def stat(self, name: str) -> SimpleNamespace:
         return SimpleNamespace(st_size=self.files[name])
@@ -192,3 +200,26 @@ def test_external_retention_deletes_only_old_valid_frappe_groups() -> None:
 def test_invalid_remote_path_is_rejected_before_connection() -> None:
     with pytest.raises(ValueError):
         gateway(FakeClient(FakeSFTP()), remote_path="../../etc")
+
+
+def test_download_artifacts_writes_basenames_only(tmp_path: Path) -> None:
+    sftp = FakeSFTP()
+    name = "20261008_020000-site_local-database.sql.gz"
+    sftp.files[name] = 8
+    gateway(FakeClient(sftp)).download_artifacts([name], str(tmp_path))
+    assert (tmp_path / name).is_file()
+    assert (tmp_path / name).stat().st_size == 8
+
+
+def test_download_artifacts_rejects_traversal_and_cleans_partial(tmp_path: Path) -> None:
+    sftp = FakeSFTP()
+    first = "20261008_020000-site_local-database.sql.gz"
+    second = "20261008_020000-site_local-files.tgz"
+    sftp.files[first] = 8
+    sftp.files[second] = 8
+    sftp.fail_get_name = second
+    with pytest.raises(SSHDownloadError):
+        gateway(FakeClient(sftp)).download_artifacts([first, second], str(tmp_path))
+    assert list(tmp_path.iterdir()) == []
+    with pytest.raises(SSHDownloadError):
+        gateway(FakeClient(sftp)).download_artifacts(["../etc/passwd"], str(tmp_path))

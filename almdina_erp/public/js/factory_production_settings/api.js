@@ -82,6 +82,15 @@
         }, options).then(data => data || {});
     }
 
+    function downloadBackupZipUrl(operationId) {
+        const id = encodeURIComponent(String(operationId || "").trim());
+        return `/api/method/${BACKUPS}.download_backup_zip?operation_id=${id}`;
+    }
+
+    function downloadBackupZipMethod() {
+        return `${BACKUPS}.download_backup_zip`;
+    }
+
     window.AlmdinaFactoryProductionSettingsApi = Object.freeze({
         getSettings,
         updateSettings,
@@ -95,5 +104,7 @@
         testSshConnection,
         testDbConnection,
         requestRestore,
+        downloadBackupZipUrl,
+        downloadBackupZipMethod,
     });
 })();

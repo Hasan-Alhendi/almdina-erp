@@ -20,6 +20,13 @@ from almdina_erp.almdina_erp.infrastructure.backups.db_root import (
     restore_runtime_ready,
     test_db_root_connection,
 )
+from almdina_erp.almdina_erp.infrastructure.backups.export_zip import (
+    BackupExportError,
+    annotate_downloadable,
+    build_backup_zip_export,
+    cleanup_export_paths,
+    send_backup_zip_response,
+)
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
     FrappeBackupEngine,
     FrappeLocalRetention,
@@ -132,6 +139,24 @@ def _safe_db_root_error_message(exc: Exception) -> str:
     return _("Database connection test failed.")
 
 
+def _safe_export_error_message(exc: BackupExportError) -> str:
+    code = str(exc.safe_code or "")
+    if code == "backup_export_not_found":
+        return _("Backup was not found.")
+    if code == "backup_export_not_eligible":
+        return _("This backup cannot be downloaded.")
+    if code in {
+        "backup_export_missing_component",
+        "backup_export_incomplete_components",
+        "backup_export_integrity_failed",
+        "backup_export_invalid_manifest",
+    }:
+        return _("Backup files are incomplete or failed integrity checks.")
+    if code in {"backup_export_external_unavailable", "ssh_download_failed", "ssh_connection_failed", "ssh_authentication_failed", "ssh_remote_path_invalid"}:
+        return _("Could not fetch the external backup for download.")
+    return _("Could not prepare the backup download.")
+
+
 @frappe.whitelist()
 def get_backup_context() -> dict[str, Any]:
     require_any_doctype_capability(
@@ -143,19 +168,45 @@ def get_backup_context() -> dict[str, Any]:
     can_restore = doctype_has_capability(Capability.RESTORE_BACKUPS)
     history = FrappeBackupHistory()
     ready = bool(restore_runtime_ready())
+    rows = history.list_recent(30)
     payload: dict[str, Any] = {
         "permissions": {
             "can_manage": can_manage,
             "can_manage_db_restore_settings": can_manage_db_restore,
             "can_restore": can_restore,
         },
-        "history": history.list_recent(30),
+        "history": annotate_downloadable(rows) if can_manage else rows,
         "restorable": history.restorable(30) if can_restore else [],
         "restore_runtime_ready": bool(can_restore and ready),
     }
     if can_manage_db_restore:
         payload["db_root"] = public_db_root_settings()
     return payload
+
+
+@frappe.whitelist()
+def download_backup_zip(operation_id: str):
+    """Stream a unified ZIP export for one completed backup operation."""
+
+    require_doctype_capability(
+        Capability.MANAGE_BACKUPS,
+        message=_("You do not have permission to download backups."),
+    )
+    packed = None
+    try:
+        packed = build_backup_zip_export(
+            str(operation_id or "").strip(),
+            sftp_factory=_ssh_gateway,
+        )
+        return send_backup_zip_response(packed)
+    except BackupExportError as exc:
+        if packed is not None:
+            cleanup_export_paths(packed.cleanup_paths)
+        frappe.throw(_safe_export_error_message(exc), frappe.ValidationError)
+    except Exception:
+        if packed is not None:
+            cleanup_export_paths(packed.cleanup_paths)
+        frappe.throw(_("Could not prepare the backup download."), frappe.ValidationError)
 
 
 @frappe.whitelist()
@@ -394,6 +445,7 @@ def prepare_restore_job(operation_id: str) -> None:
 
 __all__ = [
     "create_backup_now",
+    "download_backup_zip",
     "get_backup_context",
     "prepare_restore_job",
     "request_restore",

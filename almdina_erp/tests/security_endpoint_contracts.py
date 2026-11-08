@@ -28,7 +28,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.doctype.door_cutting_order.door_cutting_order", D, ("recalculate_order",)),
     ("almdina_erp.almdina_erp.services.approval_queue_service", F, ("approve_order_safely", "get_approval_queue_context", "get_pending_review_orders", "reject_order_safely")),
     ("almdina_erp.almdina_erp.services.archive_service", C, ("archive_approved_plan_pdf", "get_archive_context")),
-    ("almdina_erp.almdina_erp.services.backup_restore_service", C, ("create_backup_now", "get_backup_context", "request_restore", "test_ssh_connection", "test_db_connection")),
+    ("almdina_erp.almdina_erp.services.backup_restore_service", C, ("create_backup_now", "download_backup_zip", "get_backup_context", "request_restore", "test_ssh_connection", "test_db_connection")),
     ("almdina_erp.almdina_erp.services.cost_document_service", C, ("get_customer_invoice_document", "get_internal_cost_report_document")),
     ("almdina_erp.almdina_erp.services.cost_permission_service", C, ("approve_special_piece_price", "get_order_cost_snapshot", "save_cost_workspace", "update_clipped_corner_edge_price", "update_order_cost_settings")),
     (
@@ -49,7 +49,7 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("almdina_erp.almdina_erp.services.cutting_plan_preview_service", C, ("commit_cutting_plan_preview", "preview_cutting_plan", "select_cutting_plan_candidate", "continue_cutting_plan_search", "discard_cutting_plan_preview")),
     ("almdina_erp.almdina_erp.services.cutting_plan_workspace_query_service", C, ("get_plan_workspace_snapshot",)),
     ("almdina_erp.almdina_erp.services.board_editor_query_service", C, ("get_board_editor_projection",)),
-    ("almdina_erp.almdina_erp.services.board_editor_draft_service", C, ("save_board_editor_draft",)),
+    ("almdina_erp.almdina_erp.services.board_editor_draft_service", C, ("begin_board_editor_draft_from_current_source", "save_board_editor_draft",)),
     ("almdina_erp.almdina_erp.services.board_editor_draft_review_service", C, ("validate_board_editor_draft",)),
     ("almdina_erp.almdina_erp.services.board_editor_plan_create_service", C, ("create_board_editor_plan_copy",)),
     ("almdina_erp.almdina_erp.services.cutting_plan_service", D, ("approve_order", "lock_cutting_plan", "reject_order", "send_order_to_production", "submit_order_for_review")),

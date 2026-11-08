@@ -56,6 +56,7 @@
 - [16 — DCO Recovery State Ownership & Lifecycle Contracts](16_DCO_RECOVERY_STATE_OWNERSHIP.md)
 - [17 — DCO Local Recovery Infrastructure](17_DCO_LOCAL_RECOVERY_INFRASTRUCTURE.md)
 - [18 — NEW DCO Recovery & First-Insert Reconciliation](18_DCO_NEW_RECOVERY.md)
+- [19 — Backup ZIP Export Format](19_BACKUP_ZIP_EXPORT.md)
 - [Design System — Token Ownership](../design_system/TOKEN_OWNERSHIP.md)
 - [Architecture Freeze](ARCHITECTURE_FREEZE.md)
 

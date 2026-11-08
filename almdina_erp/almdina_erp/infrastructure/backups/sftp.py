@@ -35,6 +35,10 @@ class SSHUploadError(SFTPGatewayError):
     safe_code = "ssh_upload_failed"
 
 
+class SSHDownloadError(SFTPGatewayError):
+    safe_code = "ssh_download_failed"
+
+
 @dataclass(frozen=True, slots=True)
 class SSHConfig:
     host: str
@@ -212,6 +216,47 @@ class SFTPBackupGateway:
         finally:
             self._close(client, sftp)
 
+    def download_artifacts(self, filenames: list[str] | tuple[str, ...], destination_dir: str) -> None:
+        """Download approved backup basenames into a local directory.
+
+        Remote paths are never taken from the caller: only basenames already
+        validated by backup_group_identifier are fetched from the configured
+        remote directory.
+        """
+
+        dest = destination_dir
+        if not dest or not os.path.isdir(dest):
+            raise SSHRemotePathError("SSH remote path is inaccessible.")
+        names: list[str] = []
+        for raw in filenames:
+            name = os.path.basename(str(raw or ""))
+            if not name or name != str(raw) or not backup_group_identifier(name, self.config.site_slug):
+                raise SSHDownloadError("Backup artifact name is invalid.")
+            names.append(name)
+
+        client, sftp = self._connect()
+        downloaded: list[str] = []
+        try:
+            for name in names:
+                local_path = os.path.join(dest, name)
+                if os.path.exists(local_path):
+                    raise SSHDownloadError("SFTP download failed.")
+                sftp.get(name, local_path)
+                if not os.path.isfile(local_path) or os.path.getsize(local_path) <= 0:
+                    raise SSHDownloadError("Downloaded backup size is invalid.")
+                downloaded.append(local_path)
+        except Exception as exc:
+            for path in downloaded:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            if isinstance(exc, SFTPGatewayError):
+                raise
+            raise SSHDownloadError("SFTP download failed.") from exc
+        finally:
+            self._close(client, sftp)
+
     def apply_retention(self, keep_last: int) -> None:
         client, sftp = self._connect()
         try:
@@ -242,6 +287,7 @@ __all__ = [
     "SSHAuthenticationError",
     "SSHConfig",
     "SSHConnectionError",
+    "SSHDownloadError",
     "SSHRemotePathError",
     "SSHUploadError",
 ]

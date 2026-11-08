@@ -67,6 +67,7 @@ class FactoryProductionSettingsFrontendArchitectureTest(unittest.TestCase):
             "get_whatsapp_qr",
             "get_backup_context",
             "create_backup_now",
+            "download_backup_zip",
             "test_ssh_connection",
             "test_db_connection",
             "request_restore",

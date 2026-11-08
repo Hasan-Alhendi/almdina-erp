@@ -44,6 +44,11 @@
             const identifier = String(event.currentTarget.dataset.backupIdentifier || "");
             openRestore(operationId, identifier);
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-download", event => {
+            event.preventDefault();
+            const operationId = String(event.currentTarget.dataset.operationId || "");
+            downloadBackup(operationId);
+        });
         lifecycle.track(() => $body.off(EVENT_NAMESPACE), "production-settings-backup-interactions");
 
         function current() {
@@ -167,6 +172,126 @@
                     return result;
                 }),
             });
+        }
+
+        function parseDownloadErrorPayload(rawText) {
+            const text = String(rawText || "").trim();
+            if (!text) return "";
+            try {
+                const payload = JSON.parse(text);
+                if (payload && typeof payload.message === "string" && payload.message.trim()) {
+                    return payload.message.trim();
+                }
+                if (payload && payload._server_messages) {
+                    const encoded = JSON.parse(payload._server_messages);
+                    const messages = Array.isArray(encoded) ? encoded : [encoded];
+                    for (const entry of messages) {
+                        const item = typeof entry === "string" ? JSON.parse(entry) : entry;
+                        if (item && item.message) return String(item.message);
+                    }
+                }
+                if (payload && payload.exc_type) {
+                    return t("Could not prepare the backup download.");
+                }
+            } catch (_error) {
+                if (/^\s*\{/.test(text)) {
+                    return t("Could not prepare the backup download.");
+                }
+            }
+            return "";
+        }
+
+        function downloadBackup(operationId) {
+            if (!current() || !operationId) return;
+            if (typeof api.downloadBackupZipMethod !== "function") {
+                frappe.msgprint({
+                    title: t("Could not download the backup"),
+                    message: frappe.utils.escape_html(t("Could not prepare the backup download.")),
+                    indicator: "red",
+                });
+                return;
+            }
+
+            const method = api.downloadBackupZipMethod();
+            const frameName = `almdina-backup-download-${Date.now()}`;
+            const iframe = document.createElement("iframe");
+            iframe.name = frameName;
+            iframe.setAttribute("aria-hidden", "true");
+            iframe.style.display = "none";
+
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = `/api/method/${method}`;
+            form.target = frameName;
+            form.style.display = "none";
+
+            const operationInput = document.createElement("input");
+            operationInput.type = "hidden";
+            operationInput.name = "operation_id";
+            operationInput.value = String(operationId);
+            form.appendChild(operationInput);
+
+            const csrf = document.createElement("input");
+            csrf.type = "hidden";
+            csrf.name = "csrf_token";
+            csrf.value = String((frappe.csrf_token || (frappe.boot && frappe.boot.csrf_token) || ""));
+            form.appendChild(csrf);
+
+            let settled = false;
+            const cleanup = () => {
+                if (settled) return;
+                settled = true;
+                try { frappe.dom.unfreeze(); } catch (_error) { /* ignore */ }
+                form.remove();
+                iframe.remove();
+            };
+
+            const fail = (message) => {
+                cleanup();
+                if (!current()) return;
+                frappe.msgprint({
+                    title: t("Could not download the backup"),
+                    message: frappe.utils.escape_html(message || t("Could not prepare the backup download.")),
+                    indicator: "red",
+                });
+            };
+
+            iframe.addEventListener("load", () => {
+                if (settled || !current()) {
+                    cleanup();
+                    return;
+                }
+                let raw = "";
+                try {
+                    raw = String(
+                        (iframe.contentDocument
+                            && iframe.contentDocument.body
+                            && iframe.contentDocument.body.innerText)
+                        || ""
+                    );
+                } catch (_error) {
+                    cleanup();
+                    return;
+                }
+                const message = parseDownloadErrorPayload(raw);
+                if (message) {
+                    fail(message);
+                    return;
+                }
+                cleanup();
+                if (current()) {
+                    frappe.show_alert({ message: t("Backup download started."), indicator: "green" }, 5);
+                }
+            });
+
+            document.body.appendChild(iframe);
+            document.body.appendChild(form);
+            frappe.dom.freeze(t("Preparing backup download..."));
+            try {
+                form.submit();
+            } catch (_error) {
+                fail(t("Could not prepare the backup download."));
+            }
         }
 
         function deactivate() {

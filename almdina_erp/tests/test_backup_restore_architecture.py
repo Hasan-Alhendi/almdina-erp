@@ -7,8 +7,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "policy.py"
+EXPORT_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "export_format.py"
 APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "management.py"
+EXPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "export.py"
 FRAPPE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "frappe_backup.py"
+EXPORT_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "export_zip.py"
 RESTORE_RUNNER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "restore_runner.py"
 SERVICE = ROOT / "almdina_erp" / "services" / "backup_restore_service.py"
 SETTINGS = ROOT / "almdina_erp" / "doctype" / "almdina_erp_settings" / "almdina_erp_settings.json"
@@ -27,7 +30,7 @@ def imports(path: Path) -> set[str]:
 
 
 def test_domain_and_application_are_framework_free() -> None:
-    for path in (DOMAIN, APPLICATION):
+    for path in (DOMAIN, EXPORT_DOMAIN, APPLICATION, EXPORT_APPLICATION):
         dependencies = imports(path)
         assert not any(value == "frappe" or value.startswith("frappe.") for value in dependencies)
         assert not any("infrastructure" in value or ".services" in value for value in dependencies)
@@ -73,3 +76,16 @@ def test_restore_endpoint_accepts_operation_id_not_client_path() -> None:
     )
     arguments = [argument.arg for argument in request_restore.args.args]
     assert arguments == ["operation_id", "confirmation"]
+
+
+def test_download_endpoint_accepts_operation_id_not_client_path() -> None:
+    tree = ast.parse(SERVICE.read_text(encoding="utf-8"))
+    download = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "download_backup_zip"
+    )
+    arguments = [argument.arg for argument in download.args.args]
+    assert arguments == ["operation_id"]
+    export_adapter = EXPORT_ADAPTER.read_text(encoding="utf-8")
+    assert "manifest.json" in export_adapter
+    assert "allowZip64=True" in export_adapter
+    assert "send_file(" in export_adapter

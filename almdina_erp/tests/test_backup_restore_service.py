@@ -143,18 +143,20 @@ def test_disabled_automatic_target_rejects_queued_scheduled_job(
 
 
 @pytest.mark.parametrize(
-    ("endpoint", "required"),
+    ("endpoint", "required", "args"),
     [
-        ("create_backup_now", Capability.MANAGE_BACKUPS),
-        ("test_ssh_connection", Capability.MANAGE_BACKUPS),
-        ("test_db_connection", Capability.MANAGE_DB_RESTORE_SETTINGS),
-        ("request_restore", Capability.RESTORE_BACKUPS),
+        ("create_backup_now", Capability.MANAGE_BACKUPS, ()),
+        ("test_ssh_connection", Capability.MANAGE_BACKUPS, ()),
+        ("test_db_connection", Capability.MANAGE_DB_RESTORE_SETTINGS, ()),
+        ("download_backup_zip", Capability.MANAGE_BACKUPS, ("op-1",)),
+        ("request_restore", Capability.RESTORE_BACKUPS, ("untrusted-operation", "RESTORE anything")),
     ],
 )
 def test_mutating_endpoints_fail_before_work_without_capability(
     monkeypatch: pytest.MonkeyPatch,
     endpoint: str,
     required: str,
+    args: tuple[Any, ...],
 ) -> None:
     checked: list[str] = []
 
@@ -165,10 +167,7 @@ def test_mutating_endpoints_fail_before_work_without_capability(
     monkeypatch.setattr(service, "require_doctype_capability", deny)
     monkeypatch.setattr(service, "_", lambda message: message)
     with pytest.raises(PermissionError, match="denied"):
-        if endpoint == "request_restore":
-            service.request_restore("untrusted-operation", "RESTORE anything")
-        else:
-            getattr(service, endpoint)()
+        getattr(service, endpoint)(*args)
     assert checked == [required]
 
 

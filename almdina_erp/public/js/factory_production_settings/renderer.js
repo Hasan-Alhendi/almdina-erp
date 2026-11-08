@@ -251,6 +251,18 @@
             }
             return `<div class="aps-backup-history">${rows.map(row => {
                 const candidate = restorable.get(row.operation_id);
+                const canManage = Boolean(snapshot.permissions && snapshot.permissions.can_manage);
+                const downloadButton = canManage && row.can_download
+                    ? uiButton({
+                        label: t("Download"),
+                        variant: "secondary",
+                        className: "aps-backup-download",
+                        attrs: {
+                            "data-operation-id": row.operation_id,
+                            "data-backup-identifier": row.backup_identifier || "",
+                        },
+                    })
+                    : "";
                 const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
                     ? uiButton({
                         label: t("Restore"),
@@ -272,7 +284,7 @@
                             <span>${esc(row.requested_on || "—")}</span>
                             <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
                             ${row.error_summary ? `<span class="aps-backup-error">${esc(row.error_summary)}</span>` : ""}
-                            ${restoreButton}
+                            <span class="aps-backup-row-actions">${downloadButton}${restoreButton}</span>
                         </div>
                     </div>
                 `;

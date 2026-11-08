@@ -162,6 +162,14 @@
     justify-content: flex-start;
 }
 
+.aps-backup-row-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--alm-space-2, 8px);
+    margin-inline-start: auto;
+}
+
 .aps-backup-error {
     color: var(--alm-status-danger-fg);
 }

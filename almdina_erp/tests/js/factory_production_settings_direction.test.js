@@ -141,6 +141,7 @@ renderer.renderBackup({
         status: "Completed",
         requested_on: "2026-10-13",
         total_size: 2048,
+        can_download: true,
     }],
     permissions: { can_manage: true, can_manage_db_restore_settings: true, can_restore: true },
     restore_runtime_ready: false,
@@ -169,6 +170,8 @@ assert.match(backupHtml, /data-db-restore-field="db_restore_root_password"/);
 assert.match(backupHtml, /type="password"/);
 assert.doesNotMatch(backupHtml, /value="[^"]*secret/);
 assert.match(backupHtml, /aps-db-restore-save/);
+assert.match(backupHtml, /aps-backup-download/);
+assert.match(backupHtml, />Download</);
 
 renderer.renderWhatsApp({
     session: { status: "ready", name: "Desk", phone: "+963900", push_name: "Factory" },

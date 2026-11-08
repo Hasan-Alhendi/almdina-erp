@@ -7,6 +7,16 @@ from .db_root import (
     connection_is_ready,
     resolve_db_root_connection,
 )
+from .export_format import (
+    EXPORT_FORMAT,
+    EXPORT_FORMAT_VERSION,
+    ExportComponent,
+    ExportManifest,
+    archive_member_name,
+    build_export_manifest,
+    is_exportable_operation,
+    parse_stored_artifact_manifest,
+)
 from .policy import (
     BackupSchedule,
     backup_group_identifier,
@@ -24,12 +34,20 @@ __all__ = [
     "DbRootConnection",
     "DbRootDefaults",
     "DbRootOverrides",
+    "EXPORT_FORMAT",
+    "EXPORT_FORMAT_VERSION",
+    "ExportComponent",
+    "ExportManifest",
+    "archive_member_name",
     "backup_group_identifier",
+    "build_export_manifest",
     "connection_is_ready",
     "due_schedule_key",
+    "is_exportable_operation",
     "is_schedule_blocking_status",
     "is_stale_backup_operation",
     "normalize_remote_path",
+    "parse_stored_artifact_manifest",
     "resolve_db_root_connection",
     "retention_candidates",
 ]

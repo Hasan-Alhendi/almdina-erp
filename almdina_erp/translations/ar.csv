@@ -2192,6 +2192,9 @@ Backup,نسخة
 Backup & Restore settings,إعدادات Backup & Restore
 Backup copy,النسخة
 Backup scheduling failed.,فشلت جدولة النسخة.
+Backup download started.,بدأ تنزيل النسخة الاحتياطية.
+Backup files are incomplete or failed integrity checks.,ملفات النسخة غير مكتملة أو فشلت فحوص السلامة.
+Backup was not found.,لم يتم العثور على النسخة الاحتياطية.
 Backups,نسخ
 Basic data,البيانات الأساسية
 Before saving,قبل الحفظ
@@ -2216,8 +2219,10 @@ Could not calculate permission impact.,تعذر حساب أثر الصلاحيا
 Could not connect to the remote server.,تعذر الاتصال بالخادم البعيد.
 Could not create WhatsApp session.,تعذر إنشاء جلسة WhatsApp.
 Could not create the backup,تعذر إنشاء النسخة
+Could not download the backup,تعذر تنزيل النسخة
 Could not export,تعذر التصدير
 Could not fetch the QR code.,تعذر جلب رمز QR.
+Could not fetch the external backup for download.,تعذر جلب النسخة الخارجية للتنزيل.
 Could not find the route. Refresh the page.,تعذر العثور على المسار. حدّث الصفحة.
 Could not find the stage. Refresh the page.,تعذر العثور على المرحلة. حدّث الصفحة.
 Could not load WhatsApp status.,تعذر تحميل حالة WhatsApp.
@@ -2238,6 +2243,7 @@ Could not load the users and workforce interface.,تعذر تحميل واجهة
 Could not load user management,تعذر تحميل إدارة المستخدمين
 Could not open permission management.,تعذر فتح إدارة الصلاحيات.
 Could not open route management,تعذر فتح إدارة المسارات
+Could not prepare the backup download.,تعذر تجهيز تنزيل النسخة الاحتياطية.
 Could not read the file,تعذر قراءة الملف
 Could not read the file as a valid JSON object. No permissions were changed.,تعذر قراءة الملف ككائن JSON صحيح. لم يتم تغيير أي صلاحية.
 Could not reconnect WhatsApp.,تعذر إعادة اتصال WhatsApp.
@@ -2464,6 +2470,7 @@ Preparation of the backup and restore started in the background.,بدأ تجهي
 Preparing current values and permissions...,يتم تجهيز القيم والصلاحيات الحالية...
 Preparing the code...,جاري تجهيز الرمز...
 Preparing the permissions file...,جاري تجهيز ملف الصلاحيات...
+Preparing backup download...,جاري تجهيز تنزيل النسخة...
 Preparing the restore request...,جاري تجهيز طلب الاستعادة...
 Preview,معاينة
 Preview updates immediately without auto-save.,تُحدَّث المعاينة فورًا دون حفظ تلقائي.
@@ -2628,6 +2635,8 @@ Authentication Method,طريقة المصادقة
 Backup & Restore,النسخ الاحتياطي والاستعادة
 Backup History & Actions,سجل النسخ والإجراءات
 Create Backup Now,إنشاء نسخة الآن
+Download,تنزيل
+This backup cannot be downloaded.,لا يمكن تنزيل هذه النسخة الاحتياطية.
 Day of Month,يوم الشهر
 Day of Week,يوم الأسبوع
 Default Workspace,Default Workspace
@@ -3507,4 +3516,5 @@ Configure and test privileged database root connection settings used for restore
 "Configure scheduling, retention, and the SSH connection, create manual backups, and view their log. Does not grant restore or database root credential changes.",ضبط الجدولة والاحتفاظ واتصال SSH، وإنشاء النسخ اليدوية وعرض سجلها. لا تمنح الاستعادة ولا تغيير بيانات اعتماد DB root.
 Privileged database root connection used only for restore readiness. Does not change the site application login.,اتصال DB root ذو صلاحيات يُستخدم فقط لجاهزية الاستعادة. لا يغيّر تسجيل دخول تطبيق الموقع.
 Restore readiness,جاهزية الاستعادة
+You do not have permission to download backups.,ليست لديك صلاحية تنزيل النسخ الاحتياطية.
 You do not have permission to manage database restore settings.,ليست لديك صلاحية إدارة إعدادات استعادة قاعدة البيانات.
