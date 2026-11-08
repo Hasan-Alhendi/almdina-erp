@@ -1262,16 +1262,43 @@
                 maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
                 maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
             };
+            const obstacles = overlayObstacles(sheet, piece);
             const tools = engine.syntheticOverlays(Object.assign({}, piece, {
                 board,
                 kerf_mm: cutterMm,
                 tool_diameters: (frame && frame.toolDiameters) || null,
+                machining_obstacles: obstacles,
             }));
-            const obstacles = overlayObstacles(sheet, piece);
+            function diagnoseRejectedTool(kind) {
+                if (!liner || typeof liner.extensionConflict !== "function") return;
+                let bareTools = [];
+                try {
+                    bareTools = engine.syntheticOverlays(Object.assign({}, piece, {
+                        board,
+                        kerf_mm: cutterMm,
+                        tool_diameters: (frame && frame.toolDiameters) || null,
+                        machining_obstacles: null,
+                    }));
+                } catch (error) {
+                    return;
+                }
+                const bare = bareTools.find(item => item && item.kind === kind && item.geometry && item.geometry.path);
+                if (!bare) return;
+                let conflictDetails = null;
+                const conflict = liner.extensionConflict(
+                    bare.geometry.path,
+                    overlayToolDiameter(frame, piece, kind),
+                    board,
+                    obstacles,
+                    details => { conflictDetails = details; }
+                );
+                if (conflict) logLinerConflict(piece, bare.geometry.path, conflictDetails);
+            }
             const result = kept.slice();
             tools.forEach(tool => {
                 if (!tool) return;
                 if (tool.error) {
+                    if (tool.error === "liner_extension_hits_piece") diagnoseRejectedTool(tool.kind);
                     result.push(tool);
                     return;
                 }
@@ -1302,15 +1329,35 @@
             maxX: (num(frame.drawW) - num(frame.insetX)) * 10,
             maxY: (num(frame.drawH) - num(frame.insetY)) * 10,
         };
-        const tool = liner.syntheticOverlay(Object.assign({}, piece, { board }));
+        const obstacles = overlayObstacles(sheet, piece);
+        const tool = liner.syntheticOverlay(Object.assign({}, piece, {
+            board,
+            machining_obstacles: obstacles,
+        }));
         if (!tool) return kept;
         if (tool.error) {
+            if (tool.error === "liner_extension_hits_piece" && typeof liner.extensionConflict === "function") {
+                const bare = liner.syntheticOverlay(Object.assign({}, piece, {
+                    board,
+                    machining_obstacles: null,
+                }));
+                if (bare && bare.geometry && bare.geometry.path) {
+                    let conflictDetails = null;
+                    const conflict = liner.extensionConflict(
+                        bare.geometry.path,
+                        overlayToolDiameter(frame, piece, "liner"),
+                        board,
+                        obstacles,
+                        details => { conflictDetails = details; }
+                    );
+                    if (conflict) logLinerConflict(piece, bare.geometry.path, conflictDetails);
+                }
+            }
             return kept.concat({ kind: "liner", layer: "Liner", synthetic: true, error: tool.error });
         }
         if (typeof liner.extensionConflict !== "function" || !tool.geometry) {
             return kept.concat(tool);
         }
-        const obstacles = overlayObstacles(sheet, piece);
         let conflictDetails = null;
         const conflict = liner.extensionConflict(
             tool.geometry.path,

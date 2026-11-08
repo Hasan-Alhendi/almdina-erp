@@ -161,4 +161,68 @@ const crossedCompleted = engine.completeToolpaths(crossed, [], 6, null);
 assert.equal(crossedCompleted.error, undefined);
 assert.ok(crossedCompleted.overlays.filter(item => item.kind === "liner").length >= 1);
 
+const neighbor = [{ polygon: [[405, -40], [800, -40], [800, 80], [405, 80]] }];
+const clearanceHost = {
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+    x: 0,
+    y: 0,
+    w: 40,
+    h: 60,
+    extra_liner: 1,
+    liner_reference_side: "edge_width_top",
+    liner_offset_cm: 0,
+    liner_width_cm: 0.8,
+    extra_back_groove: 1,
+    back_groove_reference_side: "edge_width_top",
+    back_groove_offset_cm: 0,
+    back_groove_width_cm: 0.5,
+    extra_recessed_handle_cutout: 1,
+    recessed_handle_reference_side: "edge_width_top",
+    recessed_handle_offset_cm: 0,
+    recessed_handle_width_cm: 1.2,
+    tool_diameters: {
+        liner: 8,
+        back_groove: 5,
+        recessed_handle_cutout: 12,
+    },
+};
+const clearanceCompleted = engine.completeToolpaths(clearanceHost, [], 5, null, clearanceHost.tool_diameters, neighbor);
+assert.equal(clearanceCompleted.error, undefined);
+const byKind = Object.fromEntries(clearanceCompleted.overlays.map(item => [item.kind, item]));
+function maxX(overlay) {
+    return Math.max(...overlay.geometry.path.map(point => point[0]));
+}
+assert.ok(Math.abs(maxX(byKind.liner) - 400.75) < 1e-6);
+assert.ok(Math.abs(maxX(byKind.back_groove) - 402.5) < 1e-6);
+assert.ok(Math.abs(maxX(byKind.recessed_handle_cutout) - 398.75) < 1e-6);
+for (const kind of ["liner", "back_groove", "recessed_handle_cutout"]) {
+    assert.equal(
+        geometry.extensionConflict(byKind[kind].geometry.path, clearanceHost.tool_diameters[kind], null, neighbor),
+        ""
+    );
+}
+
+const storedPath = [[100, 4], [300, 4]];
+const persisted = Object.assign({}, clearanceHost, {
+    overlays: [{
+        kind: "liner",
+        geometry: {
+            schema_version: 1,
+            unit: "mm",
+            coordinate_space: "usable_sheet",
+            closed: false,
+            toolpath: true,
+            path: storedPath.map(point => point.slice()),
+        },
+    }],
+});
+const kept = engine.completeToolpaths(persisted, persisted.overlays, 5, null, clearanceHost.tool_diameters, neighbor);
+const keptPath = kept.overlays.find(item => item.kind === "liner").geometry.path;
+assert.deepEqual(keptPath, storedPath);
+assert.equal(geometry.extensionConflict(keptPath, 8, null, [{
+    polygon: [[150, -2], [250, -2], [250, 12], [150, 12]],
+}]), "liner_extension_hits_piece");
+
 console.log("Shared machining overlay simulation passed");

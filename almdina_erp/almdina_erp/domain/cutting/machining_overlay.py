@@ -184,6 +184,7 @@ def generate_toolpath(
     cutter_diameter_mm: float,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    obstacles: Sequence[Any] | None = None,
 ) -> list[tuple[float, float]]:
     """Cutter-center zigzag. ``kind`` only checks that the add-on is registered."""
 
@@ -198,6 +199,7 @@ def generate_toolpath(
         length_cm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
+        obstacles=obstacles,
     )
 
 
@@ -209,6 +211,7 @@ def generate_liner_set_toolpaths(
     cutter_diameter_mm: float,
     start_sawn: Sequence[bool | None] | None = None,
     end_sawn: Sequence[bool | None] | None = None,
+    obstacles: Sequence[Any] | None = None,
 ) -> list[list[tuple[float, float]]]:
     """Cutter-center paths for every liner on a door after mill-region union."""
 
@@ -219,6 +222,7 @@ def generate_liner_set_toolpaths(
         cutter_diameter_mm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
+        obstacles=obstacles,
     )
 
 
@@ -235,6 +239,7 @@ def compare_overlay_path(
     *,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
+    obstacles: Sequence[Any] | None = None,
 ) -> LinerMeasurement:
     """Geometric check shared by every machining add-on."""
 
@@ -250,6 +255,7 @@ def compare_overlay_path(
         length_cm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
+        obstacles=obstacles,
     )
 
 

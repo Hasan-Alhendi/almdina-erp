@@ -148,6 +148,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     canonical_path,
     liner_parameters_active,
     localize_path,
+    obstacles_in_toolpath_frame,
     sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
@@ -1857,6 +1858,15 @@ def _regular_addon_candidates(
             edge_bands={},
             cutter_diameter_mm=cutter_diameter_mm,
             cutter_diameters_mm=cutter_diameters_mm,
+            obstacles=obstacles_in_toolpath_frame(
+                sheet.get("pieces") or (),
+                piece,
+                outer,
+                mirrored=False,
+                quarter_turns=0,
+                width_mm=float(width) * 10.0,
+                height_mm=float(height) * 10.0,
+            ) or None,
             origin_mm=(piece["x"] * 10.0, piece["y"] * 10.0),
             board_mm=(
                 -trim_mm, -trim_mm,
@@ -2702,6 +2712,15 @@ def _regular_liner_issue(
                 height_mm=height_mm,
             )
         )
+    frame_obstacles = obstacles_in_toolpath_frame(
+        sheet.get("pieces") or (),
+        piece,
+        outline,
+        mirrored=False,
+        quarter_turns=quarter_turns,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    ) or None
     if kind == "liner" and (len(liner_specs) > 1 or len(canonical_paths) != 1):
         specs = liner_specs or (
             {
@@ -2717,6 +2736,7 @@ def _regular_liner_issue(
             specs,
             width_cm,
             cutter_diameter_mm,
+            obstacles=frame_obstacles,
         )
     else:
         try:
@@ -2749,6 +2769,7 @@ def _regular_liner_issue(
             params["length_cm"],
             start_sawn=start_sawn,
             end_sawn=end_sawn,
+            obstacles=frame_obstacles,
         )
     return _liner_issue(
         measurement,

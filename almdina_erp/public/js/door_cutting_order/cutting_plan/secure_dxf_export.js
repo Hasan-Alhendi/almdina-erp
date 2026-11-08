@@ -428,11 +428,11 @@
         };
     }
 
-    function exportOverlays(piece, kerfMm, board, diameters) {
+    function exportOverlays(piece, kerfMm, board, diameters, obstacles) {
         const overlays = Array.isArray(piece && piece.overlays) ? piece.overlays.slice() : [];
         const engine = window.AlmdinaMachiningOverlay;
         if (engine && typeof engine.completeToolpaths === "function") {
-            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board, diameters);
+            const completed = engine.completeToolpaths(piece, overlays, kerfMm, board, diameters, obstacles);
             if (completed && completed.error) {
                 throw linerExportError(piece, completed.error.code, completed.error.addon);
             }
@@ -457,8 +457,8 @@
         return overlays.concat(synthetic);
     }
 
-    function persistedOverlays(piece, kerfMm, board, diameters) {
-        const overlays = exportOverlays(piece, kerfMm, board, diameters);
+    function persistedOverlays(piece, kerfMm, board, diameters, obstacles) {
+        const overlays = exportOverlays(piece, kerfMm, board, diameters, obstacles);
         return overlays.map((overlay, index) => {
             const layerName = overlayLayerName(overlay);
             if (!layerName) {
@@ -993,7 +993,8 @@
                     piece,
                     cutterMm,
                     usableBoardMm(plan, sheet, appliedTrim),
-                    layerDiameters
+                    layerDiameters,
+                    overlayObstacles(sheet, piece)
                 );
                 overlays.forEach(overlay => {
                     entities += emitOverlayEntity(overlay, placement, sheet, piece);

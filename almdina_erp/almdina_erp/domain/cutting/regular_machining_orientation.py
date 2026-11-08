@@ -14,6 +14,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerMeasurement,
     LinerPiece,
     canonical_path,
+    canonicalize_obstacles,
     liner_parameters_active,
     sawn_liner_ends,
 )
@@ -78,6 +79,7 @@ def match_regular_machining_orientation(
     origin_mm: Point = (0.0, 0.0),
     board_mm: tuple[float, float, float, float] | None = None,
     cutter_diameters_mm: Mapping[str, float | None] | None = None,
+    obstacles: Sequence[Mapping[str, Any]] | None = None,
 ) -> RegularOrientationMatch:
     """Validate all selected machining paths under ONE inverse transform.
 
@@ -104,6 +106,17 @@ def match_regular_machining_orientation(
     passed: list[int] = []
     best_failed: tuple[int, int, str, LinerMeasurement | None] | None = None
     for turns in tuple(dict.fromkeys(int(value) % 4 for value in candidate_turns)):
+        turned_obstacles = (
+            canonicalize_obstacles(
+                obstacles,
+                mirrored=False,
+                quarter_turns=turns,
+                width_mm=width_mm,
+                height_mm=height_mm,
+            )
+            if obstacles
+            else None
+        )
         failures: list[tuple[str, LinerMeasurement | None]] = []
         for kind, spec in active:
             raw_path = overlay_paths.get(kind)
@@ -148,6 +161,7 @@ def match_regular_machining_orientation(
                     ),
                     float(spec.get("width_cm") or 0),
                     kind_diameter,
+                    obstacles=turned_obstacles,
                 )
             else:
                 try:
@@ -175,6 +189,7 @@ def match_regular_machining_orientation(
                     length,
                     start_sawn=start_sawn,
                     end_sawn=end_sawn,
+                    obstacles=turned_obstacles,
                 )
             if not measurement.ok:
                 failures.append((kind, measurement))

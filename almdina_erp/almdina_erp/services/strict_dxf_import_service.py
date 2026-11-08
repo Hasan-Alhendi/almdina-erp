@@ -21,6 +21,7 @@ from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     contour_notch_cm,
     liner_parameters_active,
     localize_path,
+    obstacles_in_toolpath_frame,
     sawn_liner_ends,
 )
 from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
@@ -1247,6 +1248,15 @@ def _corner_liner_issue(
         )
     if not canonical_paths:
         return None
+    frame_obstacles = obstacles_in_toolpath_frame(
+        (sheet or {}).get("pieces") or (),
+        piece,
+        outer,
+        mirrored=mirrored,
+        quarter_turns=turns,
+        width_mm=float(spec.cut_width_cm) * 10.0,
+        height_mm=float(spec.cut_length_cm) * 10.0,
+    ) or None
     start_cm = float(getattr(row, addon.start_field, 0) or 0) if row else None
     length_cm = float(getattr(row, addon.length_field, 0) or 0) if row else None
     machining = machining_values(row) if row is not None else {}
@@ -1270,6 +1280,7 @@ def _corner_liner_issue(
                 if cutter_diameter_mm is not None and float(cutter_diameter_mm) > 0
                 else None
             ),
+            obstacles=frame_obstacles,
         )
     else:
         try:
@@ -1301,6 +1312,7 @@ def _corner_liner_issue(
             length_cm,
             start_sawn=start_sawn,
             end_sawn=end_sawn,
+            obstacles=frame_obstacles,
         )
     return liner_geometry_issue(
         measurement,
@@ -1414,6 +1426,15 @@ def _regular_machining_issues(
         cutter_diameters_mm=cutter_diameters_mm,
         origin_mm=(float(piece.get("x") or 0) * 10, float(piece.get("y") or 0) * 10),
         board_mm=_shifted_board_mm(sheet),
+        obstacles=obstacles_in_toolpath_frame(
+            (sheet or {}).get("pieces") or (),
+            piece,
+            outer,
+            mirrored=False,
+            quarter_turns=0,
+            width_mm=float(spec.cut_width_cm) * 10.0,
+            height_mm=float(spec.cut_length_cm) * 10.0,
+        ) or None,
     )
     target = piece_target(source_piece_no=spec.row_index, copy_no=int(piece.get("copy_no") or 1))
     if result.reason == "ambiguous":

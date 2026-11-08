@@ -248,6 +248,18 @@
                 if (!(diameter > 0)) {
                     return [{ kind: "liner", layer: "Liner", synthetic: true, error: "cutter_diameter_invalid" }];
                 }
+                const sawnEnds = piece && piece.board && typeof api.sawnBoundaryEnds === "function"
+                    ? specs.map(spec => api.sawnBoundaryEnds(linerViewHost(piece, spec), geomPiece, piece.board))
+                    : null;
+                const sheetObstacles = piece.machining_obstacles || piece.obstacles;
+                const localObstacles = sheetObstacles && sheetObstacles.length && typeof api.sheetObstaclesToLocal === "function"
+                    ? api.sheetObstaclesToLocal(piece, geomPiece, sheetObstacles)
+                    : null;
+                const endsByIndex = localObstacles && localObstacles.length
+                    ? specs.map((_spec, index) => Object.assign({}, (sawnEnds && sawnEnds[index]) || {}, {
+                        obstacles: localObstacles,
+                    }))
+                    : sawnEnds;
                 const paths = api.mergedToolpathsMm(
                     geomPiece,
                     specs.map(spec => ({
@@ -258,9 +270,7 @@
                     })),
                     specs[0].widthCm,
                     diameter,
-                    piece && piece.board && typeof api.sawnBoundaryEnds === "function"
-                        ? specs.map(spec => api.sawnBoundaryEnds(linerViewHost(piece, spec), geomPiece, piece.board))
-                        : null
+                    endsByIndex
                 );
                 return paths.map(local => ({
                     kind: "liner",
@@ -337,13 +347,14 @@
         return overlays;
     }
 
-    function completeToolpaths(piece, existing, kerfMm, board, diameters) {
+    function completeToolpaths(piece, existing, kerfMm, board, diameters, obstacles) {
         const next = Array.isArray(existing) ? existing.slice() : [];
         if (isSpecialPiece(piece)) return { overlays: next };
         const host = Object.assign({}, piece, {
             kerf_mm: num(kerfMm),
             tool_diameters: diameters || (piece && piece.tool_diameters) || null,
             board: board || null,
+            machining_obstacles: obstacles || piece.machining_obstacles || null,
         });
         for (let index = 0; index < ADDONS.length; index += 1) {
             const spec = ADDONS[index];
