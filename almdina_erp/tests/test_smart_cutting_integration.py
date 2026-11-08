@@ -247,8 +247,14 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         self._insert('Edge Banding Type',dict(name=band,thickness_mm=1,disabled=0))
         try:
             rows=source_rows('P5-addon-ambiguous')
+            # All four outer edges and the inner L strap use the same
+            # 1 mm band. The inner strap consumes the second millimetre of
+            # each 10 cm remnant, matching the generated 9.8 cm raw notch.
+            # Without the inner strap, the strict importer correctly expects
+            # 9.9 cm instead and must reject that geometry.
             rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
-                           edge_long_type=band,edge_width_type=band)
+                           edge_long_type=band,edge_width_type=band,
+                           edge_break=1,edge_type=band)
             for side in ('edge_long_left','edge_long_right','edge_width_top','edge_width_bottom'):
                 rows[0][side+'_type_override']=band
             order,rows=self._order(45.3,45.3,0,rows)
