@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import os
 import posixpath
 import uuid
@@ -9,6 +10,7 @@ from typing import Any, Callable
 
 from almdina_erp.almdina_erp.application.backups.management import BackupBundle
 from almdina_erp.almdina_erp.domain.backups.policy import (
+    backup_artifact_kind,
     backup_group_identifier,
     normalize_remote_path,
     retention_candidates,
@@ -185,6 +187,9 @@ class SFTPBackupGateway:
         uploaded: list[str] = []
         temporary: list[str] = []
         try:
+            existing = set(sftp.listdir())
+            if any(artifact.filename in existing for artifact in bundle.artifacts):
+                raise SSHUploadError("Backup files already exist on the remote server.")
             for artifact in bundle.artifacts:
                 if artifact.filename != os.path.basename(artifact.filename):
                     raise SSHUploadError("Backup artifact name is invalid.")
@@ -196,6 +201,12 @@ class SFTPBackupGateway:
                 sftp.put(artifact.path, temp_name, confirm=True)
                 if int(sftp.stat(temp_name).st_size) != int(artifact.size):
                     raise SSHUploadError("Uploaded backup size does not match.")
+                digest = hashlib.sha256()
+                with sftp.open(temp_name, "rb") as remote:
+                    for block in iter(lambda: remote.read(1024 * 1024), b""):
+                        digest.update(block)
+                if digest.hexdigest() != artifact.checksum:
+                    raise SSHUploadError("Uploaded backup checksum does not match.")
                 sftp.rename(temp_name, final_name)
                 temporary.remove(temp_name)
                 uploaded.append(final_name)
@@ -216,15 +227,17 @@ class SFTPBackupGateway:
         client, sftp = self._connect()
         try:
             grouped: dict[str, list[str]] = {}
-            database_groups: set[str] = set()
+            kinds: dict[str, set[str]] = {}
             for name in sftp.listdir():
                 identifier = backup_group_identifier(name, self.config.site_slug)
                 if not identifier:
                     continue
                 grouped.setdefault(identifier, []).append(name)
-                if "-database" in name:
-                    database_groups.add(identifier)
-            eligible = [identifier for identifier in grouped if identifier in database_groups]
+                kind = backup_artifact_kind(name)
+                if kind:
+                    kinds.setdefault(identifier, set()).add(kind)
+            eligible = [identifier for identifier in grouped
+                        if kinds.get(identifier) == {"database", "public_files", "private_files", "site_config"}]
             for identifier in retention_candidates(eligible, keep_last):
                 for name in grouped[identifier]:
                     sftp.remove(name)

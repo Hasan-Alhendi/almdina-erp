@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,11 @@ from almdina_erp.almdina_erp.services import (
     backup_restore_service as service,
     production_settings_service as settings_service,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolated_restore_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(service, "_restore_site_path", lambda: tmp_path)
 
 
 class FakeSettings:

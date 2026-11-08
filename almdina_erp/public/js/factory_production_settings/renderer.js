@@ -247,6 +247,33 @@
             return labels[code] || t("Backup package validation failed.");
         }
 
+        function backupErrorLabel(row) {
+            if (row.error_summary === "retention_cleanup_failed") return t("Backup completed; old backup cleanup needs attention.");
+            if (row.operation_type === "Imported") return importErrorLabel(row.error_summary);
+            if (row.operation_type === "Restore") return t("Restore failed. Check the restore status above.");
+            const labels = {
+                ssh_authentication_failed: t("SSH authentication failed. Check the configured credentials."),
+                ssh_connection_failed: t("Could not reach the backup server. Check the address and network."),
+                ssh_remote_path_invalid: t("The remote backup directory is unavailable or not writable."),
+                ssh_upload_failed: t("External backup upload failed."),
+                restore_in_progress: t("A restore is already in progress for this site."),
+            };
+            return labels[row.error_summary] || t("Backup operation failed.");
+        }
+
+        function restorePhaseLabel(phase) {
+            const labels = {
+                QUEUED: t("Restore queued"), PREFLIGHT: t("Checking restore prerequisites"),
+                SAFETY_BACKUP: t("Creating safety backup"), MAINTENANCE: t("Site in maintenance"),
+                RESTORING: t("Restoring database and files"), MIGRATING: t("Updating database schema"),
+                VERIFYING: t("Verifying restored site"), RECOVERING: t("Recovering the safety backup"),
+                COMPLETED: t("Restore completed and verified"),
+                RECOVERED_AFTER_FAILURE: t("Restore failed; safety backup recovered"),
+                MANUAL_INTERVENTION_REQUIRED: t("Restore needs administrator intervention"),
+            };
+            return labels[phase] || t("Restore status unavailable");
+        }
+
         function sizeLabel(value) {
             const bytes = Number(value || 0);
             if (!Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -258,15 +285,16 @@
         function backupHistoryHtml(snapshot = {}) {
             const rows = Array.isArray(snapshot.history) ? snapshot.history : [];
             const restorable = new Map((snapshot.restorable || []).map(row => [row.operation_id, row]));
+            const restoreBlocked = snapshot.restore_status && snapshot.restore_status.phase && !["COMPLETED", "RECOVERED_AFTER_FAILURE"].includes(snapshot.restore_status.phase);
             if (!rows.length) {
                 return `<div class="aps-empty"><strong>${t("No backups yet")}</strong><span>${t("Use Create Backup Now to create the first local backup.")}</span></div>`;
             }
-            return `<div class="aps-backup-history">${rows.map(row => {
+            const rowHtml = row => {
                 const candidate = restorable.get(row.operation_id);
                 const downloadButton = candidate && snapshot.permissions && snapshot.permissions.can_download
                     ? uiButton({ label: t("Download ZIP"), variant: "secondary", className: "aps-backup-download", attrs: { "data-operation-id": row.operation_id } })
                     : "";
-                const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
+                const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready && !restoreBlocked
                     ? uiButton({
                         label: t("Restore"),
                         variant: "danger",
@@ -274,6 +302,8 @@
                         attrs: {
                             "data-operation-id": row.operation_id,
                             "data-backup-identifier": row.backup_identifier || "",
+                            "data-requested-on": row.requested_on || "",
+                            "data-total-size": row.total_size || 0,
                         },
                     })
                     : "";
@@ -286,18 +316,25 @@
                         <div class="aps-backup-row-meta">
                             <span>${esc(row.requested_on || "—")}</span>
                             <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
-                            ${row.error_summary ? `<span class="aps-backup-error">${esc(row.operation_type === "Imported" ? importErrorLabel(row.error_summary) : row.error_summary)}</span>` : ""}
+                            ${row.error_summary ? `<span class="aps-backup-error">${esc(backupErrorLabel(row))}</span>` : ""}
                             ${restoreButton}
                             ${downloadButton}
                         </div>
                     </div>
                 `;
-            }).join("")}</div>`;
+            };
+            const available = rows.filter(row => restorable.has(row.operation_id));
+            return `<h4>${t("Available backups")}</h4><div class="aps-backup-history">${available.length ? available.map(rowHtml).join("") : `<div class="aps-empty">${t("No available backups")}</div>`}</div>
+                <h4>${t("Operation history")}</h4><div class="aps-backup-history">${rows.map(rowHtml).join("")}</div>`;
         }
 
         function backupHtml(snapshot = {}) {
             const canManage = Boolean(snapshot.permissions && snapshot.permissions.can_manage);
             const canRestore = Boolean(snapshot.permissions && snapshot.permissions.can_restore);
+            const restore = snapshot.restore_status || {};
+            const active = restore.phase && !["COMPLETED", "RECOVERED_AFTER_FAILURE"].includes(restore.phase);
+            const latest = snapshot.latest || {};
+            const upcoming = snapshot.upcoming || {};
             return `
                 <div class="aps-section-head">
                     <div class="aps-section-copy">
@@ -310,11 +347,13 @@
                     </div>
                     <div class="aps-section-tools aps-backup-actions">
                         ${canManage ? uiButton({ label: t("Test SSH Connection"), variant: "secondary", className: "aps-backup-test" }) : ""}
-                        ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
-                        ${canManage ? uiButton({ label: t("Upload Backup ZIP"), variant: "secondary", className: "aps-backup-upload" }) : ""}
+                        ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create", disabled: Boolean(active || snapshot.backup_running) }) : ""}
+                        ${canManage ? uiButton({ label: t("Upload Backup ZIP"), variant: "secondary", className: "aps-backup-upload", disabled: Boolean(active) }) : ""}
                     </div>
                 </div>
                 ${canManage ? `<div class="aps-backup-upload-progress" role="status" aria-live="polite"></div>` : ""}
+                <div class="aps-backup-summary"><span>${t("Latest local backup")}: ${esc(latest.local && latest.local.completed_on || "—")}</span><span>${t("Latest external backup")}: ${esc(latest.external && latest.external.completed_on || "—")}</span><span>${t("Next local backup")}: ${esc(upcoming.local || "—")}</span><span>${t("Next external backup")}: ${esc(upcoming.external || "—")}</span></div>
+                ${canRestore && restore.phase ? `<div class="aps-readonly-note aps-restore-status" role="status" aria-live="polite"><strong>${esc(restorePhaseLabel(restore.phase))}</strong><span>${esc(restore.updated_at ? new Date(restore.updated_at * 1000).toLocaleString() : "")}</span></div>` : ""}
                 ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until DB root credentials are configured in the operational Frappe settings.")}</div>` : ""}
                 ${backupHistoryHtml(snapshot)}
             `;
@@ -328,6 +367,15 @@
         function renderBackupError(message) {
             const $root = $body.find("[data-backup-root]");
             if ($root.length) $root.html(`<div class="aps-error" role="alert"><span class="aps-error-icon" aria-hidden="true">!</span><div><strong>${t("Could not load backup management")}</strong><span>${esc(message || t("An unexpected error occurred."))}</span></div></div>`);
+        }
+
+        function renderRestoreOffline() {
+            const $root = $body.find("[data-backup-root]");
+            if (!$root.length) return;
+            const html = `<strong>${esc(t("Site maintenance or connection interrupted"))}</strong><span>${esc(t("Restore outcome is not confirmed. The status will update when the site is available."))}</span>`;
+            const $status = $root.find(".aps-restore-status");
+            if ($status.length) $status.attr("role", "status").html(html);
+            else $root.html(`<div class="aps-readonly-note aps-restore-status" role="status" aria-live="polite">${html}</div>`);
         }
 
         function statusLabel(status) {
@@ -442,6 +490,7 @@
             auditErrorHtml,
             renderBackup,
             renderBackupError,
+            renderRestoreOffline,
         });
     }
 

@@ -12,7 +12,7 @@ from frappe import _
 from frappe.utils import cint, now, now_datetime
 
 from almdina_erp.almdina_erp.application.backups.management import run_backup
-from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key
+from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key, next_schedule_time
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
     FrappeBackupEngine,
@@ -24,9 +24,11 @@ from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import (
 )
 from almdina_erp.almdina_erp.infrastructure.backups.restore import (
     launch_restore_runner,
+    preflight_restore,
     restore_runtime_ready,
     write_restore_request,
 )
+from almdina_erp.almdina_erp.infrastructure.backups import restore_state
 from almdina_erp.almdina_erp.infrastructure.backups.sftp import (
     SFTPBackupGateway,
     SFTPGatewayError,
@@ -43,6 +45,28 @@ _JOB_METHOD = "almdina_erp.almdina_erp.services.backup_restore_service.run_backu
 _RESTORE_JOB_METHOD = "almdina_erp.almdina_erp.services.backup_restore_service.prepare_restore_job"
 _IMPORT_JOB_METHOD = "almdina_erp.almdina_erp.services.backup_restore_service.run_import_job"
 _UPLOAD_CHUNK = 4 * 1024 * 1024
+
+
+def _restore_site_path() -> Path:
+    return Path(frappe.get_site_path()).resolve()
+
+
+def _require_restore_idle() -> None:
+    if restore_state.active(_restore_site_path()):
+        frappe.throw(_("A restore is already in progress for this site."), frappe.ValidationError)
+
+
+def _wait_for_site_jobs() -> None:
+    from frappe.utils.background_jobs import get_queue, get_queue_args, get_queue_list, get_running_jobs_in_queue
+
+    for _ in range(30):
+        running = [job for queue in get_queue_list() for job in get_running_jobs_in_queue(get_queue(queue))
+                   if get_queue_args(job).get("site") == frappe.local.site
+                   and get_queue_args(job).get("method") != _RESTORE_JOB_METHOD]
+        if not running:
+            return
+        time.sleep(1)
+    raise ValueError("restore_jobs_busy")
 
 
 def _settings() -> Any:
@@ -168,6 +192,7 @@ def download_backup_zip(operation_id: str):
 @frappe.whitelist(methods=["POST"])
 def begin_backup_upload(file_size: int) -> dict[str, str]:
     require_doctype_capability(Capability.MANAGE_BACKUPS)
+    _require_restore_idle()
     _cleanup_abandoned_uploads()
     size = cint(file_size)
     if size <= 0 or size > upload_limit():
@@ -184,6 +209,7 @@ def begin_backup_upload(file_size: int) -> dict[str, str]:
 @frappe.whitelist(methods=["POST"])
 def upload_backup_chunk(operation_id: str, offset: int, file_size: int) -> dict[str, int]:
     require_doctype_capability(Capability.MANAGE_BACKUPS)
+    _require_restore_idle()
     row = _owned_upload(operation_id)
     total = cint(file_size)
     position = cint(offset)
@@ -206,6 +232,7 @@ def upload_backup_chunk(operation_id: str, offset: int, file_size: int) -> dict[
 @frappe.whitelist(methods=["POST"])
 def finish_backup_upload(operation_id: str, file_size: int) -> dict[str, str]:
     require_doctype_capability(Capability.MANAGE_BACKUPS)
+    _require_restore_idle()
     row = _owned_upload(operation_id)
     path = _upload_path(operation_id)
     if path.is_symlink() or path.stat().st_size != cint(file_size) or cint(file_size) != int(row.get("total_size") or 0) or path.stat().st_size > upload_limit():
@@ -231,6 +258,11 @@ def run_import_job(operation_id: str) -> None:
     row = history.get(operation_id)
     if not row or row.get("operation_type") != "Imported" or row.get("status") != "Queued":
         raise ValueError("Invalid import operation")
+    if restore_state.active(_restore_site_path()):
+        history.mark_failed(operation_id, "restore_in_progress")
+        frappe.db.commit()
+        _upload_path(operation_id).unlink(missing_ok=True)
+        return
     source = _upload_path(operation_id)
     history.mark_running(operation_id)
     frappe.db.commit()
@@ -257,16 +289,37 @@ def get_backup_context() -> dict[str, Any]:
     can_manage = doctype_has_capability(Capability.MANAGE_BACKUPS)
     can_restore = doctype_has_capability(Capability.RESTORE_BACKUPS)
     history = FrappeBackupHistory()
+    status = restore_state.public_status(_restore_site_path(), str(frappe.local.site))
+    settings = _settings()
+    upcoming = {}
+    for prefix in ("local", "external"):
+        if cint(settings.get(f"{prefix}_backup_enabled")):
+            try:
+                upcoming[prefix] = str(next_schedule_time(_schedule(settings, prefix), now_datetime()))
+            except ValueError:
+                upcoming[prefix] = ""
+    latest = {}
+    for target in ("Local", "External"):
+        rows = frappe.get_all("Almdina Backup Operation", filters={"target": target, "status": "Completed"},
+                              fields=["backup_identifier", "completed_on"], order_by="completed_on desc", limit_page_length=1)
+        latest[target.lower()] = dict(rows[0]) if rows else {}
+    recent = history.list_recent(30)
     return {
         "permissions": {
             "can_manage": can_manage,
             "can_restore": can_restore,
             "can_download": can_manage and can_restore,
         },
-        "history": history.list_recent(30),
+        "history": recent,
+        "backup_running": any(row.get("operation_type") in ("Manual", "Scheduled") and
+                              row.get("status") in ("Queued", "Running") for row in recent),
         "restorable": history.restorable(30) if can_restore else [],
         "upload_max_bytes": upload_limit() if can_manage else 0,
         "restore_runtime_ready": bool(can_restore and restore_runtime_ready()),
+        "restore_status": status if can_restore else {},
+        "site": str(frappe.local.site),
+        "upcoming": upcoming,
+        "latest": latest,
     }
 
 
@@ -276,6 +329,12 @@ def create_backup_now() -> dict[str, str]:
         Capability.MANAGE_BACKUPS,
         message=_("You do not have permission to create backups."),
     )
+    _require_restore_idle()
+    if frappe.db.exists("Almdina Backup Operation", {
+        "target": "Local", "operation_type": ["in", ["Manual", "Scheduled"]],
+        "status": ["in", ["Queued", "Running"]],
+    }):
+        frappe.throw(_("A local backup is already in progress."), frappe.ValidationError)
     history = FrappeBackupHistory()
     operation_id = history.create(
         operation_type="Manual",
@@ -295,7 +354,12 @@ def test_ssh_connection() -> dict[str, bool]:
     try:
         _ssh_gateway().test_connection()
     except SFTPGatewayError as exc:
-        frappe.throw(_("SSH connection test failed ({0}).").format(exc.safe_code), frappe.ValidationError)
+        messages = {
+            "ssh_authentication_failed": _("SSH authentication failed. Check the configured credentials."),
+            "ssh_connection_failed": _("Could not reach the backup server. Check the address and network."),
+            "ssh_remote_path_invalid": _("The remote backup directory is unavailable or not writable."),
+        }
+        frappe.throw(messages.get(exc.safe_code, _("SSH connection test failed.")), frappe.ValidationError)
     return {"ok": True}
 
 
@@ -313,35 +377,61 @@ def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
     history = FrappeBackupHistory()
     bundle = history.resolve_local_bundle(operation_id)
     source_row = history.get(str(operation_id or "").strip())
-    if source_row and source_row.get("operation_type") == "Imported":
+    if source_row and (source_row.get("operation_type") == "Imported" or source_row.get("import_app_versions")):
         try:
             validate_import_restore(source_row.get("import_app_versions") or "", bundle)
         except (ValueError, OSError) as exc:
-            raise frappe.ValidationError(_("Imported backup is no longer compatible with this site.")) from exc
+            raise frappe.ValidationError(_("Selected backup is no longer compatible with this site.")) from exc
     expected = f"RESTORE {bundle.identifier}"
     if str(confirmation or "").strip() != expected:
         frappe.throw(_("Restore confirmation does not match the selected backup."), frappe.ValidationError)
+    if frappe.db.count("Almdina Backup Operation", {
+        "status": ["in", ["Running", "Prepared"]],
+        "operation_type": ["in", ["Manual", "Scheduled", "Imported", "Restore"]],
+    }):
+        frappe.throw(_("Wait for the current backup or import to finish before restoring."), frappe.ValidationError)
+    try:
+        preflight_restore(bundle)
+    except Exception as exc:
+        code = str(exc) if isinstance(exc, ValueError) else "restore_preflight_unavailable"
+        messages = {
+            "restore_runtime_not_configured": _("Restore needs database administrator credentials in the operational configuration."),
+            "restore_db_admin_unavailable": _("Database administrator access is unavailable. Check the operational configuration."),
+            "restore_db_unavailable": _("The site database is unavailable. Restore has not started."),
+            "restore_disk_space": _("There is insufficient free disk space for a safety backup and restore."),
+            "restore_tools_unavailable": _("The restore tools are unavailable on this server."),
+        }
+        raise frappe.ValidationError(messages.get(code, _("Restore preflight failed. Please contact the administrator."))) from exc
     restore_id = history.create(
         operation_type="Restore",
         target="Restore",
         requested_by=frappe.session.user,
         source_operation_id=str(operation_id or "").strip(),
     )
-    frappe.enqueue(
-        _RESTORE_JOB_METHOD,
-        queue="long",
-        timeout=6 * 60 * 60,
-        enqueue_after_commit=True,
-        job_id=f"almdina-restore-prepare-{restore_id}",
-        deduplicate=True,
-        operation_id=restore_id,
-    )
+    try:
+        restore_state.claim(_restore_site_path(), str(frappe.local.site), restore_id)
+        frappe.enqueue(
+            _RESTORE_JOB_METHOD,
+            queue="long",
+            timeout=6 * 60 * 60,
+            enqueue_after_commit=True,
+            job_id=f"almdina-restore-prepare-{restore_id}",
+            deduplicate=True,
+            operation_id=restore_id,
+        )
+    except ValueError as exc:
+        raise frappe.ValidationError(_("A restore is already in progress for this site.")) from exc
+    except Exception:
+        restore_state.advance(_restore_site_path(), restore_id, "MANUAL_INTERVENTION_REQUIRED")
+        raise
     return {"operation_id": restore_id, "status": "Queued"}
 
 
 def scheduled_backup_tick() -> None:
     """Minute-level scheduler hook; it only enqueues due long-running jobs."""
 
+    if restore_state.active(_restore_site_path()):
+        return
     settings = _settings()
     current = now_datetime()
     history = FrappeBackupHistory()
@@ -376,6 +466,10 @@ def run_backup_job(operation_id: str, target: str) -> None:
     expected_target = "External" if normalized == "external" else "Local"
     if not row or row.get("status") != "Queued" or row.get("target") != expected_target:
         raise ValueError("Backup job operation is invalid.")
+    if restore_state.active(_restore_site_path()):
+        history.mark_failed(operation_id, "restore_in_progress")
+        frappe.db.commit()
+        return
     settings = _settings()
     try:
         if normalized == "external":
@@ -413,20 +507,35 @@ def prepare_restore_job(operation_id: str) -> None:
     restore_row = history.get(operation_id)
     if not restore_row or restore_row.get("operation_type") != "Restore" or restore_row.get("status") != "Queued":
         raise ValueError("Restore operation is invalid.")
+    if restore_state.read(_restore_site_path()).get("operation_id") != operation_id:
+        raise ValueError("Restore claim is invalid.")
+    restore_state.advance(_restore_site_path(), operation_id, "PREFLIGHT", runner_pid=os.getpid())
     if not restore_runtime_ready():
         history.mark_failed(operation_id, "restore_runtime_not_configured")
         frappe.db.commit()
+        restore_state.advance(_restore_site_path(), operation_id, "RECOVERED_AFTER_FAILURE")
         return
 
     history.mark_running(operation_id)
     source_operation_id = str(restore_row.get("source_operation_id") or "")
+    previous_maintenance = bool(frappe.conf.get("maintenance_mode"))
+    maintenance_enabled = False
+    safety_operation_id = ""
+    safety_completed = False
     try:
         source_row = history.get(source_operation_id)
         if not source_row:
             raise ValueError("Restore source operation is unavailable.")
         target = history.resolve_local_bundle(source_operation_id)
-        if source_row.get("operation_type") == "Imported":
+        if source_row.get("operation_type") == "Imported" or source_row.get("import_app_versions"):
             validate_import_restore(source_row.get("import_app_versions") or "", target)
+        preflight_restore(target)
+        from frappe.installer import update_site_config
+
+        if not previous_maintenance:
+            update_site_config("maintenance_mode", 1)
+            maintenance_enabled = True
+        _wait_for_site_jobs()
 
         safety_operation_id = history.create(
             operation_type="Safety",
@@ -434,9 +543,11 @@ def prepare_restore_job(operation_id: str) -> None:
             requested_by=restore_row.get("requested_by") or "Administrator",
         )
         history.mark_running(safety_operation_id)
+        restore_state.advance(_restore_site_path(), operation_id, "SAFETY_BACKUP")
         safety_engine = FrappeBackupEngine()
         safety = safety_engine.create()
         history.mark_completed(safety_operation_id, safety, safety.identifier)
+        safety_completed = True
 
         request_path = write_restore_request(
             operation_id=operation_id,
@@ -451,6 +562,7 @@ def prepare_restore_job(operation_id: str) -> None:
             target=target,
             safety_operation_id=safety_operation_id,
             safety=safety,
+            previous_maintenance=previous_maintenance,
         )
         history.mark_restore_prepared(
             operation_id,
@@ -461,8 +573,16 @@ def prepare_restore_job(operation_id: str) -> None:
         frappe.db.commit()
         launch_restore_runner(request_path)
     except Exception as exc:
+        if safety_operation_id and not safety_completed:
+            history.mark_failed(safety_operation_id, "safety_backup_failed")
         history.mark_failed(operation_id, getattr(exc, "safe_code", exc.__class__.__name__))
         frappe.db.commit()
+        try:
+            if maintenance_enabled:
+                update_site_config("maintenance_mode", 0)
+            restore_state.advance(_restore_site_path(), operation_id, "RECOVERED_AFTER_FAILURE")
+        except Exception:
+            restore_state.advance(_restore_site_path(), operation_id, "MANUAL_INTERVENTION_REQUIRED")
         raise
 
 

@@ -421,13 +421,15 @@
 
         function openRestore(config = {}) {
             const phrase = String(config.confirmationPhrase || "");
+            const size = Number(config.size || 0);
+            const sizeText = size > 0 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : "—";
             const dialog = own(new frappe.ui.Dialog({
                 title: t("Restore backup"),
                 fields: [
                     {
                         fieldname: "warning",
                         fieldtype: "HTML",
-                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("Warning: Restore replaces the current database and files."))}</strong><span>${escapeHtml(t("The system will first create a full backup, then use Frappe Restore and run migrate."))}</span><code>${escapeHtml(phrase)}</code></div>`,
+                        options: `<div class="aps-restore-warning"><strong>${escapeHtml(t("Warning: Restore replaces the current database and files."))}</strong><span>${escapeHtml(t("Changes made after this backup will be lost."))}</span><span>${escapeHtml(t("Target site"))}: <b dir="ltr">${escapeHtml(config.site || "—")}</b></span><span>${escapeHtml(t("Backup date"))}: ${escapeHtml(config.requestedOn || "—")} · ${escapeHtml(sizeText)}</span><span>${escapeHtml(t("The system will first create a full backup, then use Frappe Restore and run migrate."))}</span><code dir="ltr">${escapeHtml(phrase)}</code></div>`,
                     },
                     { fieldname: "confirmation", fieldtype: "Data", label: t("Type the confirmation phrase as shown above"), reqd: 1 },
                 ],

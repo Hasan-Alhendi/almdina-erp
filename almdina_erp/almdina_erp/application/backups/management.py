@@ -72,18 +72,26 @@ def run_backup(
     history.mark_running(operation_id)
     bundle: BackupBundle | None = None
     try:
-        bundle = engine.create()
-        if normalized_target == "external":
-            reference = external.upload(bundle)
-            external.apply_retention(keep_last)
-        else:
-            reference = bundle.identifier
-            local_retention.apply(keep_last)
-        history.mark_completed(operation_id, bundle, reference)
+        try:
+            bundle = engine.create()
+            if normalized_target == "external":
+                reference = external.upload(bundle)
+            else:
+                reference = bundle.identifier
+            history.mark_completed(operation_id, bundle, reference)
+        except Exception as exc:
+            history.mark_failed(operation_id, _safe_error_code(exc))
+            raise
+        try:
+            if normalized_target == "external":
+                external.apply_retention(keep_last)
+            else:
+                local_retention.apply(keep_last)
+        except Exception:
+            # The new backup is already durable; cleanup errors must not report it as failed.
+            if hasattr(history, "mark_cleanup_warning"):
+                history.mark_cleanup_warning(operation_id)
         return bundle
-    except Exception as exc:
-        history.mark_failed(operation_id, _safe_error_code(exc))
-        raise
     finally:
         if bundle is not None:
             engine.release(bundle)
