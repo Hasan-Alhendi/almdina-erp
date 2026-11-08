@@ -66,6 +66,7 @@ def test_archive_member_name_rejects_traversal() -> None:
         ("Completed", "Local", "Manual", "id-1", True),
         ("Completed", "External", "Scheduled", "id-1", True),
         ("Completed", "Local", "Safety", "id-1", True),
+        ("Completed", "Local", "Imported", "id-1", True),
         ("Queued", "Local", "Manual", "id-1", False),
         ("Running", "Local", "Manual", "id-1", False),
         ("Failed", "Local", "Manual", "id-1", False),

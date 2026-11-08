@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import frappe
 from frappe import _
 from frappe.utils import cint, now, now_datetime
 
+from almdina_erp.almdina_erp.application.backups.import_backup import import_backup_zip as run_import_backup_zip
 from almdina_erp.almdina_erp.application.backups.management import run_backup
 from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
@@ -32,6 +34,10 @@ from almdina_erp.almdina_erp.infrastructure.backups.frappe_backup import (
     FrappeLocalRetention,
 )
 from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
+from almdina_erp.almdina_erp.infrastructure.backups.import_zip import (
+    BackupImportError,
+    LocalBackupZipImporter,
+)
 from almdina_erp.almdina_erp.infrastructure.backups.restore import (
     launch_restore_runner,
     write_restore_request,
@@ -207,6 +213,121 @@ def download_backup_zip(operation_id: str):
         if packed is not None:
             cleanup_export_paths(packed.cleanup_paths)
         frappe.throw(_("Could not prepare the backup download."), frappe.ValidationError)
+
+
+def _safe_import_error_message(exc: BackupImportError) -> str:
+    code = str(exc.safe_code or "")
+    mapping = {
+        "backup_import_unsupported_format": _("This backup package format is not supported."),
+        "backup_import_invalid_manifest": _("The backup package manifest is invalid."),
+        "backup_import_missing_manifest": _("The backup package is missing manifest.json."),
+        "backup_import_incomplete_components": _("The backup package is missing required components."),
+        "backup_import_integrity_failed": _("Backup package files failed integrity checks."),
+        "backup_import_corrupt_zip": _("The uploaded file is not a valid ZIP archive."),
+        "backup_import_encrypted": _("Encrypted backup packages are not supported."),
+        "backup_import_zip_bomb": _("The backup package failed safe-size validation."),
+        "backup_import_unsafe_path": _("The backup package contains unsafe file paths."),
+        "backup_import_duplicate_member": _("The backup package contains duplicate members."),
+        "backup_import_unexpected_members": _("The backup package contains unexpected files."),
+        "backup_import_site_mismatch": _("This backup package belongs to a different site."),
+        "backup_import_database_type_mismatch": _("This backup package does not match the current database type."),
+        "backup_import_identifier_mismatch": _("Backup package identifiers do not match the component filenames."),
+        "backup_import_duplicate": _("A backup with these files already exists on this site."),
+        "backup_import_missing_file": _("The uploaded backup file was not found."),
+        "backup_import_history_failed": _("Could not register the imported backup."),
+    }
+    return mapping.get(code, _("Could not import the backup package."))
+
+
+def _resolve_private_upload_path(file_url: str, file_id: str | None = None) -> tuple[str, str]:
+    """Return (file_name, absolute_path) for a private unattached staging upload."""
+
+    normalized_url = str(file_url or "").strip()
+    if not normalized_url.startswith("/private/files/") or ".." in normalized_url:
+        frappe.throw(_("The uploaded backup file was not found."), frappe.ValidationError)
+    if not normalized_url.lower().split("?", 1)[0].endswith(".zip"):
+        frappe.throw(_("Please upload a ZIP backup package."), frappe.ValidationError)
+
+    fields = ["name", "file_url", "is_private", "attached_to_doctype", "attached_to_name", "owner"]
+    file_row = None
+    if file_id:
+        file_row = frappe.db.get_value(
+            "File",
+            {"name": str(file_id).strip(), "file_url": normalized_url},
+            fields,
+            as_dict=True,
+        )
+    if file_row is None:
+        file_row = frappe.db.get_value(
+            "File",
+            {
+                "file_url": normalized_url,
+                "owner": frappe.session.user,
+                "is_private": 1,
+                "attached_to_doctype": ["is", "not set"],
+                "attached_to_name": ["is", "not set"],
+            },
+            fields,
+            as_dict=True,
+        )
+    if not file_row or not cint(file_row.is_private):
+        frappe.throw(_("The uploaded backup file was not found."), frappe.ValidationError)
+    if file_row.attached_to_doctype or file_row.attached_to_name:
+        frappe.throw(_("The uploaded backup file was not found."), frappe.ValidationError)
+    if str(file_row.owner or "") != str(frappe.session.user) and frappe.session.user != "Administrator":
+        frappe.throw(_("The uploaded backup file was not found."), frappe.ValidationError)
+
+    relative = normalized_url.lstrip("/")
+    absolute = Path(frappe.get_site_path(relative)).resolve()
+    private_files = Path(frappe.get_site_path("private", "files")).resolve()
+    try:
+        absolute.relative_to(private_files)
+    except ValueError as exc:
+        raise frappe.ValidationError(_("The uploaded backup file was not found.")) from exc
+    if not absolute.is_file() or absolute.is_symlink():
+        frappe.throw(_("The uploaded backup file was not found."), frappe.ValidationError)
+    return str(file_row.name), str(absolute)
+
+
+def _delete_staging_file(file_name: str) -> None:
+    try:
+        if file_name and frappe.db.exists("File", file_name):
+            frappe.delete_doc("File", file_name, ignore_permissions=True, delete_permanently=True)
+    except Exception:
+        frappe.logger("almdina_backup").error("Failed deleting backup import staging file", exc_info=True)
+
+
+@frappe.whitelist()
+def import_backup_zip(file_url: str, file_id: str | None = None) -> dict[str, Any]:
+    """Import one Almdina backup ZIP into the local backup store."""
+
+    require_doctype_capability(
+        Capability.MANAGE_BACKUPS,
+        message=_("You do not have permission to import backups."),
+    )
+    file_name, absolute = _resolve_private_upload_path(file_url, file_id)
+    try:
+        result = run_import_backup_zip(
+            zip_path=absolute,
+            gateway=LocalBackupZipImporter(),
+            site=str(frappe.local.site),
+            site_slug=str(frappe.local.site).replace(".", "_"),
+            database_type=str(getattr(frappe.conf, "db_type", None) or "mariadb"),
+            requested_by=frappe.session.user,
+        )
+    except BackupImportError as exc:
+        _delete_staging_file(file_name)
+        frappe.throw(_safe_import_error_message(exc), frappe.ValidationError)
+    except Exception:
+        _delete_staging_file(file_name)
+        frappe.throw(_("Could not import the backup package."), frappe.ValidationError)
+    _delete_staging_file(file_name)
+    return {
+        "operation_id": result.operation_id,
+        "backup_identifier": result.backup_identifier,
+        "total_size": result.total_size,
+        "status": "Completed",
+    }
 
 
 @frappe.whitelist()
@@ -447,6 +568,7 @@ __all__ = [
     "create_backup_now",
     "download_backup_zip",
     "get_backup_context",
+    "import_backup_zip",
     "prepare_restore_job",
     "request_restore",
     "run_backup_job",

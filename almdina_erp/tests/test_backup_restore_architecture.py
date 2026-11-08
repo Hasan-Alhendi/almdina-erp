@@ -8,8 +8,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "policy.py"
 EXPORT_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "export_format.py"
+IMPORT_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "import_format.py"
 APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "management.py"
 EXPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "export.py"
+IMPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "import_backup.py"
 FRAPPE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "frappe_backup.py"
 EXPORT_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "export_zip.py"
 RESTORE_RUNNER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "restore_runner.py"
@@ -30,7 +32,7 @@ def imports(path: Path) -> set[str]:
 
 
 def test_domain_and_application_are_framework_free() -> None:
-    for path in (DOMAIN, EXPORT_DOMAIN, APPLICATION, EXPORT_APPLICATION):
+    for path in (DOMAIN, EXPORT_DOMAIN, IMPORT_DOMAIN, APPLICATION, EXPORT_APPLICATION, IMPORT_APPLICATION):
         dependencies = imports(path)
         assert not any(value == "frappe" or value.startswith("frappe.") for value in dependencies)
         assert not any("infrastructure" in value or ".services" in value for value in dependencies)
@@ -76,6 +78,31 @@ def test_restore_endpoint_accepts_operation_id_not_client_path() -> None:
     )
     arguments = [argument.arg for argument in request_restore.args.args]
     assert arguments == ["operation_id", "confirmation"]
+
+
+def test_import_endpoint_accepts_file_identifiers_not_disk_paths() -> None:
+    tree = ast.parse(SERVICE.read_text(encoding="utf-8"))
+    import_fn = next(
+        node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "import_backup_zip"
+    )
+    arguments = [argument.arg for argument in import_fn.args.args]
+    assert arguments == ["file_url", "file_id"]
+    history = json.loads(HISTORY.read_text(encoding="utf-8"))
+    options = next(field["options"] for field in history["fields"] if field["fieldname"] == "operation_type")
+    assert "Imported" in options.split("\n")
+    assert "Imported" not in (
+        next(field["options"] for field in history["fields"] if field["fieldname"] == "target")
+    )
+    history_src = (ROOT / "almdina_erp" / "infrastructure" / "backups" / "history.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety")' in history_src
+    assert "Imported" in history_src
+    export_src = EXPORT_ADAPTER.read_text(encoding="utf-8")
+    assert "DOWNLOADABLE_LOCAL_OPERATION_TYPES" in export_src
+    assert "extractall" not in (ROOT / "almdina_erp" / "infrastructure" / "backups" / "import_zip.py").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_download_endpoint_accepts_operation_id_not_client_path() -> None:

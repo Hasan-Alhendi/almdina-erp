@@ -149,6 +149,7 @@ def test_disabled_automatic_target_rejects_queued_scheduled_job(
         ("test_ssh_connection", Capability.MANAGE_BACKUPS, ()),
         ("test_db_connection", Capability.MANAGE_DB_RESTORE_SETTINGS, ()),
         ("download_backup_zip", Capability.MANAGE_BACKUPS, ("op-1",)),
+        ("import_backup_zip", Capability.MANAGE_BACKUPS, ("/private/files/x.zip",)),
         ("request_restore", Capability.RESTORE_BACKUPS, ("untrusted-operation", "RESTORE anything")),
     ],
 )

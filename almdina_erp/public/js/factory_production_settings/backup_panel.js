@@ -26,6 +26,10 @@
             event.preventDefault();
             createBackup();
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-import", event => {
+            event.preventDefault();
+            importBackup();
+        });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-test", event => {
             event.preventDefault();
             testConnection();
@@ -85,6 +89,57 @@
                     if (!current()) return;
                     frappe.msgprint({ title: t("Could not create the backup"), message: frappe.utils.escape_html(errorMessage(error, t("Backup scheduling failed."))), indicator: "red" });
                 });
+        }
+
+        function importBackup() {
+            if (!current()) return;
+            const ui = window.AlmdinaUi;
+            if (!ui || typeof ui.fileUploader !== "function" || typeof api.importBackupZip !== "function") {
+                frappe.msgprint({
+                    title: t("Could not import the backup"),
+                    message: frappe.utils.escape_html(t("The backup import service is not ready.")),
+                    indicator: "red",
+                });
+                return;
+            }
+            ui.fileUploader({
+                preset: "securePrivate",
+                restrictions: {
+                    allowed_file_types: [".zip"],
+                },
+                on_success(file) {
+                    if (!current()) return null;
+                    const fileUrl = file && (file.file_url || file.file_name);
+                    const fileId = file && file.name;
+                    if (!fileUrl) {
+                        frappe.msgprint({
+                            title: t("Could not import the backup"),
+                            message: frappe.utils.escape_html(t("The uploaded backup file was not found.")),
+                            indicator: "red",
+                        });
+                        return null;
+                    }
+                    return api.importBackupZip(fileUrl, fileId, {
+                        freeze: true,
+                        freezeMessage: t("Validating and importing the backup package..."),
+                    }).then(result => {
+                        if (!current()) return null;
+                        frappe.show_alert({
+                            message: t("Backup imported successfully."),
+                            indicator: "green",
+                        }, 6);
+                        return refresh().then(() => result);
+                    }).catch(error => {
+                        if (!current()) return null;
+                        frappe.msgprint({
+                            title: t("Could not import the backup"),
+                            message: frappe.utils.escape_html(errorMessage(error, t("Could not import the backup package."))),
+                            indicator: "red",
+                        });
+                        return null;
+                    });
+                },
+            });
         }
 
         function testConnection() {

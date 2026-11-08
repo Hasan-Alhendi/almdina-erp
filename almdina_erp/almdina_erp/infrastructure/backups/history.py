@@ -174,6 +174,40 @@ class FrappeBackupHistory:
             },
         )
 
+    def create_imported_completed(self, *, bundle: BackupBundle, requested_by: str) -> str:
+        """Insert one Completed Local Imported operation after artifacts are on disk."""
+
+        operation_id = uuid.uuid4().hex
+        manifest = _canonical_manifest(bundle)
+        frappe.get_doc(
+            {
+                "doctype": DOCTYPE,
+                "operation_id": operation_id,
+                "operation_type": "Imported",
+                "target": "Local",
+                "status": "Completed",
+                "backup_identifier": bundle.identifier,
+                "reference": str(bundle.identifier)[:140],
+                "total_size": bundle.total_size,
+                "checksum": _manifest_checksum(manifest),
+                "artifact_manifest": manifest,
+                "requested_by": requested_by or "Administrator",
+                "requested_on": now(),
+                "started_on": now(),
+                "completed_on": now(),
+            }
+        ).insert(ignore_permissions=True)
+        return operation_id
+
+    def imported_backup_identifiers(self) -> set[str]:
+        rows = frappe.get_all(
+            DOCTYPE,
+            filters={"operation_type": "Imported", "status": "Completed", "target": "Local"},
+            fields=["backup_identifier"],
+            limit_page_length=1000,
+        )
+        return {str(row.backup_identifier) for row in rows if row.backup_identifier}
+
     def mark_failed(self, operation_id: str, error_code: str, *, release_schedule: bool = True) -> None:
         values: dict[str, Any] = {
             "status": "Failed",
@@ -232,13 +266,18 @@ class FrappeBackupHistory:
         )
         return dict(row) if row else None
 
+    # Restore remains Manual/Scheduled/Safety only. Imported is downloadable
+    # via resolve_local_bundle(..., operation_types=DOWNLOADABLE_LOCAL_OPERATION_TYPES).
+    RESTORABLE_OPERATION_TYPES = ("Manual", "Scheduled", "Safety")
+    DOWNLOADABLE_LOCAL_OPERATION_TYPES = ("Manual", "Scheduled", "Safety", "Imported")
+
     def restorable(self, limit: int = 30) -> list[dict[str, Any]]:
         rows = frappe.get_all(
             DOCTYPE,
             filters={
                 "target": "Local",
                 "status": "Completed",
-                "operation_type": ["in", ["Manual", "Scheduled", "Safety"]],
+                "operation_type": ["in", list(self.RESTORABLE_OPERATION_TYPES)],
             },
             fields=["operation_id", "backup_identifier", "requested_on", "total_size", "checksum"],
             order_by="requested_on desc",
@@ -246,16 +285,22 @@ class FrappeBackupHistory:
         )
         return [dict(row) for row in rows]
 
-    def resolve_local_bundle(self, operation_id: str) -> BackupBundle:
+    def resolve_local_bundle(
+        self,
+        operation_id: str,
+        *,
+        operation_types: tuple[str, ...] | list[str] | None = None,
+    ) -> BackupBundle:
         from frappe.utils.backups import get_backup_path
 
+        allowed_types = tuple(operation_types or self.RESTORABLE_OPERATION_TYPES)
         row = frappe.db.get_value(
             DOCTYPE,
             {
                 "operation_id": str(operation_id or "").strip(),
                 "target": "Local",
                 "status": "Completed",
-                "operation_type": ["in", ["Manual", "Scheduled", "Safety"]],
+                "operation_type": ["in", list(allowed_types)],
             },
             ["backup_identifier", "artifact_manifest", "checksum"],
             as_dict=True,

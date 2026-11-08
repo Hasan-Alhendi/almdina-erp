@@ -207,7 +207,10 @@ class FrappeExportBundleResolver:
 
     def resolve(self, operation: ExportOperation) -> tuple[BackupBundle, tuple[str, ...]]:
         if operation.target == "Local":
-            bundle = self._history.resolve_local_bundle(operation.operation_id)
+            bundle = self._history.resolve_local_bundle(
+                operation.operation_id,
+                operation_types=FrappeBackupHistory.DOWNLOADABLE_LOCAL_OPERATION_TYPES,
+            )
             return bundle, ()
         if operation.target == "External":
             return self._resolve_external(operation)

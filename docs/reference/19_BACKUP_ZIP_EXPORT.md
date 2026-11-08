@@ -2,7 +2,7 @@
 
 > **Status:** Canonical export contract (Phase 2)  
 > **Audience:** Developers, QA, DevOps, Coding AI  
-> **Scope:** Downloadable backup packages only. Upload/Import remain out of scope.
+> **Scope:** Downloadable backup packages and Local ZIP Import (`operation_type=Imported`). Restore of imported packages remains out of scope.
 
 ## Purpose
 
@@ -94,6 +94,12 @@ Queued / Running / Failed / Restore operations are rejected. The UI button is ga
 - Temporary staging lives under the site `private` directory and is removed after success or failure.
 - User-facing errors use safe codes/messages without internal paths.
 
+## Local ZIP Import
+
+`manage_backups` may upload an `almdina.backup.zip` v1 package. The server validates the root `manifest.json`, component sizes/SHA-256, current-site slug, and current `database_type`, then materializes the four artifacts into `private/backups` and inserts an `Imported` / `Local` / `Completed` history row. Imported identifiers are excluded from automatic local retention in this phase. They are downloadable but not listed by `restorable()`.
+
+Operational note: Frappe/`nginx` upload size limits remain infrastructure settings. Import code does not impose an application-level fixed ZIP size cap and streams members to disk.
+
 ## Explicit non-goals (later phases)
 
-Upload Backup, Import Backup, restoring imported ZIPs, replacing local retention with uploaded packages, and changing how originals are created.
+Restoring imported ZIPs, External SFTP import destinations, cross-site imports, overwrite of existing artifact groups, and changing how originals are created.

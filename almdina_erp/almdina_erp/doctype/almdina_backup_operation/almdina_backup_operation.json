@@ -24,7 +24,7 @@
   ],
   "fields": [
     {"fieldname":"operation_id","fieldtype":"Data","in_list_view":1,"label":"Operation ID","read_only":1,"reqd":1,"unique":1},
-    {"fieldname":"operation_type","fieldtype":"Select","in_list_view":1,"label":"Operation Type","options":"Manual\nScheduled\nSafety\nRestore","read_only":1,"reqd":1},
+    {"fieldname":"operation_type","fieldtype":"Select","in_list_view":1,"label":"Operation Type","options":"Manual\nScheduled\nSafety\nImported\nRestore","read_only":1,"reqd":1},
     {"fieldname":"target","fieldtype":"Select","in_list_view":1,"label":"Target","options":"Local\nExternal\nRestore","read_only":1,"reqd":1},
     {"fieldname":"status","fieldtype":"Select","in_list_view":1,"label":"Status","options":"Queued\nRunning\nPrepared\nCompleted\nFailed","read_only":1,"reqd":1},
     {"fieldname":"backup_identifier","fieldtype":"Data","label":"Backup Identifier","read_only":1},

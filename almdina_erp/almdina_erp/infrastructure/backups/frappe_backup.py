@@ -142,6 +142,19 @@ class FrappeLocalRetention:
             for identifier, paths in grouped.items()
             if "database" in kinds[identifier]
         }
+        # Imported packages are excluded from automatic retention in this phase.
+        try:
+            from almdina_erp.almdina_erp.infrastructure.backups.history import FrappeBackupHistory
+
+            protected = FrappeBackupHistory().imported_backup_identifiers()
+        except Exception:
+            protected = set()
+        if protected:
+            complete = {
+                identifier: paths
+                for identifier, paths in complete.items()
+                if identifier not in protected
+            }
         cleanup_old_backups(complete, limit)
 
 

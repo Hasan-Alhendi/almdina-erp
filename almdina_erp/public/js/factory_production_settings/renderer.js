@@ -378,6 +378,7 @@
                     </div>
                     <div class="aps-section-tools aps-backup-actions">
                         ${canManage ? uiButton({ label: t("Test SSH Connection"), variant: "secondary", className: "aps-backup-test" }) : ""}
+                        ${canManage ? uiButton({ label: t("Import Backup"), variant: "secondary", className: "aps-backup-import" }) : ""}
                         ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
                     </div>
                 </div>

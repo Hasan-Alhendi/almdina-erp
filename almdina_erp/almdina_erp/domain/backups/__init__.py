@@ -17,6 +17,11 @@ from .export_format import (
     is_exportable_operation,
     parse_stored_artifact_manifest,
 )
+from .import_format import (
+    normalize_database_type,
+    parse_import_manifest_json,
+    validate_import_manifest,
+)
 from .policy import (
     BackupSchedule,
     backup_group_identifier,
@@ -46,8 +51,11 @@ __all__ = [
     "is_exportable_operation",
     "is_schedule_blocking_status",
     "is_stale_backup_operation",
+    "normalize_database_type",
     "normalize_remote_path",
+    "parse_import_manifest_json",
     "parse_stored_artifact_manifest",
     "resolve_db_root_connection",
     "retention_candidates",
+    "validate_import_manifest",
 ]

@@ -97,6 +97,23 @@ class BackupDbRestoreUiContractTest(unittest.TestCase):
         self.assertNotIn("window.open(url", self.backup_panel)
         self.assertIn("downloadBackupZipMethod", self.api)
         self.assertIn("operation_id", self.backup_panel)
+        self.assertIn("importBackupZip", self.api)
+        self.assertIn("import_backup_zip", self.service)
+        self.assertIn("aps-backup-import", self.renderer)
+        self.assertIn('t("Import Backup")', self.renderer)
+        self.assertIn("importBackup", self.backup_panel)
+        self.assertIn('allowed_file_types: [".zip"]', self.backup_panel)
+        self.assertIn('t("Backup imported successfully.")', self.backup_panel)
+        self.assertIn('t("Validating and importing the backup package...")', self.backup_panel)
+        translations = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        for key in (
+            "Import Backup",
+            "Backup imported successfully.",
+            "Could not import the backup package.",
+            "A backup with these files already exists on this site.",
+            "You do not have permission to import backups.",
+        ):
+            self.assertIn(key, translations)
 
 
 if __name__ == "__main__":

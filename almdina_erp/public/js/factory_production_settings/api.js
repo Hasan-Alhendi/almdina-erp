@@ -91,6 +91,12 @@
         return `${BACKUPS}.download_backup_zip`;
     }
 
+    function importBackupZip(fileUrl, fileId, options = {}) {
+        const args = { file_url: String(fileUrl || "") };
+        if (fileId) args.file_id = String(fileId);
+        return request(`${BACKUPS}.import_backup_zip`, args, options).then(data => data || {});
+    }
+
     window.AlmdinaFactoryProductionSettingsApi = Object.freeze({
         getSettings,
         updateSettings,
@@ -106,5 +112,6 @@
         requestRestore,
         downloadBackupZipUrl,
         downloadBackupZipMethod,
+        importBackupZip,
     });
 })();

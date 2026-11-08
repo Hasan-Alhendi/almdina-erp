@@ -9,6 +9,11 @@ from .export import (
     export_backup_zip,
     prepare_export_manifest,
 )
+from .import_backup import (
+    BackupImportGateway,
+    ImportedBackupResult,
+    import_backup_zip,
+)
 from .management import (
     BackupArtifact,
     BackupBundle,
@@ -25,14 +30,17 @@ __all__ = [
     "BackupBundle",
     "BackupEngine",
     "BackupHistory",
+    "BackupImportGateway",
     "BackupZipPacker",
     "ExportBundleResolver",
     "ExportOperation",
     "ExportOperationRepository",
     "ExternalBackupGateway",
+    "ImportedBackupResult",
     "LocalRetentionGateway",
     "PackedBackupExport",
     "export_backup_zip",
+    "import_backup_zip",
     "prepare_export_manifest",
     "run_backup",
     "test_external_connection",

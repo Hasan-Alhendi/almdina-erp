@@ -2194,7 +2194,30 @@ Backup copy,النسخة
 Backup scheduling failed.,فشلت جدولة النسخة.
 Backup download started.,بدأ تنزيل النسخة الاحتياطية.
 Backup files are incomplete or failed integrity checks.,ملفات النسخة غير مكتملة أو فشلت فحوص السلامة.
+Backup imported successfully.,تم استيراد النسخة الاحتياطية بنجاح.
 Backup was not found.,لم يتم العثور على النسخة الاحتياطية.
+A backup with these files already exists on this site.,توجد بالفعل نسخة بنفس الملفات على هذا الموقع.
+Could not import the backup,تعذر استيراد النسخة
+Could not import the backup package.,تعذر استيراد حزمة النسخة الاحتياطية.
+Could not register the imported backup.,تعذر تسجيل النسخة المستوردة.
+Encrypted backup packages are not supported.,حزم النسخ المشفّرة غير مدعومة.
+Please upload a ZIP backup package.,يرجى رفع حزمة نسخة ZIP.
+The backup import service is not ready.,خدمة استيراد النسخ غير جاهزة.
+The backup package contains duplicate members.,تحتوي حزمة النسخة على أعضاء مكررة.
+The backup package contains unexpected files.,تحتوي حزمة النسخة على ملفات غير متوقعة.
+The backup package contains unsafe file paths.,تحتوي حزمة النسخة على مسارات غير آمنة.
+The backup package failed safe-size validation.,فشلت حزمة النسخة في التحقق الآمن من الحجم.
+The backup package is missing manifest.json.,حزمة النسخة تفتقد ملف manifest.json.
+The backup package is missing required components.,حزمة النسخة تفتقد المكونات المطلوبة.
+The backup package manifest is invalid.,بيان حزمة النسخة غير صالح.
+Backup package files failed integrity checks.,فشلت ملفات حزمة النسخة في فحوص السلامة.
+Backup package identifiers do not match the component filenames.,معرّفات حزمة النسخة لا تطابق أسماء المكونات.
+This backup package belongs to a different site.,هذه الحزمة تنتمي إلى موقع مختلف.
+This backup package does not match the current database type.,هذه الحزمة لا تطابق نوع قاعدة البيانات الحالي.
+This backup package format is not supported.,صيغة حزمة النسخة غير مدعومة.
+The uploaded backup file was not found.,لم يتم العثور على ملف النسخة المرفوع.
+The uploaded file is not a valid ZIP archive.,الملف المرفوع ليس أرشيف ZIP صالحًا.
+Validating and importing the backup package...,جاري التحقق من حزمة النسخة واستيرادها...
 Backups,نسخ
 Basic data,البيانات الأساسية
 Before saving,قبل الحفظ
@@ -2636,6 +2659,7 @@ Backup & Restore,النسخ الاحتياطي والاستعادة
 Backup History & Actions,سجل النسخ والإجراءات
 Create Backup Now,إنشاء نسخة الآن
 Download,تنزيل
+Import Backup,استيراد نسخة
 This backup cannot be downloaded.,لا يمكن تنزيل هذه النسخة الاحتياطية.
 Day of Month,يوم الشهر
 Day of Week,يوم الأسبوع
@@ -3517,4 +3541,5 @@ Configure and test privileged database root connection settings used for restore
 Privileged database root connection used only for restore readiness. Does not change the site application login.,اتصال DB root ذو صلاحيات يُستخدم فقط لجاهزية الاستعادة. لا يغيّر تسجيل دخول تطبيق الموقع.
 Restore readiness,جاهزية الاستعادة
 You do not have permission to download backups.,ليست لديك صلاحية تنزيل النسخ الاحتياطية.
+You do not have permission to import backups.,ليست لديك صلاحية استيراد النسخ الاحتياطية.
 You do not have permission to manage database restore settings.,ليست لديك صلاحية إدارة إعدادات استعادة قاعدة البيانات.

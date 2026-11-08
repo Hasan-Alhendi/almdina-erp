@@ -15,7 +15,7 @@ REQUIRED_COMPONENT_NAMES = frozenset(
 )
 EXPORTABLE_STATUSES = frozenset({"Completed"})
 EXPORTABLE_TARGETS = frozenset({"Local", "External"})
-EXPORTABLE_OPERATION_TYPES = frozenset({"Manual", "Scheduled", "Safety"})
+EXPORTABLE_OPERATION_TYPES = frozenset({"Manual", "Scheduled", "Safety", "Imported"})
 
 _SAFE_ARCHIVE_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
