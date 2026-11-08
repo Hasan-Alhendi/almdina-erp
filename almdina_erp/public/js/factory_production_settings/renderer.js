@@ -296,7 +296,12 @@
         }
 
         function lastSuccessfulBackup(rows) {
-            const completed = (Array.isArray(rows) ? rows : []).filter(row => String(row.status || "") === "Completed");
+            const completed = (Array.isArray(rows) ? rows : []).filter(row => {
+                if (String(row.status || "") !== "Completed") return false;
+                if (String(row.operation_type || "") === "Restore") return false;
+                if (String(row.target || "") === "Restore") return false;
+                return true;
+            });
             if (!completed.length) return null;
             return completed.slice().sort((left, right) => {
                 const a = String(left.completed_on || left.requested_on || "");

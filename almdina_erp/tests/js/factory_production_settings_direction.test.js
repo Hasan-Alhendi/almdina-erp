@@ -134,6 +134,17 @@ assert.match(pageHtml, /aps-shell alm-page alm-page--admin" dir="rtl"/);
 
 renderer.renderBackup({
     history: [{
+        operation_id: "OP-RESTORE",
+        backup_identifier: "RESTORE-LATEST",
+        operation_type: "Restore",
+        target: "Restore",
+        status: "Completed",
+        requested_on: "2026-10-14",
+        completed_on: "2026-10-14",
+        total_size: 4096,
+        can_download: false,
+        attempt_count: 1,
+    }, {
         operation_id: "OP-1",
         backup_identifier: "BACKUP-14",
         operation_type: "Manual",
@@ -184,6 +195,13 @@ assert.match(backupHtml, /data-backup-summary/);
 assert.match(backupHtml, /data-backup-primary-actions/);
 assert.match(backupHtml, /data-backup-toolbar/);
 assert.match(backupHtml, /data-backup-advanced/);
+{
+    const summaryStart = backupHtml.indexOf('data-backup-summary');
+    const summaryEnd = backupHtml.indexOf("data-backup-primary-actions", summaryStart);
+    const summaryHtml = backupHtml.slice(summaryStart, summaryEnd);
+    assert.match(summaryHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
+    assert.equal(summaryHtml.includes("RESTORE-LATEST"), false);
+}
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">2.0 KB/);
 assert.match(backupHtml, /aps-backup-retry/);

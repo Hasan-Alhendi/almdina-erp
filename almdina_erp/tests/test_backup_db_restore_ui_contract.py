@@ -87,6 +87,12 @@ class BackupDbRestoreUiContractTest(unittest.TestCase):
         self.assertIn("openBackupDetails", self.dialogs)
         self.assertIn("Remote external files will not be removed", self.dialogs)
 
+    def test_delete_label_has_arabic_translation_without_required_context(self) -> None:
+        translations = (ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
+        self.assertRegex(translations, r"(?m)^Delete,حذف(?:$|,)")
+        self.assertIn("frappe.db.commit()", (ROOT / "almdina_erp" / "infrastructure" / "backups" / "delete_backup.py").read_text(encoding="utf-8"))
+        self.assertIn('operation_type || "") === "Restore"', self.renderer)
+
     def test_domain_save_allowlist_includes_db_restore_fields(self) -> None:
         for fieldname in (
             "db_restore_type",

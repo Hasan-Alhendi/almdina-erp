@@ -194,11 +194,21 @@ class FrappeBackupDeleteGateway:
         return False
 
     def mark_operation_failed(self, operation_id: str, error_code: str) -> None:
+        """Persist Failed marker (e.g. backup_delete_pending) before any unlink.
+
+        Commit immediately so a later request failure / rollback cannot revive
+        Completed and leave a restorable ghost after partial file deletion.
+        """
+
         self._history.mark_failed(
             str(operation_id or "").strip(),
             str(error_code or "backup_delete_failed")[:140],
             release_schedule=True,
         )
+        try:
+            frappe.db.commit()
+        except Exception as exc:
+            raise BackupDeleteError("backup_delete_failed") from exc
 
     def prepare_local_delete_bundle(self, operation_id: str) -> BackupBundle:
         """Full integrity resolve while the operation is still Completed."""

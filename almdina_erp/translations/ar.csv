@@ -1155,6 +1155,7 @@ Important note: {0},ملاحظة مهمة: {0}
 Open notes,فتح الملاحظات
 The notes interface could not be loaded. Reload the page and try again.,تعذر تحميل واجهة الملاحظات. حدّث الصفحة وحاول مرة أخرى.
 Edit,تعديل,note-action
+Delete,حذف
 Delete,حذف,note-action
 User,مستخدم
 You do not have permission to view the customer notes linked to this order.,لا تتوفر لك صلاحية ملاحظات العميل المرتبط بهذا الطلب.

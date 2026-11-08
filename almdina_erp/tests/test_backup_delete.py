@@ -436,8 +436,13 @@ def test_history_mark_failed_excludes_from_restorable_and_downloadable(
             return payload
         return SimpleNamespace(**payload)
 
+    commits: list[str] = []
+
     def set_value(_doctype: str, name: str, values: dict[str, Any], **_kwargs: Any) -> None:
         store[str(name)].update(values)
+
+    def commit() -> None:
+        commits.append(str(store["op-pending"]["status"]))
 
     def get_all(_doctype: str, *, filters: dict[str, Any] | None = None, fields: list[str], **_kwargs: Any):
         rows = []
@@ -458,10 +463,11 @@ def test_history_mark_failed_excludes_from_restorable_and_downloadable(
         "almdina_erp.almdina_erp.infrastructure.backups.history",
         fromlist=["frappe"],
     )
+    db = SimpleNamespace(exists=exists, get_value=get_value, set_value=set_value, commit=commit)
     monkeypatch.setattr(
         history_mod.frappe,
         "db",
-        SimpleNamespace(exists=exists, get_value=get_value, set_value=set_value),
+        db,
         raising=False,
     )
     monkeypatch.setattr(history_mod.frappe, "get_all", get_all, raising=False)
@@ -473,11 +479,13 @@ def test_history_mark_failed_excludes_from_restorable_and_downloadable(
 
     from almdina_erp.almdina_erp.infrastructure.backups import delete_backup as delete_mod
 
+    monkeypatch.setattr(delete_mod.frappe, "db", db, raising=False)
     gateway = delete_mod.FrappeBackupDeleteGateway(history=history)
     gateway.mark_operation_failed("op-pending", "backup_delete_pending")
 
     assert store["op-pending"]["status"] == "Failed"
     assert store["op-pending"]["error_summary"] == "backup_delete_pending"
+    assert commits == ["Failed"]
     assert history.restorable() == []
 
     monkeypatch.setattr(
@@ -502,6 +510,209 @@ def test_history_mark_failed_excludes_from_restorable_and_downloadable(
         ]
     )
     assert annotated[0]["can_download"] is False
+
+
+def test_mark_failed_commit_failure_blocks_unlink(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """If pending Failed cannot be committed, no file unlink may run."""
+
+    from almdina_erp.almdina_erp.infrastructure.backups import delete_backup as delete_mod
+
+    bundle = _write_bundle(tmp_path / "backups")
+    store = {
+        "op-local": {
+            "operation_id": "op-local",
+            "operation_type": "Manual",
+            "target": "Local",
+            "status": "Completed",
+            "backup_identifier": IDENTIFIER,
+            "retry_log": "[]",
+            "started_on": "2026-11-08 12:00:00",
+            "attempt_count": 1,
+            "error_summary": "",
+        }
+    }
+    commits = {"count": 0}
+
+    def set_value(_doctype: str, name: str, values: dict[str, Any], **_kwargs: Any) -> None:
+        store[str(name)].update(values)
+
+    def commit() -> None:
+        commits["count"] += 1
+        raise RuntimeError("commit refused")
+
+    history_mod = __import__(
+        "almdina_erp.almdina_erp.infrastructure.backups.history",
+        fromlist=["frappe"],
+    )
+    db = SimpleNamespace(
+        exists=lambda _d, name: name in store,
+        get_value=lambda _d, name, fields, **kwargs: (
+            store[str(name)].get(fields)
+            if isinstance(fields, str)
+            else (
+                {field: store[str(name)].get(field) for field in fields}
+                if kwargs.get("as_dict")
+                else SimpleNamespace(**{field: store[str(name)].get(field) for field in fields})
+            )
+        ),
+        set_value=set_value,
+        commit=commit,
+    )
+    monkeypatch.setattr(history_mod.frappe, "db", db, raising=False)
+    monkeypatch.setattr(history_mod, "now", lambda: "2026-11-08 12:30:00")
+    monkeypatch.setattr(history_mod, "cint", int)
+    monkeypatch.setattr(delete_mod.frappe, "db", db, raising=False)
+
+    history = FrappeBackupHistory()
+    gateway = delete_mod.FrappeBackupDeleteGateway(history=history)
+
+    class UseCaseGateway:
+        def __init__(self) -> None:
+            self.unlinked = False
+
+        def load_operation(self, operation_id: str) -> DeletableBackupOperation:
+            row = store[operation_id]
+            return DeletableBackupOperation(
+                operation_id=row["operation_id"],
+                operation_type=row["operation_type"],
+                target=row["target"],
+                status=row["status"],
+                backup_identifier=row["backup_identifier"],
+                error_summary=row["error_summary"],
+            )
+
+        def count_other_local_references(self, *_a: Any, **_k: Any) -> int:
+            return 0
+
+        def is_protected_by_active_restore(self, **_k: Any) -> bool:
+            return False
+
+        def is_backup_or_export_busy(self, **_k: Any) -> bool:
+            return False
+
+        def prepare_local_delete_bundle(self, operation_id: str) -> BackupBundle:
+            assert operation_id == "op-local"
+            return bundle
+
+        def local_artifacts_absent(self, *_a: Any, **_k: Any) -> bool:
+            return False
+
+        def mark_operation_failed(self, operation_id: str, error_code: str) -> None:
+            gateway.mark_operation_failed(operation_id, error_code)
+
+        def delete_prepared_local_files(self, prepared: BackupBundle) -> None:
+            self.unlinked = True
+            for artifact in prepared.artifacts:
+                Path(artifact.path).unlink(missing_ok=True)
+
+        def delete_remaining_local_files(self, *_a: Any, **_k: Any) -> None:
+            self.unlinked = True
+
+        def delete_operation_record(self, *_a: Any, **_k: Any) -> None:
+            raise AssertionError("record delete must not run")
+
+    use_case_gateway = UseCaseGateway()
+    with pytest.raises(BackupDeleteError, match="backup_delete_failed"):
+        delete_backup_operation(operation_id="op-local", gateway=use_case_gateway)
+    assert use_case_gateway.unlinked is False
+    assert commits["count"] == 1
+    assert all(Path(artifact.path).exists() for artifact in bundle.artifacts)
+
+
+def test_failed_marker_survives_request_rollback_after_unlink_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Committed Failed markers must remain after a later request rollback."""
+
+    from almdina_erp.almdina_erp.infrastructure.backups import delete_backup as delete_mod
+
+    bundle = _write_bundle(tmp_path / "backups")
+    store = {
+        "op-local": {
+            "operation_id": "op-local",
+            "operation_type": "Manual",
+            "target": "Local",
+            "status": "Completed",
+            "backup_identifier": IDENTIFIER,
+            "retry_log": "[]",
+            "started_on": "2026-11-08 12:00:00",
+            "attempt_count": 1,
+            "error_summary": "",
+            "artifact_manifest": _manifest_json(bundle),
+        }
+    }
+    durable = {"op-local": dict(store["op-local"])}
+    commits: list[str] = []
+
+    def set_value(_doctype: str, name: str, values: dict[str, Any], **_kwargs: Any) -> None:
+        store[str(name)].update(values)
+
+    def commit() -> None:
+        durable["op-local"] = dict(store["op-local"])
+        commits.append(str(durable["op-local"]["error_summary"]))
+
+    def rollback() -> None:
+        store["op-local"] = dict(durable["op-local"])
+
+    history_mod = __import__(
+        "almdina_erp.almdina_erp.infrastructure.backups.history",
+        fromlist=["frappe"],
+    )
+    db = SimpleNamespace(
+        exists=lambda _d, name: name in store,
+        get_value=lambda _d, name, fields, **kwargs: (
+            store[str(name)].get(fields)
+            if isinstance(fields, str)
+            else (
+                {field: store[str(name)].get(field) for field in fields}
+                if kwargs.get("as_dict")
+                else SimpleNamespace(**{field: store[str(name)].get(field) for field in fields})
+            )
+        ),
+        set_value=set_value,
+        commit=commit,
+        rollback=rollback,
+    )
+    monkeypatch.setattr(history_mod.frappe, "db", db, raising=False)
+    monkeypatch.setattr(history_mod, "now", lambda: "2026-11-08 12:31:00")
+    monkeypatch.setattr(history_mod, "cint", int)
+    monkeypatch.setattr(delete_mod.frappe, "db", db, raising=False)
+    monkeypatch.setattr(delete_mod.frappe, "local", SimpleNamespace(site="site.local"), raising=False)
+    monkeypatch.setattr("frappe.utils.backups.get_backup_path", lambda: str(tmp_path / "backups"))
+
+    history = FrappeBackupHistory()
+    gateway = delete_mod.FrappeBackupDeleteGateway(history=history)
+
+    gateway.mark_operation_failed("op-local", "backup_delete_pending")
+    assert durable["op-local"]["status"] == "Failed"
+    assert durable["op-local"]["error_summary"] == "backup_delete_pending"
+    assert commits == ["backup_delete_pending"]
+
+    with pytest.raises(BackupDeleteError, match="backup_delete_files_failed"):
+        # Fail on first unlink after the pending marker is durable.
+        real_unlink = Path.unlink
+
+        def boom(self: Path, *args: Any, **kwargs: Any) -> None:
+            raise OSError("unlink refused")
+
+        monkeypatch.setattr(Path, "unlink", boom)
+        try:
+            gateway.delete_prepared_local_files(bundle)
+        finally:
+            monkeypatch.setattr(Path, "unlink", real_unlink)
+
+    gateway.mark_operation_failed("op-local", "backup_delete_files_failed")
+    # Simulate the request ending with a transactional rollback after the marker commit.
+    store["op-local"]["status"] = "Completed"
+    store["op-local"]["error_summary"] = ""
+    db.rollback()
+
+    assert store["op-local"]["status"] == "Failed"
+    assert store["op-local"]["error_summary"] == "backup_delete_files_failed"
+    assert durable["op-local"]["error_summary"] == "backup_delete_files_failed"
+    assert commits == ["backup_delete_pending", "backup_delete_files_failed"]
+    assert all(Path(artifact.path).exists() for artifact in bundle.artifacts)
 
 
 def test_infra_mid_file_unlink_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
