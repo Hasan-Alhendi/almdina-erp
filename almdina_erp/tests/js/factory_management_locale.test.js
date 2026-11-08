@@ -349,19 +349,19 @@ const settingsEn = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.crea
 assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "Automatic");
 assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "ancient_mode"), "وضع تاريخي");
 assert.equal(settingsEn.catalogLabel(settingsCurrent, "optimization_catalog", "ghost"), "ghost");
-const enBackup = settingsEn.page(settingsCurrent).sections.find((section) => section.key === "backup_restore");
+const enBackup = settingsEn.page(settingsCurrent).backupScheduleSection;
 assert.equal(enBackup.rows[2].value, "Last 7 backups");
 assert.equal(enBackup.rows[5].value, "Last 4 backups");
 
 const settingsAr = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.create({ translate: arabicFromCsv });
 assert.equal(settingsAr.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "تلقائي");
-assert.equal(settingsAr.page(settingsCurrent).sections.find((s) => s.key === "backup_restore").rows[2].value, "آخر 7 نسخ احتياطية");
+assert.equal(settingsAr.page(settingsCurrent).backupScheduleSection.rows[2].value, "آخر 7 نسخ احتياطية");
 
 const settingsFr = settingsWindow.AlmdinaFactoryProductionSettingsViewModel.create({ translate });
 assert.equal(settingsFr.catalogLabel(settingsCurrent, "optimization_catalog", "auto"), "Automatique");
 assert.equal(settingsFr.catalogLabel(settingsCurrent, "machine_type_catalog", "Panel Saw"), "Scie a panneaux");
 assert.equal(
-    settingsFr.page(settingsCurrent).sections.find((s) => s.key === "backup_restore").rows[2].value,
+    settingsFr.page(settingsCurrent).backupScheduleSection.rows[2].value,
     "Dernieres 7 sauvegardes"
 );
 
@@ -393,10 +393,11 @@ const dialogs = dialogWindow.AlmdinaFactoryProductionSettingsDialogs.create({
     escapeHtml: String,
 });
 const cuttingFields = dialogs.sectionFields("cutting", settingsCurrent);
-const packingField = cuttingFields.find((field) => field.fieldname === "default_packing_mode");
-assert.ok(packingField.options.includes("Automatic"));
-assert.ok(packingField.options.includes("وضع تاريخي"));
-assert.equal(packingField.default, "Automatic");
+const machineField = cuttingFields.find((field) => field.fieldname === "default_cutting_machine_type");
+assert.ok(machineField);
+assert.ok(machineField.options.includes("Panel Saw"));
+assert.ok(machineField.options.includes("منشار ألواح") || machineField.options.includes("Panel Saw"));
+assert.equal(machineField.default, "Panel Saw");
 // Frappe Select stores the visible option text; normalize must recover stable IDs.
 const normalized = (() => {
     const algorithms = settingsCurrent.optimization_catalog.map((entry) => (

@@ -9,6 +9,13 @@ from .export import (
     export_backup_zip,
     prepare_export_manifest,
 )
+from .delete_backup import (
+    BackupDeleteError,
+    BackupDeleteGateway,
+    BackupDeleteResult,
+    DeletableBackupOperation,
+    delete_backup_operation,
+)
 from .import_backup import (
     BackupImportGateway,
     ImportedBackupResult,
@@ -29,10 +36,14 @@ from .management import (
 __all__ = [
     "BackupArtifact",
     "BackupBundle",
+    "BackupDeleteError",
+    "BackupDeleteGateway",
+    "BackupDeleteResult",
     "BackupEngine",
     "BackupHistory",
     "BackupImportGateway",
     "BackupZipPacker",
+    "DeletableBackupOperation",
     "ExportBundleResolver",
     "ExportOperation",
     "ExportOperationRepository",
@@ -41,6 +52,7 @@ __all__ = [
     "ImportedBackupResult",
     "LocalRetentionGateway",
     "PackedBackupExport",
+    "delete_backup_operation",
     "export_backup_zip",
     "import_backup_zip",
     "prepare_export_manifest",

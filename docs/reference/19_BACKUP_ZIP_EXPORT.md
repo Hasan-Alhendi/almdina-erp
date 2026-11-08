@@ -98,6 +98,10 @@ Queued / Running / Failed / Restore operations are rejected. The UI button is ga
 
 `manage_backups` may upload an `almdina.backup.zip` v1 package. The server validates the root `manifest.json`, component sizes/SHA-256, current-site slug, and current `database_type`, then materializes the four artifacts into `private/backups` and inserts an `Imported` / `Local` / `Completed` history row. Imported identifiers are excluded from automatic local retention. They are downloadable and restorable after the same `resolve_local_bundle` integrity checks used for Manual/Scheduled/Safety.
 
+### Delete (Phase 5.2-C)
+
+`manage_backups` may delete one Completed operation by `operation_id` only (`delete_backup`). Local/Imported/Safety verify the bundle, then mark the row `Failed` with `backup_delete_pending` **before** any unlink; files under `private/backups` are removed only when no other Local Completed row shares the `backup_identifier`, then the history row is deleted. File or post-file record failures leave the row `Failed` (`backup_delete_files_failed` / `backup_delete_record_failed_after_files`) so it is not restorable or downloadable. Orphan retry may delete a Failed delete-marker row when artifacts are already absent (record only). Shared-ref deletes remove history only without changing files. External deletes history only — remote SFTP objects are never removed by this API. Active Restore (and matching restore-request payloads) protect source/Safety identifiers; busy Backup/Export for the same id is rejected.
+
 ### Restore (Phase 4)
 
 - Restorable sources: Local `Manual`, `Scheduled`, `Safety`, and `Imported` only. External is never restored directly (encrypted or not).

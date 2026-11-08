@@ -14,6 +14,8 @@ ENCRYPTION_DOMAIN = ROOT / "almdina_erp" / "domain" / "backups" / "encryption.py
 APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "management.py"
 EXPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "export.py"
 IMPORT_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "import_backup.py"
+DELETE_APPLICATION = ROOT / "almdina_erp" / "application" / "backups" / "delete_backup.py"
+DELETE_INFRASTRUCTURE = ROOT / "almdina_erp" / "infrastructure" / "backups" / "delete_backup.py"
 FRAPPE_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "frappe_backup.py"
 EXPORT_ADAPTER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "export_zip.py"
 RESTORE_RUNNER = ROOT / "almdina_erp" / "infrastructure" / "backups" / "restore_runner.py"
@@ -43,6 +45,7 @@ def test_domain_and_application_are_framework_free() -> None:
         APPLICATION,
         EXPORT_APPLICATION,
         IMPORT_APPLICATION,
+        DELETE_APPLICATION,
     ):
         dependencies = imports(path)
         assert not any(value == "frappe" or value.startswith("frappe.") for value in dependencies)
@@ -129,3 +132,21 @@ def test_download_endpoint_accepts_operation_id_not_client_path() -> None:
     assert "manifest.json" in export_adapter
     assert "allowZip64=True" in export_adapter
     assert "send_file(" in export_adapter
+
+
+def test_delete_application_marks_failed_before_unlink_and_infra_never_calls_sftp() -> None:
+    application = DELETE_APPLICATION.read_text(encoding="utf-8")
+    assert 'mark_operation_failed(operation.operation_id, "backup_delete_pending")' in application
+    assert "delete_prepared_local_files" in application
+    assert "backup_delete_record_failed_after_files" in application
+    assert "DELETE_ORPHAN_ERROR_CODES" in application
+    infra = DELETE_INFRASTRUCTURE.read_text(encoding="utf-8")
+    assert "sftp.remove" not in infra.lower()
+    assert "SFTPBackupGateway" not in infra
+    assert ".remove(" not in infra
+    service = SERVICE.read_text(encoding="utf-8")
+    delete_fn = next(
+        node for node in ast.parse(service).body if isinstance(node, ast.FunctionDef) and node.name == "delete_backup"
+    )
+    arguments = [argument.arg for argument in delete_fn.args.args]
+    assert arguments == ["operation_id"]

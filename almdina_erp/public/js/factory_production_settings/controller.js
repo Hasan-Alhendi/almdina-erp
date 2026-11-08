@@ -139,6 +139,7 @@
                 translate,
                 $body,
                 isActive: () => Boolean(activation && activation.isActive()),
+                getSettingsPage: () => viewModel.page(state.current),
             });
         }
         store.lifecycle.track(() => activation.dispose(), "production-settings-page-activation");

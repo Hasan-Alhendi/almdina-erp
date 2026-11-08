@@ -162,6 +162,7 @@ def test_disabled_automatic_target_rejects_queued_scheduled_job(
         ("download_backup_zip", Capability.MANAGE_BACKUPS, ("op-1",)),
         ("import_backup_zip", Capability.MANAGE_BACKUPS, ("/private/files/x.zip",)),
         ("request_restore", Capability.RESTORE_BACKUPS, ("untrusted-operation", "RESTORE anything")),
+        ("delete_backup", Capability.MANAGE_BACKUPS, ("untrusted-operation",)),
     ],
 )
 def test_mutating_endpoints_fail_before_work_without_capability(

@@ -135,10 +135,12 @@ assert.equal(sections[5].rows[0].value, "قياسات {order_name}");
 assert.equal(sections[5].rows[1].value, "تعديلات {order_name}");
 assert.equal(sections[5].rows.length, 4);
 assert.equal(sections[5].rows[3].value, "انتهى CNC {order_name}");
-assert.equal(sections[0].rows[1].value, "Same as cutting tool");
+assert.equal(sections[0].rows[1].value, "Enabled");
+assert.equal(sections[0].rows[2].value, "Same as cutting tool");
 assert.equal(sections[0].rows[5].value, 5);
-assert.equal(sections[0].rows[6].value, "Panel Saw");
-assert.equal(sections[0].rows[7].value, 10);
+assert.equal(sections[0].rows[6].value, 5);
+assert.equal(sections[0].rows[7].value, "Panel Saw");
+assert.equal(sections[0].rows[8].value, 10);
 assert.equal(model.catalogLabel(current, "optimization_catalog", "legacy_unknown"), "خوارزمية قديمة");
 assert.equal(model.catalogLabel(current, "optimization_catalog", "ghost_id"), "ghost_id");
 
@@ -165,11 +167,12 @@ backupCurrent.values.external_backup_enabled = 0;
 backupCurrent.values.external_backup_frequency = "Weekly";
 backupCurrent.values.external_backup_retention = 4;
 const backupPage = model.page(backupCurrent);
-assert.equal(backupPage.sections.length, 7);
-assert.equal(backupPage.sections[6].key, "backup_restore");
+assert.equal(backupPage.sections.length, 6);
+assert.equal(backupPage.backupScheduleSection.key, "backup_restore");
 assert.equal(backupPage.showBackupPanel, true);
-assert.equal(backupPage.sections[6].rows[2].value, "Last 7 backups");
-assert.equal(backupPage.sections[6].rows[5].value, "Last 4 backups");
+assert.equal(backupPage.sections.some(section => section.key === "backup_restore"), false);
+assert.equal(backupPage.backupScheduleSection.rows[2].value, "Last 7 backups");
+assert.equal(backupPage.backupScheduleSection.rows[5].value, "Last 4 backups");
 
 const arModel = moduleApi.create({
     translate(message, replacements) {
@@ -190,7 +193,7 @@ const arModel = moduleApi.create({
     },
 });
 const arBackup = arModel.page(backupCurrent);
-assert.equal(arBackup.sections[6].rows[2].value, "آخر 7 نسخ احتياطية");
+assert.equal(arBackup.backupScheduleSection.rows[2].value, "آخر 7 نسخ احتياطية");
 assert.equal(arModel.sections(current)[0].rows[5].value, 5);
 
 const restoreOnly = model.page({

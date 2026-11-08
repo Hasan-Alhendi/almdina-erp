@@ -136,12 +136,25 @@ renderer.renderBackup({
     history: [{
         operation_id: "OP-1",
         backup_identifier: "BACKUP-14",
-        operation_type: "Backup",
-        target: "site",
+        operation_type: "Manual",
+        target: "Local",
         status: "Completed",
         requested_on: "2026-10-13",
         total_size: 2048,
         can_download: true,
+        attempt_count: 1,
+    }, {
+        operation_id: "OP-2",
+        backup_identifier: "BACKUP-15",
+        operation_type: "Scheduled",
+        target: "External",
+        status: "Failed",
+        requested_on: "2026-10-12",
+        total_size: 1024,
+        can_download: false,
+        attempt_count: 3,
+        next_retry_on: "2026-10-13 18:00:00",
+        error_summary: "external_sftp_timeout",
     }],
     permissions: { can_manage: true, can_manage_db_restore_settings: true, can_restore: true },
     restore_runtime_ready: false,
@@ -156,11 +169,25 @@ renderer.renderBackup({
         db_restore_ready: false,
     },
     restorable: [],
+}, {
+    scheduleSection: {
+        key: "backup_restore",
+        title: "Local & External Backup Settings",
+        description: "Schedules",
+        editable: true,
+        rows: [{ label: "Local backup", value: "Enabled", multiline: false }],
+    },
 });
 assert.ok(backupHtml.indexOf("aps-section-accent") < backupHtml.indexOf("aps-section-titles"));
 assert.ok(backupHtml.indexOf("aps-section-titles") < backupHtml.indexOf("aps-section-tools"));
+assert.match(backupHtml, /data-backup-summary/);
+assert.match(backupHtml, /data-backup-primary-actions/);
+assert.match(backupHtml, /data-backup-toolbar/);
+assert.match(backupHtml, /data-backup-advanced/);
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">2.0 KB/);
+assert.match(backupHtml, /aps-backup-retry/);
+assert.match(backupHtml, /external_sftp_timeout/);
 assert.match(backupHtml, /data-db-restore-settings/);
 assert.match(backupHtml, /data-db-restore-field="db_restore_type"/);
 assert.match(backupHtml, /data-db-restore-field="db_restore_host"/);
@@ -171,7 +198,11 @@ assert.match(backupHtml, /type="password"/);
 assert.doesNotMatch(backupHtml, /value="[^"]*secret/);
 assert.match(backupHtml, /aps-db-restore-save/);
 assert.match(backupHtml, /aps-backup-download/);
+assert.match(backupHtml, /aps-backup-details/);
+assert.match(backupHtml, /aps-backup-delete/);
 assert.match(backupHtml, />Download</);
+assert.match(backupHtml, />Details</);
+assert.match(backupHtml, />Delete</);
 
 renderer.renderWhatsApp({
     session: { status: "ready", name: "Desk", phone: "+963900", push_name: "Factory" },

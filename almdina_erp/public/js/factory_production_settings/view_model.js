@@ -136,29 +136,39 @@
                         true,
                     ]),
                 ], current),
-                ...(canManageBackups(current) ? [section("backup_restore", t("Backup & Restore"), t("Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection."), [
-                    [t("Local backup"), source.local_backup_enabled ? t("Enabled") : t("Disabled")],
-                    [t("Local schedule"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
-                    [t("Local retention"), t("Last {0} backups", [display(source.local_backup_retention, 7)])],
-                    [t("External backup"), source.external_backup_enabled ? t("Enabled") : t("Disabled")],
-                    [t("External schedule"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
-                    [t("External retention"), t("Last {0} backups", [display(source.external_backup_retention, 4)])],
-                    [t("External encryption key"), source.external_backup_age_public_key_configured ? t("Configured") : t("Not configured")],
-                    [t("SSH server"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("Not configured")],
-                    [t("SSH user"), source.ssh_username || t("Not configured")],
-                    [t("Authentication method"), t(source.ssh_auth_method || "Private Key")],
-                    [t("Remote path"), source.remote_backup_path || t("Not configured")],
-                    [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
-                ], current)] : []),
-                ...(canManageDbRestoreSettings(current) ? [section("db_restore", t("Database & Restore Settings"), t("Privileged database root connection used only for restore readiness. Does not change the site application login."), [
-                    [t("Database Type"), t(source.db_restore_type || "MariaDB")],
-                    [t("Database Host"), source.db_restore_host ? `${source.db_restore_host}:${display(source.db_restore_port, 3306)}` : t("Not configured")],
-                    [t("Root Username"), source.db_restore_root_username || t("Not configured")],
-                    [t("Root Password"), source.db_restore_root_password_configured ? t("Saved securely") : t("Not set up")],
-                    [t("Credential source"), source.db_restore_source === "custom" ? t("Almadina settings") : t("Frappe operational settings")],
-                    [t("Restore readiness"), source.db_restore_ready ? t("Ready for restore") : t("Incomplete")],
-                ], current)] : []),
             ];
+        }
+
+        function backupScheduleSection(current = {}) {
+            if (!canManageBackups(current)) return null;
+            const source = values(current);
+            return section("backup_restore", t("Local & External Backup Settings"), t("Independent local and external backups built on the official Frappe mechanism, with separate retention and a secure SFTP connection."), [
+                [t("Local backup"), source.local_backup_enabled ? t("Enabled") : t("Disabled")],
+                [t("Local schedule"), `${t(source.local_backup_frequency || "Daily")} · ${display(source.local_backup_time, "02:00")}`],
+                [t("Local retention"), t("Last {0} backups", [display(source.local_backup_retention, 7)])],
+                [t("External backup"), source.external_backup_enabled ? t("Enabled") : t("Disabled")],
+                [t("External schedule"), `${t(source.external_backup_frequency || "Daily")} · ${display(source.external_backup_time, "03:00")}`],
+                [t("External retention"), t("Last {0} backups", [display(source.external_backup_retention, 4)])],
+                [t("External encryption key"), source.external_backup_age_public_key_configured ? t("Configured") : t("Not configured")],
+                [t("SSH server"), source.ssh_host ? `${source.ssh_host}:${display(source.ssh_port, 22)}` : t("Not configured")],
+                [t("SSH user"), source.ssh_username || t("Not configured")],
+                [t("Authentication method"), t(source.ssh_auth_method || "Private Key")],
+                [t("Remote path"), source.remote_backup_path || t("Not configured")],
+                [t("Credentials"), (source.ssh_password_configured || source.ssh_private_key_configured) ? t("Saved securely") : t("Not set up")],
+            ], current);
+        }
+
+        function dbRestoreSection(current = {}) {
+            if (!canManageDbRestoreSettings(current)) return null;
+            const source = values(current);
+            return section("db_restore", t("Database & Restore Settings"), t("Privileged database root connection used only for restore readiness. Does not change the site application login."), [
+                [t("Database Type"), t(source.db_restore_type || "MariaDB")],
+                [t("Database Host"), source.db_restore_host ? `${source.db_restore_host}:${display(source.db_restore_port, 3306)}` : t("Not configured")],
+                [t("Root Username"), source.db_restore_root_username || t("Not configured")],
+                [t("Root Password"), source.db_restore_root_password_configured ? t("Saved securely") : t("Not set up")],
+                [t("Credential source"), source.db_restore_source === "custom" ? t("Almadina settings") : t("Frappe operational settings")],
+                [t("Restore readiness"), source.db_restore_ready ? t("Ready for restore") : t("Incomplete")],
+            ], current);
         }
 
         function legacy(current = {}) {
@@ -189,6 +199,8 @@
                     || canManageDbRestoreSettings(current)
                     || canRestoreBackups(current)
                 ),
+                backupScheduleSection: backupScheduleSection(current),
+                dbRestoreSection: dbRestoreSection(current),
             };
         }
 
@@ -203,6 +215,8 @@
             display,
             catalogLabel,
             sections,
+            backupScheduleSection,
+            dbRestoreSection,
             legacy,
             page,
         });

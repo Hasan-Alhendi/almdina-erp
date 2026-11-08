@@ -59,9 +59,33 @@ class BackupDbRestoreUiContractTest(unittest.TestCase):
     def test_settings_card_and_edit_dialog_still_reference_db_fields(self) -> None:
         self.assertIn('t("Database & Restore Settings")', self.view_model)
         self.assertIn('section("db_restore"', self.view_model)
+        self.assertIn("dbRestoreSection", self.view_model)
+        self.assertIn("backupScheduleSection", self.view_model)
         self.assertIn("db_restore_type", self.view_model)
         self.assertIn('section === "db_restore"', self.dialogs)
         self.assertIn('fieldname: "db_restore_root_password"', self.dialogs)
+
+    def test_backup_panel_wires_delete_search_filters_and_details(self) -> None:
+        self.assertIn("deleteBackup", self.api)
+        self.assertIn("delete_backup", self.service)
+        self.assertIn("deleteBackup", self.backup_panel)
+        self.assertIn("aps-backup-delete", self.backup_panel)
+        self.assertIn("openBackupDelete", self.backup_panel)
+        self.assertIn("openBackupDetails", self.backup_panel)
+        self.assertIn("aps-backup-details", self.renderer)
+        self.assertIn("aps-backup-delete", self.renderer)
+        self.assertIn("data-backup-summary", self.renderer)
+        self.assertIn("data-backup-toolbar", self.renderer)
+        self.assertIn("data-backup-filter", self.renderer)
+        self.assertIn("data-backup-advanced", self.renderer)
+        self.assertIn("filterBackupRows", self.renderer)
+        self.assertIn("can_download", self.renderer)
+        self.assertIn("aps-backup-retry", self.renderer)
+        self.assertIn("next_retry_on", self.renderer)
+        self.assertIn('t("Encrypted External path")', self.renderer)
+        self.assertIn("openBackupDelete", self.dialogs)
+        self.assertIn("openBackupDetails", self.dialogs)
+        self.assertIn("Remote external files will not be removed", self.dialogs)
 
     def test_domain_save_allowlist_includes_db_restore_fields(self) -> None:
         for fieldname in (

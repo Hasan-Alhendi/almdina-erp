@@ -2521,10 +2521,22 @@ Reserve stock on approval,حجز المخزون عند الاعتماد
 Restore,استعادة
 Restore backup,استعادة نسخة احتياطية
 Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.,الاستعادة معطّلة حتى تكتمل إعدادات اتصال DB root في إعدادات Almadina ERP أو إعداد Frappe التشغيلي.
-Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).,"يمكن استعادة النسخ المحلية من النوع Manual وScheduled وSafety وImported. لا تُستعاد النسخ الخارجية مباشرة — استورد أولاً حزمة almdina.backup.zip (وفك تشفير النسخ الخارجية المشفّرة offline)."
+"Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).","يمكن استعادة النسخ المحلية من النوع Manual وScheduled وSafety وImported. لا تُستعاد النسخ الخارجية مباشرة — استورد أولاً حزمة almdina.backup.zip (وفك تشفير النسخ الخارجية المشفّرة offline)."
 The packaged site_config backup is verified for integrity but is not automatically applied to the live site configuration.,يتم التحقق من سلامة نسخة site_config داخل الحزمة لكنها لا تُطبَّق تلقائياً على إعدادات الموقع الحي.
 A restore operation is already in progress on this site.,توجد عملية استعادة قيد التنفيذ بالفعل على هذا الموقع.
 Not enough free disk space to create the safety backup before restore.,لا توجد مساحة قرص كافية لإنشاء نسخة الأمان قبل الاستعادة.
+You do not have permission to delete backups.,ليست لديك صلاحية حذف النسخ الاحتياطية.
+This backup cannot be deleted.,لا يمكن حذف هذه النسخة الاحتياطية.
+This backup is protected by an active restore and cannot be deleted.,هذه النسخة محمية باستعادة نشطة ولا يمكن حذفها.
+This backup is busy with another backup or download and cannot be deleted.,هذه النسخة مشغولة بنسخ أو تنزيل آخر ولا يمكن حذفها.
+Could not delete the backup.,تعذّر حذف النسخة الاحتياطية.
+Could not delete backup files.,تعذّر حذف ملفات النسخة الاحتياطية.
+Could not delete the backup history record.,تعذّر حذف سجل تاريخ النسخة الاحتياطية.
+Backup files were removed but the history record could not be deleted. Contact an administrator.,تمت إزالة ملفات النسخة لكن تعذّر حذف سجل التاريخ. تواصل مع المسؤول.
+Backup files and history were deleted.,تم حذف ملفات النسخة وسجلها.
+Backup history was deleted. Files were kept because another backup still references them.,تم حذف سجل النسخة. أُبقيت الملفات لأن نسخة أخرى ما زالت تشير إليها.
+Backup history was deleted. Remote external files were not removed from the SFTP server.,تم حذف سجل النسخة. لم تُحذف الملفات البعيدة من خادم SFTP.
+Orphaned backup history was deleted after files were already removed.,تم حذف سجل النسخة اليتيم بعد أن كانت الملفات قد أُزيلت مسبقاً.
 Restore prepared,تم تجهيز الاستعادة
 Restoring the latest factory settings changes.,يتم استرجاع آخر تغييرات إعدادات المعمل.
 Role permissions saved.,تم حفظ صلاحيات الدور.
@@ -3553,3 +3565,44 @@ Configured,مضبوط
 Paste an age1 public recipient only. Never paste an AGE-SECRET-KEY. Losing the private key makes encrypted external backups unrecoverable.,الصق مستلم age1 العام فقط. لا تلصق AGE-SECRET-KEY أبدًا. فقدان المفتاح الخاص يجعل النسخ الخارجية المشفّرة غير قابلة للاستعادة.
 External Backup age Public Key must be a valid age1 recipient. Never paste an AGE-SECRET-KEY.,يجب أن يكون المفتاح العام age للنسخ الخارجية مستلم age1 صالحًا. لا تلصق AGE-SECRET-KEY أبدًا.
 This external backup is encrypted. Download a plaintext ZIP is not available on the server; decrypt the remote .age files offline with the private key, then build an Import-compatible ZIP.,هذه النسخة الخارجية مشفّرة. تنزيل ZIP غير مشفّر غير متاح على الخادم؛ افك تشفير ملفات .age البعيدة محليًا بالمفتاح الخاص ثم أنشئ ZIP متوافقًا مع الاستيراد.
+Backup Management,إدارة النسخ الاحتياطية
+Daily backup actions stay here. Schedules and credentials stay under Advanced settings.,إجراءات النسخ اليومية هنا. الجداول وبيانات الاعتماد ضمن الإعدادات المتقدمة.
+Latest successful backup,آخر نسخة ناجحة
+No successful backup yet,لا توجد نسخة ناجحة بعد
+Create a local backup or import a ZIP package to see the latest successful copy here.,أنشئ نسخة محلية أو استورد حزمة ZIP لعرض آخر نسخة ناجحة هنا.
+Date & time,التاريخ والوقت
+Primary actions,الإجراءات الرئيسية
+"Create, import, or verify connectivity without opening advanced settings.",أنشئ أو استورد أو تحقق من الاتصال دون فتح الإعدادات المتقدمة.
+Encrypted External path,مسار External المشفر
+Download encrypted files offline → decrypt and verify → build an almdina.backup.zip → Import Backup.,نزّل ملفات التشفير offline ← فك التشفير والتحقق ← أنشئ almdina.backup.zip ← استورد النسخة.
+Backup list,قائمة النسخ الاحتياطية
+"Search, filter, and open actions for each backup.",ابحث وصفِّ وافتح إجراءات كل نسخة.
+Search by name,بحث بالاسم
+Backup name or identifier,اسم النسخة أو المعرّف
+All types,كل الأنواع
+All sources,كل المصادر
+Sort by date,ترتيب حسب التاريخ
+Newest first,الأحدث أولاً
+Oldest first,الأقدم أولاً
+No matching backups,لا توجد نسخ مطابقة
+Adjust the search or filters to see other backups.,عدّل البحث أو التصفية لعرض نسخ أخرى.
+Error,الخطأ
+Next retry,موعد المحاولة التالية
+Scheduled,مجدول
+Safety,سلامة
+Imported,مستورد
+Local,محلي
+External,خارجي
+Advanced settings,الإعدادات المتقدمة
+"Schedules, retention, External SSH, encryption, and database restore credentials.",الجداول والاحتفاظ وSSH الخارجي والتشفير وبيانات اعتماد استعادة قاعدة البيانات.
+Local & External Backup Settings,إعدادات النسخ المحلية والخارجية
+Backup details,تفاصيل النسخة
+Operation,العملية
+Completed on,اكتملت في
+Requested by,طلب بواسطة
+Delete backup,حذف النسخة
+Delete backup {0}?,حذف النسخة {0}؟
+Remote external files will not be removed from the SFTP server. Only the history record is deleted.,لن تُحذف الملفات البعيدة من خادم SFTP. يُحذف سجل التاريخ فقط.
+Local files are removed only when no other completed backup still references them.,تُحذف الملفات المحلية فقط عندما لا تشير إليها أي نسخة مكتملة أخرى.
+Deleting backup...,جارٍ حذف النسخة...
+Could not delete the backup,تعذّر حذف النسخة

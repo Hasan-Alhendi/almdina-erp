@@ -117,9 +117,108 @@
     line-height: 1.7;
 }
 
+.aps-backup-summary,
+.aps-backup-primary,
+.aps-backup-list-panel,
+.aps-backup-guide,
+.aps-backup-advanced {
+    margin-top: var(--alm-space-3, 12px);
+}
+
+.aps-backup-summary,
+.aps-backup-primary,
+.aps-backup-list-panel,
+.aps-backup-guide {
+    padding: var(--alm-space-3, 12px);
+    border: 1px solid var(--alm-border, var(--border-color, #e5e7eb));
+    border-radius: var(--alm-radius-md, 14px);
+    background: var(--alm-surface-muted, #f8fafc);
+}
+
+.aps-backup-summary-head,
+.aps-backup-primary-head,
+.aps-backup-list-head,
+.aps-backup-advanced-block-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--alm-space-2, 8px);
+    margin-bottom: var(--alm-space-2, 8px);
+}
+
+.aps-backup-summary-head strong,
+.aps-backup-primary-head strong,
+.aps-backup-list-head strong,
+.aps-backup-advanced-block-head strong,
+.aps-backup-guide strong {
+    color: var(--alm-text-strong, #101828);
+    font-size: var(--alm-font-size-sm, 12px);
+}
+
+.aps-backup-primary-head span,
+.aps-backup-list-head span,
+.aps-backup-summary-empty span,
+.aps-backup-guide span,
+.aps-backup-advanced-block-head small {
+    display: block;
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    line-height: 1.6;
+}
+
+.aps-backup-summary-grid,
+.aps-backup-toolbar {
+    display: grid;
+    gap: var(--alm-space-2, 8px);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.aps-backup-summary-grid > div {
+    display: grid;
+    gap: 2px;
+}
+
+.aps-backup-summary-grid span {
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+}
+
+.aps-backup-summary-grid b {
+    color: var(--alm-text-strong, #101828);
+    font-size: var(--alm-font-size-sm, 12px);
+    overflow-wrap: anywhere;
+}
+
+.aps-backup-filter {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.aps-backup-filter span {
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+}
+
+.aps-backup-filter-input {
+    width: 100%;
+    min-height: 34px;
+    border: 1px solid var(--alm-border, #d0d5dd);
+    border-radius: var(--alm-radius-sm, 10px);
+    padding: 6px 10px;
+    background: var(--alm-card, #fff);
+    color: var(--alm-text-strong, #101828);
+}
+
+.aps-backup-filter--search {
+    grid-column: 1 / -1;
+}
+
 .aps-backup-history {
     display: grid;
     gap: var(--alm-space-2, 8px);
+    margin-top: var(--alm-space-2, 8px);
 }
 
 .aps-backup-row {
@@ -128,7 +227,7 @@
     padding: var(--alm-space-3, 12px);
     border: 1px solid var(--alm-border, var(--border-color, #e5e7eb));
     border-radius: var(--alm-radius-md, 14px);
-    background: var(--alm-surface-muted);
+    background: var(--alm-card, #fff);
 }
 
 .aps-backup-row-main,
@@ -170,12 +269,72 @@
     margin-inline-start: auto;
 }
 
+.aps-backup-retry {
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+    line-height: 1.6;
+}
+
 .aps-backup-error {
     color: var(--alm-status-danger-fg);
 }
 
 .aps-backup-actions {
     max-width: 100%;
+}
+
+.aps-backup-advanced {
+    border: 1px solid var(--alm-border, var(--border-color, #e5e7eb));
+    border-radius: var(--alm-radius-md, 14px);
+    background: var(--alm-card, #fff);
+    padding: 0 var(--alm-space-3, 12px) var(--alm-space-3, 12px);
+}
+
+.aps-backup-advanced > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: var(--alm-space-3, 12px) 0;
+}
+
+.aps-backup-advanced > summary::-webkit-details-marker {
+    display: none;
+}
+
+.aps-backup-advanced-body,
+.aps-backup-advanced-block {
+    display: grid;
+    gap: var(--alm-space-3, 12px);
+}
+
+.aps-backup-advanced-block {
+    padding: var(--alm-space-3, 12px);
+    border: 1px solid var(--alm-border, #e5e7eb);
+    border-radius: var(--alm-radius-md, 14px);
+    background: var(--alm-surface-muted, #f8fafc);
+}
+
+.aps-backup-advanced-rows {
+    display: grid;
+    gap: var(--alm-space-2, 8px);
+}
+
+.aps-backup-details {
+    display: grid;
+    gap: var(--alm-space-2, 8px);
+}
+
+.aps-backup-details-row {
+    display: grid;
+    gap: 2px;
+}
+
+.aps-backup-details-row span {
+    color: var(--alm-text-subtle, #667085);
+    font-size: var(--alm-font-size-xs, 10px);
+}
+
+.aps-backup-delete-note {
+    margin-top: var(--alm-space-2, 8px);
 }
 
 .aps-restore-warning {

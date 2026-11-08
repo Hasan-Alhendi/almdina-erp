@@ -14,12 +14,17 @@
         const isActive = options.isActive;
         const translate = options.translate;
         const $body = options.$body;
+        const getSettingsPage = typeof options.getSettingsPage === "function"
+            ? options.getSettingsPage
+            : () => null;
         if (!api || !renderer || !dialogs || !frontend || !lifecycle || typeof isActive !== "function" || typeof translate !== "function" || !$body) {
             throw new Error("Backup panel dependencies are unavailable");
         }
         const t = translate;
         const requests = frontend.createLatestRequestGate();
         let disposed = false;
+        let latestSnapshot = null;
+        let listFilters = { query: "", type: "", source: "", status: "", sort: "date_desc" };
 
         $body.off(EVENT_NAMESPACE);
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-create", event => {
@@ -53,6 +58,26 @@
             const operationId = String(event.currentTarget.dataset.operationId || "");
             downloadBackup(operationId);
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-details", event => {
+            event.preventDefault();
+            const operationId = String(event.currentTarget.dataset.operationId || "");
+            openDetails(operationId);
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-delete", event => {
+            event.preventDefault();
+            const operationId = String(event.currentTarget.dataset.operationId || "");
+            const identifier = String(event.currentTarget.dataset.backupIdentifier || "");
+            const target = String(event.currentTarget.dataset.backupTarget || "");
+            confirmDelete(operationId, identifier, target);
+        });
+        $body.on(`input${EVENT_NAMESPACE} change${EVENT_NAMESPACE}`, "[data-backup-filter]", () => {
+            captureFiltersFromDom();
+            if (typeof renderer.renderBackupList === "function") {
+                renderer.renderBackupList(latestSnapshot || {}, listFilters);
+            } else {
+                paint(latestSnapshot || {});
+            }
+        });
         lifecycle.track(() => $body.off(EVENT_NAMESPACE), "production-settings-backup-interactions");
 
         function current() {
@@ -63,12 +88,33 @@
             return frontend.errorMessage(error, fallback);
         }
 
+        function captureFiltersFromDom() {
+            const $root = $body.find("[data-backup-root]");
+            const read = name => String($root.find(`[data-backup-filter="${name}"]`).val() || "").trim();
+            listFilters = {
+                query: read("query"),
+                type: read("type"),
+                source: read("source"),
+                status: read("status"),
+                sort: read("sort") || "date_desc",
+            };
+        }
+
+        function paint(snapshot) {
+            const page = getSettingsPage() || {};
+            renderer.renderBackup(snapshot || {}, {
+                filters: listFilters,
+                scheduleSection: page.backupScheduleSection || null,
+            });
+        }
+
         function refresh() {
             if (!current()) return Promise.resolve(null);
             const token = requests.begin();
             return api.getBackupContext({ freeze: false }).then(snapshot => {
                 if (!current() || !requests.isCurrent(token)) return null;
-                renderer.renderBackup(snapshot || {});
+                latestSnapshot = snapshot || {};
+                paint(latestSnapshot);
                 return snapshot;
             }).catch(error => {
                 if (!current() || !requests.isCurrent(token)) return null;
@@ -226,6 +272,73 @@
                     }
                     return result;
                 }),
+            });
+        }
+
+        function findRow(operationId) {
+            const rows = latestSnapshot && Array.isArray(latestSnapshot.history) ? latestSnapshot.history : [];
+            return rows.find(row => String(row.operation_id || "") === String(operationId || "")) || null;
+        }
+
+        function openDetails(operationId) {
+            if (!current() || !operationId) return;
+            const row = findRow(operationId);
+            if (!row) {
+                frappe.msgprint({
+                    title: t("Backup details"),
+                    message: frappe.utils.escape_html(t("Backup was not found.")),
+                    indicator: "orange",
+                });
+                return;
+            }
+            if (typeof dialogs.openBackupDetails === "function") {
+                dialogs.openBackupDetails({ row });
+                return;
+            }
+            frappe.msgprint({
+                title: t("Backup details"),
+                message: frappe.utils.escape_html(String(row.backup_identifier || row.operation_id || "")),
+                indicator: "blue",
+            });
+        }
+
+        function confirmDelete(operationId, identifier, target) {
+            if (!current() || !operationId || typeof api.deleteBackup !== "function") return;
+            const name = identifier || operationId;
+            if (typeof dialogs.openBackupDelete !== "function") {
+                frappe.confirm(
+                    t("Delete backup {0}?", [name]),
+                    () => runDelete(operationId)
+                );
+                return;
+            }
+            dialogs.openBackupDelete({
+                backupName: name,
+                target,
+                onConfirm: () => runDelete(operationId),
+            });
+        }
+
+        function runDelete(operationId) {
+            if (!current()) return Promise.resolve(null);
+            return api.deleteBackup(operationId, {
+                freeze: true,
+                freezeMessage: t("Deleting backup..."),
+            }).then(result => {
+                if (!current()) return null;
+                const message = result && result.message
+                    ? String(result.message)
+                    : t("Backup files and history were deleted.");
+                frappe.show_alert({ message, indicator: "green" }, 8);
+                return refresh();
+            }).catch(error => {
+                if (!current()) return null;
+                frappe.msgprint({
+                    title: t("Could not delete the backup"),
+                    message: frappe.utils.escape_html(errorMessage(error, t("Could not delete the backup."))),
+                    indicator: "red",
+                });
+                return null;
             });
         }
 

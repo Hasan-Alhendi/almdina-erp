@@ -7,8 +7,13 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_datetime, now, now_datetime
 
+from almdina_erp.almdina_erp.application.backups.delete_backup import (
+    BackupDeleteError,
+    delete_backup_operation as run_delete_backup_operation,
+)
 from almdina_erp.almdina_erp.application.backups.import_backup import import_backup_zip as run_import_backup_zip
 from almdina_erp.almdina_erp.application.backups.management import BackupBundle, run_backup
+from almdina_erp.almdina_erp.infrastructure.backups.delete_backup import FrappeBackupDeleteGateway
 from almdina_erp.almdina_erp.domain.backups.policy import BackupSchedule, due_schedule_key
 from almdina_erp.almdina_erp.domain.backups.retry import (
     MAX_BACKUP_ATTEMPTS,
@@ -442,6 +447,70 @@ def test_db_connection() -> dict[str, Any]:
     }
 
 
+def _safe_delete_error_message(exc: BackupDeleteError) -> str:
+    code = str(exc.safe_code or "")
+    mapping = {
+        "backup_delete_missing_operation": _("Backup was not found."),
+        "backup_delete_not_found": _("Backup was not found."),
+        "backup_delete_not_eligible": _("This backup cannot be deleted."),
+        "backup_delete_restore_protected": _("This backup is protected by an active restore and cannot be deleted."),
+        "backup_delete_operation_busy": _("This backup is busy with another backup or download and cannot be deleted."),
+        "backup_delete_unsafe_path": _("Backup files are outside the approved backup scope."),
+        "backup_delete_symlink_rejected": _("Backup files failed safety checks."),
+        "backup_delete_integrity_failed": _("Backup files failed integrity checks."),
+        "backup_delete_files_failed": _("Could not delete backup files."),
+        "backup_delete_record_failed": _("Could not delete the backup history record."),
+        "backup_delete_record_failed_after_files": _(
+            "Backup files were removed but the history record could not be deleted. Contact an administrator."
+        ),
+    }
+    return mapping.get(code, _("Could not delete the backup."))
+
+
+@frappe.whitelist()
+def delete_backup(operation_id: str) -> dict[str, object]:
+    """Delete one backup operation (Completed, or Failed delete-orphan retry). External: history only."""
+
+    require_doctype_capability(
+        Capability.MANAGE_BACKUPS,
+        message=_("You do not have permission to delete backups."),
+    )
+    try:
+        result = run_delete_backup_operation(
+            operation_id=str(operation_id or "").strip(),
+            gateway=FrappeBackupDeleteGateway(),
+        )
+    except BackupDeleteError as exc:
+        frappe.throw(_safe_delete_error_message(exc), frappe.ValidationError)
+    except Exception:
+        frappe.throw(_("Could not delete the backup."), frappe.ValidationError)
+
+    if result.outcome == "record_only_external":
+        message = _(
+            "Backup history was deleted. Remote external files were not removed from the SFTP server."
+        )
+    elif result.outcome == "record_only_shared_refs":
+        message = _(
+            "Backup history was deleted. Files were kept because another backup still references them."
+        )
+    elif result.outcome == "record_only_orphan_cleanup":
+        message = _("Orphaned backup history was deleted after files were already removed.")
+    else:
+        message = _("Backup files and history were deleted.")
+
+    return {
+        "operation_id": result.operation_id,
+        "backup_identifier": result.backup_identifier,
+        "target": result.target,
+        "operation_type": result.operation_type,
+        "files_deleted": bool(result.files_deleted),
+        "record_deleted": bool(result.record_deleted),
+        "remote_files_deleted": bool(result.remote_files_deleted),
+        "outcome": result.outcome,
+        "message": message,
+    }
+
+
 @frappe.whitelist()
 def request_restore(operation_id: str, confirmation: str) -> dict[str, str]:
     require_doctype_capability(
@@ -681,6 +750,7 @@ def prepare_restore_job(operation_id: str) -> None:
 
 __all__ = [
     "create_backup_now",
+    "delete_backup",
     "download_backup_zip",
     "get_backup_context",
     "import_backup_zip",

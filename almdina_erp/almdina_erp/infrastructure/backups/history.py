@@ -444,6 +444,7 @@ class FrappeBackupHistory:
                 "error_summary",
                 "artifact_manifest",
                 "attempt_count",
+                "next_retry_on",
             ],
             order_by="requested_on desc",
             limit_page_length=max(1, min(int(limit), 100)),

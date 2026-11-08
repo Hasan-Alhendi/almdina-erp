@@ -97,6 +97,12 @@
         return request(`${BACKUPS}.import_backup_zip`, args, options).then(data => data || {});
     }
 
+    function deleteBackup(operationId, options = {}) {
+        return request(`${BACKUPS}.delete_backup`, {
+            operation_id: String(operationId || "").trim(),
+        }, options).then(data => data || {});
+    }
+
     window.AlmdinaFactoryProductionSettingsApi = Object.freeze({
         getSettings,
         updateSettings,
@@ -113,5 +119,6 @@
         downloadBackupZipUrl,
         downloadBackupZipMethod,
         importBackupZip,
+        deleteBackup,
     });
 })();

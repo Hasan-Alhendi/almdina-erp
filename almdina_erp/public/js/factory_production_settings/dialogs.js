@@ -492,6 +492,90 @@
             return dialog;
         }
 
+        function openBackupDetails(config = {}) {
+            const row = config.row && typeof config.row === "object" ? config.row : {};
+            const lines = [
+                [t("Name"), row.backup_identifier || row.operation_id || "—"],
+                [t("Operation"), row.operation_id || "—"],
+                [t("Type"), row.operation_type || "—"],
+                [t("Source"), row.target || "—"],
+                [t("Status"), row.status || "—"],
+                [t("Date & time"), row.requested_on || "—"],
+                [t("Completed on"), row.completed_on || "—"],
+                [t("Size"), row.total_size == null || row.total_size === "" ? "—" : String(row.total_size)],
+                [t("Attempts"), row.attempt_count == null || row.attempt_count === "" ? "—" : String(row.attempt_count)],
+                [t("Next retry"), row.next_retry_on || "—"],
+                [t("Error"), row.error_summary || "—"],
+                [t("Requested by"), row.requested_by || "—"],
+            ];
+            const body = lines.map(([label, value]) => `
+                <div class="aps-backup-details-row">
+                    <span>${escapeHtml(label)}</span>
+                    <strong class="aps-ltr-value" dir="ltr">${escapeHtml(String(value))}</strong>
+                </div>
+            `).join("");
+            const dialog = own(new frappe.ui.Dialog({
+                title: t("Backup details"),
+                fields: [
+                    {
+                        fieldname: "details",
+                        fieldtype: "HTML",
+                        options: `<div class="aps-backup-details">${body}</div>`,
+                    },
+                ],
+                primary_action_label: t("Close"),
+                primary_action() {
+                    complete(dialog);
+                },
+            }));
+            dialog.show();
+            return dialog;
+        }
+
+        function openBackupDelete(config = {}) {
+            const name = String(config.backupName || "").trim() || "—";
+            const target = String(config.target || "").trim();
+            const externalNote = target === "External"
+                ? `<div class="aps-backup-delete-note">${escapeHtml(t("Remote external files will not be removed from the SFTP server. Only the history record is deleted."))}</div>`
+                : `<div class="aps-backup-delete-note">${escapeHtml(t("Local files are removed only when no other completed backup still references them."))}</div>`;
+            const dialog = own(new frappe.ui.Dialog({
+                title: t("Delete backup"),
+                fields: [
+                    {
+                        fieldname: "warning",
+                        fieldtype: "HTML",
+                        options: `
+                            <div class="aps-restore-warning">
+                                <strong>${escapeHtml(t("Delete backup {0}?", [name]))}</strong>
+                                <span class="aps-ltr-value" dir="ltr">${escapeHtml(name)}</span>
+                                ${externalNote}
+                            </div>
+                        `,
+                    },
+                ],
+                primary_action_label: t("Delete"),
+                primary_action() {
+                    const button = dialog.get_primary_btn();
+                    button.prop("disabled", true);
+                    Promise.resolve(config.onConfirm ? config.onConfirm() : null)
+                        .then(() => complete(dialog))
+                        .catch(error => {
+                            if (!ownedSurfaces.has(dialog)) return;
+                            frappe.msgprint({
+                                title: t("Could not delete the backup"),
+                                message: escapeHtml(error && error.message ? error.message : t("Could not delete the backup.")),
+                                indicator: "red",
+                            });
+                        })
+                        .finally(() => {
+                            if (ownedSurfaces.has(dialog)) button.prop("disabled", false);
+                        });
+                },
+            }));
+            dialog.show();
+            return dialog;
+        }
+
         return Object.freeze({
             sectionFields,
             sectionTitle,
@@ -499,6 +583,8 @@
             openAudit,
             openQr,
             openRestore,
+            openBackupDetails,
+            openBackupDelete,
             showSaved,
             deactivate,
             dispose,
