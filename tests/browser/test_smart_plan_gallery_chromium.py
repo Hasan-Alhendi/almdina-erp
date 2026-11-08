@@ -45,6 +45,7 @@ def setup_gallery(browser, origin, width):
         "door_cutting_order/drawing/door_cutting_order_special_shape_geometry.js",
         "door_cutting_order/drawing/door_cutting_order_shape_output_contract.js",
         "door_cutting_order/cutting_plan/door_cutting_order_piece_geometry.js",
+        "door_cutting_order/cutting_plan/door_cutting_order_edge_display.js",
         "door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js",
         "door_cutting_order/cutting_plan/door_cutting_order_plan_preview_session.js",
         "door_cutting_order/cutting_plan/door_cutting_order_plan_preview_presenter.js",
