@@ -120,6 +120,9 @@ async function run() {
     frm.fields_dict.plan_control_actions = { $wrapper: actions, df: {} };
     window.AlmdinaPermissions.version = () => 1;
     window.AlmdinaCuttingPlanPieceGeometry = {};
+    // Recovery now requires the edge display module as a separate dependency.
+    // This test owns preview state, so stub the already-loaded browser module.
+    window.AlmdinaEdgeDisplay = {};
     window.AlmdinaDoorCuttingPlanUX = { refresh() { actions.html('<div class="dco-plan-actions-shell"></div>'); } };
     window.AlmdinaPlanControlsUX = { apply() {} };
     const realContent = window.AlmdinaPlanContentUX;
