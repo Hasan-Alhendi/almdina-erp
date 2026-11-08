@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import os
 import posixpath
@@ -13,6 +14,8 @@ from almdina_erp.almdina_erp.domain.backups.policy import (
     normalize_remote_path,
     retention_candidates,
 )
+
+_REMOTE_READ_CHUNK = 1024 * 1024
 
 
 class SFTPGatewayError(RuntimeError):
@@ -184,6 +187,19 @@ class SFTPBackupGateway:
         finally:
             self._close(client, sftp)
 
+    @staticmethod
+    def _remote_sha256(sftp: Any, remote_name: str) -> str:
+        """Hash a remote SFTP member in fixed-size chunks (no full-file buffering)."""
+
+        digest = hashlib.sha256()
+        with sftp.open(remote_name, "rb") as stream:
+            while True:
+                chunk = stream.read(_REMOTE_READ_CHUNK)
+                if not chunk:
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
+
     def upload(self, bundle: BackupBundle) -> str:
         client, sftp = self._connect()
         uploaded: list[str] = []
@@ -194,12 +210,27 @@ class SFTPBackupGateway:
                     raise SSHUploadError("Backup artifact name is invalid.")
                 if not os.path.isfile(artifact.path):
                     raise SSHUploadError("Backup artifact is missing.")
+                expected_checksum = str(artifact.checksum or "").strip().lower()
+                if len(expected_checksum) != 64 or any(
+                    character not in "0123456789abcdef" for character in expected_checksum
+                ):
+                    raise SSHUploadError("Backup artifact checksum is invalid.")
                 final_name = artifact.filename
                 temp_name = f".{final_name}.{uuid.uuid4().hex}.part"
                 temporary.append(temp_name)
                 sftp.put(artifact.path, temp_name, confirm=True)
                 if int(sftp.stat(temp_name).st_size) != int(artifact.size):
                     raise SSHUploadError("Uploaded backup size does not match.")
+                try:
+                    remote_checksum = self._remote_sha256(sftp, temp_name)
+                except SFTPGatewayError:
+                    raise
+                except Exception as exc:
+                    raise SSHUploadError("Uploaded backup checksum could not be verified.") from exc
+                if remote_checksum != expected_checksum:
+                    error = SSHUploadError("Uploaded backup checksum does not match.")
+                    error.safe_code = "ssh_upload_integrity_failed"
+                    raise error
                 sftp.rename(temp_name, final_name)
                 temporary.remove(temp_name)
                 uploaded.append(final_name)
