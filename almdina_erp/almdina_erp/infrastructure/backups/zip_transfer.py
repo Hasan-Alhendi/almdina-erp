@@ -142,11 +142,16 @@ def _verify_inner(path: Path, kind: str, site: str, config_key: str) -> None:
         with tarfile.open(path, "r:*") as archive:
             extracted = 0
             directory = "public" if kind == "public_files" else "private"
+            prefix = [site, directory, "files"]  # Frappe archives get_site_path() from the sites directory.
             for member in archive:
-                normalized = member.name.lstrip("/").removeprefix("./")
+                if member.name.startswith("/"):
+                    raise ValueError("files")
+                normalized = member.name.removeprefix("./").rstrip("/")
                 segments = normalized.split("/")
-                if (segments[:4] != ["sites", site, directory, "files"]
-                    or ".." in segments or member.issym() or member.islnk()
+                valid_path = segments[:3] == prefix or (member.isdir() and segments == prefix[:len(segments)])
+                if (not valid_path or (member.isfile() and len(segments) <= 3)
+                    or any(segment in ("", ".", "..") for segment in segments)
+                    or member.issym() or member.islnk()
                     or not (member.isfile() or member.isdir())):
                     raise ValueError("files")
                 if member.isfile():

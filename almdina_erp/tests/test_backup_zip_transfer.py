@@ -64,7 +64,7 @@ def bundle(root):
         buffer = io.BytesIO()
         with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
             data = b"backup contents"
-            info = tarfile.TarInfo(f"sites/site.local/{folder}/files/sample.txt")
+            info = tarfile.TarInfo(f"site.local/{folder}/files/sample.txt")
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
         values[kind] = (suffix, buffer.getvalue())
@@ -211,7 +211,7 @@ def test_inner_archive_with_other_site_path_is_rejected(transfer, tmp_path):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         content = b"other tenant"
-        info = tarfile.TarInfo("sites/other.site/public/files/alien.txt")
+        info = tarfile.TarInfo("other.site/public/files/alien.txt")
         info.size = len(content)
         archive.addfile(info, io.BytesIO(content))
     files[name] = buffer.getvalue()
@@ -230,6 +230,22 @@ def test_inner_archive_with_other_site_path_is_rejected(transfer, tmp_path):
     with pytest.raises(ValueError, match="files"):
         module.import_zip(input_zip, "op", History())
     assert not list(destination.glob("*.tgz"))
+
+
+def test_frappe_empty_file_archive_and_absolute_member_paths(transfer, tmp_path):
+    module, _root, _frappe = transfer
+    path = tmp_path / "files.tgz"
+    with tarfile.open(path, "w:gz") as archive:
+        member = tarfile.TarInfo("./site.local/public/files")
+        member.type = tarfile.DIRTYPE
+        archive.addfile(member)
+    module._verify_inner(path, "public_files", "site.local", "key")
+    with tarfile.open(path, "w:gz") as archive:
+        member = tarfile.TarInfo("/site.local/public/files")
+        member.type = tarfile.DIRTYPE
+        archive.addfile(member)
+    with pytest.raises(ValueError, match="files"):
+        module._verify_inner(path, "public_files", "site.local", "key")
 
 
 def test_retention_skips_imported_marker_and_fails_closed(transfer, monkeypatch):
