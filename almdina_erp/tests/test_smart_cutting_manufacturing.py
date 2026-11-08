@@ -46,7 +46,8 @@ def rows_with_identity(rows):
 
 def import_saved_plan(plan, rows, path):
     order_rows = [SimpleNamespace(**dict(row, name=f"row-{i}", piece_instance_id=f"smart:{i}",
-        cut_width_cm=row["width_cm"], cut_length_cm=row["length_cm"])) for i,row in enumerate(rows,1)]
+        cut_width_cm=row.get("cut_width_cm",row["width_cm"]),
+        cut_length_cm=row.get("cut_length_cm",row["length_cm"]))) for i,row in enumerate(rows,1)]
     order = SimpleNamespace(name="SMART-ROUNDTRIP", pieces=order_rows, allow_piece_mirroring=bool(plan.get("allow_piece_mirroring")),
         board_width_cm=plan["full_board_width_cm"], board_length_cm=plan["full_board_length_cm"],
         full_board_width_mm=plan["full_board_width_cm"]*10,
