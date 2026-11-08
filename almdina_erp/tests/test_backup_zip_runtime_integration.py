@@ -43,7 +43,7 @@ class TestBackupZipRuntimeIntegration(FrappeTestCase):
                 validate_import_restore(history.get(operation_id)["import_app_versions"], selected)
                 self.assertEqual(imported.total_size, bundle.total_size)
         finally:
-            engine.release(bundle) if bundle else None
+            engine.release(bundle)
             if operation_id:
                 frappe.db.delete(DOCTYPE, {"operation_id": operation_id})
             if bundle:
