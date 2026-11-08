@@ -177,7 +177,9 @@ class TestDocumentContextUxContract(unittest.TestCase):
         self.assertIn("canMutateCurrentStage(frm)", controls)
         self.assertIn('"kerf_mm"', controls)
         self.assertIn('"trim_margin_mm"', controls)
-        self.assertIn('can(frm, "edit_optimizer_settings")', controls)
+        # Optimizer fields are read-only on the native DCO. Recalculation is
+        # gated by the scoped recalculation capability in PlanControls.
+        self.assertIn('can(frm, "recalculate_plan")', controls)
         self.assertIn("function applyOptimizerFieldAccess(frm)", controls)
         self.assertNotIn("function canEditOptimizerSettings(frm)", plan)
 
