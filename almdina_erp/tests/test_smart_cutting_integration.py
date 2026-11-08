@@ -261,8 +261,17 @@ class TestSmartCuttingIntegration(FrappeTestCase):
             self.assertEqual(json.loads(plan.snapshot_json),selected['plan'])
             self.assertEqual(receipt['committed_candidate_id'],selected['candidate_id'])
             self.assertEqual(previews.validate_cutting_plan_issues(plan),[])
+            # The synthetic order helper normally copies finished dimensions into
+            # persisted cut fields. Here the 1 mm profiles on both opposing
+            # edges give a 2 mm deduction per axis. The strict importer must
+            # compare against the resulting cut dimensions, not 40 x 40.
+            roundtrip_rows=[dict(row) for row in rows]
+            band_cm=0.1
+            roundtrip_rows[0]['cut_width_cm']=rows[0]['width_cm']-2*band_cm
+            roundtrip_rows[0]['cut_length_cm']=rows[0]['length_cm']-2*band_cm
+            self.assertEqual((roundtrip_rows[0]['cut_width_cm'],roundtrip_rows[0]['cut_length_cm']), (39.8,39.8))
             with TemporaryDirectory() as directory:
-                imported=import_saved_plan(selected['plan'],rows,export_real_js(_plan_to_export_snapshot(plan),Path(directory)))
+                imported=import_saved_plan(selected['plan'],roundtrip_rows,export_real_js(_plan_to_export_snapshot(plan),Path(directory)))
             self.assertEqual(sum(len(s['pieces']) for s in imported['sheets']),2)
         finally:
             frappe.db.delete('Edge Banding Type',{'name':band})
