@@ -352,3 +352,14 @@ def test_chunk_upload_enforces_owner_order_and_separate_restore_capability(trans
     service.cancel_backup_upload(operation)
     assert rows[operation]["status"] == "Failed"
     assert not service._upload_path(operation).exists()
+    checked = []
+
+    def deny_restore(capability, **_kwargs):
+        checked.append(capability)
+        if capability == service.Capability.RESTORE_BACKUPS:
+            raise PermissionError("restore permission required")
+
+    service.require_doctype_capability = deny_restore
+    with pytest.raises(PermissionError, match="restore permission required"):
+        service.download_backup_zip(operation)
+    assert checked == [service.Capability.MANAGE_BACKUPS, service.Capability.RESTORE_BACKUPS]

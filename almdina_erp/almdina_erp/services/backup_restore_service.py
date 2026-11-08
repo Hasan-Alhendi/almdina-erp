@@ -155,6 +155,10 @@ def download_backup_zip(operation_id: str):
         Capability.MANAGE_BACKUPS,
         message=_("You do not have permission to download backups."),
     )
+    require_doctype_capability(
+        Capability.RESTORE_BACKUPS,
+        message=_("You do not have permission to download backups."),
+    )
     try:
         return download_response(FrappeBackupHistory().resolve_local_bundle(operation_id))
     except (ValueError, OSError) as exc:
@@ -257,9 +261,10 @@ def get_backup_context() -> dict[str, Any]:
         "permissions": {
             "can_manage": can_manage,
             "can_restore": can_restore,
+            "can_download": can_manage and can_restore,
         },
         "history": history.list_recent(30),
-        "restorable": history.restorable(30) if can_restore or can_manage else [],
+        "restorable": history.restorable(30) if can_restore else [],
         "upload_max_bytes": upload_limit() if can_manage else 0,
         "restore_runtime_ready": bool(can_restore and restore_runtime_ready()),
     }

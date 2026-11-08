@@ -263,7 +263,7 @@
             }
             return `<div class="aps-backup-history">${rows.map(row => {
                 const candidate = restorable.get(row.operation_id);
-                const downloadButton = candidate && snapshot.permissions && snapshot.permissions.can_manage
+                const downloadButton = candidate && snapshot.permissions && snapshot.permissions.can_download
                     ? uiButton({ label: t("Download ZIP"), variant: "secondary", className: "aps-backup-download", attrs: { "data-operation-id": row.operation_id } })
                     : "";
                 const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
