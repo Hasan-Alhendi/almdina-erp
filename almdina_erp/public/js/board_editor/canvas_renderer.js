@@ -1586,12 +1586,17 @@
                 const pos = layout.positions[String(element.sheet_no)] || sheetPos;
                 const isOffcut = String((element.payload && element.payload.resource_kind) || "").toUpperCase() === "OFFCUT";
                 const style = displayStyle();
+                // Count by live session sheet_no. Projection.sheet_no stays at the
+                // manufacturing origin and must not hide cross-sheet session moves.
                 const boardPieces = ((storeView.projection && storeView.projection.pieces) || []).filter((row) => {
-                    if (Number(row.sheet_no) !== Number(element.sheet_no)) return false;
-                    if (!session || !session.pieces) return true;
+                    if (!session || !session.pieces) {
+                        return Number(row.sheet_no) === Number(element.sheet_no);
+                    }
                     const instanceId = String(row.piece_instance_id || "").trim();
                     const live = instanceId ? session.pieces[`instance:${instanceId}`] : null;
-                    if (!live) return true;
+                    if (!live) {
+                        return Number(row.sheet_no) === Number(element.sheet_no);
+                    }
                     if (live.distribution === "excluded") return false;
                     return Number(live.sheet_no) === Number(element.sheet_no);
                 });
@@ -1657,7 +1662,12 @@
                     <rect x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="#ffffff" stroke="#111111" stroke-width="2" vector-effect="non-scaling-stroke"/>
                     <rect class="abe-board-waste-hatch" x="${pos.originX}" y="${pos.originY}" width="${fullW}" height="${fullH}" fill="url(#abe-waste-hatch)" pointer-events="none"/>
                 </g>`;
-                (sheetGroups[String(element.sheet_no)] || body).push(html);
+                // Frame must stay under pieces. Cross-sheet session moves keep the
+                // projection element order of the origin sheet; a later push of this
+                // frame would cover the relocated piece (empty blue selection only).
+                const frameBucket = sheetGroups[String(element.sheet_no)];
+                if (frameBucket) frameBucket.unshift(html);
+                else body.push(html);
                 return;
             }
 

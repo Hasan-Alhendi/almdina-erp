@@ -422,4 +422,139 @@ const pieceMarks = (lAfter.match(/data-piece-key="instance:pi-l"/g) || []).lengt
 assert.ok(pieceMarks >= 2 && pieceMarks <= 3, `expected outline and liner marks, got ${pieceMarks}`);
 assert.match(lAfter, /stroke="#1d6fbf"/);
 
+// Cross-sheet session move: projection element order can place the piece markup
+// before the destination sheet frame. Frame must still paint under the piece.
+{
+    const crossProjection = {
+        board: { kerf_cm: 0.4 },
+        layers: [{ match_key: "GEOMETRY", original_name: "GEOMETRY", aci_color: 7 }],
+        sheets: [
+            {
+                sheet_no: 1,
+                full_width_cm: 122,
+                full_length_cm: 244,
+                usable_width_cm: 122,
+                usable_length_cm: 244,
+                applied_trim_width_cm: 0,
+                applied_trim_length_cm: 0,
+            },
+            {
+                sheet_no: 3,
+                full_width_cm: 122,
+                full_length_cm: 244,
+                usable_width_cm: 122,
+                usable_length_cm: 244,
+                applied_trim_width_cm: 0,
+                applied_trim_length_cm: 0,
+            },
+        ],
+        pieces: [
+            {
+                piece_id: 10,
+                piece_instance_id: "pi-cross",
+                label: "Cross",
+                sheet_no: 3,
+                placement_cm: { x: 0, y: 0, w: 50, h: 40 },
+                fill_role: "regular",
+            },
+            {
+                piece_id: 11,
+                piece_instance_id: "pi-keep",
+                label: "Keep",
+                sheet_no: 1,
+                placement_cm: { x: 10, y: 120, w: 40, h: 30 },
+                fill_role: "regular",
+            },
+        ],
+        elements: [
+            {
+                element_id: "p-cross",
+                kind: "finished_outline",
+                sheet_no: 3,
+                piece_id: 10,
+                piece_instance_id: "pi-cross",
+                layer_match_key: "GEOMETRY",
+                payload: { fill_role: "regular" },
+                geometry: { outer: [[0, 0], [500, 0], [500, 400], [0, 400]], holes: [] },
+            },
+            {
+                element_id: "sheet:1",
+                kind: "sheet_outline",
+                sheet_no: 1,
+                layer_match_key: "SHEET",
+                payload: {
+                    full_width_cm: 122,
+                    full_length_cm: 244,
+                    usable_width_cm: 122,
+                    usable_length_cm: 244,
+                    applied_trim_width_cm: 0,
+                    applied_trim_length_cm: 0,
+                },
+            },
+            {
+                element_id: "sheet:3",
+                kind: "sheet_outline",
+                sheet_no: 3,
+                layer_match_key: "SHEET",
+                payload: {
+                    full_width_cm: 122,
+                    full_length_cm: 244,
+                    usable_width_cm: 122,
+                    usable_length_cm: 244,
+                    applied_trim_width_cm: 0,
+                    applied_trim_length_cm: 0,
+                },
+            },
+            {
+                element_id: "p-keep",
+                kind: "finished_outline",
+                sheet_no: 1,
+                piece_id: 11,
+                piece_instance_id: "pi-keep",
+                layer_match_key: "GEOMETRY",
+                payload: { fill_role: "regular" },
+                geometry: { outer: [[100, 1200], [500, 1200], [500, 1500], [100, 1500]], holes: [] },
+            },
+        ],
+    };
+    const crossLayout = CanvasRenderer.sheetLayout(crossProjection.sheets, 2);
+    let crossSession = SessionDocument.buildFromProjection(crossProjection, crossLayout);
+    const crossKey = "instance:pi-cross";
+    // Simulate a completed cross-sheet session move (projection.sheet_no stays 3).
+    crossSession = JSON.parse(JSON.stringify(crossSession));
+    const moved = crossSession.pieces[crossKey];
+    moved.sheet_no = 1;
+    moved.local_x_mm = 20;
+    moved.local_y_mm = 30;
+    moved.outline_mm = [[20, 30], [520, 30], [520, 430], [20, 430]];
+    assert.equal(crossSession.pieces[crossKey].sheet_no, 1);
+    const crossHistory = History.create(crossSession);
+    const crossStore = createStore({ projection: crossProjection, orderName: "ORD", planName: "PLAN" });
+    crossStore.attachSession(crossHistory.get(), crossHistory);
+    crossStore.selectPiece(10, { pieceKey: crossKey, sheetNo: 1, expandSheet: true });
+    crossStore.setViewport({
+        scale: 0.2,
+        scrollX: 0,
+        scrollY: 0,
+        columns: 2,
+        opened: true,
+        userAdjusted: true,
+        fitted: false,
+        cameraToken: 3,
+    });
+    const crossHost = makeHost();
+    CanvasRenderer.render(crossHost, crossStore.snapshot(), {});
+    const crossHtml = crossHost.innerHTML;
+    const groupStart = crossHtml.indexOf('<g data-sheet-group="1">');
+    const groupEnd = crossHtml.indexOf('<g data-sheet-group="3">');
+    assert.ok(groupStart >= 0 && groupEnd > groupStart, "sheet group 1 markup present");
+    const groupHtml = crossHtml.slice(groupStart, groupEnd);
+    const frameAt = groupHtml.indexOf('class="abe-sheet');
+    const pieceAt = groupHtml.indexOf(`data-piece-key="${crossKey}"`);
+    assert.ok(frameAt >= 0, "destination frame present");
+    assert.ok(pieceAt >= 0, "moved piece present on destination sheet");
+    assert.ok(frameAt < pieceAt, "sheet frame must paint under cross-sheet moved piece");
+    assert.match(groupHtml, /data-piece-key="instance:pi-keep"/);
+}
+
 console.log("board_editor_render_move.test.js: ok");
