@@ -163,6 +163,11 @@ class TestSpecialExportValidation(unittest.TestCase):
             applied_trim_length_cm=0,
         )
         snapshot["sheets"][0]["pieces"][0]["x"] = 0.2
+        # Posed geometry is in the usable-sheet frame, like the placed row.
+        outer = snapshot["sheets"][0]["pieces"][0]["geometry"]["outer"]
+        snapshot["sheets"][0]["pieces"][0]["geometry"]["outer"] = [
+            [x + 2, y] for x, y in outer
+        ]
         plan.snapshot_json = json.dumps(snapshot)
 
         with patch.object(frappe, "get_doc", return_value=order, create=True):

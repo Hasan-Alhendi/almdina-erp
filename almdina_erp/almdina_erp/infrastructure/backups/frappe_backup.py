@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import fcntl
 import os
 import tempfile
 from collections import defaultdict
@@ -13,7 +14,8 @@ from almdina_erp.almdina_erp.application.backups.management import (
     BackupArtifact,
     BackupBundle,
 )
-from almdina_erp.almdina_erp.domain.backups.policy import backup_group_identifier
+from almdina_erp.almdina_erp.domain.backups.policy import backup_artifact_kind, backup_group_identifier
+from almdina_erp.almdina_erp.infrastructure.backups import restore_state
 
 
 _ARTIFACTS = (
@@ -79,7 +81,19 @@ class FrappeBackupEngine:
             ignore_conf=True,
             compress_files=True,
         )
-        generator.get_backup(ignore_files=False, force=True)
+        if self.ephemeral:
+            generator.get_backup(ignore_files=False, force=True)
+        else:
+            from frappe.utils.backups import get_backup_path
+
+            root = Path(get_backup_path())
+            root.mkdir(parents=True, exist_ok=True)
+            with (root / ".almdina-backup.lock").open("a+b") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                generator.set_backup_file_name()
+                if any(Path(str(getattr(generator, attr))).exists() for _, attr in _ARTIFACTS):
+                    raise RuntimeError("Backup artifacts already exist.")
+                generator.get_backup(ignore_files=False, force=True)
 
         site_slug = str(frappe.local.site).replace(".", "_")
         artifacts: list[BackupArtifact] = []
@@ -123,26 +137,38 @@ class FrappeLocalRetention:
         if limit < 1:
             raise ValueError("Local backup retention must be positive.")
         root = Path(get_backup_path()).resolve()
+        if restore_state.active(Path(frappe.get_site_path()).resolve()):
+            return
         if not root.is_dir():
             return
         site_slug = str(frappe.local.site).replace(".", "_")
-        grouped: dict[str, list[Path]] = defaultdict(list)
-        kinds: dict[str, set[str]] = defaultdict(set)
-        for path in root.iterdir():
-            if not path.is_file() or not _inside(root, path):
-                continue
-            identifier = backup_group_identifier(path.name, site_slug)
-            if not identifier:
-                continue
-            grouped[identifier].append(path)
-            if "-database" in path.name:
-                kinds[identifier].add("database")
-        complete = {
-            identifier: paths
-            for identifier, paths in grouped.items()
-            if "database" in kinds[identifier]
-        }
-        cleanup_old_backups(complete, limit)
+        with (root / ".almdina-backup.lock").open("a+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            # A failed history lookup must never turn imported files into candidates.
+            protected = set(frappe.get_all(
+                "Almdina Backup Operation",
+                filters={"operation_type": "Imported", "target": "Local", "status": "Completed"},
+                pluck="backup_identifier",
+            ))
+            protected.update(path.name.removeprefix(".almdina-imported-") for path in root.glob(".almdina-imported-*"))
+            grouped: dict[str, list[Path]] = defaultdict(list)
+            kinds: dict[str, set[str]] = defaultdict(set)
+            for path in root.iterdir():
+                if not path.is_file() or path.is_symlink() or not _inside(root, path):
+                    continue
+                identifier = backup_group_identifier(path.name, site_slug)
+                if not identifier or identifier in protected:
+                    continue
+                grouped[identifier].append(path)
+                kind = backup_artifact_kind(path.name)
+                if kind:
+                    kinds[identifier].add(kind)
+            complete = {
+                identifier: paths
+                for identifier, paths in grouped.items()
+                if kinds[identifier] == {"database", "public_files", "private_files", "site_config"}
+            }
+            cleanup_old_backups(complete, limit)
 
 
 def bundle_manifest(bundle: BackupBundle) -> list[dict[str, Any]]:

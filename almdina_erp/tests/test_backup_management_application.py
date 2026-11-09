@@ -41,10 +41,13 @@ class FakeHistory:
 
 
 class FakeRetention:
-    def __init__(self) -> None:
+    def __init__(self, *, fail: bool = False) -> None:
         self.applied: list[int] = []
+        self.fail = fail
 
     def apply(self, keep_last: int) -> None:
+        if self.fail:
+            raise OSError("cleanup failed")
         self.applied.append(keep_last)
 
 
@@ -97,6 +100,13 @@ def test_failed_backup_never_runs_retention_and_history_has_safe_code_only() -> 
         )
     assert retention.applied == []
     assert history.events[-1] == ("failed", "RuntimeError")
+
+
+def test_cleanup_failure_preserves_completed_backup() -> None:
+    history = FakeHistory()
+    run_backup(operation_id="op", target="local", engine=FakeEngine(), history=history,
+               keep_last=7, local_retention=FakeRetention(fail=True))
+    assert history.events[-1][0] == "completed"
 
 
 def test_external_upload_failure_never_runs_external_retention() -> None:

@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import unquote
+
+from almdina_erp.almdina_erp.infrastructure.backups import restore_state
 
 
 def _checksum(path: Path) -> str:
@@ -86,7 +91,6 @@ def _restore_command(payload: dict[str, Any], bundle: dict[str, str]) -> list[st
         bundle["public_files"],
         "--with-private-files",
         bundle["private_files"],
-        "--force",
     )
 
 
@@ -109,27 +113,51 @@ def execute_restore(
     bench_path = Path(str(payload["bench_path"])).resolve()
     sites_path = (bench_path / "sites").resolve()
     backup_root = (sites_path / str(payload["site"]) / "private" / "backups").resolve()
-    target = _validate_bundle(payload["target"], backup_root)
-    safety = _validate_bundle(payload["safety"], backup_root)
-    if settle_seconds > 0:
-        time.sleep(settle_seconds)
-
-    status = "Completed"
-    error_code = ""
+    site_path = sites_path / str(payload["site"])
+    operation_id = str(payload["operation_id"])
+    state = restore_state.read(site_path)
+    if state.get("operation_id") != operation_id or state.get("phase") != "SAFETY_BACKUP":
+        raise ValueError("Restore runner was not prepared for this site.")
+    restore_state.advance(site_path, operation_id, "MAINTENANCE", runner_pid=os.getpid())
+    destructive = False
+    staged = False
+    status = "Failed"
+    error_code = "restore_failed_safety_recovery_started"
     try:
+        target = _validate_bundle(payload["target"], backup_root)
+        safety = _validate_bundle(payload["safety"], backup_root)
+        _run(_bench_command(payload, "set-maintenance-mode", "on"), cwd=sites_path, runner=runner)
+        if settle_seconds > 0:
+            time.sleep(settle_seconds)
+        _stage_files(site_path, operation_id)
+        staged = True
+        destructive = True
+        restore_state.advance(site_path, operation_id, "RESTORING")
         _run(_restore_command(payload, target), cwd=sites_path, runner=runner)
+        _ensure_file_directories(site_path)
+        restore_state.advance(site_path, operation_id, "MIGRATING")
         _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
         _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
+        restore_state.advance(site_path, operation_id, "VERIFYING")
+        _verify(payload, sites_path, runner)
+        status = "Completed"
+        error_code = ""
     except Exception:
-        status = "Failed"
-        error_code = "restore_failed_safety_recovery_started"
-        try:
-            _run(_restore_command(payload, safety), cwd=sites_path, runner=runner)
-            _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
-            _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
-            error_code = "restore_failed_safety_recovery_completed"
-        except Exception:
-            error_code = "restore_and_safety_recovery_failed"
+        if destructive:
+            restore_state.advance(site_path, operation_id, "RECOVERING")
+            try:
+                safety = _validate_bundle(payload["safety"], backup_root)
+                _remove_restored_files(site_path)
+                _run(_restore_command(payload, safety), cwd=sites_path, runner=runner)
+                _ensure_file_directories(site_path)
+                _run(_bench_command(payload, "migrate"), cwd=sites_path, runner=runner)
+                _run(_bench_command(payload, "clear-cache"), cwd=sites_path, runner=runner)
+                _verify(payload, sites_path, runner, safety=True)
+                error_code = "restore_failed_safety_recovery_completed"
+            except Exception:
+                error_code = "restore_and_safety_recovery_failed"
+        else:
+            error_code = "restore_preparation_failed"
 
     finalize_kwargs = json.dumps(
         {
@@ -139,6 +167,9 @@ def execute_restore(
         },
         separators=(",", ":"),
     )
+    if error_code == "restore_and_safety_recovery_failed":
+        restore_state.advance(site_path, operation_id, "MANUAL_INTERVENTION_REQUIRED")
+        return 2
     try:
         _run(
             _bench_command(
@@ -152,8 +183,93 @@ def execute_restore(
             runner=runner,
         )
     except Exception:
+        restore_state.advance(site_path, operation_id, "MANUAL_INTERVENTION_REQUIRED")
+        return 2
+    try:
+        if staged:
+            _remove_staged_files(site_path, operation_id)
+        if not payload.get("previous_maintenance"):
+            _run(_bench_command(payload, "set-maintenance-mode", "off"), cwd=sites_path, runner=runner)
+        restore_state.advance(site_path, operation_id,
+                              "COMPLETED" if status == "Completed" else "RECOVERED_AFTER_FAILURE")
+    except Exception:
+        restore_state.advance(site_path, operation_id, "MANUAL_INTERVENTION_REQUIRED")
         return 2
     return 0 if status == "Completed" else 1
+
+
+def _stage_files(site_path: Path, operation_id: str) -> None:
+    staging = site_path / "private" / "backup_restore_requests" / f"{operation_id}-files"
+    staging.mkdir(mode=0o700)
+    moved: list[tuple[Path, Path]] = []
+    try:
+        for name, location in (("public", site_path / "public" / "files"),
+                               ("private", site_path / "private" / "files")):
+            if location.exists():
+                destination = staging / name
+                location.rename(destination)
+                moved.append((location, destination))
+    except Exception:
+        for original, destination in reversed(moved):
+            destination.rename(original)
+        staging.rmdir()
+        raise
+
+
+def _remove_restored_files(site_path: Path) -> None:
+    for path in (site_path / "public" / "files", site_path / "private" / "files"):
+        if path.is_symlink():
+            raise ValueError("Restored files path is a symbolic link.")
+        if path.is_dir():
+            shutil.rmtree(path)
+
+
+def _ensure_file_directories(site_path: Path) -> None:
+    for kind in ("public", "private"):
+        path = site_path / kind / "files"
+        if path.is_symlink():
+            raise ValueError("Restored files path is a symbolic link.")
+        path.mkdir(parents=True, exist_ok=True)
+
+
+def _remove_staged_files(site_path: Path, operation_id: str) -> None:
+    staging = site_path / "private" / "backup_restore_requests" / f"{operation_id}-files"
+    if staging.exists():
+        shutil.rmtree(staging)
+
+
+def _verify(payload: dict[str, Any], cwd: Path, runner: Callable[..., Any], *, safety: bool = False) -> None:
+    expected = "" if safety else str(payload.get("source_app_versions") or "")
+    _run(_bench_command(payload, "execute",
+                        "almdina_erp.almdina_erp.infrastructure.backups.restore_runner.verify_restored_site",
+                        "--kwargs", json.dumps({"expected_versions": expected})), cwd=cwd, runner=runner)
+
+
+def verify_restored_site(expected_versions: str = "") -> None:
+    import frappe
+    from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import app_versions
+
+    frappe.db.sql("SELECT 1")
+    if not frappe.db.exists("DocType", "Door Cutting Order"):
+        raise ValueError("A required DocType is unavailable after restore.")
+    versions = app_versions()
+    if expected_versions and json.loads(expected_versions) != versions:
+        raise ValueError("Application versions changed during restore.")
+    if not {"frappe", "erpnext", "almdina_erp"}.issubset(versions):
+        raise ValueError("Required applications are unavailable after restore.")
+    site_path = Path(frappe.get_site_path()).resolve()
+    for kind in ("public", "private"):
+        if not (site_path / kind / "files").is_dir():
+            raise ValueError("Restored files directory is unavailable.")
+    for row in frappe.get_all("File", filters={"is_folder": 0}, fields=["file_url", "is_private"], limit_page_length=10):
+        prefix = "/private/files/" if row.is_private else "/files/"
+        url = str(row.file_url or "")
+        if not url.startswith(prefix):
+            continue
+        root = site_path / ("private" if row.is_private else "public") / "files"
+        path = (root / unquote(url[len(prefix):])).resolve()
+        if not path.is_relative_to(root.resolve()) or not path.is_file():
+            raise ValueError("A restored attachment is unavailable.")
 
 
 def finalize_restore(request_path: str, status: str, error_code: str = "") -> None:
@@ -213,6 +329,7 @@ def finalize_restore(request_path: str, status: str, error_code: str = "") -> No
             "requested_on": payload.get("source_requested_on") or payload.get("requested_on") or now(),
             "completed_on": payload.get("source_completed_on") or payload.get("source_requested_on") or now(),
             "operation_type": payload.get("source_operation_type") or "Manual",
+            "import_app_versions": payload.get("source_app_versions") or None,
             "target": "Local",
             "status": "Completed",
         },

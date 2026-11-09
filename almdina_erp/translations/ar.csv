@@ -3419,3 +3419,77 @@ You do not have permission to use the board editor.,ليست لديك صلاحي
 Deduct edge banding thickness by default,خصم سماكة القشاط افتراضياً
 Deduct edge banding thickness automatically,خصم سماكة القشاط تلقائياً
 Tool diameters,قياسات الريش
+Download ZIP,تنزيل ZIP
+Upload Backup ZIP,رفع نسخة احتياطية ZIP
+Verifying backup,قيد التحقق من النسخة
+Verifying backup...,جاري التحقق من النسخة...
+Preparing backup upload...,جاري تجهيز رفع النسخة...
+Uploading backup: {0}%,جاري رفع النسخة: {0}%
+Backup import completed.,اكتمل استيراد النسخة الاحتياطية.
+Backup verification failed.,فشل التحقق من النسخة الاحتياطية.
+Could not upload backup,تعذر رفع النسخة الاحتياطية
+Select one ZIP within the configured upload limit.,اختر ملف ZIP واحدًا ضمن الحد المسموح للرفع.
+Backup upload failed. Please try again.,فشل رفع النسخة الاحتياطية. أعد المحاولة.
+Backup files are unavailable or failed integrity verification.,ملفات النسخة غير متاحة أو فشل التحقق من سلامتها.
+You do not have permission to download backups.,ليست لديك صلاحية تنزيل النسخ الاحتياطية.
+Invalid backup upload.,طلب رفع النسخة غير صالح.
+Backup upload is unavailable.,طلب رفع النسخة غير متاح.
+Backup ZIP exceeds the configured upload limit.,ملف النسخة يتجاوز حد الرفع المضبوط.
+Invalid backup upload size.,حجم رفع النسخة غير صالح.
+Backup upload chunk is missing.,جزء من ملف النسخة مفقود.
+Invalid backup upload chunk.,جزء ملف النسخة غير صالح.
+Backup upload chunks are out of order.,أجزاء رفع النسخة ليست بالترتيب الصحيح.
+Backup upload is incomplete.,رفع النسخة غير مكتمل.
+Imported,مستوردة
+Unsupported backup ZIP format.,صيغة ملف النسخة الاحتياطية غير مدعومة.
+This backup belongs to another site.,هذه النسخة تخص موقعًا آخر.
+Backup application versions do not match this site.,إصدارات تطبيقات النسخة لا تطابق هذا الموقع.
+A backup with these files already exists.,توجد نسخة بهذه الملفات مسبقًا.
+Backup encryption key does not match this site.,مفتاح تشفير النسخة لا يطابق هذا الموقع.
+Backup upload was interrupted.,انقطع رفع النسخة الاحتياطية.
+Backup package validation failed.,فشل التحقق من حزمة النسخة الاحتياطية.
+Imported backup is no longer compatible with this site.,النسخة المستوردة لم تعد متوافقة مع هذا الموقع.
+A restore is already in progress for this site.,توجد استعادة جارية لهذا الموقع. انتظر اكتمالها أو راجع مسؤول النظام.
+Wait for the current backup or import to finish before restoring.,انتظر انتهاء النسخ أو التحقق من الملف المرفوع قبل الاستعادة.
+Restore needs database administrator credentials in the operational configuration.,تتطلب الاستعادة بيانات دخول مسؤول قاعدة البيانات ضمن إعدادات التشغيل.
+Database administrator access is unavailable. Check the operational configuration.,تعذر الاتصال الإداري بقاعدة البيانات. راجع إعدادات التشغيل.
+There is insufficient free disk space for a safety backup and restore.,المساحة المتاحة لا تكفي لنسخة الأمان والاستعادة.
+The restore tools are unavailable on this server.,أدوات الاستعادة غير متاحة على الخادم.
+Restore preflight failed. Please contact the administrator.,فشل فحص جاهزية الاستعادة. تواصل مع مسؤول النظام.
+Restore queued,الاستعادة في قائمة الانتظار
+Checking restore prerequisites,جاري فحص جاهزية الاستعادة
+Creating safety backup,جاري إنشاء نسخة الأمان
+Site in maintenance,الموقع في وضع الصيانة
+Restoring database and files,جاري استعادة قاعدة البيانات والملفات
+Updating database schema,جاري تحديث بنية قاعدة البيانات
+Verifying restored site,جاري التحقق من الموقع المستعاد
+Recovering the safety backup,جاري استعادة نسخة الأمان بعد الفشل
+Restore completed and verified,اكتملت الاستعادة وتم التحقق منها
+Restore failed; safety backup recovered,فشلت الاستعادة وعادت نسخة الأمان بنجاح
+Restore needs administrator intervention,تحتاج الاستعادة إلى تدخل مسؤول النظام؛ الموقع في وضع آمن
+Restore status unavailable,حالة الاستعادة غير متاحة
+Available backups,النسخ المتاحة
+Operation history,سجل العمليات
+No available backups,لا توجد نسخ متاحة حاليًا
+Latest local backup,آخر نسخة محلية ناجحة
+Latest external backup,آخر نسخة خارجية ناجحة
+Next local backup,النسخة المحلية القادمة
+Next external backup,النسخة الخارجية القادمة
+Site maintenance or connection interrupted,الموقع في الصيانة أو الاتصال منقطع
+Restore outcome is not confirmed. The status will update when the site is available.,لم تتأكد نتيجة الاستعادة بعد. ستُحدّث الحالة عند عودة الاتصال.
+Backup operation completed.,اكتملت عملية النسخ بنجاح.
+Backup operation failed.,فشلت عملية النسخ.
+Backup completed; old backup cleanup needs attention.,اكتملت النسخة؛ يحتاج تنظيف النسخ القديمة إلى مراجعة.
+Restore failed. Check the restore status above.,فشلت الاستعادة. راجع حالة الاستعادة أعلاه.
+Changes made after this backup will be lost.,ستُفقد التغييرات التي حدثت بعد تاريخ هذه النسخة.
+Target site,الموقع المستهدف
+Backup date,تاريخ النسخة
+SSH authentication failed. Check the configured credentials.,فشل تسجيل الدخول إلى خادم النسخ. راجع بيانات الاتصال.
+Could not reach the backup server. Check the address and network.,تعذر الوصول إلى خادم النسخ. راجع العنوان والشبكة.
+The remote backup directory is unavailable or not writable.,مجلد النسخ الخارجي غير متاح أو لا يقبل الكتابة.
+SSH connection test failed.,فشل اختبار اتصال SSH.
+External backup upload failed.,فشل إرسال النسخة إلى الخادم الخارجي.
+A local backup is already in progress.,توجد نسخة محلية قيد الإنشاء. انتظر اكتمالها.
+The site database is unavailable. Restore has not started.,قاعدة بيانات الموقع غير متاحة. لم تبدأ الاستعادة.
+Selected backup is no longer compatible with this site.,النسخة المحددة لم تعد متوافقة مع هذا الموقع.
+Creating backup...,جاري إنشاء النسخة الاحتياطية...

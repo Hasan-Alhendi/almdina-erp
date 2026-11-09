@@ -65,7 +65,8 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         for i, row in enumerate(rows,1):
             self._insert("Door Cutting Order Detail", dict(row, name=f"{name}-{i}", parent=name,
                 parenttype="Door Cutting Order", parentfield="pieces", idx=i, piece_no=i,
-                piece_instance_id=f"smart:{i}", cut_width_cm=row["width_cm"], cut_length_cm=row["length_cm"]))
+                piece_instance_id=f"smart:{i}", cut_width_cm=row.get("cut_width_cm",row["width_cm"]),
+                cut_length_cm=row.get("cut_length_cm",row["length_cm"])))
         order = frappe.get_doc("Door Cutting Order", name)
         commands.save_system_plan_settings(order, dict(packing_mode="Auto", cutting_machine_type="CNC Router",
             kerf_mm=3, trim_margin_mm=trim*10, optimization_time_limit_sec=.4))
@@ -244,13 +245,15 @@ class TestSmartCuttingIntegration(FrappeTestCase):
         from almdina_erp.tests.geometry_nesting_cases import source_rows
         from almdina_erp.almdina_erp.services.export_validation_service import _plan_to_export_snapshot
         band='P5-BAND-'+frappe.generate_hash(length=10)
-        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0,disabled=0))
+        self._insert('Edge Banding Type',dict(name=band,thickness_mm=0.1,disabled=0))
         try:
             rows=source_rows('P5-addon-ambiguous')
             rows[0].update(edge_long_left=1,edge_long_right=1,edge_width_top=1,edge_width_bottom=1,
                            edge_long_type=band,edge_width_type=band)
             for side in ('edge_long_left','edge_long_right','edge_width_top','edge_width_bottom'):
                 rows[0][side+'_type_override']=band
+            # Two 0.1 mm edges per axis are deducted from the saved cut fields.
+            rows[0].update(cut_width_cm=39.98,cut_length_cm=39.98)
             order,rows=self._order(45.3,45.3,0,rows)
             preview=previews.preview_cutting_plan(order.name,packing_mode='smart',cutting_machine_type='CNC Router',
                 kerf_mm=3,trim_margin_mm=0,optimization_time_limit_sec=4)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -35,6 +36,42 @@ def restore_runtime_ready() -> bool:
     return False
 
 
+def preflight_restore(target: BackupBundle) -> None:
+    """Verify prerequisites without changing the site or exposing credentials."""
+    if not restore_runtime_ready():
+        raise ValueError("restore_runtime_not_configured")
+    if any(not shutil.which(tool) for tool in ("tar", "gzip", "file", "sed")):
+        raise ValueError("restore_tools_unavailable")
+    site_path = Path(frappe.get_site_path()).resolve()
+    # The safety copy and restored files coexist with the selected backup.
+    needed = target.total_size * 2 + 512 * 1024 * 1024
+    if shutil.disk_usage(site_path).free < needed:
+        raise ValueError("restore_disk_space")
+    if str(frappe.conf.db_type or "").lower() == "mariadb":
+        if not (shutil.which("mariadb") or shutil.which("mysql")):
+            raise ValueError("restore_tools_unavailable")
+        import pymysql
+
+        options = {"user": frappe.conf.get("mariadb_root_login") or frappe.conf.get("root_login") or "root",
+                   "password": frappe.conf.get("mariadb_root_password") or frappe.conf.get("root_password"),
+                   "connect_timeout": 5, "read_timeout": 5}
+        if frappe.conf.db_socket:
+            options["unix_socket"] = frappe.conf.db_socket
+        else:
+            options.update(host=frappe.conf.db_host or "localhost", port=int(frappe.conf.db_port or 3306))
+        try:
+            connection = pymysql.connect(**options)
+            connection.close()
+        except (pymysql.MySQLError, OSError) as exc:
+            raise ValueError("restore_db_admin_unavailable") from exc
+    elif str(frappe.conf.db_type or "").lower() != "sqlite":
+        raise ValueError("restore_db_admin_unavailable")
+    try:
+        frappe.db.sql("SELECT 1")
+    except Exception as exc:
+        raise ValueError("restore_db_unavailable") from exc
+
+
 def _bundle_payload(bundle: BackupBundle) -> dict[str, Any]:
     manifest = bundle_manifest(bundle)
     by_kind = {artifact.kind: artifact for artifact in bundle.artifacts}
@@ -59,6 +96,8 @@ def write_restore_request(
     target: BackupBundle,
     safety_operation_id: str,
     safety: BackupBundle,
+    source_app_versions: str = "",
+    previous_maintenance: bool | None = None,
 ) -> Path:
     folder = Path(frappe.get_site_path("private", REQUEST_FOLDER)).resolve()
     folder.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -72,6 +111,7 @@ def write_restore_request(
         "operation_id": operation_id,
         "source_operation_id": source_operation_id,
         "source_operation_type": source_operation_type,
+        "source_app_versions": source_app_versions,
         "source_requested_by": source_requested_by,
         "source_requested_on": source_requested_on,
         "source_completed_on": source_completed_on,
@@ -80,6 +120,8 @@ def write_restore_request(
         "safety_operation_id": safety_operation_id,
         "target": _bundle_payload(target),
         "safety": _bundle_payload(safety),
+        "previous_maintenance": bool(frappe.conf.get("maintenance_mode") if previous_maintenance is None else previous_maintenance),
+        "previous_scheduler_pause": bool(frappe.conf.get("pause_scheduler")),
     }
     request_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True), encoding="utf-8")
     os.chmod(request_path, stat.S_IRUSR | stat.S_IWUSR)
@@ -116,5 +158,6 @@ __all__ = [
     "REQUEST_VERSION",
     "launch_restore_runner",
     "restore_runtime_ready",
+    "preflight_restore",
     "write_restore_request",
 ]

@@ -24,6 +24,9 @@ def test_adapter_calls_frappe_backup_generator_with_files_and_full_database(
             self.backup_path_private_files = str(tmp_path / f"{stamp}-private-files.tgz")
             self.backup_path_conf = str(tmp_path / f"{stamp}-site_config_backup.json")
 
+        def set_backup_file_name(self) -> None:
+            pass
+
         def get_backup(self, **kwargs: object) -> None:
             captured["get_backup"] = kwargs
             for path in (
@@ -35,6 +38,7 @@ def test_adapter_calls_frappe_backup_generator_with_files_and_full_database(
                 Path(path).write_bytes(b"valid-frappe-artifact")
 
     monkeypatch.setattr(frappe.utils.backups, "BackupGenerator", FakeGenerator)
+    monkeypatch.setattr(frappe.utils.backups, "get_backup_path", lambda: str(tmp_path))
     monkeypatch.setattr(
         frappe,
         "conf",
@@ -62,3 +66,8 @@ def test_adapter_calls_frappe_backup_generator_with_files_and_full_database(
     assert captured["get_backup"] == {"ignore_files": False, "force": True}
     assert captured["init"]["ignore_conf"] is True
     assert captured["init"]["compress_files"] is True
+
+    # A second backup with the same Frappe timestamp must not replace an import.
+    import pytest
+    with pytest.raises(RuntimeError, match="already exist"):
+        FrappeBackupEngine().create()

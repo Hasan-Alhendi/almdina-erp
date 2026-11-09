@@ -68,6 +68,12 @@ class FrappeBackupHistory:
     def mark_running(self, operation_id: str) -> None:
         self._update(operation_id, {"status": "Running", "started_on": now(), "error_summary": None})
 
+    def set_upload_size(self, operation_id: str, size: int) -> None:
+        self._update(operation_id, {"total_size": size})
+
+    def set_import_app_versions(self, operation_id: str, versions: dict[str, str]) -> None:
+        self._update(operation_id, {"import_app_versions": json.dumps(versions, sort_keys=True)})
+
     def mark_prepared(self, operation_id: str, bundle: BackupBundle) -> None:
         manifest = _canonical_manifest(bundle)
         self._update(
@@ -101,6 +107,8 @@ class FrappeBackupHistory:
         )
 
     def mark_completed(self, operation_id: str, bundle: BackupBundle, reference: str = "") -> None:
+        from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import app_versions
+
         manifest = _canonical_manifest(bundle)
         self._update(
             operation_id,
@@ -111,6 +119,7 @@ class FrappeBackupHistory:
                 "total_size": bundle.total_size,
                 "checksum": _manifest_checksum(manifest),
                 "artifact_manifest": manifest,
+                "import_app_versions": json.dumps(app_versions(), sort_keys=True),
                 "completed_on": now(),
                 "error_summary": None,
             },
@@ -125,6 +134,9 @@ class FrappeBackupHistory:
                 "error_summary": str(error_code or "backup_operation_failed")[:140],
             },
         )
+
+    def mark_cleanup_warning(self, operation_id: str) -> None:
+        self._update(operation_id, {"error_summary": "retention_cleanup_failed"})
 
     @staticmethod
     def _update(operation_id: str, values: dict[str, Any]) -> None:
@@ -169,6 +181,8 @@ class FrappeBackupHistory:
                 "requested_on",
                 "completed_on",
                 "source_operation_id",
+                "total_size",
+                "import_app_versions",
             ],
             as_dict=True,
         )
@@ -180,7 +194,7 @@ class FrappeBackupHistory:
             filters={
                 "target": "Local",
                 "status": "Completed",
-                "operation_type": ["in", ["Manual", "Scheduled", "Safety"]],
+                "operation_type": ["in", ["Manual", "Scheduled", "Safety", "Imported"]],
             },
             fields=["operation_id", "backup_identifier", "requested_on", "total_size", "checksum"],
             order_by="requested_on desc",
@@ -197,7 +211,7 @@ class FrappeBackupHistory:
                 "operation_id": str(operation_id or "").strip(),
                 "target": "Local",
                 "status": "Completed",
-                "operation_type": ["in", ["Manual", "Scheduled", "Safety"]],
+                "operation_type": ["in", ["Manual", "Scheduled", "Safety", "Imported"]],
             },
             ["backup_identifier", "artifact_manifest", "checksum"],
             as_dict=True,
@@ -224,7 +238,7 @@ class FrappeBackupHistory:
             except ValueError as exc:
                 raise ValueError("Backup artifact is outside the approved backup scope.") from exc
             identifier = backup_group_identifier(filename, site_slug)
-            if identifier != row.backup_identifier or not path.is_file():
+            if path.is_symlink() or identifier != row.backup_identifier or not path.is_file():
                 raise ValueError("Backup artifact is invalid or missing.")
             size = int(entry.get("size") or 0)
             checksum = str(entry.get("checksum") or "")

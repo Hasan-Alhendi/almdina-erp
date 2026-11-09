@@ -191,7 +191,7 @@ class TestDcoPerformanceContract(unittest.TestCase):
         self.assertIn("def _selected_snapshot_json", source)
         self.assertIn('fields=["name", "snapshot_json"]', source)
         self.assertIn(
-            "snapshot_json = _selected_snapshot_json([system, uploaded, approved])",
+            "snapshot_json = _selected_snapshot_json([system, uploaded, board_editor, approved])",
             source,
         )
 
