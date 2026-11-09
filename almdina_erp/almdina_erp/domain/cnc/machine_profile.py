@@ -92,22 +92,43 @@ def _number(value: Any, *, lower: float, upper: float, inclusive_lower: bool) ->
     return number
 
 
-def normalize_machine_profile(raw: Mapping[str, Any]) -> MachineProfileValues:
-    from almdina_erp.almdina_erp.domain.cnc.tool_preset import normalize_tool_preset
+def _tool_number(raw: Mapping[str, Any]) -> str:
+    """Validate the sample tool number as a machine-profile rule.
 
-    tool_number = normalize_tool_preset(
-        {
-            "preset_name": "machine-profile",
-            "tool_name": "machine-profile",
-            "tool_number": raw.get("cnc_machine_tool_number"),
-            "tool_diameter_mm": 1,
-            "final_depth_mm": 1,
-            "spindle_speed_rpm": 1,
-            "feed_rate_mm_min": 1,
-            "plunge_rate_mm_min": 1,
-            "enabled": True,
-        }
-    ).tool_number
+    Preset validation stays in ``normalize_tool_preset``. A preset failure is
+    translated here so callers only see ``MachineProfileError``.
+    """
+
+    from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
+        ToolPresetError,
+        normalize_tool_preset,
+    )
+
+    try:
+        return normalize_tool_preset(
+            {
+                "preset_name": "machine-profile",
+                "tool_name": "machine-profile",
+                "tool_number": raw.get("cnc_machine_tool_number"),
+                "tool_diameter_mm": 1,
+                "final_depth_mm": 1,
+                "spindle_speed_rpm": 1,
+                "feed_rate_mm_min": 1,
+                "plunge_rate_mm_min": 1,
+                "enabled": True,
+            }
+        ).tool_number
+    except ToolPresetError as exc:
+        code = (
+            "machine_profile_tool_number_invalid"
+            if exc.code == "tool_number_invalid"
+            else "machine_profile_value_invalid"
+        )
+        raise MachineProfileError(code) from exc
+
+
+def normalize_machine_profile(raw: Mapping[str, Any]) -> MachineProfileValues:
+    tool_number = _tool_number(raw)
     spindle = _number(
         raw.get("cnc_machine_spindle_speed_rpm"),
         lower=0,
@@ -177,6 +198,28 @@ def normalize_machine_profile(raw: Mapping[str, Any]) -> MachineProfileValues:
     )
 
 
+def machine_profile_for_workspace(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the profile the operational workspace may display.
+
+    Invalid or incomplete settings do not raise. The profile stays unapproved
+    and carries no fingerprint, so it cannot be treated as ready to run.
+    """
+
+    try:
+        profile = normalize_machine_profile(raw)
+    except MachineProfileError:
+        return {
+            "production_approved": False,
+            "source_note": str(raw.get("cnc_machine_profile_source") or ""),
+            "fingerprint_payload": {},
+        }
+    return {
+        "production_approved": profile.production_approved,
+        "source_note": profile.source_note,
+        "fingerprint_payload": profile.fingerprint_payload(),
+    }
+
+
 def machine_profile_seed_updates(current: Mapping[str, Any] | None) -> dict[str, Any]:
     """Fill only missing sample values. A later edit is left untouched."""
 
@@ -193,6 +236,7 @@ __all__ = [
     "SAMPLE_MACHINE_PROFILE",
     "MachineProfileError",
     "MachineProfileValues",
+    "machine_profile_for_workspace",
     "machine_profile_seed_updates",
     "normalize_machine_profile",
 ]

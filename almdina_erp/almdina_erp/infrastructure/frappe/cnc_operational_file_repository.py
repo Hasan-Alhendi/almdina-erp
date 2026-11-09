@@ -15,8 +15,7 @@ from frappe.utils import cint
 from frappe.utils.file_manager import save_file
 
 from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
-    MachineProfileError,
-    normalize_machine_profile,
+    machine_profile_for_workspace,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
@@ -460,19 +459,7 @@ def machine_profile_view() -> dict[str, Any]:
             "cnc_machine_profile_source",
         )
     }
-    try:
-        profile = normalize_machine_profile(raw)
-    except MachineProfileError:
-        return {
-            "production_approved": False,
-            "source_note": str(raw.get("cnc_machine_profile_source") or ""),
-            "fingerprint_payload": {},
-        }
-    return {
-        "production_approved": profile.production_approved,
-        "source_note": profile.source_note,
-        "fingerprint_payload": profile.fingerprint_payload(),
-    }
+    return machine_profile_for_workspace(raw)
 
 
 def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
