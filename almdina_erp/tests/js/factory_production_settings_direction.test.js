@@ -16,7 +16,11 @@ const sandbox = {
     document: { documentElement },
     AlmdinaUi: {
         button(options) {
-            return `<button class="${options.className || ""}">${options.label || ""}</button>`;
+            const variant = String(options.variant || "secondary");
+            const variantClass = variant === "primary"
+                ? "alm-btn-primary"
+                : (variant === "danger" ? "alm-btn-danger" : "alm-btn-secondary");
+            return `<button class="btn ${variantClass} ${options.className || ""}">${options.label || ""}</button>`;
         },
         badge(options) {
             return `<span class="alm-badge">${options.label || ""}</span>`;
@@ -150,7 +154,8 @@ renderer.renderBackup({
         operation_type: "Manual",
         target: "Local",
         status: "Completed",
-        requested_on: "2026-10-13",
+        requested_on: "2026-10-13 16:43:27.123456",
+        completed_on: "2026-10-13 16:43:27.123456",
         total_size: 2048,
         can_download: true,
         attempt_count: 1,
@@ -193,13 +198,17 @@ assert.ok(backupHtml.indexOf("aps-section-accent") < backupHtml.indexOf("aps-sec
 assert.ok(backupHtml.indexOf("aps-section-titles") < backupHtml.indexOf("aps-section-tools"));
 assert.match(backupHtml, /data-backup-summary/);
 assert.match(backupHtml, /data-backup-primary-actions/);
+assert.match(backupHtml, /data-backup-notes/);
 assert.match(backupHtml, /data-backup-toolbar/);
 assert.match(backupHtml, /data-backup-advanced/);
 {
     const summaryStart = backupHtml.indexOf('data-backup-summary');
     const summaryEnd = backupHtml.indexOf("data-backup-primary-actions", summaryStart);
     const summaryHtml = backupHtml.slice(summaryStart, summaryEnd);
+    assert.match(summaryHtml, /aps-backup-summary-item/);
     assert.match(summaryHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
+    assert.match(summaryHtml, /aps-ltr-value" dir="ltr">2026-10-13 16:43</);
+    assert.equal(summaryHtml.includes("16:43:27"), false);
     assert.equal(summaryHtml.includes("RESTORE-LATEST"), false);
 }
 assert.match(backupHtml, /aps-ltr-value" dir="ltr">BACKUP-14/);
@@ -216,11 +225,14 @@ assert.match(backupHtml, /type="password"/);
 assert.doesNotMatch(backupHtml, /value="[^"]*secret/);
 assert.match(backupHtml, /aps-db-restore-save/);
 assert.match(backupHtml, /aps-backup-download/);
-assert.match(backupHtml, /aps-backup-details/);
+assert.match(backupHtml, /aps-backup-row is-clickable/);
+assert.doesNotMatch(backupHtml, /aps-backup-details/);
 assert.match(backupHtml, /aps-backup-delete/);
 assert.match(backupHtml, />Download</);
-assert.match(backupHtml, />Details</);
+assert.doesNotMatch(backupHtml, />Details</);
 assert.match(backupHtml, />Delete</);
+assert.match(backupHtml, /alm-btn-primary[^"]*aps-backup-download|aps-backup-download[^"]*alm-btn-primary/);
+assert.match(backupHtml, /aps-backup-restore/);
 
 renderer.renderWhatsApp({
     session: { status: "ready", name: "Desk", phone: "+963900", push_name: "Factory" },

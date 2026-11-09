@@ -310,6 +310,14 @@
             })[0];
         }
 
+        function formatBackupDisplayDate(value) {
+            const raw = String(value || "").trim();
+            if (!raw || raw === "—") return "—";
+            const matched = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?/);
+            if (matched) return `${matched[1]} ${matched[2]}`;
+            return raw;
+        }
+
         function backupSummaryHtml(snapshot = {}) {
             const last = lastSuccessfulBackup(snapshot.history);
             if (!last) {
@@ -322,7 +330,7 @@
                     </section>
                 `;
             }
-            const when = last.completed_on || last.requested_on || "—";
+            const when = formatBackupDisplayDate(last.completed_on || last.requested_on || "—");
             return `
                 <section class="aps-backup-summary" data-backup-summary>
                     <div class="aps-backup-summary-head">
@@ -330,12 +338,12 @@
                         ${uiBadge({ label: backupStatusLabel(last.status), tone: backupStatusTone(last.status) })}
                     </div>
                     <div class="aps-backup-summary-grid">
-                        <div><span>${t("Name")}</span><b class="aps-ltr-value" dir="ltr">${esc(last.backup_identifier || last.operation_id || "—")}</b></div>
-                        <div><span>${t("Date & time")}</span><b class="aps-ltr-value" dir="ltr">${esc(when)}</b></div>
-                        <div><span>${t("Type")}</span><b>${esc(backupTypeLabel(last.operation_type))}</b></div>
-                        <div><span>${t("Source")}</span><b>${esc(backupTargetLabel(last.target))}</b></div>
-                        <div><span>${t("Size")}</span><b class="aps-ltr-value" dir="ltr">${esc(sizeLabel(last.total_size))}</b></div>
-                        <div><span>${t("Status")}</span><b>${esc(backupStatusLabel(last.status))}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Name")}</span><b class="aps-ltr-value" dir="ltr">${esc(last.backup_identifier || last.operation_id || "—")}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Date & time")}</span><b class="aps-ltr-value" dir="ltr">${esc(when)}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Type")}</span><b>${esc(backupTypeLabel(last.operation_type))}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Source")}</span><b>${esc(backupTargetLabel(last.target))}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Size")}</span><b class="aps-ltr-value" dir="ltr">${esc(sizeLabel(last.total_size))}</b></div>
+                        <div class="aps-backup-summary-item"><span>${t("Status")}</span><b>${esc(backupStatusLabel(last.status))}</b></div>
                     </div>
                 </section>
             `;
@@ -441,7 +449,7 @@
                 const downloadButton = canManage && row.can_download
                     ? uiButton({
                         label: t("Download"),
-                        variant: "secondary",
+                        variant: "primary",
                         className: "aps-backup-download",
                         attrs: {
                             "data-operation-id": row.operation_id,
@@ -452,7 +460,7 @@
                 const restoreButton = candidate && canRestore && snapshot.restore_runtime_ready
                     ? uiButton({
                         label: t("Restore"),
-                        variant: "danger",
+                        variant: "secondary",
                         className: "aps-backup-restore",
                         attrs: {
                             "data-operation-id": row.operation_id,
@@ -460,12 +468,6 @@
                         },
                     })
                     : "";
-                const detailsButton = uiButton({
-                    label: t("Details"),
-                    variant: "secondary",
-                    className: "aps-backup-details",
-                    attrs: { "data-operation-id": row.operation_id },
-                });
                 const deleteButton = canManage && isDeletableBackupRow(row)
                     ? uiButton({
                         label: t("Delete"),
@@ -479,7 +481,7 @@
                     })
                     : "";
                 return `
-                    <article class="aps-backup-row" data-operation-id="${esc(row.operation_id || "")}">
+                    <article class="aps-backup-row is-clickable" data-operation-id="${esc(row.operation_id || "")}" role="button" tabindex="0" aria-label="${esc(t("Backup details"))}">
                         <div class="aps-backup-row-main">
                             <div>
                                 <strong class="aps-ltr-value" dir="ltr">${esc(row.backup_identifier || row.operation_id || "—")}</strong>
@@ -490,7 +492,7 @@
                         <div class="aps-backup-row-meta">
                             <span class="aps-ltr-value" dir="ltr">${esc(row.requested_on || "—")}</span>
                             <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
-                            <span class="aps-backup-row-actions">${downloadButton}${restoreButton}${detailsButton}${deleteButton}</span>
+                            <span class="aps-backup-row-actions">${downloadButton}${restoreButton}${deleteButton}</span>
                         </div>
                         ${backupRetryHtml(row)}
                     </article>
@@ -578,7 +580,7 @@
                         </div>
                         ${scheduleSection.editable ? uiButton({
                             label: t("Edit"),
-                            variant: "secondary",
+                            variant: "primary",
                             className: "aps-edit",
                             attrs: { "data-section": "backup_restore" },
                         }) : ""}
@@ -641,12 +643,14 @@
                         ${canManage ? uiButton({ label: t("Test SSH Connection"), variant: "secondary", className: "aps-backup-test" }) : ""}
                     </div>
                 </section>
-                <div class="aps-backup-guide" role="note">
-                    <strong>${t("Encrypted External path")}</strong>
-                    <span>${t("Download encrypted files offline → decrypt and verify → build an almdina.backup.zip → Import Backup.")}</span>
-                </div>
-                ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.")}</div>` : ""}
-                ${canRestore && snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).")}</div>` : ""}
+                <section class="aps-backup-notes" data-backup-notes>
+                    <div class="aps-backup-guide" role="note">
+                        <strong>${t("Encrypted External path")}</strong>
+                        <span>${t("Download encrypted files offline → decrypt and verify → build an almdina.backup.zip → Import Backup.")}</span>
+                    </div>
+                    ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note aps-backup-restore-note" role="note"><span>${t("Restore is disabled until database root connection settings are complete in Almadina ERP Settings or Frappe operational configuration.")}</span></div>` : ""}
+                    ${canRestore && snapshot.restore_runtime_ready ? `<div class="aps-readonly-note aps-backup-restore-note" role="note"><span>${t("Local Manual, Scheduled, Safety, and Imported backups can be restored. External backups are never restored directly — import an almdina.backup.zip first (decrypt encrypted External packages offline).")}</span></div>` : ""}
+                </section>
                 <section class="aps-backup-list-panel" data-backup-list-panel>
                     <div class="aps-backup-list-head">
                         <strong>${t("Backup list")}</strong>

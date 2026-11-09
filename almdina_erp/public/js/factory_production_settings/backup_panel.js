@@ -47,24 +47,38 @@
             event.preventDefault();
             saveDbRestoreSettings();
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-row", event => {
+            if (event.target.closest("button, a, input, select, textarea, label, .aps-backup-row-actions")) {
+                return;
+            }
+            const operationId = String(event.currentTarget.dataset.operationId || "");
+            openDetails(operationId);
+        });
+        $body.on(`keydown${EVENT_NAMESPACE}`, ".aps-backup-row.is-clickable", event => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            if (event.target.closest("button, a, input, select, textarea, label, .aps-backup-row-actions")) {
+                return;
+            }
+            event.preventDefault();
+            const operationId = String(event.currentTarget.dataset.operationId || "");
+            openDetails(operationId);
+        });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-restore", event => {
             event.preventDefault();
+            event.stopPropagation();
             const operationId = String(event.currentTarget.dataset.operationId || "");
             const identifier = String(event.currentTarget.dataset.backupIdentifier || "");
             openRestore(operationId, identifier);
         });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-download", event => {
             event.preventDefault();
+            event.stopPropagation();
             const operationId = String(event.currentTarget.dataset.operationId || "");
             downloadBackup(operationId);
         });
-        $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-details", event => {
-            event.preventDefault();
-            const operationId = String(event.currentTarget.dataset.operationId || "");
-            openDetails(operationId);
-        });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-backup-delete", event => {
             event.preventDefault();
+            event.stopPropagation();
             const operationId = String(event.currentTarget.dataset.operationId || "");
             const identifier = String(event.currentTarget.dataset.backupIdentifier || "");
             const target = String(event.currentTarget.dataset.backupTarget || "");
