@@ -144,6 +144,13 @@
         ));
     }
 
+    function marqueeBlockedTarget(target) {
+        if (!target || typeof target.closest !== "function") return true;
+        return Boolean(target.closest(
+            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], .abe-float-dock, .abe-canvas-tools, button, input, textarea, select, a"
+        ));
+    }
+
     function leftOuterEdgeMidpoint(points) {
         if (!Array.isArray(points) || points.length < 2) return null;
         let best = null;
@@ -1272,6 +1279,31 @@
         }
     }
 
+    function patchMarqueeOverlay(host, rect) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        let node = world.querySelector("[data-abe-marquee]");
+        if (!rect || !(Number(rect.w) > 0 || Number(rect.h) > 0)) {
+            if (node) node.remove();
+            return;
+        }
+        if (!node) {
+            node = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            node.setAttribute("data-abe-marquee", "1");
+            node.setAttribute("class", "abe-marquee");
+            node.setAttribute("pointer-events", "none");
+            node.setAttribute("fill", "rgba(11, 95, 255, 0.12)");
+            node.setAttribute("stroke", "#0b5fff");
+            node.setAttribute("stroke-width", "1.25");
+            node.setAttribute("vector-effect", "non-scaling-stroke");
+            world.appendChild(node);
+        }
+        node.setAttribute("x", String(Number(rect.x) || 0));
+        node.setAttribute("y", String(Number(rect.y) || 0));
+        node.setAttribute("width", String(Math.max(0, Number(rect.w) || 0)));
+        node.setAttribute("height", String(Math.max(0, Number(rect.h) || 0)));
+    }
+
     function patchMeasureOverlay(host, lines, scale) {
         const world = host && host.querySelector(".abe-world");
         if (!world) return;
@@ -2148,7 +2180,13 @@
             );
         }
 
-        const suppressed = () => handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression();
+        const suppressed = () => {
+            if (handlers && handlers.consumeClickSuppression && handlers.consumeClickSuppression()) return true;
+            if (handlers && handlers.consumeMarqueeClickSuppression && handlers.consumeMarqueeClickSuppression()) {
+                return true;
+            }
+            return false;
+        };
 
         const angleInput = host.querySelector(".abe-angle-input");
         if (angleInput && selectedSessionPiece) {
@@ -2277,11 +2315,36 @@
                 if (handlers.beginMeasureGesture(event)) {
                     stage.setPointerCapture(event.pointerId);
                 }
+                return;
+            }
+            if (
+                event.button === 0
+                && handlers
+                && handlers.beginMarqueeGesture
+                && !marqueeBlockedTarget(event.target)
+            ) {
+                if (handlers.beginMarqueeGesture(event)) {
+                    // Capture only after marquee activates (real drag); pending empty
+                    // clicks are settled by marquee finish + click suppression.
+                }
             }
         });
         stage.addEventListener("pointermove", (event) => {
             if (handlers && handlers.onCanvasPointerMove) handlers.onCanvasPointerMove(event);
             if (handlers && handlers.onStagePointerMove) handlers.onStagePointerMove(event);
+            if (
+                !ignoreBackgroundClick
+                && handlers
+                && handlers.isMarqueeSelecting
+                && handlers.isMarqueeSelecting()
+            ) {
+                ignoreBackgroundClick = true;
+                try {
+                    stage.setPointerCapture(event.pointerId);
+                } catch (err) {
+                    /* ignore */
+                }
+            }
             if (!panning) return;
             const delta = clientDeltaToLocal(stage, event.clientX - lastX, event.clientY - lastY);
             lastX = event.clientX;
@@ -2307,6 +2370,7 @@
         if (Array.isArray(host.__abeMeasureLines) && host.__abeMeasureLines.length) {
             patchMeasureOverlay(host, host.__abeMeasureLines, scale);
         }
+        patchMarqueeOverlay(host, null);
 
         metrics.contentWidth = contentW;
         metrics.contentHeight = contentH;
@@ -2316,6 +2380,7 @@
             metrics,
             patchDragPreview: (preview) => patchDragPreview(host, preview),
             patchMeasureOverlay: (lines) => patchMeasureOverlay(host, lines, scale),
+            patchMarqueeOverlay: (rect) => patchMarqueeOverlay(host, rect),
         };
     }
 
@@ -2424,7 +2489,9 @@
         SCALE_MAX,
         patchDragPreview,
         patchMeasureOverlay,
+        patchMarqueeOverlay,
         clickTargetKeepsSelection,
+        marqueeBlockedTarget,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,
         SCENE_PAD_PX,

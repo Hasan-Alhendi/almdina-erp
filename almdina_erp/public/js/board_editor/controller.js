@@ -37,6 +37,7 @@
         const createMoveInteraction = window.AlmdinaBoardEditor.createMoveInteraction;
         const createRotationInteraction = window.AlmdinaBoardEditor.createRotationInteraction;
         const createMeasureInteraction = window.AlmdinaBoardEditor.createMeasureInteraction;
+        const createMarqueeInteraction = window.AlmdinaBoardEditor.createMarqueeInteraction;
         const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
         const TransformGeometry = window.AlmdinaBoardEditor.TransformGeometry;
         const MoveGeometry = window.AlmdinaBoardEditor.MoveGeometry;
@@ -57,6 +58,7 @@
         let moveInteraction = null;
         let rotationInteraction = null;
         let measureInteraction = null;
+        let marqueeInteraction = null;
         let lastCanvasApi = null;
         let beforeUnloadHandler = null;
         let routeGuardOriginal = null;
@@ -1137,6 +1139,7 @@
                     isDragActive: () => Boolean(
                         (moveInteraction && moveInteraction.isActive && moveInteraction.isActive())
                         || (rotationInteraction && rotationInteraction.isActive && rotationInteraction.isActive())
+                        || (marqueeInteraction && marqueeInteraction.isSelecting && marqueeInteraction.isSelecting())
                     ),
                     onOverlay: (lines) => {
                         const host = ensureShell().querySelector("[data-abe-canvas]");
@@ -1158,12 +1161,45 @@
                     },
                 })
                 : null;
+            marqueeInteraction = typeof createMarqueeInteraction === "function"
+                ? createMarqueeInteraction({
+                    store,
+                    getStageEl: () => ensureShell().querySelector("[data-abe-stage]"),
+                    getSvgEl: () => ensureShell().querySelector(".abe-svg"),
+                    getCanvasHost: () => ensureShell().querySelector("[data-abe-canvas]"),
+                    getWorldMetrics: () => {
+                        const host = ensureShell().querySelector("[data-abe-canvas]");
+                        return (host && host.__abeWorldMetrics) || (lastCanvasApi && lastCanvasApi.metrics) || null;
+                    },
+                    isPanKey: () => spaceHeld,
+                    isBlocked: () => Boolean(
+                        (store && store.snapshot().measureToolActive)
+                        || (moveInteraction && moveInteraction.isActive && moveInteraction.isActive())
+                        || (rotationInteraction && rotationInteraction.isActive && rotationInteraction.isActive())
+                        || (measureInteraction && measureInteraction.isToolGestureActive
+                            && measureInteraction.isToolGestureActive())
+                    ),
+                    onSelectKeys: (keys) => {
+                        if (!store || typeof store.selectPieces !== "function") return;
+                        store.selectPieces(keys, { mode: "replace", expandSheets: true });
+                    },
+                    onEmptyClick: () => {
+                        if (!store) return;
+                        if (typeof store.selectPieces === "function") {
+                            store.selectPieces([], { mode: "replace" });
+                            return;
+                        }
+                        store.selectPiece(null, { pieceKey: null, elementId: null });
+                    },
+                })
+                : null;
         }
 
         function finishActiveGesture() {
             if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
             if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
             if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
+            if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
             if (store) {
                 store.setDragPreview(null);
                 store.setDropMessage("");
@@ -1528,6 +1564,7 @@
                             measureInteraction.clearAltOverlay();
                             if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
                             if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
+                            if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
                         } else {
                             measureInteraction.clearToolLine();
                         }
@@ -1536,10 +1573,20 @@
                 beginMeasureGesture: (event) => (
                     measureInteraction && measureInteraction.beginTool(event)
                 ),
+                beginMarqueeGesture: (event) => {
+                    if (!marqueeInteraction) return false;
+                    if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
+                    if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
+                    return marqueeInteraction.begin(event);
+                },
+                isMarqueeSelecting: () => Boolean(
+                    marqueeInteraction && marqueeInteraction.isSelecting && marqueeInteraction.isSelecting()
+                ),
                 beginPieceGesture: (pieceKey, event, meta) => {
                     if (store && store.snapshot().measureToolActive) {
                         return measureInteraction && measureInteraction.beginTool(event);
                     }
+                    if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
                     if (rotationInteraction && rotationInteraction.isActive()) return false;
                     return moveInteraction && moveInteraction.beginPieceGesture(pieceKey, event, meta);
                 },
@@ -1547,10 +1594,12 @@
                     if (store && store.snapshot().measureToolActive) {
                         return measureInteraction && measureInteraction.beginTool(event);
                     }
+                    if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
                     return moveInteraction && moveInteraction.beginBoardGesture(sheetNo, event);
                 },
                 beginRotateGesture: (pieceKey, event) => {
                     if (store && store.snapshot().measureToolActive) return false;
+                    if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
                     if (moveInteraction && moveInteraction.onPanIntent) moveInteraction.onPanIntent();
                     return rotationInteraction && rotationInteraction.beginHandleGesture(pieceKey, event);
                 },
@@ -1567,6 +1616,10 @@
                     const wasAltHeld = altHeld;
                     if (event && typeof event.altKey === "boolean") {
                         altHeld = Boolean(event.altKey);
+                    }
+                    if (marqueeInteraction && marqueeInteraction.isActive && marqueeInteraction.isActive()) {
+                        marqueeInteraction.onPointerMove(event);
+                        return;
                     }
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
@@ -1588,6 +1641,10 @@
                     if (moveInteraction) moveInteraction.onPointerMove(event);
                 },
                 onStagePointerUp: (event) => {
+                    if (marqueeInteraction && marqueeInteraction.isActive && marqueeInteraction.isActive()) {
+                        marqueeInteraction.onPointerUp(event);
+                        return;
+                    }
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
                         || (store && store.snapshot().measureToolActive)
@@ -1602,17 +1659,22 @@
                     if (moveInteraction) moveInteraction.onPointerUp(event);
                 },
                 onStagePointerCancel: (event) => {
+                    if (marqueeInteraction) marqueeInteraction.onPointerCancel(event);
                     if (measureInteraction) measureInteraction.onPointerCancel(event);
                     if (rotationInteraction) rotationInteraction.onPointerCancel(event);
                     if (moveInteraction) moveInteraction.onPointerCancel(event);
                 },
                 onPanIntent: () => {
+                    if (marqueeInteraction && marqueeInteraction.cancel) marqueeInteraction.cancel();
                     if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
                     if (rotationInteraction) rotationInteraction.cancel();
                     if (moveInteraction) moveInteraction.onPanIntent();
                 },
                 consumeClickSuppression: () => (
                     moveInteraction ? moveInteraction.consumeClickSuppression() : false
+                ),
+                consumeMarqueeClickSuppression: () => (
+                    marqueeInteraction ? marqueeInteraction.consumeClickSuppression() : false
                 ),
                 zoom: (factor) => zoomByFactor(factor, zoomFocalClient(null)),
                 onBack: () => backToOrder(activeOrderName),
