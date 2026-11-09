@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from pathlib import Path
 
@@ -172,3 +173,49 @@ def test_settings_response_never_contains_secret_values() -> None:
     assert privileged["ssh_private_key_configured"] is True
     assert "ssh_host" not in unprivileged
     assert "ssh_password_configured" not in unprivileged
+
+@pytest.mark.parametrize(
+    ("job_args", "blocked"),
+    [
+        ([], False),
+        ([{"site": "another.local", "method": "other.task"}], False),
+        ([{"site": "almadina-2.local", "method": service._RESTORE_JOB_METHOD}], False),
+        ([{"site": "almadina-2.local", "method": "other.task"}], True),
+        ([{}], True),
+    ],
+)
+def test_restore_waits_for_site_jobs_without_new_frappe_helper(
+    monkeypatch: pytest.MonkeyPatch, job_args: list[dict[str, str]], blocked: bool,
+) -> None:
+    background_jobs = ModuleType("frappe.utils.background_jobs")
+    background_jobs.get_queue_list = lambda: ["long"]
+    background_jobs.get_queue = lambda queue: queue
+    background_jobs.get_running_jobs_in_queue = lambda queue: [
+        SimpleNamespace(kwargs=kwargs) for kwargs in job_args
+    ]
+    monkeypatch.setitem(sys.modules, "frappe.utils.background_jobs", background_jobs)
+    monkeypatch.setattr(service.frappe, "local", SimpleNamespace(site="almadina-2.local"), raising=False)
+    monkeypatch.setattr(service.time, "sleep", lambda _seconds: None)
+
+    if blocked:
+        with pytest.raises(ValueError, match="restore_jobs_busy"):
+            service._wait_for_site_jobs()
+    else:
+        service._wait_for_site_jobs()
+
+
+def test_restore_blocks_unreadable_job_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    class UnreadableJob:
+        @property
+        def kwargs(self) -> dict[str, str]:
+            raise RuntimeError("cannot decode queued job")
+
+    background_jobs = ModuleType("frappe.utils.background_jobs")
+    background_jobs.get_queue_list = lambda: ["long"]
+    background_jobs.get_queue = lambda queue: queue
+    background_jobs.get_running_jobs_in_queue = lambda queue: [UnreadableJob()]
+    monkeypatch.setitem(sys.modules, "frappe.utils.background_jobs", background_jobs)
+    monkeypatch.setattr(service.frappe, "local", SimpleNamespace(site="almadina-2.local"), raising=False)
+
+    with pytest.raises(ValueError, match="restore_jobs_busy"):
+        service._wait_for_site_jobs()
