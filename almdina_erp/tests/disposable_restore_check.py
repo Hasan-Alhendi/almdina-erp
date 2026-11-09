@@ -18,7 +18,8 @@ def _case_path() -> Path:
 
 
 def _require_ci_site() -> None:
-    if os.environ.get("CI") != "true" or not frappe.conf.get("allow_tests"):
+    if (os.environ.get("CI") != "true" or not frappe.conf.get("allow_tests")
+            or frappe.local.site != os.environ.get("ALMADINA_DISPOSABLE_RESTORE_SITE")):
         raise RuntimeError("Destructive restore check is restricted to a test-enabled CI site.")
 
 
