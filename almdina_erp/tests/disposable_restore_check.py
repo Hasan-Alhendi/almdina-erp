@@ -27,6 +27,9 @@ def begin() -> None:
     _require_ci_site()
     if _case_path().exists():
         raise RuntimeError("Restore check already started on this site.")
+    from frappe.utils.password import get_encryption_key
+
+    get_encryption_key()
 
     note = frappe.get_doc({"doctype": "Note", "title": "Backup restore CI check", "content": "before"})
     note.insert(ignore_permissions=True)
