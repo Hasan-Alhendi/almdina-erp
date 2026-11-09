@@ -27,6 +27,13 @@ def test_stopped_runner_is_not_reported_as_running(tmp_path: Path, monkeypatch: 
         restore_state.advance(tmp_path, "other", "COMPLETED")
 
 
+def test_worker_handoff_does_not_mark_the_starting_runner_as_dead(tmp_path: Path) -> None:
+    restore_state.claim(tmp_path, "site.local", "one")
+    restore_state.advance(tmp_path, "one", "PREFLIGHT", runner_pid=99999999)
+    restore_state.advance(tmp_path, "one", "SAFETY_BACKUP", runner_pid=0)
+    assert restore_state.public_status(tmp_path, "site.local")["phase"] == "SAFETY_BACKUP"
+
+
 def test_stale_preparation_requires_intervention(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     restore_state.claim(tmp_path, "site.local", "one")
     future = time.time() + restore_state.QUEUE_STALE_SECONDS + 1

@@ -571,6 +571,7 @@ def prepare_restore_job(operation_id: str) -> None:
             safety_operation_id=safety_operation_id,
         )
         frappe.db.commit()
+        restore_state.advance(_restore_site_path(), operation_id, "SAFETY_BACKUP", runner_pid=0)
         launch_restore_runner(request_path)
     except Exception as exc:
         if safety_operation_id and not safety_completed:

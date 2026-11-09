@@ -72,7 +72,7 @@ def claim(site_path: Path, site: str, operation_id: str) -> None:
                       "phase": "QUEUED", "updated_at": time.time()})
 
 
-def advance(site_path: Path, operation_id: str, phase: str, *, runner_pid: int = 0) -> None:
+def advance(site_path: Path, operation_id: str, phase: str, *, runner_pid: int | None = None) -> None:
     if phase not in PHASES:
         raise ValueError("Unknown restore phase.")
     with _locked(site_path) as path:
@@ -80,7 +80,7 @@ def advance(site_path: Path, operation_id: str, phase: str, *, runner_pid: int =
         if not state or state.get("operation_id") != operation_id:
             raise ValueError("Restore status belongs to another operation.")
         state.update(phase=phase, updated_at=time.time())
-        if runner_pid:
+        if runner_pid is not None:
             state["runner_pid"] = runner_pid
         _write(path, state)
 
