@@ -217,6 +217,13 @@ def iter_program_xy_mm(program: Mapping[str, Any]) -> list[tuple[float, float]]:
                 if not isinstance(point, Sequence) or len(point) < 2:
                     continue
                 points.append((float(point[0]), float(point[1])))
+            home = path.get("home")
+            if (
+                isinstance(home, Mapping)
+                and home.get("x_mm") is not None
+                and home.get("y_mm") is not None
+            ):
+                points.append((float(home.get("x_mm")), float(home.get("y_mm"))))
     return points
 
 
@@ -281,6 +288,19 @@ def apply_placement_to_program(
             cloned = dict(path)
             cloned["points"] = points
             cloned["motions"] = motions
+            home = cloned.get("home")
+            if (
+                isinstance(home, Mapping)
+                and home.get("x_mm") is not None
+                and home.get("y_mm") is not None
+            ):
+                home_x, home_y = sheet_to_machine_xy(
+                    float(home.get("x_mm")),
+                    float(home.get("y_mm")),
+                    offset_left_cm=left,
+                    offset_bottom_cm=bottom,
+                )
+                cloned["home"] = {**dict(home), "x_mm": home_x, "y_mm": home_y}
             toolpaths.append(cloned)
         cloned_op = dict(operation)
         cloned_op["toolpaths"] = toolpaths

@@ -13,6 +13,7 @@ SHORTCUT_ICONS_BY_LABEL: dict[str, str] = {
     "إدارة الصلاحيات": "lock",
     "إدارة المستخدمين": "hr",
     "إدارة مسارات الإنتاج": "branch",
+    "إدارة الملفات التشغيلية": "tool",
     "طلبات قص الدرف": "clipboard",
     "مراحل الإنتاج": "organization",
     "القطع التعويضية": "duplicate",

@@ -3845,3 +3845,85 @@ Backup encryption key does not match this site.,مفتاح تشفير النسخ
 Backup upload was interrupted.,انقطع رفع النسخة الاحتياطية.
 Backup package validation failed.,فشل التحقق من حزمة النسخة الاحتياطية.
 Imported backup is no longer compatible with this site.,النسخة المستوردة لم تعد متوافقة مع هذا الموقع.
+Edit Tool,تعديل الريشة
+Tool Type,نوع الريشة
+Tool Units,وحدات الريشة
+Rate Units,وحدات السرعة
+Diameter (D),القطر (D)
+Stepdown,عمق التمريرة
+Final Tool Offset,إزاحة الريشة النهائية
+Stepover size,عرض التداخل
+Stepover percent of D,نسبة التداخل من القطر
+Spindle Speed (rpm),سرعة الدوران (لفة/د)
+Feed Rate (mm/sec),سرعة التغذية (مم/ث)
+Plunge Rate (mm/sec),سرعة النزول (مم/ث)
+Already used,مستخدم مسبقًا
+Sheet Perimeter,محيط اللوح
+Profiles,البروفايلات
+Final Depth,العمق النهائي
+Safe Z,ارتفاع الأمان
+No profiles yet.,لا توجد بروفايلات بعد.
+Profile name,اسم البروفايل
+Tool,الريشة
+Choose,اختر
+Vector Association,ربط المتجهات
+Vectors,المتجهات
+Selected Vectors,المتجهات المحددة
+Profile,البروفايل
+Toolpath name,اسم مسار التشغيل
+Calculate Now,احسب الآن
+Toolpaths,مسارات التشغيل
+Sample machine profile,عينة تعريف الماكينة
+"Stored sample used by the NC post processor. It is not a per-sheet profile, and it is not approved for production.",عينة مخزنة يستخدمها مولد ملف NC. ليست بروفايل لوح، وليست معتمدة للإنتاج.
+Edit sample machine profile,تعديل عينة تعريف الماكينة
+Operational file management,إدارة الملفات التشغيلية
+Ball Nose tools and operational file settings,ريش Ball Nose وإعدادات الملفات التشغيلية
+Loading operational file settings,جارٍ تحميل إعدادات الملفات التشغيلية
+Could not load operational file settings.,تعذر تحميل إعدادات الملفات التشغيلية.
+Only a Ball Nose tool can be created here.,يمكن إنشاء ريشة Ball Nose فقط من هنا.
+Tool units must be mm.,وحدات الريشة يجب أن تكون مم.
+Rate units must be mm/sec.,وحدات السرعة يجب أن تكون مم/ث.
+Enter the tool description.,أدخل وصف الريشة.
+Tool number must be a whole number such as 9.,رقم الريشة يجب أن يكون عددًا صحيحًا مثل 9.
+Diameter must be a positive number of millimetres.,القطر يجب أن يكون عددًا موجبًا بالمليمتر.
+Stepdown must be a positive number of millimetres.,عمق التمريرة يجب أن يكون عددًا موجبًا بالمليمتر.
+Final tool offset must be zero or a positive number of millimetres.,إزاحة الريشة النهائية يجب أن تكون صفرًا أو عددًا موجبًا بالمليمتر.
+Enter the stepover size and its percent of diameter.,أدخل عرض التداخل ونسبته من القطر.
+Spindle speed must be a positive whole number of RPM.,سرعة الدوران يجب أن تكون عددًا صحيحًا موجبًا من اللفات في الدقيقة.
+Feed rate must be a positive number of millimetres per second.,سرعة التغذية يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
+Plunge rate must be a positive number of millimetres per second.,سرعة النزول يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
+The tool notes are too long.,ملاحظات الريشة طويلة جدًا.
+The tool description cannot be changed.,لا يمكن تغيير وصف الريشة.
+A tool with this description already exists.,توجد ريشة بهذا الوصف.
+The CNC tool is not valid.,تعريف الريشة غير صالح.
+Choose a tool type.,اختر نوع الريشة.
+Stepdown must be a positive number of millimetres within the supported range.,عمق التمريرة يجب أن يكون عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Final tool offset must be zero or a positive number of millimetres within the supported range.,إزاحة الريشة النهائية يجب أن تكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Enter a profile name.,أدخل اسم البروفايل.
+The profile is not valid.,البروفايل غير صالح.
+Each profile needs its own name.,كل بروفايل يحتاج اسمًا خاصًا به.
+The profile identity is not valid.,هوية البروفايل غير صالحة.
+The selected profile does not exist.,البروفايل المختار غير موجود.
+Choose a tool for this profile.,اختر ريشة لهذا البروفايل.
+Safe Z must be zero or a positive number of millimetres within the supported range.,ارتفاع الأمان يجب أن يكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+Home X must be a finite number of millimetres.,إحداثي البداية X يجب أن يكون عددًا محدودًا بالمليمتر.
+Home Y must be a finite number of millimetres.,إحداثي البداية Y يجب أن يكون عددًا محدودًا بالمليمتر.
+Home Z must be zero or a positive number of millimetres within the supported range.,إحداثي البداية Z يجب أن يكون صفرًا أو عددًا موجبًا بالمليمتر ضمن المدى المدعوم.
+The vector association is not valid.,ربط المتجهات غير صالح.
+Each vector association needs its own identity.,كل ربط متجهات يحتاج هوية خاصة به.
+The vector association identity is not valid.,هوية ربط المتجهات غير صالحة.
+The vector association does not exist.,ربط المتجهات غير موجود.
+"Choose a layer, selected vectors, or the sheet perimeter.",اختر طبقة أو متجهات محددة أو محيط اللوح.
+That vector is not a machinable path on this sheet.,هذا المتجه ليس مسار تشغيل على هذا اللوح.
+That vector or layer is already assigned.,هذا المتجه أو هذه الطبقة مرتبطة مسبقًا.
+That layer has no machinable vectors on this sheet.,هذه الطبقة لا تحتوي متجهات قابلة للتشغيل على هذا اللوح.
+Sheet Perimeter is available only while Connected Perimeter is enabled.,محيط اللوح يظهر فقط عند تفعيل المحيط المتصل.
+Enter a toolpath name.,أدخل اسم مسار التشغيل.
+A calculated toolpath already uses that name.,يوجد مسار تشغيل محسوب بهذا الاسم.
+That calculated toolpath already exists.,مسار التشغيل المحسوب موجود مسبقًا.
+The toolpath identity is not valid.,هوية مسار التشغيل غير صالحة.
+Ball Nose,ريشة كروية
+Save tool,حفظ الريشة
+Home position,نقطة البداية
+Edit profile,تعديل البروفايل
+Tool copy,نسخة الريشة

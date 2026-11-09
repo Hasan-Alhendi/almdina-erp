@@ -631,3 +631,24 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
         max-inline-size: min(260px, 100%);
     }
 }
+.dco-artcam {
+    display: grid;
+    gap: 16px;
+    margin-block-start: 16px;
+}
+.dco-artcam-block {
+    display: grid;
+    gap: 8px;
+}
+.dco-artcam form {
+    display: grid;
+    gap: 8px;
+}
+.dco-artcam label,
+.dco-artcam fieldset {
+    display: grid;
+    gap: 4px;
+}
+.dco-artcam option:disabled {
+    color: var(--text-muted, #6b7280);
+}

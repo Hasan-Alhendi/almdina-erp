@@ -236,6 +236,9 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                         "tool_preset",
                     ),
                 ),
+                "machining_profiles": _object_list(getattr(document, "machining_profiles_json", None)),
+                "vector_associations": _object_list(getattr(document, "vector_associations_json", None)),
+                "toolpath_snapshots": _object_list(getattr(document, "toolpath_snapshots_json", None)),
             }
         )
     return rows
@@ -292,6 +295,29 @@ def _sequence_list(raw: Any) -> list[str]:
             return [str(item) for item in parsed if str(item or "").strip()]
         raise frappe.ValidationError("Cut Path Sequence must be a JSON list.")
     raise frappe.ValidationError("Cut Path Sequence must be a JSON list.")
+
+
+def _object_list(raw: Any) -> list[Any]:
+    """Read a JSON object-list field. Missing values stay empty for old files."""
+
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, list):
+        return list(raw)
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return []
+        parsed = json.loads(text)
+        if isinstance(parsed, str):
+            parsed = json.loads(parsed) if parsed.strip() else []
+        if isinstance(parsed, list):
+            return list(parsed)
+    raise frappe.ValidationError("CNC machining JSON must be a list.")
+
+
+def _object_list_json(raw: Any) -> str:
+    return json.dumps(_object_list(raw), ensure_ascii=True, separators=(",", ":"))
 
 
 def _sequence_json(raw: Any) -> str:
@@ -412,6 +438,16 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
             "plunge_rate_mm_min",
             "pass_depth_mm",
             "enabled",
+            "tool_type",
+            "tool_units",
+            "rate_units",
+            "notes",
+            "stepdown_mm",
+            "final_tool_offset_mm",
+            "stepover_size_mm",
+            "stepover_percent",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
         ],
         limit_page_length=0,
         ignore_permissions=True,
@@ -428,6 +464,18 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
             "plunge_rate_mm_min": row.plunge_rate_mm_min,
             "pass_depth_mm": None if not row.pass_depth_mm else row.pass_depth_mm,
             "enabled": bool(cint(row.enabled)),
+            "tool_type": row.tool_type or "",
+            "tool_units": row.tool_units or "",
+            "rate_units": row.rate_units or "",
+            "notes": row.notes or "",
+            "description": row.tool_name or "",
+            "diameter_mm": row.tool_diameter_mm,
+            "stepdown_mm": row.stepdown_mm,
+            "final_tool_offset_mm": row.final_tool_offset_mm,
+            "stepover_size_mm": row.stepover_size_mm,
+            "stepover_percent": row.stepover_percent,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
         }
         for row in rows
     }
@@ -565,6 +613,24 @@ def sync_status(name: str, status: str) -> None:
     )
 
 
+def update_machining_json(
+    name: str,
+    *,
+    profiles: Sequence[Mapping[str, Any]],
+    associations: Sequence[Mapping[str, Any]],
+    snapshots: Sequence[Mapping[str, Any]],
+) -> None:
+    """Replace machining JSON without rewriting operations, paths, or NC history."""
+
+    document = _without_permission_check(lambda: frappe.get_doc("CNC Operational File", name))
+    document.machining_profiles_json = _object_list_json(list(profiles))
+    document.vector_associations_json = _object_list_json(list(associations))
+    document.toolpath_snapshots_json = _object_list_json(list(snapshots))
+    document.flags.ignore_permissions = True
+    document.flags.ignore_links = True
+    document.save()
+
+
 def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
     if existing_name:
         document = _without_permission_check(
@@ -615,6 +681,13 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
                 "tool_preset": row.get("tool_preset") or "",
             },
         )
+    for field in (
+        "machining_profiles_json",
+        "vector_associations_json",
+        "toolpath_snapshots_json",
+    ):
+        if field in payload:
+            document.set(field, _object_list_json(payload.get(field)))
     document.generation_snapshot_json = kept_snapshot
     document.generated_file = kept_file
     document.generated_by = kept_by
@@ -642,6 +715,7 @@ __all__ = [
     "read_simulation_nc_bytes",
     "record_nc_generation",
     "save_sheet",
+    "update_machining_json",
     "saved_operational_files",
     "sync_status",
 ]

@@ -15,6 +15,12 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from almdina_erp.almdina_erp.application.cnc.machining_setup import (
+    accept_sheet_machining,
+    calculation_preset_injection,
+    freeze_calculated_toolpath,
+    remember_toolpath_on_association,
+)
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import _kerf_mm, compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
@@ -28,6 +34,10 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
     operational_board_layout,
     prepare_sheet_settings,
     resolve_sheet_placement,
+)
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    MachiningSetupError,
+    overlay_frozen_toolpaths,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
@@ -62,6 +72,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     save_sheet,
     saved_operational_files,
     sync_status,
+    update_machining_json,
 )
 
 
@@ -84,6 +95,38 @@ _MESSAGES = {
     "preset_disabled": "The selected CNC tool preset is disabled.",
     "tool_identity_conflict": "One board file must keep the same physical tool number.",
     "tool_diameter_conflict": "The same tool cannot use two diameters in one operational file.",
+    "tool_type_invalid": "Choose a tool type.",
+    "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
+    "tool_units_invalid": "Tool units must be mm.",
+    "rate_units_invalid": "Rate units must be mm/sec.",
+    "description_required": "Enter the tool description.",
+    "notes_invalid": "The tool notes are too long.",
+    "stepdown_invalid": "Stepdown must be a positive number of millimetres within the supported range.",
+    "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres within the supported range.",
+    "stepover_invalid": "Enter the stepover size and its percent of diameter.",
+    "profile_name_required": "Enter a profile name.",
+    "profile_invalid": "The profile is not valid.",
+    "profile_duplicate": "Each profile needs its own name.",
+    "profile_id_invalid": "The profile identity is not valid.",
+    "profile_not_found": "The selected profile does not exist.",
+    "tool_preset_required": "Choose a tool for this profile.",
+    "safe_z_invalid": "Safe Z must be zero or a positive number of millimetres within the supported range.",
+    "home_x_invalid": "Home X must be a finite number of millimetres.",
+    "home_y_invalid": "Home Y must be a finite number of millimetres.",
+    "home_z_invalid": "Home Z must be zero or a positive number of millimetres within the supported range.",
+    "association_invalid": "The vector association is not valid.",
+    "association_duplicate": "Each vector association needs its own identity.",
+    "association_id_invalid": "The vector association identity is not valid.",
+    "association_not_found": "The vector association does not exist.",
+    "selection_invalid": "Choose a layer, selected vectors, or the sheet perimeter.",
+    "vector_not_machinable": "That vector is not a machinable path on this sheet.",
+    "vector_already_assigned": "That vector or layer is already assigned.",
+    "layer_not_machinable": "That layer has no machinable vectors on this sheet.",
+    "sheet_perimeter_unavailable": "Sheet Perimeter is available only while Connected Perimeter is enabled.",
+    "toolpath_name_required": "Enter a toolpath name.",
+    "toolpath_name_duplicate": "A calculated toolpath already uses that name.",
+    "toolpath_duplicate": "That calculated toolpath already exists.",
+    "toolpath_id_invalid": "The toolpath identity is not valid.",
     "tool_number_invalid": "Tool number must look like T9.",
     "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
     "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
@@ -250,6 +293,17 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
     return _workspace_for(order, can_prepare=can_prepare)
 
 
+def _json_list(raw: Any) -> list[Any]:
+    if raw is None:
+        return []
+    parsed = frappe.parse_json(raw) if isinstance(raw, str) else raw
+    if isinstance(parsed, str):
+        parsed = frappe.parse_json(parsed) if parsed.strip() else []
+    if not isinstance(parsed, list):
+        frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    return list(parsed)
+
+
 def _parse_optional_sequence(raw: str | list[Any] | None) -> list[str] | None:
     """None/empty mean 'use default'. A non-empty list is an explicit custom order."""
 
@@ -280,6 +334,8 @@ def save_cnc_operational_sheet(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    machining_profiles: str | list[Any] | None = None,
+    vector_associations: str | list[Any] | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -341,10 +397,125 @@ def save_cnc_operational_sheet(
             plan_snapshot=approved_plan_snapshot(order),
             require_cnc_machine=False,
         )
-    except (OperationalFileError, ToolPresetError, PlacementError) as exc:
+        if machining_profiles is not None or vector_associations is not None:
+            profiles, associations = accept_sheet_machining(
+                paths=list(prepared.get("paths") or []),
+                profiles=_json_list(machining_profiles)
+                if machining_profiles is not None
+                else list((existing or {}).get("machining_profiles") or []),
+                associations=_json_list(vector_associations)
+                if vector_associations is not None
+                else list((existing or {}).get("vector_associations") or []),
+                known_tools=known_tool_presets(),
+                snapshots=list((existing or {}).get("toolpath_snapshots") or []),
+            )
+            prepared["machining_profiles_json"] = profiles
+            prepared["vector_associations_json"] = associations
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
     save_sheet(existing_name, prepared)
+    return _workspace_for(order, can_prepare=True)
+
+
+@frappe.whitelist()
+def calculate_cnc_association_toolpath(
+    order_name: str,
+    sheet_no: int | str,
+    association_id: str,
+    toolpath_name: str,
+    operation_presets: str | dict[str, Any] | None = None,
+    path_overrides: str | dict[str, Any] | None = None,
+    operation_order: str | list[Any] | None = None,
+    cut_path_early_confirmed: int | str | bool = 0,
+    viewed_plan_token: str | None = None,
+    operation_sources: str | dict[str, Any] | None = None,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: str | list[Any] | None = None,
+    perimeter_cut_early_confirmed: int | str | bool | None = None,
+    cnc_machine: str | None = None,
+    offset_left_cm: float | int | str | None = None,
+    offset_bottom_cm: float | int | str | None = None,
+    machining_profiles: str | list[Any] | None = None,
+    vector_associations: str | list[Any] | None = None,
+) -> dict[str, Any]:
+    """Calculate one named toolpath from the association copy and freeze it."""
+
+    save_cnc_operational_sheet(
+        order_name,
+        sheet_no,
+        operation_presets,
+        path_overrides,
+        operation_order,
+        cut_path_early_confirmed,
+        viewed_plan_token,
+        operation_sources,
+        perimeter_join_mode,
+        cut_path_sequence,
+        perimeter_cut_early_confirmed,
+        cnc_machine,
+        offset_left_cm,
+        offset_bottom_cm,
+        machining_profiles,
+        vector_associations,
+    )
+    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
+    plan = approved_plan_ref(order)
+    saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    if not saved or not saved.get("name"):
+        frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
+    associations = list(saved.get("vector_associations") or [])
+    association = next(
+        (
+            row
+            for row in associations
+            if str(row.get("association_id") or "") == str(association_id or "").strip()
+        ),
+        None,
+    )
+    if association is None:
+        frappe.throw(_message("association_not_found"), frappe.ValidationError)
+    (
+        operations,
+        paths,
+        order_keys,
+        confirmed,
+        _sources,
+        join_mode,
+        sequence,
+        perimeter_early,
+    ) = _settings_from_saved(saved, factory_operation_defaults())
+    try:
+        known, overrides = calculation_preset_injection(association, known_tool_presets())
+        _plan, program, _presets = _compile_authorized_program(
+            order,
+            sheet_no=cint(sheet_no),
+            operation_presets=operations,
+            path_overrides=paths,
+            operation_order=order_keys,
+            cut_path_early_confirmed=confirmed,
+            viewed_plan_token=viewed_plan_token,
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
+            known_presets=known,
+            extra_path_overrides=overrides,
+        )
+        snapshots = freeze_calculated_toolpath(
+            association=association,
+            toolpath_name=toolpath_name,
+            program=program,
+            snapshots=list(saved.get("toolpath_snapshots") or []),
+        )
+        stored_associations = remember_toolpath_on_association(associations, snapshots)
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+        frappe.throw(_message(exc.code), frappe.ValidationError)
+    update_machining_json(
+        str(saved.get("name") or ""),
+        profiles=list(saved.get("machining_profiles") or []),
+        associations=stored_associations,
+        snapshots=snapshots,
+    )
     return _workspace_for(order, can_prepare=True)
 
 
@@ -468,19 +639,23 @@ def _compile_authorized_program(
     perimeter_join_mode: str = "separate",
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
+    known_presets: Mapping[str, Mapping[str, Any]] | None = None,
+    extra_path_overrides: Mapping[str, str] | None = None,
 ) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     plan = approved_plan_ref(order)
     if plan is None:
         raise OperationalFileError("no_approved_plan")
     assert_viewed_plan_token(plan, viewed_plan_token)
     mode, uploaded = _manufacturing_inputs(order, int(sheet_no))
-    presets = known_tool_presets()
+    presets = dict(known_presets or known_tool_presets())
+    merged_paths = {str(key): value for key, value in path_overrides.items()}
+    merged_paths.update({str(key): value for key, value in dict(extra_path_overrides or {}).items()})
     payload = compile_sheet_program(
         sheet_no=int(sheet_no),
         pieces=placed_piece_views(order),
         snapshot=approved_plan_snapshot(order),
         operation_presets={str(key): value for key, value in operation_presets.items()},
-        path_overrides={str(key): value for key, value in path_overrides.items()},
+        path_overrides=merged_paths,
         operation_order=[str(item) for item in operation_order],
         known_presets=presets,
         cut_path_early_confirmed=bool(cut_path_early_confirmed),
@@ -646,6 +821,9 @@ def generate_cnc_sheet_nc(
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
         )
+        frozen = list((saved or {}).get("toolpath_snapshots") or [])
+        if frozen:
+            program = overlay_frozen_toolpaths(program, frozen)
         machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])
         if str(saved.get("settings_fingerprint") or "") != fingerprint:
@@ -801,6 +979,7 @@ __all__ = [
     "download_cnc_sheet_nc",
     "generate_cnc_sheet_nc",
     "get_cnc_operational_workspace",
+    "calculate_cnc_association_toolpath",
     "get_cnc_sheet_program",
     "save_cnc_operational_sheet",
 ]

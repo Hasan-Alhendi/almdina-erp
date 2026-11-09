@@ -23,6 +23,7 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "إدارة الصلاحيات": Surface.PERMISSIONS,
     "إدارة المستخدمين": Surface.WORKFORCE,
     "إدارة مسارات الإنتاج": Surface.FACTORY_MASTER_DATA,
+    "إدارة الملفات التشغيلية": Surface.FACTORY_SETTINGS,
     "طلبات قص الدرف": Surface.ORDERS,
     "مراحل الإنتاج": Surface.PRODUCTION_STAGES,
     # v16 sidebar/desktop records can expose link_to instead of the translated label.
@@ -37,6 +38,7 @@ WORKSPACE_ENTRY_SURFACES: dict[str, str] = {
     "Edge Banding Type": Surface.EDGE_BANDING_TYPES,
     "Almdina ERP Settings": Surface.FACTORY_SETTINGS,
     "factory-production-settings": Surface.FACTORY_SETTINGS,
+    "cnc-operational-files": Surface.FACTORY_SETTINGS,
     "factory-workforce": Surface.WORKFORCE,
     "factory-permissions": Surface.PERMISSIONS,
     "Role": Surface.ROLE_ADMIN,

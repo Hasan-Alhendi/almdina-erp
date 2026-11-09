@@ -12,6 +12,11 @@ from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
     MachineProfileError,
     normalize_machine_profile,
 )
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    MachiningSetupError,
+    artcam_tool_storage,
+    normalize_artcam_tool,
+)
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
     normalize_tool_preset,
@@ -1020,6 +1025,16 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "plunge_rate_mm_min",
             "pass_depth_mm",
             "enabled",
+            "tool_type",
+            "tool_units",
+            "rate_units",
+            "notes",
+            "stepdown_mm",
+            "final_tool_offset_mm",
+            "stepover_size_mm",
+            "stepover_percent",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
         ],
         order_by="preset_name asc",
         limit_page_length=0,
@@ -1037,6 +1052,18 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "plunge_rate_mm_min": row.plunge_rate_mm_min,
             "pass_depth_mm": _optional_pass_depth(row.pass_depth_mm),
             "enabled": bool(cint(row.enabled)),
+            "tool_type": row.tool_type or "",
+            "tool_units": row.tool_units or "",
+            "rate_units": row.rate_units or "",
+            "notes": row.notes or "",
+            "description": row.tool_name or "",
+            "diameter_mm": row.tool_diameter_mm,
+            "stepdown_mm": row.stepdown_mm,
+            "final_tool_offset_mm": row.final_tool_offset_mm,
+            "stepover_size_mm": row.stepover_size_mm,
+            "stepover_percent": row.stepover_percent,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
         }
         for row in rows
     ]
@@ -1086,6 +1113,58 @@ def _tool_preset_use_counts(name: str) -> tuple[int, int, int]:
     settings = frappe.get_single("Almdina ERP Settings")
     factory = sum(1 for fieldname in _CNC_PRESET_FIELDS if str(settings.get(fieldname) or "") == name)
     return operations, paths, factory
+
+
+def _artcam_message(code: str) -> str:
+    messages = {
+        "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
+        "tool_units_invalid": "Tool units must be mm.",
+        "rate_units_invalid": "Rate units must be mm/sec.",
+        "description_required": "Enter the tool description.",
+        "tool_number_invalid": "Tool number must be a whole number such as 9.",
+        "tool_diameter_invalid": "Diameter must be a positive number of millimetres.",
+        "stepdown_invalid": "Stepdown must be a positive number of millimetres.",
+        "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres.",
+        "stepover_invalid": "Enter the stepover size and its percent of diameter.",
+        "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM.",
+        "feed_rate_invalid": "Feed rate must be a positive number of millimetres per second.",
+        "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per second.",
+        "notes_invalid": "The tool notes are too long.",
+    }
+    return _(messages.get(code, "The CNC tool is not valid."))
+
+
+@frappe.whitelist()
+def save_artcam_tool(values: str | dict[str, Any]) -> dict[str, Any]:
+    """Create or update a Ball Nose tool. Profiles keep their own copies."""
+
+    _require_tool_preset_editor()
+    payload = _payload(values)
+    try:
+        tool = normalize_artcam_tool(payload)
+    except MachiningSetupError as exc:
+        frappe.throw(_artcam_message(exc.code), frappe.ValidationError)
+    updates = artcam_tool_storage(tool)
+    name = str(payload.get("name") or "").strip()
+    if name and frappe.db.exists("CNC Tool Preset", name):
+        document = frappe.get_doc("CNC Tool Preset", name)
+        document.check_permission("write")
+        for fieldname, value in updates.items():
+            document.set(fieldname, value)
+        document.save()
+    else:
+        if name and name != tool.description:
+            frappe.throw(_("The tool description cannot be changed."), frappe.ValidationError)
+        if frappe.db.exists("CNC Tool Preset", tool.description):
+            frappe.throw(_("A tool with this description already exists."), frappe.ValidationError)
+        document = frappe.new_doc("CNC Tool Preset")
+        document.check_permission("create")
+        document.preset_name = tool.description
+        document.enabled = 1
+        for fieldname, value in updates.items():
+            document.set(fieldname, value)
+        document.insert()
+    return get_production_settings()
 
 
 @frappe.whitelist()

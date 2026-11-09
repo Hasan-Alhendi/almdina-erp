@@ -45,6 +45,11 @@
             desc: "Production routes and operational stages",
             icon: "branch",
         },
+        "cnc-operational-files": {
+            label: "Operational file management",
+            desc: "Ball Nose tools and operational file settings",
+            icon: "tool",
+        },
         "Door Cutting Order": {
             label: "Door cutting orders",
             desc: "Create and follow cutting orders",
@@ -109,6 +114,7 @@
         "إدارة الصلاحيات": "factory-permissions",
         "إدارة المستخدمين": "factory-workforce",
         "إدارة مسارات الإنتاج": "factory-master-data",
+        "إدارة الملفات التشغيلية": "cnc-operational-files",
         "طلبات قص الدرف": "Door Cutting Order",
         "مراحل الإنتاج": "shop-floor-inbox",
         "القطع التعويضية": "Replacement Part",
@@ -126,6 +132,7 @@
         "Permission management": "factory-permissions",
         "User management": "factory-workforce",
         "Production route management": "factory-master-data",
+        "Operational file management": "cnc-operational-files",
         "Door cutting orders": "Door Cutting Order",
         "Production stages": "shop-floor-inbox",
         "Replacement parts": "Replacement Part",
@@ -184,6 +191,7 @@
         "factory-permissions": "lock",
         "factory-production-settings": "setting",
         "factory-master-data": "branch",
+        "cnc-operational-files": "tool",
     });
 
     function normalizeText(value) {

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from almdina_erp.almdina_erp.application.cnc.machining_setup import public_sheet_machining
 from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
     is_financial_plan_key,
 )
@@ -468,6 +469,12 @@ def build_operational_workspace(
                     factory_defaults,
                 ),
                 "paths": _path_rows(catalog, overrides if saved is not None else {}, labels),
+                "machining": public_sheet_machining(
+                    paths=_path_rows(catalog, overrides if saved is not None else {}, labels),
+                    profiles=(saved or {}).get("machining_profiles"),
+                    associations=(saved or {}).get("vector_associations"),
+                    snapshots=(saved or {}).get("toolpath_snapshots"),
+                ),
                 "generated_file": str((saved or {}).get("generated_file") or ""),
                 "file_present": bool((saved or {}).get("file_present")),
                 "can_download_current": bool(
@@ -540,6 +547,18 @@ def build_operational_workspace(
                 "plunge_rate_mm_min": values.get("plunge_rate_mm_min"),
                 "pass_depth_mm": values.get("pass_depth_mm"),
                 "enabled": bool(values.get("enabled", True)),
+                "tool_type": str(values.get("tool_type") or ""),
+                "tool_units": str(values.get("tool_units") or ""),
+                "rate_units": str(values.get("rate_units") or ""),
+                "notes": str(values.get("notes") or ""),
+                "description": str(values.get("description") or values.get("tool_name") or ""),
+                "diameter_mm": values.get("diameter_mm", values.get("tool_diameter_mm")),
+                "stepdown_mm": values.get("stepdown_mm"),
+                "final_tool_offset_mm": values.get("final_tool_offset_mm"),
+                "stepover_size_mm": values.get("stepover_size_mm"),
+                "stepover_percent": values.get("stepover_percent"),
+                "feed_rate_mm_sec": values.get("feed_rate_mm_sec"),
+                "plunge_rate_mm_sec": values.get("plunge_rate_mm_sec"),
             }
             for name, values in sorted(known_presets.items())
         ],

@@ -161,6 +161,14 @@
                         <p class="aps-cnc-presets__empty">${count
                             ? t("{0} saved tool presets are available in Desk.", [count])
                             : t("No CNC tool presets have been created yet.")}</p>
+                        ${(panel.presets || []).length ? `<ul class="aps-cnc-tool-list">${(panel.presets || []).map(preset => `
+                            <li>
+                                <span>${esc(preset.description || preset.tool_name || preset.preset_name || preset.name || "")}</span>
+                                <span>${esc(preset.tool_number || "")}</span>
+                                <span>${esc(preset.tool_type || "")}</span>
+                                ${panel.editable && preset.tool_type === "Ball Nose" ? `<button type="button" class="btn btn-default btn-xs aps-cnc-artcam-edit" data-preset-name="${esc(preset.name)}">${esc(t("Edit"))}</button>` : ""}
+                            </li>
+                        `).join("")}</ul>` : ""}
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
                     </div>
                 </article>
@@ -240,8 +248,10 @@
         }
 
         function render(model) {
-            const activeTab = model.activeTab === "operational_files" ? "operational_files" : "settings";
-            const settingsSelected = activeTab === "settings";
+            if (model.activeTab === "operational_files") {
+                renderOperationalFiles(model);
+                return;
+            }
             $body.html(`
                 <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
                     <header class="aps-hero alm-page-intro alm-page-intro--accented">
@@ -255,12 +265,7 @@
                         </div>
                     </header>
 
-                    <nav class="aps-tabs" role="tablist" aria-label="${esc(t("Factory settings sections"))}">
-                        ${tabButton("settings", t("Operating settings"), activeTab)}
-                        ${tabButton("operational_files", t("Operational file settings"), activeTab)}
-                    </nav>
-
-                    <div class="aps-tab-panel" data-aps-tab-panel="settings" role="tabpanel"${settingsSelected ? "" : " hidden"}>
+                    <div class="aps-tab-panel" data-aps-tab-panel="settings" role="tabpanel">
                         <div class="aps-section-intro alm-section-header">
                             <div>
                                 <span class="alm-section-header__kicker">${t("Active settings")}</span>
@@ -287,19 +292,26 @@
                             <div>${t("The legacy Almdina ERP Settings form link is now a historical route only and will be redirected to this page automatically. No value is deleted from the log on redirect, and contact numbers accept multiple lines such as: landline, mobile, WhatsApp.")}</div>
                         </div>
                     </div>
+                </div>
+            `);
+        }
 
-                    <div class="aps-tab-panel" data-aps-tab-panel="operational_files" role="tabpanel"${settingsSelected ? " hidden" : ""}>
-                        <div class="aps-section-intro alm-section-header">
-                            <div>
-                                <span class="alm-section-header__kicker">${t("Operational files")}</span>
-                                <strong class="alm-section-header__title">${t("Manage CNC tool presets from Desk")}</strong>
+        function renderOperationalFiles(model) {
+            $body.html(`
+                <div class="almdina-ui aps-shell alm-page alm-page--admin" dir="${uiDirection()}">
+                    <header class="aps-hero alm-page-intro alm-page-intro--accented">
+                        <div class="aps-hero-layout">
+                            <div class="aps-hero-copy alm-page-intro__copy">
+                                <div class="aps-hero-titles">
+                                    <h2 class="alm-page-intro__title">${t("Operational file management")}</h2>
+                                    <p class="alm-page-intro__description">${t("Operational file settings")}</p>
+                                </div>
                             </div>
-                            <span class="aps-section-intro-note alm-section-header__note">${t("List View and Form View use the current factory CNC permissions")}</span>
                         </div>
-                        <section class="aps-sections">
-                            ${operationalFilesPanel(model)}
-                        </section>
-                    </div>
+                    </header>
+                    <section class="aps-sections">
+                        ${operationalFilesPanel(model)}
+                    </section>
                 </div>
             `);
         }
@@ -545,6 +557,7 @@
             renderLoading,
             renderError,
             render,
+            renderOperationalFiles,
             renderWhatsApp,
             whatsappHtml,
             auditHtml,

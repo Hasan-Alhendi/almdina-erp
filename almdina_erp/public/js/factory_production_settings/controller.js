@@ -32,7 +32,7 @@
 
     if (window.AlmdinaFactoryProductionSettingsController) return;
 
-    function mount(wrapper) {
+    function mount(wrapper, options = {}) {
         if (!wrapper) throw new Error("Production Settings wrapper is required");
         if (
             wrapper.__almdinaProductionSettingsController
@@ -80,6 +80,7 @@
         if (typeof page.clear_inner_toolbar === "function") page.clear_inner_toolbar();
         page.add_inner_button(translate("Change log"), openAudit, null, "history");
         page.add_inner_button(translate("Refresh"), load, null, "refresh");
+        if (options.mode === "operational_files") state.activeTab = "operational_files";
         const cncEditable = () => viewModel.sectionEditable(state.current, "cnc");
         const cncPresets = window.AlmdinaFactoryProductionSettingsCncPresets ? window.AlmdinaFactoryProductionSettingsCncPresets.attach({ editable: cncEditable }) : null;
         const cncMachines = window.AlmdinaFactoryProductionSettingsCncMachines ? window.AlmdinaFactoryProductionSettingsCncMachines.attach({ editable: cncEditable }) : null;
@@ -92,7 +93,8 @@
                 onCreateWhatsApp: () => whatsapp && whatsapp.create(),
                 onReconnectWhatsApp: () => whatsapp && whatsapp.reconnect(),
                 onManageToolPresets: () => cncPresets && cncPresets.manage(),
-                onAddToolPreset: () => cncPresets && cncPresets.create(),
+                onAddToolPreset: () => state.activeTab === "operational_files" ? window.AlmdinaArtcamToolDialog.openSaved({ editable: cncEditable(), presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveArtcamTool(values).then(data => { store.apply(data || {}); render(); return data; }) }) : cncPresets && cncPresets.create(),
+                onEditArtcamTool: name => window.AlmdinaArtcamToolDialog.openSaved({ name, editable: cncEditable(), presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveArtcamTool(values).then(data => { store.apply(data || {}); render(); return data; }) }),
                 onManageCncMachines: () => cncMachines && cncMachines.manage(),
                 onAddCncMachine: () => cncMachines && cncMachines.create(),
             },

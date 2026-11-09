@@ -79,13 +79,8 @@
 
         function sections(current = {}) {
             const source = values(current);
-<<<<<<< HEAD
             const built = [
-                section("cutting", t("Cutting and optimizer"), t("Default geometry, distribution algorithm, and search limits."), [
-=======
-            return [
                 section("cutting", t("Cutting and optimizer"), t("Default geometry, cutting machine, and search limits. Default cutting tool diameters: a blank layer copies the cutting tool onto each new order."), [
->>>>>>> Develop
                     [t("Default kerf (mm)"), source.default_kerf_mm],
                     [t("Deduct edge banding thickness by default"), source.default_deduct_edge_thickness == null || source.default_deduct_edge_thickness === "" || Number(source.default_deduct_edge_thickness) !== 0 ? t("Enabled") : t("Disabled")],
                     [t("Default liner tool diameter (mm)"), source.default_liner_tool_diameter_mm == null || source.default_liner_tool_diameter_mm === "" ? t("Same as cutting tool") : source.default_liner_tool_diameter_mm],
@@ -133,11 +128,7 @@
                         true,
                     ]),
                 ], current),
-                section("cnc", t("CNC operational defaults"), t("Default tool presets for the operational DXF layers, plus the sample machine profile. A sheet that still uses the factory preset inherits a new default. A sheet or path with its own choice keeps that choice. Saved machine files and generation snapshots stay as they were, and a generated file is marked when its effective preset changes. This sample is not approved for production and does not generate an NC file."), [
-                    [t("Cut between pieces"), source.cnc_default_preset_cut_path || t("Not specified")],
-                    [t("Liner operation"), source.cnc_default_preset_liner || t("Not specified")],
-                    [t("Rear groove"), source.cnc_default_preset_rear_groove || t("Not specified")],
-                    [t("Handle recess"), source.cnc_default_preset_handle_recess || t("Not specified")],
+                section("cnc", t("Sample machine profile"), t("Stored sample used by the NC post processor. It is not a per-sheet profile, and it is not approved for production."), [
                     [t("Sample tool number"), source.cnc_machine_tool_number || t("Not specified")],
                     [t("Sample spindle speed (RPM)"), source.cnc_machine_spindle_speed_rpm],
                     [t("Sample cutting feed (mm/min)"), source.cnc_machine_cutting_feed_mm_min],
@@ -191,6 +182,8 @@
                 editable: sectionEditable(current, "cnc"),
                 presetCount: presets.length,
                 machineCount: machines.length,
+                presets,
+                machines,
             };
         }
 

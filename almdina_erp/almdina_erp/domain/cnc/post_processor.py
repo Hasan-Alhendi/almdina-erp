@@ -73,6 +73,36 @@ def _distance_mode(machine: Mapping[str, Any] | None) -> str:
     return token or "G90"
 
 
+def _path_safe_z(path: Mapping[str, Any], fallback: float) -> float:
+    raw = path.get("safe_z_mm")
+    if raw in (None, ""):
+        preset = path.get("preset") if isinstance(path.get("preset"), Mapping) else {}
+        raw = preset.get("safe_z_mm") if isinstance(preset, Mapping) else None
+    if raw in (None, ""):
+        return fallback
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise PostProcessorError("machine_profile_value_invalid") from exc
+    if value < 0:
+        raise PostProcessorError("machine_profile_value_invalid")
+    return value
+
+
+def _home_move(path: Mapping[str, Any], safe: float) -> tuple[list[str], float | None]:
+    home = path.get("home")
+    if not isinstance(home, Mapping) or home.get("x_mm") is None or home.get("y_mm") is None:
+        return [], None
+    lines = [f"G0 X{_number(home.get('x_mm'))} Y{_number(home.get('y_mm'))}"]
+    current = None
+    if home.get("z_mm") not in (None, ""):
+        home_z = float(home.get("z_mm"))
+        if abs(home_z - safe) > 0.0005:
+            lines.append(f"G0 Z{_number(home_z)}")
+            current = home_z
+    return lines, current
+
+
 def emit_nc(
     program: Mapping[str, Any],
     *,
@@ -148,6 +178,7 @@ def emit_nc(
             path_spindle = int(preset.get("spindle_speed_rpm") or 0)
             path_feed = float(preset.get("feed_rate_mm_min") or 0)
             path_plunge = float(preset.get("plunge_rate_mm_min") or 0)
+            path_safe = _path_safe_z(path, safe_z)
             if not path_tool or path_spindle <= 0 or path_feed <= 0 or path_plunge <= 0:
                 raise PostProcessorError("preset_incomplete")
             if tool_number and tool_number != path_tool:
@@ -166,9 +197,9 @@ def emit_nc(
                 y = motion.get("y_mm")
                 depth = motion.get("depth_mm")
                 if kind == "travel":
-                    if current_z is None or abs(current_z - safe_z) > 0.0005:
-                        lines.append(f"G0 Z{_number(safe_z)}")
-                        current_z = safe_z
+                    if current_z is None or abs(current_z - path_safe) > 0.0005:
+                        lines.append(f"G0 Z{_number(path_safe)}")
+                        current_z = path_safe
                     lines.append(f"G0 X{_number(x)} Y{_number(y)}")
                 elif kind == "plunge":
                     if active_feed != path_plunge:
@@ -186,8 +217,12 @@ def emit_nc(
                         lines.append(f"G1 X{_number(x)} Y{_number(y)}")
                     cut_count += 1
                 elif kind == "retract":
-                    lines.append(f"G0 Z{_number(safe_z)}")
-                    current_z = safe_z
+                    lines.append(f"G0 Z{_number(path_safe)}")
+                    current_z = path_safe
+                    home_lines, home_z = _home_move(path, path_safe)
+                    lines.extend(home_lines)
+                    if home_z is not None:
+                        current_z = home_z
                     active_feed = None
                 else:
                     raise PostProcessorError("motion_unsupported")

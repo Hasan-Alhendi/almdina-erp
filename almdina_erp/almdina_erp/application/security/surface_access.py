@@ -110,6 +110,7 @@ SURFACE_ROUTE_HINTS = MappingProxyType(
         Surface.FACTORY_SETTINGS: (
             "factory-production-settings",
             "almdina-erp-settings",
+            "cnc-operational-files",
         ),
         Surface.WORKFORCE: ("factory-workforce",),
         Surface.PERMISSIONS: ("factory-permissions",),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -66,7 +66,12 @@ def _words(line: str) -> dict[str, float | str]:
     return found
 
 
-def interpret_nc(text: str, *, safe_z_mm: float = 20.0) -> NcState:
+def interpret_nc(
+    text: str,
+    *,
+    safe_z_mm: float = 20.0,
+    allowed_safe_z_mm: Sequence[float] | None = None,
+) -> NcState:
     units = ""
     distance_mode = ""
     plane = ""
@@ -82,6 +87,12 @@ def interpret_nc(text: str, *, safe_z_mm: float = 20.0) -> NcState:
     xs: list[float] = []
     ys: list[float] = []
     zs: list[float] = []
+    allowed_heights = [float(safe_z_mm)]
+    for height in allowed_safe_z_mm or ():
+        allowed_heights.append(float(height))
+
+    def _at_allowed_height(height: float) -> bool:
+        return any(abs(float(height) - allowed) <= _TOLERANCE_MM for allowed in allowed_heights)
 
     for raw in str(text or "").splitlines():
         words = _words(raw)
@@ -125,7 +136,7 @@ def interpret_nc(text: str, *, safe_z_mm: float = 20.0) -> NcState:
                     has_x
                     and has_y
                     and z is not None
-                    and abs(float(z) - float(safe_z_mm)) > _TOLERANCE_MM
+                    and not _at_allowed_height(float(z))
                     and (not has_z or abs(float(nz) - float(z)) <= _TOLERANCE_MM)
                 ):
                     unsafe.append("rapid_inside_material")
@@ -191,7 +202,18 @@ def verify_nc_against_program(
     *,
     safe_z_mm: float = 20.0,
 ) -> NcVerification:
-    state = interpret_nc(text, safe_z_mm=safe_z_mm)
+    allowed_heights = [float(safe_z_mm)]
+    for operation in program.get("operations") or []:
+        for path in operation.get("toolpaths") or []:
+            if not isinstance(path, Mapping):
+                continue
+            raw_safe = path.get("safe_z_mm")
+            if raw_safe not in (None, ""):
+                allowed_heights.append(float(raw_safe))
+            home = path.get("home")
+            if isinstance(home, Mapping) and home.get("z_mm") not in (None, ""):
+                allowed_heights.append(float(home.get("z_mm")))
+    state = interpret_nc(text, safe_z_mm=safe_z_mm, allowed_safe_z_mm=allowed_heights)
     issues: list[str] = []
     if state.units != "mm":
         issues.append("units_mismatch")

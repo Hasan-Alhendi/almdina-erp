@@ -983,6 +983,7 @@
                 </div>
                 <div class="dco-operational-sheet__settings">
                     ${placementControlsMarkup(workspace, state, canPrepare)}
+                    ${window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet) : ""}
                     <section class="dco-operational-sheet__order">
                         <h4>${escapeHtml(translate("Operation order"))}</h4>
                         <ol class="dco-operational-order">${orderItems}</ol>
@@ -1824,6 +1825,19 @@
             const preview = wrapper.querySelector("[data-sheet-preview]");
             if (preview && ui.mode === "page") preview.setAttribute("data-preview-layout", "page");
             bindDialog(frm, ui, workspace, sheet, state, null);
+            if (window.AlmdinaArtcamMachining) {
+                window.AlmdinaArtcamMachining.bind(wrapper, {
+                    sheet,
+                    workspace,
+                    getArgs() {
+                        return sheetGenerateArgs(frm, workspace, sheet, state);
+                    },
+                    onWorkspace(message) {
+                        const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                        if (saved) refreshSheetUi(frm, ui, message, saved, state);
+                    },
+                });
+            }
             if (ui.mode === "page") syncPageToolbar(ui, workspace, sheet, state);
         });
     }

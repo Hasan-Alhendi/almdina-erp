@@ -40,6 +40,12 @@
         ));
     }
 
+    function saveArtcamTool(values, options = {}) {
+        return request(`${BASE}.save_artcam_tool`, {
+            values: JSON.stringify(values || {}),
+        }, options).then(data => data || {});
+    }
+
     function saveCncToolPreset(values, options = {}) {
         return request(`${BASE}.save_cnc_tool_preset`, {
             values: JSON.stringify(values || {}),
@@ -134,6 +140,7 @@
         getSettings,
         updateSettings,
         getAudit,
+        saveArtcamTool,
         saveCncToolPreset,
         setCncToolPresetEnabled,
         deleteCncToolPreset,

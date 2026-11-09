@@ -59,6 +59,7 @@ class TestPermissionVisibilityAndArabicUX(unittest.TestCase):
             "إدارة الصلاحيات": "permissions",
             "إدارة المستخدمين": "workforce",
             "إدارة مسارات الإنتاج": "factory_master_data",
+            "إدارة الملفات التشغيلية": "factory_settings",
             "طلبات قص الدرف": "orders",
             "مراحل الإنتاج": "production_stages",
         }

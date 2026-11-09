@@ -17,7 +17,7 @@
         { surface: "edge_banding_types", routes: ["edge-banding-type"] },
         {
             surface: "factory_settings",
-            routes: [FACTORY_SETTINGS_CONSOLE_ROUTE, LEGACY_FACTORY_SETTINGS_ROUTE],
+            routes: [FACTORY_SETTINGS_CONSOLE_ROUTE, LEGACY_FACTORY_SETTINGS_ROUTE, "cnc-operational-files"],
         },
         { surface: "workforce", routes: ["factory-workforce"] },
         { surface: "permissions", routes: ["factory-permissions"] },
