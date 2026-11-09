@@ -437,6 +437,35 @@ jobs:
           fi
           exit "$test_status"
 
+      - name: Verify restore on disposable CI site
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          if ! git diff --name-only '${{ github.event.pull_request.base.sha }}' HEAD -- almdina_erp \
+            | grep -Eq '^almdina_erp/(almdina_erp/(infrastructure/backups/|services/backup_restore_service.py)|tests/disposable_restore_check.py)'; then
+            echo 'Backup code unchanged; skipping disposable restore.'
+            exit 0
+          fi
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench --site test.localhost set-config mariadb_root_password root
+          bench --site test.localhost execute almdina_erp.tests.disposable_restore_check.begin
+          status_file="$RUNNER_TEMP/frappe-bench/sites/test.localhost/private/backup_restore_requests/state.json"
+          phase=''
+          for attempt in $(seq 1 180); do
+            phase="$(python -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); print(json.loads(p.read_text())["phase"] if p.exists() else "QUEUED")' "$status_file")"
+            if [[ "$phase" == 'COMPLETED' ]]; then break; fi
+            if [[ "$phase" == 'RECOVERED_AFTER_FAILURE' || "$phase" == 'MANUAL_INTERVENTION_REQUIRED' ]]; then
+              echo "Disposable restore failed: $phase"
+              exit 1
+            fi
+            sleep 2
+          done
+          if [[ "$phase" != 'COMPLETED' ]]; then
+            echo "Disposable restore did not finish: $phase"
+            exit 1
+          fi
+          bench --site test.localhost execute almdina_erp.tests.disposable_restore_check.verify
+
       - name: Collect integration diagnostics
         if: failure()
         run: |
