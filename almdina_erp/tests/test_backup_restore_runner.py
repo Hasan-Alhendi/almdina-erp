@@ -192,6 +192,7 @@ def test_finalize_keeps_imported_backup_record_after_database_replacement(
         return SimpleNamespace(insert=insert)
 
     monkeypatch.setattr(frappe, "local", SimpleNamespace(site="site.local"), raising=False)
+    monkeypatch.setattr(frappe.utils, "now", lambda: "2026-11-08 00:00:00")
     monkeypatch.setattr(frappe, "db", Database(), raising=False)
     monkeypatch.setattr(frappe, "get_doc", get_doc, raising=False)
     monkeypatch.setattr(frappe, "get_site_path", lambda *parts: str(path.parent) if parts else str(path.parent.parent.parent), raising=False)

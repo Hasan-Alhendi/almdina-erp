@@ -40,7 +40,7 @@ def preflight_restore(target: BackupBundle) -> None:
     """Verify prerequisites without changing the site or exposing credentials."""
     if not restore_runtime_ready():
         raise ValueError("restore_runtime_not_configured")
-    if not shutil.which("tar") or not shutil.which("gzip"):
+    if any(not shutil.which(tool) for tool in ("tar", "gzip", "file", "sed")):
         raise ValueError("restore_tools_unavailable")
     site_path = Path(frappe.get_site_path()).resolve()
     # The safety copy and restored files coexist with the selected backup.
@@ -48,6 +48,8 @@ def preflight_restore(target: BackupBundle) -> None:
     if shutil.disk_usage(site_path).free < needed:
         raise ValueError("restore_disk_space")
     if str(frappe.conf.db_type or "").lower() == "mariadb":
+        if not (shutil.which("mariadb") or shutil.which("mysql")):
+            raise ValueError("restore_tools_unavailable")
         import pymysql
 
         options = {"user": frappe.conf.get("mariadb_root_login") or frappe.conf.get("root_login") or "root",
