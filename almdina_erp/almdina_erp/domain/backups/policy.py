@@ -3,7 +3,7 @@ from __future__ import annotations
 import calendar
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import PurePosixPath
 
 
@@ -84,6 +84,19 @@ def due_schedule_key(target: str, schedule: BackupSchedule, now: datetime) -> st
     return f"{prefix}:monthly:{now:%Y-%m}"
 
 
+def next_schedule_time(schedule: BackupSchedule, now: datetime) -> datetime:
+    resolved = schedule.validated()
+    hour, minute = (int(value) for value in resolved.time.split(":"))
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    for offset in range(367):
+        day = candidate + timedelta(days=offset)
+        if due_schedule_key("preview", resolved, day):
+            return day
+    raise ValueError("Backup schedule has no next occurrence.")
+
+
 def normalize_remote_path(value: object) -> str:
     """Validate an absolute, non-root POSIX directory without traversal."""
 
@@ -117,6 +130,16 @@ def backup_group_identifier(filename: object, site_slug: object) -> str | None:
     return match.group("identifier") if match else None
 
 
+def backup_artifact_kind(filename: str) -> str | None:
+    name = str(filename)
+    for suffix, kind in (("site_config_backup.json", "site_config"), ("database.sql.gz", "database"),
+                         ("private-files.tgz", "private_files"), ("private-files.tar", "private_files"),
+                         ("files.tgz", "public_files"), ("files.tar", "public_files")):
+        if name.endswith("-" + suffix) or name.endswith("-" + suffix.replace(".", "-enc.", 1)):
+            return kind
+    return None
+
+
 def retention_candidates(identifiers: list[str] | tuple[str, ...], keep_last: int) -> tuple[str, ...]:
     try:
         limit = int(keep_last)
@@ -133,7 +156,9 @@ __all__ = [
     "FREQUENCIES",
     "WEEKDAYS",
     "backup_group_identifier",
+    "backup_artifact_kind",
     "due_schedule_key",
+    "next_schedule_time",
     "normalize_remote_path",
     "retention_candidates",
 ]

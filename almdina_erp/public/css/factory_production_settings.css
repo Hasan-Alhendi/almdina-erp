@@ -122,6 +122,26 @@
     gap: var(--alm-space-2, 8px);
 }
 
+.aps-backup-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+    gap: var(--alm-space-2, 8px);
+    margin-block: var(--alm-space-3, 12px);
+    color: var(--alm-text-subtle);
+    font-size: var(--alm-font-size-sm, 12px);
+}
+
+.aps-backup h4 {
+    margin-block: var(--alm-space-4, 16px) var(--alm-space-2, 8px);
+    color: var(--alm-text-strong);
+    font-size: var(--alm-font-size-sm, 12px);
+}
+
+.aps-restore-status {
+    display: grid;
+    gap: 4px;
+}
+
 .aps-backup-row {
     display: grid;
     gap: var(--alm-space-2, 8px);

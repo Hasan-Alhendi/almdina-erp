@@ -107,6 +107,8 @@ class FrappeBackupHistory:
         )
 
     def mark_completed(self, operation_id: str, bundle: BackupBundle, reference: str = "") -> None:
+        from almdina_erp.almdina_erp.infrastructure.backups.zip_transfer import app_versions
+
         manifest = _canonical_manifest(bundle)
         self._update(
             operation_id,
@@ -117,6 +119,7 @@ class FrappeBackupHistory:
                 "total_size": bundle.total_size,
                 "checksum": _manifest_checksum(manifest),
                 "artifact_manifest": manifest,
+                "import_app_versions": json.dumps(app_versions(), sort_keys=True),
                 "completed_on": now(),
                 "error_summary": None,
             },
@@ -131,6 +134,9 @@ class FrappeBackupHistory:
                 "error_summary": str(error_code or "backup_operation_failed")[:140],
             },
         )
+
+    def mark_cleanup_warning(self, operation_id: str) -> None:
+        self._update(operation_id, {"error_summary": "retention_cleanup_failed"})
 
     @staticmethod
     def _update(operation_id: str, values: dict[str, Any]) -> None:

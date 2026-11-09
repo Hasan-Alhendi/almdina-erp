@@ -71,6 +71,7 @@ has_permission = {
 
 boot_session = "almdina_erp.boot.boot_session"
 extend_bootinfo = ["almdina_erp.boot.extend_bootinfo"]
+before_job = ["almdina_erp.almdina_erp.infrastructure.backups.restore_state.block_job_during_restore"]
 
 scheduler_events = {
     "cron": {
