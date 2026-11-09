@@ -345,6 +345,18 @@
             return "warning";
         }
 
+        function importErrorLabel(code) {
+            const labels = {
+                format: t("Unsupported backup ZIP format."),
+                site: t("This backup belongs to another site."),
+                versions: t("Backup application versions do not match this site."),
+                duplicate: t("A backup with these files already exists."),
+                encryption_key: t("Backup encryption key does not match this site."),
+                upload_cancelled: t("Backup upload was interrupted."),
+            };
+            return labels[code] || t("Backup package validation failed.");
+        }
+
         function sizeLabel(value) {
             const bytes = Number(value || 0);
             if (!Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -361,6 +373,9 @@
             }
             return `<div class="aps-backup-history">${rows.map(row => {
                 const candidate = restorable.get(row.operation_id);
+                const downloadButton = candidate && snapshot.permissions && snapshot.permissions.can_download
+                    ? uiButton({ label: t("Download ZIP"), variant: "secondary", className: "aps-backup-download", attrs: { "data-operation-id": row.operation_id } })
+                    : "";
                 const restoreButton = candidate && snapshot.permissions && snapshot.permissions.can_restore && snapshot.restore_runtime_ready
                     ? uiButton({
                         label: t("Restore"),
@@ -375,14 +390,15 @@
                 return `
                     <div class="aps-backup-row">
                         <div class="aps-backup-row-main">
-                            <div><strong class="aps-ltr-value" dir="ltr">${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type || "")} · ${esc(row.target || "")}</span></div>
-                            ${uiBadge({ label: backupStatusLabel(row.status), tone: backupStatusTone(row.status) })}
+                            <div><strong class="aps-ltr-value" dir="ltr">${esc(row.backup_identifier || row.operation_id || "—")}</strong><span>${esc(row.operation_type === "Imported" ? t("Imported") : row.operation_type || "")} · ${esc(row.target || "")}</span></div>
+                            ${uiBadge({ label: row.operation_type === "Imported" && row.status === "Running" ? t("Verifying backup") : backupStatusLabel(row.status), tone: backupStatusTone(row.status) })}
                         </div>
                         <div class="aps-backup-row-meta">
                             <span>${esc(row.requested_on || "—")}</span>
                             <span class="aps-ltr-value" dir="ltr">${esc(sizeLabel(row.total_size))}</span>
-                            ${row.error_summary ? `<span class="aps-backup-error">${esc(row.error_summary)}</span>` : ""}
+                            ${row.error_summary ? `<span class="aps-backup-error">${esc(row.operation_type === "Imported" ? importErrorLabel(row.error_summary) : row.error_summary)}</span>` : ""}
                             ${restoreButton}
+                            ${downloadButton}
                         </div>
                     </div>
                 `;
@@ -405,8 +421,10 @@
                     <div class="aps-section-tools aps-backup-actions">
                         ${canManage ? uiButton({ label: t("Test SSH Connection"), variant: "secondary", className: "aps-backup-test" }) : ""}
                         ${canManage ? uiButton({ label: t("Create Backup Now"), variant: "primary", className: "aps-backup-create" }) : ""}
+                        ${canManage ? uiButton({ label: t("Upload Backup ZIP"), variant: "secondary", className: "aps-backup-upload" }) : ""}
                     </div>
                 </div>
+                ${canManage ? `<div class="aps-backup-upload-progress" role="status" aria-live="polite"></div>` : ""}
                 ${canRestore && !snapshot.restore_runtime_ready ? `<div class="aps-readonly-note">${t("Restore is disabled until DB root credentials are configured in the operational Frappe settings.")}</div>` : ""}
                 ${backupHistoryHtml(snapshot)}
             `;

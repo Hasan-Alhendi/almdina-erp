@@ -84,6 +84,41 @@
         return request(`${BACKUPS}.create_backup_now`, {}, options).then(data => data || {});
     }
 
+    function beginBackupUpload(size) {
+        return request(`${BACKUPS}.begin_backup_upload`, { file_size: size });
+    }
+
+    function finishBackupUpload(operationId, size) {
+        return request(`${BACKUPS}.finish_backup_upload`, { operation_id: operationId, file_size: size });
+    }
+
+    function cancelBackupUpload(operationId) {
+        return request(`${BACKUPS}.cancel_backup_upload`, { operation_id: operationId });
+    }
+
+    function uploadBackupChunk(operationId, chunk, offset, size, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `/api/method/${BACKUPS}.upload_backup_chunk`);
+            xhr.setRequestHeader("X-Frappe-CSRF-Token", frappe.csrf_token);
+            xhr.upload.onprogress = event => {
+                if (event.lengthComputable) onProgress(offset + Math.min(event.loaded, chunk.size));
+            };
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try { resolve(JSON.parse(xhr.responseText).message); } catch (error) { reject(error); }
+                } else reject(new Error("Backup upload failed."));
+            };
+            xhr.onerror = () => reject(new Error("Backup upload failed."));
+            const data = new FormData();
+            data.append("operation_id", operationId);
+            data.append("offset", String(offset));
+            data.append("file_size", String(size));
+            data.append("file", chunk, "backup.zip");
+            xhr.send(data);
+        });
+    }
+
     function testSshConnection(options = {}) {
         return request(`${BACKUPS}.test_ssh_connection`, {}, options).then(data => data || {});
     }
@@ -108,6 +143,10 @@
         getWhatsAppQr,
         getBackupContext,
         createBackupNow,
+        beginBackupUpload,
+        uploadBackupChunk,
+        finishBackupUpload,
+        cancelBackupUpload,
         testSshConnection,
         requestRestore,
     });
