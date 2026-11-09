@@ -57,12 +57,21 @@ def _require_restore_idle() -> None:
 
 
 def _wait_for_site_jobs() -> None:
-    from frappe.utils.background_jobs import get_queue, get_queue_args, get_queue_list, get_running_jobs_in_queue
+    from frappe.utils.background_jobs import get_queue, get_queue_list, get_running_jobs_in_queue
 
     for _ in range(30):
-        running = [job for queue in get_queue_list() for job in get_running_jobs_in_queue(get_queue(queue))
-                   if get_queue_args(job).get("site") == frappe.local.site
-                   and get_queue_args(job).get("method") != _RESTORE_JOB_METHOD]
+        running = []
+        for queue in get_queue_list():
+            for job in get_running_jobs_in_queue(get_queue(queue)):
+                try:
+                    args = job.kwargs
+                except Exception as exc:
+                    # An unreadable job cannot safely be ruled out for this site.
+                    raise ValueError("restore_jobs_busy") from exc
+                if not isinstance(args, dict) or not args.get("site"):
+                    raise ValueError("restore_jobs_busy")
+                if args["site"] == frappe.local.site and args.get("method") != _RESTORE_JOB_METHOD:
+                    running.append(job)
         if not running:
             return
         time.sleep(1)
