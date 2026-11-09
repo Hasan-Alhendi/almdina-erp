@@ -13,7 +13,7 @@
         `${ASSET_ROOT}/history.js?v=18`,
         `${ASSET_ROOT}/session_document.js?v=24`,
         `${ASSET_ROOT}/distribution.js?v=18`,
-        `${ASSET_ROOT}/move_geometry.js?v=20`,
+        `${ASSET_ROOT}/move_geometry.js?v=21`,
         `${ASSET_ROOT}/snap_geometry.js?v=18`,
         `${ASSET_ROOT}/rotation_geometry.js?v=19`,
         `${ASSET_ROOT}/transform_geometry.js?v=2`,
