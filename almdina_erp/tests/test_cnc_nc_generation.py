@@ -12,7 +12,7 @@ def _raw(**overrides):
     values = {
         "preset_name": "Finish",
         "tool_name": "Finish",
-        "tool_number": "T9",
+        "tool_number": 9,
         "tool_diameter_mm": 5,
         "final_depth_mm": 18,
         "spindle_speed_rpm": 15000,
@@ -101,6 +101,7 @@ def test_simulation_nc_matches_intermediate_program_with_depth_passes():
     assert package["verification"]["ok"] is True
     assert package["pass_count"] >= 3
     assert package["spindle_speed_rpm"] == 15000
+    assert package["tool_number"] == "T9"
     depths = sorted({
         abs(float(motion.z_mm))
         for motion in interpret_nc(text).motions

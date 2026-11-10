@@ -105,11 +105,14 @@ def _tool_number(raw: Mapping[str, Any]) -> str:
     )
 
     try:
+        sample = str(raw.get("cnc_machine_tool_number") or "").strip().upper()
+        if re.fullmatch(r"T[1-9][0-9]{0,2}", sample) is None:
+            raise ToolPresetError("tool_number_invalid")
         return normalize_tool_preset(
             {
                 "preset_name": "machine-profile",
                 "tool_name": "machine-profile",
-                "tool_number": raw.get("cnc_machine_tool_number"),
+                "tool_number": sample,
                 "tool_diameter_mm": 1,
                 "final_depth_mm": 1,
                 "spindle_speed_rpm": 1,

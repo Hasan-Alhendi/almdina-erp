@@ -116,9 +116,12 @@ def test_tool_preset_rejects_invalid_measurements():
         _preset(tool_diameter_mm=0)
     assert diameter.value.code == "tool_diameter_invalid"
 
-    with pytest.raises(ToolPresetError) as tool_number:
-        _preset(tool_number="9")
-    assert tool_number.value.code == "tool_number_invalid"
+    for accepted in (1, 9, 12, 125, "9", "T9"):
+        assert _preset(tool_number=accepted).tool_number == f"T{int(str(accepted).lstrip('Tt'))}"
+    for rejected in (0, -1, 1.5, "1.5", "abc", "", None, True, "T0"):
+        with pytest.raises(ToolPresetError) as tool_number:
+            _preset(tool_number=rejected)
+        assert tool_number.value.code == "tool_number_invalid"
 
     with pytest.raises(ToolPresetError) as spindle:
         _preset(spindle_speed_rpm=True)

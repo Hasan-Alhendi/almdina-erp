@@ -55,7 +55,7 @@
             { fieldtype: "Column Break" },
             { fieldname: "plunge_rate_mm_sec", fieldtype: "Float", label: "Plunge Rate (mm/sec)", precision: 3, reqd: 1, default: numberValue(tool, "plunge_rate_mm_sec", "") },
             { fieldtype: "Section Break" },
-            { fieldname: "notes", fieldtype: "Small Text", label: "Notes", reqd: 1, default: (tool && tool.notes) || "" },
+            { fieldname: "notes", fieldtype: "Small Text", label: "Notes", reqd: 0, default: (tool && tool.notes) || "" },
         ];
     }
 

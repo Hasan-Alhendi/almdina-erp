@@ -61,7 +61,13 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
     tool = _doctype("cnc_tool_preset")
     machine = _doctype("cnc_machine")
     profile = _doctype("cnc_machining_profile")
-    _assert_english_required_fields(tool)
+    for field in tool["fields"]:
+        label = str(field.get("label") or "")
+        assert label
+        assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
+        expected = 0 if field["fieldname"] == "notes" else 1
+        assert field.get("reqd") == expected, field["fieldname"]
+    assert tool["field_order"][-1] == "notes"
     _assert_english_required_fields(machine)
     _assert_english_required_fields(profile)
     assert all(field.get("fieldname") != "final_depth_mm" for field in tool["fields"])

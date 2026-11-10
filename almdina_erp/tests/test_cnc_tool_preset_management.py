@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -351,3 +352,24 @@ def test_a_sheet_rejects_a_second_tool_and_an_unconfirmed_early_cut():
         path_overrides={},
         presets=_known(),
     )
+
+
+def test_tool_notes_are_optional_and_last_on_both_forms():
+    doctype = json.loads(
+        (
+            APP_ROOT / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert doctype["field_order"][-1] == "notes"
+    assert [field["fieldname"] for field in doctype["fields"]][-1] == "notes"
+    notes = next(field for field in doctype["fields"] if field["fieldname"] == "notes")
+    assert notes["label"] == "Notes"
+    assert notes["reqd"] == 0
+    controller = (
+        APP_ROOT / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.py"
+    ).read_text(encoding="utf-8")
+    assert "notes_required" not in controller
+    dialog = (APP_ROOT / "public" / "js" / "cnc" / "artcam_tool_dialog.js").read_text(encoding="utf-8")
+    fields = dialog.split("function fieldsFor", 1)[1].split("function open", 1)[0]
+    assert fields.rfind('fieldname: "notes"') > fields.rfind('fieldname: "plunge_rate_mm_sec"')
+    assert 'label: "Notes", reqd: 0' in fields

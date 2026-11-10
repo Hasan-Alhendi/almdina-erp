@@ -128,7 +128,7 @@ _MESSAGES = {
     "toolpath_name_duplicate": "A calculated toolpath already uses that name.",
     "toolpath_duplicate": "That calculated toolpath already exists.",
     "toolpath_id_invalid": "The toolpath identity is not valid.",
-    "tool_number_invalid": "Tool number must look like T9.",
+    "tool_number_invalid": "Tool Number must be a positive whole number.",
     "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
     "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
     "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM within the supported range.",

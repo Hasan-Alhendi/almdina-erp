@@ -27,7 +27,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.master_data_references import
 _MESSAGES = {
     "preset_name_required": "Preset name is required.",
     "tool_name_required": "Tool name is required.",
-    "tool_number_invalid": "Tool number must look like T9.",
+    "tool_number_invalid": "Tool Number must be a positive whole number.",
     "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
     "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM within the supported range.",
     "feed_rate_invalid": "Feed rate must be a positive number of millimetres per minute within the supported range.",
@@ -39,7 +39,6 @@ _MESSAGES = {
     "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
     "tool_units_invalid": "Tool units must be mm.",
     "rate_units_invalid": "Rate units must be mm/sec.",
-    "notes_required": "Notes is required.",
     "notes_invalid": "The tool notes are too long.",
     "stepdown_invalid": "Stepdown must be a positive number of millimetres.",
     "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres.",
@@ -67,8 +66,6 @@ class CNCToolPreset(Document):
                     "enabled": self.enabled,
                 }
             )
-            if not str(self.notes or "").strip():
-                raise MachiningSetupError("notes_required")
             artcam = normalize_artcam_tool(
                 {
                     "description": self.tool_name,
@@ -91,7 +88,7 @@ class CNCToolPreset(Document):
             frappe.throw(_MESSAGES.get(exc.code, "The CNC tool is not valid."), frappe.ValidationError)
         storage = artcam_tool_storage(artcam)
         self.tool_name = normalized.tool_name
-        self.tool_number = normalized.tool_number
+        self.tool_number = str(artcam.tool_number_display)
         self.tool_diameter_mm = normalized.tool_diameter_mm
         self.spindle_speed_rpm = normalized.spindle_speed_rpm
         self.stepdown_mm = storage["stepdown_mm"]

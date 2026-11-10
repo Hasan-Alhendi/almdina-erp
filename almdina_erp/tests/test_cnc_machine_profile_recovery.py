@@ -170,7 +170,8 @@ def test_reader_does_not_hide_unexpected_errors_or_hardcode_a_tool_number():
     assert "T9" not in body
     assert "machine_profile_for_workspace" in body
     preset = TOOL_PRESET.read_text(encoding="utf-8")
-    assert 'required_code="tool_number_invalid"' in preset
+    assert "def catalog_tool_number" in preset
+    assert "tool_number_invalid" in preset
     assert (
         normalize_tool_preset(
             {

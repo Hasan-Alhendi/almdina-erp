@@ -47,7 +47,6 @@ HOME_AXIS_LIMIT_MM = 100_000.0
 _NAME_LIMIT = 140
 _NOTES_LIMIT = 4000
 _ID_TOKEN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,79}$")
-_TOOL_NUMBER = re.compile(r"^T[1-9][0-9]{0,2}$")
 
 SELECTION_LAYER = "layer"
 SELECTION_VECTORS = "vectors"
@@ -143,22 +142,15 @@ def _finite(value: Any, code: str, *, lower: float, upper: float, inclusive_lowe
 
 
 def _tool_number(value: Any) -> tuple[str, int]:
-    raw = str(value if value is not None else "").strip().upper()
-    if raw.startswith("T"):
-        token = raw
-    else:
-        if isinstance(value, bool):
-            raise MachiningSetupError("tool_number_invalid")
-        try:
-            number = float(value)
-        except (TypeError, ValueError) as exc:
-            raise MachiningSetupError("tool_number_invalid") from exc
-        if not math.isfinite(number) or not number.is_integer():
-            raise MachiningSetupError("tool_number_invalid")
-        token = f"T{int(number)}"
-    if _TOOL_NUMBER.fullmatch(token) is None:
-        raise MachiningSetupError("tool_number_invalid")
-    return token, int(token[1:])
+    from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
+        ToolPresetError,
+        catalog_tool_number,
+    )
+
+    try:
+        return catalog_tool_number(value)
+    except ToolPresetError as exc:
+        raise MachiningSetupError("tool_number_invalid") from exc
 
 
 def _spindle(value: Any) -> int:
@@ -266,7 +258,7 @@ def artcam_tool_storage(tool: ArtcamToolValues) -> dict[str, Any]:
 
     return {
         "tool_name": tool.description,
-        "tool_number": tool.tool_number,
+        "tool_number": str(tool.tool_number_display),
         "tool_diameter_mm": tool.diameter_mm,
         "spindle_speed_rpm": tool.spindle_speed_rpm,
         "tool_type": tool.tool_type,

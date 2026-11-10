@@ -91,6 +91,37 @@ def _rate_pair(raw: Mapping[str, Any], *, sec_key: str, min_key: str, code: str,
     raise ToolPresetError(code)
 
 
+def catalog_tool_number(value: Any) -> tuple[str, int]:
+    """Accept a positive tool index and the NC token derived from it.
+
+    The stored and entered value is the whole number, for example ``9``.
+    Callers that speak NC receive the same index as ``T9``. A ``T`` prefix on
+    input is accepted and is not required.
+    """
+
+    if isinstance(value, bool) or value in (None, ""):
+        raise ToolPresetError("tool_number_invalid")
+    if isinstance(value, int):
+        token = f"T{value}"
+    elif isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            raise ToolPresetError("tool_number_invalid")
+        token = f"T{int(value)}"
+    else:
+        raw = str(value).strip().upper()
+        if not raw:
+            raise ToolPresetError("tool_number_invalid")
+        if raw.startswith("T"):
+            token = raw
+        elif raw.isdigit():
+            token = f"T{int(raw)}"
+        else:
+            raise ToolPresetError("tool_number_invalid")
+    if _TOOL_NUMBER.fullmatch(token) is None:
+        raise ToolPresetError("tool_number_invalid")
+    return token, int(token[1:])
+
+
 def _optional_final_depth(value: Any) -> float | None:
     """A tool definition may omit Final Depth. Zero is the empty stored value."""
 
@@ -125,9 +156,7 @@ def normalize_tool_preset(
     display = raw.get("tool_name") or identity
     preset_name = _text(identity, required_code="tool_name_required")
     tool_name = _text(display, required_code="tool_name_required")
-    tool_number = _text(raw.get("tool_number"), required_code="tool_number_invalid").upper()
-    if _TOOL_NUMBER.fullmatch(tool_number) is None:
-        raise ToolPresetError("tool_number_invalid")
+    tool_number, _tool_index = catalog_tool_number(raw.get("tool_number"))
 
     final_depth = None if machining_depth_mm is _MISSING else _optional_final_depth(machining_depth_mm)
     pass_raw = raw.get("stepdown_mm")

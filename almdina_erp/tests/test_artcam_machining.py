@@ -145,6 +145,7 @@ def test_ball_nose_tool_uses_the_artcam_dialog_fields_and_keeps_the_physical_too
     assert tool.feed_rate_mm_sec == 170.0
     assert tool.plunge_rate_mm_sec == 30.0
     stored = artcam_tool_storage(tool)
+    assert stored["tool_number"] == "9"
     assert mm_per_min_from_sec(stored["feed_rate_mm_sec"]) == 10200.0
     assert mm_per_min_from_sec(stored["plunge_rate_mm_sec"]) == 1800.0
     assert "feed_rate_mm_min" not in stored
@@ -164,6 +165,23 @@ def test_ball_nose_tool_uses_the_artcam_dialog_fields_and_keeps_the_physical_too
     with pytest.raises(MachiningSetupError) as caught:
         normalize_artcam_tool(_artcam(tool_type="End Mill"))
     assert caught.value.code == "tool_type_unsupported"
+
+
+def test_plain_tool_number_is_stored_as_an_integer_and_notes_may_be_empty():
+    blank = normalize_artcam_tool(_artcam(notes=""))
+    assert blank.tool_number == "T9"
+    assert blank.tool_number_display == 9
+    assert blank.notes == ""
+    assert artcam_tool_storage(blank)["tool_number"] == "9"
+    assert artcam_tool_storage(blank)["notes"] == ""
+
+    kept = normalize_artcam_tool(_artcam(notes="Pocket note"))
+    assert kept.notes == "Pocket note"
+    edited = normalize_artcam_tool(_artcam(notes="Updated note"))
+    assert edited.notes == "Updated note"
+    with pytest.raises(MachiningSetupError) as too_long:
+        normalize_artcam_tool(_artcam(notes="x" * 4001))
+    assert too_long.value.code == "notes_invalid"
 
 
 def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():

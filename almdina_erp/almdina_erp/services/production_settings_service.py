@@ -27,6 +27,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
+    catalog_tool_number,
     mm_per_min_from_sec,
     mm_per_sec_from_min,
     normalize_tool_preset,
@@ -1097,7 +1098,7 @@ def _require_tool_preset_editor() -> None:
 def _preset_message(code: str) -> str:
     messages = {
         "tool_name_required": "Tool Name is required.",
-        "tool_number_invalid": "Tool Number must look like T9.",
+        "tool_number_invalid": "Tool Number must be a positive whole number.",
         "tool_diameter_invalid": "Tool Diameter (mm) must be a positive number within the supported range.",
         "final_depth_invalid": "Final Depth (mm) must be a positive number within the supported range.",
         "spindle_speed_invalid": "Spindle Speed (RPM) must be a positive whole number within the supported range.",
@@ -1112,7 +1113,7 @@ def _preset_message(code: str) -> str:
 
 def _apply_tool_preset(document: Any, preset: Any) -> None:
     document.tool_name = preset.tool_name
-    document.tool_number = preset.tool_number
+    document.tool_number = str(catalog_tool_number(preset.tool_number)[1])
     document.tool_diameter_mm = preset.tool_diameter_mm
     document.spindle_speed_rpm = preset.spindle_speed_rpm
     document.feed_rate_mm_sec = mm_per_sec_from_min(preset.feed_rate_mm_min)
