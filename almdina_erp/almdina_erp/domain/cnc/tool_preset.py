@@ -150,10 +150,16 @@ def unused_tool_preset_can_be_deleted(
     operation_uses: int,
     path_uses: int,
     factory_uses: int,
+    machining_uses: int = 0,
 ) -> bool:
-    """A preset that still labels a sheet, a path, or a factory default stays."""
+    """A preset that still labels a sheet, a path, a factory default, or a copy stays."""
 
-    return int(operation_uses) == 0 and int(path_uses) == 0 and int(factory_uses) == 0
+    return (
+        int(operation_uses) == 0
+        and int(path_uses) == 0
+        and int(factory_uses) == 0
+        and int(machining_uses) == 0
+    )
 
 
 def assert_single_tool_for_file(presets: Sequence[ToolPresetValues]) -> None:

@@ -423,6 +423,8 @@ def build_operational_workspace(
                 cut_path_sequence=sequence,
                 perimeter_cut_early_confirmed=perimeter_early,
                 sheet_placement=placement_fp,
+                toolpath_snapshots=list((saved or {}).get("toolpath_snapshots") or ()),
+                vector_associations=list((saved or {}).get("vector_associations") or ()),
             )
             status = effective_status(
                 generation_fingerprint=str(saved.get("generation_fingerprint") or ""),
@@ -592,6 +594,8 @@ def prepare_sheet_settings(
     machine_catalog: Sequence[Mapping[str, Any]] | None = None,
     plan_snapshot: Mapping[str, Any] | None = None,
     require_cnc_machine: bool = False,
+    toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
+    vector_associations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     from almdina_erp.almdina_erp.domain.cnc.operational_file import (
         apply_legacy_cut_path_sequence_to_order,
@@ -709,6 +713,12 @@ def prepare_sheet_settings(
         cut_path_sequence=sequence,
         perimeter_cut_early_confirmed=perimeter_early,
         sheet_placement=placement_fp,
+        toolpath_snapshots=list((existing or {}).get("toolpath_snapshots") or ())
+        if toolpath_snapshots is None
+        else list(toolpath_snapshots),
+        vector_associations=list((existing or {}).get("vector_associations") or ())
+        if vector_associations is None
+        else list(vector_associations),
     )
     generation_fingerprint = str((existing or {}).get("generation_fingerprint") or "")
     generated_file = str((existing or {}).get("generated_file") or "")

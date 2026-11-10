@@ -46,6 +46,12 @@
         }, options).then(data => data || {});
     }
 
+    function saveMachiningProfile(values, options = {}) {
+        return request(`${BASE}.save_cnc_machining_profile`, {
+            values: JSON.stringify(values || {}),
+        }, options).then(data => data || {});
+    }
+
     function saveCncToolPreset(values, options = {}) {
         return request(`${BASE}.save_cnc_tool_preset`, {
             values: JSON.stringify(values || {}),
@@ -141,6 +147,7 @@
         updateSettings,
         getAudit,
         saveArtcamTool,
+        saveMachiningProfile,
         saveCncToolPreset,
         setCncToolPresetEnabled,
         deleteCncToolPreset,

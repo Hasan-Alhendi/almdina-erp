@@ -17,14 +17,26 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     append_snapshot,
     artcam_tool_storage,
     association_availability,
+    active_toolpath_snapshots,
     calculate_toolpath_snapshot,
+    machining_tool_uses,
+    nc_toolpath_fingerprint_rows,
     normalize_artcam_tool,
     normalize_associations,
     normalize_profile,
     overlay_frozen_toolpaths,
+    release_stale_toolpath_links,
     tool_copy_from_stored,
     vectors_from_paths,
 )
+from almdina_erp.almdina_erp.application.cnc.machining_setup import freeze_calculated_toolpath
+from almdina_erp.almdina_erp.domain.cnc.operational_file import (
+    GENERATED,
+    NEEDS_REGENERATION,
+    effective_status,
+    settings_fingerprint,
+)
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import unused_tool_preset_can_be_deleted
 from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
 
 
@@ -132,6 +144,30 @@ def test_ball_nose_tool_uses_the_artcam_dialog_fields_and_keeps_the_physical_too
     with pytest.raises(MachiningSetupError) as caught:
         normalize_artcam_tool(_artcam(tool_type="End Mill"))
     assert caught.value.code == "tool_type_unsupported"
+
+
+def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():
+    stored = _stored_tool()
+    known = {"T9_CUT": stored}
+    saved = normalize_profile(_profile(), known_tools=known)
+    stored["tool_diameter_mm"] = 12
+    stored["diameter_mm"] = 12
+    reopened = normalize_profile(
+        {
+            "profile_id": saved["profile_id"],
+            "name": saved["name"],
+            "tool_preset": saved["tool_preset"],
+            "tool_values": dict(saved["tool_values"]),
+            "final_depth_mm": saved["final_depth_mm"],
+            "safe_z_mm": saved["safe_z_mm"],
+            "home_x_mm": saved["home_x_mm"],
+            "home_y_mm": saved["home_y_mm"],
+            "home_z_mm": saved["home_z_mm"],
+        },
+        known_tools=known,
+    )
+    assert reopened["tool_values"]["diameter_mm"] == 5.0
+    assert known["T9_CUT"]["tool_diameter_mm"] == 12
 
 
 def test_profile_copy_is_independent_of_the_base_tool_and_of_other_profiles():
@@ -405,3 +441,277 @@ def test_legacy_tool_copy_does_not_invent_artcam_fields():
     assert copied["final_tool_offset_mm"] is None
     legacy["tool_diameter_mm"] = 9
     assert copied["diameter_mm"] == 6
+
+
+def _linked(profile, association_id, vector_ids, **local_overrides):
+    local = {**copy.deepcopy(profile), **local_overrides}
+    return {
+        "association_id": association_id,
+        "profile_id": profile["profile_id"],
+        "selection": {"kind": SELECTION_VECTORS, "vector_ids": list(vector_ids)},
+        "local_values": local,
+    }
+
+
+def test_profile_edits_keep_an_independent_validated_tool_copy():
+    stored = _stored_tool()
+    known = {"T9_CUT": stored}
+    created = normalize_profile(_profile(), known_tools=known)
+    edited_tool = copy.deepcopy(created["tool_values"])
+    edited_tool["diameter_mm"] = 8
+    edited_tool["feed_rate_mm_sec"] = 20
+    edited_tool["stepover_percent"] = 10
+    edited = normalize_profile(
+        {
+            **created,
+            "final_depth_mm": 22,
+            "safe_z_mm": 30,
+            "home_x_mm": 4,
+            "tool_values": edited_tool,
+        },
+        known_tools={"T9_CUT": stored},
+    )
+    assert stored["tool_diameter_mm"] == 5
+    assert stored["feed_rate_mm_sec"] == 170
+    assert edited["tool_values"]["diameter_mm"] == 8
+    assert edited["tool_values"]["feed_rate_mm_sec"] == 20
+    assert edited["final_depth_mm"] == 22
+    assert edited["safe_z_mm"] == 30
+    assert edited["home_x_mm"] == 4
+    reopened = normalize_profile(edited, known_tools={})
+    assert reopened["tool_values"]["diameter_mm"] == 8
+    stored["tool_diameter_mm"] = 11
+    stored["feed_rate_mm_sec"] = 1
+    again = normalize_profile(edited, known_tools={"T9_CUT": stored})
+    assert again["tool_values"]["diameter_mm"] == 8
+    assert again["tool_values"]["feed_rate_mm_sec"] == 20
+    with pytest.raises(MachiningSetupError) as invalid:
+        normalize_profile(
+            {**created, "tool_values": {**created["tool_values"], "stepover_percent": 0}},
+            known_tools=known,
+        )
+    assert invalid.value.code == "stepover_invalid"
+
+
+def test_feed_rate_is_converted_from_mm_per_second_once():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    associations = normalize_associations(
+        [_linked(profile, "association:cut", ["cut_path:piece-a:outer"])],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    assert associations[0]["local_values"]["tool_values"]["feed_rate_mm_sec"] == 170
+    assert associations[0]["local_values"]["tool_values"]["rate_units"] == RATE_UNITS_MM_SEC
+    snapshot = calculate_toolpath_snapshot(
+        association=associations[0],
+        toolpath_name="T9_CUT",
+        program=_program("cut_path:piece-a:outer"),
+    )
+    assert snapshot["preset"]["feed_rate_mm_min"] == 10200
+    assert snapshot["preset"]["plunge_rate_mm_min"] == 1800
+
+
+def test_one_association_can_hold_several_vectors_and_can_be_edited_in_place():
+    catalog = _catalog(
+        _vector("cut_path:piece-a:outer", piece="piece-a"),
+        _vector("cut_path:piece-b:outer", piece="piece-b"),
+        _vector("cut_path:piece-c:outer", piece="piece-c"),
+    )
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    other = normalize_profile(_profile(profile_id="profile:other", name="Other"), known_tools=known)
+    stored = normalize_associations(
+        [
+            _linked(profile, "association:group", ["cut_path:piece-a:outer", "cut_path:piece-b:outer"]),
+            _linked(other, "association:rest", ["cut_path:piece-c:outer"]),
+        ],
+        profiles=[profile, other],
+        catalog=catalog,
+    )
+    assert stored[0]["vector_ids"] == ["cut_path:piece-a:outer", "cut_path:piece-b:outer"]
+    edited = normalize_associations(
+        [
+            {
+                **stored[0],
+                "local_values": {**stored[0]["local_values"], "final_depth_mm": 24, "safe_z_mm": 28},
+                "toolpath_id": "toolpath:old",
+            },
+            stored[1],
+        ],
+        profiles=[profile, other],
+        catalog=catalog,
+    )
+    assert edited[0]["association_id"] == "association:group"
+    assert edited[0]["vector_ids"] == stored[0]["vector_ids"]
+    assert edited[1]["local_values"]["final_depth_mm"] == 20
+    with pytest.raises(MachiningSetupError) as overlap:
+        normalize_associations(
+            [
+                _linked(profile, "association:group", ["cut_path:piece-a:outer", "cut_path:piece-c:outer"]),
+                stored[1],
+            ],
+            profiles=[profile, other],
+            catalog=catalog,
+        )
+    assert overlap.value.code == "vector_already_assigned"
+
+
+def test_editing_an_association_releases_its_active_snapshot_without_deleting_history():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    association = normalize_associations(
+        [_linked(profile, "association:cut", ["cut_path:piece-a:outer"], final_depth_mm=21)],
+        profiles=[profile],
+        catalog=catalog,
+    )[0]
+    snapshot = calculate_toolpath_snapshot(
+        association=association,
+        toolpath_name="T9_CUT",
+        program=_program("cut_path:piece-a:outer"),
+        toolpath_id="toolpath:first",
+    )
+    association["toolpath_id"] = snapshot["toolpath_id"]
+    unchanged = release_stale_toolpath_links([association], [snapshot])
+    assert unchanged[0]["toolpath_id"] == "toolpath:first"
+    changed = copy.deepcopy(association)
+    changed["local_values"]["final_depth_mm"] = 25
+    released = release_stale_toolpath_links([changed], [snapshot])
+    assert released[0]["toolpath_id"] == ""
+    assert snapshot["local_values"]["final_depth_mm"] == 21
+    program = overlay_frozen_toolpaths(
+        _program("cut_path:piece-a:outer"),
+        [snapshot],
+        associations=released,
+    )
+    assert program["operations"][0]["toolpaths"][0].get("safe_z_mm") is None
+
+
+def test_reassigning_a_vector_keeps_history_and_executes_only_the_linked_snapshot():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    first_association = normalize_associations(
+        [_linked(profile, "association:first", ["cut_path:piece-a:outer"], final_depth_mm=21)],
+        profiles=[profile],
+        catalog=catalog,
+    )[0]
+    program = _program("cut_path:piece-a:outer")
+    first = freeze_calculated_toolpath(
+        association=first_association,
+        toolpath_name="First",
+        program=program,
+        snapshots=[],
+    )
+    first_association["toolpath_id"] = first[-1]["toolpath_id"]
+    second_association = normalize_associations(
+        [_linked(profile, "association:second", ["cut_path:piece-a:outer"], final_depth_mm=22)],
+        profiles=[profile],
+        catalog=catalog,
+    )[0]
+    both = freeze_calculated_toolpath(
+        association=second_association,
+        toolpath_name="Second",
+        program=program,
+        snapshots=first,
+    )
+    second_association["toolpath_id"] = both[-1]["toolpath_id"]
+    assert len(both) == 2
+    assert both[0]["superseded_by"] == both[1]["toolpath_id"]
+    active = active_toolpath_snapshots(both, [second_association])
+    assert [row["name"] for row in active] == ["Second"]
+    overlaid = overlay_frozen_toolpaths(program, both, associations=[second_association])
+    assert overlaid["operations"][0]["toolpaths"][0]["preset"]["final_depth_mm"] == 22
+    assert len(overlaid["operations"][0]["toolpaths"]) == 1
+
+
+def test_toolpath_snapshot_fingerprint_tracks_nc_changes_and_ignores_json_shape():
+    base = settings_fingerprint(
+        operation_presets={"cut_path": "T9_CUT"},
+        path_overrides={},
+        presets={"T9_CUT": _stored_tool()},
+        machine_profile={"tool_number": "T9"},
+    )
+    assert settings_fingerprint(
+        operation_presets={"cut_path": "T9_CUT"},
+        path_overrides={},
+        presets={"T9_CUT": _stored_tool()},
+        machine_profile={"tool_number": "T9"},
+        toolpath_snapshots=[],
+        vector_associations=[],
+    ) == base
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    association = normalize_associations(
+        [_linked(profile, "association:cut", ["cut_path:piece-a:outer"], final_depth_mm=21, safe_z_mm=25)],
+        profiles=[profile],
+        catalog=catalog,
+    )[0]
+    snapshot = calculate_toolpath_snapshot(
+        association=association,
+        toolpath_name="T9_CUT",
+        program=_program("cut_path:piece-a:outer"),
+        toolpath_id="toolpath:first",
+    )
+    association["toolpath_id"] = snapshot["toolpath_id"]
+    arguments = {
+        "operation_presets": {"cut_path": "T9_CUT"},
+        "path_overrides": {},
+        "presets": {"T9_CUT": _stored_tool()},
+        "machine_profile": {"tool_number": "T9"},
+        "toolpath_snapshots": [snapshot],
+        "vector_associations": [association],
+    }
+    current = settings_fingerprint(**arguments)
+    assert current != base
+    assert effective_status(
+        generation_fingerprint=current,
+        current_fingerprint=current,
+        stored_plan=("PLAN-1", 1),
+        current_plan=("PLAN-1", 1),
+        generated_file="/private/files/sheet.sim.nc",
+        file_present=True,
+        snapshot_complete=True,
+    ) == GENERATED
+    changed_snapshot = copy.deepcopy(snapshot)
+    changed_snapshot["preset"]["feed_rate_mm_min"] = 9000
+    changed_snapshot["paths"][0]["motions"] = [{"kind": "cut", "x_mm": 1, "y_mm": 2, "depth_mm": 3}]
+    changed = settings_fingerprint(**{**arguments, "toolpath_snapshots": [changed_snapshot]})
+    assert changed != current
+    assert effective_status(
+        generation_fingerprint=current,
+        current_fingerprint=changed,
+        stored_plan=("PLAN-1", 1),
+        current_plan=("PLAN-1", 1),
+        generated_file="/private/files/sheet.sim.nc",
+        file_present=True,
+        snapshot_complete=True,
+    ) == NEEDS_REGENERATION
+    shuffled = copy.deepcopy(snapshot)
+    shuffled["preset"] = {key: shuffled["preset"][key] for key in reversed(list(shuffled["preset"]))}
+    shuffled["unused_note"] = "formatting only"
+    assert nc_toolpath_fingerprint_rows([shuffled], [association]) == nc_toolpath_fingerprint_rows(
+        [snapshot],
+        [association],
+    )
+    assert settings_fingerprint(**{**arguments, "toolpath_snapshots": [shuffled]}) == current
+
+
+def test_a_tool_used_by_a_profile_association_or_snapshot_cannot_be_deleted():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    association = {"local_values": profile}
+    snapshot = {"local_values": profile, "preset": {"preset_name": "T9_CUT"}}
+    assert machining_tool_uses("T9_CUT", profiles=[profile])["profiles"] == 1
+    assert machining_tool_uses("T9_CUT", associations=[association])["associations"] == 1
+    assert machining_tool_uses("T9_CUT", snapshots=[snapshot])["snapshots"] == 1
+    assert machining_tool_uses("Unused", profiles=[profile])["profiles"] == 0
+    assert unused_tool_preset_can_be_deleted(
+        operation_uses=0, path_uses=0, factory_uses=0, machining_uses=0
+    ) is True
+    assert unused_tool_preset_can_be_deleted(
+        operation_uses=0, path_uses=0, factory_uses=0, machining_uses=1
+    ) is False

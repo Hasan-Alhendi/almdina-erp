@@ -649,6 +649,41 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
     display: grid;
     gap: 4px;
 }
+.dco-artcam .dco-artcam-assoc__row,
+.dco-artcam .dco-artcam-fields {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+.dco-artcam .dco-artcam-assoc__row,
+.dco-artcam .dco-artcam-fields--pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dco-artcam .dco-artcam-fields--home {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dco-artcam .form-section {
+    margin-block-start: 12px;
+}
+.dco-artcam-note {
+    margin: 8px 0 0;
+    color: var(--text-muted, #687481);
+}
+@media (max-width: 720px) {
+    .dco-artcam .dco-artcam-assoc__row,
+    .dco-artcam .dco-artcam-fields,
+    .dco-artcam .dco-artcam-fields--pair {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .dco-artcam .dco-artcam-fields--home {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width: 520px) {
+    .dco-artcam .dco-artcam-fields--home {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
 .dco-artcam option:disabled {
     color: var(--text-muted, #6b7280);
 }

@@ -64,6 +64,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     get_cnc_machine,
     known_tool_presets,
     list_cnc_machines,
+    machining_profile_catalog,
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
@@ -256,6 +257,7 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
     workspace["message"] = _message(workspace["reason_code"]) if workspace["reason_code"] else ""
     workspace["can_edit_factory_cnc"] = doctype_has_capability(Capability.EDIT_FACTORY_CNC_DEFAULTS)
+    workspace["machining_profile_catalog"] = machining_profile_catalog()
     try:
         workspace["layout"] = (
             operational_board_layout(approved_plan_snapshot(order))
@@ -364,40 +366,42 @@ def save_cnc_operational_sheet(
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
-        prepared = prepare_sheet_settings(
-            order_name=str(order.name),
-            approved_plan=plan,
-            plan_is_current=plan is not None,
-            pieces=placed_piece_views(order),
-            sheet_no=cint(sheet_no),
-            existing=existing,
-            operation_presets={str(key): value for key, value in parsed_operations.items()},
-            path_overrides={str(key): value for key, value in parsed_paths.items()},
-            known_presets=known_tool_presets(),
-            machine_profile=machine_profile_view(),
-            operation_order=None if parsed_order is None else [str(item) for item in parsed_order],
-            cut_path_early_confirmed=(
+        sheet_arguments = {
+            "order_name": str(order.name),
+            "approved_plan": plan,
+            "plan_is_current": plan is not None,
+            "pieces": placed_piece_views(order),
+            "sheet_no": cint(sheet_no),
+            "existing": existing,
+            "operation_presets": {str(key): value for key, value in parsed_operations.items()},
+            "path_overrides": {str(key): value for key, value in parsed_paths.items()},
+            "known_presets": known_tool_presets(),
+            "machine_profile": machine_profile_view(),
+            "operation_order": None if parsed_order is None else [str(item) for item in parsed_order],
+            "cut_path_early_confirmed": (
                 None if parsed_order is None else bool(cint(cut_path_early_confirmed))
             ),
-            operation_sources=None if parsed_sources is None else {
+            "operation_sources": None if parsed_sources is None else {
                 str(key): value for key, value in parsed_sources.items()
             },
-            factory_defaults=factory_operation_defaults(),
-            perimeter_join_mode=perimeter_join_mode,
-            cut_path_sequence=parsed_sequence,
-            perimeter_cut_early_confirmed=(
+            "factory_defaults": factory_operation_defaults(),
+            "perimeter_join_mode": perimeter_join_mode,
+            "cut_path_sequence": parsed_sequence,
+            "perimeter_cut_early_confirmed": (
                 None
                 if perimeter_cut_early_confirmed is None
                 else bool(cint(perimeter_cut_early_confirmed))
             ),
-            cnc_machine=cnc_machine,
-            offset_left_cm=offset_left_cm,
-            offset_bottom_cm=offset_bottom_cm,
-            machine_catalog=list_cnc_machines(),
-            plan_snapshot=approved_plan_snapshot(order),
-            require_cnc_machine=False,
-        )
+            "cnc_machine": cnc_machine,
+            "offset_left_cm": offset_left_cm,
+            "offset_bottom_cm": offset_bottom_cm,
+            "machine_catalog": list_cnc_machines(),
+            "plan_snapshot": approved_plan_snapshot(order),
+            "require_cnc_machine": False,
+        }
+        prepared = prepare_sheet_settings(**sheet_arguments)
         if machining_profiles is not None or vector_associations is not None:
+            snapshots = list((existing or {}).get("toolpath_snapshots") or [])
             profiles, associations = accept_sheet_machining(
                 paths=list(prepared.get("paths") or []),
                 profiles=_json_list(machining_profiles)
@@ -407,7 +411,12 @@ def save_cnc_operational_sheet(
                 if vector_associations is not None
                 else list((existing or {}).get("vector_associations") or []),
                 known_tools=known_tool_presets(),
-                snapshots=list((existing or {}).get("toolpath_snapshots") or []),
+                snapshots=snapshots,
+            )
+            prepared = prepare_sheet_settings(
+                **sheet_arguments,
+                toolpath_snapshots=snapshots,
+                vector_associations=associations,
             )
             prepared["machining_profiles_json"] = profiles
             prepared["vector_associations_json"] = associations
@@ -508,6 +517,31 @@ def calculate_cnc_association_toolpath(
             snapshots=list(saved.get("toolpath_snapshots") or []),
         )
         stored_associations = remember_toolpath_on_association(associations, snapshots)
+        restamped = prepare_sheet_settings(
+            order_name=str(order.name),
+            approved_plan=plan,
+            plan_is_current=True,
+            pieces=placed_piece_views(order),
+            sheet_no=cint(sheet_no),
+            existing=saved,
+            operation_presets=operations,
+            path_overrides=paths,
+            known_presets=known_tool_presets(),
+            machine_profile=machine_profile_view(),
+            operation_order=order_keys,
+            cut_path_early_confirmed=confirmed,
+            factory_defaults=factory_operation_defaults(),
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
+            cnc_machine=saved.get("cnc_machine"),
+            offset_left_cm=saved.get("offset_left_cm"),
+            offset_bottom_cm=saved.get("offset_bottom_cm"),
+            machine_catalog=list_cnc_machines(),
+            plan_snapshot=approved_plan_snapshot(order),
+            toolpath_snapshots=snapshots,
+            vector_associations=stored_associations,
+        )
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     update_machining_json(
@@ -515,6 +549,8 @@ def calculate_cnc_association_toolpath(
         profiles=list(saved.get("machining_profiles") or []),
         associations=stored_associations,
         snapshots=snapshots,
+        fingerprint=str(restamped.get("settings_fingerprint") or ""),
+        status=str(restamped.get("status") or ""),
     )
     return _workspace_for(order, can_prepare=True)
 
@@ -823,7 +859,11 @@ def generate_cnc_sheet_nc(
         )
         frozen = list((saved or {}).get("toolpath_snapshots") or [])
         if frozen:
-            program = overlay_frozen_toolpaths(program, frozen)
+            program = overlay_frozen_toolpaths(
+                program,
+                frozen,
+                associations=list(saved.get("vector_associations") or []),
+            )
         machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])
         if str(saved.get("settings_fingerprint") or "") != fingerprint:

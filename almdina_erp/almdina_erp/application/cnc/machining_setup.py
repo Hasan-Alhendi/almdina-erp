@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     machining_public_view,
     normalize_associations,
     normalize_profiles,
+    release_stale_toolpath_links,
     synthetic_preset_name,
     vectors_from_paths,
 )
@@ -36,6 +37,7 @@ def accept_sheet_machining(
         profiles=stored_profiles,
         catalog=catalog,
     )
+    stored_associations = release_stale_toolpath_links(stored_associations, snapshots)
     assert_physical_tool_consistency(stored_associations, snapshots)
     return stored_profiles, stored_associations
 
@@ -85,7 +87,18 @@ def freeze_calculated_toolpath(
         program=program,
         existing_snapshots=snapshots,
     )
-    return append_snapshot(snapshots, snapshot)
+    previous_id = str(association.get("toolpath_id") or "")
+    stored = append_snapshot(snapshots, snapshot)
+    new_id = str(snapshot.get("toolpath_id") or "")
+    new_vectors = {str(vector_id) for vector_id in snapshot.get("vector_ids") or ()}
+    for row in stored:
+        row_id = str(row.get("toolpath_id") or "")
+        if row_id == new_id or row.get("superseded_by"):
+            continue
+        shared = new_vectors.intersection(str(vector_id) for vector_id in row.get("vector_ids") or ())
+        if row_id == previous_id or shared:
+            row["superseded_by"] = new_id
+    return stored
 
 
 def remember_toolpath_on_association(

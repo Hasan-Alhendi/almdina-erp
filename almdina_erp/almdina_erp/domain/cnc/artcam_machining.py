@@ -353,6 +353,22 @@ def _home_z(value: Any) -> float:
     )
 
 
+def canonical_tool_copy(raw: Mapping[str, Any], *, tool_preset: str) -> dict[str, Any]:
+    """Validate a stored tool copy. Ball Nose uses the same rules as the base tool."""
+
+    stored = _copy(raw)
+    tool_type = str(stored.get("tool_type") or "").strip()
+    rate_units = str(stored.get("rate_units") or "").strip()
+    if tool_type == BALL_NOSE or rate_units == RATE_UNITS_MM_SEC:
+        payload = normalize_artcam_tool(stored).public_dict()
+        payload["tool_preset"] = str(tool_preset or "")
+        payload["enabled"] = True if stored.get("enabled", True) else False
+        return payload
+    payload = tool_copy_from_stored(stored, tool_preset=tool_preset)
+    payload["tool_preset"] = str(tool_preset or payload.get("tool_preset") or "")
+    return payload
+
+
 def normalize_profile(
     raw: Mapping[str, Any],
     *,
@@ -363,13 +379,15 @@ def normalize_profile(
 
     name = _text(raw.get("name"), "profile_name_required")
     tool_name = _text(raw.get("tool_preset"), "tool_preset_required")
-    stored = known_tools.get(tool_name)
-    if stored is None:
-        raise MachiningSetupError("preset_not_found")
-    if raw.get("tool_values"):
-        tool_values = _copy(raw.get("tool_values") if isinstance(raw.get("tool_values"), Mapping) else {})
-        tool_values["tool_preset"] = tool_name
+    explicit = raw.get("tool_values") if isinstance(raw.get("tool_values"), Mapping) else None
+    if explicit:
+        tool_values = canonical_tool_copy(explicit, tool_preset=tool_name)
     else:
+        stored = known_tools.get(tool_name)
+        if stored is None:
+            raise MachiningSetupError("preset_not_found")
+        if stored.get("enabled", True) is False:
+            raise MachiningSetupError("preset_disabled")
         tool_values = tool_copy_from_stored(stored, tool_preset=tool_name)
     profile = {
         "profile_id": _stable_id(profile_id or raw.get("profile_id") or new_machining_id("profile"), "profile_id_invalid"),
@@ -518,10 +536,12 @@ def _local_from_profile(profile: Mapping[str, Any], raw_local: Any) -> dict[str,
         local = _copy(profile)
     local["profile_id"] = profile["profile_id"]
     local["tool_preset"] = profile["tool_preset"]
-    if not isinstance(local.get("tool_values"), Mapping):
+    if not isinstance(local.get("tool_values"), Mapping) or not local.get("tool_values"):
         local["tool_values"] = _copy(profile.get("tool_values") if isinstance(profile.get("tool_values"), Mapping) else {})
-    else:
-        local["tool_values"] = _copy(local["tool_values"])
+    local["tool_values"] = canonical_tool_copy(
+        local["tool_values"],
+        tool_preset=str(local.get("tool_preset") or ""),
+    )
     local["final_depth_mm"] = _depth_mm(local.get("final_depth_mm", profile.get("final_depth_mm")))
     local["safe_z_mm"] = _safe_z(local.get("safe_z_mm", profile.get("safe_z_mm")))
     local["home_x_mm"] = _home_axis(local.get("home_x_mm", profile.get("home_x_mm")), "home_x_invalid")
@@ -835,16 +855,197 @@ def local_preset_payload(local: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _canon_number(value: Any) -> Any:
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if not math.isfinite(number):
+            return value
+        if number.is_integer():
+            return int(number)
+        return round(number, 6)
+    return value
+
+
+def _nc_signature(local: Mapping[str, Any], vector_ids: Sequence[Any]) -> dict[str, Any]:
+    preset = _preset_from_local(local)
+    return {
+        "vectors": [str(vector_id) for vector_id in vector_ids],
+        "tool_number": preset.tool_number,
+        "diameter_mm": _canon_number(preset.tool_diameter_mm),
+        "final_depth_mm": _canon_number(preset.final_depth_mm),
+        "pass_depth_mm": _canon_number(preset.pass_depth_mm),
+        "spindle_speed_rpm": preset.spindle_speed_rpm,
+        "feed_rate_mm_min": _canon_number(preset.feed_rate_mm_min),
+        "plunge_rate_mm_min": _canon_number(preset.plunge_rate_mm_min),
+        "safe_z_mm": _canon_number(local.get("safe_z_mm")),
+        "home_x_mm": _canon_number(local.get("home_x_mm")),
+        "home_y_mm": _canon_number(local.get("home_y_mm")),
+        "home_z_mm": _canon_number(local.get("home_z_mm")),
+    }
+
+
+def release_stale_toolpath_links(
+    associations: Sequence[Mapping[str, Any]],
+    snapshots: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop the active link when the association no longer matches its snapshot.
+
+    The snapshot itself stays. A later calculation records the replacement.
+    """
+
+    by_id = {
+        str(snapshot.get("toolpath_id") or ""): snapshot
+        for snapshot in snapshots
+        if isinstance(snapshot, Mapping) and snapshot.get("toolpath_id")
+    }
+    released: list[dict[str, Any]] = []
+    for association in associations:
+        row = _copy(association)
+        link = str(row.get("toolpath_id") or "")
+        snapshot = by_id.get(link)
+        local = snapshot.get("local_values") if isinstance(snapshot, Mapping) else None
+        if isinstance(snapshot, Mapping) and isinstance(local, Mapping):
+            current = _nc_signature(row.get("local_values") or {}, row.get("vector_ids") or ())
+            frozen = _nc_signature(local, snapshot.get("vector_ids") or ())
+            if current != frozen:
+                row["toolpath_id"] = ""
+                row["toolpath_name"] = ""
+        released.append(row)
+    return released
+
+
+def active_toolpath_snapshots(
+    snapshots: Sequence[Mapping[str, Any]],
+    associations: Sequence[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the snapshots that may enter NC.
+
+    A linked association selects its snapshot by toolpath id. Historical
+    snapshots stay stored and do not execute. Callers that do not pass
+    associations keep the previous last-snapshot-per-path behavior.
+    """
+
+    rows = [_copy(snapshot) for snapshot in snapshots if isinstance(snapshot, Mapping)]
+    if associations is None:
+        return rows
+    linked_ids: list[str] = []
+    for association in associations:
+        if not isinstance(association, Mapping):
+            continue
+        toolpath_id = str(association.get("toolpath_id") or "").strip()
+        if toolpath_id and toolpath_id not in linked_ids:
+            linked_ids.append(toolpath_id)
+    if not linked_ids:
+        return []
+    by_id = {str(snapshot.get("toolpath_id") or ""): snapshot for snapshot in rows}
+    return [by_id[toolpath_id] for toolpath_id in linked_ids if toolpath_id in by_id]
+
+
+def nc_toolpath_fingerprint_rows(
+    snapshots: Sequence[Mapping[str, Any]] | None,
+    associations: Sequence[Mapping[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Canonical NC payload. Key order and unused snapshot fields do not matter."""
+
+    active = active_toolpath_snapshots(list(snapshots or ()), list(associations or ()))
+    rows: list[dict[str, Any]] = []
+    for snapshot in active:
+        preset = snapshot.get("preset") if isinstance(snapshot.get("preset"), Mapping) else {}
+        home = snapshot.get("home") if isinstance(snapshot.get("home"), Mapping) else {}
+        paths = []
+        for path in snapshot.get("paths") or ():
+            if not isinstance(path, Mapping):
+                continue
+            paths.append(
+                {
+                    "path_key": str(path.get("path_key") or ""),
+                    "closed": bool(path.get("closed")),
+                    "points": deepcopy(path.get("points") or []),
+                    "motions": deepcopy(path.get("motions") or []),
+                }
+            )
+        rows.append(
+            {
+                "toolpath_id": str(snapshot.get("toolpath_id") or ""),
+                "vector_ids": [str(vector_id) for vector_id in snapshot.get("vector_ids") or ()],
+                "tool_number": str(preset.get("tool_number") or ""),
+                "tool_diameter_mm": _canon_number(preset.get("tool_diameter_mm")),
+                "final_depth_mm": _canon_number(preset.get("final_depth_mm")),
+                "pass_depth_mm": _canon_number(preset.get("pass_depth_mm")),
+                "spindle_speed_rpm": _canon_number(preset.get("spindle_speed_rpm")),
+                "feed_rate_mm_min": _canon_number(preset.get("feed_rate_mm_min")),
+                "plunge_rate_mm_min": _canon_number(preset.get("plunge_rate_mm_min")),
+                "safe_z_mm": _canon_number(snapshot.get("safe_z_mm")),
+                "home": {
+                    "x_mm": _canon_number(home.get("x_mm")),
+                    "y_mm": _canon_number(home.get("y_mm")),
+                    "z_mm": _canon_number(home.get("z_mm")),
+                },
+                "paths": paths,
+            }
+        )
+    return sorted(rows, key=lambda row: str(row.get("toolpath_id") or ""))
+
+
+def machining_tool_uses(
+    preset_name: str,
+    *,
+    profiles: Sequence[Mapping[str, Any]] = (),
+    associations: Sequence[Mapping[str, Any]] = (),
+    snapshots: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, int]:
+    """Count saved references. A snapshot copy is independent of a live profile."""
+
+    name = str(preset_name or "").strip()
+    profile_uses = sum(
+        1
+        for profile in profiles
+        if isinstance(profile, Mapping) and str(profile.get("tool_preset") or "") == name
+    )
+    association_uses = 0
+    for association in associations:
+        if not isinstance(association, Mapping):
+            continue
+        local = association.get("local_values") if isinstance(association.get("local_values"), Mapping) else {}
+        tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}
+        if name and name in {str(local.get("tool_preset") or ""), str(tool_values.get("tool_preset") or "")}:
+            association_uses += 1
+    snapshot_uses = 0
+    for snapshot in snapshots:
+        if not isinstance(snapshot, Mapping):
+            continue
+        local = snapshot.get("local_values") if isinstance(snapshot.get("local_values"), Mapping) else {}
+        tool_values = snapshot.get("tool_values") if isinstance(snapshot.get("tool_values"), Mapping) else {}
+        preset = snapshot.get("preset") if isinstance(snapshot.get("preset"), Mapping) else {}
+        if name and name in {
+            str(local.get("tool_preset") or ""),
+            str(tool_values.get("tool_preset") or ""),
+            str(preset.get("preset_name") or ""),
+        }:
+            snapshot_uses += 1
+    return {
+        "profiles": profile_uses,
+        "associations": association_uses,
+        "snapshots": snapshot_uses,
+    }
+
+
 def overlay_frozen_toolpaths(
     program: Mapping[str, Any],
     snapshots: Sequence[Mapping[str, Any]],
+    associations: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Replace live preset motions with the frozen snapshot where one exists."""
+    """Replace live preset motions with the active frozen snapshot for each path."""
 
     if not snapshots:
         return dict(program)
+    selected = active_toolpath_snapshots(snapshots, associations)
+    if not selected:
+        return dict(program)
     by_path: dict[str, Mapping[str, Any]] = {}
-    for snapshot in snapshots:
+    for snapshot in selected:
         if not isinstance(snapshot, Mapping):
             continue
         for path in snapshot.get("paths") or ():
@@ -938,6 +1139,10 @@ def machining_public_view(
     snapshots: Sequence[Mapping[str, Any]],
     catalog: Sequence[MachinableVector],
 ) -> dict[str, Any]:
+    active_ids = {
+        str(snapshot.get("toolpath_id") or "")
+        for snapshot in active_toolpath_snapshots(snapshots, associations)
+    }
     return {
         "profiles": [_copy(row) for row in profiles if isinstance(row, Mapping)],
         "associations": [_copy(row) for row in associations if isinstance(row, Mapping)],
@@ -951,6 +1156,8 @@ def machining_public_view(
                 "safe_z_mm": row.get("safe_z_mm"),
                 "home": _copy(row.get("home") if isinstance(row.get("home"), Mapping) else {}),
                 "preset": _copy(row.get("preset") if isinstance(row.get("preset"), Mapping) else {}),
+                "active": str(row.get("toolpath_id") or "") in active_ids,
+                "superseded_by": str(row.get("superseded_by") or ""),
             }
             for row in snapshots
             if isinstance(row, Mapping)
@@ -971,13 +1178,18 @@ __all__ = [
     "ArtcamToolValues",
     "MachinableVector",
     "MachiningSetupError",
+    "active_toolpath_snapshots",
     "append_snapshot",
+    "canonical_tool_copy",
     "artcam_tool_storage",
     "assert_physical_tool_consistency",
     "association_availability",
     "calculate_toolpath_snapshot",
     "local_preset_payload",
     "machining_public_view",
+    "machining_tool_uses",
+    "nc_toolpath_fingerprint_rows",
+    "release_stale_toolpath_links",
     "new_machining_id",
     "normalize_artcam_tool",
     "normalize_associations",

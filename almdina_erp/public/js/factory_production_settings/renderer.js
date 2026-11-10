@@ -191,6 +191,37 @@
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the CNC machines.")}</p>`}
                     </div>
                 </article>
+                <article class="aps-section is-editable" data-section="cnc_profiles">
+                    <div class="aps-section-head">
+                        <div class="aps-section-copy">
+                            <span class="aps-section-accent" aria-hidden="true"></span>
+                            <div class="aps-section-titles">
+                                <span class="aps-section-kicker">${t("Operational files")}</span>
+                                <h3>${t("Machining profiles")}</h3>
+                                <div class="aps-section-desc">${t("Create ArtCAM profiles here. Each profile keeps its own copy of a tool. Profiles are not part of board settings or default board settings.")}</div>
+                            </div>
+                        </div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${panel.editable ? uiButton({
+                            label: t("Add a profile"),
+                            variant: "secondary",
+                            className: "aps-cnc-profile-add",
+                        }) : ""}</div>
+                    </div>
+                    <div class="aps-cnc-presets">
+                        <p class="aps-cnc-presets__empty">${Number(panel.profileCount || 0)
+                            ? t("{0} machining profiles are available.", [Number(panel.profileCount || 0)])
+                            : t("No machining profiles have been created yet.")}</p>
+                        ${(panel.profiles || []).length ? `<ul class="aps-cnc-tool-list">${(panel.profiles || []).map(profile => `
+                            <li>
+                                <span>${esc(profile.name || "")}</span>
+                                <span>${esc(profile.tool_preset || "")}</span>
+                                <span>${esc(profile.final_depth_mm == null ? "" : profile.final_depth_mm)}</span>
+                                ${panel.editable ? `<button type="button" class="btn btn-default btn-xs aps-cnc-profile-edit" data-profile-id="${esc(profile.profile_id)}">${esc(t("Edit"))}</button>` : ""}
+                            </li>
+                        `).join("")}</ul>` : ""}
+                        ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the machining profiles.")}</p>`}
+                    </div>
+                </article>
             `;
         }
 

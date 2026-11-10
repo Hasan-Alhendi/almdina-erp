@@ -22,6 +22,7 @@ frappe.pages["cnc-operational-files"].on_page_load = function (wrapper) {
         "/assets/almdina_erp/js/factory_production_settings/cnc_presets.js",
         "/assets/almdina_erp/js/factory_production_settings/cnc_machines.js",
         "/assets/almdina_erp/js/cnc/artcam_tool_dialog.js",
+        "/assets/almdina_erp/js/cnc/artcam_profile_dialog.js",
         "/assets/almdina_erp/js/factory_production_settings/controller.js",
     ]);
     const STYLESHEET = "/assets/almdina_erp/css/factory_production_settings.css?v=3";

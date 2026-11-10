@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cint
 
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import machining_tool_uses
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError, normalize_tool_preset
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
@@ -58,6 +62,15 @@ class CNCToolPreset(Document):
         self.plunge_rate_mm_min = normalized.plunge_rate_mm_min
         self.pass_depth_mm = normalized.pass_depth_mm
         self.enabled = 1 if normalized.enabled else 0
+        if not self.enabled and not self.is_new():
+            previous = self.get_doc_before_save()
+            if previous is not None and int(previous.enabled or 0):
+                live_uses, _snapshot_uses = _saved_machining_uses(self.name)
+                if live_uses:
+                    frappe.throw(
+                        _("This tool is still selected by a profile or vector association. Calculated toolpaths keep their own copy, but those live selections must choose another tool before this one can be disabled."),
+                        frappe.ValidationError,
+                    )
 
     def before_trash(self) -> None:
         references = find_link_references(self.doctype, self.name)
@@ -68,12 +81,47 @@ class CNCToolPreset(Document):
                 ),
                 frappe.ValidationError,
             )
+        live_uses, snapshot_uses = _saved_machining_uses(self.name)
+        if live_uses or snapshot_uses:
+            frappe.throw(
+                _("This tool is used by a sheet, a profile, a vector association, or a calculated toolpath. It cannot be deleted."),
+                frappe.ValidationError,
+            )
 
     def on_update(self) -> None:
         audit_saved_document(self)
 
     def on_trash(self) -> None:
         audit_deleted_document(self)
+
+
+def _saved_machining_uses(name: str) -> tuple[int, int]:
+    """Count profile/association selections separately from frozen snapshot copies."""
+
+    live_uses = 0
+    snapshot_uses = 0
+    for row in frappe.get_all(
+        "CNC Operational File",
+        fields=["machining_profiles_json", "vector_associations_json", "toolpath_snapshots_json"],
+    ):
+        uses = machining_tool_uses(
+            name,
+            profiles=_json_rows(row.machining_profiles_json),
+            associations=_json_rows(row.vector_associations_json),
+            snapshots=_json_rows(row.toolpath_snapshots_json),
+        )
+        live_uses += uses["profiles"] + uses["associations"]
+        snapshot_uses += uses["snapshots"]
+    if frappe.db.exists("DocType", "CNC Machining Profile"):
+        live_uses += cint(frappe.db.count("CNC Machining Profile", {"tool_preset": name}))
+    return live_uses, snapshot_uses
+
+
+def _json_rows(raw: object) -> list:
+    if not raw:
+        return []
+    parsed = json.loads(raw) if isinstance(raw, str) else raw
+    return list(parsed or []) if isinstance(parsed, list) else []
 
 
 __all__ = ["CNCToolPreset"]

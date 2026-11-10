@@ -3927,3 +3927,15 @@ Save tool,حفظ الريشة
 Home position,نقطة البداية
 Edit profile,تعديل البروفايل
 Tool copy,نسخة الريشة
+Edit association,تعديل الربط
+Not the active toolpath,ليس مسار التشغيل النشط
+Stepover and the final tool offset are stored on the copy. This calculation follows the approved cutter-center path and does not build a pocket or raster.,عرض التداخل وإزاحة الريشة النهائية يُحفظان في النسخة. الحساب الحالي يتبع مسار مركز القص المعتمد ولا ينشئ تفريغ جيب أو مسحًا شبكيًا.
+This tool is still selected by a profile or vector association. Calculated toolpaths keep their own copy, but those live selections must choose another tool before this one can be disabled.,هذه الريشة ما زالت مختارة في بروفايل أو ربط متجهات. مسارات التشغيل المحسوبة تحتفظ بنسختها، لكن الاختيارات الحية يجب أن تختار ريشة أخرى قبل تعطيل هذه الريشة.
+This tool is used by a sheet, a profile, a vector association, or a calculated toolpath. It cannot be deleted.,هذه الريشة مستخدمة في لوح أو بروفايل أو ربط متجهات أو مسار تشغيل محسوب. لا يمكن حذفها.
+Machining profiles,بروفايلات التشغيل
+Create ArtCAM profiles here. Each profile keeps its own copy of a tool. Profiles are not part of board settings or default board settings.,تُنشأ بروفايلات ArtCAM هنا. يحتفظ كل بروفايل بنسخته من الريشة. البروفايلات ليست جزءًا من إعدادات اللوح أو إعدادات اللوح الافتراضية.
+Add a profile,إضافة بروفايل
+"{0} machining profiles are available.",يتوفر {0} من بروفايلات التشغيل.
+No machining profiles have been created yet.,لم تُنشأ بروفايلات تشغيل بعد.
+A factory settings manager must create the machining profiles.,يجب أن ينشئ مسؤول إعدادات المصنع بروفايلات التشغيل.
+You do not have permission to edit ArtCAM machining profiles.,ليست لديك صلاحية تعديل بروفايلات ArtCAM.

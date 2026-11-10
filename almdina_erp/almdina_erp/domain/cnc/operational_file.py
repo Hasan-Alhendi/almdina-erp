@@ -315,24 +315,33 @@ def settings_fingerprint(
     cut_path_sequence: Sequence[str] | None = None,
     perimeter_cut_early_confirmed: bool = False,
     sheet_placement: Mapping[str, Any] | None = None,
+    toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
+    vector_associations: Sequence[Mapping[str, Any]] | None = None,
 ) -> str:
     resolved = []
     for key in sorted(set(operation_presets) | set(path_overrides)):
         preset_name = str(path_overrides.get(key) or operation_presets.get(key) or "").strip()
         snapshot = dict(presets.get(preset_name) or {})
         resolved.append({"key": key, "preset": preset_name, "values": snapshot})
-    return _fingerprint(
-        {
-            "assignments": resolved,
-            "operation_order": [str(key) for key in (operation_order or ())],
-            "cut_path_early_confirmed": bool(cut_path_early_confirmed),
-            "perimeter_join_mode": str(perimeter_join_mode or "separate"),
-            "cut_path_sequence": [str(key) for key in (cut_path_sequence or ())],
-            "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
-            "machine_profile": dict(machine_profile or {}),
-            "sheet_placement": dict(sheet_placement or {}),
-        }
-    )
+    payload: dict[str, Any] = {
+        "assignments": resolved,
+        "operation_order": [str(key) for key in (operation_order or ())],
+        "cut_path_early_confirmed": bool(cut_path_early_confirmed),
+        "perimeter_join_mode": str(perimeter_join_mode or "separate"),
+        "cut_path_sequence": [str(key) for key in (cut_path_sequence or ())],
+        "perimeter_cut_early_confirmed": bool(perimeter_cut_early_confirmed),
+        "machine_profile": dict(machine_profile or {}),
+        "sheet_placement": dict(sheet_placement or {}),
+    }
+    if toolpath_snapshots is not None or vector_associations is not None:
+        from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+            nc_toolpath_fingerprint_rows,
+        )
+
+        rows = nc_toolpath_fingerprint_rows(toolpath_snapshots, vector_associations)
+        if rows:
+            payload["toolpath_snapshots"] = rows
+    return _fingerprint(payload)
 
 
 def default_operation_order(present: Sequence[str]) -> tuple[str, ...]:

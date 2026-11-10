@@ -29,114 +29,143 @@
         return `${prefix}:${token}`;
     }
 
-    function optionState(disabled) {
-        return disabled ? " disabled" : "";
+    const TOOL_FIELDS = Object.freeze([
+        ["description", "Description", "Data", false],
+        ["tool_number", "Tool Number", "Int", false],
+        ["tool_type", "Tool Type", "Data", true],
+        ["tool_units", "Tool Units", "Data", true],
+        ["rate_units", "Rate Units", "Data", true],
+        ["notes", "Notes", "Small Text", false],
+        ["diameter_mm", "Diameter (D)", "Float", false],
+        ["stepdown_mm", "Stepdown (mm)", "Float", false],
+        ["final_tool_offset_mm", "Final Tool Offset (mm)", "Float", false],
+        ["stepover_size_mm", "Stepover size (mm)", "Float", false],
+        ["stepover_percent", "Stepover percent of D", "Float", false],
+        ["spindle_speed_rpm", "Spindle Speed (rpm)", "Int", false],
+        ["feed_rate_mm_sec", "Feed Rate (mm/sec)", "Float", false],
+        ["plunge_rate_mm_sec", "Plunge Rate (mm/sec)", "Float", false],
+    ]);
+
+    const PROFILE_FIELDS = Object.freeze([
+        ["final_depth_mm", "Final Depth (mm)", "Float"],
+        ["safe_z_mm", "Safe Z (mm)", "Float"],
+    ]);
+
+    const HOME_FIELDS = Object.freeze([
+        ["home_x_mm", "X (mm)", "Float"],
+        ["home_y_mm", "Y (mm)", "Float"],
+        ["home_z_mm", "Z (mm)", "Float"],
+    ]);
+
+    function profileRecords(context) {
+        const sheet = context.sheet || {};
+        const data = machining(sheet);
+        const catalog = ((context.workspace && context.workspace.machining_profile_catalog) || [])
+            .filter(row => row && row.enabled !== false);
+        const seen = new Set();
+        const rows = [];
+        catalog.forEach(row => {
+            if (!row.profile_id || seen.has(row.profile_id)) return;
+            seen.add(row.profile_id);
+            rows.push(row);
+        });
+        (data.profiles || []).forEach(row => {
+            if (!row || !row.profile_id || seen.has(row.profile_id)) return;
+            seen.add(row.profile_id);
+            rows.push(row);
+        });
+        return rows;
     }
 
-    function usedLabel(row) {
-        return row && row.used ? ` — ${translate("Already used")}` : "";
+    function vectorChoices(context, editingId) {
+        const availability = machining(context.sheet).availability || {};
+        const editing = (machining(context.sheet).associations || [])
+            .find(row => row && row.association_id === editingId);
+        const owned = new Set((editing && editing.vector_ids) || []);
+        if (editing && editing.selection && editing.selection.kind === "layer") {
+            owned.add(editing.selection.operation_key);
+        }
+        if (editing && editing.selection && editing.selection.kind === "sheet_perimeter") {
+            owned.add("sheet_perimeter");
+        }
+        const rows = [];
+        (availability.layers || []).forEach(layer => {
+            if (layer.disabled && !owned.has(layer.operation_key)) return;
+            rows.push({
+                value: layer.operation_key,
+                label: layer.dxf_layer || layer.operation_key,
+            });
+        });
+        (availability.vectors || []).forEach(vector => {
+            if (vector.disabled && !owned.has(vector.vector_id)) return;
+            rows.push({
+                value: vector.vector_id,
+                label: vector.label || vector.vector_id,
+            });
+        });
+        const perimeter = availability.sheet_perimeter;
+        if (perimeter && (!perimeter.disabled || owned.has("sheet_perimeter"))) {
+            rows.push({ value: "sheet_perimeter", label: "Sheet Perimeter" });
+        }
+        return rows;
+    }
+
+    function choiceLabel(context, value) {
+        const match = vectorChoices(context, "").find(row => row.value === value);
+        return match ? match.label : value;
     }
 
     function markup(workspace, sheet) {
         const data = machining(sheet);
-        const availability = data.availability || {};
-        const presets = (workspace && workspace.presets) || [];
-        const profiles = data.profiles || [];
         const associations = data.associations || [];
         const toolpaths = data.toolpaths || [];
-        const perimeter = availability.sheet_perimeter;
-        const profileOptions = profiles.map(profile => (
-            `<option value="${escapeHtml(profile.profile_id)}">${escapeHtml(profile.name)}</option>`
-        )).join("");
-        const toolOptions = presets.filter(preset => preset && preset.enabled !== false).map(preset => (
-            `<option value="${escapeHtml(preset.name)}">${escapeHtml(preset.description || preset.tool_name || preset.name)}</option>`
-        )).join("");
-        const layerOptions = (availability.layers || []).map(layer => (
-            `<option value="${escapeHtml(layer.operation_key)}"${optionState(layer.disabled)}>${escapeHtml(layer.dxf_layer || layer.operation_key)}${escapeHtml(usedLabel(layer))}</option>`
-        )).join("");
-        const vectorOptions = (availability.vectors || []).map(vector => (
-            `<option value="${escapeHtml(vector.vector_id)}"${optionState(vector.disabled)}>${escapeHtml(vector.label || vector.vector_id)}${escapeHtml(usedLabel(vector))}</option>`
-        )).join("");
-        const perimeterOption = perimeter
-            ? `<option value="sheet_perimeter"${optionState(perimeter.disabled)}>${escapeHtml(translate("Sheet Perimeter"))}${escapeHtml(usedLabel(perimeter))}</option>`
-            : "";
-        const profileCards = profiles.map(profile => `
-            <article class="dco-artcam-card" data-profile-id="${escapeHtml(profile.profile_id)}">
-                <header><strong>${escapeHtml(profile.name)}</strong><span>${escapeHtml(profile.tool_preset || "")}</span></header>
-                <p>${escapeHtml(translate("Final Depth"))}: ${escapeHtml(profile.final_depth_mm)} mm · ${escapeHtml(translate("Safe Z"))}: ${escapeHtml(profile.safe_z_mm)} mm</p>
-                <p>${escapeHtml(translate("Home position"))}: X ${escapeHtml(profile.home_x_mm)} · Y ${escapeHtml(profile.home_y_mm)} · Z ${escapeHtml(profile.home_z_mm)} mm</p>
-                <button type="button" class="btn btn-default btn-xs" data-artcam-edit-profile="${escapeHtml(profile.profile_id)}">${escapeHtml(translate("Edit profile"))}</button>
-            </article>
-        `).join("");
-        const associationCards = associations.map(row => `
+        const associationCards = associations.map(row => {
+            const labels = (row.vector_ids || []).map(id => choiceLabel({ workspace, sheet }, id));
+            const profile = profileRecords({ workspace, sheet }).find(item => item.profile_id === row.profile_id);
+            return `
             <article class="dco-artcam-card" data-association-id="${escapeHtml(row.association_id)}">
-                <header><strong>${escapeHtml((row.vector_ids || []).join(", "))}</strong></header>
-                <p>${escapeHtml(translate("Profile"))}: ${escapeHtml(row.profile_id || "")}</p>
-                ${row.toolpath_name ? `<p>${escapeHtml(row.toolpath_name)}</p>` : ""}
-                <button type="button" class="btn btn-default btn-xs" data-artcam-remove-association="${escapeHtml(row.association_id)}">${escapeHtml(translate("Remove"))}</button>
-            </article>
-        `).join("");
+                <header><strong>${escapeHtml(labels.join(", "))}</strong></header>
+                <p>Profile: ${escapeHtml((profile && profile.name) || row.profile_id || "")}</p>
+                <button type="button" class="btn btn-default btn-xs" data-artcam-edit-association="${escapeHtml(row.association_id)}">Edit</button>
+                <button type="button" class="btn btn-default btn-xs" data-artcam-remove-association="${escapeHtml(row.association_id)}">Remove</button>
+            </article>`;
+        }).join("");
         const toolpathItems = toolpaths.map(row => (
-            `<li data-toolpath-id="${escapeHtml(row.toolpath_id)}">${escapeHtml(row.name)}</li>`
+            `<li data-toolpath-id="${escapeHtml(row.toolpath_id)}">${escapeHtml(row.name)}${row.active ? "" : ` <span>${escapeHtml(translate("Not the active toolpath"))}</span>`}</li>`
         )).join("");
         return `
             <section class="dco-artcam" data-artcam-root>
-                <section class="dco-artcam-block">
-                    <h4>${escapeHtml(translate("Profiles"))}</h4>
-                    <div class="dco-artcam-list">${profileCards || `<p>${escapeHtml(translate("No profiles yet."))}</p>`}</div>
-                    <form data-artcam-profile-form>
-                        <label>${escapeHtml(translate("Profile name"))}<input name="name" required></label>
-                        <label>${escapeHtml(translate("Tool"))}<select name="tool_preset" required><option value="">${escapeHtml(translate("Choose"))}</option>${toolOptions}</select></label>
-                        <label>${escapeHtml(translate("Final Depth"))}<input name="final_depth_mm" type="number" min="0" step="0.001" required> <span>mm</span></label>
-                        <label>${escapeHtml(translate("Safe Z"))}<input name="safe_z_mm" type="number" min="0" step="0.001" required> <span>mm</span></label>
-                        <fieldset>
-                            <legend>${escapeHtml(translate("Home position"))}</legend>
-                            <label>X<input name="home_x_mm" type="number" step="0.001" required> <span>mm</span></label>
-                            <label>Y<input name="home_y_mm" type="number" step="0.001" required> <span>mm</span></label>
-                            <label>Z<input name="home_z_mm" type="number" min="0" step="0.001" required> <span>mm</span></label>
-                        </fieldset>
-                        <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(translate("Save profile"))}</button>
-                    </form>
-                </section>
                 <section class="dco-artcam-block" data-vector-association>
-                    <h4>${escapeHtml(translate("Vector Association"))}</h4>
+                    <h4>Vector Association</h4>
                     <div class="dco-artcam-list">${associationCards}</div>
-                    <form data-artcam-association-form>
-                        <label>${escapeHtml(translate("Vectors"))}
-                            <select name="vector_choice" required>
-                                <option value="">${escapeHtml(translate("Choose"))}</option>
-                                ${layerOptions}
-                                <optgroup label="${escapeHtml(translate("Selected Vectors"))}">${vectorOptions}</optgroup>
-                                ${perimeterOption}
-                            </select>
-                        </label>
-                        <label>${escapeHtml(translate("Profile"))}
-                            <select name="profile_id" required><option value="">${escapeHtml(translate("Choose"))}</option>${profileOptions}</select>
-                        </label>
-                        <label>${escapeHtml(translate("Final Depth"))}<input name="final_depth_mm" type="number" min="0" step="0.001"> <span>mm</span></label>
-                        <label>${escapeHtml(translate("Safe Z"))}<input name="safe_z_mm" type="number" min="0" step="0.001"> <span>mm</span></label>
-                        <fieldset>
-                            <legend>${escapeHtml(translate("Home position"))}</legend>
-                            <label>X<input name="home_x_mm" type="number" step="0.001"> <span>mm</span></label>
-                            <label>Y<input name="home_y_mm" type="number" step="0.001"> <span>mm</span></label>
-                            <label>Z<input name="home_z_mm" type="number" min="0" step="0.001"> <span>mm</span></label>
-                        </fieldset>
-                        <fieldset>
-                            <legend>${escapeHtml(translate("Tool copy"))}</legend>
-                            <label>${escapeHtml(translate("Diameter (D)"))}<input name="diameter_mm" type="number" min="0" step="0.001"> <span>mm</span></label>
-                            <label>${escapeHtml(translate("Stepdown"))}<input name="stepdown_mm" type="number" min="0" step="0.001"> <span>mm</span></label>
-                            <label>${escapeHtml(translate("Spindle Speed (rpm)"))}<input name="spindle_speed_rpm" type="number" min="1" step="1"></label>
-                            <label>${escapeHtml(translate("Feed Rate (mm/sec)"))}<input name="feed_rate_mm_sec" type="number" min="0" step="0.001"></label>
-                            <label>${escapeHtml(translate("Plunge Rate (mm/sec)"))}<input name="plunge_rate_mm_sec" type="number" min="0" step="0.001"></label>
-                        </fieldset>
-                        <button type="submit" class="btn btn-default btn-sm">${escapeHtml(translate("Assign"))}</button>
-                    </form>
+                    <div data-artcam-association>
+                        <div class="dco-artcam-assoc__row">
+                            <div data-artcam-vectors-host></div>
+                            <div data-artcam-profile-host></div>
+                        </div>
+                        <div data-artcam-association-detail hidden>
+                            <div class="form-section">
+                                <div class="section-head">Tool</div>
+                                <div class="section-body dco-artcam-fields" data-artcam-tool-fields></div>
+                            </div>
+                            <div class="form-section">
+                                <div class="section-head">Profile</div>
+                                <div class="section-body dco-artcam-fields dco-artcam-fields--pair" data-artcam-profile-fields></div>
+                            </div>
+                            <div class="form-section">
+                                <div class="section-head">Home</div>
+                                <div class="section-body dco-artcam-fields dco-artcam-fields--home" data-artcam-home-fields></div>
+                            </div>
+                            <p class="dco-artcam-note">Stepover and the final tool offset are stored on this association copy. This calculation follows the approved cutter-center path and does not build a pocket or raster.</p>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" data-artcam-assign>Assign</button>
+                    </div>
                     <form data-artcam-calculate-form>
                         <label>${escapeHtml(translate("Toolpath name"))}<input name="toolpath_name" required></label>
                         <label>${escapeHtml(translate("Vector Association"))}
                             <select name="association_id" required>
                                 <option value="">${escapeHtml(translate("Choose"))}</option>
-                                ${associations.map(row => `<option value="${escapeHtml(row.association_id)}">${escapeHtml((row.vector_ids || []).join(", "))}</option>`).join("")}
+                                ${associations.map(row => `<option value="${escapeHtml(row.association_id)}">${escapeHtml((row.vector_ids || []).map(id => choiceLabel({ workspace, sheet }, id)).join(", "))}</option>`).join("")}
                             </select>
                         </label>
                         <button type="submit" class="btn btn-primary btn-sm">${escapeHtml(translate("Calculate Now"))}</button>
@@ -152,10 +181,63 @@
 
     function formData(form) {
         const data = {};
-        new FormData(form).forEach((value, key) => {
-            data[key] = value;
+        Array.from(form.elements).forEach(element => {
+            if (!element.name) return;
+            data[element.name] = element.value;
         });
         return data;
+    }
+
+    function applyToolInputs(target, values) {
+        TOOL_FIELDS.forEach(([name]) => {
+            if (values[name] !== undefined && values[name] !== "") target[name] = values[name];
+        });
+        if (target.tool_type === "Ball Nose" || target.rate_units === "mm/sec") {
+            target.tool_type = "Ball Nose";
+            target.tool_units = "mm";
+            target.rate_units = "mm/sec";
+        }
+        return target;
+    }
+
+    let mounted = [];
+
+    function disposeMounted() {
+        mounted.forEach(control => {
+            if (control && typeof control.dispose === "function") control.dispose();
+        });
+        mounted = [];
+    }
+
+    function pinLabel(control, label) {
+        const wrapper = control && control.control && control.control.$wrapper;
+        if (!wrapper) return;
+        wrapper.find(".control-label").first().text(label);
+    }
+
+    function mountField(parent, name, label, fieldtype, value, readOnly) {
+        const ui = window.AlmdinaUi;
+        const host = document.createElement("div");
+        parent.appendChild(host);
+        const control = ui.control({
+            parent: host,
+            fieldname: name,
+            fieldtype,
+            label,
+            onlyInput: false,
+            readOnly: Boolean(readOnly),
+            value: value == null ? "" : value,
+            df: fieldtype === "Float" ? { precision: 3 } : {},
+        });
+        pinLabel(control, label);
+        mounted.push(control);
+        return control;
+    }
+
+    function readControl(control) {
+        if (!control || typeof control.getValue !== "function") return "";
+        const value = control.getValue();
+        return value == null ? "" : value;
     }
 
     function bind(root, context) {
@@ -163,12 +245,14 @@
         const host = root.querySelector("[data-artcam-root]");
         if (!host || host.dataset.artcamBound === "1") return;
         host.dataset.artcamBound = "1";
+        disposeMounted();
+        const ui = window.AlmdinaUi;
+        const state = { editingId: "", fields: {} };
+        if (ui && typeof ui.control === "function") mountAssociation(host, context, state);
         host.addEventListener("submit", event => {
             const form = event.target;
             if (!(form instanceof HTMLFormElement)) return;
             event.preventDefault();
-            if (form.matches("[data-artcam-profile-form]")) saveProfile(form, context);
-            if (form.matches("[data-artcam-association-form]")) saveAssociation(form, context);
             if (form.matches("[data-artcam-calculate-form]")) calculate(form, context);
         });
         host.addEventListener("click", event => {
@@ -178,16 +262,118 @@
                 removeAssociation(button.getAttribute("data-artcam-remove-association"), context);
                 return;
             }
-            const edit = event.target.closest("[data-artcam-edit-profile]");
-            if (!edit) return;
+            const editAssociation = event.target.closest("[data-artcam-edit-association]");
+            if (editAssociation) {
+                event.preventDefault();
+                fillAssociation(host, editAssociation.getAttribute("data-artcam-edit-association"), context, state);
+                return;
+            }
+            const assign = event.target.closest("[data-artcam-assign]");
+            if (!assign) return;
             event.preventDefault();
-            fillProfileForm(host, edit.getAttribute("data-artcam-edit-profile"), context);
+            saveAssociation(host, context, state);
+        });
+    }
+
+    function mountAssociation(host, context, state) {
+        const vectorsHost = host.querySelector("[data-artcam-vectors-host]");
+        const profileHost = host.querySelector("[data-artcam-profile-host]");
+        const ui = window.AlmdinaUi;
+        state.vectors = ui.control({
+            parent: vectorsHost,
+            fieldname: "vector_choice",
+            fieldtype: "MultiSelectList",
+            label: "Vectors",
+            onlyInput: false,
+            df: {
+                get_data(txt) {
+                    const query = String(txt || "").trim().toLowerCase();
+                    return vectorChoices(context, state.editingId).filter(row => (
+                        !query || String(row.label || "").toLowerCase().includes(query)
+                    ));
+                },
+            },
+        });
+        pinLabel(state.vectors, "Vectors");
+        if (state.vectors.control && state.vectors.control.$wrapper) {
+            state.vectors.control.$wrapper.find(".select-all-options").text("Select All");
+            state.vectors.control.$wrapper.find(".clear-selections").text("Clear All");
+        }
+        mounted.push(state.vectors);
+        const profiles = profileRecords(context);
+        state.profile = ui.control({
+            parent: profileHost,
+            fieldname: "profile_id",
+            fieldtype: "Select",
+            label: "Profile",
+            onlyInput: false,
+            options: [{ value: "", label: "Choose" }].concat(profiles.map(row => ({
+                value: row.profile_id,
+                label: row.name || row.profile_id,
+            }))),
+            onChange(value) {
+                if (state.silent) return;
+                const profile = profileRecords(context).find(row => row.profile_id === value);
+                if (!profile) {
+                    hideDetail(host);
+                    return;
+                }
+                showDetail(host, context, state, profile);
+            },
+        });
+        pinLabel(state.profile, "Profile");
+        rewriteSelect(state.profile, [{ value: "", label: "Choose" }].concat(profiles.map(row => ({
+            value: row.profile_id,
+            label: row.name || row.profile_id,
+        }))));
+        mounted.push(state.profile);
+    }
+
+    function rewriteSelect(control, rows) {
+        const input = control && control.control && control.control.$input && control.control.$input.get(0);
+        if (!input) return;
+        const selected = input.value;
+        input.innerHTML = "";
+        rows.forEach(row => {
+            const option = document.createElement("option");
+            option.value = row.value;
+            option.textContent = row.label;
+            input.appendChild(option);
+        });
+        if (selected) input.value = selected;
+    }
+
+    function hideDetail(host) {
+        const detail = host.querySelector("[data-artcam-association-detail]");
+        if (detail) detail.hidden = true;
+    }
+
+    function showDetail(host, context, state, source) {
+        const detail = host.querySelector("[data-artcam-association-detail]");
+        if (!detail) return;
+        detail.hidden = false;
+        const toolHost = detail.querySelector("[data-artcam-tool-fields]");
+        const profileHost = detail.querySelector("[data-artcam-profile-fields]");
+        const homeHost = detail.querySelector("[data-artcam-home-fields]");
+        [toolHost, profileHost, homeHost].forEach(node => {
+            if (node) node.innerHTML = "";
+        });
+        state.fields = {};
+        const tool = (source && source.tool_values) || source || {};
+        const values = Object.assign({}, source || {}, tool);
+        TOOL_FIELDS.forEach(([name, label, fieldtype, readOnly]) => {
+            state.fields[name] = mountField(toolHost, name, label, fieldtype, values[name], readOnly);
+        });
+        PROFILE_FIELDS.forEach(([name, label, fieldtype]) => {
+            state.fields[name] = mountField(profileHost, name, label, fieldtype, source && source[name], false);
+        });
+        HOME_FIELDS.forEach(([name, label, fieldtype]) => {
+            state.fields[name] = mountField(homeHost, name, label, fieldtype, source && source[name], false);
         });
     }
 
     function currentMachining(context) {
-        const sheet = context.sheet || {};
-        return machining(sheet);
+        return machining(context.sheet || {});
     }
 
     function callSave(context, profiles, associations) {
@@ -208,99 +394,99 @@
         });
     }
 
-    function toolCopy(preset, toolPreset) {
-        if (!preset) return undefined;
-        return Object.assign({}, preset, {
-            tool_preset: toolPreset,
-            description: preset.description || preset.tool_name,
+    function fieldValues(state) {
+        const values = {};
+        Object.keys(state.fields || {}).forEach(name => {
+            values[name] = readControl(state.fields[name]);
         });
+        return values;
     }
 
-    function fillProfileForm(host, profileId, context) {
-        const profile = (currentMachining(context).profiles || []).find(row => row.profile_id === profileId);
-        const form = host.querySelector("[data-artcam-profile-form]");
-        if (!profile || !form) return;
-        form.dataset.profileId = profile.profile_id;
-        form.elements.name.value = profile.name || "";
-        form.elements.tool_preset.value = profile.tool_preset || "";
-        form.elements.final_depth_mm.value = profile.final_depth_mm;
-        form.elements.safe_z_mm.value = profile.safe_z_mm;
-        form.elements.home_x_mm.value = profile.home_x_mm;
-        form.elements.home_y_mm.value = profile.home_y_mm;
-        form.elements.home_z_mm.value = profile.home_z_mm;
+    function selectionFromChoices(chosen, availability) {
+        const values = (chosen || []).filter(Boolean);
+        if (values.length === 1 && values[0] === "sheet_perimeter") return { kind: "sheet_perimeter" };
+        const layer = (availability.layers || []).find(row => row.operation_key === values[0]);
+        if (values.length === 1 && layer) return { kind: "layer", operation_key: values[0] };
+        return { kind: "vectors", vector_ids: values };
     }
 
-    function saveProfile(form, context) {
-        const values = formData(form);
+    function profileSnapshot(profile) {
+        return {
+            profile_id: profile.profile_id,
+            name: profile.name,
+            tool_preset: profile.tool_preset,
+            tool_values: Object.assign({}, profile.tool_values || {}),
+            final_depth_mm: profile.final_depth_mm,
+            safe_z_mm: profile.safe_z_mm,
+            home_x_mm: profile.home_x_mm,
+            home_y_mm: profile.home_y_mm,
+            home_z_mm: profile.home_z_mm,
+        };
+    }
+
+    function fillAssociation(host, associationId, context, state) {
+        const row = (currentMachining(context).associations || []).find(item => item.association_id === associationId);
+        if (!row || !state.profile) return;
+        state.editingId = row.association_id;
+        state.silent = true;
+        const chosen = (row.vector_ids || []).slice();
+        if (row.selection && row.selection.kind === "layer" && row.selection.operation_key) {
+            chosen.splice(0, chosen.length, row.selection.operation_key);
+        }
+        if (row.selection && row.selection.kind === "sheet_perimeter") {
+            chosen.splice(0, chosen.length, "sheet_perimeter");
+        }
+        const prepareVectors = state.vectors.control && typeof state.vectors.control.set_options === "function"
+            ? state.vectors.control.set_options()
+            : null;
+        Promise.resolve(prepareVectors).then(() => state.vectors.setValue(chosen)).finally(() => {
+            state.silent = false;
+        });
+        state.profile.setValue(row.profile_id || "");
+        const profile = profileRecords(context).find(item => item.profile_id === row.profile_id) || {};
+        showDetail(host, context, state, Object.assign({}, profile, row.local_values || {}));
+        const button = host.querySelector("[data-artcam-assign]");
+        if (button) button.textContent = "Save association";
+    }
+
+    function saveAssociation(host, context, state) {
+        const values = fieldValues(state);
         const data = currentMachining(context);
-        const preset = ((context.workspace && context.workspace.presets) || []).find(row => row.name === values.tool_preset);
-        const editing = form.dataset.profileId || "";
-        const next = {
-            name: values.name,
-            tool_preset: values.tool_preset,
+        const profileId = readControl(state.profile);
+        const profile = profileRecords(context).find(row => row.profile_id === profileId);
+        if (!profile) return;
+        const editing = state.editingId || "";
+        const current = (data.associations || []).find(row => row.association_id === editing);
+        const baseTool = current && current.profile_id === profileId
+            ? (current.local_values && current.local_values.tool_values)
+            : profile.tool_values;
+        const local = Object.assign({}, profile, {
+            tool_values: applyToolInputs(Object.assign({}, baseTool || profile.tool_values || {}), values),
             final_depth_mm: values.final_depth_mm,
             safe_z_mm: values.safe_z_mm,
             home_x_mm: values.home_x_mm,
             home_y_mm: values.home_y_mm,
             home_z_mm: values.home_z_mm,
-        };
-        let profiles;
-        if (editing) {
-            profiles = (data.profiles || []).map(row => {
-                if (row.profile_id !== editing) return row;
-                const sameTool = row.tool_preset === values.tool_preset;
-                return Object.assign({}, row, next, {
-                    tool_values: sameTool ? row.tool_values : toolCopy(preset, values.tool_preset),
-                });
-            });
-        } else {
-            profiles = (data.profiles || []).concat([Object.assign({
-                profile_id: newId("profile"),
-                tool_values: toolCopy(preset, values.tool_preset),
-            }, next)]);
-        }
-        callSave(context, profiles, data.associations || []).then(() => {
-            delete form.dataset.profileId;
         });
-    }
-
-    function selectionFromChoice(value, availability) {
-        if (value === "sheet_perimeter") return { kind: "sheet_perimeter" };
-        const layer = (availability.layers || []).find(row => row.operation_key === value);
-        if (layer) return { kind: "layer", operation_key: value };
-        return { kind: "vectors", vector_ids: [value] };
-    }
-
-    function saveAssociation(form, context) {
-        const values = formData(form);
-        const data = currentMachining(context);
-        const profile = (data.profiles || []).find(row => row.profile_id === values.profile_id);
-        if (!profile) return;
-        const toolValues = Object.assign({}, profile.tool_values || {});
-        if (values.diameter_mm !== "") toolValues.diameter_mm = values.diameter_mm;
-        if (values.stepdown_mm !== "") toolValues.stepdown_mm = values.stepdown_mm;
-        if (values.spindle_speed_rpm !== "") toolValues.spindle_speed_rpm = values.spindle_speed_rpm;
-        if (values.feed_rate_mm_sec !== "" && toolValues.rate_units === "mm/sec") {
-            toolValues.feed_rate_mm_sec = values.feed_rate_mm_sec;
-        }
-        if (values.plunge_rate_mm_sec !== "" && toolValues.rate_units === "mm/sec") {
-            toolValues.plunge_rate_mm_sec = values.plunge_rate_mm_sec;
-        }
-        const local = Object.assign({}, profile, {
-            tool_values: toolValues,
-            final_depth_mm: values.final_depth_mm || profile.final_depth_mm,
-            safe_z_mm: values.safe_z_mm || profile.safe_z_mm,
-            home_x_mm: values.home_x_mm === "" ? profile.home_x_mm : values.home_x_mm,
-            home_y_mm: values.home_y_mm === "" ? profile.home_y_mm : values.home_y_mm,
-            home_z_mm: values.home_z_mm === "" ? profile.home_z_mm : values.home_z_mm,
-        });
-        const associations = (data.associations || []).concat([{
-            association_id: newId("association"),
+        const vectorValue = readControl(state.vectors);
+        const next = {
+            association_id: editing || newId("association"),
             profile_id: profile.profile_id,
-            selection: selectionFromChoice(values.vector_choice, data.availability || {}),
+            selection: selectionFromChoices(
+                Array.isArray(vectorValue) ? vectorValue : [vectorValue],
+                data.availability || {}
+            ),
             local_values: local,
-        }]);
-        callSave(context, data.profiles || [], associations);
+            toolpath_id: current ? current.toolpath_id || "" : "",
+            toolpath_name: current ? current.toolpath_name || "" : "",
+        };
+        const associations = editing
+            ? (data.associations || []).map(row => row.association_id === editing ? next : row)
+            : (data.associations || []).concat([next]);
+        const profiles = (data.profiles || []).some(row => row.profile_id === profile.profile_id)
+            ? (data.profiles || [])
+            : (data.profiles || []).concat([profileSnapshot(profile)]);
+        callSave(context, profiles, associations);
     }
 
     function removeAssociation(associationId, context) {

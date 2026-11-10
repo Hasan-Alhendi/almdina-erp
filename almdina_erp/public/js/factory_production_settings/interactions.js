@@ -52,6 +52,15 @@
             event.preventDefault();
             if (callbacks.onAddCncMachine) callbacks.onAddCncMachine();
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-profile-add", event => {
+            event.preventDefault();
+            if (callbacks.onAddMachiningProfile) callbacks.onAddMachiningProfile();
+        });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-profile-edit", event => {
+            event.preventDefault();
+            const profileId = String(event.currentTarget.dataset.profileId || "");
+            if (callbacks.onEditMachiningProfile) callbacks.onEditMachiningProfile(profileId);
+        });
         lifecycle.track(() => $body.off(EVENT_NAMESPACE), "production-settings-interactions");
         return true;
     }

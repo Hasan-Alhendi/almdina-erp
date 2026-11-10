@@ -481,6 +481,56 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
     }
 
 
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, str):
+        if not value.strip():
+            return {}
+        parsed = json.loads(value)
+        return dict(parsed) if isinstance(parsed, dict) else {}
+    if isinstance(value, dict):
+        return dict(value)
+    return {}
+
+
+def machining_profile_catalog() -> list[dict[str, Any]]:
+    """ArtCAM profiles managed from operational-file settings, not from a sheet."""
+
+    if not frappe.db.exists("DocType", "CNC Machining Profile"):
+        return []
+    rows = frappe.get_all(
+        "CNC Machining Profile",
+        fields=[
+            "profile_id",
+            "profile_name",
+            "tool_preset",
+            "tool_values_json",
+            "final_depth_mm",
+            "safe_z_mm",
+            "home_x_mm",
+            "home_y_mm",
+            "home_z_mm",
+            "enabled",
+        ],
+        order_by="profile_name asc",
+        limit_page_length=0,
+    )
+    return [
+        {
+            "profile_id": row.profile_id,
+            "name": row.profile_name,
+            "tool_preset": row.tool_preset,
+            "tool_values": _json_object(row.tool_values_json),
+            "final_depth_mm": row.final_depth_mm,
+            "safe_z_mm": row.safe_z_mm,
+            "home_x_mm": row.home_x_mm,
+            "home_y_mm": row.home_y_mm,
+            "home_z_mm": row.home_z_mm,
+            "enabled": bool(cint(row.enabled)),
+        }
+        for row in rows
+    ]
+
+
 def factory_operation_defaults() -> dict[str, str]:
     return {
         operation.key: str(
@@ -619,6 +669,8 @@ def update_machining_json(
     profiles: Sequence[Mapping[str, Any]],
     associations: Sequence[Mapping[str, Any]],
     snapshots: Sequence[Mapping[str, Any]],
+    fingerprint: str = "",
+    status: str = "",
 ) -> None:
     """Replace machining JSON without rewriting operations, paths, or NC history."""
 
@@ -626,6 +678,10 @@ def update_machining_json(
     document.machining_profiles_json = _object_list_json(list(profiles))
     document.vector_associations_json = _object_list_json(list(associations))
     document.toolpath_snapshots_json = _object_list_json(list(snapshots))
+    if fingerprint:
+        document.settings_fingerprint = fingerprint
+    if status:
+        document.status = status
     document.flags.ignore_permissions = True
     document.flags.ignore_links = True
     document.save()
@@ -708,6 +764,7 @@ __all__ = [
     "get_cnc_machine",
     "known_tool_presets",
     "list_cnc_machines",
+    "machining_profile_catalog",
     "machine_profile_view",
     "manufacturing_source",
     "placed_piece_views",

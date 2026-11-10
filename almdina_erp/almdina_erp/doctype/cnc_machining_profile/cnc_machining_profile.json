@@ -1,0 +1,113 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "hash",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "profile_id",
+    "profile_name",
+    "tool_preset",
+    "tool_values_json",
+    "final_depth_mm",
+    "safe_z_mm",
+    "home_x_mm",
+    "home_y_mm",
+    "home_z_mm",
+    "enabled"
+  ],
+  "fields": [
+    {
+      "description": "Stable profile identity copied onto an operational file. It is not a board default.",
+      "fieldname": "profile_id",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Profile ID",
+      "read_only": 1,
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "profile_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Profile Name",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "tool_preset",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Tool",
+      "options": "CNC Tool Preset",
+      "reqd": 1
+    },
+    {
+      "description": "Tool values copied into this profile. Later edits of the tool do not change this copy.",
+      "fieldname": "tool_values_json",
+      "fieldtype": "JSON",
+      "label": "Tool Values"
+    },
+    {
+      "fieldname": "final_depth_mm",
+      "fieldtype": "Float",
+      "in_list_view": 1,
+      "label": "Final Depth (mm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "fieldname": "safe_z_mm",
+      "fieldtype": "Float",
+      "label": "Safe Z (mm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "fieldname": "home_x_mm",
+      "fieldtype": "Float",
+      "label": "Home X (mm)",
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "fieldname": "home_y_mm",
+      "fieldtype": "Float",
+      "label": "Home Y (mm)",
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "fieldname": "home_z_mm",
+      "fieldtype": "Float",
+      "label": "Home Z (mm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Enabled"
+    }
+  ],
+  "links": [],
+  "module": "Almdina ERP",
+  "name": "CNC Machining Profile",
+  "naming_rule": "Random",
+  "permissions": [],
+  "search_fields": "profile_name,profile_id,tool_preset",
+  "show_title_field_in_link": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "profile_name",
+  "track_changes": 1
+}

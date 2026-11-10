@@ -138,6 +138,10 @@ def test_creating_a_preset_requires_the_factory_capability_and_then_appears_for_
     assert unused_tool_preset_can_be_deleted(operation_uses=1, path_uses=0, factory_uses=0) is False
     assert unused_tool_preset_can_be_deleted(operation_uses=0, path_uses=1, factory_uses=0) is False
     assert unused_tool_preset_can_be_deleted(operation_uses=0, path_uses=0, factory_uses=1) is False
+    assert "machining_uses=live_uses + snapshot_uses" in service
+    disable_body = service.split("def set_cnc_tool_preset_enabled", 1)[1].split("\ndef ", 1)[0]
+    assert "if live_uses:" in disable_body
+    assert "_snapshot_uses" in disable_body
     panel = PANEL.read_text(encoding="utf-8")
     assert "Operational file settings" in panel
     assert "CNC tool presets" in panel
