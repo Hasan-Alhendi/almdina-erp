@@ -69,7 +69,15 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
         assert field.get("reqd") == expected, field["fieldname"]
     assert tool["field_order"][-1] == "notes"
     _assert_english_required_fields(machine)
-    _assert_english_required_fields(profile)
+    generated = {"profile_id", "tool_values_json"}
+    for field in profile["fields"]:
+        label = str(field.get("label") or "")
+        assert label
+        assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
+        expected = 0 if field["fieldname"] in generated else 1
+        assert field.get("reqd", 0) == expected, field["fieldname"]
+        if field["fieldname"] in generated:
+            assert "default" not in field
     assert all(field.get("fieldname") != "final_depth_mm" for field in tool["fields"])
     assert any(field.get("fieldname") == "final_depth_mm" and field.get("reqd") == 1 for field in profile["fields"])
 
@@ -102,6 +110,8 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "CNC Machine" not in form
     assert "tool_values_json" in form
     assert 'frm.set_df_property("tool_values_json", "hidden", 1)' in form
+    assert 'frm.set_df_property("profile_id", "reqd", 0)' in form
+    assert 'frm.set_df_property("tool_values_json", "reqd", 0)' in form
 
 
 def test_machining_profile_permission_matches_the_tool_catalog():

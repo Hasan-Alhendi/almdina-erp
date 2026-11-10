@@ -18,6 +18,8 @@ frappe.ui.form.on("CNC Machining Profile", {
             field.df.label = label;
             if (typeof field.set_label === "function") field.set_label(label);
         });
+        frm.set_df_property("profile_id", "reqd", 0);
         frm.set_df_property("tool_values_json", "hidden", 1);
+        frm.set_df_property("tool_values_json", "reqd", 0);
     },
 });

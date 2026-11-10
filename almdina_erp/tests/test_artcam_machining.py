@@ -184,6 +184,94 @@ def test_plain_tool_number_is_stored_as_an_integer_and_notes_may_be_empty():
     assert too_long.value.code == "notes_invalid"
 
 
+def test_profile_identity_and_snapshot_are_generated_without_user_input():
+    known = {"T9_CUT": _stored_tool()}
+    created = normalize_profile(
+        {
+            "name": "Liner profile",
+            "tool_preset": "T9_CUT",
+            "final_depth_mm": 20,
+            "safe_z_mm": 20,
+            "home_x_mm": 0,
+            "home_y_mm": 0,
+            "home_z_mm": 20,
+        },
+        known_tools=known,
+    )
+    other = normalize_profile(
+        {
+            "name": "Second profile",
+            "tool_preset": "T9_CUT",
+            "final_depth_mm": 20,
+            "safe_z_mm": 20,
+            "home_x_mm": 0,
+            "home_y_mm": 0,
+            "home_z_mm": 20,
+        },
+        known_tools=known,
+    )
+    assert created["profile_id"].startswith("profile:")
+    assert other["profile_id"].startswith("profile:")
+    assert created["profile_id"] != other["profile_id"]
+    assert created["tool_values"]["diameter_mm"] == 5.0
+    assert created["tool_values"]["tool_number"] == "T9"
+
+    known["T9_CUT"]["diameter_mm"] = 12
+    known["T9_CUT"]["tool_diameter_mm"] = 12
+    kept = normalize_profile(
+        {
+            "profile_id": created["profile_id"],
+            "name": created["name"],
+            "tool_preset": created["tool_preset"],
+            "tool_values": dict(created["tool_values"]),
+            "final_depth_mm": created["final_depth_mm"],
+            "safe_z_mm": created["safe_z_mm"],
+            "home_x_mm": created["home_x_mm"],
+            "home_y_mm": created["home_y_mm"],
+            "home_z_mm": created["home_z_mm"],
+        },
+        known_tools=known,
+    )
+    assert kept["profile_id"] == created["profile_id"]
+    assert kept["tool_values"]["diameter_mm"] == 5.0
+
+    replacement = _stored_tool()
+    replacement["description"] = "Other"
+    replacement["tool_name"] = "Other"
+    replacement["diameter_mm"] = 8
+    replacement["tool_diameter_mm"] = 8
+    known["Other"] = replacement
+    switched = normalize_profile(
+        {
+            "profile_id": created["profile_id"],
+            "name": created["name"],
+            "tool_preset": "Other",
+            "tool_values": {},
+            "final_depth_mm": created["final_depth_mm"],
+            "safe_z_mm": created["safe_z_mm"],
+            "home_x_mm": created["home_x_mm"],
+            "home_y_mm": created["home_y_mm"],
+            "home_z_mm": created["home_z_mm"],
+        },
+        known_tools=known,
+    )
+    assert switched["tool_values"]["diameter_mm"] == 8.0
+    assert created["tool_values"]["diameter_mm"] == 5.0
+
+    with pytest.raises(MachiningSetupError) as missing_name:
+        normalize_profile(
+            {"tool_preset": "T9_CUT", "final_depth_mm": 20, "safe_z_mm": 20, "home_x_mm": 0, "home_y_mm": 0, "home_z_mm": 20},
+            known_tools=known,
+        )
+    assert missing_name.value.code == "profile_name_required"
+    with pytest.raises(MachiningSetupError) as bad_id:
+        normalize_profile(
+            {**created, "profile_id": "bad id"},
+            known_tools=known,
+        )
+    assert bad_id.value.code == "profile_id_invalid"
+
+
 def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():
     stored = _stored_tool()
     known = {"T9_CUT": stored}

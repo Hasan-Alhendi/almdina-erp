@@ -24,7 +24,6 @@
       "in_list_view": 1,
       "label": "Profile ID",
       "read_only": 1,
-      "reqd": 1,
       "unique": 1
     },
     {
@@ -51,8 +50,7 @@
       "fieldtype": "JSON",
       "hidden": 1,
       "label": "Tool Snapshot",
-      "read_only": 1,
-      "reqd": 1
+      "read_only": 1
     },
     {
       "fieldname": "final_depth_mm",
