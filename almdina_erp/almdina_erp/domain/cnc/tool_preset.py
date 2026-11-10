@@ -38,7 +38,7 @@ class ToolPresetValues:
     tool_name: str
     tool_number: str
     tool_diameter_mm: float
-    final_depth_mm: float
+    final_depth_mm: float | None
     spindle_speed_rpm: int
     feed_rate_mm_min: float
     plunge_rate_mm_min: float
@@ -65,19 +65,35 @@ def _positive(value: Any, code: str, *, upper: float) -> float:
     return number
 
 
+def _optional_final_depth(value: Any) -> float | None:
+    """A tool definition may omit Final Depth. Zero is the empty stored value."""
+
+    if value in (None, ""):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ToolPresetError("final_depth_invalid") from exc
+    if not math.isfinite(number):
+        raise ToolPresetError("final_depth_invalid")
+    if number == 0:
+        return None
+    return round(_positive(number, "final_depth_invalid", upper=MAX_DEPTH_MM), 3)
+
+
 def normalize_tool_preset(raw: Mapping[str, Any]) -> ToolPresetValues:
     tool_number = _text(raw.get("tool_number"), required_code="tool_number_invalid").upper()
     if _TOOL_NUMBER.fullmatch(tool_number) is None:
         raise ToolPresetError("tool_number_invalid")
 
-    final_depth = _positive(raw.get("final_depth_mm"), "final_depth_invalid", upper=MAX_DEPTH_MM)
+    final_depth = _optional_final_depth(raw.get("final_depth_mm"))
     pass_raw = raw.get("pass_depth_mm")
     pass_depth: float | None
     if pass_raw in (None, ""):
         pass_depth = None
     else:
         pass_depth = _positive(pass_raw, "pass_depth_invalid", upper=MAX_DEPTH_MM)
-        if pass_depth > final_depth + 1e-9:
+        if final_depth is not None and pass_depth > final_depth + 1e-9:
             raise ToolPresetError("pass_depth_exceeds_final_depth")
 
     raw_spindle = raw.get("spindle_speed_rpm")
@@ -104,7 +120,7 @@ def normalize_tool_preset(raw: Mapping[str, Any]) -> ToolPresetValues:
             _positive(raw.get("tool_diameter_mm"), "tool_diameter_invalid", upper=MAX_DIAMETER_MM),
             3,
         ),
-        final_depth_mm=round(final_depth, 3),
+        final_depth_mm=final_depth,
         spindle_speed_rpm=spindle,
         feed_rate_mm_min=round(
             _positive(raw.get("feed_rate_mm_min"), "feed_rate_invalid", upper=MAX_FEED_MM_MIN),
@@ -143,6 +159,48 @@ def tool_preset_write_allowed(capabilities: Iterable[str] | None) -> bool:
     """Return whether these grants may create or change a tool preset."""
 
     return Capability.EDIT_FACTORY_CNC_DEFAULTS in set(capabilities or ())
+
+
+_DELETE_REASONS = {
+    "operational_file": "This tool is selected on a CNC operational file.",
+    "factory_default": "This tool is selected as a factory default.",
+    "profile": "This tool is used by a machining profile.",
+    "association": "This tool is used by a vector association.",
+    "active_snapshot": "This tool is used by an active toolpath snapshot.",
+}
+
+
+def tool_delete_blockers(
+    *,
+    operation_uses: int = 0,
+    path_uses: int = 0,
+    factory_uses: int = 0,
+    profile_uses: int = 0,
+    association_uses: int = 0,
+    active_snapshot_uses: int = 0,
+) -> tuple[str, ...]:
+    """Name the live references that forbid deletion.
+
+    Historical toolpath snapshots keep their own copy and do not execute, so
+    they are not a deletion blocker. This function does not remove references.
+    """
+
+    blockers: list[str] = []
+    if int(operation_uses) or int(path_uses):
+        blockers.append("operational_file")
+    if int(factory_uses):
+        blockers.append("factory_default")
+    if int(profile_uses):
+        blockers.append("profile")
+    if int(association_uses):
+        blockers.append("association")
+    if int(active_snapshot_uses):
+        blockers.append("active_snapshot")
+    return tuple(blockers)
+
+
+def tool_delete_reason(code: str) -> str:
+    return _DELETE_REASONS.get(str(code or ""), "This tool cannot be deleted.")
 
 
 def unused_tool_preset_can_be_deleted(
@@ -186,6 +244,8 @@ __all__ = [
     "ToolPresetValues",
     "assert_single_tool_for_file",
     "normalize_tool_preset",
+    "tool_delete_blockers",
+    "tool_delete_reason",
     "tool_preset_write_allowed",
     "unused_tool_preset_can_be_deleted",
 ]

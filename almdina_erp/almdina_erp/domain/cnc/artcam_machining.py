@@ -433,8 +433,8 @@ def _preset_from_local(local: Mapping[str, Any]) -> ToolPresetValues:
         feed = tool_values.get("feed_rate_mm_min")
         plunge = tool_values.get("plunge_rate_mm_min")
         stepdown = tool_values.get("stepdown_mm", tool_values.get("pass_depth_mm"))
-    final_depth = local.get("final_depth_mm")
-    if stepdown not in (None, "") and final_depth not in (None, ""):
+    final_depth = _depth_mm(local.get("final_depth_mm"))
+    if stepdown not in (None, ""):
         if float(stepdown) > float(final_depth) + 1e-9:
             raise MachiningSetupError("pass_depth_exceeds_final_depth")
     description = str(tool_values.get("description") or tool_values.get("tool_preset") or local.get("name") or "tool")
@@ -1012,7 +1012,14 @@ def machining_tool_uses(
         tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}
         if name and name in {str(local.get("tool_preset") or ""), str(tool_values.get("tool_preset") or "")}:
             association_uses += 1
+    linked_ids = {
+        str(association.get("toolpath_id") or "").strip()
+        for association in associations
+        if isinstance(association, Mapping) and str(association.get("toolpath_id") or "").strip()
+    }
     snapshot_uses = 0
+    active_snapshot_uses = 0
+    historical_snapshot_uses = 0
     for snapshot in snapshots:
         if not isinstance(snapshot, Mapping):
             continue
@@ -1025,10 +1032,17 @@ def machining_tool_uses(
             str(preset.get("preset_name") or ""),
         }:
             snapshot_uses += 1
+            toolpath_id = str(snapshot.get("toolpath_id") or "").strip()
+            if toolpath_id and toolpath_id in linked_ids:
+                active_snapshot_uses += 1
+            else:
+                historical_snapshot_uses += 1
     return {
         "profiles": profile_uses,
         "associations": association_uses,
         "snapshots": snapshot_uses,
+        "active_snapshots": active_snapshot_uses,
+        "historical_snapshots": historical_snapshot_uses,
     }
 
 

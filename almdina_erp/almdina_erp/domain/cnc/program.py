@@ -517,6 +517,9 @@ def build_board_program(
                     if not preset.enabled:
                         preset_issue = "preset_disabled"
                         preset = None
+                    elif preset.final_depth_mm is None:
+                        preset_issue = "final_depth_invalid"
+                        preset = None
         if not issue:
             issue = preset_issue
         if (

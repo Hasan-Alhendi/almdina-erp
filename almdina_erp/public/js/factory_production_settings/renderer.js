@@ -24,6 +24,19 @@
         }
 
 
+        const TOOL_DELETE_REASONS = {
+            operational_file: "This tool is selected on a CNC operational file.",
+            factory_default: "This tool is selected as a factory default.",
+            profile: "This tool is used by a machining profile.",
+            association: "This tool is used by a vector association.",
+            active_snapshot: "This tool is used by an active toolpath snapshot.",
+        };
+
+        function toolDeleteReason(preset) {
+            const codes = preset && Array.isArray(preset.delete_blockers) ? preset.delete_blockers : [];
+            return codes.map(code => TOOL_DELETE_REASONS[code] ? t(TOOL_DELETE_REASONS[code]) : "").filter(Boolean).join(" ");
+        }
+
         function uiButton(options) {
             const ui = window.AlmdinaUi;
             if (!ui || typeof ui.button !== "function") {
@@ -161,14 +174,19 @@
                         <p class="aps-cnc-presets__empty">${count
                             ? t("{0} saved tool presets are available in Desk.", [count])
                             : t("No CNC tool presets have been created yet.")}</p>
-                        ${(panel.presets || []).length ? `<ul class="aps-cnc-tool-list">${(panel.presets || []).map(preset => `
+                        ${(panel.presets || []).length ? `<ul class="aps-cnc-tool-list">${(panel.presets || []).map(preset => {
+                            const deleteReason = toolDeleteReason(preset);
+                            return `
                             <li>
                                 <span>${esc(preset.description || preset.tool_name || preset.preset_name || preset.name || "")}</span>
                                 <span>${esc(preset.tool_number || "")}</span>
                                 <span>${esc(preset.tool_type || "")}</span>
                                 ${panel.editable && preset.tool_type === "Ball Nose" ? `<button type="button" class="btn btn-default btn-xs aps-cnc-artcam-edit" data-preset-name="${esc(preset.name)}">${esc(t("Edit"))}</button>` : ""}
+                                ${panel.editable ? `<button type="button" class="btn btn-default btn-xs aps-cnc-tool-delete" data-preset-name="${esc(preset.name)}">${esc(t("Delete tool"))}</button>` : ""}
+                                ${panel.editable && deleteReason ? `<span class="aps-readonly-note">${esc(deleteReason)}</span>` : ""}
                             </li>
-                        `).join("")}</ul>` : ""}
+                        `;
+                        }).join("")}</ul>` : ""}
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
                     </div>
                 </article>

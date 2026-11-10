@@ -95,6 +95,24 @@
                 onManageToolPresets: () => cncPresets && cncPresets.manage(),
                 onAddToolPreset: () => state.activeTab === "operational_files" ? window.AlmdinaArtcamToolDialog.openSaved({ editable: cncEditable(), presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveArtcamTool(values).then(data => { store.apply(data || {}); render(); return data; }) }) : cncPresets && cncPresets.create(),
                 onEditArtcamTool: name => window.AlmdinaArtcamToolDialog.openSaved({ name, editable: cncEditable(), presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveArtcamTool(values).then(data => { store.apply(data || {}); render(); return data; }) }),
+                onDeleteToolPreset: name => {
+                    const remove = () => api.deleteCncToolPreset(name).then(data => {
+                        store.apply(data || {});
+                        render();
+                        return data;
+                    }).catch(error => {
+                        frappe.msgprint({
+                            title: translate("This tool cannot be deleted."),
+                            message: frappe.utils.escape_html(errorMessage(error, translate("This tool cannot be deleted."))),
+                            indicator: "red",
+                        });
+                    });
+                    if (window.frappe && typeof frappe.confirm === "function") {
+                        frappe.confirm(translate("Delete this tool?"), remove);
+                        return;
+                    }
+                    remove();
+                },
                 onAddMachiningProfile: () => window.AlmdinaArtcamProfileDialog && window.AlmdinaArtcamProfileDialog.open({ editable: cncEditable(), presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveMachiningProfile(values).then(data => { store.apply(data || {}); render(); return data; }) }),
                 onEditMachiningProfile: profileId => window.AlmdinaArtcamProfileDialog && window.AlmdinaArtcamProfileDialog.open({ editable: cncEditable(), profile: ((state.current || {}).cnc_machining_profiles || []).find(row => row && row.profile_id === profileId) || null, presets: (state.current || {}).cnc_tool_presets, onSubmit: values => api.saveMachiningProfile(values).then(data => { store.apply(data || {}); render(); return data; }) }),
                 onManageCncMachines: () => cncMachines && cncMachines.manage(),

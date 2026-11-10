@@ -44,6 +44,11 @@
             const name = String(event.currentTarget.dataset.presetName || "");
             if (callbacks.onEditArtcamTool) callbacks.onEditArtcamTool(name);
         });
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-tool-delete", event => {
+            event.preventDefault();
+            const name = String(event.currentTarget.dataset.presetName || "");
+            if (callbacks.onDeleteToolPreset) callbacks.onDeleteToolPreset(name);
+        });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-machine-manage", event => {
             event.preventDefault();
             if (callbacks.onManageCncMachines) callbacks.onManageCncMachines();

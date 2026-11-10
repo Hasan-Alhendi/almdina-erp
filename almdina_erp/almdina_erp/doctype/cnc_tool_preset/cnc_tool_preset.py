@@ -73,18 +73,17 @@ class CNCToolPreset(Document):
                     )
 
     def before_trash(self) -> None:
+        from almdina_erp.almdina_erp.services.production_settings_service import (
+            assert_tool_preset_can_be_deleted,
+        )
+
+        assert_tool_preset_can_be_deleted(self.name)
         references = find_link_references(self.doctype, self.name)
         if references:
             frappe.throw(
                 _("This CNC tool preset is in use and cannot be deleted: {0}").format(
                     reference_summary(references)
                 ),
-                frappe.ValidationError,
-            )
-        live_uses, snapshot_uses = _saved_machining_uses(self.name)
-        if live_uses or snapshot_uses:
-            frappe.throw(
-                _("This tool is used by a sheet, a profile, a vector association, or a calculated toolpath. It cannot be deleted."),
                 frappe.ValidationError,
             )
 

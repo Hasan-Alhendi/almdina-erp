@@ -36,7 +36,12 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     effective_status,
     settings_fingerprint,
 )
-from almdina_erp.almdina_erp.domain.cnc.tool_preset import unused_tool_preset_can_be_deleted
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
+    ToolPresetError,
+    normalize_tool_preset,
+    tool_delete_blockers,
+    unused_tool_preset_can_be_deleted,
+)
 from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
 
 
@@ -700,6 +705,56 @@ def test_toolpath_snapshot_fingerprint_tracks_nc_changes_and_ignores_json_shape(
     assert settings_fingerprint(**{**arguments, "toolpath_snapshots": [shuffled]}) == current
 
 
+def test_a_tool_can_be_saved_without_final_depth_and_calculation_still_requires_it():
+    stored = _stored_tool()
+    created = normalize_tool_preset(stored)
+    assert created.final_depth_mm is None
+    assert created.pass_depth_mm == 19.0
+    empty = normalize_tool_preset({**stored, "final_depth_mm": 0})
+    assert empty.final_depth_mm is None
+    kept = normalize_tool_preset({**stored, "final_depth_mm": 20})
+    assert kept.final_depth_mm == 20.0
+    with pytest.raises(ToolPresetError) as invalid:
+        normalize_tool_preset({**stored, "final_depth_mm": -1})
+    assert invalid.value.code == "final_depth_invalid"
+    with pytest.raises(ToolPresetError) as deeper:
+        normalize_tool_preset({**stored, "final_depth_mm": 10, "pass_depth_mm": 19})
+    assert deeper.value.code == "pass_depth_exceeds_final_depth"
+
+    known = {"T9_CUT": stored}
+    with pytest.raises(MachiningSetupError) as profile_depth:
+        normalize_profile(_profile(final_depth_mm=None), known_tools=known)
+    assert profile_depth.value.code == "final_depth_invalid"
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    association = normalize_associations(
+        [
+            {
+                "association_id": "association:cut",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_VECTORS, "vector_ids": ["cut_path:piece-a:outer"]},
+            }
+        ],
+        profiles=[profile],
+        catalog=catalog,
+    )[0]
+    missing_depth = copy.deepcopy(association)
+    missing_depth["local_values"]["final_depth_mm"] = None
+    with pytest.raises(MachiningSetupError) as calculation:
+        calculate_toolpath_snapshot(
+            association=missing_depth,
+            toolpath_name="Cut",
+            program=_program("cut_path:piece-a:outer"),
+        )
+    assert calculation.value.code == "final_depth_invalid"
+    calculated = calculate_toolpath_snapshot(
+        association=association,
+        toolpath_name="Cut",
+        program=_program("cut_path:piece-a:outer"),
+    )
+    assert calculated["preset"]["final_depth_mm"] == 20
+
+
 def test_a_tool_used_by_a_profile_association_or_snapshot_cannot_be_deleted():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)
@@ -715,3 +770,28 @@ def test_a_tool_used_by_a_profile_association_or_snapshot_cannot_be_deleted():
     assert unused_tool_preset_can_be_deleted(
         operation_uses=0, path_uses=0, factory_uses=0, machining_uses=1
     ) is False
+    historical = machining_tool_uses("T9_CUT", snapshots=[snapshot])
+    assert historical["historical_snapshots"] == 1
+    assert historical["active_snapshots"] == 0
+    assert tool_delete_blockers() == ()
+    assert tool_delete_blockers(active_snapshot_uses=historical["active_snapshots"]) == ()
+    active = machining_tool_uses(
+        "T9_CUT",
+        associations=[{"toolpath_id": "toolpath:current", "local_values": profile}],
+        snapshots=[{**snapshot, "toolpath_id": "toolpath:current"}],
+    )
+    assert active["active_snapshots"] == 1
+    assert active["associations"] == 1
+    assert tool_delete_blockers(
+        profile_uses=1,
+        association_uses=1,
+        active_snapshot_uses=1,
+        operation_uses=1,
+        factory_uses=1,
+    ) == (
+        "operational_file",
+        "factory_default",
+        "profile",
+        "association",
+        "active_snapshot",
+    )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Sequence
 from typing import Any
 
 import frappe
@@ -28,7 +29,8 @@ from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
     normalize_tool_preset,
     resolve_selected_presets,
-    unused_tool_preset_can_be_deleted,
+    tool_delete_blockers,
+    tool_delete_reason,
 )
 from almdina_erp.almdina_erp.domain.cutting.catalog import (
     DEFAULT_OPTIMIZATION_MODE_ID,
@@ -1047,6 +1049,8 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
         order_by="preset_name asc",
         limit_page_length=0,
     )
+    references = _tool_reference_index()
+    empty_uses = _empty_tool_uses()
     return [
         {
             "name": row.name,
@@ -1072,6 +1076,16 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "stepover_percent": row.stepover_percent,
             "feed_rate_mm_sec": row.feed_rate_mm_sec,
             "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "delete_blockers": list(
+                tool_delete_blockers(
+                    operation_uses=references.get(str(row.name or ""), empty_uses)["operations"],
+                    path_uses=references.get(str(row.name or ""), empty_uses)["paths"],
+                    factory_uses=references.get(str(row.name or ""), empty_uses)["factory"],
+                    profile_uses=references.get(str(row.name or ""), empty_uses)["profiles"],
+                    association_uses=references.get(str(row.name or ""), empty_uses)["associations"],
+                    active_snapshot_uses=references.get(str(row.name or ""), empty_uses)["active_snapshots"],
+                )
+            ),
         }
         for row in rows
     ]
@@ -1115,35 +1129,134 @@ def _apply_tool_preset(document: Any, preset: Any, *, keep_name: bool) -> None:
     document.enabled = 1 if preset.enabled else 0
 
 
-def _tool_preset_use_counts(name: str) -> tuple[int, int, int, int, int]:
-    operations = cint(frappe.db.count("CNC Operational Operation", {"tool_preset": name}))
-    paths = cint(frappe.db.count("CNC Operational Path", {"tool_preset": name}))
-    settings = frappe.get_single("Almdina ERP Settings")
-    factory = sum(1 for fieldname in _CNC_PRESET_FIELDS if str(settings.get(fieldname) or "") == name)
-    profile_uses = 0
-    association_uses = 0
-    snapshot_uses = 0
-    for row in frappe.get_all(
-        "CNC Operational File",
-        fields=["machining_profiles_json", "vector_associations_json", "toolpath_snapshots_json"],
+def _empty_tool_uses() -> dict[str, int]:
+    return {
+        "operations": 0,
+        "paths": 0,
+        "factory": 0,
+        "profiles": 0,
+        "associations": 0,
+        "active_snapshots": 0,
+        "historical_snapshots": 0,
+    }
+
+
+def _count_bucket(index: dict[str, dict[str, int]], tool_name: Any) -> dict[str, int] | None:
+    token = str(tool_name or "").strip()
+    if not token:
+        return None
+    found = index.get(token)
+    if found is None:
+        found = _empty_tool_uses()
+        index[token] = found
+    return found
+
+
+def _add_link_counts(index: dict[str, dict[str, int]], doctype: str, key: str) -> None:
+    if not frappe.db.exists("DocType", doctype):
+        return
+    for tool_name in frappe.get_all(
+        doctype,
+        filters={"tool_preset": ["is", "set"]},
+        pluck="tool_preset",
+        limit_page_length=0,
     ):
-        uses = machining_tool_uses(
-            name,
-            profiles=_json_rows(row.machining_profiles_json),
-            associations=_json_rows(row.vector_associations_json),
-            snapshots=_json_rows(row.toolpath_snapshots_json),
-        )
-        profile_uses += uses["profiles"]
-        association_uses += uses["associations"]
-        snapshot_uses += uses["snapshots"]
-    profile_uses += _catalog_profile_uses(name)
-    return operations, paths, factory, profile_uses + association_uses, snapshot_uses
+        found = _count_bucket(index, tool_name)
+        if found is not None:
+            found[key] += 1
 
 
-def _catalog_profile_uses(name: str) -> int:
-    if not frappe.db.exists("DocType", "CNC Machining Profile"):
-        return 0
-    return cint(frappe.db.count("CNC Machining Profile", {"tool_preset": name}))
+def _tool_reference_index() -> dict[str, dict[str, int]]:
+    """Read every live tool reference once. Historical snapshots stay in their own count."""
+
+    index: dict[str, dict[str, int]] = {}
+    _add_link_counts(index, "CNC Operational Operation", "operations")
+    _add_link_counts(index, "CNC Operational Path", "paths")
+    _add_link_counts(index, "CNC Machining Profile", "profiles")
+    settings = frappe.get_single("Almdina ERP Settings")
+    for fieldname in _CNC_PRESET_FIELDS:
+        found = _count_bucket(index, settings.get(fieldname))
+        if found is not None:
+            found["factory"] += 1
+    if frappe.db.exists("DocType", "CNC Operational File"):
+        for row in frappe.get_all(
+            "CNC Operational File",
+            fields=["machining_profiles_json", "vector_associations_json", "toolpath_snapshots_json"],
+            limit_page_length=0,
+        ):
+            profiles = _json_rows(row.machining_profiles_json)
+            associations = _json_rows(row.vector_associations_json)
+            snapshots = _json_rows(row.toolpath_snapshots_json)
+            names: set[str] = set()
+            for profile in profiles:
+                if isinstance(profile, dict):
+                    names.add(str(profile.get("tool_preset") or "").strip())
+            for association in associations:
+                if not isinstance(association, dict):
+                    continue
+                local = association.get("local_values") if isinstance(association.get("local_values"), dict) else {}
+                tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), dict) else {}
+                names.add(str(local.get("tool_preset") or "").strip())
+                names.add(str(tool_values.get("tool_preset") or "").strip())
+            for snapshot in snapshots:
+                if not isinstance(snapshot, dict):
+                    continue
+                local = snapshot.get("local_values") if isinstance(snapshot.get("local_values"), dict) else {}
+                tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), dict) else {}
+                preset = snapshot.get("preset") if isinstance(snapshot.get("preset"), dict) else {}
+                names.add(str(local.get("tool_preset") or "").strip())
+                names.add(str(tool_values.get("tool_preset") or "").strip())
+                names.add(str(preset.get("preset_name") or "").strip())
+            names.discard("")
+            for tool_name in names:
+                uses = machining_tool_uses(
+                    tool_name,
+                    profiles=profiles,
+                    associations=associations,
+                    snapshots=snapshots,
+                )
+                found = _count_bucket(index, tool_name)
+                if found is None:
+                    continue
+                found["profiles"] += uses["profiles"]
+                found["associations"] += uses["associations"]
+                found["active_snapshots"] += uses["active_snapshots"]
+                found["historical_snapshots"] += uses["historical_snapshots"]
+    return index
+
+
+def _tool_preset_use_counts(name: str) -> dict[str, int]:
+    """Count live references separately from historical snapshot copies."""
+
+    if not name:
+        return _empty_tool_uses()
+    return _tool_reference_index().get(name, _empty_tool_uses())
+
+
+def _tool_delete_message(blockers: Sequence[str]) -> str:
+    return " ".join(
+        [_("This tool cannot be deleted."), *(_(tool_delete_reason(code)) for code in blockers)]
+    )
+
+
+def _tool_delete_blockers_for(name: str) -> tuple[str, ...]:
+    counts = _tool_preset_use_counts(name)
+    return tool_delete_blockers(
+        operation_uses=counts["operations"],
+        path_uses=counts["paths"],
+        factory_uses=counts["factory"],
+        profile_uses=counts["profiles"],
+        association_uses=counts["associations"],
+        active_snapshot_uses=counts["active_snapshots"],
+    )
+
+
+def assert_tool_preset_can_be_deleted(name: str) -> None:
+    """Server gate for Desk delete and the operational-files action."""
+
+    blockers = _tool_delete_blockers_for(name)
+    if blockers:
+        frappe.throw(_tool_delete_message(blockers), frappe.ValidationError)
 
 
 def _json_rows(raw: Any) -> list[Any]:
@@ -1315,7 +1428,9 @@ def set_cnc_tool_preset_enabled(name: str, enabled: int | str | bool = 0) -> dic
     document.check_permission("write")
     turning_off = not cint(enabled)
     if turning_off:
-        _operations, _paths, _factory, live_uses, _snapshot_uses = _tool_preset_use_counts(preset_name)
+        counts = _tool_preset_use_counts(preset_name)
+        live_uses = counts["profiles"] + counts["associations"]
+        _snapshot_uses = counts["active_snapshots"] + counts["historical_snapshots"]
         if live_uses:
             frappe.throw(
                 _("This tool is still selected by a profile or vector association. Calculated toolpaths keep their own copy, but those live selections must choose another tool before this one can be disabled."),
@@ -1334,17 +1449,7 @@ def delete_cnc_tool_preset(name: str) -> dict[str, Any]:
     preset_name = str(name or "").strip()
     if not preset_name or not frappe.db.exists("CNC Tool Preset", preset_name):
         frappe.throw(_preset_message("preset_not_found"), frappe.ValidationError)
-    operations, paths, factory, live_uses, snapshot_uses = _tool_preset_use_counts(preset_name)
-    if not unused_tool_preset_can_be_deleted(
-        operation_uses=operations,
-        path_uses=paths,
-        factory_uses=factory,
-        machining_uses=live_uses + snapshot_uses,
-    ):
-        frappe.throw(
-            _("This tool is used by a sheet, a profile, a vector association, or a calculated toolpath. It cannot be deleted."),
-            frappe.ValidationError,
-        )
+    assert_tool_preset_can_be_deleted(preset_name)
     document = frappe.get_doc("CNC Tool Preset", preset_name)
     document.check_permission("delete")
     document.delete()
