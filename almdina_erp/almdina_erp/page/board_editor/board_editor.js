@@ -17,7 +17,7 @@
         `${ASSET_ROOT}/snap_geometry.js?v=22`,
         `${ASSET_ROOT}/rotation_geometry.js?v=20`,
         `${ASSET_ROOT}/transform_geometry.js?v=2`,
-        `${ASSET_ROOT}/measure_geometry.js?v=5`,
+        `${ASSET_ROOT}/measure_geometry.js?v=6`,
         `${ASSET_ROOT}/position_geometry.js?v=4`,
         `${ASSET_ROOT}/alignment_geometry.js?v=2`,
         `${ASSET_ROOT}/marquee_geometry.js?v=2`,

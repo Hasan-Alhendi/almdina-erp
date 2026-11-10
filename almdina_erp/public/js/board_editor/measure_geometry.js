@@ -682,6 +682,11 @@
         if (!matA || !matB) return result;
 
         const corridor = facingCorridor(matA.bounds, matB.bounds);
+        // #region agent log
+        if (typeof fetch === "function" && result.direction) {
+            fetch('http://127.0.0.1:7408/ingest/49ab0d3b-b599-4900-a22a-e493477757b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c4ee1e'},body:JSON.stringify({sessionId:'c4ee1e',runId:'l-present-pre',hypothesisId:'H1',location:'measure_geometry.js:presentPieceClearanceNearPointer',message:'L/directional piece presentation gate',data:{direction:result.direction,distance:result.distance,pointer:pointerWorld,start:result.start,end:result.end,corridorNull:!corridor,corridorGap:corridor&&corridor.gap,corridorAxis:corridor&&corridor.axis,gapMatch:corridor?Math.abs(corridor.gap-num(result.distance))<=0.05:false,aBounds:matA.bounds,bBounds:matB.bounds},timestamp:Date.now()})}).catch(()=>{});
+        }
+        // #endregion
         if (!corridor || !(corridor.gap >= 0)) return result;
         // Only slide when the geometric clearance is exactly the parallel AABB gap.
         if (Math.abs(corridor.gap - num(result.distance)) > 0.05) return result;
