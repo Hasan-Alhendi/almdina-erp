@@ -39,15 +39,9 @@
             event.preventDefault();
             if (callbacks.onAddToolPreset) callbacks.onAddToolPreset();
         });
-        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-artcam-edit", event => {
+        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-profile-manage", event => {
             event.preventDefault();
-            const name = String(event.currentTarget.dataset.presetName || "");
-            if (callbacks.onEditArtcamTool) callbacks.onEditArtcamTool(name);
-        });
-        $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-tool-delete", event => {
-            event.preventDefault();
-            const name = String(event.currentTarget.dataset.presetName || "");
-            if (callbacks.onDeleteToolPreset) callbacks.onDeleteToolPreset(name);
+            if (callbacks.onManageMachiningProfiles) callbacks.onManageMachiningProfiles();
         });
         $body.on(`click${EVENT_NAMESPACE}`, ".aps-cnc-machine-manage", event => {
             event.preventDefault();

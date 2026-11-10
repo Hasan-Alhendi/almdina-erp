@@ -81,12 +81,25 @@ def _optional_final_depth(value: Any) -> float | None:
     return round(_positive(number, "final_depth_invalid", upper=MAX_DEPTH_MM), 3)
 
 
-def normalize_tool_preset(raw: Mapping[str, Any]) -> ToolPresetValues:
+_MISSING = object()
+
+
+def normalize_tool_preset(
+    raw: Mapping[str, Any],
+    *,
+    machining_depth_mm: Any = _MISSING,
+) -> ToolPresetValues:
+    """Normalize a tool definition. Final depth is not a tool property.
+
+    ``machining_depth_mm`` is the operational depth supplied by a profile or an
+    existing board program. A stored tool payload cannot provide it.
+    """
+
     tool_number = _text(raw.get("tool_number"), required_code="tool_number_invalid").upper()
     if _TOOL_NUMBER.fullmatch(tool_number) is None:
         raise ToolPresetError("tool_number_invalid")
 
-    final_depth = _optional_final_depth(raw.get("final_depth_mm"))
+    final_depth = None if machining_depth_mm is _MISSING else _optional_final_depth(machining_depth_mm)
     pass_raw = raw.get("pass_depth_mm")
     pass_depth: float | None
     if pass_raw in (None, ""):

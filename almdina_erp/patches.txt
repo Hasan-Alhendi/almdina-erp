@@ -35,3 +35,5 @@ almdina_erp.patches.v1_0.seed_cnc_machine_profile_sample
 almdina_erp.patches.v1_0.normalize_board_editor_draft_revision_tokens
 almdina_erp.patches.v1_0.backfill_layer_tool_diameters
 almdina_erp.patches.v1_0.repair_missing_cnc_machine_profile_fields
+almdina_erp.patches.v1_0.clear_artcam_catalog_and_operational_files
+almdina_erp.patches.v1_0.restore_cnc_profile_tool_snapshot

@@ -510,7 +510,10 @@ def build_board_program(
                 preset_issue = "preset_not_found"
             else:
                 try:
-                    preset = normalize_tool_preset(raw)
+                    preset = normalize_tool_preset(
+                        raw,
+                        machining_depth_mm=raw.get("machining_depth_mm", raw.get("final_depth_mm")),
+                    )
                 except ToolPresetError as exc:
                     preset_issue = exc.code
                 else:

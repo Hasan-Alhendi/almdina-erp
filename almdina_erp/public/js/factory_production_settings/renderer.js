@@ -24,19 +24,6 @@
         }
 
 
-        const TOOL_DELETE_REASONS = {
-            operational_file: "This tool is selected on a CNC operational file.",
-            factory_default: "This tool is selected as a factory default.",
-            profile: "This tool is used by a machining profile.",
-            association: "This tool is used by a vector association.",
-            active_snapshot: "This tool is used by an active toolpath snapshot.",
-        };
-
-        function toolDeleteReason(preset) {
-            const codes = preset && Array.isArray(preset.delete_blockers) ? preset.delete_blockers : [];
-            return codes.map(code => TOOL_DELETE_REASONS[code] ? t(TOOL_DELETE_REASONS[code]) : "").filter(Boolean).join(" ");
-        }
-
         function uiButton(options) {
             const ui = window.AlmdinaUi;
             if (!ui || typeof ui.button !== "function") {
@@ -165,7 +152,7 @@
                             <div class="aps-section-titles">
                                 <span class="aps-section-kicker">${t("Operational files")}</span>
                                 <h3>${t("CNC tool presets")}</h3>
-                                <div class="aps-section-desc">${t("Manage saved CNC tool presets with the standard Desk list and form. Board NC settings only select a saved preset or create a new one.")}</div>
+                                <div class="aps-section-desc">${t("Open the standard CNC Tool Preset list to add, edit, or delete tools. Final depth belongs to a machining profile, not to the tool.")}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools aps-cnc-presets__actions">${actions}</div>
@@ -174,19 +161,6 @@
                         <p class="aps-cnc-presets__empty">${count
                             ? t("{0} saved tool presets are available in Desk.", [count])
                             : t("No CNC tool presets have been created yet.")}</p>
-                        ${(panel.presets || []).length ? `<ul class="aps-cnc-tool-list">${(panel.presets || []).map(preset => {
-                            const deleteReason = toolDeleteReason(preset);
-                            return `
-                            <li>
-                                <span>${esc(preset.description || preset.tool_name || preset.preset_name || preset.name || "")}</span>
-                                <span>${esc(preset.tool_number || "")}</span>
-                                <span>${esc(preset.tool_type || "")}</span>
-                                ${panel.editable && preset.tool_type === "Ball Nose" ? `<button type="button" class="btn btn-default btn-xs aps-cnc-artcam-edit" data-preset-name="${esc(preset.name)}">${esc(t("Edit"))}</button>` : ""}
-                                ${panel.editable ? `<button type="button" class="btn btn-default btn-xs aps-cnc-tool-delete" data-preset-name="${esc(preset.name)}">${esc(t("Delete tool"))}</button>` : ""}
-                                ${panel.editable && deleteReason ? `<span class="aps-readonly-note">${esc(deleteReason)}</span>` : ""}
-                            </li>
-                        `;
-                        }).join("")}</ul>` : ""}
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the tool presets.")}</p>`}
                     </div>
                 </article>
@@ -216,27 +190,26 @@
                             <div class="aps-section-titles">
                                 <span class="aps-section-kicker">${t("Operational files")}</span>
                                 <h3>${t("Machining profiles")}</h3>
-                                <div class="aps-section-desc">${t("Create ArtCAM profiles here. Each profile keeps its own copy of a tool. Profiles are not part of board settings or default board settings.")}</div>
+                                <div class="aps-section-desc">${t("Open the standard Machining Profile list. A profile copies one tool and keeps the final depth used for toolpaths.")}</div>
                             </div>
                         </div>
-                        <div class="aps-section-tools aps-cnc-presets__actions">${panel.editable ? uiButton({
-                            label: t("Add a profile"),
-                            variant: "secondary",
-                            className: "aps-cnc-profile-add",
-                        }) : ""}</div>
+                        <div class="aps-section-tools aps-cnc-presets__actions">${[
+                            uiButton({
+                                label: t("Manage machining profiles"),
+                                variant: "primary",
+                                className: "aps-cnc-profile-manage",
+                            }),
+                            panel.editable ? uiButton({
+                                label: t("Add a profile"),
+                                variant: "secondary",
+                                className: "aps-cnc-profile-add",
+                            }) : "",
+                        ].filter(Boolean).join("")}</div>
                     </div>
                     <div class="aps-cnc-presets">
                         <p class="aps-cnc-presets__empty">${Number(panel.profileCount || 0)
                             ? t("{0} machining profiles are available.", [Number(panel.profileCount || 0)])
                             : t("No machining profiles have been created yet.")}</p>
-                        ${(panel.profiles || []).length ? `<ul class="aps-cnc-tool-list">${(panel.profiles || []).map(profile => `
-                            <li>
-                                <span>${esc(profile.name || "")}</span>
-                                <span>${esc(profile.tool_preset || "")}</span>
-                                <span>${esc(profile.final_depth_mm == null ? "" : profile.final_depth_mm)}</span>
-                                ${panel.editable ? `<button type="button" class="btn btn-default btn-xs aps-cnc-profile-edit" data-profile-id="${esc(profile.profile_id)}">${esc(t("Edit"))}</button>` : ""}
-                            </li>
-                        `).join("")}</ul>` : ""}
                         ${panel.editable ? "" : `<p class="aps-readonly-note">${t("A factory settings manager must create the machining profiles.")}</p>`}
                     </div>
                 </article>

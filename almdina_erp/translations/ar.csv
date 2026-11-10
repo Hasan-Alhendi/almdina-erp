@@ -3939,6 +3939,14 @@ Add a profile,إضافة بروفايل
 No machining profiles have been created yet.,لم تُنشأ بروفايلات تشغيل بعد.
 A factory settings manager must create the machining profiles.,يجب أن ينشئ مسؤول إعدادات المصنع بروفايلات التشغيل.
 You do not have permission to edit ArtCAM machining profiles.,ليست لديك صلاحية تعديل بروفايلات ArtCAM.
+Open the standard CNC Tool Preset list to add, edit, or delete tools. Final depth belongs to a machining profile, not to the tool.,افتح قائمة الريش القياسية لإضافة الريش أو تعديلها أو حذفها. العمق النهائي يخص بروفايل التشغيل وليس الريشة.
+Open the standard Machining Profile list. A profile copies one tool and keeps the final depth used for toolpaths.,افتح قائمة بروفايلات التشغيل القياسية. ينسخ البروفايل ريشة واحدة ويحتفظ بالعمق النهائي المستخدم في مسارات التشغيل.
+Notes is required.,ملاحظات الريشة مطلوبة.
+Tool type is required.,نوع الريشة مطلوب.
+Manage machining profiles,إدارة بروفايلات التشغيل
+Choose a CNC machine for this profile.,اختر ماكينة CNC لهذا البروفايل.
+This machining profile is in use and cannot be deleted: {0},بروفايل التشغيل مستخدم ولا يمكن حذفه: {0}
+This machining profile is used by a vector association on an operational file and cannot be deleted.,بروفايل التشغيل مستخدم في ربط متجهات داخل ملف تشغيل ولا يمكن حذفه.
 Delete tool,حذف الريشة
 Delete this tool?,حذف هذه الريشة؟
 This tool cannot be deleted.,لا يمكن حذف هذه الريشة.

@@ -1,7 +1,7 @@
 """Catalog record for one ArtCAM profile.
 
 The stored tool copy belongs to this profile. Saving it does not rewrite the
-tool, a sheet file, or a calculated toolpath.
+tool, a sheet file, or a calculated toolpath. A profile does not link a machine.
 """
 
 from __future__ import annotations
@@ -23,6 +23,10 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
     audit_saved_document,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.master_data_references import (
+    find_link_references,
+    reference_summary,
 )
 
 
@@ -84,6 +88,9 @@ class CNCMachiningProfile(Document):
             "home_y_mm": self.home_y_mm,
             "home_z_mm": self.home_z_mm,
         }
+        previous = None if self.is_new() else self.get_doc_before_save()
+        if previous is not None and str(previous.tool_preset or "") != str(self.tool_preset or ""):
+            raw["tool_values"] = {}
         try:
             profile = normalize_profile(
                 raw,
@@ -107,7 +114,40 @@ class CNCMachiningProfile(Document):
         audit_saved_document(self)
 
     def on_trash(self) -> None:
+        references = find_link_references(self.doctype, self.name)
+        if references:
+            frappe.throw(
+                _("This machining profile is in use and cannot be deleted: {0}").format(
+                    reference_summary(references)
+                ),
+                frappe.ValidationError,
+            )
+        if _association_uses(str(self.profile_id or "")):
+            frappe.throw(
+                _("This machining profile is used by a vector association on an operational file and cannot be deleted."),
+                frappe.ValidationError,
+            )
         audit_deleted_document(self)
+
+
+def _association_uses(profile_id: str) -> int:
+    if not profile_id or not frappe.db.exists("DocType", "CNC Operational File"):
+        return 0
+    uses = 0
+    for raw in frappe.get_all(
+        "CNC Operational File",
+        pluck="vector_associations_json",
+        limit_page_length=0,
+    ):
+        parsed = json.loads(raw) if isinstance(raw, str) and raw else raw
+        if not isinstance(parsed, list):
+            continue
+        uses += sum(
+            1
+            for row in parsed
+            if isinstance(row, dict) and str(row.get("profile_id") or "") == profile_id
+        )
+    return uses
 
 
 __all__ = ["CNCMachiningProfile"]

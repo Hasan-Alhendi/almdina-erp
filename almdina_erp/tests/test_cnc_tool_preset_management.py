@@ -153,14 +153,12 @@ def test_creating_a_preset_requires_the_factory_capability_and_then_appears_for_
     assert "Add a tool preset" in panel
     assert "aps-cnc-preset-manage" in panel
     assert "aps-cnc-preset-edit" not in panel
-    assert "aps-cnc-tool-delete" in panel
-    assert "Delete tool" in panel
-    assert "This tool is used by a machining profile." in panel
-    assert "This tool is used by an active toolpath snapshot." in panel
+    assert "aps-cnc-tool-delete" not in panel
+    assert "Manage machining profiles" in panel
     doctype_py = (
         APP_ROOT / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.py"
     ).read_text(encoding="utf-8")
-    assert "assert_tool_preset_can_be_deleted" in doctype_py.split("def before_trash", 1)[1]
+    assert "assert_tool_preset_can_be_deleted" in doctype_py.split("def on_trash", 1)[1]
     presets_js = (
         APP_ROOT / "public" / "js" / "factory_production_settings" / "cnc_presets.js"
     ).read_text(encoding="utf-8")
@@ -170,6 +168,7 @@ def test_creating_a_preset_requires_the_factory_capability_and_then_appears_for_
         APP_ROOT / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.json"
     ).read_text(encoding="utf-8")
     assert '"quick_entry": 1' in doctype
+    assert "final_depth_mm" not in doctype
     assert '"search_fields": "tool_name,tool_number,preset_name"' in doctype
     assert '"in_list_view": 1' in doctype
     assert "spindle_speed_rpm" in doctype

@@ -110,7 +110,7 @@ _MESSAGES = {
     "profile_duplicate": "Each profile needs its own name.",
     "profile_id_invalid": "The profile identity is not valid.",
     "profile_not_found": "The selected profile does not exist.",
-    "tool_preset_required": "Choose a tool for this profile.",
+        "tool_preset_required": "Choose a tool for this profile.",
     "safe_z_invalid": "Safe Z must be zero or a positive number of millimetres within the supported range.",
     "home_x_invalid": "Home X must be a finite number of millimetres.",
     "home_y_invalid": "Home Y must be a finite number of millimetres.",

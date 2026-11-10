@@ -450,8 +450,9 @@ def _preset_from_local(local: Mapping[str, Any]) -> ToolPresetValues:
         "pass_depth_mm": None if stepdown in (None, "") else stepdown,
         "enabled": True if tool_values.get("enabled", True) else False,
     }
+    raw.pop("final_depth_mm", None)
     try:
-        return normalize_tool_preset(raw)
+        return normalize_tool_preset(raw, machining_depth_mm=final_depth)
     except ToolPresetError as exc:
         raise MachiningSetupError(exc.code) from exc
 

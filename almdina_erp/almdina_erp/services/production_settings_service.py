@@ -613,7 +613,6 @@ def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
             "tool_name",
             "tool_number",
             "tool_diameter_mm",
-            "final_depth_mm",
             "spindle_speed_rpm",
             "feed_rate_mm_min",
             "plunge_rate_mm_min",
@@ -629,7 +628,6 @@ def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
             "tool_name": row.tool_name,
             "tool_number": row.tool_number,
             "tool_diameter_mm": row.tool_diameter_mm,
-            "final_depth_mm": row.final_depth_mm,
             "spindle_speed_rpm": row.spindle_speed_rpm,
             "feed_rate_mm_min": row.feed_rate_mm_min,
             "plunge_rate_mm_min": row.plunge_rate_mm_min,
@@ -1029,7 +1027,6 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "tool_name",
             "tool_number",
             "tool_diameter_mm",
-            "final_depth_mm",
             "spindle_speed_rpm",
             "feed_rate_mm_min",
             "plunge_rate_mm_min",
@@ -1058,7 +1055,6 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "tool_name": row.tool_name,
             "tool_number": row.tool_number,
             "tool_diameter_mm": row.tool_diameter_mm,
-            "final_depth_mm": row.final_depth_mm,
             "spindle_speed_rpm": row.spindle_speed_rpm,
             "feed_rate_mm_min": row.feed_rate_mm_min,
             "plunge_rate_mm_min": row.plunge_rate_mm_min,
@@ -1121,7 +1117,6 @@ def _apply_tool_preset(document: Any, preset: Any, *, keep_name: bool) -> None:
     document.tool_name = preset.tool_name
     document.tool_number = preset.tool_number
     document.tool_diameter_mm = preset.tool_diameter_mm
-    document.final_depth_mm = preset.final_depth_mm
     document.spindle_speed_rpm = preset.spindle_speed_rpm
     document.feed_rate_mm_min = preset.feed_rate_mm_min
     document.plunge_rate_mm_min = preset.plunge_rate_mm_min

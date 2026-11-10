@@ -710,15 +710,15 @@ def test_a_tool_can_be_saved_without_final_depth_and_calculation_still_requires_
     created = normalize_tool_preset(stored)
     assert created.final_depth_mm is None
     assert created.pass_depth_mm == 19.0
-    empty = normalize_tool_preset({**stored, "final_depth_mm": 0})
-    assert empty.final_depth_mm is None
-    kept = normalize_tool_preset({**stored, "final_depth_mm": 20})
+    ignored = normalize_tool_preset({**stored, "final_depth_mm": 20})
+    assert ignored.final_depth_mm is None
+    kept = normalize_tool_preset(stored, machining_depth_mm=20)
     assert kept.final_depth_mm == 20.0
     with pytest.raises(ToolPresetError) as invalid:
-        normalize_tool_preset({**stored, "final_depth_mm": -1})
+        normalize_tool_preset(stored, machining_depth_mm=-1)
     assert invalid.value.code == "final_depth_invalid"
     with pytest.raises(ToolPresetError) as deeper:
-        normalize_tool_preset({**stored, "final_depth_mm": 10, "pass_depth_mm": 19})
+        normalize_tool_preset({**stored, "pass_depth_mm": 19}, machining_depth_mm=10)
     assert deeper.value.code == "pass_depth_exceeds_final_depth"
 
     known = {"T9_CUT": stored}

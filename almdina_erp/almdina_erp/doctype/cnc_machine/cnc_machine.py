@@ -37,7 +37,10 @@ class CNCMachine(Document):
         self.length_cm = normalized.length_cm
         self.enabled = 1 if int(self.enabled or 0) else 0
 
-    def before_trash(self) -> None:
+    def on_update(self) -> None:
+        audit_saved_document(self)
+
+    def on_trash(self) -> None:
         references = find_link_references(self.doctype, self.name)
         if references:
             frappe.throw(
@@ -46,11 +49,6 @@ class CNCMachine(Document):
                 ),
                 frappe.ValidationError,
             )
-
-    def on_update(self) -> None:
-        audit_saved_document(self)
-
-    def on_trash(self) -> None:
         audit_deleted_document(self)
 
 

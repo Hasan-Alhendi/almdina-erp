@@ -125,8 +125,9 @@ def test_tool_preset_rejects_invalid_measurements():
     assert spindle.value.code == "spindle_speed_invalid"
 
     with pytest.raises(ToolPresetError) as depth:
-        _preset(pass_depth_mm=20, final_depth_mm=18.5)
+        normalize_tool_preset(_raw(pass_depth_mm=20), machining_depth_mm=18.5)
     assert depth.value.code == "pass_depth_exceeds_final_depth"
+    assert normalize_tool_preset(_raw(final_depth_mm=18.5)).final_depth_mm is None
 
     valid = _preset()
     assert valid.tool_number == "T9"

@@ -7,7 +7,12 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import cint
 
-from almdina_erp.almdina_erp.domain.cnc.artcam_machining import machining_tool_uses
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    MachiningSetupError,
+    artcam_tool_storage,
+    machining_tool_uses,
+    normalize_artcam_tool,
+)
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import ToolPresetError, normalize_tool_preset
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
@@ -24,12 +29,21 @@ _MESSAGES = {
     "tool_name_required": "Tool name is required.",
     "tool_number_invalid": "Tool number must look like T9.",
     "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
-    "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
     "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM within the supported range.",
     "feed_rate_invalid": "Feed rate must be a positive number of millimetres per minute within the supported range.",
     "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per minute within the supported range.",
     "pass_depth_invalid": "Pass depth must be a positive number of millimetres within the supported range.",
     "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
+    "description_required": "Enter the tool description.",
+    "tool_type_invalid": "Tool type is required.",
+    "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
+    "tool_units_invalid": "Tool units must be mm.",
+    "rate_units_invalid": "Rate units must be mm/sec.",
+    "notes_required": "Notes is required.",
+    "notes_invalid": "The tool notes are too long.",
+    "stepdown_invalid": "Stepdown must be a positive number of millimetres.",
+    "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres.",
+    "stepover_invalid": "Enter the stepover size and its percent of diameter.",
 }
 
 
@@ -42,7 +56,6 @@ class CNCToolPreset(Document):
                     "tool_name": self.tool_name,
                     "tool_number": self.tool_number,
                     "tool_diameter_mm": self.tool_diameter_mm,
-                    "final_depth_mm": self.final_depth_mm,
                     "spindle_speed_rpm": self.spindle_speed_rpm,
                     "feed_rate_mm_min": self.feed_rate_mm_min,
                     "plunge_rate_mm_min": self.plunge_rate_mm_min,
@@ -50,17 +63,47 @@ class CNCToolPreset(Document):
                     "enabled": self.enabled,
                 }
             )
-        except ToolPresetError as exc:
-            frappe.throw(_(_MESSAGES[exc.code]), frappe.ValidationError)
+            if not str(self.notes or "").strip():
+                raise MachiningSetupError("notes_required")
+            artcam = normalize_artcam_tool(
+                {
+                    "description": self.tool_name,
+                    "tool_type": self.tool_type,
+                    "tool_number": self.tool_number,
+                    "tool_units": self.tool_units,
+                    "rate_units": self.rate_units,
+                    "notes": self.notes,
+                    "diameter_mm": self.tool_diameter_mm,
+                    "stepdown_mm": self.stepdown_mm,
+                    "final_tool_offset_mm": self.final_tool_offset_mm,
+                    "stepover_size_mm": self.stepover_size_mm,
+                    "stepover_percent": self.stepover_percent,
+                    "spindle_speed_rpm": self.spindle_speed_rpm,
+                    "feed_rate_mm_sec": self.feed_rate_mm_sec,
+                    "plunge_rate_mm_sec": self.plunge_rate_mm_sec,
+                }
+            )
+        except (ToolPresetError, MachiningSetupError) as exc:
+            frappe.throw(_(_MESSAGES.get(exc.code, "The CNC tool is not valid.")), frappe.ValidationError)
+        storage = artcam_tool_storage(artcam)
         self.preset_name = normalized.preset_name
         self.tool_name = normalized.tool_name
         self.tool_number = normalized.tool_number
         self.tool_diameter_mm = normalized.tool_diameter_mm
-        self.final_depth_mm = normalized.final_depth_mm
         self.spindle_speed_rpm = normalized.spindle_speed_rpm
         self.feed_rate_mm_min = normalized.feed_rate_mm_min
         self.plunge_rate_mm_min = normalized.plunge_rate_mm_min
         self.pass_depth_mm = normalized.pass_depth_mm
+        self.tool_type = storage["tool_type"]
+        self.tool_units = storage["tool_units"]
+        self.rate_units = storage["rate_units"]
+        self.notes = storage["notes"]
+        self.stepdown_mm = storage["stepdown_mm"]
+        self.final_tool_offset_mm = storage["final_tool_offset_mm"]
+        self.stepover_size_mm = storage["stepover_size_mm"]
+        self.stepover_percent = storage["stepover_percent"]
+        self.feed_rate_mm_sec = storage["feed_rate_mm_sec"]
+        self.plunge_rate_mm_sec = storage["plunge_rate_mm_sec"]
         self.enabled = 1 if normalized.enabled else 0
         if not self.enabled and not self.is_new():
             previous = self.get_doc_before_save()
@@ -72,7 +115,10 @@ class CNCToolPreset(Document):
                         frappe.ValidationError,
                     )
 
-    def before_trash(self) -> None:
+    def on_update(self) -> None:
+        audit_saved_document(self)
+
+    def on_trash(self) -> None:
         from almdina_erp.almdina_erp.services.production_settings_service import (
             assert_tool_preset_can_be_deleted,
         )
@@ -86,11 +132,6 @@ class CNCToolPreset(Document):
                 ),
                 frappe.ValidationError,
             )
-
-    def on_update(self) -> None:
-        audit_saved_document(self)
-
-    def on_trash(self) -> None:
         audit_deleted_document(self)
 
 
