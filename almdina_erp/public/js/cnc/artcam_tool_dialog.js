@@ -35,11 +35,9 @@
             : "";
         return [
             { fieldtype: "Section Break", label: "Tool" },
-            { fieldname: "description", fieldtype: "Data", label: "Description", reqd: 1, default: (tool && (tool.description || tool.tool_name)) || "" },
+            { fieldname: "description", fieldtype: "Data", label: "Tool Name", reqd: 1, default: (tool && (tool.description || tool.tool_name)) || "" },
             { fieldtype: "Column Break" },
             { fieldname: "tool_number", fieldtype: "Int", label: "Tool Number", reqd: 1, default: displayNumber },
-            { fieldtype: "Column Break" },
-            { fieldname: "tool_type", fieldtype: "Data", label: "Tool Type", read_only: 1, default: "Ball Nose" },
             { fieldtype: "Section Break" },
             { fieldname: "diameter_mm", fieldtype: "Float", label: "Diameter (D)", precision: 3, reqd: 1, default: numberValue(tool, "diameter_mm", tool && tool.tool_diameter_mm) },
             { fieldtype: "Column Break" },
@@ -56,12 +54,8 @@
             { fieldname: "feed_rate_mm_sec", fieldtype: "Float", label: "Feed Rate (mm/sec)", precision: 3, reqd: 1, default: numberValue(tool, "feed_rate_mm_sec", "") },
             { fieldtype: "Column Break" },
             { fieldname: "plunge_rate_mm_sec", fieldtype: "Float", label: "Plunge Rate (mm/sec)", precision: 3, reqd: 1, default: numberValue(tool, "plunge_rate_mm_sec", "") },
-            { fieldtype: "Column Break" },
-            { fieldname: "tool_units", fieldtype: "Data", label: "Tool Units", read_only: 1, default: "mm" },
             { fieldtype: "Section Break" },
-            { fieldname: "rate_units", fieldtype: "Data", label: "Rate Units", read_only: 1, default: "mm/sec" },
-            { fieldtype: "Column Break" },
-            { fieldname: "notes", fieldtype: "Small Text", label: "Notes", default: (tool && tool.notes) || "" },
+            { fieldname: "notes", fieldtype: "Small Text", label: "Notes", reqd: 1, default: (tool && tool.notes) || "" },
         ];
     }
 

@@ -81,72 +81,21 @@
     }
 
     function fieldsFor() {
-        const toolFields = [
-            ["description", "Description", "Data"],
-            ["tool_number", "Tool Number", "Int"],
-            ["tool_type", "Tool Type", "Data"],
-            ["diameter_mm", "Diameter (D)", "Float"],
-            ["stepdown_mm", "Stepdown (mm)", "Float"],
-            ["final_tool_offset_mm", "Final Tool Offset (mm)", "Float"],
-            ["stepover_size_mm", "Stepover size (mm)", "Float"],
-            ["stepover_percent", "Stepover percent of D", "Float"],
-            ["spindle_speed_rpm", "Spindle Speed (rpm)", "Int"],
-            ["feed_rate_mm_sec", "Feed Rate (mm/sec)", "Float"],
-            ["plunge_rate_mm_sec", "Plunge Rate (mm/sec)", "Float"],
-            ["tool_units", "Tool Units", "Data"],
-        ];
-        const rows = [
-            ["description", "tool_number", "tool_type"],
-            ["diameter_mm", "stepdown_mm", "final_tool_offset_mm"],
-            ["stepover_size_mm", "stepover_percent", "spindle_speed_rpm"],
-            ["feed_rate_mm_sec", "plunge_rate_mm_sec", "tool_units"],
-        ];
-        const byName = {};
-        toolFields.forEach(([name, label, fieldtype]) => {
-            byName[name] = { label, fieldtype };
-        });
-        const fields = [
+        return [
             { fieldtype: "Section Break", label: "Profile" },
-            { fieldname: "profile_name", fieldtype: "Data", label: "Profile name", reqd: 1 },
+            { fieldname: "profile_name", fieldtype: "Data", label: "Profile Name", reqd: 1 },
             { fieldname: "tool_preset", fieldtype: "Select", label: "Tool", reqd: 1, options: "\n" },
-            { fieldtype: "Section Break", label: "Tool", depends_on: "eval:doc.tool_preset" },
+            { fieldtype: "Section Break", label: "Machining" },
+            { fieldname: "final_depth_mm", fieldtype: "Float", label: "Final Depth (mm)", precision: 3, reqd: 1 },
+            { fieldtype: "Column Break" },
+            { fieldname: "safe_z_mm", fieldtype: "Float", label: "Safe Z (mm)", precision: 3, reqd: 1 },
+            { fieldtype: "Section Break", label: "Home" },
+            { fieldname: "home_x_mm", fieldtype: "Float", label: "Home X (mm)", precision: 3, reqd: 1 },
+            { fieldtype: "Column Break" },
+            { fieldname: "home_y_mm", fieldtype: "Float", label: "Home Y (mm)", precision: 3, reqd: 1 },
+            { fieldtype: "Column Break" },
+            { fieldname: "home_z_mm", fieldtype: "Float", label: "Home Z (mm)", precision: 3, reqd: 1 },
         ];
-        rows.forEach((row, index) => {
-            if (index) fields.push({ fieldtype: "Section Break", depends_on: "eval:doc.tool_preset" });
-            row.forEach((name, column) => {
-                if (column) fields.push({ fieldtype: "Column Break" });
-                const spec = byName[name];
-                const label = spec.label;
-                const fieldtype = spec.fieldtype;
-                const readOnly = name === "tool_type" || name === "tool_units";
-                fields.push({
-                    fieldname: name,
-                    fieldtype,
-                    label,
-                    precision: fieldtype === "Float" ? 3 : undefined,
-                    reqd: readOnly ? 0 : 1,
-                    read_only: readOnly ? 1 : 0,
-                    depends_on: "eval:doc.tool_preset",
-                });
-            });
-        });
-        fields.push(
-            { fieldtype: "Section Break", depends_on: "eval:doc.tool_preset" },
-            { fieldname: "notes", fieldtype: "Small Text", label: "Notes", depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Column Break" },
-            { fieldname: "rate_units", fieldtype: "Data", label: "Rate Units", read_only: 1, default: "mm/sec", depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Section Break", label: "Profile", depends_on: "eval:doc.tool_preset" },
-            { fieldname: "final_depth_mm", fieldtype: "Float", label: "Final Depth (mm)", precision: 3, reqd: 1, depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Column Break" },
-            { fieldname: "safe_z_mm", fieldtype: "Float", label: "Safe Z (mm)", precision: 3, reqd: 1, depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Section Break", label: "Home", depends_on: "eval:doc.tool_preset" },
-            { fieldname: "home_x_mm", fieldtype: "Float", label: "X (mm)", precision: 3, reqd: 1, depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Column Break" },
-            { fieldname: "home_y_mm", fieldtype: "Float", label: "Y (mm)", precision: 3, reqd: 1, depends_on: "eval:doc.tool_preset" },
-            { fieldtype: "Column Break" },
-            { fieldname: "home_z_mm", fieldtype: "Float", label: "Z (mm)", precision: 3, reqd: 1, depends_on: "eval:doc.tool_preset" }
-        );
-        return fields;
     }
 
     function open(options = {}) {
@@ -168,22 +117,6 @@
                     home_x_mm: values.home_x_mm,
                     home_y_mm: values.home_y_mm,
                     home_z_mm: values.home_z_mm,
-                    tool_values: {
-                        description: values.description,
-                        tool_type: values.tool_type || "Ball Nose",
-                        tool_number: values.tool_number,
-                        tool_units: values.tool_units || "mm",
-                        rate_units: values.rate_units || "mm/sec",
-                        notes: values.notes || "",
-                        diameter_mm: values.diameter_mm,
-                        stepdown_mm: values.stepdown_mm,
-                        final_tool_offset_mm: values.final_tool_offset_mm,
-                        stepover_size_mm: values.stepover_size_mm,
-                        stepover_percent: values.stepover_percent,
-                        spindle_speed_rpm: values.spindle_speed_rpm,
-                        feed_rate_mm_sec: values.feed_rate_mm_sec,
-                        plunge_rate_mm_sec: values.plunge_rate_mm_sec,
-                    },
                 };
                 if (profile && profile.profile_id) payload.profile_id = profile.profile_id;
                 const pending = options.onSubmit ? options.onSubmit(payload) : null;

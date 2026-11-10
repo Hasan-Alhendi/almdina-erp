@@ -98,7 +98,7 @@ class CNCMachiningProfile(Document):
                 profile_id=self.profile_id,
             )
         except MachiningSetupError as exc:
-            frappe.throw(_(_MESSAGES.get(exc.code, "The profile is not valid.")), frappe.ValidationError)
+            frappe.throw(_MESSAGES.get(exc.code, "The profile is not valid."), frappe.ValidationError)
         self.profile_id = profile["profile_id"]
         self.profile_name = profile["name"]
         self.tool_preset = profile["tool_preset"]

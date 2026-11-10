@@ -17,6 +17,7 @@ from frappe.utils.file_manager import save_file
 from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
     machine_profile_for_workspace,
 )
+from almdina_erp.almdina_erp.domain.cnc.tool_preset import mm_per_min_from_sec
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
     generation_snapshot_is_complete,
@@ -428,39 +429,38 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
         "CNC Tool Preset",
         fields=[
             "name",
-            "preset_name",
             "tool_name",
             "tool_number",
             "tool_diameter_mm",
             "spindle_speed_rpm",
-            "feed_rate_mm_min",
-            "plunge_rate_mm_min",
-            "pass_depth_mm",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
+            "stepdown_mm",
             "enabled",
             "tool_type",
             "tool_units",
             "rate_units",
             "notes",
-            "stepdown_mm",
             "final_tool_offset_mm",
             "stepover_size_mm",
             "stepover_percent",
-            "feed_rate_mm_sec",
-            "plunge_rate_mm_sec",
         ],
         limit_page_length=0,
         ignore_permissions=True,
     )
     return {
         str(row.name): {
-            "preset_name": row.preset_name,
+            "preset_name": row.tool_name,
             "tool_name": row.tool_name,
             "tool_number": row.tool_number,
             "tool_diameter_mm": row.tool_diameter_mm,
             "spindle_speed_rpm": row.spindle_speed_rpm,
-            "feed_rate_mm_min": row.feed_rate_mm_min,
-            "plunge_rate_mm_min": row.plunge_rate_mm_min,
-            "pass_depth_mm": None if not row.pass_depth_mm else row.pass_depth_mm,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "feed_rate_mm_min": mm_per_min_from_sec(row.feed_rate_mm_sec or 0),
+            "plunge_rate_mm_min": mm_per_min_from_sec(row.plunge_rate_mm_sec or 0),
+            "stepdown_mm": row.stepdown_mm,
+            "pass_depth_mm": None if not row.stepdown_mm else row.stepdown_mm,
             "enabled": bool(cint(row.enabled)),
             "tool_type": row.tool_type or "",
             "tool_units": row.tool_units or "",
@@ -468,12 +468,9 @@ def known_tool_presets() -> dict[str, dict[str, Any]]:
             "notes": row.notes or "",
             "description": row.tool_name or "",
             "diameter_mm": row.tool_diameter_mm,
-            "stepdown_mm": row.stepdown_mm,
             "final_tool_offset_mm": row.final_tool_offset_mm,
             "stepover_size_mm": row.stepover_size_mm,
             "stepover_percent": row.stepover_percent,
-            "feed_rate_mm_sec": row.feed_rate_mm_sec,
-            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
         }
         for row in rows
     }

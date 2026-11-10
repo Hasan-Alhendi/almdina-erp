@@ -32,6 +32,7 @@ from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
     ToolPresetValues,
     assert_single_tool_for_file,
+    mm_per_min_from_sec,
     normalize_tool_preset,
 )
 
@@ -268,9 +269,6 @@ def artcam_tool_storage(tool: ArtcamToolValues) -> dict[str, Any]:
         "tool_number": tool.tool_number,
         "tool_diameter_mm": tool.diameter_mm,
         "spindle_speed_rpm": tool.spindle_speed_rpm,
-        "feed_rate_mm_min": round(tool.feed_rate_mm_sec * 60.0, 1),
-        "plunge_rate_mm_min": round(tool.plunge_rate_mm_sec * 60.0, 1),
-        "pass_depth_mm": tool.stepdown_mm,
         "tool_type": tool.tool_type,
         "tool_units": tool.tool_units,
         "rate_units": tool.rate_units,
@@ -426,8 +424,8 @@ def _preset_from_local(local: Mapping[str, Any]) -> ToolPresetValues:
     tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}
     rate_units = str(tool_values.get("rate_units") or "")
     if rate_units == RATE_UNITS_MM_SEC:
-        feed = float(tool_values.get("feed_rate_mm_sec") or 0) * 60.0
-        plunge = float(tool_values.get("plunge_rate_mm_sec") or 0) * 60.0
+        feed = mm_per_min_from_sec(tool_values.get("feed_rate_mm_sec") or 0)
+        plunge = mm_per_min_from_sec(tool_values.get("plunge_rate_mm_sec") or 0)
         stepdown = tool_values.get("stepdown_mm")
     else:
         feed = tool_values.get("feed_rate_mm_min")

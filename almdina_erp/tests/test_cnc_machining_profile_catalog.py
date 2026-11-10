@@ -33,11 +33,17 @@ def test_profile_catalog_is_not_a_board_default_and_keeps_the_file_copy():
     assert doctype["name"] == "CNC Machining Profile"
     assert "cnc_machine" not in doctype["field_order"]
     assert all(field.get("fieldname") != "cnc_machine" for field in doctype["fields"])
-    assert "tool_preset" in doctype["field_order"]
     assert "tool_values_json" in doctype["field_order"]
-    assert "final_depth_mm" in doctype["field_order"]
+    snapshot = next(field for field in doctype["fields"] if field["fieldname"] == "tool_values_json")
+    assert snapshot["hidden"] == 1
+    assert snapshot["label"] == "Tool Snapshot"
+    assert "cnc_machine" not in doctype["field_order"]
     tool = _doctype("cnc_tool_preset")
     assert "final_depth_mm" not in tool["field_order"]
+    assert "preset_name" not in tool["field_order"]
+    assert "feed_rate_mm_min" not in tool["field_order"]
+    assert "pass_depth_mm" not in tool["field_order"]
+    assert tool["autoname"] == "field:tool_name"
     operational = json.loads(_text(PACKAGE / "almdina_erp" / "doctype" / "cnc_operational_file" / "cnc_operational_file.json"))
     assert any(field.get("fieldname") == "machining_profiles_json" for field in operational["fields"])
     service = _text(PACKAGE / "almdina_erp" / "services" / "production_settings_service.py")
@@ -89,6 +95,7 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     form = _text(PACKAGE / "almdina_erp" / "doctype" / "cnc_machining_profile" / "cnc_machining_profile.js")
     assert "CNC Machine" not in form
     assert "tool_values_json" in form
+    assert 'frm.set_df_property("tool_values_json", "hidden", 1)' in form
 
 
 def test_machining_profile_permission_matches_the_tool_catalog():

@@ -50,16 +50,20 @@ _MESSAGES = {
 class CNCToolPreset(Document):
     def validate(self) -> None:
         try:
+            self.tool_type = "Ball Nose"
+            self.tool_units = "mm"
+            self.rate_units = "mm/sec"
+            if not self.is_new() and str(self.tool_name or "").strip() != str(self.name or "").strip():
+                frappe.throw("Tool Name cannot be changed.", frappe.ValidationError)
             normalized = normalize_tool_preset(
                 {
-                    "preset_name": self.preset_name,
                     "tool_name": self.tool_name,
                     "tool_number": self.tool_number,
                     "tool_diameter_mm": self.tool_diameter_mm,
                     "spindle_speed_rpm": self.spindle_speed_rpm,
-                    "feed_rate_mm_min": self.feed_rate_mm_min,
-                    "plunge_rate_mm_min": self.plunge_rate_mm_min,
-                    "pass_depth_mm": self.pass_depth_mm,
+                    "feed_rate_mm_sec": self.feed_rate_mm_sec,
+                    "plunge_rate_mm_sec": self.plunge_rate_mm_sec,
+                    "stepdown_mm": self.stepdown_mm,
                     "enabled": self.enabled,
                 }
             )
@@ -84,21 +88,17 @@ class CNCToolPreset(Document):
                 }
             )
         except (ToolPresetError, MachiningSetupError) as exc:
-            frappe.throw(_(_MESSAGES.get(exc.code, "The CNC tool is not valid.")), frappe.ValidationError)
+            frappe.throw(_MESSAGES.get(exc.code, "The CNC tool is not valid."), frappe.ValidationError)
         storage = artcam_tool_storage(artcam)
-        self.preset_name = normalized.preset_name
         self.tool_name = normalized.tool_name
         self.tool_number = normalized.tool_number
         self.tool_diameter_mm = normalized.tool_diameter_mm
         self.spindle_speed_rpm = normalized.spindle_speed_rpm
-        self.feed_rate_mm_min = normalized.feed_rate_mm_min
-        self.plunge_rate_mm_min = normalized.plunge_rate_mm_min
-        self.pass_depth_mm = normalized.pass_depth_mm
+        self.stepdown_mm = storage["stepdown_mm"]
         self.tool_type = storage["tool_type"]
         self.tool_units = storage["tool_units"]
         self.rate_units = storage["rate_units"]
         self.notes = storage["notes"]
-        self.stepdown_mm = storage["stepdown_mm"]
         self.final_tool_offset_mm = storage["final_tool_offset_mm"]
         self.stepover_size_mm = storage["stepover_size_mm"]
         self.stepover_percent = storage["stepover_percent"]

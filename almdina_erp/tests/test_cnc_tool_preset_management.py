@@ -169,7 +169,7 @@ def test_creating_a_preset_requires_the_factory_capability_and_then_appears_for_
     ).read_text(encoding="utf-8")
     assert '"quick_entry": 1' in doctype
     assert "final_depth_mm" not in doctype
-    assert '"search_fields": "tool_name,tool_number,preset_name"' in doctype
+    assert '"search_fields": "tool_name,tool_number"' in doctype
     assert '"in_list_view": 1' in doctype
     assert "spindle_speed_rpm" in doctype
 

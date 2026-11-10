@@ -65,6 +65,32 @@ def _positive(value: Any, code: str, *, upper: float) -> float:
     return number
 
 
+def mm_per_min_from_sec(value: Any) -> float:
+    """Convert a stored mm/sec rate into the mm/min value motion code already uses."""
+
+    return round(float(value) * 60.0, 1)
+
+
+def mm_per_sec_from_min(value: Any) -> float:
+    """Convert a legacy mm/min rate into the stored mm/sec value."""
+
+    return round(float(value) / 60.0, 3)
+
+
+def _rate_pair(raw: Mapping[str, Any], *, sec_key: str, min_key: str, code: str, upper_per_min: float) -> tuple[float, float]:
+    """Return ``(mm/sec, mm/min)``. Stored tools supply seconds; older payloads supply minutes."""
+
+    seconds = raw.get(sec_key)
+    minutes = raw.get(min_key)
+    if seconds not in (None, ""):
+        per_sec = _positive(seconds, code, upper=upper_per_min / 60.0)
+        return round(per_sec, 3), mm_per_min_from_sec(per_sec)
+    if minutes not in (None, ""):
+        per_min = _positive(minutes, code, upper=upper_per_min)
+        return mm_per_sec_from_min(per_min), round(per_min, 1)
+    raise ToolPresetError(code)
+
+
 def _optional_final_depth(value: Any) -> float | None:
     """A tool definition may omit Final Depth. Zero is the empty stored value."""
 
@@ -95,12 +121,18 @@ def normalize_tool_preset(
     existing board program. A stored tool payload cannot provide it.
     """
 
+    identity = raw.get("preset_name") or raw.get("tool_name")
+    display = raw.get("tool_name") or identity
+    preset_name = _text(identity, required_code="tool_name_required")
+    tool_name = _text(display, required_code="tool_name_required")
     tool_number = _text(raw.get("tool_number"), required_code="tool_number_invalid").upper()
     if _TOOL_NUMBER.fullmatch(tool_number) is None:
         raise ToolPresetError("tool_number_invalid")
 
     final_depth = None if machining_depth_mm is _MISSING else _optional_final_depth(machining_depth_mm)
-    pass_raw = raw.get("pass_depth_mm")
+    pass_raw = raw.get("stepdown_mm")
+    if pass_raw in (None, ""):
+        pass_raw = raw.get("pass_depth_mm")
     pass_depth: float | None
     if pass_raw in (None, ""):
         pass_depth = None
@@ -124,10 +156,24 @@ def normalize_tool_preset(
     ):
         raise ToolPresetError("spindle_speed_invalid")
     spindle = int(spindle_number)
+    _feed_sec, feed_min = _rate_pair(
+        raw,
+        sec_key="feed_rate_mm_sec",
+        min_key="feed_rate_mm_min",
+        code="feed_rate_invalid",
+        upper_per_min=MAX_FEED_MM_MIN,
+    )
+    _plunge_sec, plunge_min = _rate_pair(
+        raw,
+        sec_key="plunge_rate_mm_sec",
+        min_key="plunge_rate_mm_min",
+        code="plunge_rate_invalid",
+        upper_per_min=MAX_PLUNGE_MM_MIN,
+    )
 
     return ToolPresetValues(
-        preset_name=_text(raw.get("preset_name"), required_code="preset_name_required"),
-        tool_name=_text(raw.get("tool_name"), required_code="tool_name_required"),
+        preset_name=preset_name,
+        tool_name=tool_name,
         tool_number=tool_number,
         tool_diameter_mm=round(
             _positive(raw.get("tool_diameter_mm"), "tool_diameter_invalid", upper=MAX_DIAMETER_MM),
@@ -135,14 +181,8 @@ def normalize_tool_preset(
         ),
         final_depth_mm=final_depth,
         spindle_speed_rpm=spindle,
-        feed_rate_mm_min=round(
-            _positive(raw.get("feed_rate_mm_min"), "feed_rate_invalid", upper=MAX_FEED_MM_MIN),
-            1,
-        ),
-        plunge_rate_mm_min=round(
-            _positive(raw.get("plunge_rate_mm_min"), "plunge_rate_invalid", upper=MAX_PLUNGE_MM_MIN),
-            1,
-        ),
+        feed_rate_mm_min=feed_min,
+        plunge_rate_mm_min=plunge_min,
         pass_depth_mm=None if pass_depth is None else round(pass_depth, 3),
         enabled=bool(raw.get("enabled", True)),
     )

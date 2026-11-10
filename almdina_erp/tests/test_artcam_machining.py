@@ -38,6 +38,8 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
+    mm_per_min_from_sec,
+    mm_per_sec_from_min,
     normalize_tool_preset,
     tool_delete_blockers,
     unused_tool_preset_can_be_deleted,
@@ -143,9 +145,22 @@ def test_ball_nose_tool_uses_the_artcam_dialog_fields_and_keeps_the_physical_too
     assert tool.feed_rate_mm_sec == 170.0
     assert tool.plunge_rate_mm_sec == 30.0
     stored = artcam_tool_storage(tool)
-    assert stored["feed_rate_mm_min"] == 10200.0
-    assert stored["plunge_rate_mm_min"] == 1800.0
-    assert "final_depth_mm" not in stored
+    assert mm_per_min_from_sec(stored["feed_rate_mm_sec"]) == 10200.0
+    assert mm_per_min_from_sec(stored["plunge_rate_mm_sec"]) == 1800.0
+    assert "feed_rate_mm_min" not in stored
+    assert "pass_depth_mm" not in stored
+    assert mm_per_sec_from_min(10200) == 170.0
+    assert normalize_tool_preset(
+        {
+            "tool_name": "Finish",
+            "tool_number": "T9",
+            "tool_diameter_mm": 6,
+            "spindle_speed_rpm": 15000,
+            "feed_rate_mm_min": 10200,
+            "plunge_rate_mm_min": 1800,
+            "pass_depth_mm": 7,
+        }
+    ).feed_rate_mm_min == 10200.0
     with pytest.raises(MachiningSetupError) as caught:
         normalize_artcam_tool(_artcam(tool_type="End Mill"))
     assert caught.value.code == "tool_type_unsupported"

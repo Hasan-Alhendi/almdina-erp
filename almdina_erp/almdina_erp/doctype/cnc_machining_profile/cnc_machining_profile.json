@@ -46,10 +46,12 @@
       "reqd": 1
     },
     {
-      "description": "Tool values copied into this profile. Later edits of the tool do not change this copy.",
+      "description": "Hidden snapshot copied from the selected tool when this profile is saved. Later tool edits do not change it.",
       "fieldname": "tool_values_json",
       "fieldtype": "JSON",
-      "label": "Tool Values",
+      "hidden": 1,
+      "label": "Tool Snapshot",
+      "read_only": 1,
       "reqd": 1
     },
     {

@@ -27,6 +27,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     ToolPresetError,
+    mm_per_min_from_sec,
+    mm_per_sec_from_min,
     normalize_tool_preset,
     resolve_selected_presets,
     tool_delete_blockers,
@@ -609,14 +611,13 @@ def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
         filters={"name": ["in", wanted]},
         fields=[
             "name",
-            "preset_name",
             "tool_name",
             "tool_number",
             "tool_diameter_mm",
             "spindle_speed_rpm",
-            "feed_rate_mm_min",
-            "plunge_rate_mm_min",
-            "pass_depth_mm",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
+            "stepdown_mm",
             "enabled",
         ],
         limit_page_length=0,
@@ -624,14 +625,17 @@ def _known_cnc_presets(names: list[str]) -> dict[str, dict[str, Any]]:
     )
     return {
         str(row.name): {
-            "preset_name": row.preset_name,
+            "preset_name": row.tool_name,
             "tool_name": row.tool_name,
             "tool_number": row.tool_number,
             "tool_diameter_mm": row.tool_diameter_mm,
             "spindle_speed_rpm": row.spindle_speed_rpm,
-            "feed_rate_mm_min": row.feed_rate_mm_min,
-            "plunge_rate_mm_min": row.plunge_rate_mm_min,
-            "pass_depth_mm": row.pass_depth_mm,
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "feed_rate_mm_min": mm_per_min_from_sec(row.feed_rate_mm_sec or 0),
+            "plunge_rate_mm_min": mm_per_min_from_sec(row.plunge_rate_mm_sec or 0),
+            "stepdown_mm": row.stepdown_mm,
+            "pass_depth_mm": row.stepdown_mm,
             "enabled": bool(cint(row.enabled)),
         }
         for row in rows
@@ -1023,27 +1027,23 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
         "CNC Tool Preset",
         fields=[
             "name",
-            "preset_name",
             "tool_name",
             "tool_number",
             "tool_diameter_mm",
             "spindle_speed_rpm",
-            "feed_rate_mm_min",
-            "plunge_rate_mm_min",
-            "pass_depth_mm",
+            "feed_rate_mm_sec",
+            "plunge_rate_mm_sec",
+            "stepdown_mm",
             "enabled",
             "tool_type",
             "tool_units",
             "rate_units",
             "notes",
-            "stepdown_mm",
             "final_tool_offset_mm",
             "stepover_size_mm",
             "stepover_percent",
-            "feed_rate_mm_sec",
-            "plunge_rate_mm_sec",
         ],
-        order_by="preset_name asc",
+        order_by="tool_name asc",
         limit_page_length=0,
     )
     references = _tool_reference_index()
@@ -1051,14 +1051,17 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
     return [
         {
             "name": row.name,
-            "preset_name": row.preset_name,
+            "preset_name": row.tool_name,
             "tool_name": row.tool_name,
             "tool_number": row.tool_number,
             "tool_diameter_mm": row.tool_diameter_mm,
             "spindle_speed_rpm": row.spindle_speed_rpm,
-            "feed_rate_mm_min": row.feed_rate_mm_min,
-            "plunge_rate_mm_min": row.plunge_rate_mm_min,
-            "pass_depth_mm": _optional_pass_depth(row.pass_depth_mm),
+            "feed_rate_mm_sec": row.feed_rate_mm_sec,
+            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
+            "feed_rate_mm_min": mm_per_min_from_sec(row.feed_rate_mm_sec or 0),
+            "plunge_rate_mm_min": mm_per_min_from_sec(row.plunge_rate_mm_sec or 0),
+            "stepdown_mm": row.stepdown_mm,
+            "pass_depth_mm": _optional_pass_depth(row.stepdown_mm),
             "enabled": bool(cint(row.enabled)),
             "tool_type": row.tool_type or "",
             "tool_units": row.tool_units or "",
@@ -1066,12 +1069,9 @@ def _cnc_tool_preset_catalog() -> list[dict[str, Any]]:
             "notes": row.notes or "",
             "description": row.tool_name or "",
             "diameter_mm": row.tool_diameter_mm,
-            "stepdown_mm": row.stepdown_mm,
             "final_tool_offset_mm": row.final_tool_offset_mm,
             "stepover_size_mm": row.stepover_size_mm,
             "stepover_percent": row.stepover_percent,
-            "feed_rate_mm_sec": row.feed_rate_mm_sec,
-            "plunge_rate_mm_sec": row.plunge_rate_mm_sec,
             "delete_blockers": list(
                 tool_delete_blockers(
                     operation_uses=references.get(str(row.name or ""), empty_uses)["operations"],
@@ -1096,31 +1096,31 @@ def _require_tool_preset_editor() -> None:
 
 def _preset_message(code: str) -> str:
     messages = {
-        "preset_name_required": "Enter a preset name.",
-        "tool_name_required": "Enter a tool name.",
-        "tool_number_invalid": "Tool number must look like T9.",
-        "tool_diameter_invalid": "Tool diameter must be a positive number of millimetres within the supported range.",
-        "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
-        "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM within the supported range.",
-        "feed_rate_invalid": "Feed rate must be a positive number of millimetres per minute within the supported range.",
-        "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per minute within the supported range.",
-        "pass_depth_invalid": "Pass depth must be a positive number of millimetres within the supported range.",
-        "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
+        "tool_name_required": "Tool Name is required.",
+        "tool_number_invalid": "Tool Number must look like T9.",
+        "tool_diameter_invalid": "Tool Diameter (mm) must be a positive number within the supported range.",
+        "final_depth_invalid": "Final Depth (mm) must be a positive number within the supported range.",
+        "spindle_speed_invalid": "Spindle Speed (RPM) must be a positive whole number within the supported range.",
+        "feed_rate_invalid": "Feed Rate (mm/sec) must be a positive number within the supported range.",
+        "plunge_rate_invalid": "Plunge Rate (mm/sec) must be a positive number within the supported range.",
+        "pass_depth_invalid": "Stepdown must be a positive number of millimetres within the supported range.",
+        "pass_depth_exceeds_final_depth": "Stepdown cannot be deeper than Final Depth (mm).",
         "preset_not_found": "The selected CNC tool preset does not exist.",
     }
-    return _(messages.get(code, "The CNC tool preset is not valid."))
+    return messages.get(code, "The CNC tool preset is not valid.")
 
 
-def _apply_tool_preset(document: Any, preset: Any, *, keep_name: bool) -> None:
-    if not keep_name:
-        document.preset_name = preset.preset_name
+def _apply_tool_preset(document: Any, preset: Any) -> None:
     document.tool_name = preset.tool_name
     document.tool_number = preset.tool_number
     document.tool_diameter_mm = preset.tool_diameter_mm
     document.spindle_speed_rpm = preset.spindle_speed_rpm
-    document.feed_rate_mm_min = preset.feed_rate_mm_min
-    document.plunge_rate_mm_min = preset.plunge_rate_mm_min
-    document.pass_depth_mm = preset.pass_depth_mm
+    document.feed_rate_mm_sec = mm_per_sec_from_min(preset.feed_rate_mm_min)
+    document.plunge_rate_mm_sec = mm_per_sec_from_min(preset.plunge_rate_mm_min)
+    document.stepdown_mm = preset.pass_depth_mm
+    document.tool_type = "Ball Nose"
+    document.tool_units = "mm"
+    document.rate_units = "mm/sec"
     document.enabled = 1 if preset.enabled else 0
 
 
@@ -1305,7 +1305,7 @@ def save_artcam_tool(values: str | dict[str, Any]) -> dict[str, Any]:
             frappe.throw(_("A tool with this description already exists."), frappe.ValidationError)
         document = frappe.new_doc("CNC Tool Preset")
         document.check_permission("create")
-        document.preset_name = tool.description
+        document.tool_name = tool.description
         document.enabled = 1
         for fieldname, value in updates.items():
             document.set(fieldname, value)
@@ -1397,16 +1397,16 @@ def save_cnc_tool_preset(values: str | dict[str, Any]) -> dict[str, Any]:
     if name and frappe.db.exists("CNC Tool Preset", name):
         document = frappe.get_doc("CNC Tool Preset", name)
         document.check_permission("write")
-        if preset.preset_name != str(document.preset_name or ""):
-            frappe.throw(_("The preset name cannot be changed."), frappe.ValidationError)
-        _apply_tool_preset(document, preset, keep_name=True)
+        if preset.tool_name != str(document.tool_name or ""):
+            frappe.throw("Tool Name cannot be changed.", frappe.ValidationError)
+        _apply_tool_preset(document, preset)
         document.save()
     else:
-        if name and name != preset.preset_name:
-            frappe.throw(_("The preset name cannot be changed."), frappe.ValidationError)
+        if name and name != preset.tool_name:
+            frappe.throw("Tool Name cannot be changed.", frappe.ValidationError)
         document = frappe.new_doc("CNC Tool Preset")
         document.check_permission("create")
-        _apply_tool_preset(document, preset, keep_name=False)
+        _apply_tool_preset(document, preset)
         document.insert()
     return get_production_settings()
 
