@@ -1969,6 +1969,31 @@
             }
         }
 
+        function formatApplyFailureMessage(response) {
+            const escape = (frappe.utils && typeof frappe.utils.escape_html === "function")
+                ? frappe.utils.escape_html
+                : (value) => String(value == null ? "" : value);
+            let text = String(
+                (response && response.message)
+                || __("The layout could not be applied to a cutting plan.")
+            ).trim();
+            const review = response && response.review;
+            const issueLines = Array.isArray(review && review.issues)
+                ? review.issues
+                    .filter((issue) => {
+                        const severity = String((issue && issue.severity) || "error").toLowerCase();
+                        return severity === "error" || severity === "blocking";
+                    })
+                    .map((issue) => String((issue && issue.message) || "").trim())
+                    .filter(Boolean)
+                    .slice(0, 5)
+                : [];
+            if (issueLines.length && !issueLines.every((line) => text.includes(line))) {
+                text = `${text}\n\n${issueLines.map((line) => `• ${line}`).join("\n")}`;
+            }
+            return escape(text).replace(/\n/g, "<br>");
+        }
+
         async function createPlanCopy() {
             if (!store || !activeOrderName || !loadedPlanName) return;
             const view = store.snapshot();
@@ -2031,8 +2056,7 @@
                         : __("Apply to cutting plan");
                     frappe.msgprint({
                         title,
-                        message: (response && response.message)
-                            || __("The layout could not be applied to a cutting plan."),
+                        message: formatApplyFailureMessage(response),
                         indicator: "orange",
                     });
                 }
@@ -2042,7 +2066,9 @@
                 if (typeof frappe !== "undefined" && frappe.msgprint) {
                     frappe.msgprint({
                         title: __("Apply to cutting plan"),
-                        message: __("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
+                        message: formatApplyFailureMessage({
+                            message: __("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
+                        }),
                         indicator: "red",
                     });
                 }

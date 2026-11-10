@@ -289,7 +289,8 @@ const { CanvasRenderer, SessionDocument, createStore, History } = editor;
     assert.doesNotMatch(html, /class="abe-sheet[^"]*"[^>]*data-sheet-group=/);
 
     const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-    assert.match(page, /canvas_renderer\.js\?v=40/);
+    assert.match(page, /canvas_renderer\.js\?v=43/);
+    assert.match(page, /move_interaction\.js\?v=29/);
 }
 
 console.log("board_editor_board_drag_preview.test.js: ok");

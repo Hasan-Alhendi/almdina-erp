@@ -512,15 +512,17 @@ assert.equal(typeof MeasureGeometry.edgeSlideBand, "function");
 // Asset pins.
 {
     const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-    assert.match(page, /measure_geometry\.js\?v=3/);
-    assert.match(page, /measure_interaction\.js\?v=6/);
+    assert.match(page, /measure_geometry\.js\?v=5/);
+    assert.match(page, /measure_interaction\.js\?v=8/);
     const geometrySource = fs.readFileSync(path.join(root, "public/js/board_editor/measure_geometry.js"), "utf8");
     const interactionSource = fs.readFileSync(path.join(root, "public/js/board_editor/measure_interaction.js"), "utf8");
     assert.match(geometrySource, /presentPieceClearanceNearPointer/);
     assert.match(geometrySource, /presentEdgeClearanceNearPointer/);
+    assert.match(geometrySource, /directionalClearancesBetweenPieces/);
     assert.match(interactionSource, /presentPieceClearanceNearPointer/);
     assert.match(interactionSource, /presentEdgeClearanceNearPointer/);
     assert.match(interactionSource, /presentGeomLines/);
+    assert.match(interactionSource, /directionalClearancesBetweenPieces/);
 }
 
 console.log("board_editor_measure_presentation.test.js: ok");

@@ -555,6 +555,17 @@ assert.match(lAfter, /stroke="#1d6fbf"/);
     assert.ok(pieceAt >= 0, "moved piece present on destination sheet");
     assert.ok(frameAt < pieceAt, "sheet frame must paint under cross-sheet moved piece");
     assert.match(groupHtml, /data-piece-key="instance:pi-keep"/);
+
+    // Live piece drag must elevate nodes above sheet groups so destination
+    // board fills cannot cover the in-flight piece still parented under origin.
+    const rendererSrc = fs.readFileSync(
+        path.join(root, "public/js/board_editor/canvas_renderer.js"),
+        "utf8"
+    );
+    assert.match(rendererSrc, /data-abe-drag-layer/);
+    assert.match(rendererSrc, /function ensureDragLayer\(/);
+    assert.match(rendererSrc, /function elevateDragNode\(/);
+    assert.match(rendererSrc, /preview\.kind === "piece"[\s\S]*ensureDragLayer\(\)/);
 }
 
 console.log("board_editor_render_move.test.js: ok");

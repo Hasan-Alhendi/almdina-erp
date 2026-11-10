@@ -283,6 +283,63 @@ def _aabb_near(a: Mapping[str, float], b: Mapping[str, float], pad: float) -> bo
     )
 
 
+def _aabb_overlap_area(a: Mapping[str, float], b: Mapping[str, float]) -> float:
+    width = max(0.0, min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]))
+    height = max(0.0, min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"]))
+    return width * height
+
+
+def _aabb_separation_mm(a: Mapping[str, float], b: Mapping[str, float]) -> float:
+    if _aabb_overlap_area(a, b) > 0:
+        return 0.0
+    dx = max(0.0, max(a["x"] - (b["x"] + b["w"]), b["x"] - (a["x"] + a["w"])))
+    dy = max(0.0, max(a["y"] - (b["y"] + b["h"]), b["y"] - (a["y"] + a["h"])))
+    overlap_x = max(0.0, min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]))
+    overlap_y = max(0.0, min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"]))
+    if overlap_x > 0:
+        return dy
+    if overlap_y > 0:
+        return dx
+    return hypot(dx, dy)
+
+
+def _pick_primary_near_board(near_rows: list[dict[str, Any]]) -> str | None:
+    if not near_rows:
+        return None
+    if len(near_rows) == 1:
+        return str(near_rows[0]["sheet_no"])
+    ranked = sorted(
+        near_rows,
+        key=lambda row: (
+            -num(row.get("overlap_area")),
+            num(row.get("separation")),
+            num(row.get("sheet_no")),
+        ),
+    )
+    return str(ranked[0]["sheet_no"])
+
+
+def _usable_edge_threshold_mm(
+    threshold_mm: float,
+    piece_bounds: Mapping[str, float],
+    usable: Mapping[str, float],
+) -> float:
+    base = num(threshold_mm)
+    uw = num(usable.get("w"))
+    uh = num(usable.get("h"))
+    if not (uw > 0 and uh > 0):
+        return base
+    fill_x = num(piece_bounds.get("w")) / uw
+    fill_y = num(piece_bounds.get("h")) / uh
+    if fill_x < 0.8 and fill_y < 0.8:
+        return base
+    slack_x = uw - num(piece_bounds.get("w"))
+    slack_y = uh - num(piece_bounds.get("h"))
+    widen = max(0.0, max(slack_x, slack_y)) + base
+    cap = max(base, min(uw, uh) * 0.12)
+    return max(base, min(widen, cap))
+
+
 def suggest_piece_snap(
     *,
     piece: Mapping[str, Any],
@@ -340,30 +397,48 @@ def suggest_piece_snap(
         ),
     }
 
-    near_boards: list[str] = []
+    near_rows: list[dict[str, Any]] = []
     for sheet_no, board in boards.items():
         ox = num(board.get("origin_x_mm")) + num(board.get("trim_x_mm"))
         oy = num(board.get("origin_y_mm")) + num(board.get("trim_y_mm"))
         uw = num(board.get("usable_width_mm")) or num(board.get("width_mm"))
         uh = num(board.get("usable_length_mm")) or num(board.get("height_mm"))
         usable = {"x": ox, "y": oy, "w": uw, "h": uh}
-        if _aabb_near(proposed["bounds"], usable, num(threshold_mm)):
-            near_boards.append(str(sheet_no))
+        if not _aabb_near(proposed["bounds"], usable, num(threshold_mm)):
+            continue
+        near_rows.append(
+            {
+                "sheet_no": str(sheet_no),
+                "overlap_area": _aabb_overlap_area(proposed["bounds"], usable),
+                "separation": _aabb_separation_mm(proposed["bounds"], usable),
+            }
+        )
 
-    unique_board = near_boards[0] if len(near_boards) == 1 else None
+    # Large near-board-size pieces stay near multiple sheets across the editor
+    # gap; prefer the dominant overlap so usable-edge magnetism still fires.
+    primary_board = _pick_primary_near_board(near_rows)
     piece_sheet = piece.get("sheet_no")
     sheet_scope = (
-        str(unique_board)
-        if unique_board is not None
+        str(primary_board)
+        if primary_board is not None
         else (None if piece_sheet is None or piece_sheet == "" else str(piece_sheet))
     )
 
-    moving_edges = footprint_edges(proposed) if unique_board is not None else []
+    moving_edges = footprint_edges(proposed) if primary_board is not None else []
     targets: list[tuple[str, dict[str, Any], float]] = []
-    if unique_board is not None:
-        targets.extend(
-            ("usable", edge, 0.0) for edge in usable_edges_world(boards[unique_board])
+    usable_threshold_mm = num(threshold_mm)
+    if primary_board is not None:
+        board = boards[primary_board]
+        primary_usable = {
+            "x": num(board.get("origin_x_mm")) + num(board.get("trim_x_mm")),
+            "y": num(board.get("origin_y_mm")) + num(board.get("trim_y_mm")),
+            "w": num(board.get("usable_width_mm")) or num(board.get("width_mm")),
+            "h": num(board.get("usable_length_mm")) or num(board.get("height_mm")),
+        }
+        usable_threshold_mm = _usable_edge_threshold_mm(
+            threshold_mm, proposed["bounds"], primary_usable
         )
+        targets.extend(("usable", edge, 0.0) for edge in usable_edges_world(board))
 
     piece_key = piece.get("piece_key")
     moving_keys = {piece_key}
@@ -385,7 +460,7 @@ def suggest_piece_snap(
         if not _aabb_near(proposed["bounds"], other_fp["bounds"], pad):
             continue
         nearby_pieces.append((other_key, other_fp))
-        if unique_board is not None:
+        if primary_board is not None:
             for edge in footprint_edges(other_fp):
                 targets.append((f"piece:{other_key}", edge, num(kerf_mm)))
 
@@ -398,7 +473,8 @@ def suggest_piece_snap(
             if delta is None:
                 continue
             dx, dy = delta
-            if hypot(dx, dy) > num(threshold_mm) + _EPS:
+            limit = usable_threshold_mm if source == "usable" else num(threshold_mm)
+            if hypot(dx, dy) > limit + _EPS:
                 continue
             abs_dx = raw_dx + dx
             abs_dy = raw_dy + dy
@@ -470,7 +546,7 @@ def suggest_piece_snap(
         for y_row in sorted(axis_candidates["y"], key=lambda row: row["key"])[:4]:
             dx = x_row["dx"]
             dy = y_row["dy"]
-            if hypot(dx - raw_dx, dy - raw_dy) > num(threshold_mm) * 1.5 + _EPS:
+            if hypot(dx - raw_dx, dy - raw_dy) > max(num(threshold_mm), usable_threshold_mm) * 1.5 + _EPS:
                 continue
             combined.append(
                 {

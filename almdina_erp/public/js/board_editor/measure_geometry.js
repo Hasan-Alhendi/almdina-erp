@@ -368,6 +368,118 @@
         return { point: proj, t, distance: distance(point, proj) };
     }
 
+    function castAxisToMaterial(start, vector, targetMaterial, blockers, maxDistMm) {
+        const maxDist = Math.max(1, Number(maxDistMm) || 5000);
+        const outer = targetMaterial && targetMaterial.outer;
+        if (!Array.isArray(outer) || outer.length < 2) return null;
+        const sx = num(start[0]);
+        const sy = num(start[1]);
+        const vx = num(vector[0]);
+        const vy = num(vector[1]);
+        let bestT = null;
+        let bestPoint = null;
+        for (let i = 0; i < outer.length; i += 1) {
+            const a = outer[i];
+            const b = outer[(i + 1) % outer.length];
+            const ax = num(a[0]);
+            const ay = num(a[1]);
+            const rdx = num(b[0]) - ax;
+            const rdy = num(b[1]) - ay;
+            // Solve S + t V = A + u (B-A); det = vx*(-rdy) - (-rdx)*vy.
+            const denom = (-vx * rdy) + (rdx * vy);
+            if (Math.abs(denom) < EPS) continue;
+            const t = ((ax - sx) * (-rdy) - (-rdx) * (ay - sy)) / denom;
+            const u = (vx * (ay - sy) - vy * (ax - sx)) / denom;
+            if (t < -EPS || t > maxDist + EPS) continue;
+            if (u < -EPS || u > 1 + EPS) continue;
+            const clampedT = Math.max(0, t);
+            if (bestT == null || clampedT < bestT - EPS) {
+                bestT = clampedT;
+                bestPoint = [sx + vx * clampedT, sy + vy * clampedT];
+            }
+        }
+        if (bestT == null || !bestPoint) return null;
+        // Confirm the hit lands on (or immediately enters) the target solid.
+        const confirm = [
+            bestPoint[0] + vx * Math.min(0.75, Math.max(0.1, bestT || 0.75)),
+            bestPoint[1] + vy * Math.min(0.75, Math.max(0.1, bestT || 0.75)),
+        ];
+        if (!pointInMaterial(bestPoint, targetMaterial) && !pointInMaterial(confirm, targetMaterial)) {
+            return null;
+        }
+        if (bestT > EPS && blockers && blockers.length
+            && segmentBlockedByMaterials(start, bestPoint, blockers, [])) {
+            return null;
+        }
+        return { point: bestPoint, distance: bestT };
+    }
+
+    function directionalClearancesBetweenPieces(session, pieceKeyA, pieceKeyB) {
+        // Axis-aligned meeting gaps from A toward B (concave L pockets included).
+        const pieces = (session && session.pieces) || {};
+        const boards = (session && session.boards) || {};
+        const pieceA = pieces[pieceKeyA];
+        const pieceB = pieces[pieceKeyB];
+        if (!pieceA || !pieceB) return [];
+        if (Number(pieceA.sheet_no) !== Number(pieceB.sheet_no)) return [];
+        if (pieceA.sheet_no == null || pieceA.sheet_no === "") return [];
+
+        const matA = pieceMaterial(pieceA, boards);
+        const matB = pieceMaterial(pieceB, boards);
+        if (!matA || !matB) return [];
+
+        const others = Object.keys(pieces)
+            .filter((key) => key !== pieceKeyA && key !== pieceKeyB
+                && Number(pieces[key].sheet_no) === Number(pieceA.sheet_no))
+            .map((key) => pieceMaterial(pieces[key], boards))
+            .filter(Boolean);
+
+        const aBounds = matA.bounds;
+        const bBounds = matB.bounds;
+        const maxScan = Math.max(
+            50,
+            Math.hypot(
+                (aBounds.w || 0) + (bBounds.w || 0),
+                (aBounds.h || 0) + (bBounds.h || 0)
+            ) + 20
+        );
+        const samplesA = sampleBoundary(matA.outer, 64);
+        const dirs = [
+            { id: "left", vector: [-1, 0] },
+            { id: "right", vector: [1, 0] },
+            { id: "top", vector: [0, -1] },
+            { id: "bottom", vector: [0, 1] },
+        ];
+        const results = [];
+        dirs.forEach((dir) => {
+            let best = null;
+            samplesA.forEach((point) => {
+                if (!outwardProbe(point, dir.vector, matA)) return;
+                const hit = castAxisToMaterial(point, dir.vector, matB, others, maxScan);
+                if (!hit || !(hit.distance >= 0)) return;
+                if (hit.distance > EPS && segmentBlockedByMaterials(
+                    point,
+                    hit.point,
+                    others,
+                    [pieceKeyA, pieceKeyB]
+                )) return;
+                if (!best || hit.distance < best.distance - EPS) {
+                    best = {
+                        kind: "piece",
+                        direction: dir.id,
+                        start: point,
+                        end: hit.point,
+                        distance: hit.distance,
+                        pieceKeyA,
+                        pieceKeyB,
+                    };
+                }
+            });
+            if (best) results.push(best);
+        });
+        return results;
+    }
+
     function shortestClearanceBetweenPieces(session, pieceKeyA, pieceKeyB) {
         const pieces = (session && session.pieces) || {};
         const boards = (session && session.boards) || {};
@@ -718,6 +830,7 @@
         segmentBlockedByMaterials,
         edgeClearances,
         shortestClearanceBetweenPieces,
+        directionalClearancesBetweenPieces,
         hitTestPieceKey,
         measureLine,
         densifySegment,

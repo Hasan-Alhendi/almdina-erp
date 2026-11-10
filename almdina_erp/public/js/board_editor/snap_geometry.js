@@ -274,6 +274,54 @@
         );
     }
 
+    function aabbOverlapArea(a, b) {
+        const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+        const h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+        return w * h;
+    }
+
+    function aabbSeparationMm(a, b) {
+        if (aabbOverlapArea(a, b) > 0) return 0;
+        const dx = Math.max(0, Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w)));
+        const dy = Math.max(0, Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h)));
+        const overlapX = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+        const overlapY = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+        if (overlapX > 0) return dy;
+        if (overlapY > 0) return dx;
+        return Math.hypot(dx, dy);
+    }
+
+    // Large near-board-size pieces stay "near" multiple sheets across the
+    // editor gap. Prefer the board with the greatest overlap (then closest).
+    function pickPrimaryNearBoard(nearRows) {
+        if (!nearRows.length) return null;
+        if (nearRows.length === 1) return nearRows[0].sheetNo;
+        const ranked = nearRows.slice().sort((left, right) => {
+            if (right.overlapArea !== left.overlapArea) return right.overlapArea - left.overlapArea;
+            if (left.separation !== right.separation) return left.separation - right.separation;
+            return Number(left.sheetNo) - Number(right.sheetNo);
+        });
+        return ranked[0].sheetNo;
+    }
+
+    // Near-full-board doors can sit "almost" on a sheet while their edge error
+    // still exceeds the screen-pixel threshold. Widen usable-edge capture only;
+    // neighbour/kerf snaps keep the normal threshold.
+    function usableEdgeThresholdMm(thresholdMm, pieceBounds, usable) {
+        const base = num(thresholdMm);
+        const uw = num(usable && usable.w);
+        const uh = num(usable && usable.h);
+        if (!(uw > 0) || !(uh > 0)) return base;
+        const fillX = num(pieceBounds.w) / uw;
+        const fillY = num(pieceBounds.h) / uh;
+        if (fillX < 0.8 && fillY < 0.8) return base;
+        const slackX = uw - num(pieceBounds.w);
+        const slackY = uh - num(pieceBounds.h);
+        const widen = Math.max(0, Math.max(slackX, slackY)) + base;
+        const cap = Math.max(base, Math.min(uw, uh) * 0.12);
+        return Math.max(base, Math.min(widen, cap));
+    }
+
     function thresholdMmFromScale(scale, enterPx) {
         const px = enterPx == null ? SNAP_ENTER_PX : enterPx;
         const s = Number(scale);
@@ -332,7 +380,7 @@
                 : null,
         };
 
-        const nearBoards = [];
+        const nearRows = [];
         Object.entries(session.boards || {}).forEach(([sheetNo, board]) => {
             const ox = num(board.origin_x_mm) + num(board.trim_x_mm);
             const oy = num(board.origin_y_mm) + num(board.trim_y_mm);
@@ -342,20 +390,35 @@
                 w: num(board.usable_width_mm) || num(board.width_mm),
                 h: num(board.usable_length_mm) || num(board.height_mm),
             };
-            if (aabbNear(proposed.bounds, usable, thresholdMm)) nearBoards.push(sheetNo);
+            if (!aabbNear(proposed.bounds, usable, thresholdMm)) return;
+            nearRows.push({
+                sheetNo: String(sheetNo),
+                overlapArea: aabbOverlapArea(proposed.bounds, usable),
+                separation: aabbSeparationMm(proposed.bounds, usable),
+            });
         });
 
-        // Board-edge / Kerf snaps require a unique nearby board.
-        // Alignment snaps may still run for same-sheet (or both off-board) neighbours.
-        const uniqueBoard = nearBoards.length === 1 ? nearBoards[0] : null;
-        const sheetScope = uniqueBoard != null
-            ? String(uniqueBoard)
+        // Prefer the dominant nearby board so near-board-size doors still get
+        // usable-edge magnetism when the editor gap keeps a neighbour "near".
+        const primaryBoard = pickPrimaryNearBoard(nearRows);
+        const sheetScope = primaryBoard != null
+            ? String(primaryBoard)
             : (piece.sheet_no == null || piece.sheet_no === "" ? null : String(piece.sheet_no));
 
-        const movingEdges = uniqueBoard != null ? footprintEdges(proposed) : [];
+        const movingEdges = primaryBoard != null ? footprintEdges(proposed) : [];
         const targets = [];
-        if (uniqueBoard != null) {
-            usableEdgesWorld(session.boards[uniqueBoard]).forEach((edge) => {
+        let primaryUsable = null;
+        let usableThresholdMm = thresholdMm;
+        if (primaryBoard != null) {
+            const board = session.boards[primaryBoard];
+            primaryUsable = {
+                x: num(board.origin_x_mm) + num(board.trim_x_mm),
+                y: num(board.origin_y_mm) + num(board.trim_y_mm),
+                w: num(board.usable_width_mm) || num(board.width_mm),
+                h: num(board.usable_length_mm) || num(board.height_mm),
+            };
+            usableThresholdMm = usableEdgeThresholdMm(thresholdMm, proposed.bounds, primaryUsable);
+            usableEdgesWorld(board).forEach((edge) => {
                 targets.push(["usable", edge, 0]);
             });
         }
@@ -374,7 +437,7 @@
             const otherFp = MoveGeometry.worldFootprint(other, session.boards);
             if (!aabbNear(proposed.bounds, otherFp.bounds, pad)) return;
             nearbyPieces.push({ key: otherKey, footprint: otherFp });
-            if (uniqueBoard != null) {
+            if (primaryBoard != null) {
                 footprintEdges(otherFp).forEach((edge) => {
                     targets.push([`piece:${otherKey}`, edge, num(session.kerf_mm)]);
                 });
@@ -388,7 +451,8 @@
                 const delta = edgeDelta(movingEdge, targetEdge, gap);
                 if (!delta) return;
                 const [dx, dy] = delta;
-                if (hypot(dx, dy) > thresholdMm + EPS) return;
+                const limit = source === "usable" ? usableThresholdMm : thresholdMm;
+                if (hypot(dx, dy) > limit + EPS) return;
                 const absDx = rawDx + dx;
                 const absDy = rawDy + dy;
                 const axis = Math.abs(dy) <= EPS && Math.abs(dx) > EPS
@@ -459,11 +523,12 @@
         const combined = [];
         const xs = sortByKey(axisCandidates.x).slice(0, 4);
         const ys = sortByKey(axisCandidates.y).slice(0, 4);
+        const combinedLimit = Math.max(thresholdMm, usableThresholdMm) * 1.5;
         xs.forEach((xRow) => {
             ys.forEach((yRow) => {
                 const dx = xRow.dx;
                 const dy = yRow.dy;
-                if (hypot(dx - rawDx, dy - rawDy) > thresholdMm * 1.5 + EPS) return;
+                if (hypot(dx - rawDx, dy - rawDy) > combinedLimit + EPS) return;
                 combined.push({
                     dx,
                     dy,

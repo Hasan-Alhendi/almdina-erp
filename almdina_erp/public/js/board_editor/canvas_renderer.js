@@ -1146,13 +1146,49 @@
         if (!world) return;
         let ghost = world.querySelector("[data-abe-ghost]");
         let angleBadge = world.querySelector("[data-abe-angle-badge]");
-        world.querySelectorAll("[data-abe-drag-shift]").forEach((node) => {
-            const base = node.getAttribute("data-abe-base-transform");
-            if (base != null) node.setAttribute("transform", base);
-            else node.removeAttribute("transform");
-            node.removeAttribute("data-abe-base-transform");
-            node.removeAttribute("data-abe-drag-shift");
-        });
+        const dragHomes = patchDragPreview._dragHomes || (patchDragPreview._dragHomes = new Map());
+        function restoreDragHomes() {
+            world.querySelectorAll("[data-abe-drag-shift]").forEach((node) => {
+                const base = node.getAttribute("data-abe-base-transform");
+                if (base != null) node.setAttribute("transform", base);
+                else node.removeAttribute("transform");
+                node.removeAttribute("data-abe-base-transform");
+                node.removeAttribute("data-abe-drag-shift");
+                const home = dragHomes.get(node);
+                if (home && home.parent && home.parent.isConnected) {
+                    if (home.next && home.next.parentNode === home.parent) {
+                        home.parent.insertBefore(node, home.next);
+                    } else {
+                        home.parent.appendChild(node);
+                    }
+                }
+                dragHomes.delete(node);
+            });
+            const emptyLayer = world.querySelector("[data-abe-drag-layer]");
+            if (emptyLayer && !emptyLayer.childNodes.length) emptyLayer.remove();
+        }
+        function ensureDragLayer() {
+            let layer = world.querySelector("[data-abe-drag-layer]");
+            if (!layer) {
+                layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                layer.setAttribute("data-abe-drag-layer", "1");
+            }
+            // Keep the live drag layer above sheet groups so destination boards
+            // cannot cover a piece still parented under its origin sheet group.
+            if (ghost && ghost.parentNode === world) world.insertBefore(layer, ghost);
+            else world.appendChild(layer);
+            return layer;
+        }
+        function elevateDragNode(node, layer) {
+            if (!dragHomes.has(node)) {
+                dragHomes.set(node, {
+                    parent: node.parentNode,
+                    next: node.nextSibling,
+                });
+            }
+            layer.appendChild(node);
+        }
+        restoreDragHomes();
         world.querySelectorAll("[data-abe-guide]").forEach((node) => node.remove());
         world.querySelectorAll("[data-abe-rotate-preview]").forEach((node) => node.remove());
         if (!preview) {
@@ -1216,6 +1252,7 @@
         }
         if (angleBadge) angleBadge.remove();
         if (preview.kind === "piece" && Array.isArray(preview.ids)) {
+            const dragLayer = ensureDragLayer();
             preview.ids.forEach((pieceKey) => {
                 const instanceId = String(pieceKey).replace(/^instance:/, "");
                 world.querySelectorAll(`[data-piece-key="${attrSel(pieceKey)}"], [data-piece-instance="${attrSel(instanceId)}"], [data-abe-selection-for="${attrSel(pieceKey)}"]`).forEach((node) => {
@@ -1223,6 +1260,7 @@
                         node.setAttribute("data-abe-base-transform", node.getAttribute("transform") || "");
                     }
                     const base = node.getAttribute("data-abe-base-transform") || "";
+                    elevateDragNode(node, dragLayer);
                     node.setAttribute("transform", `${base} translate(${dx},${dy})`.trim());
                     node.setAttribute("data-abe-drag-shift", "1");
                 });

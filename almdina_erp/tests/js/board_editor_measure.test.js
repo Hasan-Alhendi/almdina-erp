@@ -308,6 +308,26 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.ok(gap.distance > 0);
 }
 
+// 10b: L-pocket Alt meeting sides publish left+top directional clearances.
+{
+    const lPiece = {
+        ...rectPiece("instance:l", 0, 0, 100, 100),
+        outline_mm: [[0, 0], [100, 0], [100, 40], [40, 40], [40, 100], [0, 100]],
+        base_outline_mm: [[0, 0], [100, 0], [100, 40], [40, 40], [40, 100], [0, 100]],
+    };
+    const nested = rectPiece("instance:nest", 45, 45, 30, 30);
+    const session = sessionWith([lPiece, nested]);
+    const dirs = MeasureGeometry.directionalClearancesBetweenPieces(
+        session,
+        "instance:nest",
+        "instance:l"
+    );
+    const byDir = Object.fromEntries(dirs.map((row) => [row.direction, row.distance]));
+    assert.equal(dirs.length, 2);
+    assert.ok(Math.abs(byDir.left - 5) < 1e-6);
+    assert.ok(Math.abs(byDir.top - 5) < 1e-6);
+}
+
 // 11: glass hole is not solid obstacle material.
 {
     const host = {
@@ -416,8 +436,8 @@ function sessionWith(pieces, boardOverrides = {}) {
     assert.match(controller, /toggleMeasureTool/);
     assert.match(controller, /refreshAltInspection/);
     assert.match(controller, /clearAltOverlay/);
-    assert.match(page, /measure_geometry\.js\?v=3/);
-    assert.match(page, /measure_interaction\.js\?v=6/);
+    assert.match(page, /measure_geometry\.js\?v=5/);
+    assert.match(page, /measure_interaction\.js\?v=8/);
     assert.match(controller, /isDragActive/);
     assert.match(controller, /wasAltHeld/);
     assert.doesNotMatch(sessionDoc, /measureToolActive|measure_lines|abe-measure/);
@@ -496,8 +516,10 @@ function makeAltHarness(pieces) {
 
 function overlayMode(overlay) {
     if (!Array.isArray(overlay) || !overlay.length) return "none";
-    if (overlay.some((row) => row && (row.kind === "edge" || row.direction))) return "edge";
-    return "piece";
+    // Piece clearances may carry axis direction (L-pocket left/top); classify by kind.
+    if (overlay.some((row) => row && row.kind === "edge")) return "edge";
+    if (overlay.some((row) => row && row.kind === "piece")) return "piece";
+    return "none";
 }
 
 // 18: multi-target cache — Empty → B → C → B → Empty computes once per target.

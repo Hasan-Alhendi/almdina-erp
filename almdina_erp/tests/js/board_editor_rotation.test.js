@@ -130,6 +130,16 @@ const { RotationGeometry, MoveGeometry, SnapGeometry, History } = editor;
 
 assert.equal(RotationGeometry.normalizeAngleDeg(360), 0);
 assert.equal(RotationGeometry.anglesEquivalent(0, 360), true);
+
+{
+    // Positive angles must match SVG rotate() chirality (clockwise with Y-down).
+    const got = RotationGeometry.rotatePoint([100, 0], { x: 0, y: 0 }, 90);
+    assert.ok(Math.abs(got[0] - 0) < 1e-9, `x=${got[0]}`);
+    assert.ok(Math.abs(got[1] - 100) < 1e-9, `y=${got[1]}`);
+    const got45 = RotationGeometry.rotatePoint([100, 0], { x: 0, y: 0 }, 45);
+    assert.ok(Math.abs(got45[0] - 70.71067811865476) < 1e-9);
+    assert.ok(Math.abs(got45[1] - 70.71067811865476) < 1e-9);
+}
 {
     let session = baseSession({
         "instance:a": piece("instance:a", { piece_id: 1, x: 200, y: 200, w: 100, h: 80 }),

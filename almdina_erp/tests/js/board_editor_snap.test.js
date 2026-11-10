@@ -439,4 +439,124 @@ assert.doesNotMatch(canvasSource, /abe-tool-select/);
     assert.equal(Math.round(proposal.local_y_mm), 105);
 }
 
+// Near-board-size doors stay near both sheets across the editor gap; magnet
+// must still target the dominant board's usable edge.
+{
+    const dual = {
+        boards: {
+            1: {
+                sheet_no: 1,
+                origin_x_mm: 0,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+            2: {
+                sheet_no: 2,
+                origin_x_mm: 1268,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+        },
+        pieces: {
+            "instance:wide": {
+                piece_key: "instance:wide",
+                piece_id: 10,
+                piece_instance_id: "wide",
+                sheet_no: 1,
+                local_x_mm: 20,
+                local_y_mm: 40,
+                placement_cm: { x: 2, y: 4, w: 118, h: 100 },
+                outline_mm: [[20, 40], [1200, 40], [1200, 1040], [20, 1040]],
+                editable: true,
+                glass_host_key: null,
+            },
+        },
+        kerf_mm: 4,
+        stale_cut_path_sheets: [],
+        stale_unbound_text_sheets: [],
+    };
+    // Mostly over board 2 (origin 1268) while still near board 1 across the gap.
+    const suggestion = SnapGeometry.suggestPieceSnap(dual, "instance:wide", 1275, 40, {
+        magnetEnabled: true,
+        thresholdMm: 40,
+    });
+    assert.equal(suggestion.ok, true);
+    assert.match(String(suggestion.source), /usable/);
+    const proposal = MoveGeometry.proposePieceDrop(
+        dual,
+        "instance:wide",
+        20 + suggestion.dx,
+        40 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(Number(proposal.target_sheet_no), 2);
+    assert.equal(Math.round(proposal.local_x_mm), 0);
+}
+
+// Near-full-board doors need a wider usable-edge capture than the screen-pixel
+// threshold; neighbour snaps must keep the normal threshold.
+{
+    const wideFit = {
+        boards: {
+            1: {
+                sheet_no: 1,
+                origin_x_mm: 0,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+        },
+        pieces: {
+            "instance:wide": {
+                piece_key: "instance:wide",
+                piece_id: 11,
+                piece_instance_id: "wide",
+                sheet_no: 1,
+                local_x_mm: 55,
+                local_y_mm: 40,
+                placement_cm: { x: 5.5, y: 4, w: 110, h: 100 },
+                outline_mm: [[55, 40], [1155, 40], [1155, 1040], [55, 1040]],
+                editable: true,
+                glass_host_key: null,
+            },
+        },
+        kerf_mm: 4,
+        stale_cut_path_sheets: [],
+        stale_unbound_text_sheets: [],
+    };
+    // Offset 55mm exceeds the 20mm screen threshold, but the widened usable
+    // threshold for near-full doors must still capture the left board edge.
+    const suggestion = SnapGeometry.suggestPieceSnap(wideFit, "instance:wide", 55, 40, {
+        magnetEnabled: true,
+        thresholdMm: 20,
+    });
+    assert.equal(suggestion.ok, true);
+    assert.match(String(suggestion.source), /usable/);
+    const proposal = MoveGeometry.proposePieceDrop(
+        wideFit,
+        "instance:wide",
+        55 + suggestion.dx,
+        40 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(Math.round(proposal.local_x_mm), 0);
+}
+
 console.log("board_editor_snap.test.js: ok");

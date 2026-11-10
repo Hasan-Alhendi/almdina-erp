@@ -931,10 +931,30 @@ class BoardEditorPlanCreateApplicationTests(unittest.TestCase):
         self.assertIn('"create_failed"', service)
         self.assertIn("frappe.ValidationError", service)
         self.assertIn('result["prefer_plan_tab"] = "BoardEditor"', service)
+        self.assertIn("_format_not_ready_message", service)
+        self.assertIn("format_board_editor_review_issue", service)
         adapter = (
             APP / "infrastructure" / "frappe" / "board_editor_plan_create_adapter.py"
         ).read_text(encoding="utf-8")
         self.assertIn("def discard_incomplete_plan", adapter)
+
+    def test_not_ready_apply_message_includes_blocking_issue_detail(self):
+        from almdina_erp.almdina_erp.services import board_editor_plan_create_service as svc
+
+        review = {
+            "ready": False,
+            "issues": [
+                {
+                    "code": "offcut_unresolved",
+                    "severity": "error",
+                    "message": "An offcut piece has no resolved execution owner.",
+                }
+            ],
+        }
+        message = svc._error_message("not_ready", review)
+        self.assertIn("The saved distribution is not ready", message)
+        self.assertIn("An offcut piece has no resolved execution owner.", message)
+        self.assertIn("• ", message)
 
 
 if __name__ == "__main__":
