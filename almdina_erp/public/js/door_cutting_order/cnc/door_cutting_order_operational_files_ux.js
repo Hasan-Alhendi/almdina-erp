@@ -913,15 +913,23 @@
             ? `<p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting first may let the pieces move after they separate from the board."))}</p>
                 <label class="dco-operational-sheet__confirm"><input type="checkbox" data-cut-confirm${state.confirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to keep this operation order."))}</label>`
             : "";
-        if (!state.sections) state.sections = { placement: false, associations: true, order: false };
+        if (!state.sections || state._artcamSheetNo !== Number(sheet && sheet.sheet_no)) {
+            if (state._artcamSheetNo !== Number(sheet && sheet.sheet_no)) {
+                state.artcamForm = null;
+                state.vectorSelection = [];
+                state.sections = null;
+            }
+            state._artcamSheetNo = Number(sheet && sheet.sheet_no);
+        }
+        if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: false };
         const section = (id, title, body) => {
             const open = Boolean(state.sections[id]);
-            return `<section class="dco-sheet-acc" data-sheet-section="${id}" data-open="${open ? "1" : "0"}">
-                <button type="button" class="dco-sheet-acc__head" data-sheet-acc aria-expanded="${open ? "true" : "false"}">
-                    <span>${escapeHtml(translate(title))}</span>
-                    <span class="dco-sheet-acc__chevron" aria-hidden="true"></span>
-                </button>
-                <div class="dco-sheet-acc__body"${open ? "" : " hidden"}>${body}</div>
+            return `<section class="dco-sheet-acc${open ? "" : " is-collapsed"}" data-sheet-section="${id}">
+                <div class="dco-sheet-acc__title">
+                    <h4>${escapeHtml(translate(title))}</h4>
+                    <button type="button" class="dco-sheet-acc__toggle" data-sheet-acc aria-expanded="${open ? "true" : "false"}" aria-label="${escapeHtml(translate(title))}"></button>
+                </div>
+                <div class="dco-sheet-acc__body">${body}</div>
             </section>`;
         };
         return `<div class="dco-operational-sheet">
@@ -933,6 +941,7 @@
                 </div>
                 <div class="dco-operational-sheet__settings">
                     ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
+                    ${section("perimeter", "Sheet Perimeter", perimeterJoinControlsMarkup(state, canPrepare))}
                     ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
                     ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
                 </div>
@@ -1147,11 +1156,9 @@
                 if (accordion) {
                     const section = accordion.closest("[data-sheet-section]");
                     const id = section && section.getAttribute("data-sheet-section");
-                    const bodyNode = section && section.querySelector(".dco-sheet-acc__body");
-                    if (!id || !bodyNode) return;
-                    const open = section.getAttribute("data-open") !== "1";
-                    section.setAttribute("data-open", open ? "1" : "0");
-                    bodyNode.hidden = !open;
+                    if (!id || !section) return;
+                    const open = section.classList.contains("is-collapsed");
+                    section.classList.toggle("is-collapsed", !open);
                     accordion.setAttribute("aria-expanded", open ? "true" : "false");
                     live.state.sections = Object.assign({}, live.state.sections, { [id]: open });
                     return;
@@ -1190,7 +1197,24 @@
                     refreshSelection();
                     return;
                 }
-                const previewHit = target.closest("[data-sheet-preview] [data-execution-path-id]");
+                const previewHit = target.closest("[data-sheet-preview] [data-execution-path]");
+                if (previewHit && event.shiftKey) {
+                    const source = body.querySelector("[data-artcam-editor] [data-field=\"source\"]");
+                    if (!source || source.value !== "selected_vectors") return;
+                    if (typeof event.preventDefault === "function") event.preventDefault();
+                    const pathKey = previewHit.getAttribute("data-execution-path") || "";
+                    if (!pathKey || pathKey === "cut_path:sheet_perimeter") return;
+                    if (!Array.isArray(live.state.vectorSelection)) live.state.vectorSelection = [];
+                    const selected = new Set(live.state.vectorSelection);
+                    if (selected.has(pathKey)) selected.delete(pathKey);
+                    else selected.add(pathKey);
+                    live.state.vectorSelection = Array.from(selected);
+                    if (window.AlmdinaArtcamMachining) window.AlmdinaArtcamMachining.ensureForm(live.state);
+                    highlightVectorSelection(body, live.state);
+                    const count = body.querySelector("[data-vector-count]");
+                    if (count) count.textContent = `${live.state.vectorSelection.length} Vectors Selected`;
+                    return;
+                }
                 if (previewHit) {
                     applyExecutionSelection(
                         body,
@@ -2163,6 +2187,28 @@
         return executions;
     }
 
+    function previewEndPoint(points, start, end, closed) {
+        const finish = Array.isArray(end) ? end : (Array.isArray(points) ? points[points.length - 1] : start);
+        if (!Array.isArray(start) || !Array.isArray(finish) || !Array.isArray(points) || points.length < 2) return finish || start;
+        const dx = Number(finish[0]) - Number(start[0]);
+        const dy = Number(finish[1]) - Number(start[1]);
+        if (!closed || Math.hypot(dx, dy) > 0.5) return finish;
+        const previous = points[points.length - 2];
+        const incomingX = Number(finish[0]) - Number(previous[0]);
+        const incomingY = Number(finish[1]) - Number(previous[1]);
+        const length = Math.hypot(incomingX, incomingY) || 1;
+        return [Number(finish[0]) - (incomingX / length) * 4, Number(finish[1]) - (incomingY / length) * 4];
+    }
+
+    function highlightVectorSelection(body, state) {
+        const preview = body && body.querySelector("[data-sheet-preview]");
+        if (!preview) return;
+        const selected = new Set((state.vectorSelection || []).map(String));
+        preview.querySelectorAll("[data-execution-path]").forEach(node => {
+            node.classList.toggle("is-vector-picked", selected.has(node.getAttribute("data-execution-path") || ""));
+        });
+    }
+
     function collectPhysicalPaths(program) {
         const paths = [];
         let pathNumber = 0;
@@ -2204,6 +2250,16 @@
                         current = null;
                     }
                 });
+                if (!passes.length && Array.isArray(toolpath.points) && toolpath.points.length >= 2) {
+                    const points = toolpath.points.map(point => [Number(point[0]), Number(point[1])]);
+                    passes.push({
+                        execution: 1,
+                        depth_mm: null,
+                        points,
+                        start: points[0],
+                        end: points[points.length - 1],
+                    });
+                }
                 if (!passes.length) return;
                 const groups = [];
                 passes.forEach(pass => {
@@ -2358,6 +2414,7 @@
             ? Number(placement.machine_length_cm) * 10
             : sheetLength;
         const selectedExecutionPathId = String(options.selectedExecutionPathId || "");
+        const selectedVectorIds = new Set((options.selectedVectorIds || []).map(String));
         const markerScope = String(options.markerScope || nextCutPreviewScope());
         const hiddenOperations = Array.isArray(options.hiddenOperations) ? options.hiddenOperations : [];
         const hidden = new Set(hiddenOperations.map(String));
@@ -2439,9 +2496,9 @@
             </marker>`;
         }).join("");
         const strokes = physicalPaths.map(item => {
-            const selected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId
-                ? " is-cnc-path-selected"
-                : "";
+            const inspected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId;
+            const picked = selectedVectorIds.has(String(item.path_key || ""));
+            const selected = `${inspected ? " is-cnc-path-selected" : ""}${picked ? " is-vector-picked" : ""}`;
             const markerId = `${markerScope}-arrow-${item.path_number}`;
             const color = PROGRAM_COLORS[item.operation_key] || "#333";
             const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
@@ -2454,10 +2511,16 @@
             const arrowLine = arrow
                 ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
+            const endPoint = previewEndPoint(item.points, item.start, item.end, item.closed);
+            const ends = inspected
+                ? `<circle class="dco-cnc-cut-preview__origin" cx="${Number(start[0])}" cy="${Number(start[1])}" r="3.2" fill="#16A34A"/>
+                    <circle class="dco-cnc-cut-preview__finish" cx="${Number(endPoint[0])}" cy="${Number(endPoint[1])}" r="3.2" fill="#DC2626"/>`
+                : "";
             return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
+                <polyline class="dco-cnc-cut-preview__hit" points="${points}" fill="none" stroke="transparent" stroke-width="8" vector-effect="non-scaling-stroke"/>
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
-                <circle class="dco-cnc-cut-preview__start" cx="${Number(start[0])}" cy="${Number(start[1])}" r="2.4" fill="${color}"/>
+                ${ends}
             </g>`;
         }).join("");
         const labels = physicalPaths.map(item => {
@@ -2601,6 +2664,7 @@
         const interactiveSelector = "button, input, label, a, [data-execution-path-id], .dco-cnc-cut-preview__badge";
 
         viewport.addEventListener("pointerdown", event => {
+            if (event.shiftKey) return;
             if (event.button != null && event.button !== 0) return;
             if (zoom <= 1.0001) return;
             const target = event.target;
@@ -2689,6 +2753,7 @@
         host.__cutPreviewSheetSignature = nextSignature;
         host.__cutPreviewSelectedExecutionPathId = payload.selectedExecutionPathId || "";
         host.__cutPreviewSelectedPathKey = payload.selectedPathKey || "";
+        host.__cutPreviewVectorIds = payload.selectedVectorIds || host.__cutPreviewVectorIds || [];
         host.__cutPreviewLayout = layout;
         host.__cutPreviewHidden = hiddenOperations;
         host.__cutPreviewZoom = zoom;
@@ -2700,6 +2765,7 @@
         host.innerHTML = cutPathPreviewMarkup(nextProgram, {
             selectedExecutionPathId: payload.selectedExecutionPathId || "",
             selectedPathKey: payload.selectedPathKey || "",
+            selectedVectorIds: payload.selectedVectorIds || host.__cutPreviewVectorIds || [],
             markerScope,
             layout,
             zoom,
@@ -2874,7 +2940,7 @@
                     status: "ready",
                     program,
                     selectedExecutionPathId: state.selectedExecutionPathId || "",
-                    selectedPathKey: state.selectedPathKey || "",
+                    selectedVectorIds: state.vectorSelection || [],
                     layout: livePreview.getAttribute("data-preview-layout") || livePreview.__cutPreviewLayout || "",
                     zoom: livePreview.__cutPreviewZoom,
                     pan: livePreview.__cutPreviewPan,

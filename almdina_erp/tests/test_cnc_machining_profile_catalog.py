@@ -90,7 +90,10 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "artcam_tool_dialog.js" not in page
     assert 'frappe.set_route("List", "CNC Machining Profile")' in controller
     assert "data-artcam-profile-form" not in sheet
-    assert "dco-artcam-card" in sheet
+    assert "dco-artcam-editor" in sheet
+    assert "data-artcam-add" not in sheet
+    assert "Home Position (mm)" in sheet
+    assert "Choose Another Tool" in sheet
     assert 'data-field="source"' in sheet
     assert "data-artcam-assign" not in sheet
     assert "MultiSelectList" not in sheet
@@ -101,6 +104,18 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "machining_profiles:" in sheet
     assert "vector_associations:" in sheet
     assert not any("\u0600" <= character <= "\u06ff" for character in sheet)
+    sheet_page = _text(PACKAGE / "public" / "js" / "door_cutting_order" / "cnc" / "door_cutting_order_operational_files_ux.js")
+    style = _text(PACKAGE / "public" / "css" / "door_cutting_order_operational_files.css")
+    assert "Sheet Perimeter" in sheet_page
+    assert "data-perimeter-join-mode=\"connected\"" in sheet_page
+    assert "dco-sheet-acc__toggle" in sheet_page
+    assert "dco-sheet-acc__head" not in sheet_page
+    assert "previewEndPoint" in sheet_page
+    assert "event.shiftKey" in sheet_page
+    assert "is-vector-picked" in style
+    assert "#16A34A" in sheet_page
+    assert "#DC2626" in sheet_page
+    assert "width: 26px" in style
     cleanup = _text(PACKAGE / "patches" / "v1_0" / "clear_artcam_catalog_and_operational_files.py")
     restore = _text(PACKAGE / "patches" / "v1_0" / "restore_cnc_profile_tool_snapshot.py")
     assert "almdina_artcam_catalog_cleaned_v1" in cleanup

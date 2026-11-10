@@ -520,7 +520,10 @@ def selection_coverage(
                 covered.append(vector_id)
         return tuple(covered)
     if kind == SELECTION_SELECTED_VECTORS:
-        raise MachiningSetupError("selected_vectors_pending")
+        raw_ids = selection.get("vector_ids") or ()
+        if isinstance(raw_ids, (str, bytes)) or not isinstance(raw_ids, Sequence) or not raw_ids:
+            raise MachiningSetupError("selected_vectors_pending")
+        return selection_coverage({**dict(selection), "kind": SELECTION_VECTORS}, catalog)
     raise MachiningSetupError("selection_invalid")
 
 
@@ -530,7 +533,12 @@ def _local_from_profile(profile: Mapping[str, Any], raw_local: Any) -> dict[str,
     else:
         local = _copy(profile)
     local["profile_id"] = profile["profile_id"]
-    local["tool_preset"] = profile["tool_preset"]
+    explicit_tool = ""
+    if isinstance(raw_local, Mapping):
+        explicit_tool = str(raw_local.get("tool_preset") or "").strip()
+        supplied = raw_local.get("tool_values") if isinstance(raw_local.get("tool_values"), Mapping) else {}
+        explicit_tool = explicit_tool or str(supplied.get("tool_preset") or supplied.get("description") or "").strip()
+    local["tool_preset"] = explicit_tool or str(profile.get("tool_preset") or "")
     if not isinstance(local.get("tool_values"), Mapping) or not local.get("tool_values"):
         local["tool_values"] = _copy(profile.get("tool_values") if isinstance(profile.get("tool_values"), Mapping) else {})
     local["tool_values"] = canonical_tool_copy(
@@ -1166,31 +1174,51 @@ def order_program_by_associations(
     program: Mapping[str, Any],
     associations: Sequence[Mapping[str, Any]] | None,
 ) -> dict[str, Any]:
-    """Keep path geometry and order the posted operations by association identity."""
+    """Order posted paths by association identity, even when a layer repeats."""
 
     payload = dict(program)
     rows = [row for row in (associations or ()) if isinstance(row, Mapping)]
     if not rows:
         return payload
-    rank: dict[str, int] = {}
+    owner: dict[str, int] = {}
     for index, association in enumerate(rows):
         for vector_id in association.get("vector_ids") or ():
-            rank.setdefault(str(vector_id), index)
-    operations: list[dict[str, Any]] = []
+            owner.setdefault(str(vector_id), index)
+    buckets: dict[int, list[tuple[Mapping[str, Any], Mapping[str, Any]]]] = {index: [] for index in range(len(rows))}
+    leftovers: list[tuple[Mapping[str, Any], Mapping[str, Any]]] = []
     for operation in payload.get("operations") or ():
         if not isinstance(operation, Mapping):
             continue
-        cloned = dict(operation)
-        paths = [dict(path) for path in operation.get("toolpaths") or () if isinstance(path, Mapping)]
-        paths.sort(key=lambda path: rank.get(str(path.get("path_key") or ""), 10_000))
-        cloned["toolpaths"] = paths
-        operations.append(cloned)
-    operations.sort(
-        key=lambda operation: min(
-            (rank.get(str(path.get("path_key") or ""), 10_000) for path in operation.get("toolpaths") or ()),
-            default=10_000,
-        )
-    )
+        for path in operation.get("toolpaths") or ():
+            if not isinstance(path, Mapping):
+                continue
+            index = owner.get(str(path.get("path_key") or ""))
+            if index is None:
+                leftovers.append((operation, path))
+            else:
+                buckets[index].append((operation, path))
+
+    def emit(items: list[tuple[Mapping[str, Any], Mapping[str, Any]]]) -> None:
+        grouped: dict[str, dict[str, Any]] = {}
+        order: list[str] = []
+        for operation, path in items:
+            key = str(operation.get("operation_key") or "")
+            if key not in grouped:
+                grouped[key] = {"operation": operation, "paths": []}
+                order.append(key)
+            grouped[key]["paths"].append(dict(path))
+        for key in order:
+            cloned = dict(grouped[key]["operation"])
+            cloned["toolpaths"] = grouped[key]["paths"]
+            cloned["sequence"] = len(operations) + 1
+            operations.append(cloned)
+
+    operations: list[dict[str, Any]] = []
+    for index in range(len(rows)):
+        if buckets[index]:
+            emit(buckets[index])
+    if leftovers:
+        emit(leftovers)
     payload["operations"] = operations
     return payload
 

@@ -353,6 +353,109 @@ def test_association_overrides_stay_local_and_unresolved_sources_do_not_calculat
         stored[:2],
     )
     assert [row["operation_key"] for row in ordered["operations"]] == ["cut_path", "liner"]
+    selected = normalize_associations(
+        [{
+            "association_id": "association:picked",
+            "name": "Picked",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "selected_vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+        }],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    assert selected[0]["geometry_ready"] is True
+    assert selected[0]["vector_ids"] == ["cut_path:piece-a:outer"]
+    assert selected[0]["selection"]["kind"] == "selected_vectors"
+    with pytest.raises(MachiningSetupError) as duplicate:
+        normalize_associations(
+            [
+                selected[0],
+                {
+                    "association_id": "association:again",
+                    "name": "Again",
+                    "profile_id": profile["profile_id"],
+                    "selection": {"kind": "selected_vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+                },
+            ],
+            profiles=[profile],
+            catalog=catalog,
+        )
+    assert duplicate.value.code == "vector_already_assigned"
+
+
+def test_association_keeps_a_different_local_tool_without_changing_the_profile():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer", "cut_path", "CUT_PATH"))
+    stored = normalize_associations(
+        [{
+            "association_id": "association:tool",
+            "name": "Local tool",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+            "local_values": {
+                "tool_preset": "T12_LOCAL",
+                "tool_values": {
+                    **profile["tool_values"],
+                    "tool_preset": "T12_LOCAL",
+                    "description": "T12_LOCAL",
+                    "tool_number": 9,
+                    "feed_rate_mm_sec": 40,
+                },
+            },
+        }],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    assert stored[0]["local_values"]["tool_preset"] == "T12_LOCAL"
+    assert stored[0]["local_values"]["tool_values"]["feed_rate_mm_sec"] == 40.0
+    assert profile["tool_preset"] != "T12_LOCAL"
+    with pytest.raises(MachiningSetupError) as conflict:
+        normalize_associations(
+            [
+                stored[0],
+                {
+                    "association_id": "association:other",
+                    "name": "Other tool",
+                    "profile_id": profile["profile_id"],
+                    "selection": {"kind": "vectors", "vector_ids": ["liner:piece-a"]},
+                    "local_values": {
+                        "tool_preset": "T8_OTHER",
+                        "tool_values": {**profile["tool_values"], "tool_number": 8},
+                    },
+                },
+            ],
+            profiles=[profile],
+            catalog=_catalog(
+                _vector("cut_path:piece-a:outer", "cut_path", "CUT_PATH"),
+                _vector("liner:piece-a", "liner", "Liner"),
+            ),
+        )
+    assert conflict.value.code == "tool_identity_conflict"
+
+
+def test_repeated_layer_order_follows_association_identity():
+    ordered = order_program_by_associations(
+        {
+            "operations": [
+                {
+                    "operation_key": "cut_path",
+                    "toolpaths": [{"path_key": "layer-1:a"}, {"path_key": "layer-1:c"}],
+                },
+                {"operation_key": "liner", "toolpaths": [{"path_key": "layer-2:b"}]},
+            ]
+        },
+        [
+            {"association_id": "a", "vector_ids": ["layer-1:a"]},
+            {"association_id": "b", "vector_ids": ["layer-2:b"]},
+            {"association_id": "c", "vector_ids": ["layer-1:c"]},
+        ],
+    )
+    assert [
+        path["path_key"]
+        for operation in ordered["operations"]
+        for path in operation["toolpaths"]
+    ] == ["layer-1:a", "layer-2:b", "layer-1:c"]
 
 
 def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():
