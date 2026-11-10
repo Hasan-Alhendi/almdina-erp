@@ -50,7 +50,9 @@ _ID_TOKEN = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,79}$")
 
 SELECTION_LAYER = "layer"
 SELECTION_VECTORS = "vectors"
+SELECTION_SELECTED_VECTORS = "selected_vectors"
 SELECTION_SHEET_PERIMETER = "sheet_perimeter"
+_UNRESOLVED_SELECTION = frozenset({"selected_vectors_pending", "sheet_perimeter_unavailable"})
 
 
 class MachiningSetupError(ValueError):
@@ -517,6 +519,8 @@ def selection_coverage(
             if vector_id not in covered:
                 covered.append(vector_id)
         return tuple(covered)
+    if kind == SELECTION_SELECTED_VECTORS:
+        raise MachiningSetupError("selected_vectors_pending")
     raise MachiningSetupError("selection_invalid")
 
 
@@ -547,6 +551,7 @@ def normalize_associations(
     *,
     profiles: Sequence[Mapping[str, Any]],
     catalog: Sequence[MachinableVector],
+    keep_unresolved: bool = False,
 ) -> list[dict[str, Any]]:
     by_profile = {str(profile.get("profile_id") or ""): profile for profile in profiles}
     normalized: list[dict[str, Any]] = []
@@ -565,7 +570,15 @@ def normalize_associations(
         if profile is None:
             raise MachiningSetupError("profile_not_found")
         selection = row.get("selection") if isinstance(row.get("selection"), Mapping) else {}
-        covered = selection_coverage(selection, catalog)
+        try:
+            covered = selection_coverage(selection, catalog)
+            conflict = ""
+        except MachiningSetupError as exc:
+            if keep_unresolved and exc.code in _UNRESOLVED_SELECTION:
+                covered = ()
+                conflict = exc.code
+            else:
+                raise
         for vector_id in covered:
             owner = covered_owner.get(vector_id)
             if owner is not None:
@@ -576,12 +589,15 @@ def normalize_associations(
         normalized.append(
             {
                 "association_id": association_id,
+                "name": str(row.get("name") or "").strip()[:_NAME_LIMIT],
                 "selection": _copy(selection),
                 "profile_id": profile["profile_id"],
                 "local_values": local,
                 "toolpath_name": str(row.get("toolpath_name") or "").strip(),
                 "toolpath_id": str(row.get("toolpath_id") or "").strip(),
                 "vector_ids": list(covered),
+                "conflict": conflict,
+                "geometry_ready": not conflict,
             }
         )
     _assert_single_physical_tool(
@@ -605,6 +621,8 @@ def association_availability(
 ) -> dict[str, Any]:
     """Show used vectors as disabled. They stay visible."""
 
+    from almdina_erp.almdina_erp.domain.cnc.operations import ILLUSTRATIVE_DXF_LAYERS
+
     owners: dict[str, str] = {}
     for association in associations:
         if str(association.get("association_id") or "") == str(editing_id or ""):
@@ -618,6 +636,8 @@ def association_availability(
             continue
         grouped.setdefault(vector.operation_key, []).append(vector)
     for operation_key, vectors in grouped.items():
+        if str(vectors[0].dxf_layer or "").strip().upper() in {name.upper() for name in ILLUSTRATIVE_DXF_LAYERS}:
+            continue
         used = [vector.vector_id for vector in vectors if vector.vector_id in owners]
         layers.append(
             {
@@ -713,7 +733,12 @@ def calculate_toolpath_snapshot(
 ) -> dict[str, Any]:
     """Freeze one calculated toolpath from the association's own values."""
 
-    name = _text(toolpath_name or association.get("toolpath_name"), "toolpath_name_required")
+    name = _text(toolpath_name or association.get("toolpath_name") or association.get("name"), "toolpath_name_required")
+    if association.get("conflict"):
+        raise MachiningSetupError(str(association.get("conflict")))
+    selection = association.get("selection") if isinstance(association.get("selection"), Mapping) else {}
+    if str(selection.get("kind") or "") == SELECTION_SELECTED_VECTORS and not association.get("vector_ids"):
+        raise MachiningSetupError("selected_vectors_pending")
     local = association.get("local_values") if isinstance(association.get("local_values"), Mapping) else {}
     preset = _preset_from_local(local)
     previous = [
@@ -1137,6 +1162,39 @@ def overlay_frozen_toolpaths(
     return payload
 
 
+def order_program_by_associations(
+    program: Mapping[str, Any],
+    associations: Sequence[Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    """Keep path geometry and order the posted operations by association identity."""
+
+    payload = dict(program)
+    rows = [row for row in (associations or ()) if isinstance(row, Mapping)]
+    if not rows:
+        return payload
+    rank: dict[str, int] = {}
+    for index, association in enumerate(rows):
+        for vector_id in association.get("vector_ids") or ():
+            rank.setdefault(str(vector_id), index)
+    operations: list[dict[str, Any]] = []
+    for operation in payload.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        cloned = dict(operation)
+        paths = [dict(path) for path in operation.get("toolpaths") or () if isinstance(path, Mapping)]
+        paths.sort(key=lambda path: rank.get(str(path.get("path_key") or ""), 10_000))
+        cloned["toolpaths"] = paths
+        operations.append(cloned)
+    operations.sort(
+        key=lambda operation: min(
+            (rank.get(str(path.get("path_key") or ""), 10_000) for path in operation.get("toolpaths") or ()),
+            default=10_000,
+        )
+    )
+    payload["operations"] = operations
+    return payload
+
+
 def machining_public_view(
     *,
     profiles: Sequence[Mapping[str, Any]],
@@ -1176,6 +1234,7 @@ __all__ = [
     "LEGACY_RATE_UNITS_MM_MIN",
     "RATE_UNITS_MM_SEC",
     "SELECTION_LAYER",
+    "SELECTION_SELECTED_VECTORS",
     "SELECTION_SHEET_PERIMETER",
     "SELECTION_VECTORS",
     "SUPPORTED_TOOL_TYPES",
@@ -1200,6 +1259,7 @@ __all__ = [
     "normalize_associations",
     "normalize_profile",
     "normalize_profiles",
+    "order_program_by_associations",
     "overlay_frozen_toolpaths",
     "selection_coverage",
     "synthetic_preset_name",

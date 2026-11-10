@@ -24,6 +24,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     normalize_artcam_tool,
     normalize_associations,
     normalize_profile,
+    order_program_by_associations,
     overlay_frozen_toolpaths,
     release_stale_toolpath_links,
     tool_copy_from_stored,
@@ -270,6 +271,88 @@ def test_profile_identity_and_snapshot_are_generated_without_user_input():
             known_tools=known,
         )
     assert bad_id.value.code == "profile_id_invalid"
+
+
+def test_association_overrides_stay_local_and_unresolved_sources_do_not_calculate():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    original_depth = profile["final_depth_mm"]
+    original_feed = profile["tool_values"]["feed_rate_mm_sec"]
+    catalog = _catalog(
+        _vector("cut_path:piece-a:outer", "cut_path", "CUT_PATH"),
+        _vector("liner:piece-a", "liner", "Liner"),
+        _vector("note:a", "text", "TEXT"),
+    )
+    availability = association_availability(catalog, [])
+    assert [row["dxf_layer"] for row in availability["layers"]] == ["CUT_PATH", "Liner"]
+    assert "vectors" in availability
+    stored = normalize_associations(
+        [
+            {
+                "association_id": "association:one",
+                "name": "Pocket",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": "layer", "operation_key": "cut_path"},
+                "local_values": {
+                    "final_depth_mm": 15,
+                    "tool_values": {**profile["tool_values"], "feed_rate_mm_sec": 80, "stepdown_mm": 5},
+                },
+            },
+            {
+                "association_id": "association:two",
+                "name": "Edge",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": "layer", "operation_key": "liner"},
+            },
+            {
+                "association_id": "association:later",
+                "name": "Later",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": "selected_vectors"},
+            },
+        ],
+        profiles=[profile],
+        catalog=catalog,
+        keep_unresolved=True,
+    )
+    assert stored[0]["local_values"]["final_depth_mm"] == 15.0
+    assert stored[0]["local_values"]["tool_values"]["feed_rate_mm_sec"] == 80.0
+    assert stored[1]["local_values"]["final_depth_mm"] == original_depth
+    assert stored[1]["local_values"]["tool_values"]["feed_rate_mm_sec"] == original_feed
+    assert profile["final_depth_mm"] == original_depth
+    assert stored[0]["association_id"] != stored[1]["association_id"]
+    assert stored[2]["conflict"] == "selected_vectors_pending"
+    assert stored[2]["geometry_ready"] is False
+    with pytest.raises(MachiningSetupError) as pending:
+        calculate_toolpath_snapshot(
+            association=stored[2],
+            toolpath_name="Later",
+            program=_program("cut_path:piece-a:outer"),
+        )
+    assert pending.value.code == "selected_vectors_pending"
+    blocked = normalize_associations(
+        [{
+            "association_id": "association:edge",
+            "name": "Perimeter",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "sheet_perimeter"},
+        }],
+        profiles=[profile],
+        catalog=catalog,
+        keep_unresolved=True,
+    )
+    assert blocked[0]["conflict"] == "sheet_perimeter_unavailable"
+    assert blocked[0]["vector_ids"] == []
+    ordered = order_program_by_associations(
+        {
+            "operations": [
+                {"operation_key": "liner", "toolpaths": [{"path_key": "liner:piece-a"}]},
+                {"operation_key": "cut_path", "toolpaths": [{"path_key": "cut_path:piece-a:outer"}]},
+            ]
+        },
+        stored[:2],
+    )
+    assert [row["operation_key"] for row in ordered["operations"]] == ["cut_path", "liner"]
 
 
 def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():

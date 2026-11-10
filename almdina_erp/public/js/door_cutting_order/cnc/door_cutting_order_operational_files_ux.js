@@ -893,87 +893,37 @@
         const canPrepare = Boolean(workspace.can_prepare);
         const disabled = canPrepare ? "" : " disabled";
         const early = cutPathIsEarly(state.order);
-        const lastIndex = Math.max(0, state.order.length - 1);
-        const orderItems = state.order.map((key, index) => {
+        const associations = ((sheet.machining || {}).associations) || [];
+        const lastIndex = Math.max(0, associations.length - 1);
+        const orderItems = associations.map((row, index) => {
             const earlierDisabled = !canPrepare || index === 0 ? " disabled" : "";
             const laterDisabled = !canPrepare || index === lastIndex ? " disabled" : "";
-            return `<li class="dco-operational-order__item" tabindex="0" draggable="${canPrepare ? "true" : "false"}" data-operation-key="${escapeHtml(key)}">
-            <span class="dco-operational-order__label">${escapeHtml(operationLabel(key))}</span>
+            const source = (row.selection && row.selection.kind === "sheet_perimeter")
+                ? "Sheet Perimeter"
+                : ((row.selection && row.selection.operation_key) || "");
+            return `<li class="dco-operational-order__item" data-association-id="${escapeHtml(row.association_id)}">
+            <span class="dco-operational-order__label">${escapeHtml(row.name || row.association_id)} <small>${escapeHtml(source)}</small></span>
             <span class="dco-operational-order__moves">
                 <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="earlier" title="${escapeHtml(translate("Move earlier"))}" aria-label="${escapeHtml(translate("Move earlier"))}"${earlierDisabled}>${orderMoveIcon("up-line")}</button>
                 <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="later" title="${escapeHtml(translate("Move later"))}" aria-label="${escapeHtml(translate("Move later"))}"${laterDisabled}>${orderMoveIcon("down-line")}</button>
             </span>
         </li>`;
         }).join("");
-        const layers = state.order.map(key => {
-            const operation = (sheet.operations || []).find(item => item.operation_key === key) || {};
-            const paths = (sheet.paths || []).filter(path => path.operation_key === key);
-            const expanded = Boolean(state.expanded[key]);
-            const selectedLayer = state.operations[key] || "";
-            const source = (state.sources && state.sources[key]) === "sheet" ? "sheet" : "factory";
-            const issue = presetIssue(workspace, selectedLayer);
-            const facts = presetFacts(workspace, selectedLayer);
-            const pathRows = paths.map(path => {
-                const custom = Boolean(state.overrides[path.path_key]);
-                const editing = canPrepare && (custom || Boolean(state.customizing && state.customizing[path.path_key]));
-                const selected = effectivePreset(state, path);
-                const control = editing
-                    ? `<div class="dco-operational-path__preset">
-                        <div data-path-preset-host="${escapeHtml(path.path_key)}"></div>
-                        <button type="button" class="btn btn-default btn-xs" data-reset-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Use the layer preset"))}</button>
-                       </div>`
-                    : `<span class="dco-operational-path__effective">${escapeHtml(presetLabel(workspace, selected))}</span>
-                        ${canPrepare ? `<button type="button" class="btn btn-default btn-xs" data-customize-path="${escapeHtml(path.path_key)}">${escapeHtml(translate("Customize this path"))}</button>` : ""}`;
-                return `<div class="dco-operational-path${custom ? " is-custom" : ""}${path.path_key === state.selectedPathKey ? " is-selected" : ""}" data-path-key="${escapeHtml(path.path_key)}" data-path-operation="${escapeHtml(key)}" data-custom="${custom ? "1" : "0"}">
-                    <button type="button" class="btn btn-link btn-xs dco-operational-path__pick" data-select-path="${escapeHtml(path.path_key)}">${escapeHtml(path.piece_label ? translate("Piece {0}", [path.piece_label]) : translate("Piece number is not available"))}</button>
-                    <span class="dco-operational-path__badge">${escapeHtml(translate(custom ? "Custom preset" : "Uses the layer preset"))}</span>
-                    ${control}
-                </div>`;
-            }).join("");
-            const restore = canPrepare
-                ? `<button type="button" class="btn btn-default btn-xs" data-restore-layer="${escapeHtml(key)}">${escapeHtml(translate("Restore the factory preset"))}</button>`
-                : "";
-            const perimeterControls = key === "cut_path" ? perimeterJoinControlsMarkup(state, canPrepare) : "";
-            return `<article class="dco-operational-layer" data-layer="${escapeHtml(key)}">
-                <header class="dco-operational-layer__head">
-                    <div>
-                        <strong>${escapeHtml(operationLabel(key))}</strong>
-                        <code>${escapeHtml(operation.dxf_layer || "")}</code>
-                        <span>${escapeHtml(translate("{0} paths", [paths.length || operation.path_count || 0]))}</span>
-                    </div>
-                    <p class="dco-operational-layer__source" data-layer-source="${escapeHtml(source)}">${escapeHtml(translate(
-                        source === "sheet"
-                            ? "Sheet choice"
-                            : (key === SHEET_PERIMETER_OPERATION_KEY
-                                ? "Inherited from Cut between pieces"
-                                : "Factory default")
-                    ))}</p>
-                    <label class="dco-operational-layer__choice">${escapeHtml(translate("Tool preset"))}
-                        <div data-operation-preset-host="${escapeHtml(key)}" data-readonly="${canPrepare ? "0" : "1"}"></div>
-                    </label>
-                    ${restore}
-                </header>
-                ${perimeterControls}
-                ${facts ? `<p class="dco-operational-layer__facts">${escapeHtml(facts)}</p>` : ""}
-                ${issue ? `<p class="dco-operational-layer__issue" role="status">${escapeHtml(issue)}</p>` : ""}
-                <button type="button" class="btn btn-default btn-xs" data-toggle-layer="${escapeHtml(key)}" aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(translate(expanded ? "Hide paths" : "Show paths"))}</button>
-                <div class="dco-operational-layer__paths"${expanded ? "" : " hidden"}>${pathRows}</div>
-            </article>`;
-        }).join("");
         const warning = early
             ? `<p class="dco-operational-sheet__warning" role="alert">${escapeHtml(translate("Cutting first may let the pieces move after they separate from the board."))}</p>
                 <label class="dco-operational-sheet__confirm"><input type="checkbox" data-cut-confirm${state.confirmed ? " checked" : ""}${disabled}> ${escapeHtml(translate("I understand and want to keep this operation order."))}</label>`
             : "";
-        const availability = presetAvailability(workspace);
-        const availabilityHtml = availability
-            ? `<p class="dco-operational-sheet__note" role="status">${escapeHtml(availability)}</p>`
-            : "";
-        const permissionNote = canPrepare
-            ? ""
-            : `<p class="dco-operational-sheet__note" role="status">${escapeHtml(translate("You can review these settings. Preparing operational files is not available for your current permissions."))}</p>`;
-        const restoreSheet = canPrepare
-            ? `<button type="button" class="btn btn-default btn-sm" data-restore-sheet>${escapeHtml(translate("Restore factory presets for this sheet"))}</button>`
-            : "";
+        if (!state.sections) state.sections = { placement: false, associations: true, order: false };
+        const section = (id, title, body) => {
+            const open = Boolean(state.sections[id]);
+            return `<section class="dco-sheet-acc" data-sheet-section="${id}" data-open="${open ? "1" : "0"}">
+                <button type="button" class="dco-sheet-acc__head" data-sheet-acc aria-expanded="${open ? "true" : "false"}">
+                    <span>${escapeHtml(translate(title))}</span>
+                    <span class="dco-sheet-acc__chevron" aria-hidden="true"></span>
+                </button>
+                <div class="dco-sheet-acc__body"${open ? "" : " hidden"}>${body}</div>
+            </section>`;
+        };
         return `<div class="dco-operational-sheet">
             <div class="dco-operational-sheet__body">
                 <div class="dco-operational-sheet__preview">
@@ -982,22 +932,9 @@
                     <p class="dco-operational-files__status" data-sheet-nc-status="${escapeHtml(sheet.status || "")}">${escapeHtml(statusLabel(sheet.status))}</p>
                 </div>
                 <div class="dco-operational-sheet__settings">
-                    ${placementControlsMarkup(workspace, state, canPrepare)}
-                    ${window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet) : ""}
-                    <section class="dco-operational-sheet__order">
-                        <h4>${escapeHtml(translate("Operation order"))}</h4>
-                        <ol class="dco-operational-order">${orderItems}</ol>
-                        ${warning}
-                    </section>
-                    <section class="dco-operational-layers">
-                        <div class="dco-operational-layers__tools">
-                            <h4>${escapeHtml(translate("Layer presets"))}</h4>
-                            ${restoreSheet}
-                        </div>
-                        ${permissionNote}
-                        ${availabilityHtml}
-                        <div class="dco-operational-layers__list">${layers}</div>
-                    </section>
+                    ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
+                    ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
+                    ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
                 </div>
             </div>
         </div>`;
@@ -1206,6 +1143,19 @@
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.closest !== "function") return;
+                const accordion = target.closest("[data-sheet-acc]");
+                if (accordion) {
+                    const section = accordion.closest("[data-sheet-section]");
+                    const id = section && section.getAttribute("data-sheet-section");
+                    const bodyNode = section && section.querySelector(".dco-sheet-acc__body");
+                    if (!id || !bodyNode) return;
+                    const open = section.getAttribute("data-open") !== "1";
+                    section.setAttribute("data-open", open ? "1" : "0");
+                    bodyNode.hidden = !open;
+                    accordion.setAttribute("aria-expanded", open ? "true" : "false");
+                    live.state.sections = Object.assign({}, live.state.sections, { [id]: open });
+                    return;
+                }
                 const customize = target.closest("[data-customize-path]");
                 if (customize) {
                     const pathKey = customize.getAttribute("data-customize-path");
@@ -1289,6 +1239,25 @@
                 }
                 const moveOp = target.closest("[data-move]");
                 if (moveOp && live.workspace.can_prepare) {
+                    const associationItem = moveOp.closest("[data-association-id]");
+                    if (associationItem) {
+                        const id = associationItem.getAttribute("data-association-id");
+                        const rows = (live.sheet.machining && live.sheet.machining.associations) || [];
+                        const index = rows.findIndex(row => row.association_id === id);
+                        const targetIndex = index + (moveOp.getAttribute("data-move") === "earlier" ? -1 : 1);
+                        if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
+                        const [item] = rows.splice(index, 1);
+                        rows.splice(targetIndex, 0, item);
+                        const preferred = [];
+                        rows.forEach(row => {
+                            const selection = row.selection || {};
+                            const key = selection.kind === "sheet_perimeter" ? "sheet_perimeter" : selection.operation_key;
+                            if (key && !preferred.includes(key)) preferred.push(key);
+                        });
+                        live.state.order = preferred.concat((live.state.order || []).filter(key => !preferred.includes(key)));
+                        refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
+                        return;
+                    }
                     const item = moveOp.closest("[data-operation-key]");
                     const key = item && item.getAttribute("data-operation-key");
                     const direction = moveOp.getAttribute("data-move");
@@ -1829,8 +1798,12 @@
                 window.AlmdinaArtcamMachining.bind(wrapper, {
                     sheet,
                     workspace,
+                    state,
                     getArgs() {
                         return sheetGenerateArgs(frm, workspace, sheet, state);
+                    },
+                    refresh() {
+                        refreshSheetUi(frm, ui, workspace, sheet, state);
                     },
                     onWorkspace(message) {
                         const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));

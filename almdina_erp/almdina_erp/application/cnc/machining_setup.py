@@ -36,6 +36,7 @@ def accept_sheet_machining(
         associations,
         profiles=stored_profiles,
         catalog=catalog,
+        keep_unresolved=True,
     )
     stored_associations = release_stale_toolpath_links(stored_associations, snapshots)
     assert_physical_tool_consistency(stored_associations, snapshots)

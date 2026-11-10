@@ -687,3 +687,97 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 .dco-artcam option:disabled {
     color: var(--text-muted, #6b7280);
 }
+.dco-sheet-acc {
+    margin: 0 0 12px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 10px;
+    background: var(--card-bg, #fff);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.dco-sheet-acc__head,
+.dco-artcam-card__toggle,
+.dco-artcam-tool__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    font-weight: 650;
+}
+.dco-sheet-acc__chevron {
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 120ms ease;
+}
+.dco-sheet-acc[data-open="1"] > .dco-sheet-acc__head .dco-sheet-acc__chevron,
+.dco-artcam-card.is-open .dco-artcam-card__toggle .dco-sheet-acc__chevron,
+.dco-artcam-tool[data-open="1"] .dco-sheet-acc__chevron {
+    transform: rotate(-135deg);
+}
+.dco-sheet-acc__body,
+.dco-artcam-card__body {
+    padding: 0 14px 14px;
+}
+.dco-artcam-card {
+    margin: 0 0 10px;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 10px;
+}
+.dco-artcam-card__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dco-artcam-card__toggle {
+    flex: 1;
+}
+.dco-artcam-card__toggle small,
+.dco-operational-order__label small {
+    display: block;
+    color: var(--text-muted, #6b7280);
+    font-weight: 450;
+}
+.dco-artcam-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+.dco-artcam-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+}
+.dco-artcam-field--wide {
+    grid-column: 1 / -1;
+}
+.dco-artcam-field input,
+.dco-artcam-field select {
+    min-height: 32px;
+    padding: 4px 8px;
+}
+.dco-artcam-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+.dco-artcam-status.is-error {
+    color: var(--red-500, #b42318);
+}
+html[dir="rtl"] .dco-sheet-acc__head,
+html[dir="rtl"] .dco-artcam-card__toggle,
+html[dir="rtl"] .dco-artcam-tool__toggle {
+    text-align: right;
+}
+@media (max-width: 720px) {
+    .dco-artcam-fields {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

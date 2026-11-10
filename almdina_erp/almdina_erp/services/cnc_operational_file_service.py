@@ -37,6 +37,7 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 )
 from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     MachiningSetupError,
+    order_program_by_associations,
     overlay_frozen_toolpaths,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
@@ -123,6 +124,7 @@ _MESSAGES = {
     "vector_not_machinable": "That vector is not a machinable path on this sheet.",
     "vector_already_assigned": "That vector or layer is already assigned.",
     "layer_not_machinable": "That layer has no machinable vectors on this sheet.",
+    "selected_vectors_pending": "Selected Vectors needs a direct selection on the board before this association can be calculated.",
     "sheet_perimeter_unavailable": "Sheet Perimeter is available only while Connected Perimeter is enabled.",
     "toolpath_name_required": "Enter a toolpath name.",
     "toolpath_name_duplicate": "A calculated toolpath already uses that name.",
@@ -863,6 +865,10 @@ def generate_cnc_sheet_nc(
                 program,
                 frozen,
                 associations=list(saved.get("vector_associations") or []),
+            )
+            program = order_program_by_associations(
+                program,
+                list(saved.get("vector_associations") or []),
             )
         machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])

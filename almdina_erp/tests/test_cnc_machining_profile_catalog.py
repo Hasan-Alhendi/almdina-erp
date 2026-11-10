@@ -90,11 +90,14 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "artcam_tool_dialog.js" not in page
     assert 'frappe.set_route("List", "CNC Machining Profile")' in controller
     assert "data-artcam-profile-form" not in sheet
-    assert "dco-artcam-assoc__row" in sheet
-    assert 'label: "Vectors"' in sheet
-    assert 'label: "Profile"' in sheet
-    assert 'class="section-head">Home' in sheet
-    assert "data-artcam-home-fields" in sheet
+    assert "dco-artcam-card" in sheet
+    assert 'data-field="source"' in sheet
+    assert "data-artcam-assign" not in sheet
+    assert "MultiSelectList" not in sheet
+    assert "Toolpaths" not in sheet
+    assert 'label: "Profile"' not in sheet
+    assert "Vector Source" in sheet
+    assert "Calculate Now" in sheet
     assert "machining_profiles:" in sheet
     assert "vector_associations:" in sheet
     assert not any("\u0600" <= character <= "\u06ff" for character in sheet)
