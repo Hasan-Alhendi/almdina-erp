@@ -489,6 +489,37 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             places=6,
         )
 
+    def test_nesting_rotation_is_kept_for_edge_bands_without_spinning_geometry(self):
+        pieces = [projection_piece("ROT", 2, 10, 20, 800, 400, original_w=40, original_h=80)]
+        proj = projection(pieces)
+        source = source_snapshot(pieces)
+        source["sheets"][0]["pieces"][0]["rotated"] = True
+        snapshot = materialize_plan_snapshot(
+            draft=draft_payload(layout_rows(pieces)),
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        piece = snapshot["sheets"][0]["pieces"][0]
+        self.assertFalse(piece["rotated"])
+        self.assertEqual(piece["rotation_quarter_turns"], 1)
+
+        turned = materialize_plan_snapshot(
+            draft=draft_payload(layout_rows(pieces, ROT={"rotation": 15})),
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        self.assertNotIn("rotation_quarter_turns", turned["sheets"][0]["pieces"][0])
+
     def test_manufacturing_actions_allowed_for_board_editor(self):
         self.assertTrue(manufacturing_actions_allowed(BOARD_EDITOR))
         self.assertTrue(manufacturing_actions_allowed("System"))

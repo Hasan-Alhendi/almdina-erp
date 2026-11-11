@@ -319,6 +319,13 @@ def _pick_primary_near_board(near_rows: list[dict[str, Any]]) -> str | None:
     return str(ranked[0]["sheet_no"])
 
 
+# Near-full doors can sit a few centimetres off a usable edge while that
+# error still exceeds the screen-pixel threshold. Assist only that near miss
+# (the 55mm fixture). Stay under half the leftover gap so the opposite usable
+# edge is outside the same catch radius.
+_USABLE_EDGE_ASSIST_MM = 60.0
+
+
 def _usable_edge_threshold_mm(
     threshold_mm: float,
     piece_bounds: Mapping[str, float],
@@ -333,11 +340,13 @@ def _usable_edge_threshold_mm(
     fill_y = num(piece_bounds.get("h")) / uh
     if fill_x < 0.8 and fill_y < 0.8:
         return base
-    slack_x = uw - num(piece_bounds.get("w"))
-    slack_y = uh - num(piece_bounds.get("h"))
-    widen = max(0.0, max(slack_x, slack_y)) + base
-    cap = max(base, min(uw, uh) * 0.12)
-    return max(base, min(widen, cap))
+    slack_x = max(0.0, uw - num(piece_bounds.get("w")))
+    slack_y = max(0.0, uh - num(piece_bounds.get("h")))
+    tight_slack = min(slack_x, slack_y)
+    assist = max(base, _USABLE_EDGE_ASSIST_MM)
+    if tight_slack > 0:
+        assist = min(assist, max(base, tight_slack / 2 - 1))
+    return max(base, assist)
 
 
 def suggest_piece_snap(

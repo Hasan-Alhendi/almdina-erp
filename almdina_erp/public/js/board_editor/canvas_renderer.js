@@ -1305,10 +1305,11 @@
                 line.setAttribute("y1", String(Number(guide.y1) || 0));
                 line.setAttribute("x2", String(Number(guide.x2) || 0));
                 line.setAttribute("y2", String(Number(guide.y2) || 0));
-                line.setAttribute("stroke", "#0b5fff");
-                // Alignment guides stay solid and thinner; kerf/board edge guides stay dashed.
+                // Piece-to-piece alignment is a solid red stroke. Kerf and board
+                // edges stay blue and dashed so they are not read as the same cue.
                 const isAlignment = guide.kind === "alignment";
-                line.setAttribute("stroke-width", isAlignment ? "1" : "1.25");
+                line.setAttribute("stroke", isAlignment ? "#d92d20" : "#0b5fff");
+                line.setAttribute("stroke-width", isAlignment ? "2" : "1.25");
                 if (!isAlignment) line.setAttribute("stroke-dasharray", "6 4");
                 line.setAttribute("vector-effect", "non-scaling-stroke");
                 line.setAttribute("pointer-events", "none");

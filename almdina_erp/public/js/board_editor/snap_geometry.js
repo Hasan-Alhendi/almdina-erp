@@ -304,9 +304,13 @@
         return ranked[0].sheetNo;
     }
 
-    // Near-full-board doors can sit "almost" on a sheet while their edge error
-    // still exceeds the screen-pixel threshold. Widen usable-edge capture only;
-    // neighbour/kerf snaps keep the normal threshold.
+    // Near-full doors can sit a few centimetres off a usable edge while that
+    // error still exceeds the screen-pixel threshold. Assist only that near
+    // miss (the 55mm fixture). Stay under half the leftover gap so the
+    // opposite usable edge is outside the same catch radius. Neighbour snaps
+    // keep the pixel threshold.
+    const USABLE_EDGE_ASSIST_MM = 60;
+
     function usableEdgeThresholdMm(thresholdMm, pieceBounds, usable) {
         const base = num(thresholdMm);
         const uw = num(usable && usable.w);
@@ -315,11 +319,12 @@
         const fillX = num(pieceBounds.w) / uw;
         const fillY = num(pieceBounds.h) / uh;
         if (fillX < 0.8 && fillY < 0.8) return base;
-        const slackX = uw - num(pieceBounds.w);
-        const slackY = uh - num(pieceBounds.h);
-        const widen = Math.max(0, Math.max(slackX, slackY)) + base;
-        const cap = Math.max(base, Math.min(uw, uh) * 0.12);
-        return Math.max(base, Math.min(widen, cap));
+        const slackX = Math.max(0, uw - num(pieceBounds.w));
+        const slackY = Math.max(0, uh - num(pieceBounds.h));
+        const tightSlack = Math.min(slackX, slackY);
+        let assist = Math.max(base, USABLE_EDGE_ASSIST_MM);
+        if (tightSlack > 0) assist = Math.min(assist, Math.max(base, tightSlack / 2 - 1));
+        return Math.max(base, assist);
     }
 
     function thresholdMmFromScale(scale, enterPx) {
@@ -541,8 +546,7 @@
         });
 
         let found = firstValid(combined);
-        if (found) return found;
-        found = firstValid(axisCandidates.x) || firstValid(axisCandidates.y) || firstValid(axisCandidates.n);
+        if (!found) found = firstValid(axisCandidates.x) || firstValid(axisCandidates.y) || firstValid(axisCandidates.n);
         if (found) return found;
         return { ok: false, dx: rawDx, dy: rawDy, guides: [], source: null };
     }
