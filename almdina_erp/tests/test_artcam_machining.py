@@ -798,6 +798,37 @@ def test_sheet_perimeter_is_absent_until_connected_and_then_uses_the_existing_pa
     )
     assert associations[0]["vector_ids"] == [SHEET_PERIMETER_PATH_KEY]
     assert association_availability(connected, associations)["sheet_perimeter"]["disabled"] is True
+    separate_ops = normalize_associations(
+        [
+            {
+                "association_id": "association:edge",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_SHEET_PERIMETER},
+            },
+            {
+                "association_id": "association:cut",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_LAYER, "operation_key": "cut_path"},
+            },
+        ],
+        profiles=[profile],
+        catalog=connected,
+    )
+    assert separate_ops[0]["vector_ids"] == [SHEET_PERIMETER_PATH_KEY]
+    assert separate_ops[1]["vector_ids"] == ["cut_path:piece-a:outer"]
+    legacy = normalize_associations(
+        [
+            {
+                "association_id": "association:old",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_LAYER, "operation_key": "cut_path"},
+                "vector_ids": ["cut_path:piece-a:outer", SHEET_PERIMETER_PATH_KEY],
+            }
+        ],
+        profiles=[profile],
+        catalog=connected,
+    )
+    assert legacy[0]["vector_ids"] == ["cut_path:piece-a:outer", SHEET_PERIMETER_PATH_KEY]
 
 
 def test_illustrative_geometry_and_a_direct_reassignment_are_rejected():

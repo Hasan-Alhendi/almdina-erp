@@ -3961,3 +3961,6 @@ The saved direction could not be cleared.,تعذر إلغاء الاتجاه ا�
 "This path cannot be reversed safely, so the NC file was not created.",لا يمكن عكس هذا المسار بأمان، لذلك لم يُنشأ ملف NC.
 "A saved path direction belongs to an older geometry, so the NC file was not created.",اتجاه محفوظ يخص هندسة أقدم، لذلك لم يُنشأ ملف NC.
 "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",اتجاه محفوظ لم يعد يطابق مساراً على هذا اللوح، لذلك لم يُنشأ ملف NC.
+The path direction was not changed.,لم يتغير اتجاه المسار.
+Restore the original direction,استعادة الاتجاه الأصلي
+The association was not calculated.,لم يُحسب الربط.

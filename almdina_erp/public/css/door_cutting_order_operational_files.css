@@ -425,8 +425,7 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 }
 .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__path,
 .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__arrow {
-    stroke: #0b6bcb;
-    stroke-width: 2.2;
+    stroke-width: 2.6;
 }
 .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__start {
     fill: #0b6bcb;
@@ -765,8 +764,22 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 .dco-operational-sheet .dco-sheet-acc__body {
     padding: 12px 16px 16px;
 }
+.dco-operational-sheet .dco-cnc-cut-preview__arrow {
+    display: none;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__arrow {
+    display: inline;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-layer-active .dco-cnc-cut-preview__path {
+    stroke: #F59E0B;
+    stroke-width: 2.4px;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned .dco-cnc-cut-preview__path {
+    stroke: #6D597A;
+}
 .dco-operational-sheet .dco-cnc-cut-preview__execution.is-vector-picked .dco-cnc-cut-preview__path {
     stroke: #EC4899;
+    stroke-width: 2.4px;
 }
 .dco-operational-sheet .dco-cnc-cut-preview__execution.is-association-hidden {
     display: none;

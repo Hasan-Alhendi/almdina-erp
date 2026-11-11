@@ -72,8 +72,7 @@ const markup = ux.programMarkup({
     ],
 });
 
-assert.ok(markup.drawing.includes("#1d4e89"));
-assert.ok(markup.drawing.includes("#a61b1b"));
+assert.ok(markup.drawing.includes("#C62828"));
 assert.ok(markup.drawing.includes("marker-end"));
 assert.ok(markup.drawing.includes("translate(0,2000) scale(1,-1)"));
 assert.ok(markup.list.includes("Depth {0} mm") || markup.list.includes("7"));

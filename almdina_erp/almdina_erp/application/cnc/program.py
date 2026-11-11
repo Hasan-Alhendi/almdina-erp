@@ -895,6 +895,25 @@ def _on_ring(points: Sequence[tuple[float, float]], ring: Sequence[tuple[float, 
     )
 
 
+def _keep_mill_outline(entities: list[CncSourceEntity], piece_id: str, layer: str) -> bool:
+    """Leave source mill geometry on the board when the cutter center cannot be calculated."""
+
+    from dataclasses import replace
+
+    kept = False
+    updated: list[CncSourceEntity] = []
+    for entity in entities:
+        same_layer = entity.piece_instance_id == piece_id and entity.layer.upper() == layer.upper()
+        if same_layer and len(entity.points) >= 2 and entity.role != "tool_center":
+            updated.append(replace(entity, role="mill_diameter_required"))
+            kept = True
+            continue
+        updated.append(entity)
+    if kept:
+        entities[:] = updated
+    return kept
+
+
 def _drop_layer(entities: list[CncSourceEntity], piece_id: str, layer: str) -> None:
     entities[:] = [
         entity
@@ -1194,6 +1213,9 @@ def _apply_parametric_mills(
                 continue
             if diameter is None:
                 if open_centers:
+                    continue
+                # Keep the approved outline visible and selectable. Do not invent a cutter center.
+                if _keep_mill_outline(entities, piece_id, layer):
                     continue
                 _drop_layer(entities, piece_id, layer)
                 for key in catalog_keys:

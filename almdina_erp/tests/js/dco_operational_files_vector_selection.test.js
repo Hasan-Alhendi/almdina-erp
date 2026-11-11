@@ -215,4 +215,34 @@ assert.deepEqual(state.vectorSelection, ["cut_path:shared"]);
 assert.equal(state.artcamForm.association_id, "b");
 assert.equal(state.artcamForm.source, "selected_vectors");
 
+assert.equal(ux.PROGRAM_COLORS.liner, "#C62828");
+assert.equal(ux.PROGRAM_COLORS.recessed_handle_cutout, "#C62828");
+assert.equal(ux.PROGRAM_COLORS.back_groove, "#C62828");
+const highlighted = ux.cutPathPreviewMarkup({
+    sheet_width_mm: 100,
+    sheet_length_mm: 80,
+    geometry_ready: true,
+    operations: [
+        { operation_key: "liner", toolpaths: [{ path_key: "liner:a", operation_key: "liner", closed: false, points: [[10, 10], [80, 10]], motions: [] }] },
+        { operation_key: "cut_path", toolpaths: [{ path_key: "cut_path:a", operation_key: "cut_path", closed: false, points: [[10, 40], [80, 40]], motions: [] }] },
+        { operation_key: "sheet_perimeter", toolpaths: [{ path_key: "cut_path:sheet_perimeter", operation_key: "sheet_perimeter", closed: true, points: [[0, 0], [100, 0], [100, 80], [0, 0]], motions: [] }] },
+    ],
+}, {
+    selectedVectorIds: ["cut_path:a"],
+    assignedVectorIds: ["liner:a"],
+    activeOperation: "sheet_perimeter",
+});
+assert.ok(highlighted.includes("is-vector-picked"));
+assert.ok(highlighted.includes("is-assigned"));
+assert.ok(highlighted.includes("is-layer-active"));
+assert.ok(highlighted.includes('data-operation-key="liner"'));
+assert.ok(highlighted.includes('data-operation-key="sheet_perimeter"'));
+assert.ok(!highlighted.includes("data-clear-reverse"));
+assert.ok(!highlighted.includes("Clear saved direction"));
+const css = fs.readFileSync(path.join(root, "public/css/door_cutting_order_operational_files.css"), "utf8");
+assert.ok(css.includes(".dco-operational-sheet .dco-cnc-cut-preview__arrow"));
+assert.ok(css.includes("display: none"));
+assert.ok(css.includes("#F59E0B"));
+assert.ok(css.includes("#EC4899"));
+
 console.log("dco_operational_files_vector_selection.test.js passed");

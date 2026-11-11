@@ -106,13 +106,13 @@
         options.push({ value: "selected_vectors", label: "Selected Vectors" });
         const ownsPerimeter = form && form.source === "sheet_perimeter";
         if (connected || (availability.sheet_perimeter && !availability.sheet_perimeter.disabled) || ownsPerimeter) {
-            options.push({ value: "sheet_perimeter", label: "Sheet Perimeter" });
+            options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
         }
         return options;
     }
 
     function sourceLabel(value, context) {
-        if (value === "sheet_perimeter") return "Sheet Perimeter";
+        if (value === "sheet_perimeter") return "SHEET_PERIMETER";
         if (value === "selected_vectors") return "Selected Vectors";
         const layer = String(value || "").startsWith("layer:") ? String(value).slice(6) : "";
         const match = ((machining(context.sheet).availability || {}).layers || [])
@@ -327,6 +327,18 @@
         };
     }
 
+    function reportFailure(title, fallback, error) {
+        const board = window.AlmdinaOperationalFilesUX;
+        if (board && typeof board.showSheetIssueDialog === "function") {
+            board.showSheetIssueDialog(title, [{
+                problem: fallback,
+                action: translate("Correct the listed issue, then generate the NC file again."),
+            }], { error });
+            return;
+        }
+        if (window.frappe && frappe.msgprint) frappe.msgprint(fallback);
+    }
+
     function status(host, message, failed) {
         const node = host.querySelector("[data-artcam-status]");
         if (!node) return;
@@ -366,6 +378,7 @@
                     count.hidden = !selected;
                     count.textContent = `${(context.state.vectorSelection || []).length} Vectors Selected`;
                 }
+                if (typeof context.paintBoard === "function") context.paintBoard();
             }
             if (event.target.matches("[data-field=\"profile_id\"]")) {
                 const profile = profilesOf(context).find(row => row.profile_id === event.target.value);
@@ -450,6 +463,19 @@
         }
         if (form.source === "selected_vectors" && !(state.vectorSelection || []).length) {
             status(host, translate("Select at least one vector on the board."), true);
+            reportFailure(translate("The association was not calculated."), translate("Select at least one vector on the board."));
+            return;
+        }
+        const owned = new Set();
+        (machining(context.sheet).associations || []).forEach(row => {
+            if (!row || row.association_id === form.association_id) return;
+            (row.vector_ids || []).forEach(id => owned.add(String(id)));
+        });
+        const clash = (state.vectorSelection || []).filter(id => owned.has(String(id)));
+        if (form.source === "selected_vectors" && clash.length) {
+            const message = translate("That vector or layer is already assigned.");
+            status(host, message, true);
+            reportFailure(translate("The association was not calculated."), `${message} ${clash.join(", ")}`);
             return;
         }
         const previous = (machining(context.sheet).associations || [])
@@ -486,10 +512,15 @@
                 status(host, translate("The association was saved and calculated."), false);
                 if (typeof context.onWorkspace === "function") context.onWorkspace(calculated || workspace);
             });
-        }).catch(() => {
+        }).catch(error => {
             state.artcamBusy = false;
             if (button) button.disabled = false;
             status(host, translate("The association was not calculated. The values on this page are still here."), true);
+            reportFailure(
+                translate("The association was not calculated."),
+                translate("The association was not calculated. The values on this page are still here."),
+                error
+            );
         });
     }
 

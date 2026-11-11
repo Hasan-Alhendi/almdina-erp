@@ -693,6 +693,13 @@ def set_cnc_path_direction(
     sheet_no: int | str,
     path_key: str,
     viewed_plan_token: str | None = None,
+    operation_presets: str | dict[str, Any] | None = None,
+    path_overrides: str | dict[str, Any] | None = None,
+    operation_order: str | list[Any] | None = None,
+    cut_path_early_confirmed: int | str | bool = 0,
+    perimeter_join_mode: str | None = None,
+    cut_path_sequence: str | list[Any] | None = None,
+    perimeter_cut_early_confirmed: int | str | bool = 0,
 ) -> dict[str, Any]:
     """Toggle one path direction and keep it for the next NC generation."""
 
@@ -714,18 +721,42 @@ def set_cnc_path_direction(
         sequence,
         perimeter_early,
     ) = _settings_from_saved(saved, factory_operation_defaults())
+    probe_operations = operations
+    probe_paths = paths
+    probe_order = order_keys
+    probe_confirmed = confirmed
+    probe_join = join_mode
+    probe_sequence = sequence
+    probe_early = perimeter_early
+    if operation_presets is not None:
+        parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
+        if isinstance(parsed_operations, dict):
+            probe_operations = {str(item): value for item, value in parsed_operations.items()}
+    if path_overrides is not None:
+        parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
+        if isinstance(parsed_paths, dict):
+            probe_paths = {str(item): value for item, value in parsed_paths.items()}
+    if operation_order is not None:
+        parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+        if isinstance(parsed_order, list):
+            probe_order = [str(item) for item in parsed_order]
+    if perimeter_join_mode is not None:
+        probe_join = str(perimeter_join_mode or join_mode)
+        probe_sequence = _parse_optional_sequence(cut_path_sequence)
+        probe_early = bool(cint(perimeter_cut_early_confirmed))
+        probe_confirmed = bool(cint(cut_path_early_confirmed))
     try:
         _plan, program, _presets = _compile_authorized_program(
             order,
             sheet_no=cint(sheet_no),
-            operation_presets=operations,
-            path_overrides=paths,
-            operation_order=order_keys,
-            cut_path_early_confirmed=confirmed,
+            operation_presets=probe_operations,
+            path_overrides=probe_paths,
+            operation_order=probe_order,
+            cut_path_early_confirmed=probe_confirmed,
             viewed_plan_token=viewed_plan_token,
-            perimeter_join_mode=join_mode,
-            cut_path_sequence=sequence,
-            perimeter_cut_early_confirmed=perimeter_early,
+            perimeter_join_mode=probe_join,
+            cut_path_sequence=probe_sequence,
+            perimeter_cut_early_confirmed=probe_early,
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -743,7 +774,7 @@ def set_cnc_path_direction(
             if found is not None:
                 break
         if not isinstance(found, dict):
-            frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
+            frappe.throw(_issue_message("path_reverse_missing", key), frappe.ValidationError)
         geometry_id = path_geometry_id(found)
         probe = apply_reversed_directions(
             {"operations": [{"toolpaths": [found]}], "issues": []},
@@ -751,7 +782,7 @@ def set_cnc_path_direction(
         )
         blocked = reversed_direction_block(probe)
         if blocked:
-            frappe.throw(_message(blocked), frappe.ValidationError)
+            frappe.throw(_issue_message(blocked, key), frappe.ValidationError)
         records.append({"path_key": key, "geometry_id": geometry_id})
     records = normalize_reversed_paths(records)
     try:

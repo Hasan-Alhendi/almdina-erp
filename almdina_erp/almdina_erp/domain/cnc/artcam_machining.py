@@ -481,6 +481,31 @@ def vectors_from_paths(paths: Sequence[Mapping[str, Any]]) -> tuple[MachinableVe
     return tuple(vectors)
 
 
+def _retain_saved_perimeter(
+    selection: Mapping[str, Any],
+    stored_ids: Any,
+    covered: tuple[str, ...],
+    index: Mapping[str, MachinableVector],
+) -> tuple[str, ...]:
+    """Keep a perimeter that an older CUT_PATH association already owns.
+
+    New layer selections do not include the connected perimeter. A saved row
+    that already lists it keeps that ownership until the user edits it.
+    """
+
+    if str(selection.get("kind") or "") != SELECTION_LAYER:
+        return covered
+    if str(selection.get("operation_key") or "") != "cut_path":
+        return covered
+    if isinstance(stored_ids, (str, bytes)) or not isinstance(stored_ids, Sequence):
+        return covered
+    if SHEET_PERIMETER_PATH_KEY not in {str(item or "") for item in stored_ids}:
+        return covered
+    if SHEET_PERIMETER_PATH_KEY not in index or SHEET_PERIMETER_PATH_KEY in covered:
+        return covered
+    return tuple(covered) + (SHEET_PERIMETER_PATH_KEY,)
+
+
 def _catalog_index(catalog: Sequence[MachinableVector]) -> dict[str, MachinableVector]:
     return {vector.vector_id: vector for vector in catalog}
 
@@ -592,6 +617,12 @@ def normalize_associations(
                 conflict = exc.code
             else:
                 raise
+        covered = _retain_saved_perimeter(
+            selection,
+            row.get("vector_ids"),
+            covered,
+            _catalog_index(catalog),
+        )
         for vector_id in covered:
             owner = covered_owner.get(vector_id)
             if owner is not None:

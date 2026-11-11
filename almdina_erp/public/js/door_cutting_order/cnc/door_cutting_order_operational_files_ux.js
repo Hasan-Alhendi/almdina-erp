@@ -1218,25 +1218,13 @@
                     return;
                 }
                 if (applyBoardVectorClick(event, body, live.state)) return;
-                const previewHit = boardVectorHit(target);
-                const clearReverse = target.closest("[data-clear-reverse]");
-                if (clearReverse && live.workspace.can_prepare) {
-                    const pathKey = clearReverse.getAttribute("data-clear-reverse") || "";
-                    if (!pathKey) return;
-                    frappe.call({
-                        method: `${METHOD}.set_cnc_path_direction`,
-                        args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
-                            path_key: pathKey,
-                        }),
-                        callback() {
-                            requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
-                        },
-                        error() {
-                            frappe.msgprint(translate("The saved direction could not be cleared."));
-                        },
-                    });
+                const preview = body.querySelector("[data-sheet-preview]");
+                const pointed = resolveBoardPointer(preview, event);
+                if (pointed && pointed.ambiguous) {
+                    openPathMenu(body, event, pointed.choices, "inspect");
                     return;
                 }
+                const previewHit = (pointed && pointed.hit) || boardVectorHit(target);
                 if (previewHit) {
                     applyExecutionSelection(
                         body,
@@ -1336,27 +1324,29 @@
                     });
                     return;
                 }
+                const choosePath = target.closest("[data-choose-path]");
+                if (choosePath) {
+                    const menu = body.querySelector("[data-path-menu]");
+                    const executionId = choosePath.getAttribute("data-execution-path-id") || "";
+                    if (menu) menu.hidden = true;
+                    if (executionId) {
+                        applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
+                    }
+                    return;
+                }
                 const reverse = target.closest("[data-reverse-path]");
                 if (reverse) {
                     const menu = body.querySelector("[data-path-menu]");
-                    const pathKey = menu && menu.getAttribute("data-path-key");
+                    const pathKey = reverse.getAttribute("data-path-key")
+                        || (menu && menu.getAttribute("data-path-key"))
+                        || "";
+                    const executionId = reverse.getAttribute("data-execution-path-id") || "";
                     if (menu) menu.hidden = true;
+                    if (executionId) {
+                        applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
+                    }
                     if (!pathKey || !live.workspace.can_prepare) return;
-                    const preview = body.querySelector("[data-sheet-preview]");
-                    reversePreviewPath(preview, pathKey);
-                    frappe.call({
-                        method: `${METHOD}.set_cnc_path_direction`,
-                        args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
-                            path_key: pathKey,
-                        }),
-                        callback() {
-                            requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
-                        },
-                        error() {
-                            reversePreviewPath(preview, pathKey);
-                            frappe.msgprint(translate("This path cannot be reversed safely. Its direction was left unchanged."));
-                        },
-                    });
+                    requestPathReverse(live.frm, dialog, live.workspace, live.sheet, live.state, pathKey);
                     return;
                 }
                 const moveOp = target.closest("[data-move]");
@@ -1427,18 +1417,25 @@
             body.addEventListener("contextmenu", event => {
                 const live = liveContext();
                 const menu = body.querySelector("[data-path-menu]");
-                const hit = event.target && event.target.closest && event.target.closest("[data-sheet-preview] [data-execution-path]");
+                const preview = body.querySelector("[data-sheet-preview]");
+                const pointed = resolveBoardPointer(preview, event);
+                const hit = (pointed && pointed.hit)
+                    || (event.target && event.target.closest && event.target.closest("[data-sheet-preview] [data-execution-path]"));
                 if (!menu) return;
-                if (!hit) {
+                if ((!hit && !(pointed && pointed.ambiguous)) || !live || !live.workspace || !live.workspace.can_prepare) {
                     menu.hidden = true;
                     return;
                 }
                 if (typeof event.preventDefault === "function") event.preventDefault();
-                menu.hidden = false;
-                menu.setAttribute("data-path-key", hit.getAttribute("data-execution-path") || "");
-                menu.style.left = `${Number(event.clientX) || 0}px`;
-                menu.style.top = `${Number(event.clientY) || 0}px`;
-                if (!live || !live.workspace || !live.workspace.can_prepare) menu.hidden = true;
+                if (pointed && pointed.ambiguous) {
+                    openPathMenu(body, event, pointed.choices, "reverse");
+                    return;
+                }
+                openPathMenu(body, event, [{
+                    path_key: hit.getAttribute("data-execution-path") || hit.getAttribute("data-vector-id") || "",
+                    execution_path_id: hit.getAttribute("data-execution-path-id") || "",
+                    label: "",
+                }], "reverse");
             });
             body.addEventListener("keydown", event => {
                 if (event.key !== "Escape") return;
@@ -1710,6 +1707,11 @@
             toolpath_exceeds_machine: translate("A cutter path would leave the machine travel area after placement."),
             offset_left_invalid: translate(PLACEMENT_MESSAGES.offset_left_invalid),
             offset_bottom_invalid: translate(PLACEMENT_MESSAGES.offset_bottom_invalid),
+            path_reverse_unsupported: translate("This path cannot be reversed safely, so the NC file was not created."),
+            path_reverse_stale: translate("A saved path direction belongs to an older geometry, so the NC file was not created."),
+            path_reverse_missing: translate("A saved path direction no longer matches a path on this sheet, so the NC file was not created."),
+            vector_already_assigned: translate("That vector or layer is already assigned."),
+            mill_diameter_required: translate("This milling path needs the layer tool diameter before its cutter center can be calculated."),
         };
         return actions[code] || translate("Correct the listed issue, then generate the NC file again.");
     }
@@ -1974,6 +1976,12 @@
                     refresh() {
                         refreshSheetUi(frm, ui, workspace, sheet, state);
                     },
+                    paintBoard() {
+                        const root = dialogRoot(ui);
+                        const preview = root && root.querySelector("[data-sheet-preview]");
+                        if (preview) preview.__cutSheet = sheet;
+                        paintBoardAppearance(root, sheet, state);
+                    },
                     onWorkspace(message) {
                         ui._almdinaOnWorkspace(message);
                     },
@@ -2190,12 +2198,13 @@
         });
     }
 
+    const PATH_COLOR = "#C62828";
     const PROGRAM_COLORS = Object.freeze({
-        liner: "#1d4e89",
-        recessed_handle_cutout: "#c45c12",
-        back_groove: "#5c4d2e",
-        sheet_perimeter: "#0b7285",
-        cut_path: "#a61b1b",
+        liner: PATH_COLOR,
+        recessed_handle_cutout: PATH_COLOR,
+        back_groove: PATH_COLOR,
+        sheet_perimeter: PATH_COLOR,
+        cut_path: PATH_COLOR,
     });
     const DIRECTION_LABELS = Object.freeze({
         ccw: "Counterclockwise",
@@ -2366,6 +2375,167 @@
         return [Number(finish[0]) - (incomingX / length) * separation, Number(finish[1]) - (incomingY / length) * separation];
     }
 
+    function segmentDistance(px, py, start, end) {
+        const dx = Number(end[0]) - Number(start[0]);
+        const dy = Number(end[1]) - Number(start[1]);
+        const lengthSq = dx * dx + dy * dy;
+        if (!(lengthSq > 0)) return Math.hypot(px - Number(start[0]), py - Number(start[1]));
+        const ratio = Math.max(0, Math.min(1, ((px - Number(start[0])) * dx + (py - Number(start[1])) * dy) / lengthSq));
+        return Math.hypot(px - (Number(start[0]) + ratio * dx), py - (Number(start[1]) + ratio * dy));
+    }
+
+    function resolveBoardPointer(preview, event) {
+        if (!preview || !event || event.clientX == null || typeof preview.querySelector !== "function") return null;
+        const group = preview.querySelector("[data-sheet-geometry]");
+        const svg = preview.querySelector(".dco-cnc-cut-preview__svg");
+        if (!group || !svg || typeof group.getScreenCTM !== "function" || typeof svg.createSVGPoint !== "function") return null;
+        const matrix = group.getScreenCTM();
+        if (!matrix || typeof matrix.inverse !== "function") return null;
+        const point = svg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        const local = point.matrixTransform(matrix.inverse());
+        const scale = Math.hypot(Number(matrix.a) || 0, Number(matrix.c) || 0) || 1;
+        const tolerance = 14 / scale;
+        const epsilon = 2 / scale;
+        const ranked = [];
+        (preview.__cutPreviewPaths || []).forEach(item => {
+            if (!item || !Array.isArray(item.points) || item.points.length < 2) return;
+            const node = preview.querySelector(`[data-execution-path-id="${item.execution_path_id}"]`);
+            if (!node || (node.classList && node.classList.contains("is-association-hidden"))) return;
+            let distance = Infinity;
+            for (let index = 1; index < item.points.length; index += 1) {
+                distance = Math.min(distance, segmentDistance(local.x, local.y, item.points[index - 1], item.points[index]));
+            }
+            if (distance <= tolerance) {
+                ranked.push({
+                    distance,
+                    node,
+                    path_key: String(item.path_key || ""),
+                    execution_path_id: String(item.execution_path_id || ""),
+                    label: [item.operation_key || "", item.piece_label || item.path_key || ""].filter(Boolean).join(" · "),
+                });
+            }
+        });
+        ranked.sort((left, right) => left.distance - right.distance || left.path_key.localeCompare(right.path_key));
+        if (!ranked.length) return { hit: null, ambiguous: false, choices: [] };
+        const ambiguous = ranked.length > 1 && ranked[1].distance - ranked[0].distance <= epsilon;
+        return { hit: ranked[0].node, ambiguous, choices: ranked.slice(0, 4) };
+    }
+
+    function openPathMenu(body, event, choices, mode) {
+        const menu = body && body.querySelector("[data-path-menu]");
+        if (!menu) return;
+        const rows = (choices || []).filter(choice => choice && choice.path_key);
+        if (!rows.length) {
+            menu.hidden = true;
+            return;
+        }
+        menu.innerHTML = rows.map(choice => {
+            const label = mode === "inspect"
+                ? (choice.label || choice.path_key)
+                : (choice.label
+                    ? `${translate("Reverse Direction")} · ${choice.label}`
+                    : translate("Reverse Direction"));
+            const action = mode === "inspect" ? "data-choose-path" : "data-reverse-path";
+            return `<button type="button" ${action} data-path-key="${escapeHtml(choice.path_key)}" data-execution-path-id="${escapeHtml(choice.execution_path_id || "")}">${escapeHtml(label)}</button>`;
+        }).join("");
+        menu.hidden = false;
+        menu.setAttribute("data-path-key", rows[0].path_key);
+        menu.style.left = `${Number(event.clientX) || 0}px`;
+        menu.style.top = `${Number(event.clientY) || 0}px`;
+    }
+
+    function requestPathReverse(frm, dialog, workspace, sheet, state, pathKey) {
+        if (!pathKey || !state || state.reverseBusy) return;
+        state.reverseBusy = pathKey;
+        frappe.call({
+            method: `${METHOD}.set_cnc_path_direction`,
+            args: Object.assign({}, sheetGenerateArgs(frm, workspace, sheet, state), { path_key: pathKey }),
+            callback() {
+                state.reverseBusy = "";
+                state.directionReport = pathKey;
+                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
+            },
+            error(error) {
+                state.reverseBusy = "";
+                showSheetIssueDialog(translate("The path direction was not changed."), [{
+                    problem: serverErrorText(error) || translate("This path cannot be reversed safely, so the NC file was not created."),
+                    target: pathKey,
+                    action: translate("Correct the listed issue, then generate the NC file again."),
+                    code: "path_reverse_unsupported",
+                }]);
+            },
+        });
+    }
+
+    function serverErrorText(error) {
+        const ui = window.AlmdinaFrontend;
+        if (ui && typeof ui.normalizeError === "function") {
+            const normalized = ui.normalizeError(error);
+            if (normalized && (normalized.message || normalized.exception)) return normalized.message || normalized.exception;
+        }
+        if (!error) return "";
+        if (typeof error === "string") return error;
+        return error.message || (error.responseJSON && (error.responseJSON.exception || error.responseJSON._error_message)) || "";
+    }
+
+    function showSheetIssueDialog(title, issues, options) {
+        const rows = Array.isArray(issues) ? issues : [];
+        const ui = window.AlmdinaUi;
+        if (ui && typeof ui.errorDialog === "function" && options && options.error) {
+            const shown = ui.errorDialog(options.error, {
+                title,
+                fallback: (rows[0] && rows[0].problem) || title,
+            });
+            if (shown) return shown;
+        }
+        if (!window.frappe || !frappe.ui || !frappe.ui.Dialog) {
+            if (window.frappe && frappe.msgprint) frappe.msgprint((rows[0] && rows[0].problem) || title);
+            return null;
+        }
+        const cards = rows.map(item => `<section class="alm-error-card">
+            <p><strong>${escapeHtml(translate("What is the problem?"))}</strong> ${escapeHtml(item.problem || "")}</p>
+            ${item.target ? `<p><strong>${escapeHtml(translate("Where is it?"))}</strong> ${escapeHtml(item.target)}</p>` : ""}
+            ${item.action ? `<p><strong>${escapeHtml(translate("What should I do?"))}</strong> ${escapeHtml(item.action)}</p>` : ""}
+            ${item.code ? `<small>${escapeHtml(item.code)}</small>` : ""}
+        </section>`).join("");
+        const dialogBox = new frappe.ui.Dialog({
+            title,
+            size: "large",
+            secondary_action_label: translate("Close"),
+            secondary_action() { dialogBox.hide(); },
+        });
+        const restore = options && options.restorePath
+            ? `<p><button type="button" class="btn btn-default btn-sm" data-restore-direction>${escapeHtml(translate("Restore the original direction"))}</button></p>`
+            : "";
+        dialogBox.$body.html(`<div class="almdina-ui"><div class="alm-error-summary" role="alert">${cards}${restore}</div></div>`);
+        if (options && options.restorePath && dialogBox.$body) {
+            dialogBox.$body.find("[data-restore-direction]").on("click", () => {
+                dialogBox.hide();
+                if (typeof options.onRestore === "function") options.onRestore(options.restorePath);
+            });
+        }
+        dialogBox.show();
+        return dialogBox;
+    }
+
+    function directionIssues(program) {
+        const found = [];
+        (Array.isArray(program && program.issues) ? program.issues : []).forEach(issue => {
+            if (!issue) return;
+            const code = String(issue.code || "");
+            if (!["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"].includes(code)) return;
+            found.push({
+                code,
+                problem: issue.message || issueAction(code),
+                target: issue.path_key || "",
+                action: issueAction(code),
+            });
+        });
+        return found;
+    }
+
     function boardVectorHit(target) {
         let node = target;
         while (node) {
@@ -2407,7 +2577,7 @@
         if (window.AlmdinaArtcamMachining && typeof window.AlmdinaArtcamMachining.ensureForm === "function") {
             window.AlmdinaArtcamMachining.ensureForm(state);
         }
-        highlightVectorSelection(body, state);
+        paintBoardAppearance(body, null, state);
         const count = body && typeof body.querySelector === "function"
             ? body.querySelector("[data-vector-count]")
             : null;
@@ -2415,13 +2585,45 @@
         return true;
     }
 
-    function highlightVectorSelection(body, state) {
+    function boardDisplayState(sheet, state) {
+        const form = (state && state.artcamForm) || {};
+        const source = String(form.source || "");
+        let active = "";
+        if (source === "sheet_perimeter") active = "sheet_perimeter";
+        else if (source.indexOf("layer:") === 0) active = source.slice(6);
+        const editing = String(form.association_id || "");
+        const assigned = new Set();
+        ((((sheet || {}).machining) || {}).associations || []).forEach(row => {
+            if (!row || String(row.association_id || "") === editing) return;
+            (row.vector_ids || []).forEach(id => assigned.add(String(id)));
+        });
+        return {
+            active,
+            assigned,
+            selected: new Set(((state && state.vectorSelection) || []).map(String)),
+        };
+    }
+
+    function paintBoardAppearance(body, sheet, state) {
         const preview = body && body.querySelector("[data-sheet-preview]");
         if (!preview) return;
-        const selected = new Set((state.vectorSelection || []).map(String));
+        const display = boardDisplayState(sheet || preview.__cutSheet, state);
         preview.querySelectorAll("[data-execution-path]").forEach(node => {
-            node.classList.toggle("is-vector-picked", selected.has(node.getAttribute("data-execution-path") || ""));
+            const vectorId = node.getAttribute("data-vector-id") || node.getAttribute("data-execution-path") || "";
+            const operation = node.getAttribute("data-operation-key") || "";
+            const current = display.selected.has(vectorId);
+            const assigned = !current && display.assigned.has(vectorId);
+            node.classList.toggle("is-vector-picked", current);
+            node.classList.toggle("is-assigned", assigned);
+            node.classList.toggle(
+                "is-layer-active",
+                Boolean(display.active) && !current && !assigned && operation === display.active
+            );
         });
+    }
+
+    function highlightVectorSelection(body, state) {
+        paintBoardAppearance(body, null, state);
     }
 
     function collectPhysicalPaths(program) {
@@ -2675,6 +2877,8 @@
             : sheetLength;
         const selectedExecutionPathId = String(options.selectedExecutionPathId || "");
         const selectedVectorIds = new Set((options.selectedVectorIds || []).map(String));
+        const assignedVectorIds = new Set((options.assignedVectorIds || []).map(String));
+        const activeOperation = String(options.activeOperation || "");
         const markerScope = String(options.markerScope || nextCutPreviewScope());
         const hiddenOperations = Array.isArray(options.hiddenOperations) ? options.hiddenOperations : [];
         const hidden = new Set(hiddenOperations.map(String));
@@ -2685,26 +2889,10 @@
         if (!geometryReady) {
             notes.push(translate("Cutting path preview is incomplete."));
         }
-        const issueMessages = [];
-        (Array.isArray(drawing.issues) ? drawing.issues : []).forEach(issue => {
-            if (!issue) return;
-            const message = issue.message || issue.code;
-            if (message) issueMessages.push(String(message));
-        });
-        allPaths.forEach(item => {
-            (item.issues || []).forEach(code => {
-                if (code) issueMessages.push(String(code));
-            });
-        });
-        const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
-        uniqueIssues.forEach(message => notes.push(message));
         const pageLayout = String(options.layout || "") === "page";
         const frame = cutPreviewViewBox(width, length, physicalPaths, offsetX, offsetY);
         const frameOptions = Object.assign({}, options, { frameWidth: frame.width, frameHeight: frame.height });
         const emptyMessage = translate("No machining paths are available for this sheet preview.");
-        const reverseIssues = (Array.isArray(drawing.issues) ? drawing.issues : []).filter(issue => (
-            issue && ["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"].includes(String(issue.code || ""))
-        ));
         const boardSurface = (svgInner) => {
             const stage = `<div class="dco-cnc-cut-preview__stage" data-cut-stage>
                 <svg class="dco-cnc-cut-preview__svg" viewBox="${frame.text}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(svgInner.aria || emptyMessage)}">
@@ -2734,7 +2922,6 @@
                     body: `<rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>`,
                 })}
                 <p class="dco-operational-files__note">${escapeHtml(emptyMessage)}</p>
-                ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
             </div>`;
         }
 
@@ -2746,9 +2933,12 @@
             </marker>`;
         }).join("");
         const strokes = physicalPaths.map(item => {
+            const vectorId = String(item.vector_id || item.path_key || "");
             const inspected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId;
-            const picked = selectedVectorIds.has(String(item.path_key || ""));
-            const selected = `${inspected ? " is-cnc-path-selected" : ""}${picked ? " is-vector-picked" : ""}`;
+            const picked = selectedVectorIds.has(vectorId);
+            const assigned = !picked && assignedVectorIds.has(vectorId);
+            const layerActive = !picked && !assigned && activeOperation && item.operation_key === activeOperation;
+            const selected = `${inspected ? " is-cnc-path-selected" : ""}${picked ? " is-vector-picked" : ""}${assigned ? " is-assigned" : ""}${layerActive ? " is-layer-active" : ""}`;
             const markerId = `${markerScope}-arrow-${item.path_number}`;
             const color = PROGRAM_COLORS[item.operation_key] || "#333";
             const points = item.points.map(point => `${Number(point[0])},${Number(point[1])}`).join(" ");
@@ -2761,9 +2951,8 @@
             const arrowLine = arrow
                 ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            const vectorId = String(item.vector_id || item.path_key || "");
             return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-vector-id="${escapeHtml(vectorId)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
-                <polyline class="dco-cnc-cut-preview__hit" data-vector-id="${escapeHtml(vectorId)}" data-execution-path="${escapeHtml(item.path_key)}" points="${points}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>
+                <polyline class="dco-cnc-cut-preview__hit" data-vector-id="${escapeHtml(vectorId)}" data-execution-path="${escapeHtml(item.path_key)}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" points="${points}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
             </g>`;
@@ -2785,7 +2974,7 @@
                 <rect class="dco-cnc-cut-preview__sheet" x="${offsetX}" y="${offsetY}" width="${sheetW}" height="${sheetL}" fill="#fff7ed" stroke="#9a3412" stroke-width="1"/>
                 <circle class="dco-cnc-cut-preview__origin" cx="0" cy="0" r="3" fill="#111827"/>`
             : `<rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>`;
-        const sheetGroup = `<g transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
+        const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
         const placementNote = placement
             ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.", [
                 Number(placement.offset_left_cm || 0),
@@ -2804,8 +2993,7 @@
                     </g>`,
             })}
             ${placementNote}
-            ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
-            ${reverseIssues.map(issue => `<p class="dco-cnc-program__error" role="status"><button type="button" class="btn btn-default btn-xs" data-clear-reverse="${escapeHtml(String(issue.path_key || ""))}">${escapeHtml(translate("Clear saved direction"))}</button></p>`).join("")}
+            ${notes.map(note => `<p class="dco-operational-files__note" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
     }
 
@@ -2879,10 +3067,15 @@
         host.__cutPreviewWidth = Number(nextProgram.sheet_width_mm || nextProgram.machine_width_mm || 0);
         host.__cutPreviewHeight = Number(nextProgram.sheet_length_mm || nextProgram.machine_length_mm || 0);
         host.__cutPreviewSelectedExecutionPathId = payload.selectedExecutionPathId || "";
+        const display = boardDisplayState(payload.sheet || host.__cutSheet, payload.state || {
+            vectorSelection: payload.selectedVectorIds || host.__cutPreviewVectorIds || [],
+        });
         host.innerHTML = cutPathPreviewMarkup(nextProgram, {
             selectedExecutionPathId: payload.selectedExecutionPathId || "",
             selectedPathKey: payload.selectedPathKey || "",
             selectedVectorIds: payload.selectedVectorIds || host.__cutPreviewVectorIds || [],
+            assignedVectorIds: payload.assignedVectorIds || Array.from(display.assigned),
+            activeOperation: payload.activeOperation || display.active,
             markerScope,
             layout,
             zoom,
@@ -3097,6 +3290,8 @@
                 paintCutPathPreview(livePreview, {
                     status: "ready",
                     program,
+                    sheet,
+                    state,
                     selectedExecutionPathId: state.selectedExecutionPathId || "",
                     selectedVectorIds: state.vectorSelection || [],
                     layout: livePreview.getAttribute("data-preview-layout") || livePreview.__cutPreviewLayout || "",
@@ -3105,6 +3300,22 @@
                     hiddenOperations: livePreview.__cutPreviewHidden,
                     placement: placementPreviewPayload(workspace, state),
                 });
+                paintBoardAppearance(liveBody, sheet, state);
+                const direction = directionIssues(program);
+                const signature = direction.map(item => `${item.code}:${item.target}`).join("|");
+                if (signature && state.shownDirectionSignature !== signature) {
+                    state.shownDirectionSignature = signature;
+                    showSheetIssueDialog(
+                        translate("The path direction was not changed."),
+                        direction,
+                        {
+                            restorePath: direction[0] && direction[0].target,
+                            onRestore(pathKey) {
+                                requestPathReverse(frm, dialog, workspace, sheet, state, pathKey);
+                            },
+                        }
+                    );
+                }
             },
             error() {
                 if (dialog._cncProgramPreviewRequest !== request) return;
@@ -3509,6 +3720,9 @@
         cutPreviewViewBox,
         boardVectorHit,
         applyBoardVectorClick,
+        paintBoardAppearance,
+        showSheetIssueDialog,
+        resolveBoardPointer,
         paintCutPathPreview,
         highlightCutPreview,
         applyExecutionSelection,
