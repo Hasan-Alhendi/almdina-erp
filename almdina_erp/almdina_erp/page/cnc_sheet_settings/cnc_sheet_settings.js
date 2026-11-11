@@ -3,10 +3,12 @@
 
     const PAGE_ROUTE = "cnc-sheet-settings";
     const STYLE = "/assets/almdina_erp/css/door_cutting_order_operational_files.css?v=11";
+    // frappe.require reads the extension before the query string. A "?v="
+    // suffix makes the loader throw before the script request is sent.
     const ASSETS = Object.freeze([
         "/assets/almdina_erp/js/almdina_ui.js",
-        "/assets/almdina_erp/js/cnc/artcam_machining_ux.js?v=11",
-        "/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js?v=11",
+        "/assets/almdina_erp/js/cnc/artcam_machining_ux.js",
+        "/assets/almdina_erp/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js",
     ]);
 
     function translate(message, replacements) {
