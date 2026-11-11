@@ -26,6 +26,8 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     normalize_profile,
     order_program_by_associations,
     overlay_frozen_toolpaths,
+    apply_reversed_directions,
+    path_geometry_id,
     release_stale_toolpath_links,
     tool_copy_from_stored,
     vectors_from_paths,
@@ -353,6 +355,8 @@ def test_association_overrides_stay_local_and_unresolved_sources_do_not_calculat
         stored[:2],
     )
     assert [row["operation_key"] for row in ordered["operations"]] == ["cut_path", "liner"]
+
+
     selected = normalize_associations(
         [{
             "association_id": "association:picked",
@@ -383,6 +387,93 @@ def test_association_overrides_stay_local_and_unresolved_sources_do_not_calculat
     assert duplicate.value.code == "vector_already_assigned"
 
 
+def _motion_program(points, depths=(5.0, 10.0), closed=False, path_key="cut_path:piece-a:outer"):
+    from almdina_erp.almdina_erp.domain.cnc.program import _motions
+
+    motions = _motions(points, closed=closed, depths=depths)
+    return {
+        "geometry_ready": True,
+        "coordinate_space": "sheet_bottom_left_y_up_mm",
+        "operations": [{
+            "operation_key": "cut_path",
+            "toolpaths": [{
+                "path_key": path_key,
+                "closed": closed,
+                "ready": True,
+                "points": [[point[0], point[1]] for point in points],
+                "motions": [
+                    {
+                        "kind": motion.kind,
+                        "x_mm": motion.x_mm,
+                        "y_mm": motion.y_mm,
+                        "depth_mm": motion.depth_mm,
+                    }
+                    for motion in motions
+                ],
+                "preset": {
+                    "tool_number": "T9",
+                    "spindle_speed_rpm": 18000,
+                    "feed_rate_mm_min": 2400,
+                    "plunge_rate_mm_min": 600,
+                    "safe_z_mm": 5,
+                },
+                "safe_z_mm": 5,
+            }],
+        }],
+    }
+
+
+def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
+    from almdina_erp.almdina_erp.domain.cnc.post_processor import emit_nc
+
+    points = ((0.0, 0.0), (10.0, 0.0), (10.0, 5.0))
+    program = _motion_program(points)
+    identity = path_geometry_id(program["operations"][0]["toolpaths"][0])
+    reversed_program = apply_reversed_directions(
+        program,
+        [{"path_key": "cut_path:piece-a:outer", "geometry_id": identity}],
+    )
+    path = reversed_program["operations"][0]["toolpaths"][0]
+    assert path["points"][0] == [10.0, 5.0]
+    assert path["points"][-1] == [0.0, 0.0]
+    plunges = [motion for motion in path["motions"] if motion["kind"] == "plunge"]
+    assert [motion["depth_mm"] for motion in plunges] == [5.0, 10.0]
+    assert path["preset"]["feed_rate_mm_min"] == 2400
+    original_nc = emit_nc(program).text
+    reversed_nc = emit_nc(reversed_program).text
+    assert "G0 X0 Y0" in original_nc
+    assert "G0 X10 Y5" in reversed_nc
+    assert "G1 Z-5" in reversed_nc
+    stale = apply_reversed_directions(
+        program,
+        [{"path_key": "cut_path:piece-a:outer", "geometry_id": "not-this-path"}],
+    )
+    assert stale["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
+    assert stale["issues"][0]["code"] == "path_reverse_stale"
+    unsupported = apply_reversed_directions(
+        {
+            "operations": [{
+                "toolpaths": [{
+                    "path_key": "cut_path:arc",
+                    "closed": False,
+                    "points": [[0, 0, 1], [2, 0, 1]],
+                    "motions": [],
+                }],
+            }],
+        },
+        [{"path_key": "cut_path:arc", "geometry_id": ""}],
+    )
+    assert unsupported["issues"][0]["code"] == "path_reverse_unsupported"
+    assert unsupported["operations"][0]["toolpaths"][0]["points"][0] == [0, 0, 1]
+    closed = _motion_program(((0, 0), (4, 0), (4, 4), (0, 0)), depths=(3.0,), closed=True, path_key="cut_path:closed")
+    closed_id = path_geometry_id(closed["operations"][0]["toolpaths"][0])
+    closed_reversed = apply_reversed_directions(
+        closed,
+        [{"path_key": "cut_path:closed", "geometry_id": closed_id}],
+    )
+    closed_path = closed_reversed["operations"][0]["toolpaths"][0]
+    assert closed_path["points"][0] == [4.0, 4.0]
+    assert [motion["depth_mm"] for motion in closed_path["motions"] if motion["kind"] == "plunge"] == [3.0]
 def test_association_keeps_a_different_local_tool_without_changing_the_profile():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)

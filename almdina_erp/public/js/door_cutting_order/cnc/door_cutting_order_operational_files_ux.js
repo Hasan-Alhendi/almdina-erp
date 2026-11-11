@@ -884,8 +884,12 @@
 
     function orderMoveIcon(name) {
         if (window.frappe && frappe.utils && typeof frappe.utils.icon === "function") {
-            return frappe.utils.icon(name, "sm");
+            const icon = frappe.utils.icon(name, "sm");
+            if (icon && !String(icon).includes("es-icon-missing")) return icon;
         }
+        if (name === "eye") return "◉";
+        if (name === "eye-off") return "◌";
+        if (name === "trash-2") return "✕";
         return name === "up-line" ? "↑" : "↓";
     }
 
@@ -900,12 +904,22 @@
             const laterDisabled = !canPrepare || index === lastIndex ? " disabled" : "";
             const source = (row.selection && row.selection.kind === "sheet_perimeter")
                 ? "Sheet Perimeter"
-                : ((row.selection && row.selection.operation_key) || "");
+                : (row.selection && row.selection.kind === "selected_vectors")
+                    ? "Selected Vectors"
+                    : ((row.selection && row.selection.operation_key) || "");
+            const profile = (((sheet.machining || {}).profiles) || []).find(item => item.profile_id === row.profile_id);
+            const profileName = (profile && profile.name) || row.profile_id || "";
+            const hidden = Boolean(state.hiddenAssociations && state.hiddenAssociations[row.association_id]);
             return `<li class="dco-operational-order__item" data-association-id="${escapeHtml(row.association_id)}">
-            <span class="dco-operational-order__label">${escapeHtml(row.name || row.association_id)} <small>${escapeHtml(source)}</small></span>
+            <button type="button" class="dco-operational-order__label" data-edit-association="${escapeHtml(row.association_id)}">
+                <strong>${escapeHtml(row.name || row.association_id)}</strong>
+                <small>${escapeHtml(source)}${profileName ? ` · ${escapeHtml(profileName)}` : ""}</small>
+            </button>
             <span class="dco-operational-order__moves">
                 <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="earlier" title="${escapeHtml(translate("Move earlier"))}" aria-label="${escapeHtml(translate("Move earlier"))}"${earlierDisabled}>${orderMoveIcon("up-line")}</button>
                 <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-move="later" title="${escapeHtml(translate("Move later"))}" aria-label="${escapeHtml(translate("Move later"))}"${laterDisabled}>${orderMoveIcon("down-line")}</button>
+                <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-association-visibility="${escapeHtml(row.association_id)}" aria-pressed="${hidden ? "true" : "false"}" title="${escapeHtml(translate(hidden ? "Show paths" : "Hide paths"))}" aria-label="${escapeHtml(translate(hidden ? "Show paths" : "Hide paths"))}">${orderMoveIcon(hidden ? "eye-off" : "eye")}</button>
+                <button type="button" class="btn btn-default btn-xs dco-operational-order__move" data-delete-association="${escapeHtml(row.association_id)}" title="${escapeHtml(translate("Delete"))}" aria-label="${escapeHtml(translate("Delete"))}"${disabled}>${orderMoveIcon("trash-2")}</button>
             </span>
         </li>`;
         }).join("");
@@ -917,6 +931,7 @@
             if (state._artcamSheetNo !== Number(sheet && sheet.sheet_no)) {
                 state.artcamForm = null;
                 state.vectorSelection = [];
+                state.hiddenAssociations = {};
                 state.sections = null;
             }
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
@@ -938,6 +953,9 @@
                     <div data-sheet-preview></div>
                     <p class="dco-operational-sheet__selection" role="status">${escapeHtml(selectionText(workspace, sheet, state))}</p>
                     <p class="dco-operational-files__status" data-sheet-nc-status="${escapeHtml(sheet.status || "")}">${escapeHtml(statusLabel(sheet.status))}</p>
+                    <div class="dco-path-menu" data-path-menu hidden role="menu">
+                        <button type="button" data-reverse-path role="menuitem">${escapeHtml(translate("Reverse Direction"))}</button>
+                    </div>
                 </div>
                 <div class="dco-operational-sheet__settings">
                     ${section("placement", "Machine placement", placementControlsMarkup(workspace, state, canPrepare))}
@@ -1152,6 +1170,8 @@
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.closest !== "function") return;
+                const pathMenu = body.querySelector("[data-path-menu]");
+                if (pathMenu && !target.closest("[data-path-menu]")) pathMenu.hidden = true;
                 const accordion = target.closest("[data-sheet-acc]");
                 if (accordion) {
                     const section = accordion.closest("[data-sheet-section]");
@@ -1261,25 +1281,105 @@
                     requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
                     return;
                 }
+                const visibility = target.closest("[data-association-visibility]");
+                if (visibility) {
+                    const id = visibility.getAttribute("data-association-visibility");
+                    if (!live.state.hiddenAssociations) live.state.hiddenAssociations = {};
+                    live.state.hiddenAssociations[id] = !live.state.hiddenAssociations[id];
+                    const preview = body.querySelector("[data-sheet-preview]");
+                    if (preview) {
+                        preview.__cutSheet = live.sheet;
+                        preview.__hiddenAssociations = live.state.hiddenAssociations;
+                        paintAssociationVisibility(preview);
+                    }
+                    visibility.setAttribute("aria-pressed", live.state.hiddenAssociations[id] ? "true" : "false");
+                    visibility.innerHTML = orderMoveIcon(live.state.hiddenAssociations[id] ? "eye-off" : "eye");
+                    return;
+                }
+                const editAssociation = target.closest("[data-edit-association]");
+                if (editAssociation && window.AlmdinaArtcamMachining) {
+                    const id = editAssociation.getAttribute("data-edit-association");
+                    const row = ((live.sheet.machining || {}).associations || []).find(item => item.association_id === id);
+                    if (!row) return;
+                    const current = live.state.artcamForm;
+                    const dirty = current && current.association_id !== id && (current.name || current.source || current.profile_id);
+                    if (dirty && !window.confirm(translate("Leave the current association without calculating it?"))) return;
+                    window.AlmdinaArtcamMachining.loadAssociation(live.state, row);
+                    live.state.sections = Object.assign({}, live.state.sections, { associations: true });
+                    refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
+                    return;
+                }
+                const deleteAssociation = target.closest("[data-delete-association]");
+                if (deleteAssociation && live.workspace.can_prepare) {
+                    const id = deleteAssociation.getAttribute("data-delete-association");
+                    if (!window.confirm(translate("Remove this association from the operation order?"))) return;
+                    const saved = ((live.sheet.machining || {}).associations || []).filter(row => row.association_id !== id);
+                    frappe.call({
+                        method: `${METHOD}.save_cnc_operational_sheet`,
+                        args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
+                            machining_profiles: (live.sheet.machining || {}).profiles || [],
+                            vector_associations: saved,
+                        }),
+                        callback(response) {
+                            if (live.state.artcamForm && live.state.artcamForm.association_id === id) {
+                                live.state.artcamForm = null;
+                                live.state.vectorSelection = [];
+                            }
+                            const onWorkspace = dialog._almdinaOnWorkspace;
+                            if (typeof onWorkspace === "function") onWorkspace((response && response.message) || {});
+                        },
+                        error() {
+                            frappe.msgprint(translate("The association could not be removed."));
+                        },
+                    });
+                    return;
+                }
+                const reverse = target.closest("[data-reverse-path]");
+                if (reverse) {
+                    const menu = body.querySelector("[data-path-menu]");
+                    const pathKey = menu && menu.getAttribute("data-path-key");
+                    if (menu) menu.hidden = true;
+                    if (!pathKey || !live.workspace.can_prepare) return;
+                    const preview = body.querySelector("[data-sheet-preview]");
+                    reversePreviewPath(preview, pathKey);
+                    frappe.call({
+                        method: `${METHOD}.set_cnc_path_direction`,
+                        args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
+                            path_key: pathKey,
+                        }),
+                        callback() {
+                            requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
+                        },
+                        error() {
+                            reversePreviewPath(preview, pathKey);
+                            frappe.msgprint(translate("This path cannot be reversed safely. Its direction was left unchanged."));
+                        },
+                    });
+                    return;
+                }
                 const moveOp = target.closest("[data-move]");
                 if (moveOp && live.workspace.can_prepare) {
                     const associationItem = moveOp.closest("[data-association-id]");
                     if (associationItem) {
                         const id = associationItem.getAttribute("data-association-id");
-                        const rows = (live.sheet.machining && live.sheet.machining.associations) || [];
+                        const rows = ((live.sheet.machining && live.sheet.machining.associations) || []).slice();
                         const index = rows.findIndex(row => row.association_id === id);
                         const targetIndex = index + (moveOp.getAttribute("data-move") === "earlier" ? -1 : 1);
                         if (index < 0 || targetIndex < 0 || targetIndex >= rows.length) return;
-                        const [item] = rows.splice(index, 1);
-                        rows.splice(targetIndex, 0, item);
-                        const preferred = [];
-                        rows.forEach(row => {
-                            const selection = row.selection || {};
-                            const key = selection.kind === "sheet_perimeter" ? "sheet_perimeter" : selection.operation_key;
-                            if (key && !preferred.includes(key)) preferred.push(key);
+                        const next = rows.slice();
+                        const [item] = next.splice(index, 1);
+                        next.splice(targetIndex, 0, item);
+                        frappe.call({
+                            method: `${METHOD}.save_cnc_operational_sheet`,
+                            args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
+                                machining_profiles: (live.sheet.machining || {}).profiles || [],
+                                vector_associations: next,
+                            }),
+                            callback(response) {
+                                const onWorkspace = dialog._almdinaOnWorkspace;
+                                if (typeof onWorkspace === "function") onWorkspace((response && response.message) || {});
+                            },
                         });
-                        live.state.order = preferred.concat((live.state.order || []).filter(key => !preferred.includes(key)));
-                        refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
                         return;
                     }
                     const item = moveOp.closest("[data-operation-key]");
@@ -1322,9 +1422,48 @@
                 if (!cutPathIsEarly(next)) live.state.confirmed = false;
                 refreshDialog(live.frm, dialog, live.workspace, live.sheet, live.state, live.board);
             });
+            body.addEventListener("contextmenu", event => {
+                const live = liveContext();
+                const menu = body.querySelector("[data-path-menu]");
+                const hit = event.target && event.target.closest && event.target.closest("[data-sheet-preview] [data-execution-path]");
+                if (!menu) return;
+                if (!hit) {
+                    menu.hidden = true;
+                    return;
+                }
+                if (typeof event.preventDefault === "function") event.preventDefault();
+                menu.hidden = false;
+                menu.setAttribute("data-path-key", hit.getAttribute("data-execution-path") || "");
+                menu.style.left = `${Number(event.clientX) || 0}px`;
+                menu.style.top = `${Number(event.clientY) || 0}px`;
+                if (!live || !live.workspace || !live.workspace.can_prepare) menu.hidden = true;
+            });
+            body.addEventListener("keydown", event => {
+                if (event.key !== "Escape") return;
+                const menu = body.querySelector("[data-path-menu]");
+                if (menu) menu.hidden = true;
+            });
         }
         mountPresetControls(frm, dialog, workspace, sheet, state, board);
         if (!canPrepare) return;
+    }
+
+    function reversePointList(value) {
+        return String(value || "").trim().split(/\s+/).filter(Boolean).reverse().join(" ");
+    }
+
+    function reversePreviewPath(preview, pathKey) {
+        if (!preview || !pathKey) return;
+        preview.querySelectorAll(`g[data-execution-path="${pathKey}"] polyline`).forEach(line => {
+            line.setAttribute("points", reversePointList(line.getAttribute("points")));
+        });
+        (preview.__cutPreviewPaths || []).forEach(item => {
+            if (!item || item.path_key !== pathKey || !Array.isArray(item.points)) return;
+            item.points = item.points.slice().reverse();
+            item.start = item.points[0];
+            item.end = item.points[item.points.length - 1];
+        });
+        paintPathMarkers(preview);
     }
 
     function moveOperation(state, key, direction) {
@@ -1814,6 +1953,10 @@
         preserveDialogScroll(ui, () => {
             disposePresetLinks(ui);
             ui._almdinaSheet = { frm, workspace, sheet, state, board: null };
+            ui._almdinaOnWorkspace = message => {
+                const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
+                if (saved) refreshSheetUi(frm, ui, message, saved, state);
+            };
             wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
             const preview = wrapper.querySelector("[data-sheet-preview]");
             if (preview && ui.mode === "page") preview.setAttribute("data-preview-layout", "page");
@@ -1830,8 +1973,7 @@
                         refreshSheetUi(frm, ui, workspace, sheet, state);
                     },
                     onWorkspace(message) {
-                        const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
-                        if (saved) refreshSheetUi(frm, ui, message, saved, state);
+                        ui._almdinaOnWorkspace(message);
                     },
                 });
             }
@@ -2187,7 +2329,7 @@
         return executions;
     }
 
-    function previewEndPoint(points, start, end, closed) {
+    function previewEndPoint(points, start, end, closed, gap) {
         const finish = Array.isArray(end) ? end : (Array.isArray(points) ? points[points.length - 1] : start);
         if (!Array.isArray(start) || !Array.isArray(finish) || !Array.isArray(points) || points.length < 2) return finish || start;
         const dx = Number(finish[0]) - Number(start[0]);
@@ -2197,7 +2339,8 @@
         const incomingX = Number(finish[0]) - Number(previous[0]);
         const incomingY = Number(finish[1]) - Number(previous[1]);
         const length = Math.hypot(incomingX, incomingY) || 1;
-        return [Number(finish[0]) - (incomingX / length) * 4, Number(finish[1]) - (incomingY / length) * 4];
+        const separation = Number(gap) > 0 ? Number(gap) : 4;
+        return [Number(finish[0]) - (incomingX / length) * separation, Number(finish[1]) - (incomingY / length) * separation];
     }
 
     function highlightVectorSelection(body, state) {
@@ -2395,7 +2538,7 @@
     function cutPreviewLayoutStyle(width, length, options = {}) {
         const pageLayout = String(options.layout || "") === "page";
         if (pageLayout) {
-            return `inline-size:100%;min-inline-size:min(100%,${SHEET_PAGE_PREVIEW_MIN_WIDTH_PX}px);aspect-ratio:${width} / ${length}`;
+            return `inline-size:100%;max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}`;
         }
         return `max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}`;
     }
@@ -2439,25 +2582,13 @@
         const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
         uniqueIssues.forEach(message => notes.push(message));
         const pageLayout = String(options.layout || "") === "page";
-        const initialZoom = clampCutPreviewZoom(
-            options.zoom == null ? CUT_PREVIEW_ZOOM.INITIAL : options.zoom
-        );
-        const zoomControls = pageLayout
-            ? `<div class="dco-cnc-cut-preview__zoom" role="group" aria-label="${escapeHtml(translate("Preview zoom"))}">
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="out" title="${escapeHtml(translate("Zoom out"))}">−</button>
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="reset" title="${escapeHtml(translate("Fit to view"))}">${escapeHtml(translate("Fit"))}</button>
-                <button type="button" class="btn btn-default btn-xs" data-cut-zoom="in" title="${escapeHtml(translate("Zoom in"))}">+</button>
-               </div>`
-            : "";
-        const legend = pageLayout ? previewLegendMarkup(drawing, hiddenOperations) : "";
         const emptyMessage = translate("No machining paths are available for this sheet preview.");
-
-        const boardSurface = (svgInner, labelInner) => {
-            const stage = `<div class="dco-cnc-cut-preview__stage" data-cut-stage style="--cut-zoom:${initialZoom}">
+        const boardSurface = (svgInner) => {
+            const stage = `<div class="dco-cnc-cut-preview__stage" data-cut-stage>
                 <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(svgInner.aria || emptyMessage)}">
                     ${svgInner.body || ""}
                 </svg>
-                ${labelInner || ""}
+                ${svgInner.extra || ""}
             </div>`;
             if (!pageLayout) return stage;
             return `<div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, options)}" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
@@ -2470,15 +2601,12 @@
 
         if (!(width > 0 && length > 0)) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}">
-                ${legend}
                 <p class="dco-operational-files__note">${escapeHtml(emptyMessage)}</p>
             </div>`;
         }
 
         if (!physicalPaths.length) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
-                ${legend}
-                ${zoomControls}
                 ${boardSurface({
                     aria: emptyMessage,
                     body: `<rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>`,
@@ -2511,32 +2639,11 @@
             const arrowLine = arrow
                 ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            const endPoint = previewEndPoint(item.points, item.start, item.end, item.closed);
-            const ends = inspected
-                ? `<circle class="dco-cnc-cut-preview__origin" cx="${Number(start[0])}" cy="${Number(start[1])}" r="3.2" fill="#16A34A"/>
-                    <circle class="dco-cnc-cut-preview__finish" cx="${Number(endPoint[0])}" cy="${Number(endPoint[1])}" r="3.2" fill="#DC2626"/>`
-                : "";
             return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
                 <polyline class="dco-cnc-cut-preview__hit" points="${points}" fill="none" stroke="transparent" stroke-width="8" vector-effect="non-scaling-stroke"/>
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
-                ${ends}
             </g>`;
-        }).join("");
-        const labels = physicalPaths.map(item => {
-            const selected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId
-                ? " is-cnc-path-selected"
-                : "";
-            const title = item.passes.map(pass => (
-                pass.depth_mm == null
-                    ? translate("Pass {0}", [pass.pass_index])
-                    : translate("Pass {0}: Depth {1} mm", [pass.pass_index, pass.depth_mm])
-            )).join(" · ");
-            const labelX = Number(item.start[0]) + offsetX;
-            const labelY = Number(item.start[1]) + offsetY;
-            const left = width > 0 ? (labelX / width) * 100 : 0;
-            const top = length > 0 ? ((length - labelY) / length) * 100 : 0;
-            return `<button type="button" class="dco-cnc-cut-preview__badge${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-label-x="${escapeHtml(item.start[0])}" data-label-y="${escapeHtml(item.start[1])}" style="left:${left}%;top:${top}%;" title="${escapeHtml(title)}"><span>${escapeHtml(item.path_number)}</span></button>`;
         }).join("");
         const sheetW = sheetWidth > 0 ? sheetWidth : width;
         const sheetL = sheetLength > 0 ? sheetLength : length;
@@ -2555,7 +2662,7 @@
                 <rect class="dco-cnc-cut-preview__sheet" x="${offsetX}" y="${offsetY}" width="${sheetW}" height="${sheetL}" fill="#fff7ed" stroke="#9a3412" stroke-width="1"/>
                 <circle class="dco-cnc-cut-preview__origin" cx="0" cy="0" r="3" fill="#111827"/>`
             : `<rect class="dco-cnc-cut-preview__frame" x="0" y="0" width="${width}" height="${length}" fill="none"/>`;
-        const sheetGroup = `<g transform="translate(${offsetX},${offsetY})">${strokes}</g>`;
+        const sheetGroup = `<g transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
         const placementNote = placement
             ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.", [
                 Number(placement.offset_left_cm || 0),
@@ -2564,145 +2671,27 @@
             : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
-            ${legend}
-            ${zoomControls}
             ${boardSurface({
                 aria: translate("Machining preview"),
+                extra: `<div class="dco-cnc-cut-preview__dims" aria-hidden="true">${leftDim}${bottomDim}</div>`,
                 body: `<defs>${markers}</defs>
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}
                         ${sheetGroup}
                     </g>`,
-            }, `<div class="dco-cnc-cut-preview__labels" aria-hidden="false">${labels}</div>
-                <div class="dco-cnc-cut-preview__dims" aria-hidden="true">${leftDim}${bottomDim}</div>`)}
+            })}
             ${placementNote}
             ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
         </div>`;
     }
 
-    function bindCutPreviewChrome(host, options = {}) {
+    function bindCutPreviewChrome(host) {
         if (!host || typeof host.querySelector !== "function") return;
         const stage = host.querySelector("[data-cut-stage]");
-        const viewport = host.querySelector("[data-cut-viewport]");
-        if (!stage || !viewport) return;
-        let zoom = clampCutPreviewZoom(
-            options.initialZoom == null
-                ? stage.style.getPropertyValue("--cut-zoom")
-                : options.initialZoom
-        );
-        let pan = normalizeCutPreviewPan(
-            options.initialPan == null ? host.__cutPreviewPan : options.initialPan
-        );
-        const outButton = host.querySelector('[data-cut-zoom="out"]');
-        const inButton = host.querySelector('[data-cut-zoom="in"]');
-
-        function viewportSize() {
-            if (typeof viewport.getBoundingClientRect !== "function") {
-                return {
-                    width: Number(viewport.clientWidth) || 0,
-                    height: Number(viewport.clientHeight) || 0,
-                };
-            }
-            const rect = viewport.getBoundingClientRect();
-            return { width: rect.width || 0, height: rect.height || 0 };
-        }
-
-        const apply = () => {
-            zoom = clampCutPreviewZoom(zoom);
-            pan = clampCutPreviewPan(pan, zoom, viewportSize());
-            host.__cutPreviewZoom = zoom;
-            host.__cutPreviewPan = { x: pan.x, y: pan.y };
-            stage.style.setProperty("--cut-zoom", String(zoom));
-            stage.style.setProperty("--cut-pan-x", `${pan.x}px`);
-            stage.style.setProperty("--cut-pan-y", `${pan.y}px`);
-            stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
-            viewport.classList.toggle("is-panning-enabled", zoom > 1.0001);
-            if (outButton) outButton.disabled = zoom <= CUT_PREVIEW_ZOOM.MIN + 0.0001;
-            if (inButton) inButton.disabled = zoom >= CUT_PREVIEW_ZOOM.MAX - 0.0001;
-        };
-
-        host.querySelectorAll("[data-cut-zoom]").forEach(button => {
-            button.addEventListener("click", () => {
-                const action = button.getAttribute("data-cut-zoom");
-                const previousZoom = zoom;
-                if (action === "in") zoom = clampCutPreviewZoom(zoom + CUT_PREVIEW_ZOOM.STEP);
-                else if (action === "out") zoom = clampCutPreviewZoom(zoom - CUT_PREVIEW_ZOOM.STEP);
-                else {
-                    zoom = CUT_PREVIEW_ZOOM.INITIAL;
-                    pan = { x: 0, y: 0 };
-                    apply();
-                    return;
-                }
-                pan = scaleCutPreviewPan(pan, previousZoom, zoom);
-                apply();
-            });
-        });
-        host.querySelectorAll("[data-cut-layer]").forEach(input => {
-            input.addEventListener("change", () => {
-                const hidden = [];
-                host.querySelectorAll("[data-cut-layer]").forEach(box => {
-                    if (!box.checked) hidden.push(box.getAttribute("data-cut-layer"));
-                });
-                host.__cutPreviewHidden = hidden;
-                paintCutPathPreview(host, {
-                    status: "ready",
-                    program: host.__cutPreviewProgram || {},
-                    selectedExecutionPathId: host.__cutPreviewSelectedExecutionPathId || "",
-                    selectedPathKey: host.__cutPreviewSelectedPathKey || "",
-                    layout: host.__cutPreviewLayout || "",
-                    zoom: host.__cutPreviewZoom,
-                    pan: host.__cutPreviewPan,
-                    hiddenOperations: hidden,
-                });
-            });
-        });
-
-        let dragging = false;
-        let startX = 0;
-        let startY = 0;
-        let originPan = { x: 0, y: 0 };
-        const interactiveSelector = "button, input, label, a, [data-execution-path-id], .dco-cnc-cut-preview__badge";
-
-        viewport.addEventListener("pointerdown", event => {
-            if (event.shiftKey) return;
-            if (event.button != null && event.button !== 0) return;
-            if (zoom <= 1.0001) return;
-            const target = event.target;
-            if (target && typeof target.closest === "function" && target.closest(interactiveSelector)) {
-                return;
-            }
-            dragging = true;
-            startX = Number(event.clientX) || 0;
-            startY = Number(event.clientY) || 0;
-            originPan = { x: pan.x, y: pan.y };
-            viewport.classList.add("is-panning");
-            if (typeof viewport.setPointerCapture === "function" && event.pointerId != null) {
-                try {
-                    viewport.setPointerCapture(event.pointerId);
-                } catch (_error) {
-                    // Ignore capture failures in non-DOM test hosts.
-                }
-            }
-            if (typeof event.preventDefault === "function") event.preventDefault();
-        });
-        viewport.addEventListener("pointermove", event => {
-            if (!dragging) return;
-            const dx = (Number(event.clientX) || 0) - startX;
-            const dy = (Number(event.clientY) || 0) - startY;
-            pan = { x: originPan.x + dx, y: originPan.y + dy };
-            apply();
-        });
-        const endPan = () => {
-            if (!dragging) return;
-            dragging = false;
-            viewport.classList.remove("is-panning");
-            apply();
-        };
-        viewport.addEventListener("pointerup", endPan);
-        viewport.addEventListener("pointercancel", endPan);
-        viewport.addEventListener("lostpointercapture", endPan);
-
-        apply();
+        if (!stage || !stage.style) return;
+        host.__cutPreviewZoom = 1;
+        host.__cutPreviewPan = { x: 0, y: 0 };
+        stage.style.transform = "translate(0px, 0px) scale(1)";
     }
 
     function collectMarkerIdsFromMarkup(markup) {
@@ -2762,6 +2751,10 @@
             || host.__cutPreviewPlacement
             || null;
         host.__cutPreviewPlacement = placement;
+        host.__cutPreviewPaths = collectPhysicalPaths(nextProgram);
+        host.__cutPreviewWidth = Number(nextProgram.sheet_width_mm || nextProgram.machine_width_mm || 0);
+        host.__cutPreviewHeight = Number(nextProgram.sheet_length_mm || nextProgram.machine_length_mm || 0);
+        host.__cutPreviewSelectedExecutionPathId = payload.selectedExecutionPathId || "";
         host.innerHTML = cutPathPreviewMarkup(nextProgram, {
             selectedExecutionPathId: payload.selectedExecutionPathId || "",
             selectedPathKey: payload.selectedPathKey || "",
@@ -2772,18 +2765,57 @@
             hiddenOperations,
             placement,
         });
-        bindCutPreviewChrome(host, { initialZoom: zoom, initialPan: pan });
+        bindCutPreviewChrome(host, { initialZoom: 1, initialPan: { x: 0, y: 0 } });
+        paintPathMarkers(host);
+        paintAssociationVisibility(host);
+    }
+
+    function hiddenAssociationPathKeys(sheet, state) {
+        const hidden = new Set();
+        const flags = (state && state.hiddenAssociations) || {};
+        ((((sheet || {}).machining) || {}).associations || []).forEach(row => {
+            if (!row || !flags[row.association_id]) return;
+            (row.vector_ids || []).forEach(key => hidden.add(String(key)));
+        });
+        return hidden;
+    }
+
+    function paintAssociationVisibility(preview) {
+        if (!preview || typeof preview.querySelectorAll !== "function") return;
+        const hidden = hiddenAssociationPathKeys(preview.__cutSheet, { hiddenAssociations: preview.__hiddenAssociations || {} });
+        preview.querySelectorAll("[data-execution-path]").forEach(node => {
+            node.classList.toggle("is-association-hidden", hidden.has(node.getAttribute("data-execution-path") || ""));
+        });
+    }
+
+    function paintPathMarkers(preview) {
+        if (!preview || typeof preview.querySelector !== "function") return;
+        const group = preview.querySelector("[data-path-markers]");
+        if (!group) return;
+        const selected = String(preview.__cutPreviewSelectedExecutionPathId || "");
+        const item = (preview.__cutPreviewPaths || []).find(row => row && row.execution_path_id === selected);
+        if (!item || !Array.isArray(item.start)) {
+            group.innerHTML = "";
+            return;
+        }
+        const width = Number(preview.__cutPreviewWidth || 0);
+        const height = Number(preview.__cutPreviewHeight || 0);
+        const radius = Math.max(6, Math.min(width || 100, height || 100) * 0.012);
+        const end = previewEndPoint(item.points, item.start, item.end, item.closed, radius * 1.6);
+        group.innerHTML = `<circle class="dco-cnc-cut-preview__start-mark" cx="${Number(item.start[0])}" cy="${Number(item.start[1])}" r="${radius}" fill="#16A34A"></circle><circle class="dco-cnc-cut-preview__finish" cx="${Number(end[0])}" cy="${Number(end[1])}" r="${radius}" fill="#DC2626"></circle>`;
     }
 
     function highlightCutPreview(preview, state) {
         if (!preview) return;
         const selected = state && state.selectedExecutionPathId ? String(state.selectedExecutionPathId) : "";
+        preview.__cutPreviewSelectedExecutionPathId = selected;
         preview.querySelectorAll("[data-execution-path-id]").forEach(node => {
             node.classList.toggle(
                 "is-cnc-path-selected",
                 Boolean(selected) && node.getAttribute("data-execution-path-id") === selected
             );
         });
+        paintPathMarkers(preview);
     }
 
     function physicalPathRowMarkup(path, workspace, state, canPrepare, ownsSettings) {
@@ -2923,6 +2955,8 @@
                 const liveBody = dialogRoot(dialog);
                 const livePreview = liveBody && liveBody.querySelector("[data-sheet-preview]");
                 if (!livePreview) return;
+                livePreview.__cutSheet = sheet;
+                livePreview.__hiddenAssociations = state.hiddenAssociations || {};
                 const program = (response && response.message) || {};
                 if (dialog._almdinaSheet) dialog._almdinaSheet.program = program;
                 state.program = program;

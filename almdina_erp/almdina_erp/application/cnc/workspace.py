@@ -425,6 +425,7 @@ def build_operational_workspace(
                 sheet_placement=placement_fp,
                 toolpath_snapshots=list((saved or {}).get("toolpath_snapshots") or ()),
                 vector_associations=list((saved or {}).get("vector_associations") or ()),
+                reversed_path_keys=list((saved or {}).get("reversed_path_keys") or ()),
             )
             status = effective_status(
                 generation_fingerprint=str(saved.get("generation_fingerprint") or ""),
@@ -461,6 +462,7 @@ def build_operational_workspace(
                 "cnc_machine": str((saved or {}).get("cnc_machine") or ""),
                 "offset_left_cm": float((saved or {}).get("offset_left_cm") or 0),
                 "offset_bottom_cm": float((saved or {}).get("offset_bottom_cm") or 0),
+                "reversed_path_keys": list((saved or {}).get("reversed_path_keys") or ()),
                 "sheet_width_cm": sheet_width_cm,
                 "sheet_length_cm": sheet_length_cm,
                 "operations": _operation_rows(
@@ -596,6 +598,7 @@ def prepare_sheet_settings(
     require_cnc_machine: bool = False,
     toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
     vector_associations: Sequence[Mapping[str, Any]] | None = None,
+    reversed_path_keys: Sequence[Any] | None = None,
 ) -> dict[str, Any]:
     from almdina_erp.almdina_erp.domain.cnc.operational_file import (
         apply_legacy_cut_path_sequence_to_order,
@@ -719,6 +722,9 @@ def prepare_sheet_settings(
         vector_associations=list((existing or {}).get("vector_associations") or ())
         if vector_associations is None
         else list(vector_associations),
+        reversed_path_keys=list((existing or {}).get("reversed_path_keys") or ())
+        if reversed_path_keys is None
+        else list(reversed_path_keys),
     )
     generation_fingerprint = str((existing or {}).get("generation_fingerprint") or "")
     generated_file = str((existing or {}).get("generated_file") or "")
@@ -747,6 +753,9 @@ def prepare_sheet_settings(
         "cnc_machine": placement.machine_name if placement else "",
         "offset_left_cm": placement.offset_left_cm if placement else 0.0,
         "offset_bottom_cm": placement.offset_bottom_cm if placement else 0.0,
+        "reversed_path_keys": list((existing or {}).get("reversed_path_keys") or ())
+        if reversed_path_keys is None
+        else list(reversed_path_keys),
         "sheet_placement": placement_fp,
         "operations": _operation_rows(
             catalog,

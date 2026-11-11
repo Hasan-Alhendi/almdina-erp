@@ -273,8 +273,8 @@ const markupEleven = ux.cutPathPreviewMarkup(program, {
 });
 assert.ok(markupTen.includes(`data-execution-path-id="${ten.execution_path_id}"`));
 assert.ok(markupEleven.includes(`data-execution-path-id="${eleven.execution_path_id}"`));
-assert.ok(markupTen.includes(`<span>${ten.path_number}</span>`));
-assert.ok(markupEleven.includes(`<span>${eleven.path_number}</span>`));
+assert.ok(!markupTen.includes("dco-cnc-cut-preview__badge"));
+assert.ok(!markupEleven.includes("dco-cnc-cut-preview__badge"));
 assert.ok(markupTen.includes("is-cnc-path-selected"));
 assert.ok(markupEleven.includes("is-cnc-path-selected"));
 
@@ -458,14 +458,14 @@ ux.paintCutPathPreview(zoomHost, {
     selectedExecutionPathId: ten.execution_path_id,
     zoom: 0.85,
 });
-assert.equal(zoomHost.__cutPreviewZoom, 0.85);
+assert.equal(zoomHost.__cutPreviewZoom, 1);
 ux.paintCutPathPreview(zoomHost, {
     status: "ready",
     program,
     layout: "page",
     selectedExecutionPathId: eleven.execution_path_id,
 });
-assert.equal(zoomHost.__cutPreviewZoom, 0.85, "selection repaint preserves zoom");
+assert.equal(zoomHost.__cutPreviewZoom, 1, "the board stays fitted when the selection changes");
 assert.ok(zoomHost.innerHTML.includes(eleven.execution_path_id));
 assert.ok(!zoomHost.innerHTML.includes(`is-cnc-path-selected" data-execution-path-id="${ten.execution_path_id}"`)
     || zoomHost.innerHTML.includes(`data-execution-path-id="${eleven.execution_path_id}"`));

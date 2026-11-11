@@ -317,6 +317,7 @@ def settings_fingerprint(
     sheet_placement: Mapping[str, Any] | None = None,
     toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
     vector_associations: Sequence[Mapping[str, Any]] | None = None,
+    reversed_path_keys: Sequence[Any] | None = None,
 ) -> str:
     resolved = []
     for key in sorted(set(operation_presets) | set(path_overrides)):
@@ -341,6 +342,12 @@ def settings_fingerprint(
         rows = nc_toolpath_fingerprint_rows(toolpath_snapshots, vector_associations)
         if rows:
             payload["toolpath_snapshots"] = rows
+    if reversed_path_keys:
+        from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+            normalize_reversed_paths,
+        )
+
+        payload["reversed_path_keys"] = normalize_reversed_paths(reversed_path_keys)
     return _fingerprint(payload)
 
 

@@ -98,7 +98,9 @@
         const connected = context.state && context.state.perimeterJoinMode === "connected";
         const options = [];
         (availability.layers || []).forEach(layer => {
-            if (!layer || !layer.operation_key || layer.disabled) return;
+            if (!layer || !layer.operation_key) return;
+            const current = form && form.source === `layer:${layer.operation_key}`;
+            if (layer.disabled && !current) return;
             options.push({ value: `layer:${layer.operation_key}`, label: layer.dxf_layer || layer.operation_key });
         });
         options.push({ value: "selected_vectors", label: "Selected Vectors" });
@@ -137,7 +139,12 @@
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
         const options = sourceOptions(context, form);
+        const editing = (machining(context.sheet).associations || [])
+            .some(row => row.association_id === form.association_id);
         return `<form class="dco-artcam-editor" data-artcam-editor>
+            ${editing ? `<p class="dco-artcam-note" data-artcam-editing>${escapeHtml(translate("Editing"))}: ${escapeHtml(form.name || form.association_id)}
+                <button type="button" class="btn btn-default btn-xs" data-artcam-cancel>${escapeHtml(translate("New association"))}</button>
+            </p>` : ""}
             <div class="dco-artcam-row dco-artcam-row--main">
                 <label class="dco-artcam-field">${escapeHtml("Association Name")}
                     <input class="form-control" data-field="name" value="${escapeHtml(form.name || "")}">
@@ -196,35 +203,33 @@
         </form>`;
     }
 
-    function savedMarkup(context) {
-        const rows = machining(context.sheet).associations || [];
-        if (!rows.length) return "";
-        return `<div class="dco-artcam-saved">${rows.map(row => {
-            const source = row.selection && row.selection.kind === "sheet_perimeter"
-                ? "Sheet Perimeter"
-                : (row.selection && row.selection.kind === "selected_vectors"
-                    ? "Selected Vectors"
-                    : ((row.selection && row.selection.operation_key) || ""));
-            const profile = profilesOf(context).find(item => item.profile_id === row.profile_id);
-            const conflict = row.conflict === "sheet_perimeter_unavailable"
-                ? translate("Connected Perimeter is off. Change this association before calculating.")
-                : "";
-            return `<article class="dco-artcam-saved__item" data-saved-association="${escapeHtml(row.association_id)}">
-                <button type="button" class="dco-artcam-saved__open" data-artcam-edit="${escapeHtml(row.association_id)}">
-                    <strong>${escapeHtml(row.name || row.association_id)}</strong>
-                    <small>${escapeHtml(source)} · ${escapeHtml((profile && profile.name) || row.profile_id || "")}</small>
-                </button>
-                <button type="button" class="btn btn-default btn-xs" data-artcam-remove-association="${escapeHtml(row.association_id)}">${escapeHtml(translate("Remove"))}</button>
-                ${conflict ? `<p class="dco-artcam-note" role="status">${escapeHtml(conflict)}</p>` : ""}
-            </article>`;
-        }).join("")}</div>`;
+    function loadAssociation(state, row) {
+        const local = (row && row.local_values) || {};
+        state.artcamForm = {
+            association_id: row.association_id,
+            name: row.name || "",
+            source: row.selection && row.selection.kind === "layer"
+                ? `layer:${row.selection.operation_key}`
+                : ((row.selection && row.selection.kind) || ""),
+            profile_id: row.profile_id || "",
+            tool_preset: local.tool_preset || "",
+            fields: {
+                final_depth_mm: local.final_depth_mm,
+                safe_z_mm: local.safe_z_mm,
+                home_x_mm: local.home_x_mm,
+                home_y_mm: local.home_y_mm,
+                home_z_mm: local.home_z_mm,
+            },
+            tool: Object.assign({}, local.tool_values || {}),
+            toolOpen: false,
+        };
+        state.vectorSelection = (row.selection && row.selection.vector_ids) || row.vector_ids || [];
     }
 
     function markup(workspace, sheet, state) {
         const context = { workspace, sheet, state: state || {} };
         return `<section class="dco-artcam" data-artcam-root>
             ${editorMarkup(context)}
-            ${savedMarkup(context)}
         </section>`;
     }
 
@@ -348,6 +353,7 @@
         ensureForm(context.state);
         host.addEventListener("input", () => readEditor(host, context.state));
         host.addEventListener("change", event => {
+            const previousProfile = ensureForm(context.state).profile_id;
             readEditor(host, context.state);
             const form = context.state.artcamForm;
             if (event.target.matches("[data-field=\"source\"]")) {
@@ -365,9 +371,10 @@
                 const profile = profilesOf(context).find(row => row.profile_id === event.target.value);
                 if (!profile) return;
                 const dirty = Object.keys(form.fields || {}).some(key => form.fields[key] !== "" && form.fields[key] != null);
-                if (dirty && form.profile_id && form.profile_id !== profile.profile_id
+                if (dirty && previousProfile && previousProfile !== profile.profile_id
                     && !window.confirm(translate("Changing the profile replaces the local settings on this association."))) {
-                    event.target.value = form.profile_id;
+                    event.target.value = previousProfile;
+                    form.profile_id = previousProfile;
                     return;
                 }
                 fillFromProfile(form, profile);
@@ -391,31 +398,10 @@
                 ensureForm(context.state).toolOpen = open;
                 return;
             }
-            const edit = event.target.closest("[data-artcam-edit]");
-            if (edit) {
-                const row = (machining(context.sheet).associations || [])
-                    .find(item => item.association_id === edit.getAttribute("data-artcam-edit"));
-                if (!row) return;
-                const local = row.local_values || {};
-                context.state.artcamForm = {
-                    association_id: row.association_id,
-                    name: row.name || "",
-                    source: row.selection && row.selection.kind === "layer"
-                        ? `layer:${row.selection.operation_key}`
-                        : ((row.selection && row.selection.kind) || ""),
-                    profile_id: row.profile_id || "",
-                    tool_preset: local.tool_preset || "",
-                    fields: {
-                        final_depth_mm: local.final_depth_mm,
-                        safe_z_mm: local.safe_z_mm,
-                        home_x_mm: local.home_x_mm,
-                        home_y_mm: local.home_y_mm,
-                        home_z_mm: local.home_z_mm,
-                    },
-                    tool: Object.assign({}, local.tool_values || {}),
-                    toolOpen: false,
-                };
-                context.state.vectorSelection = (row.selection && row.selection.vector_ids) || row.vector_ids || [];
+            const cancel = event.target.closest("[data-artcam-cancel]");
+            if (cancel) {
+                context.state.artcamForm = blankForm();
+                context.state.vectorSelection = [];
                 if (typeof context.refresh === "function") context.refresh();
                 return;
             }
@@ -497,5 +483,5 @@
         });
     }
 
-    window.AlmdinaArtcamMachining = Object.freeze({ markup, bind, ensureForm });
+    window.AlmdinaArtcamMachining = Object.freeze({ markup, bind, ensureForm, loadAssociation });
 })();

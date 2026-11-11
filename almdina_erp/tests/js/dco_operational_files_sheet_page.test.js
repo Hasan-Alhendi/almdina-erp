@@ -200,10 +200,10 @@ const colored = ux.cutPathPreviewMarkup(program, {
     layout: "page",
     zoom: ux.CUT_PREVIEW_ZOOM.INITIAL,
 });
-assert.ok(colored.includes("--cut-zoom:0.55"));
-assert.ok(colored.includes("dco-cnc-cut-preview__legend"));
-assert.ok(colored.includes('data-cut-layer="liner"'));
-assert.ok(colored.includes('data-cut-layer="cut_path"'));
+assert.ok(!colored.includes("--cut-zoom:"));
+assert.ok(!colored.includes("dco-cnc-cut-preview__legend"));
+assert.ok(!colored.includes("data-cut-layer"));
+assert.ok(colored.includes("max-inline-size:260px"));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.liner));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.recessed_handle_cutout));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.back_groove));
@@ -261,7 +261,7 @@ const zoomHost = {
     },
 };
 ux.paintCutPathPreview(zoomHost, { status: "ready", program, layout: "page" });
-assert.equal(zoomHost.__cutPreviewZoom, 0.55);
+assert.equal(zoomHost.__cutPreviewZoom, 1);
 ux.paintCutPathPreview(zoomHost, {
     status: "ready",
     program,
@@ -269,14 +269,14 @@ ux.paintCutPathPreview(zoomHost, {
     selectedPathKey: "cut_path:a",
     zoom: 0.85,
 });
-assert.equal(zoomHost.__cutPreviewZoom, 0.85);
+assert.equal(zoomHost.__cutPreviewZoom, 1);
 ux.paintCutPathPreview(zoomHost, {
     status: "ready",
     program,
     layout: "page",
     selectedPathKey: "liner:a",
 });
-assert.equal(zoomHost.__cutPreviewZoom, 0.85, "selection/repaint must keep the current zoom");
+assert.equal(zoomHost.__cutPreviewZoom, 1, "the board stays fitted");
 assert.equal(ux.clampCutPreviewZoom(0.4 - ux.CUT_PREVIEW_ZOOM.STEP), 0.4);
 assert.equal(ux.clampCutPreviewZoom(2.5 + ux.CUT_PREVIEW_ZOOM.STEP), 2.5);
 
@@ -306,15 +306,13 @@ for (let index = 0; index < 10; index += 1) {
         assert.ok(ref.startsWith(`${scope}-arrow-`), `ref ${ref} must stay inside scope ${scope}`);
         assert.equal(liveDom.getElementById(ref) !== null, true, `missing marker for ${ref}`);
     });
-    assert.ok(markup.includes("dco-cnc-cut-preview__badge"));
+    assert.ok(markup.includes("data-path-markers"));
+    assert.ok(!markup.includes("dco-cnc-cut-preview__badge"));
     assert.ok(markup.includes("font-size") || css.includes("font-size: 14px"));
     const cutPhysical = ux.collectPhysicalPaths(program).find(item => item.path_key === "cut_path:a");
     assert.ok(cutPhysical);
     assert.equal(cutPhysical.pass_count, 2);
-    assert.ok(
-        markup.includes(`<span>${cutPhysical.path_number}</span>`),
-        "depth passes share one physical path number"
-    );
+    assert.ok(!markup.includes(`<span>${cutPhysical.path_number}</span>`));
     assert.ok(!markup.includes("<span>4,5</span>"), "depth passes must not keep dual badge numbers");
 }
 

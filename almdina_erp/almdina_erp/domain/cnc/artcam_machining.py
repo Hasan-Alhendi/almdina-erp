@@ -22,7 +22,12 @@ from typing import Any
 
 from almdina_erp.almdina_erp.domain.cnc.operations import SHEET_PERIMETER_OPERATION_KEY
 from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
-from almdina_erp.almdina_erp.domain.cnc.program import _motions, _pass_depths
+from almdina_erp.almdina_erp.domain.cnc.program import (
+    CHAIN_TOLERANCE_MM,
+    _identity,
+    _motions,
+    _pass_depths,
+)
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     MAX_DEPTH_MM,
     MAX_DIAMETER_MM,
@@ -1257,6 +1262,191 @@ def machining_public_view(
     }
 
 
+_MOTION_KINDS = frozenset({"travel", "plunge", "cut", "retract"})
+
+
+def path_geometry_id(path: Mapping[str, Any]) -> str:
+    """Identity of the unreversed polyline. A new plan must not inherit an old reverse."""
+
+    points = tuple(_points(path))
+    return _identity(points, bool(path.get("closed")))
+
+
+def normalize_reversed_paths(rows: Sequence[Any] | None) -> list[dict[str, str]]:
+    """Stable path-key records. Empty geometry ids are filled by the compiler."""
+
+    normalized: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows or ():
+        if isinstance(row, str):
+            key = row.strip()
+            geometry_id = ""
+        elif isinstance(row, Mapping):
+            key = str(row.get("path_key") or "").strip()
+            geometry_id = str(row.get("geometry_id") or "").strip()
+        else:
+            continue
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append({"path_key": key, "geometry_id": geometry_id})
+    normalized.sort(key=lambda item: item["path_key"])
+    return normalized
+
+
+def _same_point(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return math.hypot(left[0] - right[0], left[1] - right[1]) <= CHAIN_TOLERANCE_MM
+
+
+def reverse_operational_points(
+    points: Sequence[tuple[float, float]],
+    *,
+    closed: bool,
+) -> list[tuple[float, float]]:
+    """Reverse travel direction without moving the geometric vertices."""
+
+    sequence = [(float(point[0]), float(point[1])) for point in points]
+    if len(sequence) < 2:
+        raise MachiningSetupError("path_reverse_unsupported")
+    if closed and len(sequence) > 2 and _same_point(sequence[0], sequence[-1]):
+        sequence = sequence[:-1]
+    if len(sequence) < 2:
+        raise MachiningSetupError("path_reverse_unsupported")
+    return list(reversed(sequence))
+
+
+def _motion_sequences(path: Mapping[str, Any]) -> tuple[list[float], list[list[tuple[float, float]]]]:
+    depths: list[float] = []
+    sequences: list[list[tuple[float, float]]] = []
+    current: list[tuple[float, float]] | None = None
+    for motion in path.get("motions") or ():
+        if not isinstance(motion, Mapping):
+            raise MachiningSetupError("path_reverse_unsupported")
+        kind = str(motion.get("kind") or "")
+        if kind not in _MOTION_KINDS:
+            raise MachiningSetupError("path_reverse_unsupported")
+        if kind == "plunge":
+            current = [(_finite_motion_point(motion))]
+            sequences.append(current)
+            depth = motion.get("depth_mm")
+            depths.append(float(depth) if depth not in (None, "") else 0.0)
+            continue
+        if kind == "cut":
+            if current is None:
+                raise MachiningSetupError("path_reverse_unsupported")
+            current.append(_finite_motion_point(motion))
+    return depths, sequences
+
+
+def _finite_motion_point(motion: Mapping[str, Any]) -> tuple[float, float]:
+    try:
+        x = float(motion.get("x_mm"))
+        y = float(motion.get("y_mm"))
+    except (TypeError, ValueError) as exc:
+        raise MachiningSetupError("path_reverse_unsupported") from exc
+    if not math.isfinite(x) or not math.isfinite(y):
+        raise MachiningSetupError("path_reverse_unsupported")
+    return (x, y)
+
+
+def _sequences_match(sequences: Sequence[Sequence[tuple[float, float]]]) -> bool:
+    if len(sequences) < 2:
+        return True
+    first = sequences[0]
+    for other in sequences[1:]:
+        if len(other) != len(first):
+            return False
+        if any(not _same_point(left, right) for left, right in zip(first, other, strict=True)):
+            return False
+    return True
+
+
+def _reverse_one_path(path: Mapping[str, Any], geometry_id: str) -> dict[str, Any]:
+    if any(
+        isinstance(point, Sequence)
+        and not isinstance(point, (str, bytes))
+        and len(point) != 2
+        for point in path.get("points") or ()
+    ):
+        raise MachiningSetupError("path_reverse_unsupported")
+    current_id = path_geometry_id(path)
+    if geometry_id and geometry_id != current_id:
+        raise MachiningSetupError("path_reverse_stale")
+    points = _points(path)
+    reversed_points = reverse_operational_points(points, closed=bool(path.get("closed")))
+    updated = dict(path)
+    updated["points"] = [[point[0], point[1]] for point in reversed_points]
+    updated["reversed"] = True
+    motions = path.get("motions") or ()
+    if not motions:
+        return updated
+    depths, sequences = _motion_sequences(path)
+    if not depths or not _sequences_match(sequences):
+        raise MachiningSetupError("path_reverse_unsupported")
+    updated["motions"] = _motions_for_depths(
+        reversed_points,
+        bool(path.get("closed")),
+        depths,
+    )
+    return updated
+
+
+def _motions_for_depths(
+    points: Sequence[tuple[float, float]],
+    closed: bool,
+    depths: Sequence[float],
+) -> list[dict[str, Any]]:
+    motions = _motions(points, closed=closed, depths=tuple(depths))
+    return [
+        {
+            "kind": motion.kind,
+            "x_mm": motion.x_mm,
+            "y_mm": motion.y_mm,
+            "depth_mm": motion.depth_mm,
+        }
+        for motion in motions
+    ]
+
+
+def apply_reversed_directions(
+    program: Mapping[str, Any],
+    records: Sequence[Any] | None,
+) -> dict[str, Any]:
+    """Reverse saved path directions before NC. Unsupported paths stay unchanged."""
+
+    payload = deepcopy(dict(program))
+    wanted = {
+        row["path_key"]: row["geometry_id"]
+        for row in normalize_reversed_paths(records)
+    }
+    if not wanted:
+        return payload
+    issues = [dict(issue) for issue in payload.get("issues") or () if isinstance(issue, Mapping)]
+    operations: list[dict[str, Any]] = []
+    for operation in payload.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        cloned = dict(operation)
+        toolpaths: list[dict[str, Any]] = []
+        for path in operation.get("toolpaths") or ():
+            if not isinstance(path, Mapping):
+                continue
+            key = str(path.get("path_key") or "")
+            if key not in wanted:
+                toolpaths.append(dict(path))
+                continue
+            try:
+                toolpaths.append(_reverse_one_path(path, wanted[key]))
+            except MachiningSetupError as exc:
+                issues.append({"code": exc.code, "path_key": key})
+                toolpaths.append(dict(path))
+        cloned["toolpaths"] = toolpaths
+        operations.append(cloned)
+    payload["operations"] = operations
+    payload["issues"] = issues
+    return payload
+
+
 __all__ = [
     "BALL_NOSE",
     "LEGACY_RATE_UNITS_MM_MIN",
@@ -1270,6 +1460,10 @@ __all__ = [
     "ArtcamToolValues",
     "MachinableVector",
     "MachiningSetupError",
+    "apply_reversed_directions",
+    "normalize_reversed_paths",
+    "path_geometry_id",
+    "reverse_operational_points",
     "active_toolpath_snapshots",
     "append_snapshot",
     "canonical_tool_copy",

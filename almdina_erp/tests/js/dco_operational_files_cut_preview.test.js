@@ -173,7 +173,8 @@ const scoped = ux.cutPathPreviewMarkup(program, {
 assert.ok(scoped.includes("dco-cnc-cut-preview__frame"));
 assert.ok(scoped.includes("dco-cnc-cut-preview__path"));
 assert.ok(scoped.includes(`marker-end="url(#cnc-cut-test-scope-arrow-${openA.path_number})"`));
-assert.ok(scoped.includes("dco-cnc-cut-preview__badge"));
+assert.ok(!scoped.includes("dco-cnc-cut-preview__badge"));
+assert.ok(scoped.includes("data-path-markers"));
 assert.ok(scoped.includes(`data-execution-path-id="${openA.execution_path_id}"`));
 assert.ok(scoped.includes('data-execution-path="cut_path:open-a"'));
 assert.ok(scoped.includes("is-cnc-path-selected"));
@@ -208,8 +209,7 @@ const incomplete = ux.cutPathPreviewMarkup({
     ],
 });
 assert.ok(incomplete.includes("Cutting path preview is incomplete."));
-assert.ok(incomplete.includes("No machining paths are available for this sheet preview."));
-assert.ok(!incomplete.includes("0,0 10,0 10,10"), "do not invent strokes from points without motions");
+assert.ok(incomplete.includes("0,0 10,0 10,10"), "source geometry stays selectable when motions are absent");
 
 const host = { innerHTML: "" };
 ux.paintCutPathPreview(host, { status: "loading" });
@@ -224,8 +224,7 @@ ux.paintCutPathPreview(host, {
 assert.ok(host.innerHTML.includes("dco-cnc-cut-preview__execution"));
 assert.ok(host.innerHTML.includes('data-execution-path="cut_path:shared"'));
 assert.ok(host.innerHTML.includes(`data-execution-path-id="${sharedPhysical.execution_path_id}"`));
-const selectedNodes = (host.innerHTML.match(/is-cnc-path-selected/g) || []).length;
-assert.ok(selectedNodes >= 2, "badge and stroke share one selected physical identity");
+assert.equal((host.innerHTML.match(/is-cnc-path-selected/g) || []).length, 1, "the selected path is marked once");
 assert.ok(!host.innerHTML.includes(`>${sharedPhysical.path_number},${sharedPhysical.path_number + 1}<`), "depth passes do not keep dual badge numbers");
 
 const arrow = ux.cutExecutionArrowSegment([[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]], true);

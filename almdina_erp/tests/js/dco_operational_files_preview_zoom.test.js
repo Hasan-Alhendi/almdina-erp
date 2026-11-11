@@ -110,16 +110,14 @@ const pageMarkup = ux.cutPathPreviewMarkup(program, {
 });
 assert.ok(pageMarkup.includes("data-cut-viewport"));
 assert.ok(pageMarkup.includes("data-cut-stage"));
-assert.ok(pageMarkup.includes('data-cut-zoom="in"'));
-assert.ok(pageMarkup.includes('data-cut-zoom="out"'));
-assert.ok(pageMarkup.includes('data-cut-zoom="reset"'));
-assert.ok(pageMarkup.includes("dco-cnc-cut-preview__legend"));
-assert.ok(pageMarkup.indexOf("dco-cnc-cut-preview__legend") < pageMarkup.indexOf("data-cut-viewport"));
-assert.ok(pageMarkup.indexOf("dco-cnc-cut-preview__zoom") < pageMarkup.indexOf("data-cut-viewport"));
-assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf("data-cut-stage"));
+assert.ok(!pageMarkup.includes('data-cut-zoom="in"'));
+assert.ok(!pageMarkup.includes('data-cut-zoom="out"'));
+assert.ok(!pageMarkup.includes('data-cut-zoom="reset"'));
+assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__legend"));
+assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__badge"));
+assert.ok(pageMarkup.includes("max-inline-size:260px"));
 assert.ok(pageMarkup.includes("aspect-ratio:2440 / 1220"));
-assert.ok(!/data-cut-viewport[\s\S]*data-cut-zoom=/.test(pageMarkup), "zoom controls stay outside viewport");
-assert.ok(!/data-cut-viewport[\s\S]*dco-cnc-cut-preview__legend/.test(pageMarkup), "legend stays outside viewport");
+assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf("data-cut-stage"));
 
 const dialogMarkup = ux.cutPathPreviewMarkup(program, {
     markerScope: "cnc-zoom-dialog",
@@ -229,27 +227,15 @@ ux.paintCutPathPreview(host, {
     layout: "page",
     zoom: ux.CUT_PREVIEW_ZOOM.INITIAL,
 });
-assert.equal(host.__cutPreviewZoom, 0.55);
+assert.equal(host.__cutPreviewZoom, 1);
 assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 });
 assert.ok(host.innerHTML.includes("data-cut-viewport"));
-assert.ok(host.stageStyle.transform.includes("scale(0.55)"));
-assert.ok(host.stageStyle.transform.includes("translate(0px, 0px)"));
-
-host.buttons.in._handler();
-assert.equal(host.__cutPreviewZoom, 0.7);
-assert.ok(host.viewportNode.classList.contains("is-panning-enabled") === false);
-
-while (host.__cutPreviewZoom < ux.CUT_PREVIEW_ZOOM.MAX - 0.0001) {
-    host.buttons.in._handler();
-}
-assert.equal(host.__cutPreviewZoom, 2.5);
-assert.equal(host.buttons.in.disabled, true);
-assert.ok(host.viewportNode.classList.contains("is-panning-enabled"));
-assert.ok(host.stageStyle.transform.includes("scale(2.5)"));
-assert.ok(!host.innerHTML.includes('data-cut-zoom="in"') || true, "chrome markup remains outside scaled stage");
+assert.ok(!host.innerHTML.includes("data-cut-zoom"));
+assert.ok(host.stageStyle.transform.includes("scale(1)"));
 
 host.viewportNode.dispatch("pointerdown", {
     button: 0,
+    shiftKey: true,
     clientX: 100,
     clientY: 100,
     pointerId: 1,
@@ -257,48 +243,8 @@ host.viewportNode.dispatch("pointerdown", {
     preventDefault() {},
 });
 host.viewportNode.dispatch("pointermove", { clientX: 180, clientY: 40 });
-assert.ok(Math.abs(host.__cutPreviewPan.x - 80) < 0.001);
-assert.ok(Math.abs(host.__cutPreviewPan.y - (-60)) < 0.001);
-host.viewportNode.dispatch("pointerup", {});
-assert.ok(host.__cutPreviewPan.x !== 0 || host.__cutPreviewPan.y !== 0);
-
-host.viewportNode.dispatch("pointerdown", {
-    button: 0,
-    clientX: 10,
-    clientY: 10,
-    pointerId: 2,
-    target: host.viewportNode,
-    preventDefault() {},
-});
-host.viewportNode.dispatch("pointermove", { clientX: 10 + 20000, clientY: 10 - 20000 });
-host.viewportNode.dispatch("pointerup", {});
-const maxX = (800 * (2.5 - 1)) / 2;
-const maxY = (400 * (2.5 - 1)) / 2;
-assert.ok(Math.abs(host.__cutPreviewPan.x) <= maxX + 0.001);
-assert.ok(Math.abs(host.__cutPreviewPan.y) <= maxY + 0.001);
-
-const preservedPan = { ...host.__cutPreviewPan };
-const preservedZoom = host.__cutPreviewZoom;
-ux.paintCutPathPreview(host, {
-    status: "ready",
-    program,
-    layout: "page",
-    selectedExecutionPathId: "keep-selection",
-});
-assert.equal(host.__cutPreviewZoom, preservedZoom, "selection/repaint keeps zoom");
-assert.deepEqual(host.__cutPreviewPan, preservedPan, "selection/repaint keeps pan");
-
-host.buttons.reset._handler();
-assert.equal(host.__cutPreviewZoom, 0.55);
 assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 });
-assert.equal(host.buttons.out.disabled, false);
-
-while (host.__cutPreviewZoom > ux.CUT_PREVIEW_ZOOM.MIN + 0.0001) {
-    host.buttons.out._handler();
-}
-assert.equal(host.__cutPreviewZoom, 0.4);
-assert.equal(host.buttons.out.disabled, true);
-assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 }, "sub-1 zoom forces centered pan");
+assert.equal(host.__cutPreviewZoom, 1);
 
 const physical = ux.collectPhysicalPaths(program);
 assert.ok(physical.length >= 2);

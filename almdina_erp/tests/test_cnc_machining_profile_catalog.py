@@ -91,6 +91,7 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert 'frappe.set_route("List", "CNC Machining Profile")' in controller
     assert "data-artcam-profile-form" not in sheet
     assert "dco-artcam-editor" in sheet
+    assert "dco-artcam-saved" not in sheet
     assert "data-artcam-add" not in sheet
     assert "Home Position (mm)" in sheet
     assert "Choose Another Tool" in sheet
@@ -116,6 +117,14 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "#16A34A" in sheet_page
     assert "#DC2626" in sheet_page
     assert "width: 26px" in style
+    assert "Reverse Direction" in sheet_page
+    assert "data-association-visibility" in sheet_page
+    assert "data-delete-association" in sheet_page
+    assert "data-edit-association" in sheet_page
+    assert "data-path-markers" in sheet_page
+    assert "dco-cnc-cut-preview__badge" not in sheet_page
+    assert "Zoom out" not in sheet_page
+    assert "event.shiftKey" in sheet_page
     cleanup = _text(PACKAGE / "patches" / "v1_0" / "clear_artcam_catalog_and_operational_files.py")
     restore = _text(PACKAGE / "patches" / "v1_0" / "restore_cnc_profile_tool_snapshot.py")
     assert "almdina_artcam_catalog_cleaned_v1" in cleanup

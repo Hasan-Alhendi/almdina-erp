@@ -240,6 +240,7 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "machining_profiles": _object_list(getattr(document, "machining_profiles_json", None)),
                 "vector_associations": _object_list(getattr(document, "vector_associations_json", None)),
                 "toolpath_snapshots": _object_list(getattr(document, "toolpath_snapshots_json", None)),
+                "reversed_path_keys": _object_list(getattr(document, "reversed_path_keys", None)),
             }
         )
     return rows
@@ -712,6 +713,8 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
         document.set(field, payload.get(field))
     # Frappe JSON fields reject a raw Python list; persist one JSON string.
     document.set("cut_path_sequence", _sequence_json(payload.get("cut_path_sequence")))
+    if "reversed_path_keys" in payload:
+        document.set("reversed_path_keys", _object_list_json(payload.get("reversed_path_keys")))
     from almdina_erp.almdina_erp.domain.cnc.operational_file import (
         validate_operational_path_rows,
     )
