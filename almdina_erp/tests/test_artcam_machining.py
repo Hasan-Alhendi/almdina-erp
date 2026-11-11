@@ -27,7 +27,9 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     order_program_by_associations,
     overlay_frozen_toolpaths,
     apply_reversed_directions,
+    effective_operational_program,
     path_geometry_id,
+    reversed_direction_block,
     release_stale_toolpath_links,
     tool_copy_from_stored,
     vectors_from_paths,
@@ -450,6 +452,8 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
     )
     assert stale["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
     assert stale["issues"][0]["code"] == "path_reverse_stale"
+    assert stale["nc_export_ready"] is False
+    assert reversed_direction_block(stale) == "path_reverse_stale"
     unsupported = apply_reversed_directions(
         {
             "operations": [{
@@ -465,6 +469,8 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
     )
     assert unsupported["issues"][0]["code"] == "path_reverse_unsupported"
     assert unsupported["operations"][0]["toolpaths"][0]["points"][0] == [0, 0, 1]
+    assert unsupported["nc_export_ready"] is False
+    assert reversed_direction_block(unsupported) == "path_reverse_unsupported"
     closed = _motion_program(((0, 0), (4, 0), (4, 4), (0, 0)), depths=(3.0,), closed=True, path_key="cut_path:closed")
     closed_id = path_geometry_id(closed["operations"][0]["toolpaths"][0])
     closed_reversed = apply_reversed_directions(
@@ -474,6 +480,80 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
     closed_path = closed_reversed["operations"][0]["toolpaths"][0]
     assert closed_path["points"][0] == [4.0, 4.0]
     assert [motion["depth_mm"] for motion in closed_path["motions"] if motion["kind"] == "plunge"] == [3.0]
+    original_edges = _undirected_edges(closed["operations"][0]["toolpaths"][0]["points"], closed=True)
+    reversed_edges = _undirected_edges(closed_path["points"], closed=True)
+    assert original_edges == reversed_edges
+    second = apply_reversed_directions(
+        closed_reversed,
+        [{"path_key": "cut_path:closed", "geometry_id": closed_id}],
+    )
+    assert second["direction_blocked"] is True
+    assert second["operations"][0]["toolpaths"][0]["points"] == closed_path["points"]
+    missing = apply_reversed_directions(
+        closed,
+        [{"path_key": "cut_path:gone", "geometry_id": closed_id}],
+    )
+    assert missing["issues"][0]["code"] == "path_reverse_missing"
+    assert missing["nc_export_ready"] is False
+    restored = apply_reversed_directions(closed, [])
+    assert restored["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
+
+
+def _undirected_edges(points, *, closed):
+    sequence = [tuple(point) for point in points]
+    if closed and len(sequence) > 2 and sequence[0] == sequence[-1]:
+        sequence = sequence[:-1]
+    edges = []
+    for start, end in zip(sequence, sequence[1:]):
+        edges.append(tuple(sorted((start, end))))
+    if closed and len(sequence) > 2:
+        edges.append(tuple(sorted((sequence[-1], sequence[0]))))
+    return sorted(edges)
+
+
+def test_effective_program_uses_the_frozen_path_before_reverse():
+    program = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:local")
+    program["geometry_ready"] = True
+    program["nc_export_ready"] = True
+    frozen_points = [[0, 0], [10, 0], [10, 6]]
+    snapshot = {
+        "toolpath_id": "tp-local",
+        "preset": {"tool_diameter_mm": 8, "final_depth_mm": 4, "feed_rate_mm_min": 1000},
+        "safe_z_mm": 20,
+        "paths": [{
+            "path_key": "cut_path:local",
+            "operation_key": "cut_path",
+            "closed": False,
+            "points": frozen_points,
+            "motions": program["operations"][0]["toolpaths"][0]["motions"],
+        }],
+    }
+    associations = [
+        {"association_id": "b", "toolpath_id": "tp-local", "vector_ids": ["cut_path:local"]},
+        {"association_id": "a", "vector_ids": ["cut_path:other"]},
+    ]
+    identity = path_geometry_id({"points": frozen_points, "closed": False})
+    effective = effective_operational_program(
+        program,
+        snapshots=[snapshot],
+        associations=associations,
+        reversed_path_keys=[{"path_key": "cut_path:local", "geometry_id": identity}],
+    )
+    path = effective["operations"][0]["toolpaths"][0]
+    assert path["points"][0] == [10.0, 6.0]
+    assert path["points"][-1] == [0.0, 0.0]
+    assert path["preset"]["tool_diameter_mm"] == 8
+    assert reversed_direction_block(effective) == ""
+    stale = effective_operational_program(
+        program,
+        snapshots=[snapshot],
+        associations=associations,
+        reversed_path_keys=[{"path_key": "cut_path:local", "geometry_id": "old-plan"}],
+    )
+    assert reversed_direction_block(stale) == "path_reverse_stale"
+    assert stale["nc_export_ready"] is False
+
+
 def test_association_keeps_a_different_local_tool_without_changing_the_profile():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)

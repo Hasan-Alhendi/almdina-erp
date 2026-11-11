@@ -116,7 +116,10 @@ assert.ok(!pageMarkup.includes('data-cut-zoom="reset"'));
 assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__legend"));
 assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__badge"));
 assert.ok(pageMarkup.includes("max-inline-size:260px"));
-assert.ok(pageMarkup.includes("aspect-ratio:2440 / 1220"));
+const pageBox = pageMarkup.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
+assert.ok(pageBox[0] <= 0 && pageBox[1] <= 0);
+assert.ok(pageBox[0] + pageBox[2] >= 2440 && pageBox[1] + pageBox[3] >= 1220);
+assert.ok(pageMarkup.includes(`aspect-ratio:${pageBox[2]} / ${pageBox[3]}`));
 assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf("data-cut-stage"));
 
 const dialogMarkup = ux.cutPathPreviewMarkup(program, {

@@ -37,11 +37,11 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 )
 from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     MachiningSetupError,
-    order_program_by_associations,
-    overlay_frozen_toolpaths,
     apply_reversed_directions,
+    effective_operational_program,
     normalize_reversed_paths,
     path_geometry_id,
+    reversed_direction_block,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
@@ -180,8 +180,9 @@ _MESSAGES = {
     "cut_path_does_not_match_approved_centers": "The uploaded cut does not match the approved cutter centers.",
     "dxf_unreadable": "The operational drawing could not be read.",
     "file_persist_failed": "The simulation NC file could not be stored.",
-    "path_reverse_unsupported": "This path cannot be reversed safely. Its direction was left unchanged.",
-    "path_reverse_stale": "The saved direction belongs to an older path and was not applied.",
+    "path_reverse_unsupported": "This path cannot be reversed safely, so the NC file was not created.",
+    "path_reverse_stale": "A saved path direction belongs to an older geometry, so the NC file was not created.",
+    "path_reverse_missing": "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",
     "sheet_settings_required": "Save the sheet settings before reversing a machining path.",
     "perimeter_join_mode_invalid": "The sheet perimeter join mode is not valid.",
     "perimeter_unavailable": "A connected sheet perimeter could not be formed from the approved cut network.",
@@ -220,6 +221,8 @@ def _issue_message(code: str, path_key: str = "") -> str:
         return _(
             "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter."
         ).format(path_key or _("the shared cut"))
+    if code in {"path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"} and path_key:
+        return f"{_message(code)} ({path_key})"
     return _message(code)
 
 
@@ -620,6 +623,18 @@ def _manufacturing_inputs(order: Any, sheet_no: int) -> tuple[str, dict[str, Any
         }
 
 
+def _effective_sheet_program(program: dict[str, Any], saved: dict[str, Any] | None) -> dict[str, Any]:
+    """Preview, reverse validation, and NC all consume this program."""
+
+    saved_row = saved or {}
+    return effective_operational_program(
+        program,
+        snapshots=list(saved_row.get("toolpath_snapshots") or []),
+        associations=list(saved_row.get("vector_associations") or []),
+        reversed_path_keys=list(saved_row.get("reversed_path_keys") or []),
+    )
+
+
 @frappe.whitelist()
 def get_cnc_sheet_program(
     order_name: str,
@@ -668,7 +683,7 @@ def get_cnc_sheet_program(
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    payload = apply_reversed_directions(payload, (saved or {}).get("reversed_path_keys"))
+    payload = _effective_sheet_program(payload, saved)
     return _describe_program(payload)
 
 
@@ -714,31 +729,29 @@ def set_cnc_path_direction(
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
-    found = None
-    for operation in program.get("operations") or []:
-        for path in operation.get("toolpaths") or []:
-            if str(path.get("path_key") or "") == key:
-                found = path
-                break
-        if found is not None:
-            break
-    if not isinstance(found, dict):
-        frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
     records = normalize_reversed_paths(saved.get("reversed_path_keys"))
     if any(row["path_key"] == key for row in records):
         records = [row for row in records if row["path_key"] != key]
     else:
+        current = _effective_sheet_program(program, saved)
+        found = None
+        for operation in current.get("operations") or []:
+            for path in operation.get("toolpaths") or []:
+                if str(path.get("path_key") or "") == key:
+                    found = path
+                    break
+            if found is not None:
+                break
+        if not isinstance(found, dict):
+            frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
         geometry_id = path_geometry_id(found)
         probe = apply_reversed_directions(
             {"operations": [{"toolpaths": [found]}], "issues": []},
             [{"path_key": key, "geometry_id": geometry_id}],
         )
-        blocked = [
-            issue for issue in probe.get("issues") or []
-            if str(issue.get("code") or "") == "path_reverse_unsupported"
-        ]
+        blocked = reversed_direction_block(probe)
         if blocked:
-            frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
+            frappe.throw(_message(blocked), frappe.ValidationError)
         records.append({"path_key": key, "geometry_id": geometry_id})
     records = normalize_reversed_paths(records)
     try:
@@ -970,21 +983,10 @@ def generate_cnc_sheet_nc(
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
         )
-        frozen = list((saved or {}).get("toolpath_snapshots") or [])
-        if frozen:
-            program = overlay_frozen_toolpaths(
-                program,
-                frozen,
-                associations=list(saved.get("vector_associations") or []),
-            )
-            program = order_program_by_associations(
-                program,
-                list(saved.get("vector_associations") or []),
-            )
-        program = apply_reversed_directions(
-            program,
-            list(saved.get("reversed_path_keys") or []),
-        )
+        program = _effective_sheet_program(program, saved)
+        blocked = reversed_direction_block(program)
+        if blocked:
+            frappe.throw(_message(blocked), frappe.ValidationError)
         machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])
         if str(saved.get("settings_fingerprint") or "") != fingerprint:

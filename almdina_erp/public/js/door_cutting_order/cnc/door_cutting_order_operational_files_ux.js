@@ -1217,22 +1217,24 @@
                     refreshSelection();
                     return;
                 }
-                const previewHit = target.closest("[data-sheet-preview] [data-execution-path]");
-                if (previewHit && event.shiftKey) {
-                    const source = body.querySelector("[data-artcam-editor] [data-field=\"source\"]");
-                    if (!source || source.value !== "selected_vectors") return;
-                    if (typeof event.preventDefault === "function") event.preventDefault();
-                    const pathKey = previewHit.getAttribute("data-execution-path") || "";
-                    if (!pathKey || pathKey === "cut_path:sheet_perimeter") return;
-                    if (!Array.isArray(live.state.vectorSelection)) live.state.vectorSelection = [];
-                    const selected = new Set(live.state.vectorSelection);
-                    if (selected.has(pathKey)) selected.delete(pathKey);
-                    else selected.add(pathKey);
-                    live.state.vectorSelection = Array.from(selected);
-                    if (window.AlmdinaArtcamMachining) window.AlmdinaArtcamMachining.ensureForm(live.state);
-                    highlightVectorSelection(body, live.state);
-                    const count = body.querySelector("[data-vector-count]");
-                    if (count) count.textContent = `${live.state.vectorSelection.length} Vectors Selected`;
+                if (applyBoardVectorClick(event, body, live.state)) return;
+                const previewHit = boardVectorHit(target);
+                const clearReverse = target.closest("[data-clear-reverse]");
+                if (clearReverse && live.workspace.can_prepare) {
+                    const pathKey = clearReverse.getAttribute("data-clear-reverse") || "";
+                    if (!pathKey) return;
+                    frappe.call({
+                        method: `${METHOD}.set_cnc_path_direction`,
+                        args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
+                            path_key: pathKey,
+                        }),
+                        callback() {
+                            requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
+                        },
+                        error() {
+                            frappe.msgprint(translate("The saved direction could not be cleared."));
+                        },
+                    });
                     return;
                 }
                 if (previewHit) {
@@ -2262,10 +2264,31 @@
     }
 
     function geometryFingerprint(points, closed) {
-        const parts = (Array.isArray(points) ? points : []).map(point => (
-            `${Number(point[0]).toFixed(3)},${Number(point[1]).toFixed(3)}`
+        const rounded = (Array.isArray(points) ? points : []).map(point => [
+            Number(point[0]).toFixed(3),
+            Number(point[1]).toFixed(3),
+        ]).filter((point, index, all) => (
+            index === 0 || point[0] !== all[index - 1][0] || point[1] !== all[index - 1][1]
         ));
-        return `${closed ? "C" : "O"}:${parts.join(";")}`;
+        if (closed && rounded.length > 2) {
+            const first = rounded[0];
+            const last = rounded[rounded.length - 1];
+            if (first[0] === last[0] && first[1] === last[1]) rounded.pop();
+        }
+        const rotate = (sequence) => {
+            if (!closed || sequence.length < 3) return sequence;
+            let best = 0;
+            for (let index = 1; index < sequence.length; index += 1) {
+                const point = sequence[index];
+                const current = sequence[best];
+                if (point[0] < current[0] || (point[0] === current[0] && point[1] < current[1])) best = index;
+            }
+            return sequence.slice(best).concat(sequence.slice(0, best));
+        };
+        const text = (sequence) => sequence.map(point => point.join(",")).join(";");
+        const forward = text(rotate(rounded));
+        const backward = text(rotate(rounded.slice().reverse()));
+        return `${closed ? "C" : "O"}:${forward <= backward ? forward : backward}`;
     }
 
     function buildExecutionPathId(operationKey, pathKey, sequence, fingerprint, groupIndex) {
@@ -2341,6 +2364,55 @@
         const length = Math.hypot(incomingX, incomingY) || 1;
         const separation = Number(gap) > 0 ? Number(gap) : 4;
         return [Number(finish[0]) - (incomingX / length) * separation, Number(finish[1]) - (incomingY / length) * separation];
+    }
+
+    function boardVectorHit(target) {
+        let node = target;
+        while (node) {
+            const vectorId = node.getAttribute && (
+                node.getAttribute("data-vector-id") || node.getAttribute("data-execution-path")
+            );
+            const executionId = node.getAttribute && node.getAttribute("data-execution-path-id");
+            if (vectorId && executionId) {
+                if (node.classList && node.classList.contains("is-association-hidden")) return null;
+                let parent = node;
+                while (parent) {
+                    if (parent.getAttribute && parent.getAttribute("data-sheet-preview") !== null
+                        && parent !== node) return node;
+                    parent = parent.parentElement || parent.parentNode || parent.parent || null;
+                }
+            }
+            node = node.parentElement || node.parentNode || node.parent || null;
+        }
+        return null;
+    }
+
+    function applyBoardVectorClick(event, body, state) {
+        if (!event || !event.shiftKey || !state) return false;
+        const hit = boardVectorHit(event.target);
+        if (!hit) return false;
+        const source = body && typeof body.querySelector === "function"
+            ? body.querySelector("[data-artcam-editor] [data-field=\"source\"]")
+            : null;
+        const mode = (source && source.value) || ((state.artcamForm || {}).source) || "";
+        if (mode !== "selected_vectors") return false;
+        if (typeof event.preventDefault === "function") event.preventDefault();
+        const vectorId = hit.getAttribute("data-vector-id") || hit.getAttribute("data-execution-path") || "";
+        if (!vectorId || vectorId === "cut_path:sheet_perimeter") return true;
+        if (!Array.isArray(state.vectorSelection)) state.vectorSelection = [];
+        const selected = new Set(state.vectorSelection.map(String));
+        if (selected.has(String(vectorId))) selected.delete(String(vectorId));
+        else selected.add(String(vectorId));
+        state.vectorSelection = Array.from(selected);
+        if (window.AlmdinaArtcamMachining && typeof window.AlmdinaArtcamMachining.ensureForm === "function") {
+            window.AlmdinaArtcamMachining.ensureForm(state);
+        }
+        highlightVectorSelection(body, state);
+        const count = body && typeof body.querySelector === "function"
+            ? body.querySelector("[data-vector-count]")
+            : null;
+        if (count) count.textContent = `${state.vectorSelection.length} Vectors Selected`;
+        return true;
     }
 
     function highlightVectorSelection(body, state) {
@@ -2535,12 +2607,57 @@
         return `<div class="dco-cnc-cut-preview__legend" role="group" aria-label="${escapeHtml(translate("Operation colors"))}">${items}</div>`;
     }
 
+    function formatPreviewNumber(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "0";
+        return String(Math.round(number * 1000) / 1000);
+    }
+
+    function cutPreviewViewBox(width, length, paths, offsetX, offsetY) {
+        let minX = 0;
+        let minY = 0;
+        let maxX = Number(width) || 0;
+        let maxY = Number(length) || 0;
+        const radius = Math.max(6, Math.min(maxX || 100, maxY || 100) * 0.012);
+        (Array.isArray(paths) ? paths : []).forEach(item => {
+            (item && item.points || []).forEach(point => {
+                const svgX = Number(offsetX || 0) + Number(point[0]);
+                const svgY = Number(length) - (Number(offsetY || 0) + Number(point[1]));
+                if (!Number.isFinite(svgX) || !Number.isFinite(svgY)) return;
+                minX = Math.min(minX, svgX);
+                maxX = Math.max(maxX, svgX);
+                minY = Math.min(minY, svgY);
+                maxY = Math.max(maxY, svgY);
+            });
+        });
+        const pad = radius + 2;
+        minX -= pad;
+        minY -= pad;
+        maxX += pad;
+        maxY += pad;
+        return {
+            minX,
+            minY,
+            width: Math.max(1, maxX - minX),
+            height: Math.max(1, maxY - minY),
+            text: [
+                formatPreviewNumber(minX),
+                formatPreviewNumber(minY),
+                formatPreviewNumber(Math.max(1, maxX - minX)),
+                formatPreviewNumber(Math.max(1, maxY - minY)),
+            ].join(" "),
+        };
+    }
+
     function cutPreviewLayoutStyle(width, length, options = {}) {
+        const frameWidth = Number(options.frameWidth || width);
+        const frameHeight = Number(options.frameHeight || length);
         const pageLayout = String(options.layout || "") === "page";
+        const aspect = `aspect-ratio:${formatPreviewNumber(frameWidth)} / ${formatPreviewNumber(frameHeight)}`;
         if (pageLayout) {
-            return `inline-size:100%;max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}`;
+            return `inline-size:100%;max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;${aspect}`;
         }
-        return `max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;aspect-ratio:${width} / ${length}`;
+        return `max-inline-size:${SHEET_PREVIEW_MAX_WIDTH_PX}px;${aspect}`;
     }
 
     function cutPathPreviewMarkup(program, options = {}) {
@@ -2582,22 +2699,27 @@
         const uniqueIssues = Array.from(new Set(issueMessages)).slice(0, 6);
         uniqueIssues.forEach(message => notes.push(message));
         const pageLayout = String(options.layout || "") === "page";
+        const frame = cutPreviewViewBox(width, length, physicalPaths, offsetX, offsetY);
+        const frameOptions = Object.assign({}, options, { frameWidth: frame.width, frameHeight: frame.height });
         const emptyMessage = translate("No machining paths are available for this sheet preview.");
+        const reverseIssues = (Array.isArray(drawing.issues) ? drawing.issues : []).filter(issue => (
+            issue && ["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"].includes(String(issue.code || ""))
+        ));
         const boardSurface = (svgInner) => {
             const stage = `<div class="dco-cnc-cut-preview__stage" data-cut-stage>
-                <svg class="dco-cnc-cut-preview__svg" viewBox="0 0 ${width} ${length}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(svgInner.aria || emptyMessage)}">
+                <svg class="dco-cnc-cut-preview__svg" viewBox="${frame.text}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(svgInner.aria || emptyMessage)}">
                     ${svgInner.body || ""}
                 </svg>
                 ${svgInner.extra || ""}
             </div>`;
             if (!pageLayout) return stage;
-            return `<div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, options)}" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
+            return `<div class="dco-cnc-cut-preview__viewport" data-cut-viewport style="${cutPreviewLayoutStyle(width, length, frameOptions)}" role="region" aria-label="${escapeHtml(translate("Board preview viewport"))}">
                 ${stage}
             </div>`;
         };
         const previewShellStyle = pageLayout
             ? "inline-size:100%;min-inline-size:0;"
-            : cutPreviewLayoutStyle(width, length, options);
+            : cutPreviewLayoutStyle(width, length, frameOptions);
 
         if (!(width > 0 && length > 0)) {
             return `<div class="dco-cnc-cut-preview" role="status" data-marker-scope="${escapeHtml(markerScope)}">
@@ -2639,8 +2761,9 @@
             const arrowLine = arrow
                 ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
-                <polyline class="dco-cnc-cut-preview__hit" points="${points}" fill="none" stroke="transparent" stroke-width="8" vector-effect="non-scaling-stroke"/>
+            const vectorId = String(item.vector_id || item.path_key || "");
+            return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-vector-id="${escapeHtml(vectorId)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
+                <polyline class="dco-cnc-cut-preview__hit" data-vector-id="${escapeHtml(vectorId)}" data-execution-path="${escapeHtml(item.path_key)}" points="${points}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
             </g>`;
@@ -2682,6 +2805,7 @@
             })}
             ${placementNote}
             ${notes.map(note => `<p class="dco-cnc-program__error" role="status">${escapeHtml(note)}</p>`).join("")}
+            ${reverseIssues.map(issue => `<p class="dco-cnc-program__error" role="status"><button type="button" class="btn btn-default btn-xs" data-clear-reverse="${escapeHtml(String(issue.path_key || ""))}">${escapeHtml(translate("Clear saved direction"))}</button></p>`).join("")}
         </div>`;
     }
 
@@ -2802,7 +2926,7 @@
         const height = Number(preview.__cutPreviewHeight || 0);
         const radius = Math.max(6, Math.min(width || 100, height || 100) * 0.012);
         const end = previewEndPoint(item.points, item.start, item.end, item.closed, radius * 1.6);
-        group.innerHTML = `<circle class="dco-cnc-cut-preview__start-mark" cx="${Number(item.start[0])}" cy="${Number(item.start[1])}" r="${radius}" fill="#16A34A"></circle><circle class="dco-cnc-cut-preview__finish" cx="${Number(end[0])}" cy="${Number(end[1])}" r="${radius}" fill="#DC2626"></circle>`;
+        group.innerHTML = `<circle class="dco-cnc-cut-preview__start-mark" cx="${Number(item.start[0])}" cy="${Number(item.start[1])}" r="${radius}" fill="#16A34A" pointer-events="none"></circle><circle class="dco-cnc-cut-preview__finish" cx="${Number(end[0])}" cy="${Number(end[1])}" r="${radius}" fill="#DC2626" pointer-events="none"></circle>`;
     }
 
     function highlightCutPreview(preview, state) {
@@ -3382,6 +3506,9 @@
         geometryFingerprint,
         buildExecutionPathId,
         cutPathPreviewMarkup,
+        cutPreviewViewBox,
+        boardVectorHit,
+        applyBoardVectorClick,
         paintCutPathPreview,
         highlightCutPreview,
         applyExecutionSelection,

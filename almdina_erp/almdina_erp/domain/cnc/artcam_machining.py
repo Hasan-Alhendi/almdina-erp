@@ -1408,11 +1408,34 @@ def _motions_for_depths(
     ]
 
 
+_DIRECTION_BLOCK_CODES = frozenset({
+    "path_reverse_unsupported",
+    "path_reverse_stale",
+    "path_reverse_missing",
+})
+
+
+def reversed_direction_block(program: Mapping[str, Any] | None) -> str:
+    """Return the first saved-direction failure, or an empty string."""
+
+    if not isinstance(program, Mapping):
+        return ""
+    if program.get("direction_blocked"):
+        for issue in program.get("issues") or ():
+            if isinstance(issue, Mapping) and str(issue.get("code") or "") in _DIRECTION_BLOCK_CODES:
+                return str(issue.get("code") or "")
+        return "path_reverse_unsupported"
+    for issue in program.get("issues") or ():
+        if isinstance(issue, Mapping) and str(issue.get("code") or "") in _DIRECTION_BLOCK_CODES:
+            return str(issue.get("code") or "")
+    return ""
+
+
 def apply_reversed_directions(
     program: Mapping[str, Any],
     records: Sequence[Any] | None,
 ) -> dict[str, Any]:
-    """Reverse saved path directions before NC. Unsupported paths stay unchanged."""
+    """Reverse saved path directions. A record that cannot be applied blocks NC."""
 
     payload = deepcopy(dict(program))
     wanted = {
@@ -1421,7 +1444,14 @@ def apply_reversed_directions(
     }
     if not wanted:
         return payload
-    issues = [dict(issue) for issue in payload.get("issues") or () if isinstance(issue, Mapping)]
+    issues = [
+        dict(issue)
+        for issue in payload.get("issues") or ()
+        if isinstance(issue, Mapping)
+        and str(issue.get("code") or "") not in _DIRECTION_BLOCK_CODES
+    ]
+    seen: set[str] = set()
+    blocked = False
     operations: list[dict[str, Any]] = []
     for operation in payload.get("operations") or ():
         if not isinstance(operation, Mapping):
@@ -1435,16 +1465,48 @@ def apply_reversed_directions(
             if key not in wanted:
                 toolpaths.append(dict(path))
                 continue
+            seen.add(key)
             try:
                 toolpaths.append(_reverse_one_path(path, wanted[key]))
             except MachiningSetupError as exc:
+                blocked = True
                 issues.append({"code": exc.code, "path_key": key})
-                toolpaths.append(dict(path))
+                failed = dict(path)
+                failed["issues"] = [*(failed.get("issues") or ()), exc.code]
+                failed["ready"] = False
+                toolpaths.append(failed)
         cloned["toolpaths"] = toolpaths
         operations.append(cloned)
+    for key in wanted:
+        if key in seen:
+            continue
+        blocked = True
+        issues.append({"code": "path_reverse_missing", "path_key": key})
     payload["operations"] = operations
     payload["issues"] = issues
+    if blocked:
+        payload["direction_blocked"] = True
+        payload["nc_export_ready"] = False
+        payload["ready"] = False
     return payload
+
+
+def effective_operational_program(
+    program: Mapping[str, Any],
+    *,
+    snapshots: Sequence[Mapping[str, Any]] | None = None,
+    associations: Sequence[Mapping[str, Any]] | None = None,
+    reversed_path_keys: Sequence[Any] | None = None,
+) -> dict[str, Any]:
+    """One machining program for preview, reverse checks, and NC export."""
+
+    current = overlay_frozen_toolpaths(
+        program,
+        snapshots or (),
+        associations=associations,
+    )
+    current = order_program_by_associations(current, associations)
+    return apply_reversed_directions(current, reversed_path_keys)
 
 
 __all__ = [
@@ -1461,7 +1523,9 @@ __all__ = [
     "MachinableVector",
     "MachiningSetupError",
     "apply_reversed_directions",
+    "effective_operational_program",
     "normalize_reversed_paths",
+    "reversed_direction_block",
     "path_geometry_id",
     "reverse_operational_points",
     "active_toolpath_snapshots",

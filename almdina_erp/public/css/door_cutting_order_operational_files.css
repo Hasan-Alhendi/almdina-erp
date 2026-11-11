@@ -383,7 +383,7 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-cnc-cut-preview__viewport {
     position: relative;
     z-index: 1;
-    overflow: hidden;
+    overflow: visible;
     inline-size: 100%;
     min-inline-size: 0;
     background: #f7f9fc;
@@ -540,15 +540,15 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     min-block-size: 0;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__body {
-    grid-template-columns: minmax(0, 1.5fr) minmax(18rem, 1fr);
-    align-items: stretch;
+    grid-template-columns: minmax(0, 260px) minmax(16rem, 1fr);
+    align-items: start;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__preview {
     position: sticky;
-    inset-block-start: 0.5rem;
-    max-inline-size: none;
+    inset-block-start: 0;
+    max-inline-size: 260px;
     min-inline-size: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__settings {
     position: relative;
@@ -812,6 +812,17 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 }
 .dco-operational-sheet .dco-cnc-cut-preview__hit {
     pointer-events: stroke;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__machine,
+.dco-operational-sheet .dco-cnc-cut-preview__void,
+.dco-operational-sheet .dco-cnc-cut-preview__sheet,
+.dco-operational-sheet .dco-cnc-cut-preview__frame,
+.dco-operational-sheet .dco-cnc-cut-preview__origin,
+.dco-operational-sheet .dco-cnc-cut-preview__path,
+.dco-operational-sheet .dco-cnc-cut-preview__arrow,
+.dco-operational-sheet .dco-cnc-cut-preview__start-mark,
+.dco-operational-sheet .dco-cnc-cut-preview__finish {
+    pointer-events: none;
 }
 .dco-operational-sheet .dco-artcam-note {
     margin: 0;

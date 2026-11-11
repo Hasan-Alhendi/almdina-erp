@@ -33,6 +33,12 @@ from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     split_segments_at_vertices,
 )
 from almdina_erp.almdina_erp.domain.cnc.post_processor import POST_PROCESSOR_VERSION
+from almdina_erp.almdina_erp.domain.cnc.program import (
+    CHAIN_TOLERANCE_MM,
+    CncSourceEntity,
+    build_board_program,
+    chain_line_paths,
+)
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -770,3 +776,166 @@ def test_diagnosis_reports_geometry_stats_for_complex_network():
     assert diagnosis.crossing_count >= 1
     assert diagnosis.reject_code is None
     assert diagnosis.degree_histogram
+
+
+def _edges_within_tolerance(paths):
+    edges = []
+    for points, closed in paths:
+        sequence = list(points)
+        for start, end in zip(sequence, sequence[1:]):
+            edges.append((start, end))
+        if closed and len(sequence) > 2 and sequence[0] != sequence[-1]:
+            edges.append((sequence[-1], sequence[0]))
+    return edges
+
+
+def _same_edge(left, right):
+    return (
+        abs(left[0][0] - right[0][0]) <= CHAIN_TOLERANCE_MM
+        and abs(left[0][1] - right[0][1]) <= CHAIN_TOLERANCE_MM
+        and abs(left[1][0] - right[1][0]) <= CHAIN_TOLERANCE_MM
+        and abs(left[1][1] - right[1][1]) <= CHAIN_TOLERANCE_MM
+    ) or (
+        abs(left[0][0] - right[1][0]) <= CHAIN_TOLERANCE_MM
+        and abs(left[0][1] - right[1][1]) <= CHAIN_TOLERANCE_MM
+        and abs(left[1][0] - right[0][0]) <= CHAIN_TOLERANCE_MM
+        and abs(left[1][1] - right[0][1]) <= CHAIN_TOLERANCE_MM
+    )
+
+
+def _coverage_preserved(segments, paths):
+    produced = _edges_within_tolerance(paths)
+    assert len(produced) == len(segments)
+    unused = list(segments)
+    for edge in produced:
+        match = next((index for index, item in enumerate(unused) if _same_edge(edge, item)), None)
+        assert match is not None
+        unused.pop(match)
+
+
+def test_collinear_segments_on_a_tolerance_boundary_chain_without_changing_coverage():
+    segments = [
+        ((0.0, 0.0), (10.024, 0.0)),
+        ((10.026, 0.0), (30.0, 0.0)),
+        ((30.0, 0.0), (45.0, 0.0)),
+        ((45.0, 0.0), (60.0, 0.0)),
+        ((60.0, 0.0), (80.0, 0.0)),
+    ]
+    paths = chain_line_paths(segments)
+    assert len(paths) == 1
+    assert paths[0][1] is False
+    assert len(paths[0][0]) == 6
+    _coverage_preserved(segments, paths)
+
+
+def test_connected_rectangle_with_a_split_side_is_one_closed_chain():
+    segments = [
+        ((0.0, 0.0), (20.0, 0.0)),
+        ((20.0, 0.0), (40.0, 0.0)),
+        ((40.0, 0.0), (60.0, 0.0)),
+        ((60.0, 0.0), (80.0, 0.0)),
+        ((80.0, 0.0), (100.0, 0.0)),
+        ((100.0, 0.0), (100.0, 80.0)),
+        ((100.0, 80.0), (0.0, 80.0)),
+        ((0.0, 80.0), (0.0, 0.0)),
+    ]
+    paths = chain_line_paths(segments)
+    assert len(paths) == 1
+    assert paths[0][1] is True
+    _coverage_preserved(segments, paths)
+    perimeter = extract_connected_perimeter(segments)
+    assert perimeter.closed is True
+    assert perimeter.edge_count == 8
+
+
+def test_a_branch_or_a_real_gap_does_not_chain():
+    branch = [
+        ((0.0, 0.0), (10.0, 0.0)),
+        ((10.0, 0.0), (20.0, 0.0)),
+        ((10.0, 0.0), (10.0, 12.0)),
+    ]
+    branched = chain_line_paths(branch)
+    assert len(branched) == 3
+    _coverage_preserved(branch, branched)
+    gap = [((0.0, 0.0), (10.0, 0.0)), ((10.2, 0.0), (20.0, 0.0))]
+    assert len(chain_line_paths(gap)) == 2
+    parallel = [((0.0, 0.0), (10.0, 0.0)), ((0.0, 0.2), (10.0, 0.2))]
+    assert len(chain_line_paths(parallel)) == 2
+
+
+def test_chained_collinear_cuts_share_one_retract_sequence_and_distinct_keys_do_not():
+    preset = {
+        "Finish": {
+            "preset_name": "Finish",
+            "tool_name": "Finish",
+            "tool_number": "T9",
+            "tool_diameter_mm": 5,
+            "final_depth_mm": 18,
+            "spindle_speed_rpm": 15000,
+            "feed_rate_mm_min": 8000,
+            "plunge_rate_mm_min": 1500,
+            "pass_depth_mm": 6,
+            "enabled": True,
+        }
+    }
+    segments = [
+        ((0.0, 10.0), (10.024, 10.0)),
+        ((10.026, 10.0), (30.0, 10.0)),
+        ((30.0, 10.0), (50.0, 10.0)),
+    ]
+    entities = [
+        CncSourceEntity(
+            layer="CUT_PATH",
+            points=segment,
+            closed=False,
+            entity_type="LINE",
+            role="tool_center",
+            ring="open",
+            path_key="",
+        )
+        for segment in segments
+    ]
+    program = build_board_program(
+        sheet_no=1,
+        entities=entities,
+        operation_order=["cut_path"],
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        known_presets=preset,
+        units="mm",
+        frame_origin_mm=(0.0, 0.0),
+        sheet_width_mm=100,
+        sheet_length_mm=80,
+    )
+    toolpaths = [path for operation in program.operations for path in operation.toolpaths]
+    assert len(toolpaths) == 1
+    assert [motion.kind for motion in toolpaths[0].motions].count("retract") == 3
+    assert [motion.kind for motion in toolpaths[0].motions].count("plunge") == 3
+    separate = []
+    for index, segment in enumerate(segments[:2]):
+        separate.append(
+            CncSourceEntity(
+                layer="CUT_PATH",
+                points=segment,
+                closed=False,
+                entity_type="LINE",
+                role="tool_center",
+                ring="open",
+                path_key=f"cut_path:piece-{index}",
+            )
+        )
+    split = build_board_program(
+        sheet_no=1,
+        entities=separate,
+        operation_order=["cut_path"],
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        known_presets=preset,
+        units="mm",
+        frame_origin_mm=(0.0, 0.0),
+        sheet_width_mm=100,
+        sheet_length_mm=80,
+    )
+    split_paths = [path for operation in split.operations for path in operation.toolpaths]
+    assert len(split_paths) == 2
+    assert {path.path_key for path in split_paths} == {"cut_path:piece-0", "cut_path:piece-1"}

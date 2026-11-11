@@ -145,9 +145,47 @@ def _distance(left: tuple[float, float], right: tuple[float, float]) -> float:
     return math.dist(left, right)
 
 
-def _node(point: tuple[float, float]) -> tuple[int, int]:
-    scale = CHAIN_TOLERANCE_MM
-    return (int(round(point[0] / scale)), int(round(point[1] / scale)))
+def _endpoint_clusters(
+    points: Sequence[tuple[float, float]],
+) -> list[int]:
+    """Join endpoints that are within the chain tolerance, including bucket edges.
+
+    Rounding each point into its own cell splits a real joint when the two
+    ends fall on opposite sides of a 0.05 mm boundary. Neighbor cells are
+    compared, and only pairs inside the tolerance become one vertex.
+    """
+
+    count = len(points)
+    parent = list(range(count))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        root_left = find(left)
+        root_right = find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    cell = CHAIN_TOLERANCE_MM
+    buckets: dict[tuple[int, int], list[int]] = {}
+    for index, point in enumerate(points):
+        key = (math.floor(point[0] / cell), math.floor(point[1] / cell))
+        buckets.setdefault(key, []).append(index)
+    for index, point in enumerate(points):
+        base_x = math.floor(point[0] / cell)
+        base_y = math.floor(point[1] / cell)
+        for step_x in (-1, 0, 1):
+            for step_y in (-1, 0, 1):
+                for other in buckets.get((base_x + step_x, base_y + step_y), ()):
+                    if other >= index:
+                        continue
+                    if _distance(point, points[other]) <= CHAIN_TOLERANCE_MM:
+                        union(index, other)
+    return [find(index) for index in range(count)]
 
 
 def _same_segment(
@@ -184,22 +222,25 @@ def _chain_lines(
     usable = _dedupe_segments(segments)
     if not usable:
         return []
-    adjacency: dict[tuple[int, int], list[int]] = {}
-    ends: list[tuple[tuple[int, int], tuple[int, int]]] = []
-    for index, (start, end) in enumerate(usable):
-        start_key = _node(start)
-        end_key = _node(end)
+    clusters = _endpoint_clusters([point for segment in usable for point in segment])
+    adjacency: dict[int, list[int]] = {}
+    ends: list[tuple[int, int]] = []
+    for index, _segment in enumerate(usable):
+        start_key = clusters[index * 2]
+        end_key = clusters[index * 2 + 1]
         ends.append((start_key, end_key))
         adjacency.setdefault(start_key, []).append(index)
-        adjacency.setdefault(end_key, []).append(index)
+        if end_key != start_key:
+            adjacency.setdefault(end_key, []).append(index)
 
     unused = set(range(len(usable)))
     paths: list[tuple[tuple[tuple[float, float], ...], bool]] = []
 
-    def walk(start_edge: int, start_key: tuple[int, int]) -> tuple[list[tuple[float, float]], bool]:
+    def walk(start_edge: int, start_key: int) -> tuple[list[tuple[float, float]], bool]:
         points: list[tuple[float, float]] = []
         edge_index = start_edge
         current = start_key
+        origin = start_key
         closed = False
         while edge_index in unused:
             unused.remove(edge_index)
@@ -215,7 +256,7 @@ def _chain_lines(
             current = nxt
             choices = [item for item in adjacency.get(current, []) if item in unused]
             if not choices:
-                closed = _node(points[0]) == current and len(points) >= 4
+                closed = origin == current and len(points) >= 4
                 break
             if len(choices) > 1 or len(adjacency.get(current, [])) != 2:
                 break
@@ -223,13 +264,13 @@ def _chain_lines(
         return points, closed
 
     terminals = [key for key, edges in adjacency.items() if len(edges) != 2]
-    terminal_edges: list[tuple[tuple[float, float], int, tuple[int, int]]] = []
+    terminal_edges: list[tuple[tuple[float, float], int, int]] = []
     for key in terminals:
         for edge_index in adjacency[key]:
             if edge_index not in unused:
                 continue
             start, end = usable[edge_index]
-            other = end if _node(start) == key else start
+            other = end if ends[edge_index][0] == key else start
             terminal_edges.append((other, edge_index, key))
     terminal_edges.sort(key=lambda item: (item[0][0], item[0][1], item[1]))
     for _other, edge_index, key in terminal_edges:
@@ -241,8 +282,7 @@ def _chain_lines(
 
     while unused:
         edge_index = min(unused)
-        start, _end = usable[edge_index]
-        points, closed = walk(edge_index, _node(start))
+        points, closed = walk(edge_index, ends[edge_index][0])
         if len(points) >= 2:
             paths.append((tuple(points), closed))
     return paths

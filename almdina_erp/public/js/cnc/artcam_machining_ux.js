@@ -162,7 +162,7 @@
                     </select>
                 </label>
             </div>
-            <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml("Hold Shift and click vectors on the board")}</p>
+            <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
             <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(`${count} Vectors Selected`)}</p>
             <div class="dco-artcam-row dco-artcam-row--pair">
                 ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
@@ -429,6 +429,17 @@
         });
     }
 
+    function orderedAssociations(rows, next) {
+        const list = (Array.isArray(rows) ? rows : []).slice();
+        const index = list.findIndex(row => row && row.association_id === next.association_id);
+        if (index >= 0) {
+            list[index] = next;
+            return list;
+        }
+        list.push(next);
+        return list;
+    }
+
     function calculate(host, context) {
         const state = context.state;
         if (state.artcamBusy) return;
@@ -444,8 +455,7 @@
         const previous = (machining(context.sheet).associations || [])
             .find(row => row.association_id === form.association_id) || null;
         const next = payloadFromForm(form, state, previous);
-        const others = (machining(context.sheet).associations || [])
-            .filter(row => row.association_id !== next.association_id);
+        const rows = orderedAssociations(machining(context.sheet).associations || [], next);
         state.artcamBusy = true;
         const button = host.querySelector("[data-artcam-calculate]");
         if (button) button.disabled = true;
@@ -453,7 +463,7 @@
         const args = context.getArgs ? context.getArgs() : {};
         call(`${METHOD}.save_cnc_operational_sheet`, Object.assign({}, args, {
             machining_profiles: machining(context.sheet).profiles || [],
-            vector_associations: others.concat([next]),
+            vector_associations: rows,
         })).then(workspace => {
             const sheet = ((workspace.sheets || []).find(item => Number(item.sheet_no) === Number((context.sheet || {}).sheet_no))) || {};
             const saved = ((sheet.machining || {}).associations || []).find(row => row.association_id === next.association_id) || next;
@@ -483,5 +493,11 @@
         });
     }
 
-    window.AlmdinaArtcamMachining = Object.freeze({ markup, bind, ensureForm, loadAssociation });
+    window.AlmdinaArtcamMachining = Object.freeze({
+        markup,
+        bind,
+        ensureForm,
+        loadAssociation,
+        orderedAssociations,
+    });
 })();

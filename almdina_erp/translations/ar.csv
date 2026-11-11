@@ -3955,3 +3955,9 @@ This tool is selected as a factory default.,هذه الريشة مختارة ك�
 This tool is used by a machining profile.,هذه الريشة مستخدمة في بروفايل تشغيل.
 This tool is used by a vector association.,هذه الريشة مستخدمة في ربط متجهات.
 This tool is used by an active toolpath snapshot.,هذه الريشة مستخدمة في لقطة مسار تشغيل فعالة.
+Shift + Click to select vectors,Shift + نقرة لتحديد المتجهات
+Clear saved direction,إلغاء الاتجاه المحفوظ
+The saved direction could not be cleared.,تعذر إلغاء الاتجاه المحفوظ.
+"This path cannot be reversed safely, so the NC file was not created.",لا يمكن عكس هذا المسار بأمان، لذلك لم يُنشأ ملف NC.
+"A saved path direction belongs to an older geometry, so the NC file was not created.",اتجاه محفوظ يخص هندسة أقدم، لذلك لم يُنشأ ملف NC.
+"A saved path direction no longer matches a path on this sheet, so the NC file was not created.",اتجاه محفوظ لم يعد يطابق مساراً على هذا اللوح، لذلك لم يُنشأ ملف NC.

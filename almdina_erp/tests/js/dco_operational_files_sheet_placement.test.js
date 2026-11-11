@@ -104,7 +104,10 @@ const markup = ux.cutPathPreviewMarkup(program, {
     placement,
     zoom: 1,
 });
-assert.ok(markup.includes('viewBox="0 0 1300 2500"'));
+const viewBox = markup.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
+assert.ok(viewBox[0] <= 0 && viewBox[1] <= 0, "machine origin stays inside the frame");
+assert.ok(viewBox[0] + viewBox[2] >= 1300 && viewBox[1] + viewBox[3] >= 2500, "machine far edges stay inside the frame");
+assert.ok(markup.includes("100,200"));
 assert.ok(markup.includes("dco-cnc-cut-preview__void"));
 assert.ok(markup.includes("dco-cnc-cut-preview__machine"));
 assert.ok(markup.includes('transform="translate(30,40)"'));
