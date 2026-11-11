@@ -100,12 +100,15 @@ def _approved(source, revision=2):
 
 
 def test_operational_layers_follow_the_current_dxf_contract():
-    assert [operation.dxf_layer for operation in CNC_OPERATION_TYPES] == [
+    assert [operation.dxf_layer for operation in CNC_OPERATION_TYPES if operation.key != "sheet_perimeter"] == [
         "CUT_PATH",
         "Liner",
         "Rear Groove",
         "Handle Recess",
     ]
+    perimeter = next(operation for operation in CNC_OPERATION_TYPES if operation.key == "sheet_perimeter")
+    assert perimeter.dxf_layer == "CUT_PATH"
+    assert len({operation.dxf_layer for operation in CNC_OPERATION_TYPES}) == 4
     assert is_operational_layer("CUT_PATH")
     for layer in ("GEOMETRY", "SHEET_OUTLINE", "TEXT", "OFFCUT", "text", "0"):
         assert not is_operational_layer(layer)

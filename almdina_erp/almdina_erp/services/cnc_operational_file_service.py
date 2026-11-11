@@ -37,6 +37,9 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 )
 from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     MachiningSetupError,
+    archive_association,
+    catalog_rows_from_program,
+    drop_resurrected_associations,
     effective_operational_program,
     toggle_reversed_path,
     unreversed_operational_program,
@@ -130,6 +133,8 @@ _MESSAGES = {
     "sheet_perimeter_unavailable": "Sheet Perimeter is available only while Connected Perimeter is enabled.",
     "toolpath_name_required": "Enter a toolpath name.",
     "toolpath_name_duplicate": "A calculated toolpath already uses that name.",
+    "vector_identity_ambiguous": "That path key matches more than one vector. Select the vector on the board again.",
+    "association_stale": "The sheet changed in another window. Reload it before repeating this action.",
     "toolpath_duplicate": "That calculated toolpath already exists.",
     "toolpath_id_invalid": "The toolpath identity is not valid.",
     "tool_number_invalid": "Tool Number must be a positive whole number.",
@@ -321,6 +326,24 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
     return _workspace_for(order, can_prepare=can_prepare)
 
 
+def _reject_stale_sheet(saved: Mapping[str, Any] | None, base_fingerprint: str | None) -> None:
+    expected = str(base_fingerprint or "").strip()
+    if not saved or not expected:
+        return
+    current = str(saved.get("settings_fingerprint") or "")
+    if current and current != expected:
+        frappe.throw(_message("association_stale"), frappe.ValidationError)
+
+
+def _snapshot_for_request(snapshots: Any, request_id: str, association_id: str) -> bool:
+    for snapshot in snapshots or ():
+        if not isinstance(snapshot, Mapping):
+            continue
+        if str(snapshot.get("request_id") or "") == request_id and str(snapshot.get("association_id") or "") == association_id:
+            return True
+    return False
+
+
 def _json_list(raw: Any) -> list[Any]:
     if raw is None:
         return []
@@ -364,10 +387,12 @@ def save_cnc_operational_sheet(
     offset_bottom_cm: float | int | str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
+    base_fingerprint: str | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    _reject_stale_sheet(existing, base_fingerprint)
     parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
     if path_overrides is None and existing is not None:
         parsed_paths = {
@@ -428,14 +453,22 @@ def save_cnc_operational_sheet(
         prepared = prepare_sheet_settings(**sheet_arguments)
         if machining_profiles is not None or vector_associations is not None:
             snapshots = list((existing or {}).get("toolpath_snapshots") or [])
+            incoming_associations = (
+                _json_list(vector_associations)
+                if vector_associations is not None
+                else list((existing or {}).get("vector_associations") or [])
+            )
+            incoming_associations = drop_resurrected_associations(
+                list((existing or {}).get("vector_associations") or []),
+                incoming_associations,
+                snapshots,
+            )
             profiles, associations = accept_sheet_machining(
                 paths=list(prepared.get("paths") or []),
                 profiles=_json_list(machining_profiles)
                 if machining_profiles is not None
                 else list((existing or {}).get("machining_profiles") or []),
-                associations=_json_list(vector_associations)
-                if vector_associations is not None
-                else list((existing or {}).get("vector_associations") or []),
+                associations=incoming_associations,
                 known_tools=known_tool_presets(),
                 snapshots=snapshots,
             )
@@ -473,61 +506,71 @@ def calculate_cnc_association_toolpath(
     offset_bottom_cm: float | int | str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
+    calculation_request_id: str | None = None,
+    base_fingerprint: str | None = None,
 ) -> dict[str, Any]:
-    """Calculate one named toolpath from the association copy and freeze it."""
+    """Validate, calculate, and save one association in a single request.
 
-    save_cnc_operational_sheet(
-        order_name,
-        sheet_no,
-        operation_presets,
-        path_overrides,
-        operation_order,
-        cut_path_early_confirmed,
-        viewed_plan_token,
-        operation_sources,
-        perimeter_join_mode,
-        cut_path_sequence,
-        perimeter_cut_early_confirmed,
-        cnc_machine,
-        offset_left_cm,
-        offset_bottom_cm,
-        machining_profiles,
-        vector_associations,
-    )
+    Nothing is written until the toolpath snapshot is complete. A repeated
+    request id returns the workspace that the first successful call saved.
+    """
+
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    if not saved or not saved.get("name"):
-        frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
-    associations = list(saved.get("vector_associations") or [])
-    association = next(
-        (
-            row
-            for row in associations
-            if str(row.get("association_id") or "") == str(association_id or "").strip()
-        ),
+    request_id = str(calculation_request_id or "").strip()
+    target_id = str(association_id or "").strip()
+    if saved and request_id and _snapshot_for_request(saved.get("toolpath_snapshots"), request_id, target_id):
+        return _workspace_for(order, can_prepare=True)
+    _reject_stale_sheet(saved, base_fingerprint)
+    incoming = drop_resurrected_associations(
+        list((saved or {}).get("vector_associations") or []),
+        _json_list(vector_associations) if vector_associations is not None else list((saved or {}).get("vector_associations") or []),
+        list((saved or {}).get("toolpath_snapshots") or []),
+    )
+    provisional = next(
+        (row for row in incoming if str(row.get("association_id") or "") == target_id),
         None,
     )
-    if association is None:
+    if provisional is None:
         frappe.throw(_message("association_not_found"), frappe.ValidationError)
-    (
-        operations,
-        paths,
-        order_keys,
-        confirmed,
-        _sources,
-        join_mode,
-        sequence,
-        perimeter_early,
-    ) = _settings_from_saved(saved, factory_operation_defaults())
+    if saved:
+        (
+            operations,
+            paths,
+            order_keys,
+            confirmed,
+            _sources,
+            join_mode,
+            sequence,
+            perimeter_early,
+        ) = _settings_from_saved(saved, factory_operation_defaults())
+    else:
+        operations, paths, order_keys = {}, {}, []
+        confirmed = False
+        join_mode, sequence, perimeter_early = "separate", None, False
+    if operation_presets is not None:
+        operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
+    if path_overrides is not None:
+        paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
+    if operation_order is not None:
+        order_keys = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
+    if cut_path_early_confirmed is not None:
+        confirmed = bool(cint(cut_path_early_confirmed))
+    if perimeter_join_mode is not None:
+        join_mode = str(perimeter_join_mode or "separate")
+    if cut_path_sequence is not None:
+        sequence = _parse_optional_sequence(cut_path_sequence)
+    if perimeter_cut_early_confirmed is not None:
+        perimeter_early = bool(cint(perimeter_cut_early_confirmed))
     try:
-        known, overrides = calculation_preset_injection(association, known_tool_presets())
+        known, overrides = calculation_preset_injection(provisional, known_tool_presets())
         _plan, program, _presets = _compile_authorized_program(
             order,
             sheet_no=cint(sheet_no),
-            operation_presets=operations,
-            path_overrides=paths,
-            operation_order=order_keys,
+            operation_presets=operations if isinstance(operations, dict) else {},
+            path_overrides=paths if isinstance(paths, dict) else {},
+            operation_order=order_keys if isinstance(order_keys, list) else [],
             cut_path_early_confirmed=confirmed,
             viewed_plan_token=viewed_plan_token,
             perimeter_join_mode=join_mode,
@@ -536,13 +579,102 @@ def calculate_cnc_association_toolpath(
             known_presets=known,
             extra_path_overrides=overrides,
         )
+        profiles, associations = accept_sheet_machining(
+            paths=catalog_rows_from_program(program),
+            profiles=_json_list(machining_profiles) if machining_profiles is not None else list((saved or {}).get("machining_profiles") or []),
+            associations=incoming,
+            known_tools=known_tool_presets(),
+            snapshots=list((saved or {}).get("toolpath_snapshots") or []),
+        )
+        association = next(
+            (row for row in associations if str(row.get("association_id") or "") == target_id),
+            None,
+        )
+        if association is None:
+            frappe.throw(_message("association_not_found"), frappe.ValidationError)
+        if association.get("conflict") or not association.get("vector_ids"):
+            raise MachiningSetupError(str(association.get("conflict") or "vector_not_machinable"))
+        prior_snapshots = list((saved or {}).get("toolpath_snapshots") or [])
         snapshots = freeze_calculated_toolpath(
             association=association,
             toolpath_name=toolpath_name,
             program=program,
-            snapshots=list(saved.get("toolpath_snapshots") or []),
+            snapshots=prior_snapshots,
+            live_association_ids=[str(row.get("association_id") or "") for row in associations],
+            request_id=request_id,
         )
-        stored_associations = remember_toolpath_on_association(associations, snapshots)
+        stored_associations = remember_toolpath_on_association(
+            associations,
+            snapshots,
+            target_id,
+        )
+        restamped = prepare_sheet_settings(
+            order_name=str(order.name),
+            approved_plan=plan,
+            plan_is_current=True,
+            pieces=placed_piece_views(order),
+            sheet_no=cint(sheet_no),
+            existing=saved,
+            operation_presets=operations if isinstance(operations, dict) else {},
+            path_overrides=paths if isinstance(paths, dict) else {},
+            known_presets=known_tool_presets(),
+            machine_profile=machine_profile_view(),
+            operation_order=order_keys if isinstance(order_keys, list) else None,
+            cut_path_early_confirmed=confirmed,
+            factory_defaults=factory_operation_defaults(),
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
+            cnc_machine=(saved or {}).get("cnc_machine") if cnc_machine is None else cnc_machine,
+            offset_left_cm=(saved or {}).get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
+            offset_bottom_cm=(saved or {}).get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            machine_catalog=list_cnc_machines(),
+            plan_snapshot=approved_plan_snapshot(order),
+            toolpath_snapshots=snapshots,
+            vector_associations=stored_associations,
+        )
+        restamped["machining_profiles_json"] = profiles
+        restamped["vector_associations_json"] = stored_associations
+        restamped["toolpath_snapshots_json"] = snapshots
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
+    save_sheet(str((saved or {}).get("name") or ""), restamped)
+    return _workspace_for(order, can_prepare=True)
+
+
+@frappe.whitelist()
+def delete_cnc_association(
+    order_name: str,
+    sheet_no: int | str,
+    association_id: str,
+    viewed_plan_token: str | None = None,
+    base_fingerprint: str | None = None,
+) -> dict[str, Any]:
+    """Remove one association by its id and archive its snapshots."""
+
+    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
+    plan = approved_plan_ref(order)
+    saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    if not saved or not saved.get("name"):
+        return _workspace_for(order, can_prepare=True)
+    _reject_stale_sheet(saved, base_fingerprint)
+    target = str(association_id or "").strip()
+    current = list(saved.get("vector_associations") or [])
+    if not any(str(row.get("association_id") or "") == target for row in current):
+        return _workspace_for(order, can_prepare=True)
+    try:
+        assert_viewed_plan_token(plan, viewed_plan_token)
+        kept, snapshots = archive_association(current, list(saved.get("toolpath_snapshots") or []), target)
+        (
+            operations,
+            paths,
+            order_keys,
+            confirmed,
+            _sources,
+            join_mode,
+            sequence,
+            perimeter_early,
+        ) = _settings_from_saved(saved, factory_operation_defaults())
         restamped = prepare_sheet_settings(
             order_name=str(order.name),
             approved_plan=plan,
@@ -566,18 +698,14 @@ def calculate_cnc_association_toolpath(
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
             toolpath_snapshots=snapshots,
-            vector_associations=stored_associations,
+            vector_associations=kept,
         )
+        restamped["machining_profiles_json"] = list(saved.get("machining_profiles") or [])
+        restamped["vector_associations_json"] = kept
+        restamped["toolpath_snapshots_json"] = snapshots
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
-    update_machining_json(
-        str(saved.get("name") or ""),
-        profiles=list(saved.get("machining_profiles") or []),
-        associations=stored_associations,
-        snapshots=snapshots,
-        fingerprint=str(restamped.get("settings_fingerprint") or ""),
-        status=str(restamped.get("status") or ""),
-    )
+    save_sheet(str(saved.get("name") or ""), restamped)
     return _workspace_for(order, can_prepare=True)
 
 
@@ -1183,6 +1311,7 @@ __all__ = [
     "generate_cnc_sheet_nc",
     "get_cnc_operational_workspace",
     "calculate_cnc_association_toolpath",
+    "delete_cnc_association",
     "get_cnc_sheet_program",
     "set_cnc_path_direction",
     "save_cnc_operational_sheet",

@@ -394,6 +394,51 @@ def _identity(points: Sequence[tuple[float, float]], closed: bool) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def selectable_vector_id(path_key: str, shape_id: str, *, shared: bool) -> str:
+    """Identity of one selectable vector.
+
+    A path key that has a single shape stays unchanged, so older associations
+    still resolve. Distinct shapes that share a path key get their own id.
+    Depth passes of one shape share it, and reversing the points does not.
+    """
+
+    key = str(path_key or "").strip()
+    shape = str(shape_id or "").strip()
+    if shared and shape:
+        return f"{key}#{shape}"
+    return key
+
+
+def stamp_selectable_vector_ids(payload: dict[str, object]) -> dict[str, object]:
+    """Publish vector ids from the shapes actually present on the program."""
+
+    shapes_by_key: dict[str, set[str]] = {}
+    operations = payload.get("operations") or []
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        for path in operation.get("toolpaths") or []:
+            if not isinstance(path, dict):
+                continue
+            shapes_by_key.setdefault(str(path.get("path_key") or ""), set()).add(
+                str(path.get("shape_id") or "")
+            )
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        for path in operation.get("toolpaths") or []:
+            if not isinstance(path, dict):
+                continue
+            key = str(path.get("path_key") or "")
+            shape = str(path.get("shape_id") or "")
+            path["vector_id"] = selectable_vector_id(
+                key,
+                shape,
+                shared=len(shapes_by_key.get(key) or ()) > 1,
+            )
+    return payload
+
+
 def direction_invariant_identity(
     points: Sequence[tuple[float, float]],
     closed: bool,
@@ -822,7 +867,7 @@ def chain_line_paths(
 def program_payload(program: CncBoardProgram) -> dict[str, object]:
     """JSON-ready view. Depth stays a positive millimetre depth, never a Z word."""
 
-    return {
+    payload = {
         "sheet_no": program.sheet_no,
         "ready": program.ready,
         "geometry_ready": program.geometry_ready,
@@ -885,6 +930,7 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
             for operation in program.operations
         ],
     }
+    return stamp_selectable_vector_ids(payload)
 
 
 __all__ = [
@@ -899,4 +945,6 @@ __all__ = [
     "direction_invariant_identity",
     "orient_path",
     "program_payload",
+    "selectable_vector_id",
+    "stamp_selectable_vector_ids",
 ]

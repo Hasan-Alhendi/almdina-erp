@@ -4,10 +4,11 @@ A tool definition is independent of every profile that copies it. A profile is
 independent of every association that copies it. A calculated toolpath keeps
 its own snapshot, so later edits do not rewrite it.
 
-Vector identity is the operational path key already issued from the piece
-instance and geometry fingerprint. List order, draw order, and the layer name
-are not identities. Sheet perimeter uses the existing connected-perimeter path
-key and is offered only when that path is in the machinable catalog.
+A selectable vector is one machined shape. A path key with a single shape
+keeps that key. Shapes that share a path key are distinct, and depth passes
+of one shape stay together. List order and SVG order are not identities.
+Sheet perimeter uses the existing connected-perimeter path key and is offered
+only when that path is in the machinable catalog.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
     _motions,
     _pass_depths,
     direction_invariant_identity,
+    selectable_vector_id,
+    stamp_selectable_vector_ids,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     MAX_DEPTH_MM,
@@ -464,7 +467,7 @@ def vectors_from_paths(paths: Sequence[Mapping[str, Any]]) -> tuple[MachinableVe
     for row in paths:
         if not isinstance(row, Mapping):
             continue
-        vector_id = str(row.get("path_key") or row.get("vector_id") or "").strip()
+        vector_id = str(row.get("vector_id") or row.get("path_key") or "").strip()
         operation_key = str(row.get("operation_key") or "").strip()
         if not vector_id or not operation_key or vector_id in seen:
             continue
@@ -735,6 +738,8 @@ def association_availability(
 
 
 def _geometry_index(program: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    """Last toolpath for each path key. Prefer geometry_groups for selection."""
+
     found: dict[str, Mapping[str, Any]] = {}
     for operation in program.get("operations") or ():
         if not isinstance(operation, Mapping):
@@ -743,6 +748,106 @@ def _geometry_index(program: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
             if isinstance(path, Mapping) and path.get("path_key"):
                 found[str(path.get("path_key"))] = path
     return found
+
+
+def geometry_groups(program: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One group per machined shape. Depth-pass copies of that shape stay together."""
+
+    buckets: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    order: list[tuple[str, str]] = []
+    for operation in program.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        for path in operation.get("toolpaths") or ():
+            if not isinstance(path, Mapping) or not path.get("path_key"):
+                continue
+            key = str(path.get("path_key") or "")
+            try:
+                shape = shape_id(path)
+            except MachiningSetupError:
+                shape = str(path.get("shape_id") or "")
+            token = (key, shape)
+            if token not in buckets:
+                buckets[token] = []
+                order.append(token)
+            buckets[token].append(path)
+    shapes_for_key: dict[str, set[str]] = {}
+    for key, shape in order:
+        shapes_for_key.setdefault(key, set()).add(shape)
+    groups: list[dict[str, Any]] = []
+    for key, shape in order:
+        paths = buckets[(key, shape)]
+        issues: list[str] = []
+        for path in paths:
+            for code in path.get("issues") or ():
+                text = str(code or "")
+                if text and text not in issues:
+                    issues.append(text)
+        ready = all(bool(path.get("ready")) for path in paths) and any(
+            len(path.get("points") or ()) >= 2 for path in paths
+        )
+        groups.append(
+            {
+                "path_key": key,
+                "shape_id": shape,
+                "vector_id": selectable_vector_id(
+                    key,
+                    shape,
+                    shared=len(shapes_for_key.get(key) or ()) > 1,
+                ),
+                "paths": paths,
+                "ready": ready,
+                "issues": issues,
+            }
+        )
+    return groups
+
+
+def resolve_geometry_group(program: Mapping[str, Any], vector_id: str) -> dict[str, Any]:
+    """Find the shape a saved or selected vector id refers to.
+
+    A legacy path key still selects its shape when that key has only one shape.
+    It does not select every shape that happens to share the key.
+    """
+
+    wanted = str(vector_id or "").strip()
+    if not wanted:
+        raise MachiningSetupError("vector_not_machinable")
+    groups = geometry_groups(program)
+    exact = [group for group in groups if group["vector_id"] == wanted]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise MachiningSetupError("vector_identity_ambiguous")
+    legacy = [group for group in groups if group["path_key"] == wanted]
+    if len(legacy) == 1:
+        return legacy[0]
+    if len(legacy) > 1:
+        raise MachiningSetupError("vector_identity_ambiguous")
+    raise MachiningSetupError("vector_not_machinable")
+
+
+def catalog_rows_from_program(program: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Selectable vectors taken from the compiled program, not from draw order."""
+
+    rows: list[dict[str, Any]] = []
+    for group in geometry_groups(program):
+        first = group["paths"][0]
+        layer = str(first.get("operational_layer") or first.get("dxf_layer") or "")
+        rows.append(
+            {
+                "vector_id": group["vector_id"],
+                "path_key": group["path_key"],
+                "shape_id": group["shape_id"],
+                "operation_key": str(first.get("operation_key") or ""),
+                "dxf_layer": layer,
+                "piece_instance_id": str(first.get("piece_instance_id") or ""),
+                "label": str(first.get("piece_label") or group["vector_id"]),
+                "ready": group["ready"],
+                "issues": list(group["issues"]),
+            }
+        )
+    return rows
 
 
 def _points(path: Mapping[str, Any]) -> list[tuple[float, float]]:
@@ -787,6 +892,7 @@ def calculate_toolpath_snapshot(
     program: Mapping[str, Any],
     existing_snapshots: Sequence[Mapping[str, Any]] = (),
     toolpath_id: str | None = None,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     """Freeze one calculated toolpath from the association's own values."""
 
@@ -798,29 +904,39 @@ def calculate_toolpath_snapshot(
         raise MachiningSetupError("selected_vectors_pending")
     local = association.get("local_values") if isinstance(association.get("local_values"), Mapping) else {}
     preset = _preset_from_local(local)
+    current_association = str(association.get("association_id") or "")
     previous = [
         _preset_from_local(snapshot.get("local_values") or {})
         for snapshot in existing_snapshots
         if isinstance(snapshot, Mapping)
+        and not snapshot.get("archived")
+        and not snapshot.get("superseded_by")
+        and str(snapshot.get("association_id") or "") not in {"", current_association}
     ]
     _assert_single_physical_tool([*previous, preset])
-    geometry = _geometry_index(program)
     vector_ids = [str(vector_id) for vector_id in association.get("vector_ids") or ()]
     if not vector_ids:
         raise MachiningSetupError("vector_not_machinable")
     paths: list[dict[str, Any]] = []
+    resolved_ids: list[str] = []
     for vector_id in vector_ids:
-        path = geometry.get(vector_id)
-        if path is None or not path.get("ready"):
-            issues = list((path or {}).get("issues") or [])
+        group = resolve_geometry_group(program, vector_id)
+        if not group["ready"]:
+            issues = list(group.get("issues") or [])
             raise MachiningSetupError(str(issues[0] if issues else "vector_not_machinable"))
+        path = next(item for item in group["paths"] if len(item.get("points") or ()) >= 2)
         points = _points(path)
         if len(points) < 2:
             raise MachiningSetupError("geometry_invalid")
         closed = bool(path.get("closed"))
+        resolved = str(group["vector_id"])
+        if resolved not in resolved_ids:
+            resolved_ids.append(resolved)
         paths.append(
             {
-                "path_key": vector_id,
+                "path_key": str(group["path_key"]),
+                "vector_id": resolved,
+                "shape_id": str(group["shape_id"] or ""),
                 "operation_key": str(path.get("operation_key") or ""),
                 "dxf_layer": str(path.get("dxf_layer") or ""),
                 "piece_instance_id": str(path.get("piece_instance_id") or ""),
@@ -836,10 +952,11 @@ def calculate_toolpath_snapshot(
         )
     return {
         "toolpath_id": _stable_id(toolpath_id or new_machining_id("toolpath"), "toolpath_id_invalid"),
+        "request_id": str(request_id or "").strip(),
         "name": name,
         "association_id": str(association.get("association_id") or ""),
         "profile_id": str(association.get("profile_id") or ""),
-        "vector_ids": vector_ids,
+        "vector_ids": resolved_ids,
         "tool_values": _copy(local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}),
         "profile_values": {
             "final_depth_mm": local.get("final_depth_mm"),
@@ -875,14 +992,30 @@ def calculate_toolpath_snapshot(
 def append_snapshot(
     snapshots: Sequence[Mapping[str, Any]],
     snapshot: Mapping[str, Any],
+    *,
+    live_association_ids: Sequence[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Keep calculation order. A new snapshot does not rewrite an older one."""
+    """Keep calculation order. A new snapshot does not rewrite an older one.
+
+    A historical or superseded name does not block a new calculation. Recalculating
+    the same association may keep its name. Another live association may not.
+    """
 
     stored = [_copy(row) for row in snapshots if isinstance(row, Mapping)]
     incoming = _copy(snapshot)
     if any(row.get("toolpath_id") == incoming.get("toolpath_id") for row in stored):
         raise MachiningSetupError("toolpath_duplicate")
-    if any(row.get("name") == incoming.get("name") for row in stored):
+    live = None if live_association_ids is None else {str(item) for item in live_association_ids}
+    incoming_association = str(incoming.get("association_id") or "")
+    for row in stored:
+        if row.get("name") != incoming.get("name") or not incoming.get("name"):
+            continue
+        if row.get("superseded_by") or row.get("archived"):
+            continue
+        if str(row.get("association_id") or "") == incoming_association:
+            continue
+        if live is not None and str(row.get("association_id") or "") not in live:
+            continue
         raise MachiningSetupError("toolpath_name_duplicate")
     stored.append(incoming)
     return stored
@@ -894,13 +1027,21 @@ def assert_physical_tool_consistency(
 ) -> None:
     """One file keeps one physical tool number and one diameter."""
 
+    linked = {
+        str(row.get("toolpath_id") or "").strip()
+        for row in associations
+        if isinstance(row, Mapping) and str(row.get("toolpath_id") or "").strip()
+    }
     presets = [
         _preset_from_local(row["local_values"])
         for row in associations
         if isinstance(row, Mapping) and isinstance(row.get("local_values"), Mapping)
     ]
     for snapshot in snapshots:
-        if not isinstance(snapshot, Mapping):
+        if not isinstance(snapshot, Mapping) or snapshot.get("archived") or snapshot.get("superseded_by"):
+            continue
+        toolpath_id = str(snapshot.get("toolpath_id") or "").strip()
+        if not toolpath_id or toolpath_id not in linked:
             continue
         local = snapshot.get("local_values")
         if isinstance(local, Mapping):
@@ -1012,7 +1153,11 @@ def active_toolpath_snapshots(
             linked_ids.append(toolpath_id)
     if not linked_ids:
         return []
-    by_id = {str(snapshot.get("toolpath_id") or ""): snapshot for snapshot in rows}
+    by_id = {
+        str(snapshot.get("toolpath_id") or ""): snapshot
+        for snapshot in rows
+        if not snapshot.get("archived")
+    }
     return [by_id[toolpath_id] for toolpath_id in linked_ids if toolpath_id in by_id]
 
 
@@ -1131,16 +1276,28 @@ def overlay_frozen_toolpaths(
     selected = active_toolpath_snapshots(snapshots, associations)
     if not selected:
         return dict(program)
+    groups = geometry_groups(program)
+    shared_keys = {
+        group["path_key"]
+        for group in groups
+        if sum(1 for other in groups if other["path_key"] == group["path_key"]) > 1
+    }
+    vector_by_object = {id(path): group["vector_id"] for group in groups for path in group["paths"]}
     by_path: dict[str, Mapping[str, Any]] = {}
     for snapshot in selected:
-        if not isinstance(snapshot, Mapping):
+        if not isinstance(snapshot, Mapping) or snapshot.get("archived"):
             continue
         for path in snapshot.get("paths") or ():
-            if isinstance(path, Mapping) and path.get("path_key"):
-                by_path[str(path.get("path_key"))] = {
-                    "path": path,
-                    "snapshot": snapshot,
-                }
+            if not isinstance(path, Mapping) or not path.get("path_key"):
+                continue
+            key = str(path.get("path_key") or "")
+            vector = str(path.get("vector_id") or "")
+            shape = str(path.get("shape_id") or "")
+            if not vector and shape and key in shared_keys:
+                vector = selectable_vector_id(key, shape, shared=True)
+            if not vector and key in shared_keys:
+                continue
+            by_path[vector or key] = {"path": path, "snapshot": snapshot}
     if not by_path:
         return dict(program)
     operations: list[dict[str, Any]] = []
@@ -1149,14 +1306,18 @@ def overlay_frozen_toolpaths(
         if not isinstance(operation, Mapping):
             continue
         toolpaths: list[dict[str, Any]] = []
+        emitted: set[str] = set()
         for path in operation.get("toolpaths") or ():
             if not isinstance(path, Mapping):
                 continue
-            key = str(path.get("path_key") or "")
+            key = vector_by_object.get(id(path)) or str(path.get("vector_id") or path.get("path_key") or "")
             frozen = by_path.get(key)
+            if frozen is not None and key in emitted:
+                continue
             if frozen is None:
                 toolpaths.append(dict(path))
                 continue
+            emitted.add(key)
             seen.add(key)
             snapshot = frozen["snapshot"]
             frozen_path = frozen["path"]
@@ -1189,7 +1350,9 @@ def overlay_frozen_toolpaths(
             preset = _copy(snapshot.get("preset") if isinstance(snapshot.get("preset"), Mapping) else {})
             grouped.setdefault(operation_key, []).append(
                 {
-                    "path_key": key,
+                    "path_key": str(frozen_path.get("path_key") or key),
+                    "vector_id": str(frozen_path.get("vector_id") or key),
+                    "shape_id": str(frozen_path.get("shape_id") or ""),
                     "operation_key": operation_key,
                     "dxf_layer": frozen_path.get("dxf_layer") or "",
                     "piece_instance_id": frozen_path.get("piece_instance_id") or "",
@@ -1683,7 +1846,64 @@ def _stamp_shape_ids(program: Mapping[str, Any]) -> dict[str, Any]:
         cloned["toolpaths"] = toolpaths
         operations.append(cloned)
     payload["operations"] = operations
-    return payload
+    return stamp_selectable_vector_ids(payload)
+
+
+def archive_association(
+    associations: Sequence[Mapping[str, Any]],
+    snapshots: Sequence[Mapping[str, Any]],
+    association_id: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Remove one association from the active set and archive its snapshots.
+
+    Archived snapshots stay for audit. They do not execute, reserve a name,
+    or constrain the next physical tool. Historical NC files are untouched.
+    """
+
+    target = str(association_id or "").strip()
+    if not target:
+        raise MachiningSetupError("association_id_invalid")
+    kept = [
+        _copy(row)
+        for row in associations
+        if isinstance(row, Mapping) and str(row.get("association_id") or "") != target
+    ]
+    archived: list[dict[str, Any]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, Mapping):
+            continue
+        row = _copy(snapshot)
+        if str(row.get("association_id") or "") == target:
+            row["archived"] = True
+            if not row.get("superseded_by"):
+                row["superseded_by"] = "archived"
+        archived.append(row)
+    return kept, archived
+
+
+def drop_resurrected_associations(
+    existing: Sequence[Mapping[str, Any]],
+    incoming: Sequence[Mapping[str, Any]],
+    snapshots: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Ignore a stale save that tries to restore an association already removed."""
+
+    live = {
+        str(row.get("association_id") or "")
+        for row in existing
+        if isinstance(row, Mapping)
+    }
+    archived_ids = {
+        str(snapshot.get("association_id") or "")
+        for snapshot in snapshots
+        if isinstance(snapshot, Mapping) and snapshot.get("archived")
+    }
+    blocked = archived_ids - live
+    return [
+        _copy(row)
+        for row in incoming
+        if isinstance(row, Mapping) and str(row.get("association_id") or "") not in blocked
+    ]
 
 
 def unreversed_operational_program(
@@ -1739,6 +1959,11 @@ __all__ = [
     "reversed_direction_block",
     "path_geometry_id",
     "reverse_operational_points",
+    "archive_association",
+    "catalog_rows_from_program",
+    "drop_resurrected_associations",
+    "geometry_groups",
+    "resolve_geometry_group",
     "shape_id",
     "toggle_reversed_path",
     "unreversed_operational_program",

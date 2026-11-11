@@ -3920,6 +3920,8 @@ That layer has no machinable vectors on this sheet.,هذه الطبقة لا ت�
 Sheet Perimeter is available only while Connected Perimeter is enabled.,محيط اللوح يظهر فقط عند تفعيل المحيط المتصل.
 Enter a toolpath name.,أدخل اسم مسار التشغيل.
 A calculated toolpath already uses that name.,يوجد مسار تشغيل محسوب بهذا الاسم.
+That path key matches more than one vector. Select the vector on the board again.,مفتاح المسار يطابق أكثر من متجه. حدّد المتجه على اللوح مرة أخرى.
+The sheet changed in another window. Reload it before repeating this action.,تغيّر اللوح في نافذة أخرى. أعد تحميله قبل تكرار الإجراء.
 That calculated toolpath already exists.,مسار التشغيل المحسوب موجود مسبقًا.
 The toolpath identity is not valid.,هوية مسار التشغيل غير صالحة.
 Ball Nose,ريشة كروية
@@ -3964,6 +3966,7 @@ The saved direction could not be cleared.,تعذر إلغاء الاتجاه ا�
 The path direction was not changed.,لم يتغير اتجاه المسار.
 Restore the original direction,استعادة الاتجاه الأصلي
 The association was not calculated.,لم يُحسب الربط.
+Calculating the toolpath...,جارٍ حساب مسار التشغيل...
 "A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want.",اتجاه محفوظ يطابق أكثر من مسار، لذلك لم يُنشأ ملف NC. استعد الاتجاه ثم عيّنه من جديد على المسار المطلوب.
 "The sheet perimeter already belongs to {0}. Edit that association and release the sheet perimeter before assigning it on its own.",محيط اللوح يخص الربط {0} بالفعل. عدّل ذلك الربط وافصل المحيط قبل إسناده وحده.
 Release the sheet perimeter from this association,افصل محيط اللوح عن هذا الربط

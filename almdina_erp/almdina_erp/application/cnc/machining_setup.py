@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    _nc_signature,
     append_snapshot,
     assert_physical_tool_consistency,
     calculate_toolpath_snapshot,
@@ -81,15 +82,18 @@ def freeze_calculated_toolpath(
     toolpath_name: str,
     program: Mapping[str, Any],
     snapshots: Sequence[Mapping[str, Any]],
+    live_association_ids: Sequence[str] | None = None,
+    request_id: str | None = None,
 ) -> list[dict[str, Any]]:
     snapshot = calculate_toolpath_snapshot(
         association=association,
         toolpath_name=toolpath_name,
         program=program,
         existing_snapshots=snapshots,
+        request_id=request_id,
     )
     previous_id = str(association.get("toolpath_id") or "")
-    stored = append_snapshot(snapshots, snapshot)
+    stored = append_snapshot(snapshots, snapshot, live_association_ids=live_association_ids)
     new_id = str(snapshot.get("toolpath_id") or "")
     new_vectors = {str(vector_id) for vector_id in snapshot.get("vector_ids") or ()}
     for row in stored:
@@ -105,18 +109,34 @@ def freeze_calculated_toolpath(
 def remember_toolpath_on_association(
     associations: Sequence[Mapping[str, Any]],
     snapshots: Sequence[Mapping[str, Any]],
+    association_id: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Link only the association that was just calculated, and only when it still matches.
+
+    Recalculating one association must not restore another association's old
+    snapshot after its depth, tool, or vectors changed.
+    """
+
     latest: dict[str, Mapping[str, Any]] = {}
     for snapshot in snapshots:
-        if isinstance(snapshot, Mapping) and snapshot.get("association_id"):
+        if isinstance(snapshot, Mapping) and snapshot.get("association_id") and not snapshot.get("archived"):
             latest[str(snapshot.get("association_id"))] = snapshot
+    target = str(association_id or "").strip()
     rows: list[dict[str, Any]] = []
     for association in associations:
         row = dict(association)
-        snapshot = latest.get(str(row.get("association_id") or ""))
-        if snapshot is not None:
-            row["toolpath_id"] = snapshot.get("toolpath_id") or ""
-            row["toolpath_name"] = snapshot.get("name") or row.get("toolpath_name") or ""
+        row_id = str(row.get("association_id") or "")
+        if target and row_id != target:
+            rows.append(row)
+            continue
+        snapshot = latest.get(row_id)
+        local = snapshot.get("local_values") if isinstance(snapshot, Mapping) else None
+        if isinstance(snapshot, Mapping) and isinstance(local, Mapping):
+            current = _nc_signature(row.get("local_values") or {}, row.get("vector_ids") or ())
+            frozen = _nc_signature(local, snapshot.get("vector_ids") or ())
+            if current == frozen:
+                row["toolpath_id"] = snapshot.get("toolpath_id") or ""
+                row["toolpath_name"] = snapshot.get("name") or row.get("toolpath_name") or ""
         rows.append(row)
     return rows
 

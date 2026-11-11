@@ -15,10 +15,15 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     TOOL_UNITS_MM,
     MachiningSetupError,
     append_snapshot,
+    archive_association,
     artcam_tool_storage,
     association_availability,
     active_toolpath_snapshots,
     calculate_toolpath_snapshot,
+    catalog_rows_from_program,
+    drop_resurrected_associations,
+    geometry_groups,
+    resolve_geometry_group,
     machining_tool_uses,
     nc_toolpath_fingerprint_rows,
     normalize_artcam_tool,
@@ -34,7 +39,12 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     tool_copy_from_stored,
     vectors_from_paths,
 )
-from almdina_erp.almdina_erp.application.cnc.machining_setup import freeze_calculated_toolpath
+from almdina_erp.almdina_erp.application.cnc.machining_setup import (
+    freeze_calculated_toolpath,
+    remember_toolpath_on_association,
+)
+from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
+from almdina_erp.almdina_erp.domain.cnc.nc_interpreter import interpret_nc
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     GENERATED,
     NEEDS_REGENERATION,
@@ -1410,3 +1420,252 @@ def test_a_tool_used_by_a_profile_association_or_snapshot_cannot_be_deleted():
         "association",
         "active_snapshot",
     )
+
+
+def _shape(path_key, points, *, operation="cut_path", layer="CUT_PATH", ready=True, issues=()):
+    return {
+        "path_key": path_key,
+        "operation_key": operation,
+        "dxf_layer": layer,
+        "operational_layer": layer,
+        "ready": ready,
+        "closed": True,
+        "points": points,
+        "issues": list(issues),
+    }
+
+
+def test_vector_identity_survives_shared_keys_depth_passes_reverse_and_delete():
+    square = [[0, 0], [40, 0], [40, 20], [0, 0]]
+    reversed_square = [[40, 20], [40, 0], [0, 0], [40, 20]]
+    neighbor = [[80, 0], [110, 0], [110, 16], [80, 0]]
+    liner = [[0, 40], [30, 40], [30, 46], [0, 40]]
+    handle = [[0, 50], [18, 50], [18, 58], [0, 50]]
+    groove = [[0, 70], [22, 70], [22, 76], [0, 70]]
+    perimeter = [[0, 0], [200, 0], [200, 90], [0, 90], [0, 0]]
+    shared = "cut_path:center:shared"
+    program = {
+        "operations": [
+            {
+                "operation_key": "cut_path",
+                "dxf_layer": "CUT_PATH",
+                "toolpaths": [
+                    _shape("cut_path:piece-a:outer", square),
+                    _shape(shared, square),
+                    _shape(shared, neighbor),
+                    _shape(shared, reversed_square),
+                    _shape(shared, square),
+                ],
+            },
+            {
+                "operation_key": "liner",
+                "dxf_layer": "Liner",
+                "toolpaths": [_shape("liner:piece-a", liner, operation="liner", layer="Liner")],
+            },
+            {
+                "operation_key": "handle_recess",
+                "dxf_layer": "Handle Recess",
+                "toolpaths": [_shape("handle:piece-a", handle, operation="handle_recess", layer="Handle Recess")],
+            },
+            {
+                "operation_key": "rear_groove",
+                "dxf_layer": "Rear Groove",
+                "toolpaths": [_shape("groove:piece-a", groove, operation="rear_groove", layer="Rear Groove")],
+            },
+            {
+                "operation_key": "sheet_perimeter",
+                "dxf_layer": "CUT_PATH",
+                "toolpaths": [
+                    _shape(SHEET_PERIMETER_PATH_KEY, perimeter, operation="sheet_perimeter", layer="SHEET_PERIMETER")
+                ],
+            },
+        ]
+    }
+    groups = {group["vector_id"]: group for group in geometry_groups(program)}
+    shared_ids = [group["vector_id"] for group in geometry_groups(program) if group["path_key"] == shared]
+    assert len(shared_ids) == 2
+    assert all("#" in vector_id for vector_id in shared_ids)
+    assert groups["cut_path:piece-a:outer"]["path_key"] == "cut_path:piece-a:outer"
+    assert groups["liner:piece-a"]["paths"][0]["dxf_layer"] == "Liner"
+    assert groups["handle:piece-a"]["paths"][0]["dxf_layer"] == "Handle Recess"
+    assert groups["groove:piece-a"]["paths"][0]["dxf_layer"] == "Rear Groove"
+    assert groups[SHEET_PERIMETER_PATH_KEY]["vector_id"] == SHEET_PERIMETER_PATH_KEY
+    square_id = next(vector_id for vector_id in shared_ids if len(groups[vector_id]["paths"]) == 3)
+    neighbor_id = next(vector_id for vector_id in shared_ids if vector_id != square_id)
+    assert resolve_geometry_group(program, square_id)["vector_id"] == square_id
+    with pytest.raises(MachiningSetupError) as ambiguous:
+        resolve_geometry_group(program, shared)
+    assert ambiguous.value.code == "vector_identity_ambiguous"
+    assert resolve_geometry_group(program, "cut_path:piece-a:outer")["path_key"] == "cut_path:piece-a:outer"
+    rows = catalog_rows_from_program(program)
+    assert {row["vector_id"] for row in rows} == set(groups)
+    catalog = vectors_from_paths(rows)
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    selected = normalize_associations(
+        [_linked(profile, "association:a", [square_id, "liner:piece-a"], toolpath_name="TEST_ASSOC_A")],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    unready = {
+        "operations": [
+            {
+                "toolpaths": [
+                    _shape("cut_path:plain", square, ready=False, issues=["mill_diameter_required"]),
+                ]
+            }
+        ]
+    }
+    with pytest.raises(MachiningSetupError) as unreadiness:
+        calculate_toolpath_snapshot(
+            association={
+                "association_id": "association:plain",
+                "vector_ids": ["cut_path:plain"],
+                "local_values": selected[0]["local_values"],
+            },
+            toolpath_name="PLAIN",
+            program=unready,
+        )
+    assert unreadiness.value.code == "mill_diameter_required"
+    snapshot = calculate_toolpath_snapshot(
+        association=selected[0],
+        toolpath_name="TEST_ASSOC_A",
+        program=program,
+    )
+    frozen_points = [tuple(path["points"]) for path in snapshot["paths"]]
+    assert [list(point) for point in square] in [path["points"] for path in snapshot["paths"]]
+    assert neighbor not in [path["points"] for path in snapshot["paths"]]
+    assert len(snapshot["paths"]) == 2
+    assert {path["vector_id"] for path in snapshot["paths"]} == {square_id, "liner:piece-a"}
+    perimeter_row = normalize_associations(
+        [
+            {
+                "association_id": "association:edge",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_SHEET_PERIMETER},
+                "local_values": copy.deepcopy(selected[0]["local_values"]),
+            }
+        ],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    perimeter_snapshot = calculate_toolpath_snapshot(
+        association=perimeter_row[0],
+        toolpath_name="PERIMETER",
+        program=program,
+    )
+    assert [path["vector_id"] for path in perimeter_snapshot["paths"]] == [SHEET_PERIMETER_PATH_KEY]
+    assert perimeter_snapshot["paths"][0]["points"] == perimeter
+    stored = append_snapshot([], snapshot, live_association_ids=["association:a"])
+    linked = remember_toolpath_on_association(selected, stored, "association:a")
+    overlaid = overlay_frozen_toolpaths(program, stored, linked)
+    square_copies = [
+        path
+        for operation in overlaid["operations"]
+        for path in operation["toolpaths"]
+        if path.get("path_key") == shared and path.get("points") == square
+    ]
+    neighbor_paths = [
+        path
+        for operation in overlaid["operations"]
+        for path in operation["toolpaths"]
+        if path.get("points") == neighbor
+    ]
+    assert len(square_copies) == 1
+    assert len(neighbor_paths) == 1
+    assert neighbor_paths[0].get("motions") in (None, [])
+    frozen_square = next(path for path in snapshot["paths"] if path["vector_id"] == square_id)
+    assert square_copies[0]["motions"] == frozen_square["motions"]
+    assert frozen_points
+    posted = {
+        "geometry_ready": True,
+        "nc_export_ready": True,
+        "ready": True,
+        "sheet_no": 1,
+        "coordinate_space": "sheet_bottom_left_y_up_mm",
+        "operations": [
+            {
+                "operation_key": "cut_path",
+                "dxf_layer": "CUT_PATH",
+                "toolpaths": [
+                    {**path, "preset": snapshot["preset"], "ready": True, "issues": []}
+                    for path in snapshot["paths"]
+                ],
+            }
+        ],
+    }
+    machine = {"retract_z_mm": 20, "production_approved": False, "distance_mode": "G90", "work_offset": "G54"}
+    package = build_simulation_nc(posted, machine_profile=machine, sheet_no=1)
+    text = package["text"]
+    assert package["verification"]["ok"] is True
+    assert "X80" not in text and "X110" not in text
+    assert "X40" in text and "Y46" in text
+    posted_cuts = [motion for motion in interpret_nc(text).motions if motion.kind == "cut"]
+    snapshot_cuts = [
+        motion
+        for path in snapshot["paths"]
+        for motion in path["motions"]
+        if motion["kind"] == "cut"
+    ]
+    assert len(posted_cuts) == len(snapshot_cuts)
+    assert [(round(motion.x_mm, 3), round(motion.y_mm, 3)) for motion in posted_cuts] == [
+        (round(float(motion["x_mm"]), 3), round(float(motion["y_mm"]), 3)) for motion in snapshot_cuts
+    ]
+
+    other = normalize_associations(
+        [_linked(profile, "association:b", [neighbor_id], final_depth_mm=22)],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    both = freeze_calculated_toolpath(
+        association=other[0],
+        toolpath_name="TEST_ASSOC_B",
+        program=program,
+        snapshots=stored,
+        live_association_ids=["association:a", "association:b"],
+    )
+    remembered = remember_toolpath_on_association(linked + other, both, "association:b")
+    changed = copy.deepcopy(remembered)
+    changed[1]["local_values"]["final_depth_mm"] = 24
+    changed[1]["toolpath_id"] = ""
+    recalculated = freeze_calculated_toolpath(
+        association=changed[0],
+        toolpath_name="TEST_ASSOC_A",
+        program=program,
+        snapshots=both,
+        live_association_ids=["association:a", "association:b"],
+    )
+    after = remember_toolpath_on_association(changed, recalculated, "association:a")
+    assert after[1]["toolpath_id"] == ""
+    assert after[0]["toolpath_id"]
+    assert after[0]["local_values"]["final_depth_mm"] == profile["final_depth_mm"]
+
+    kept, archived = archive_association(after, recalculated, "association:a")
+    assert [row["association_id"] for row in kept] == ["association:b"]
+    assert active_toolpath_snapshots(archived, kept) == []
+    assert all(row.get("archived") for row in archived if row.get("association_id") == "association:a")
+    reused = calculate_toolpath_snapshot(
+        association=selected[0],
+        toolpath_name="TEST_ASSOC_A",
+        program=program,
+        existing_snapshots=archived,
+    )
+    append_snapshot(archived, reused, live_association_ids=["association:b"])
+    with pytest.raises(MachiningSetupError) as duplicate:
+        append_snapshot(
+            archived,
+            {
+                **reused,
+                "name": "TEST_ASSOC_B",
+                "toolpath_id": "toolpath:clash",
+                "association_id": "association:live",
+            },
+            live_association_ids=["association:b", "association:live"],
+        )
+    assert duplicate.value.code == "toolpath_name_duplicate"
+    stale = drop_resurrected_associations(
+        kept,
+        after,
+        archived,
+    )
+    assert [row["association_id"] for row in stale] == ["association:b"]

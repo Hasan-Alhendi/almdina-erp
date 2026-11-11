@@ -437,10 +437,9 @@
                 event.preventDefault();
                 if (!window.confirm(translate("Remove this association from the operation order?"))) return;
                 const id = remove.getAttribute("data-artcam-remove-association");
-                const saved = (machining(context.sheet).associations || []).filter(row => row.association_id !== id);
-                call(`${METHOD}.save_cnc_operational_sheet`, Object.assign({}, context.getArgs ? context.getArgs() : {}, {
-                    machining_profiles: machining(context.sheet).profiles || [],
-                    vector_associations: saved,
+                call(`${METHOD}.delete_cnc_association`, Object.assign({}, context.getArgs ? context.getArgs() : {}, {
+                    association_id: id,
+                    base_fingerprint: (context.sheet || {}).settings_fingerprint || "",
                 })).then(workspace => {
                     if (context.state.artcamForm && context.state.artcamForm.association_id === id) {
                         context.state.artcamForm = blankForm();
@@ -513,40 +512,61 @@
         state.artcamBusy = true;
         const button = host.querySelector("[data-artcam-calculate]");
         if (button) button.disabled = true;
-        status(host, translate("Saving associations..."), false);
+        if (!state.calculationRequestId || state.calculationAssociationId !== next.association_id) {
+            state.calculationRequestId = newId();
+            state.calculationAssociationId = next.association_id;
+        }
+        status(host, translate("Calculating the toolpath..."), false);
         const args = context.getArgs ? context.getArgs() : {};
-        call(`${METHOD}.save_cnc_operational_sheet`, Object.assign({}, args, {
+        call(`${METHOD}.calculate_cnc_association_toolpath`, Object.assign({}, args, {
+            association_id: next.association_id,
+            toolpath_name: next.name || form.name,
             machining_profiles: machining(context.sheet).profiles || [],
             vector_associations: rows,
+            calculation_request_id: state.calculationRequestId,
+            base_fingerprint: (context.sheet || {}).settings_fingerprint || "",
         })).then(workspace => {
-            const sheet = ((workspace.sheets || []).find(item => Number(item.sheet_no) === Number((context.sheet || {}).sheet_no))) || {};
-            const saved = ((sheet.machining || {}).associations || []).find(row => row.association_id === next.association_id) || next;
-            if (saved.conflict || saved.geometry_ready === false || !(saved.vector_ids || []).length) {
-                status(host, translate("The association was saved, but its vectors are not ready to calculate."), true);
+            state.artcamForm = blankForm();
+            state.vectorSelection = [];
+            state.calculationRequestId = "";
+            state.artcamBusy = false;
+            status(host, translate("The association was saved and calculated."), false);
+            if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
+        }).catch(error => {
+            const problem = window.AlmdinaFrontend && window.AlmdinaFrontend.normalizeError
+                ? window.AlmdinaFrontend.normalizeError(error)
+                : { outcome: "unknown", message: "" };
+            const release = () => {
                 state.artcamBusy = false;
                 if (button) button.disabled = false;
-                if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
-                return null;
+            };
+            if (problem.outcome === "unknown") {
+                call(`${METHOD}.get_cnc_operational_workspace`, args).then(workspace => {
+                    const sheet = ((workspace.sheets || []).find(item => Number(item.sheet_no) === Number((context.sheet || {}).sheet_no))) || {};
+                    const saved = ((sheet.machining || {}).associations || []).find(row => row.association_id === next.association_id);
+                    release();
+                    if (saved && saved.toolpath_id) {
+                        state.artcamForm = blankForm();
+                        state.vectorSelection = [];
+                        state.calculationRequestId = "";
+                        status(host, translate("The association was saved and calculated."), false);
+                        if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
+                        return;
+                    }
+                    status(host, translate("The result could not be confirmed. Check the current status before repeating the operation."), true);
+                    if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
+                }).catch(() => {
+                    release();
+                    status(host, translate("The result could not be confirmed. Check the current status before repeating the operation."), true);
+                });
+                return;
             }
-            return call(`${METHOD}.calculate_cnc_association_toolpath`, Object.assign({}, args, {
-                association_id: saved.association_id,
-                toolpath_name: saved.name || form.name,
-                machining_profiles: (sheet.machining || {}).profiles || [],
-                vector_associations: (sheet.machining || {}).associations || [],
-            })).then(calculated => {
-                state.artcamForm = blankForm();
-                state.vectorSelection = [];
-                state.artcamBusy = false;
-                status(host, translate("The association was saved and calculated."), false);
-                if (typeof context.onWorkspace === "function") context.onWorkspace(calculated || workspace);
-            });
-        }).catch(error => {
-            state.artcamBusy = false;
-            if (button) button.disabled = false;
-            status(host, translate("The association was not calculated. The values on this page are still here."), true);
+            state.calculationRequestId = "";
+            release();
+            status(host, problem.message || translate("The association was not calculated. The values on this page are still here."), true);
             reportFailure(
                 translate("The association was not calculated."),
-                translate("The association was not calculated. The values on this page are still here."),
+                problem.message || translate("The association was not calculated. The values on this page are still here."),
                 error
             );
         });

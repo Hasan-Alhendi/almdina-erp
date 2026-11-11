@@ -1316,12 +1316,11 @@
                 if (deleteAssociation && live.workspace.can_prepare) {
                     const id = deleteAssociation.getAttribute("data-delete-association");
                     if (!window.confirm(translate("Remove this association from the operation order?"))) return;
-                    const saved = ((live.sheet.machining || {}).associations || []).filter(row => row.association_id !== id);
                     frappe.call({
-                        method: `${METHOD}.save_cnc_operational_sheet`,
+                        method: `${METHOD}.delete_cnc_association`,
                         args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
-                            machining_profiles: (live.sheet.machining || {}).profiles || [],
-                            vector_associations: saved,
+                            association_id: id,
+                            base_fingerprint: live.sheet.settings_fingerprint || "",
                         }),
                         callback(response) {
                             if (live.state.artcamForm && live.state.artcamForm.association_id === id) {
@@ -2653,7 +2652,7 @@
         const mode = (source && source.value) || ((state.artcamForm || {}).source) || "";
         if (mode !== "selected_vectors") return false;
         if (typeof event.preventDefault === "function") event.preventDefault();
-        const vectorId = hit.getAttribute("data-vector-id") || hit.getAttribute("data-execution-path") || "";
+        const vectorId = hit.getAttribute("data-vector-id") || "";
         if (!vectorId || vectorId === "cut_path:sheet_perimeter") return true;
         if (!Array.isArray(state.vectorSelection)) state.vectorSelection = [];
         const selected = new Set(state.vectorSelection.map(String));
@@ -2695,7 +2694,7 @@
         if (!preview) return;
         const display = boardDisplayState(sheet || preview.__cutSheet, state);
         preview.querySelectorAll("[data-execution-path]").forEach(node => {
-            const vectorId = node.getAttribute("data-vector-id") || node.getAttribute("data-execution-path") || "";
+            const vectorId = node.getAttribute("data-vector-id") || "";
             const operation = node.getAttribute("data-operation-key") || "";
             const current = display.selected.has(vectorId);
             const assigned = !current && display.assigned.has(vectorId);
@@ -2808,6 +2807,7 @@
                         preset_name: String(toolpath.preset_name || ""),
                         geometry_fingerprint: group.fingerprint,
                         shape_id: String(toolpath.shape_id || ""),
+                        vector_id: String(toolpath.vector_id || ""),
                         points: group.points,
                         start: group.start,
                         end: group.end,
@@ -2820,6 +2820,13 @@
                     });
                 });
             });
+        });
+        const keyCount = {};
+        paths.forEach(path => {
+            keyCount[path.path_key] = (keyCount[path.path_key] || 0) + 1;
+        });
+        paths.forEach(path => {
+            if (!path.vector_id && keyCount[path.path_key] === 1) path.vector_id = path.path_key;
         });
         return paths;
     }
@@ -3020,7 +3027,7 @@
             </marker>`;
         }).join("");
         const strokes = physicalPaths.map(item => {
-            const vectorId = String(item.vector_id || item.path_key || "");
+            const vectorId = String(item.vector_id || "");
             const inspected = selectedExecutionPathId && item.execution_path_id === selectedExecutionPathId;
             const picked = selectedVectorIds.has(vectorId);
             const assigned = !picked && assignedVectorIds.has(vectorId);

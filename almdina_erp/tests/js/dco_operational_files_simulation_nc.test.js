@@ -111,6 +111,13 @@ const dialog = ux.dialogMarkup(
         status: "Not Generated",
         operations: [{ operation_key: "cut_path", dxf_layer: "CUT_PATH", path_count: 1 }],
         paths: [{ path_key: "cut_path:a", operation_key: "cut_path", piece_label: "1.1" }],
+        machining: {
+            associations: [
+                { association_id: "association:a", name: "Outer", selection: { kind: "selected_vectors" }, profile_id: "" },
+                { association_id: "association:b", name: "Inner", selection: { kind: "layer", operation_key: "cut_path" }, profile_id: "" },
+            ],
+            profiles: [],
+        },
         can_download_current: false,
     },
     {
@@ -134,8 +141,9 @@ assert.ok(dialog.includes("dco-operational-sheet__body"));
 assert.ok(dialog.includes("dco-operational-sheet__preview"));
 assert.ok(dialog.includes("dco-operational-sheet__settings"));
 assert.ok(dialog.includes("dco-operational-order__move"));
-assert.ok(dialog.includes("Move the operation earlier"));
+assert.ok(dialog.includes("Move earlier"));
 assert.ok(dialog.includes("data-move=\"earlier\""));
+assert.ok(dialog.includes("data-delete-association=\"association:a\""));
 assert.ok(dialog.indexOf("dco-operational-sheet__preview") < dialog.indexOf("dco-operational-sheet__settings"));
 
 const multi = ux.dialogMarkup(
@@ -152,6 +160,13 @@ const multi = ux.dialogMarkup(
             { operation_key: "cut_path", dxf_layer: "CUT_PATH", path_count: 1 },
         ],
         paths: [],
+        machining: {
+            associations: [
+                { association_id: "association:liner", name: "Liner", selection: { kind: "layer", operation_key: "liner" }, profile_id: "" },
+                { association_id: "association:cut", name: "Cut", selection: { kind: "layer", operation_key: "cut_path" }, profile_id: "" },
+            ],
+            profiles: [],
+        },
         can_download_current: false,
     },
     {
@@ -166,9 +181,9 @@ const multi = ux.dialogMarkup(
         factoryPresets: { liner: "Finish", cut_path: "Finish" },
     }
 );
-assert.ok(multi.includes('data-operation-key="liner"'));
+assert.ok(multi.includes("association:liner"));
 assert.ok(/data-move="earlier"[^>]*disabled/.test(multi) || multi.includes('data-move="earlier" disabled'));
-assert.ok(multi.includes("Cutting first may let the pieces move") || !ux.cutPathIsEarly(["liner", "cut_path"]));
+assert.ok(!ux.cutPathIsEarly(["liner", "cut_path"]));
 
 const denied = ux.dialogMarkup(
     {
@@ -195,7 +210,8 @@ const denied = ux.dialogMarkup(
         factoryPresets: { cut_path: "Finish" },
     }
 );
-assert.ok(denied.includes("Preparing operational files is not available for your current permissions."));
+assert.ok(denied.includes("dco-operational-sheet__preview"));
+assert.ok(ux.generateNcControlState({ canPrepare: false }).reason.includes("Preparing operational files is not available for your current permissions."));
 assert.ok(panel.includes("Generate NC file"));
 assert.equal(ux.generateNcControlState({ canPrepare: false }).disabled, true);
 assert.equal(ux.generateNcControlState({ canPrepare: true, geometryReady: false, previewPending: true }).disabled, false);

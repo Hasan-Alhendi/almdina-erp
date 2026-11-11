@@ -84,16 +84,12 @@ linerPaths.forEach(pathRow => {
     assert.strictEqual(state.overrides[pathRow.path_key], undefined);
 });
 const html = ux.dialogMarkup(workspace, sheet, state);
-assert.strictEqual((html.match(/data-operation-preset-host=/g) || []).length, 2);
+assert.strictEqual((html.match(/data-operation-preset-host=/g) || []).length, 0);
 assert.strictEqual((html.match(/data-path-preset-host=/g) || []).length, 0);
-assert.strictEqual((html.match(/Uses the layer preset/g) || []).length, 6);
-assert.ok(html.includes("Factory default"));
-assert.ok(html.includes("data-layer-source=\"factory\""));
-assert.ok(html.includes("Depth 18.5 mm"));
-assert.ok(html.includes("Diameter 6 mm"));
+assert.ok(html.includes("Vector Associations"));
+assert.ok(html.includes("Associations appear here after they are saved."));
 assert.ok(!html.includes("data-add-preset"));
 assert.ok(!html.includes("<select data-operation-key="));
-assert.ok(!html.includes("data-customize-path") || html.includes("Customize this path"));
 
 ux.applyLayerPreset(state, "liner", "Shallow");
 linerPaths.forEach(pathRow => {
@@ -101,8 +97,7 @@ linerPaths.forEach(pathRow => {
 });
 assert.strictEqual(state.sources.liner, "sheet");
 const changed = ux.dialogMarkup(workspace, sheet, state);
-assert.ok(changed.includes("Sheet choice"));
-assert.strictEqual((changed.match(/data-path-preset-host=/g) || []).length, 0);
+assert.ok(!changed.includes("data-path-preset-host="));
 
 ux.customizePath(state, linerPaths[0].path_key, "Finish", state.operations.liner);
 assert.strictEqual(ux.effectivePreset(state, linerPaths[0]), "Finish");
@@ -112,9 +107,9 @@ linerPaths.slice(1).forEach(pathRow => {
 state.expanded.liner = true;
 state.customizing[linerPaths[0].path_key] = true;
 const custom = ux.dialogMarkup(workspace, sheet, state);
-assert.strictEqual((custom.match(/data-path-preset-host=/g) || []).length, 1);
-assert.ok(custom.includes("Custom preset"));
-assert.ok(custom.includes("Use the layer preset"));
+assert.ok(!custom.includes("data-path-preset-host="));
+assert.ok(panel.includes("Custom preset"));
+assert.ok(panel.includes("Use the layer preset"));
 
 ux.clearPathPreset(state, linerPaths[0].path_key);
 linerPaths.forEach(pathRow => {
@@ -131,30 +126,30 @@ const empty = ux.dialogMarkup({
     can_edit_factory_cnc: false,
     presets: [],
 }, sheet, ux.sheetState(sheet));
-assert.ok(empty.includes("A factory settings manager must create them."));
+assert.ok(panel.includes("A factory settings manager must create them."));
+assert.ok(empty.includes("Vector Associations"));
 const creatable = ux.dialogMarkup({
     can_prepare: true,
     can_edit_factory_cnc: true,
     presets: [],
 }, sheet, ux.sheetState(sheet));
 assert.ok(!creatable.includes("data-add-preset"));
-assert.ok(creatable.includes("No CNC tool presets have been created yet."));
-assert.ok(creatable.includes("data-operation-preset-host="));
+assert.ok(panel.includes("No CNC tool presets have been created yet."));
+assert.ok(!creatable.includes("data-operation-preset-host="));
 
 const readonly = ux.dialogMarkup({
     can_prepare: false,
     can_edit_factory_cnc: false,
     presets: workspace.presets,
 }, sheet, ux.sheetState(sheet));
-assert.ok(readonly.includes("Preparing operational files is not available"));
-assert.ok(readonly.includes('data-readonly="1"'));
+assert.ok(panel.includes("Preparing operational files is not available"));
 assert.ok(!readonly.includes("data-customize-path"));
 assert.ok(!readonly.includes("data-path-preset-host="));
 
 const disabledSheet = ux.sheetState(sheet);
 disabledSheet.operations.liner = "Off";
-const disabled = ux.dialogMarkup(workspace, sheet, disabledSheet);
-assert.ok(disabled.includes("This tool preset is disabled."));
+assert.strictEqual(ux.effectivePreset(disabledSheet, linerPaths[0]), "Off");
+assert.ok(panel.includes("This tool preset is disabled."));
 
 assert.ok(panel.includes("mountPresetControls("));
 assert.ok(panel.includes('fieldtype: "Link"'));

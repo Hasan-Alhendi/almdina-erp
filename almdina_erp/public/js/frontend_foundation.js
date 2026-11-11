@@ -106,13 +106,18 @@
         // Only a protocol message or a legacy server-message list is eligible
         // for display; even an unstructured string can contain private details.
         const message = issues[0] && issues[0].problem || messages.join("\n") || fallback;
+        const confirmedRejection = !supported
+            && ["ValidationError", "MandatoryError", "LinkValidationError", "DuplicateEntryError"].includes(exceptionType)
+            && status < 500
+            && messages.length > 0;
         const normalized = Object.freeze({
             isAlmdinaError: true, status, exceptionType,
             code: issues[0] && issues[0].code || "OPERATION_FAILED",
             title: supported ? publicText(envelope.title, 200) : "",
             message, issues,
             outcome: supported && ["rejected", "partial", "unknown"].includes(envelope.outcome)
-                ? envelope.outcome : "unknown",
+                ? envelope.outcome
+                : (confirmedRejection ? "rejected" : "unknown"),
             requestReference: supported && typeof envelope.request_reference === "string"
                 && /^[a-zA-Z0-9-]{1,80}$/.test(envelope.request_reference)
                 ? envelope.request_reference
