@@ -245,4 +245,50 @@ assert.ok(css.includes("display: none"));
 assert.ok(css.includes("#F59E0B"));
 assert.ok(css.includes("#EC4899"));
 
+function zoned(marker, parent) {
+    const node = {
+        parent: parent || null,
+        getAttribute(name) {
+            return name === marker ? "1" : null;
+        },
+        closest(selector) {
+            const name = String(selector || "").match(/\[([^\]=]+)/);
+            let current = node;
+            while (current) {
+                if (name && current.getAttribute(name[1]) != null) return current;
+                current = current.parent;
+            }
+            return null;
+        },
+    };
+    return node;
+}
+
+const geometry = zoned("data-sheet-geometry");
+const pathNode = zoned("data-execution-path", geometry);
+const menu = zoned("data-path-menu", geometry);
+const reverse = zoned("data-reverse-path", menu);
+const control = zoned("data-artcam-root");
+assert.equal(ux.boardPointerZone(reverse), "menu");
+assert.equal(ux.boardPointerZone(pathNode), "board");
+assert.equal(ux.boardPointerZone(control), "control");
+assert.equal(ux.boardPointerZone(zoned("data-page")), "outside");
+const shaped = ux.cutPathPreviewMarkup({
+    sheet_width_mm: 100,
+    sheet_length_mm: 80,
+    operations: [{
+        operation_key: "cut_path",
+        toolpaths: [{
+            path_key: "cut_path:shared",
+            shape_id: "shape-b",
+            operation_key: "cut_path",
+            closed: false,
+            points: [[0, 0], [10, 0]],
+            motions: [],
+        }],
+    }],
+});
+assert.ok(shaped.includes('data-shape-id="shape-b"'));
+assert.ok(shaped.includes('data-shape-id="shape-b"'));
+
 console.log("dco_operational_files_vector_selection.test.js passed");

@@ -37,11 +37,9 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
 )
 from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     MachiningSetupError,
-    apply_reversed_directions,
     effective_operational_program,
-    normalize_reversed_paths,
-    path_geometry_id,
-    reversed_direction_block,
+    toggle_reversed_path,
+    unreversed_operational_program,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
@@ -126,6 +124,7 @@ _MESSAGES = {
     "selection_invalid": "Choose a layer, selected vectors, or the sheet perimeter.",
     "vector_not_machinable": "That vector is not a machinable path on this sheet.",
     "vector_already_assigned": "That vector or layer is already assigned.",
+    "sheet_perimeter_already_assigned": "The sheet perimeter already belongs to {0}. Edit that association and release the sheet perimeter before assigning it on its own.",
     "layer_not_machinable": "That layer has no machinable vectors on this sheet.",
     "selected_vectors_pending": "Selected Vectors needs a direct selection on the board before this association can be calculated.",
     "sheet_perimeter_unavailable": "Sheet Perimeter is available only while Connected Perimeter is enabled.",
@@ -183,6 +182,7 @@ _MESSAGES = {
     "path_reverse_unsupported": "This path cannot be reversed safely, so the NC file was not created.",
     "path_reverse_stale": "A saved path direction belongs to an older geometry, so the NC file was not created.",
     "path_reverse_missing": "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",
+    "path_reverse_ambiguous": "A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want.",
     "sheet_settings_required": "Save the sheet settings before reversing a machining path.",
     "perimeter_join_mode_invalid": "The sheet perimeter join mode is not valid.",
     "perimeter_unavailable": "A connected sheet perimeter could not be formed from the approved cut network.",
@@ -216,12 +216,28 @@ def _message(code: str) -> str:
     return _(_MESSAGES.get(code, _NO_APPROVED_PLAN))
 
 
+def _failure_message(exc: Exception) -> str:
+    code = str(getattr(exc, "code", "") or "")
+    detail = str(getattr(exc, "detail", "") or "")
+    template = _MESSAGES.get(code, "")
+    if template and "{0}" in template:
+        return _(template).format(detail or "—")
+    if code in {"path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing", "path_reverse_ambiguous"}:
+        return _issue_message(code, detail)
+    return _message(code)
+
+
 def _issue_message(code: str, path_key: str = "") -> str:
     if code == "tool_diameter_kerf_mismatch":
         return _(
             "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter."
         ).format(path_key or _("the shared cut"))
-    if code in {"path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"} and path_key:
+    if code in {
+        "path_reverse_unsupported",
+        "path_reverse_stale",
+        "path_reverse_missing",
+        "path_reverse_ambiguous",
+    } and path_key:
         return f"{_message(code)} ({path_key})"
     return _message(code)
 
@@ -431,7 +447,7 @@ def save_cnc_operational_sheet(
             prepared["machining_profiles_json"] = profiles
             prepared["vector_associations_json"] = associations
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
-        frappe.throw(_message(exc.code), frappe.ValidationError)
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
     save_sheet(existing_name, prepared)
     return _workspace_for(order, can_prepare=True)
@@ -553,7 +569,7 @@ def calculate_cnc_association_toolpath(
             vector_associations=stored_associations,
         )
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
-        frappe.throw(_message(exc.code), frappe.ValidationError)
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     update_machining_json(
         str(saved.get("name") or ""),
         profiles=list(saved.get("machining_profiles") or []),
@@ -692,6 +708,8 @@ def set_cnc_path_direction(
     order_name: str,
     sheet_no: int | str,
     path_key: str,
+    shape_id: str | None = None,
+    clear_saved: int | str | bool = 0,
     viewed_plan_token: str | None = None,
     operation_presets: str | dict[str, Any] | None = None,
     path_overrides: str | dict[str, Any] | None = None,
@@ -760,31 +778,22 @@ def set_cnc_path_direction(
         )
     except OperationalFileError as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
-    records = normalize_reversed_paths(saved.get("reversed_path_keys"))
-    if any(row["path_key"] == key for row in records):
-        records = [row for row in records if row["path_key"] != key]
-    else:
-        current = _effective_sheet_program(program, saved)
-        found = None
-        for operation in current.get("operations") or []:
-            for path in operation.get("toolpaths") or []:
-                if str(path.get("path_key") or "") == key:
-                    found = path
-                    break
-            if found is not None:
-                break
-        if not isinstance(found, dict):
-            frappe.throw(_issue_message("path_reverse_missing", key), frappe.ValidationError)
-        geometry_id = path_geometry_id(found)
-        probe = apply_reversed_directions(
-            {"operations": [{"toolpaths": [found]}], "issues": []},
-            [{"path_key": key, "geometry_id": geometry_id}],
+    try:
+        direction_program = unreversed_operational_program(
+            program,
+            snapshots=list(saved.get("toolpath_snapshots") or []),
+            associations=list(saved.get("vector_associations") or []),
         )
-        blocked = reversed_direction_block(probe)
-        if blocked:
-            frappe.throw(_issue_message(blocked, key), frappe.ValidationError)
-        records.append({"path_key": key, "geometry_id": geometry_id})
-    records = normalize_reversed_paths(records)
+        records = toggle_reversed_path(
+            saved.get("reversed_path_keys"),
+            direction_program,
+            key,
+            str(shape_id or ""),
+            clear=bool(cint(clear_saved)),
+        )
+    except MachiningSetupError as exc:
+        detail = exc.detail or key
+        frappe.throw(_issue_message(exc.code, detail), frappe.ValidationError)
     try:
         prepared = prepare_sheet_settings(
             order_name=str(order.name),
@@ -814,7 +823,7 @@ def set_cnc_path_direction(
         )
         save_sheet(str(saved.get("name") or ""), prepared)
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
-        frappe.throw(_message(exc.code), frappe.ValidationError)
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     workspace = _workspace_for(order, can_prepare=True)
     workspace["reversed_path_key"] = key
     return workspace

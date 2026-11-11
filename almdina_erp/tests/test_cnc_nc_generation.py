@@ -162,6 +162,7 @@ def test_mill_outlines_stay_visible_when_the_cutter_diameter_is_missing():
         extra_recessed_handle_cutout=1,
         overlays=[
             {"kind": "liner", "geometry": {"path": [[20, 40], [180, 40]], "closed": False, "entity_type": "LINE"}},
+            {"kind": "liner", "geometry": {"path": [[20, 55], [180, 55]], "closed": False, "entity_type": "LINE"}},
             {"kind": "back_groove", "geometry": {"path": [[20, 80], [180, 80]], "closed": False, "entity_type": "LINE"}},
             {"kind": "recessed_handle_cutout", "geometry": {"path": [[40, 120], [90, 120]], "closed": False, "entity_type": "LINE"}},
         ],
@@ -182,8 +183,21 @@ def test_mill_outlines_stay_visible_when_the_cutter_diameter_is_missing():
         assert drawn[key], key
         assert drawn[key][0]["ready"] is False
         assert drawn[key][0]["motions"] == []
+    assert len(drawn["liner"]) == 2
     assert "mill_diameter_required" in drawn["liner"][0]["issues"]
     assert program["geometry_ready"] is False
+    bare = _program(
+        pieces=[_piece(
+            extra_liner=1,
+            liner_reference_side="edge_width_top",
+            liner_offset_cm=2,
+            liner_width_cm=1.8,
+        )],
+        operation_presets={"cut_path": "Finish"},
+        operation_order=["liner", "cut_path"],
+    )
+    bare_liner = next(row for row in bare["operations"] if row["operation_key"] == "liner")
+    assert all(len(path.get("points") or []) < 2 for path in bare_liner["toolpaths"])
 
 
 def test_unready_geometry_and_production_flag_are_rejected():

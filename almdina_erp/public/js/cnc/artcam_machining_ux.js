@@ -105,7 +105,7 @@
         });
         options.push({ value: "selected_vectors", label: "Selected Vectors" });
         const ownsPerimeter = form && form.source === "sheet_perimeter";
-        if (connected || (availability.sheet_perimeter && !availability.sheet_perimeter.disabled) || ownsPerimeter) {
+        if (connected || availability.sheet_perimeter || ownsPerimeter) {
             options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
         }
         return options;
@@ -139,8 +139,13 @@
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
         const options = sourceOptions(context, form);
-        const editing = (machining(context.sheet).associations || [])
-            .some(row => row.association_id === form.association_id);
+        const editingRow = (machining(context.sheet).associations || [])
+            .find(row => row.association_id === form.association_id) || null;
+        const editing = Boolean(editingRow);
+        const ownsSavedPerimeter = Boolean(
+            editingRow
+            && (editingRow.vector_ids || []).some(id => String(id) === "cut_path:sheet_perimeter")
+        );
         return `<form class="dco-artcam-editor" data-artcam-editor>
             ${editing ? `<p class="dco-artcam-note" data-artcam-editing>${escapeHtml(translate("Editing"))}: ${escapeHtml(form.name || form.association_id)}
                 <button type="button" class="btn btn-default btn-xs" data-artcam-cancel>${escapeHtml(translate("New association"))}</button>
@@ -162,6 +167,7 @@
                     </select>
                 </label>
             </div>
+            ${ownsSavedPerimeter ? `<label class="dco-artcam-note"><input type="checkbox" data-field="release_perimeter"> ${escapeHtml(translate("Release the sheet perimeter from this association"))}</label>` : ""}
             <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
             <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(`${count} Vectors Selected`)}</p>
             <div class="dco-artcam-row dco-artcam-row--pair">
@@ -250,6 +256,8 @@
             form.tool[name] = value(name);
         });
         form.tool.notes = value("notes");
+        const release = host.querySelector("[data-artcam-editor] [data-field=\"release_perimeter\"]");
+        form.releasePerimeter = Boolean(release && release.checked);
         form.toolOpen = !host.querySelector("[data-artcam-tool]").classList.contains("is-collapsed");
         return form;
     }
@@ -275,7 +283,7 @@
         tool.rate_units = "mm/sec";
         tool.description = form.tool_preset || tool.description || "";
         tool.tool_preset = form.tool_preset || tool.tool_preset || "";
-        return {
+        const payload = {
             association_id: form.association_id,
             name: form.name,
             profile_id: form.profile_id,
@@ -293,6 +301,12 @@
             toolpath_id: previous ? previous.toolpath_id || "" : "",
             toolpath_name: form.name,
         };
+        if (previous && Array.isArray(previous.vector_ids)) {
+            payload.vector_ids = previous.vector_ids.filter(id => !(
+                form.releasePerimeter && String(id) === "cut_path:sheet_perimeter"
+            ));
+        }
+        return payload;
     }
 
     function fillFromProfile(form, profile) {
@@ -477,6 +491,20 @@
             status(host, message, true);
             reportFailure(translate("The association was not calculated."), `${message} ${clash.join(", ")}`);
             return;
+        }
+        if (form.source === "sheet_perimeter") {
+            const owner = (machining(context.sheet).associations || []).find(row => (
+                row
+                && row.association_id !== form.association_id
+                && (row.vector_ids || []).some(id => String(id) === "cut_path:sheet_perimeter")
+            ));
+            if (owner) {
+                const message = translate("The sheet perimeter already belongs to {0}. Edit that association and release the sheet perimeter before assigning it on its own.")
+                    .split("{0}").join(owner.name || owner.association_id);
+                status(host, message, true);
+                reportFailure(translate("The association was not calculated."), message);
+                return;
+            }
         }
         const previous = (machining(context.sheet).associations || [])
             .find(row => row.association_id === form.association_id) || null;

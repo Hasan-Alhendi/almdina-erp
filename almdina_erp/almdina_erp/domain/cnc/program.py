@@ -394,6 +394,26 @@ def _identity(points: Sequence[tuple[float, float]], closed: bool) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def direction_invariant_identity(
+    points: Sequence[tuple[float, float]],
+    closed: bool,
+) -> str:
+    """Same value for a polyline and its reverse. Depth passes of one shape share it."""
+
+    sequence = [(round(float(point[0]), 3), round(float(point[1]), 3)) for point in points]
+    if (
+        closed
+        and len(sequence) > 2
+        and math.dist(sequence[0], sequence[-1]) <= CHAIN_TOLERANCE_MM
+    ):
+        sequence = sequence[:-1]
+    if len(sequence) < 2:
+        return _identity(sequence, closed)
+    forward = _identity(sequence, closed)
+    backward = _identity(list(reversed(sequence)), closed)
+    return forward if forward <= backward else backward
+
+
 def _translate(
     points: Sequence[tuple[float, float]],
     origin: tuple[float, float] | None,
@@ -820,12 +840,23 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
             {
                 "operation_key": operation.operation_key,
                 "dxf_layer": operation.dxf_layer,
+                "operational_layer": (
+                    "SHEET_PERIMETER"
+                    if operation.operation_key == SHEET_PERIMETER_OPERATION_KEY
+                    else operation.dxf_layer
+                ),
                 "sequence": operation.sequence,
                 "toolpaths": [
                     {
                         "path_key": path.path_key,
+                        "shape_id": direction_invariant_identity(path.points, path.closed),
                         "operation_key": path.operation_key,
                         "dxf_layer": path.dxf_layer,
+                        "operational_layer": (
+                            "SHEET_PERIMETER"
+                            if path.operation_key == SHEET_PERIMETER_OPERATION_KEY
+                            else path.dxf_layer
+                        ),
                         "piece_instance_id": path.piece_instance_id,
                         "piece_label": path.piece_label,
                         "closed": path.closed,
@@ -865,6 +896,7 @@ __all__ = [
     "CncToolpath",
     "build_board_program",
     "chain_line_paths",
+    "direction_invariant_identity",
     "orient_path",
     "program_payload",
 ]

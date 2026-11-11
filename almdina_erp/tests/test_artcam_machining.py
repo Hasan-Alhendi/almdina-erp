@@ -499,6 +499,52 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
     assert restored["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
 
 
+def test_reverse_targets_one_shape_when_several_toolpaths_share_a_path_key():
+    from almdina_erp.almdina_erp.domain.cnc.artcam_machining import shape_id, toggle_reversed_path
+
+    first = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:shared")
+    second = _motion_program(((0, 20), (12, 20)), depths=(4.0, 8.0), path_key="cut_path:shared")
+    program = {
+        "operations": [{
+            "operation_key": "cut_path",
+            "toolpaths": [
+                first["operations"][0]["toolpaths"][0],
+                second["operations"][0]["toolpaths"][0],
+                dict(second["operations"][0]["toolpaths"][0]),
+            ],
+        }],
+    }
+    target = program["operations"][0]["toolpaths"][1]
+    wanted = shape_id(target)
+    assert shape_id(program["operations"][0]["toolpaths"][2]) == wanted
+    assert shape_id(program["operations"][0]["toolpaths"][0]) != wanted
+    saved = toggle_reversed_path([], program, "cut_path:shared", wanted)
+    changed = apply_reversed_directions(program, saved)
+    paths = changed["operations"][0]["toolpaths"]
+    assert paths[0]["points"][0] == [0.0, 0.0]
+    assert paths[1]["points"][0] == [12.0, 20.0]
+    assert paths[2]["points"][0] == [12.0, 20.0]
+    assert [motion["depth_mm"] for motion in paths[1]["motions"] if motion["kind"] == "plunge"] == [4.0, 8.0]
+    again = toggle_reversed_path(saved, program, "cut_path:shared", wanted)
+    restored = apply_reversed_directions(program, again)
+    assert restored["operations"][0]["toolpaths"][1]["points"][0] == [0.0, 20.0]
+    ambiguous = apply_reversed_directions(
+        program,
+        [{"path_key": "cut_path:shared", "geometry_id": path_geometry_id(target)}],
+    )
+    assert ambiguous["direction_blocked"] is True
+    assert ambiguous["issues"][0]["code"] == "path_reverse_ambiguous"
+    assert ambiguous["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
+    assert ambiguous["operations"][0]["toolpaths"][1]["points"][0] == [0.0, 20.0]
+    cleared = toggle_reversed_path(
+        [{"path_key": "cut_path:shared", "geometry_id": "legacy"}],
+        program,
+        "cut_path:shared",
+        clear=True,
+    )
+    assert cleared == []
+
+
 def _undirected_edges(points, *, closed):
     sequence = [tuple(point) for point in points]
     if closed and len(sequence) > 2 and sequence[0] == sequence[-1]:
@@ -552,6 +598,25 @@ def test_effective_program_uses_the_frozen_path_before_reverse():
     )
     assert reversed_direction_block(stale) == "path_reverse_stale"
     assert stale["nc_export_ready"] is False
+    from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+        shape_id,
+        toggle_reversed_path,
+        unreversed_operational_program,
+    )
+
+    live_shape = shape_id(program["operations"][0]["toolpaths"][0])
+    base = unreversed_operational_program(
+        program,
+        snapshots=[snapshot],
+        associations=associations,
+    )
+    frozen = base["operations"][0]["toolpaths"][0]
+    assert frozen["shape_id"] == shape_id({"points": frozen_points, "closed": False})
+    assert frozen["shape_id"] != live_shape
+    saved = toggle_reversed_path([], base, "cut_path:local", frozen["shape_id"])
+    changed = apply_reversed_directions(base, saved)
+    assert changed["operations"][0]["toolpaths"][0]["points"][0] == [10.0, 6.0]
+    assert changed["operations"][0]["toolpaths"][0]["shape_id"] == frozen["shape_id"]
 
 
 def test_association_keeps_a_different_local_tool_without_changing_the_profile():
@@ -829,6 +894,47 @@ def test_sheet_perimeter_is_absent_until_connected_and_then_uses_the_existing_pa
         catalog=connected,
     )
     assert legacy[0]["vector_ids"] == ["cut_path:piece-a:outer", SHEET_PERIMETER_PATH_KEY]
+    with pytest.raises(MachiningSetupError) as owned:
+        normalize_associations(
+            [
+                {
+                    "association_id": "association:old",
+                    "name": "Old cut",
+                    "profile_id": profile["profile_id"],
+                    "selection": {"kind": SELECTION_LAYER, "operation_key": "cut_path"},
+                    "vector_ids": ["cut_path:piece-a:outer", SHEET_PERIMETER_PATH_KEY],
+                },
+                {
+                    "association_id": "association:edge",
+                    "name": "Perimeter",
+                    "profile_id": profile["profile_id"],
+                    "selection": {"kind": SELECTION_SHEET_PERIMETER},
+                },
+            ],
+            profiles=[profile],
+            catalog=connected,
+        )
+    assert owned.value.code == "sheet_perimeter_already_assigned"
+    assert owned.value.detail == "Old cut"
+    released = normalize_associations(
+        [
+            {
+                "association_id": "association:old",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_LAYER, "operation_key": "cut_path"},
+                "vector_ids": ["cut_path:piece-a:outer"],
+            },
+            {
+                "association_id": "association:edge",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": SELECTION_SHEET_PERIMETER},
+            },
+        ],
+        profiles=[profile],
+        catalog=connected,
+    )
+    assert released[0]["vector_ids"] == ["cut_path:piece-a:outer"]
+    assert released[1]["vector_ids"] == [SHEET_PERIMETER_PATH_KEY]
 
 
 def test_illustrative_geometry_and_a_direct_reassignment_are_rejected():

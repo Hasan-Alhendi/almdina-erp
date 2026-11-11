@@ -269,6 +269,7 @@
     }
 
     function applyPerimeterJoinMode(frm, dialog, workspace, sheet, state, mode) {
+        state.reportPerimeterIssues = true;
         state.perimeterJoinMode = normalizePerimeterJoinMode(mode);
         if (state.perimeterJoinMode === "connected") {
             ensureSheetPerimeterOperation(state);
@@ -1170,8 +1171,38 @@
                 const live = liveContext();
                 const target = event.target;
                 if (!live || !live.state || !target || typeof target.closest !== "function") return;
+                const zone = boardPointerZone(target);
                 const pathMenu = body.querySelector("[data-path-menu]");
-                if (pathMenu && !target.closest("[data-path-menu]")) pathMenu.hidden = true;
+                if (zone === "menu") {
+                    const choosePath = target.closest("[data-choose-path]");
+                    const reverse = target.closest("[data-reverse-path]");
+                    const action = choosePath || reverse;
+                    const pathKey = action
+                        ? (action.getAttribute("data-path-key") || (pathMenu && pathMenu.getAttribute("data-path-key")) || "")
+                        : "";
+                    const shapeId = action ? (action.getAttribute("data-shape-id") || "") : "";
+                    const executionId = action ? (action.getAttribute("data-execution-path-id") || "") : "";
+                    if (pathMenu) pathMenu.hidden = true;
+                    if (choosePath && executionId) {
+                        applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
+                    }
+                    if (reverse && pathKey && live.workspace.can_prepare) {
+                        if (executionId) {
+                            applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
+                        }
+                        requestPathReverse(
+                            live.frm,
+                            dialog,
+                            live.workspace,
+                            live.sheet,
+                            live.state,
+                            pathKey,
+                            shapeId
+                        );
+                    }
+                    return;
+                }
+                if (pathMenu) pathMenu.hidden = true;
                 const accordion = target.closest("[data-sheet-acc]");
                 if (accordion) {
                     const section = accordion.closest("[data-sheet-section]");
@@ -1215,24 +1246,6 @@
                     live.state.selectedPathKey = settingsHit.getAttribute("data-select-path") || "";
                     live.state.selectedExecutionPathId = "";
                     refreshSelection();
-                    return;
-                }
-                if (applyBoardVectorClick(event, body, live.state)) return;
-                const preview = body.querySelector("[data-sheet-preview]");
-                const pointed = resolveBoardPointer(preview, event);
-                if (pointed && pointed.ambiguous) {
-                    openPathMenu(body, event, pointed.choices, "inspect");
-                    return;
-                }
-                const previewHit = (pointed && pointed.hit) || boardVectorHit(target);
-                if (previewHit) {
-                    applyExecutionSelection(
-                        body,
-                        live.workspace,
-                        live.sheet,
-                        live.state,
-                        previewHit.getAttribute("data-execution-path-id")
-                    );
                     return;
                 }
                 const toggle = target.closest("[data-toggle-layer]");
@@ -1318,35 +1331,14 @@
                             const onWorkspace = dialog._almdinaOnWorkspace;
                             if (typeof onWorkspace === "function") onWorkspace((response && response.message) || {});
                         },
-                        error() {
-                            frappe.msgprint(translate("The association could not be removed."));
+                        error(error) {
+                            showSheetIssueDialog(translate("The association could not be removed."), [{
+                                problem: serverErrorText(error) || translate("The association could not be removed."),
+                                target: id,
+                                action: translate("Keep this association, or try removing it again."),
+                            }]);
                         },
                     });
-                    return;
-                }
-                const choosePath = target.closest("[data-choose-path]");
-                if (choosePath) {
-                    const menu = body.querySelector("[data-path-menu]");
-                    const executionId = choosePath.getAttribute("data-execution-path-id") || "";
-                    if (menu) menu.hidden = true;
-                    if (executionId) {
-                        applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
-                    }
-                    return;
-                }
-                const reverse = target.closest("[data-reverse-path]");
-                if (reverse) {
-                    const menu = body.querySelector("[data-path-menu]");
-                    const pathKey = reverse.getAttribute("data-path-key")
-                        || (menu && menu.getAttribute("data-path-key"))
-                        || "";
-                    const executionId = reverse.getAttribute("data-execution-path-id") || "";
-                    if (menu) menu.hidden = true;
-                    if (executionId) {
-                        applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
-                    }
-                    if (!pathKey || !live.workspace.can_prepare) return;
-                    requestPathReverse(live.frm, dialog, live.workspace, live.sheet, live.state, pathKey);
                     return;
                 }
                 const moveOp = target.closest("[data-move]");
@@ -1383,7 +1375,25 @@
                     const current = dialogRoot(dialog);
                     const moved = current && current.querySelector(`[data-operation-key="${key}"] [data-move="${direction}"]`);
                     if (moved) moved.focus();
+                    return;
                 }
+                if (zone !== "board") return;
+                if (applyBoardVectorClick(event, body, live.state)) return;
+                const preview = body.querySelector("[data-sheet-preview]");
+                const pointed = resolveBoardPointer(preview, event);
+                if (pointed && pointed.ambiguous) {
+                    openPathMenu(body, event, pointed.choices, "inspect");
+                    return;
+                }
+                const previewHit = (pointed && pointed.hit) || boardVectorHit(target);
+                if (!previewHit) return;
+                applyExecutionSelection(
+                    body,
+                    live.workspace,
+                    live.sheet,
+                    live.state,
+                    previewHit.getAttribute("data-execution-path-id")
+                );
             });
             let dragKey = "";
             body.addEventListener("dragstart", event => {
@@ -1417,12 +1427,17 @@
             body.addEventListener("contextmenu", event => {
                 const live = liveContext();
                 const menu = body.querySelector("[data-path-menu]");
+                const zone = boardPointerZone(event.target);
+                if (!menu) return;
+                if (zone !== "board" || !live || !live.workspace || !live.workspace.can_prepare) {
+                    if (zone !== "menu") menu.hidden = true;
+                    return;
+                }
                 const preview = body.querySelector("[data-sheet-preview]");
                 const pointed = resolveBoardPointer(preview, event);
                 const hit = (pointed && pointed.hit)
                     || (event.target && event.target.closest && event.target.closest("[data-sheet-preview] [data-execution-path]"));
-                if (!menu) return;
-                if ((!hit && !(pointed && pointed.ambiguous)) || !live || !live.workspace || !live.workspace.can_prepare) {
+                if (!hit && !(pointed && pointed.ambiguous)) {
                     menu.hidden = true;
                     return;
                 }
@@ -1433,6 +1448,7 @@
                 }
                 openPathMenu(body, event, [{
                     path_key: hit.getAttribute("data-execution-path") || hit.getAttribute("data-vector-id") || "",
+                    shape_id: hit.getAttribute("data-shape-id") || "",
                     execution_path_id: hit.getAttribute("data-execution-path-id") || "",
                     label: "",
                 }], "reverse");
@@ -1710,6 +1726,8 @@
             path_reverse_unsupported: translate("This path cannot be reversed safely, so the NC file was not created."),
             path_reverse_stale: translate("A saved path direction belongs to an older geometry, so the NC file was not created."),
             path_reverse_missing: translate("A saved path direction no longer matches a path on this sheet, so the NC file was not created."),
+            path_reverse_ambiguous: translate("A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want."),
+            sheet_perimeter_already_assigned: translate("The sheet perimeter already belongs to another association. Edit that association and release the sheet perimeter before assigning it on its own."),
             vector_already_assigned: translate("That vector or layer is already assigned."),
             mill_diameter_required: translate("This milling path needs the layer tool diameter before its cutter center can be calculated."),
         };
@@ -2384,6 +2402,34 @@
         return Math.hypot(px - (Number(start[0]) + ratio * dx), py - (Number(start[1]) + ratio * dy));
     }
 
+    function boardPointerZone(target) {
+        if (!target || typeof target.closest !== "function") return "unknown";
+        if (target.closest("[data-path-menu]")) return "menu";
+        const controls = [
+            "[data-sheet-acc]",
+            "[data-customize-path]",
+            "[data-reset-path]",
+            "[data-select-execution]",
+            "[data-select-path]",
+            "[data-toggle-layer]",
+            "[data-restore-layer]",
+            "[data-restore-sheet]",
+            "[data-association-visibility]",
+            "[data-edit-association]",
+            "[data-delete-association]",
+            "[data-move]",
+            "[data-artcam-root]",
+            "[data-cnc-save-sheet]",
+            "[data-cnc-page-download]",
+            "[data-generate-nc]",
+        ];
+        if (controls.some(selector => target.closest(selector))) return "control";
+        if (target.closest("[data-sheet-geometry]")) return "board";
+        const svg = target.closest("svg");
+        if (svg && typeof svg.closest === "function" && svg.closest("[data-sheet-preview]")) return "board";
+        return "outside";
+    }
+
     function resolveBoardPointer(preview, event) {
         if (!preview || !event || event.clientX == null || typeof preview.querySelector !== "function") return null;
         const group = preview.querySelector("[data-sheet-geometry]");
@@ -2412,6 +2458,7 @@
                     distance,
                     node,
                     path_key: String(item.path_key || ""),
+                    shape_id: String(item.shape_id || ""),
                     execution_path_id: String(item.execution_path_id || ""),
                     label: [item.operation_key || "", item.piece_label || item.path_key || ""].filter(Boolean).join(" · "),
                 });
@@ -2438,7 +2485,7 @@
                     ? `${translate("Reverse Direction")} · ${choice.label}`
                     : translate("Reverse Direction"));
             const action = mode === "inspect" ? "data-choose-path" : "data-reverse-path";
-            return `<button type="button" ${action} data-path-key="${escapeHtml(choice.path_key)}" data-execution-path-id="${escapeHtml(choice.execution_path_id || "")}">${escapeHtml(label)}</button>`;
+            return `<button type="button" ${action} data-path-key="${escapeHtml(choice.path_key)}" data-shape-id="${escapeHtml(choice.shape_id || "")}" data-execution-path-id="${escapeHtml(choice.execution_path_id || "")}">${escapeHtml(label)}</button>`;
         }).join("");
         menu.hidden = false;
         menu.setAttribute("data-path-key", rows[0].path_key);
@@ -2446,12 +2493,16 @@
         menu.style.top = `${Number(event.clientY) || 0}px`;
     }
 
-    function requestPathReverse(frm, dialog, workspace, sheet, state, pathKey) {
+    function requestPathReverse(frm, dialog, workspace, sheet, state, pathKey, shapeId, clearSaved) {
         if (!pathKey || !state || state.reverseBusy) return;
         state.reverseBusy = pathKey;
         frappe.call({
             method: `${METHOD}.set_cnc_path_direction`,
-            args: Object.assign({}, sheetGenerateArgs(frm, workspace, sheet, state), { path_key: pathKey }),
+            args: Object.assign({}, sheetGenerateArgs(frm, workspace, sheet, state), {
+                path_key: pathKey,
+                shape_id: shapeId || "",
+                clear_saved: clearSaved ? 1 : 0,
+            }),
             callback() {
                 state.reverseBusy = "";
                 state.directionReport = pathKey;
@@ -2459,10 +2510,11 @@
             },
             error(error) {
                 state.reverseBusy = "";
+                const problem = serverErrorText(error) || translate("This path cannot be reversed safely, so the NC file was not created.");
                 showSheetIssueDialog(translate("The path direction was not changed."), [{
-                    problem: serverErrorText(error) || translate("This path cannot be reversed safely, so the NC file was not created."),
+                    problem,
                     target: pathKey,
-                    action: translate("Correct the listed issue, then generate the NC file again."),
+                    action: problem,
                     code: "path_reverse_unsupported",
                 }]);
             },
@@ -2494,11 +2546,22 @@
             if (window.frappe && frappe.msgprint) frappe.msgprint((rows[0] && rows[0].problem) || title);
             return null;
         }
-        const cards = rows.map(item => `<section class="alm-error-card">
+        const grouped = [];
+        rows.forEach(item => {
+            const code = String((item && item.code) || "");
+            const existing = code ? grouped.find(row => row.code === code) : null;
+            if (!existing) {
+                grouped.push(Object.assign({}, item, { target: item && item.target ? String(item.target) : "" }));
+                return;
+            }
+            if (item && item.target && existing.target.indexOf(String(item.target)) < 0) {
+                existing.target = [existing.target, item.target].filter(Boolean).join(", ");
+            }
+        });
+        const cards = grouped.map(item => `<section class="alm-error-card">
             <p><strong>${escapeHtml(translate("What is the problem?"))}</strong> ${escapeHtml(item.problem || "")}</p>
             ${item.target ? `<p><strong>${escapeHtml(translate("Where is it?"))}</strong> ${escapeHtml(item.target)}</p>` : ""}
             ${item.action ? `<p><strong>${escapeHtml(translate("What should I do?"))}</strong> ${escapeHtml(item.action)}</p>` : ""}
-            ${item.code ? `<small>${escapeHtml(item.code)}</small>` : ""}
         </section>`).join("");
         const dialogBox = new frappe.ui.Dialog({
             title,
@@ -2520,12 +2583,35 @@
         return dialogBox;
     }
 
+    function perimeterIssues(program) {
+        const codes = {
+            perimeter_unavailable: true,
+            perimeter_not_closed: true,
+            perimeter_geometry_ambiguous: true,
+            perimeter_components_disconnected: true,
+            perimeter_geometry_invalid: true,
+            perimeter_join_mode_invalid: true,
+        };
+        const found = [];
+        (Array.isArray(program && program.issues) ? program.issues : []).forEach(issue => {
+            const code = String(issue && issue.code || "");
+            if (!codes[code]) return;
+            found.push({
+                code,
+                problem: issue.message || issueAction(code),
+                target: issue.path_key || "SHEET_PERIMETER",
+                action: issueAction(code),
+            });
+        });
+        return found;
+    }
+
     function directionIssues(program) {
         const found = [];
         (Array.isArray(program && program.issues) ? program.issues : []).forEach(issue => {
             if (!issue) return;
             const code = String(issue.code || "");
-            if (!["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing"].includes(code)) return;
+            if (!["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing", "path_reverse_ambiguous"].includes(code)) return;
             found.push({
                 code,
                 problem: issue.message || issueAction(code),
@@ -2721,6 +2807,7 @@
                         issues: Array.isArray(toolpath.issues) ? toolpath.issues.slice() : [],
                         preset_name: String(toolpath.preset_name || ""),
                         geometry_fingerprint: group.fingerprint,
+                        shape_id: String(toolpath.shape_id || ""),
                         points: group.points,
                         start: group.start,
                         end: group.end,
@@ -2951,8 +3038,8 @@
             const arrowLine = arrow
                 ? `<polyline class="dco-cnc-cut-preview__arrow" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-operation-key="${escapeHtml(item.operation_key)}" points="${Number(arrow.from[0])},${Number(arrow.from[1])} ${Number(arrow.to[0])},${Number(arrow.to[1])}" fill="none" stroke="${color}" stroke-width="1.8" vector-effect="non-scaling-stroke" marker-end="url(#${escapeHtml(markerId)})"/>`
                 : "";
-            return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-vector-id="${escapeHtml(vectorId)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
-                <polyline class="dco-cnc-cut-preview__hit" data-vector-id="${escapeHtml(vectorId)}" data-execution-path="${escapeHtml(item.path_key)}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" points="${points}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>
+            return `<g class="dco-cnc-cut-preview__execution${selected}" data-path-number="${item.path_number}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" data-execution-path="${escapeHtml(item.path_key)}" data-shape-id="${escapeHtml(item.shape_id || "")}" data-vector-id="${escapeHtml(vectorId)}" data-operation-key="${escapeHtml(item.operation_key)}" data-pass-count="${item.pass_count}" data-depth-mm="${escapeHtml(depths)}">
+                <polyline class="dco-cnc-cut-preview__hit" data-vector-id="${escapeHtml(vectorId)}" data-execution-path="${escapeHtml(item.path_key)}" data-shape-id="${escapeHtml(item.shape_id || "")}" data-execution-path-id="${escapeHtml(item.execution_path_id)}" points="${points}" fill="none" stroke="transparent" stroke-width="14" vector-effect="non-scaling-stroke"/>
                 <polyline class="dco-cnc-cut-preview__path" points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
                 ${arrowLine}
             </g>`;
@@ -3025,7 +3112,7 @@
             return;
         }
         if (status === "error") {
-            host.innerHTML = `<div class="dco-cnc-cut-preview" role="alert"><p class="dco-cnc-program__error">${escapeHtml(translate("Cutting paths could not be loaded."))}</p></div>`;
+            host.innerHTML = `<div class="dco-cnc-cut-preview" role="alert"><p class="dco-operational-files__note">${escapeHtml(translate("Cutting paths could not be loaded."))}</p></div>`;
             return;
         }
         const markerScope = nextCutPreviewScope();
@@ -3301,6 +3388,17 @@
                     placement: placementPreviewPayload(workspace, state),
                 });
                 paintBoardAppearance(liveBody, sheet, state);
+                state.shownPreviewFailure = false;
+                if (state.reportPerimeterIssues) {
+                    state.reportPerimeterIssues = false;
+                    const perimeter = perimeterIssues(program);
+                    if (perimeter.length) {
+                        showSheetIssueDialog(
+                            translate("The connected sheet perimeter could not be formed."),
+                            perimeter
+                        );
+                    }
+                }
                 const direction = directionIssues(program);
                 const signature = direction.map(item => `${item.code}:${item.target}`).join("|");
                 if (signature && state.shownDirectionSignature !== signature) {
@@ -3311,18 +3409,26 @@
                         {
                             restorePath: direction[0] && direction[0].target,
                             onRestore(pathKey) {
-                                requestPathReverse(frm, dialog, workspace, sheet, state, pathKey);
+                                requestPathReverse(frm, dialog, workspace, sheet, state, pathKey, "", true);
                             },
                         }
                     );
                 }
             },
-            error() {
+            error(error) {
                 if (dialog._cncProgramPreviewRequest !== request) return;
                 const liveBody = dialogRoot(dialog);
                 const livePreview = liveBody && liveBody.querySelector("[data-sheet-preview]");
                 if (!livePreview) return;
                 paintCutPathPreview(livePreview, { status: "error" });
+                if (state.shownPreviewFailure) return;
+                state.shownPreviewFailure = true;
+                const problem = serverErrorText(error) || translate("The cutting preview could not be loaded.");
+                showSheetIssueDialog(translate("The cutting preview could not be loaded."), [{
+                    problem,
+                    target: String((sheet && sheet.sheet_no) || ""),
+                    action: translate("Open the sheet again. If this continues, the approved plan or the sheet settings need to be checked."),
+                }]);
             },
         });
     }
@@ -3723,6 +3829,7 @@
         paintBoardAppearance,
         showSheetIssueDialog,
         resolveBoardPointer,
+        boardPointerZone,
         paintCutPathPreview,
         highlightCutPreview,
         applyExecutionSelection,

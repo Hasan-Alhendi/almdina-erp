@@ -27,6 +27,7 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
     _identity,
     _motions,
     _pass_depths,
+    direction_invariant_identity,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
     MAX_DEPTH_MM,
@@ -61,9 +62,10 @@ _UNRESOLVED_SELECTION = frozenset({"selected_vectors_pending", "sheet_perimeter_
 
 
 class MachiningSetupError(ValueError):
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
+    def __init__(self, code: str, detail: str = "") -> None:
+        super().__init__(code if not detail else f"{code}:{detail}")
         self.code = code
+        self.detail = detail
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,11 +471,14 @@ def vectors_from_paths(paths: Sequence[Mapping[str, Any]]) -> tuple[MachinableVe
         if vector_id == "cut_path:internals":
             continue
         seen.add(vector_id)
+        layer_name = str(row.get("dxf_layer") or "")
+        if vector_id == SHEET_PERIMETER_PATH_KEY:
+            layer_name = "SHEET_PERIMETER"
         vectors.append(
             MachinableVector(
                 vector_id=vector_id,
                 operation_key=operation_key,
-                dxf_layer=str(row.get("dxf_layer") or ""),
+                dxf_layer=layer_name,
                 piece_instance_id=str(row.get("piece_instance_id") or ""),
                 label=str(row.get("piece_label") or row.get("label") or vector_id),
             )
@@ -595,6 +600,7 @@ def normalize_associations(
     normalized: list[dict[str, Any]] = []
     seen: set[str] = set()
     covered_owner: dict[str, str] = {}
+    owner_names: dict[str, str] = {}
     for row in rows:
         if not isinstance(row, Mapping):
             raise MachiningSetupError("association_invalid")
@@ -623,11 +629,18 @@ def normalize_associations(
             covered,
             _catalog_index(catalog),
         )
+        association_name = str(row.get("name") or "").strip()[:_NAME_LIMIT]
         for vector_id in covered:
             owner = covered_owner.get(vector_id)
             if owner is not None:
+                if vector_id == SHEET_PERIMETER_PATH_KEY:
+                    raise MachiningSetupError(
+                        "sheet_perimeter_already_assigned",
+                        owner_names.get(vector_id) or owner,
+                    )
                 raise MachiningSetupError("vector_already_assigned")
             covered_owner[vector_id] = association_id
+            owner_names[vector_id] = association_name or association_id
         local = _local_from_profile(profile, row.get("local_values"))
         seen.add(association_id)
         normalized.append(
@@ -1297,14 +1310,24 @@ _MOTION_KINDS = frozenset({"travel", "plunge", "cut", "retract"})
 
 
 def path_geometry_id(path: Mapping[str, Any]) -> str:
-    """Identity of the unreversed polyline. A new plan must not inherit an old reverse."""
+    """Directed identity of the unreversed polyline. A new plan must not inherit an old reverse."""
 
     points = tuple(_points(path))
     return _identity(points, bool(path.get("closed")))
 
 
+def shape_id(path: Mapping[str, Any]) -> str:
+    """Direction-invariant identity of one machined shape.
+
+    Depth passes of the same toolpath share it. A different polyline that only
+    shares the source vector key does not.
+    """
+
+    return direction_invariant_identity(_points(path), bool(path.get("closed")))
+
+
 def normalize_reversed_paths(rows: Sequence[Any] | None) -> list[dict[str, str]]:
-    """Stable path-key records. Empty geometry ids are filled by the compiler."""
+    """Stable reverse records. A legacy row has no shape id and stays one per path key."""
 
     normalized: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -1312,16 +1335,22 @@ def normalize_reversed_paths(rows: Sequence[Any] | None) -> list[dict[str, str]]
         if isinstance(row, str):
             key = row.strip()
             geometry_id = ""
+            shape = ""
         elif isinstance(row, Mapping):
             key = str(row.get("path_key") or "").strip()
             geometry_id = str(row.get("geometry_id") or "").strip()
+            shape = str(row.get("shape_id") or "").strip()
         else:
             continue
-        if not key or key in seen:
+        token = f"{key}\n{shape}" if shape else key
+        if not key or token in seen:
             continue
-        seen.add(key)
-        normalized.append({"path_key": key, "geometry_id": geometry_id})
-    normalized.sort(key=lambda item: item["path_key"])
+        seen.add(token)
+        item = {"path_key": key, "geometry_id": geometry_id}
+        if shape:
+            item["shape_id"] = shape
+        normalized.append(item)
+    normalized.sort(key=lambda item: (item["path_key"], item.get("shape_id", "")))
     return normalized
 
 
@@ -1443,6 +1472,7 @@ _DIRECTION_BLOCK_CODES = frozenset({
     "path_reverse_unsupported",
     "path_reverse_stale",
     "path_reverse_missing",
+    "path_reverse_ambiguous",
 })
 
 
@@ -1469,19 +1499,32 @@ def apply_reversed_directions(
     """Reverse saved path directions. A record that cannot be applied blocks NC."""
 
     payload = deepcopy(dict(program))
-    wanted = {
-        row["path_key"]: row["geometry_id"]
-        for row in normalize_reversed_paths(records)
-    }
-    if not wanted:
+    saved = normalize_reversed_paths(records)
+    if not saved:
         return payload
+    by_key: dict[str, list[dict[str, str]]] = {}
+    for row in saved:
+        by_key.setdefault(row["path_key"], []).append(row)
+    catalog: dict[str, list[Mapping[str, Any]]] = {}
+    for operation in payload.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        for path in operation.get("toolpaths") or ():
+            if isinstance(path, Mapping):
+                catalog.setdefault(str(path.get("path_key") or ""), []).append(path)
+    ambiguous = {
+        key
+        for key, rows in by_key.items()
+        if any(not row.get("shape_id") for row in rows)
+        and len({shape_id(path) for path in catalog.get(key, ())}) > 1
+    }
     issues = [
         dict(issue)
         for issue in payload.get("issues") or ()
         if isinstance(issue, Mapping)
         and str(issue.get("code") or "") not in _DIRECTION_BLOCK_CODES
     ]
-    seen: set[str] = set()
+    matched: set[tuple[str, str]] = set()
     blocked = False
     operations: list[dict[str, Any]] = []
     for operation in payload.get("operations") or ():
@@ -1491,28 +1534,48 @@ def apply_reversed_directions(
         toolpaths: list[dict[str, Any]] = []
         for path in operation.get("toolpaths") or ():
             if not isinstance(path, Mapping):
+                toolpaths.append(path)
                 continue
             key = str(path.get("path_key") or "")
-            if key not in wanted:
+            rows = by_key.get(key) or []
+            if not rows or key in ambiguous:
                 toolpaths.append(dict(path))
                 continue
-            seen.add(key)
+            current_shape = shape_id(path)
+            chosen = next((row for row in rows if row.get("shape_id") == current_shape), None)
+            if chosen is None:
+                chosen = next((row for row in rows if not row.get("shape_id")), None)
+            if chosen is None:
+                toolpaths.append(dict(path))
+                continue
+            matched.add((key, str(chosen.get("shape_id") or "")))
             try:
-                toolpaths.append(_reverse_one_path(path, wanted[key]))
+                toolpaths.append(_reverse_one_path(path, chosen.get("geometry_id") or ""))
             except MachiningSetupError as exc:
                 blocked = True
-                issues.append({"code": exc.code, "path_key": key})
+                issues.append({"code": exc.code, "path_key": key, "shape_id": current_shape})
                 failed = dict(path)
                 failed["issues"] = [*(failed.get("issues") or ()), exc.code]
                 failed["ready"] = False
                 toolpaths.append(failed)
         cloned["toolpaths"] = toolpaths
         operations.append(cloned)
-    for key in wanted:
-        if key in seen:
+    for key in ambiguous:
+        blocked = True
+        issues.append({"code": "path_reverse_ambiguous", "path_key": key})
+        matched.add((key, ""))
+    for row in saved:
+        token = (row["path_key"], str(row.get("shape_id") or ""))
+        if token in matched or (row["path_key"], "") in matched:
+            continue
+        if row["path_key"] in ambiguous:
             continue
         blocked = True
-        issues.append({"code": "path_reverse_missing", "path_key": key})
+        issues.append({
+            "code": "path_reverse_missing",
+            "path_key": row["path_key"],
+            "shape_id": str(row.get("shape_id") or ""),
+        })
     payload["operations"] = operations
     payload["issues"] = issues
     if blocked:
@@ -1520,6 +1583,124 @@ def apply_reversed_directions(
         payload["nc_export_ready"] = False
         payload["ready"] = False
     return payload
+
+
+def _toolpaths_for_key(program: Mapping[str, Any], path_key: str) -> list[Mapping[str, Any]]:
+    found: list[Mapping[str, Any]] = []
+    for operation in program.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        for path in operation.get("toolpaths") or ():
+            if isinstance(path, Mapping) and str(path.get("path_key") or "") == path_key:
+                found.append(path)
+    return found
+
+
+def toggle_reversed_path(
+    records: Sequence[Any] | None,
+    program: Mapping[str, Any],
+    path_key: str,
+    shape: str = "",
+    *,
+    clear: bool = False,
+) -> list[dict[str, str]]:
+    """Add or remove one saved direction. An ambiguous legacy row is not guessed."""
+
+    key = str(path_key or "").strip()
+    wanted_shape = str(shape or "").strip()
+    if not key:
+        raise MachiningSetupError("path_reverse_unsupported")
+    current = normalize_reversed_paths(records)
+
+    def without(predicate) -> list[dict[str, str]]:
+        return [row for row in current if not predicate(row)]
+
+    exact = [
+        row for row in current
+        if row["path_key"] == key and wanted_shape and row.get("shape_id") == wanted_shape
+    ]
+    legacy = [row for row in current if row["path_key"] == key and not row.get("shape_id")]
+    if clear:
+        if wanted_shape:
+            return without(
+                lambda row: row["path_key"] == key and row.get("shape_id", "") in {"", wanted_shape}
+            )
+        return without(lambda row: row["path_key"] == key)
+    if exact:
+        return without(lambda row: row["path_key"] == key and row.get("shape_id") == wanted_shape)
+    paths = _toolpaths_for_key(program, key)
+    if not paths:
+        raise MachiningSetupError("path_reverse_missing")
+    shapes: list[str] = []
+    for path in paths:
+        current_shape = shape_id(path)
+        if current_shape not in shapes:
+            shapes.append(current_shape)
+    if legacy:
+        if len(shapes) > 1:
+            raise MachiningSetupError("path_reverse_ambiguous")
+        return without(lambda row: row["path_key"] == key and not row.get("shape_id"))
+    if not wanted_shape:
+        if len(shapes) != 1:
+            raise MachiningSetupError("path_reverse_ambiguous")
+        wanted_shape = shapes[0]
+    targets = [path for path in paths if shape_id(path) == wanted_shape]
+    if not targets:
+        raise MachiningSetupError("path_reverse_missing")
+    geometry = path_geometry_id(targets[0])
+    probe = apply_reversed_directions(
+        {"operations": [{"toolpaths": [dict(path) for path in targets]}], "issues": []},
+        [{"path_key": key, "geometry_id": geometry, "shape_id": wanted_shape}],
+    )
+    blocked = reversed_direction_block(probe)
+    if blocked:
+        raise MachiningSetupError(blocked)
+    current.append({"path_key": key, "geometry_id": geometry, "shape_id": wanted_shape})
+    return normalize_reversed_paths(current)
+
+
+def _stamp_shape_ids(program: Mapping[str, Any]) -> dict[str, Any]:
+    """Publish the identity of the geometry that will actually be machined."""
+
+    payload = deepcopy(dict(program))
+    operations: list[dict[str, Any]] = []
+    for operation in payload.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            operations.append(operation)
+            continue
+        cloned = dict(operation)
+        toolpaths: list[Any] = []
+        for path in operation.get("toolpaths") or ():
+            if not isinstance(path, Mapping):
+                toolpaths.append(path)
+                continue
+            updated = dict(path)
+            try:
+                updated["shape_id"] = shape_id(updated)
+            except MachiningSetupError:
+                updated["shape_id"] = ""
+            toolpaths.append(updated)
+        cloned["toolpaths"] = toolpaths
+        operations.append(cloned)
+    payload["operations"] = operations
+    return payload
+
+
+def unreversed_operational_program(
+    program: Mapping[str, Any],
+    *,
+    snapshots: Sequence[Mapping[str, Any]] | None = None,
+    associations: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Overlay and order the program before any saved direction is applied."""
+
+    current = overlay_frozen_toolpaths(
+        program,
+        snapshots or (),
+        associations=associations,
+    )
+    current = order_program_by_associations(current, associations)
+    return _stamp_shape_ids(current)
 
 
 def effective_operational_program(
@@ -1531,12 +1712,11 @@ def effective_operational_program(
 ) -> dict[str, Any]:
     """One machining program for preview, reverse checks, and NC export."""
 
-    current = overlay_frozen_toolpaths(
+    current = unreversed_operational_program(
         program,
-        snapshots or (),
+        snapshots=snapshots,
         associations=associations,
     )
-    current = order_program_by_associations(current, associations)
     return apply_reversed_directions(current, reversed_path_keys)
 
 
@@ -1559,6 +1739,9 @@ __all__ = [
     "reversed_direction_block",
     "path_geometry_id",
     "reverse_operational_points",
+    "shape_id",
+    "toggle_reversed_path",
+    "unreversed_operational_program",
     "active_toolpath_snapshots",
     "append_snapshot",
     "canonical_tool_copy",
