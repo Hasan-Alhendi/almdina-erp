@@ -3493,3 +3493,13 @@ A local backup is already in progress.,توجد نسخة محلية قيد ال�
 The site database is unavailable. Restore has not started.,قاعدة بيانات الموقع غير متاحة. لم تبدأ الاستعادة.
 Selected backup is no longer compatible with this site.,النسخة المحددة لم تعد متوافقة مع هذا الموقع.
 Creating backup...,جاري إنشاء النسخة الاحتياطية...
+You do not have permission to save this board editor drawing.,ليست لديك صلاحية حفظ رسم محرر الألواح هذا.
+You do not have permission to view this board editor drawing.,ليست لديك صلاحية عرض رسم محرر الألواح هذا.
+Board editor drawings are not installed. Run migrate.,تخزين رسومات محرر الألواح غير مثبّت. نفّذ الترحيل.
+Board editor drawing archive could not be stored together.,تعذر حفظ أرشيف رسومات محرر الألواح معًا.
+Board editor drawing is missing its key.,مفتاح رسم محرر الألواح مفقود.
+"Board editor drawing must belong to an order, a source plan, and a piece.",يجب أن يتبع رسم محرر الألواح طلبًا وخطة مصدر ودرفة.
+Board editor drawing is not valid JSON.,رسم محرر الألواح ليس JSON صالحًا.
+Board editor drawing is not a supported drawing document.,رسم محرر الألواح ليس مستند رسم مدعومًا.
+Board editor drawing archive is not valid JSON.,أرشيف رسم محرر الألواح ليس JSON صالحًا.
+Board editor drawing archive is not a supported archive.,أرشيف رسم محرر الألواح ليس أرشيفًا مدعومًا.
