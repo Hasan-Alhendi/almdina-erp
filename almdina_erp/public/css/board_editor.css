@@ -762,6 +762,96 @@
   max-width: 100%;
 }
 
+.abe-mode-switch,
+.abe-drawing-workspace {
+  pointer-events: auto;
+  max-width: 100%;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-md, 14px);
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+}
+
+.abe-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+}
+
+.abe-mode-btn {
+  border: 0;
+  background: transparent;
+  color: var(--alm-text-muted, #667085);
+  border-radius: 10px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.abe-mode-btn.is-active {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+}
+
+.abe-mode-btn:focus-visible,
+.abe-drawing-workspace:focus-within {
+  outline: 2px solid var(--alm-focus, #3b6fd8);
+  outline-offset: 1px;
+}
+
+.abe-drawing-workspace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.abe-drawing-status,
+.abe-drawing-note {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.abe-drawing-note,
+.abe-drawing-tool {
+  color: var(--alm-text-muted, #98a2b3);
+}
+
+.abe-drawing-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.abe-drawing-tool {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.abe-drawing-size {
+  font-variant-numeric: tabular-nums;
+}
+
+.abe-canvas-stage.is-drawing .abe-piece {
+  cursor: pointer;
+}
+
 .abe-canvas-tools,
 .abe-float-tools {
   pointer-events: auto;
@@ -1081,6 +1171,8 @@
 [data-theme="dark"] .abe-sidebar,
 [data-theme="dark"] .abe-right-sidebar,
 [data-theme="dark"] .abe-section-head,
+[data-theme="dark"] .abe-mode-switch,
+[data-theme="dark"] .abe-drawing-workspace,
 [data-theme="dark"] .abe-float-tools,
 [data-theme="dark"] .abe-state {
   background: var(--alm-surface, #1b2430);

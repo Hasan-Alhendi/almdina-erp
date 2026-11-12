@@ -1337,6 +1337,37 @@
         });
     }
 
+    function editorModeSwitch(mode) {
+        const current = mode === "drawing" ? "drawing" : "board";
+        const button = (value, label) => {
+            const pressed = current === value;
+            return `<button type="button" class="abe-mode-btn${pressed ? " is-active" : ""}" data-abe-editor-mode="${value}" aria-pressed="${pressed ? "true" : "false"}">${esc(__(label))}</button>`;
+        };
+        return `<div class="abe-mode-switch" role="group" aria-label="${esc(__("Editor mode"))}">${button("board", "Board")}${button("drawing", "Drawing")}</div>`;
+    }
+
+    function drawingWorkspaceHtml(storeView) {
+        if ((storeView && storeView.editorMode) !== "drawing") return "";
+        const target = (storeView && storeView.drawingTarget) || {};
+        const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+        const tools = (EditorMode && EditorMode.futureTools) || [];
+        const message = __(target.messageKey || "Select a special piece to start drawing.");
+        const name = target.label
+            ? `<strong class="abe-drawing-name">${esc(target.label)}</strong>`
+            : "";
+        const size = target.widthCm != null && target.lengthCm != null
+            ? `<span class="abe-drawing-size" dir="ltr">${esc(target.widthCm)} × ${esc(target.lengthCm)} cm</span>`
+            : "";
+        const toolHtml = tools.map((tool) => (
+            `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`
+        )).join("");
+        return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
+            <p class="abe-drawing-status" role="status">${name}${size}<span>${esc(message)}</span></p>
+            <div class="abe-drawing-tools" role="group" aria-disabled="true" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
+            <p class="abe-drawing-note">${esc(__("These drawing tools are not available yet."))}</p>
+        </div>`;
+    }
+
     function render(host, storeView, handlers) {
         const projection = storeView.projection || {};
         const session = storeView.session || null;
@@ -1948,11 +1979,13 @@
         );
 
         const magnetOn = storeView.magnetEnabled !== false;
-        const measureOn = storeView.measureToolActive === true;
+        const drawingMode = storeView.editorMode === "drawing";
+        const boardCommands = !drawingMode;
+        const measureOn = boardCommands && storeView.measureToolActive === true;
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}" data-abe-stage="1">
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
@@ -1962,53 +1995,57 @@
             </div>
             <div class="abe-float-dock">
                 <div class="abe-float-stack">
+                ${editorModeSwitch(storeView.editorMode)}
+                ${drawingWorkspaceHtml(storeView)}
                 <div class="abe-canvas-tools abe-float-tools" role="toolbar" aria-label="${esc(__("Canvas tools"))}">
                     ${toolButton("abe-zoom-in", "zoom-in", __("Zoom in"))}
                     ${toolButton("abe-zoom-out", "zoom-out", __("Zoom out"))}
                     ${toolButton("abe-fit-all", "maximize-2", __("Fit all"))}
                     ${toolSep}
-                    ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !storeView.canUndo })}
-                    ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !storeView.canRedo })}
-                    ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"))}
+                    ${toolButton("abe-undo", "undo-2", __("Undo"), { disabled: !boardCommands || !storeView.canUndo })}
+                    ${toolButton("abe-redo", "redo-2", __("Redo"), { disabled: !boardCommands || !storeView.canRedo })}
+                    ${toolButton("abe-restore", "refresh-ccw", __("Restore entry layout"), { disabled: !boardCommands })}
                     ${toolSep}
                     ${toolButton("abe-magnet" + (magnetOn ? " is-active" : ""), "magnet", __("Magnet"), {
                         pressed: magnetOn,
+                        disabled: !boardCommands,
                         attrs: ` data-abe-magnet="1"`,
                         title: __("Magnet: snap pieces to board edges and neighbouring pieces while dragging. Hold Alt to bypass."),
                     })}
                     ${toolButton("abe-measure" + (measureOn ? " is-active" : ""), "ruler", __("Measure"), {
                         pressed: measureOn,
+                        disabled: !boardCommands,
                         attrs: ` data-abe-measure-tool="1"`,
                         title: __("Measure tool: drag a straight line on a board to read its length in millimetres. Esc clears the line."),
                     })}
-                    <label class="abe-angle-field${angleEditable ? "" : " is-disabled"}" title="${esc(angleTitle)}">
-                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
+                    <label class="abe-angle-field${angleEditable && boardCommands ? "" : " is-disabled"}" title="${esc(angleTitle)}">
+                        <input type="text" inputmode="decimal" class="abe-angle-input" value="${esc(String(Math.round(angleValue * 1000) / 1000))}" ${angleEditable && boardCommands ? "" : "disabled"} aria-label="${esc(angleTitle)}" title="${esc(angleTitle)}" />
                         <span aria-hidden="true">°</span>
                     </label>
                     ${toolButton("abe-angle-0-180", "arrow-left-right", angle0_180Label, {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: anglePairTitle || angle0_180Label,
                     })}
                     ${toolButton("abe-angle-90-270", "arrow-up-down", angle90_270Label, {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: anglePairTitle || angle90_270Label,
                     })}
                     ${toolButton("abe-rotate-30", "refresh", __("Rotate +30°"), {
-                        disabled: !angleEditable,
+                        disabled: !boardCommands || !angleEditable,
                         title: angleEditable
                             ? __("Add 30 degrees in the positive rotation direction.")
                             : angleTitle,
                     })}
                     ${toolButton("abe-angle-mirror", "flip-horizontal-2", __("Mirror angle"), {
-                        disabled: !transformMirrorEnabled,
+                        disabled: !boardCommands || !transformMirrorEnabled,
                         title: transformMirrorTitle,
                     })}
                     ${toolSep}
                     ${toolButton("abe-remove-piece", "trash-2", __("Remove from distribution"), {
-                        disabled: !canRemovePiece,
+                        disabled: !boardCommands || !canRemovePiece,
                         title: removePieceTitle,
                     })}
-                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !canRemoveBoard })}
+                    ${toolButton("abe-remove-board", "square-x", __("Remove board from distribution"), { disabled: !boardCommands || !canRemoveBoard })}
                 </div>
                 </div>
             </div>
@@ -2087,6 +2124,13 @@
         host.querySelector(".abe-fit-all").onclick = () => handlers && handlers.fitAll && handlers.fitAll(layout);
         host.querySelector(".abe-zoom-in").onclick = () => handlers && handlers.zoom && handlers.zoom(1.2);
         host.querySelector(".abe-zoom-out").onclick = () => handlers && handlers.zoom && handlers.zoom(1 / 1.2);
+        host.querySelectorAll("[data-abe-editor-mode]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (handlers && handlers.setEditorMode) {
+                    handlers.setEditorMode(button.getAttribute("data-abe-editor-mode"));
+                }
+            });
+        });
         const floatDock = host.querySelector(".abe-float-dock");
         if (floatDock) {
             floatDock.addEventListener("pointerdown", (event) => {

@@ -334,7 +334,17 @@
             publishPresented(entryKey, presented);
         }
 
+        function distributionGesturesAllowed() {
+            const snap = store && store.snapshot ? store.snapshot() : null;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (EditorMode && typeof EditorMode.distributionGesturesAllowed === "function") {
+                return EditorMode.distributionGesturesAllowed(snap);
+            }
+            return !snap || snap.editorMode !== "drawing";
+        }
+
         function beginTool(event) {
+            if (!distributionGesturesAllowed()) return false;
             const MG = geometry();
             if (!MG || !store || !(isMeasureToolActive && isMeasureToolActive())) return false;
             if (isPanKey && isPanKey()) return false;

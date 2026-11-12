@@ -671,7 +671,7 @@ assert.match(css, /grid-template-areas:\s*"sidebar canvas inspector"/);
 assert.doesNotMatch(css, /\.abe-right-sidebar\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/);
 assert.match(page, /alignment_geometry\.js\?v=2/);
 assert.match(page, /right_sidebar_renderer\.js\?v=5/);
-assert.match(page, /board_editor\.css\?v=38/);
+assert.match(page, /board_editor\.css\?v=39/);
 assert.match(controller, /RightSidebarRenderer/);
 assert.match(controller, /applyAlignment/);
 assert.match(right, /data-abe-align/);

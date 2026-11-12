@@ -127,7 +127,17 @@
             });
         }
 
+        function distributionGesturesAllowed() {
+            const snap = store && store.snapshot ? store.snapshot() : null;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (EditorMode && typeof EditorMode.distributionGesturesAllowed === "function") {
+                return EditorMode.distributionGesturesAllowed(snap);
+            }
+            return !snap || snap.editorMode !== "drawing";
+        }
+
         function beginHandleGesture(pieceKey, event) {
+            if (!distributionGesturesAllowed()) return false;
             if (!event || event.button === 1) return false;
             if (isPanKey && isPanKey()) return false;
             if (event.pointerType === "mouse" && event.button !== 0) return false;
@@ -191,6 +201,10 @@
 
         function onPointerMove(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            if (!distributionGesturesAllowed()) {
+                reset();
+                return;
+            }
             const world = clientToWorld(event.clientX, event.clientY);
             updateFromWorld(world);
         }
@@ -216,6 +230,10 @@
 
         function onPointerUp(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            if (!distributionGesturesAllowed()) {
+                reset();
+                return;
+            }
             const snap = store.snapshot();
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
             const decision = RotationGeometry.validatePieceRotation(
@@ -243,6 +261,7 @@
         }
 
         function applyNumericAngle(pieceKey, rawValue) {
+            if (!distributionGesturesAllowed()) return false;
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
             const parsed = Number(String(rawValue == null ? "" : rawValue).trim());
             if (!Number.isFinite(parsed)) {

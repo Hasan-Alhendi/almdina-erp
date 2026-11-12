@@ -3503,3 +3503,17 @@ Board editor drawing is not valid JSON.,رسم محرر الألواح ليس JS
 Board editor drawing is not a supported drawing document.,رسم محرر الألواح ليس مستند رسم مدعومًا.
 Board editor drawing archive is not valid JSON.,أرشيف رسم محرر الألواح ليس JSON صالحًا.
 Board editor drawing archive is not a supported archive.,أرشيف رسم محرر الألواح ليس أرشيفًا مدعومًا.
+Editor mode,وضع المحرر
+Select a special piece to start drawing.,حدد درفة خاصة لبدء الرسم.
+Select one special piece. Group drawing is not available.,اختر درفة خاصة واحدة. الرسم الجماعي غير متاح.
+Geometric drawing is available for special pieces only.,الرسم الهندسي متاح للدرفات الخاصة فقط.
+This special piece is selected for drawing.,هذه الدرفة الخاصة محددة للرسم.
+Drawing edits stay unavailable while this layout is read-only.,تعديلات الرسم غير متاحة ما دام هذا التوزيع للعرض فقط.
+Drawing tools,أدوات الرسم
+These drawing tools are not available yet.,أدوات الرسم هذه غير متاحة بعد.
+Select tool,أداة التحديد
+Polyline,متعدد الخطوط
+Shapes,الأشكال
+Pen,القلم
+Node edit,تعديل العقد
+Snap tool,أداة الالتقاط

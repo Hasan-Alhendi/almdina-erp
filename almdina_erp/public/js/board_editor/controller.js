@@ -197,6 +197,7 @@
         let altHeld = false;
         let activeOrderName = "";
         let scrollOwned = false;
+        let measureArmedBeforeDrawing = false;
         let loadedRevisionToken = "";
         let loadedPlanName = "";
         let freshnessRetryTimer = null;
@@ -921,7 +922,7 @@
         }
 
         function commitRotation(pieceKey, rotationDeg) {
-            if (!store || !RotationGeometry) return;
+            if (!layoutCommandsAllowed() || !store || !RotationGeometry) return;
             const view = store.snapshot();
             if (!view.session) return;
             const next = RotationGeometry.applyPieceRotation(view.session, pieceKey, rotationDeg);
@@ -974,6 +975,7 @@
         }
 
         function commitTransform(result, pieceKey) {
+            if (!layoutCommandsAllowed()) return;
             if (!store || !result || !result.ok) {
                 rejectTransform(result && result.code);
                 return;
@@ -1170,8 +1172,38 @@
             }
         }
 
+        function layoutCommandsAllowed() {
+            if (!store) return false;
+            const mode = store.snapshot().editorMode;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            if (EditorMode && typeof EditorMode.layoutCommandsAllowed === "function") {
+                return EditorMode.layoutCommandsAllowed(mode);
+            }
+            return mode !== "drawing";
+        }
+
+        function setEditorMode(mode) {
+            if (!store) return;
+            const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
+            const next = EditorMode && typeof EditorMode.normalize === "function"
+                ? EditorMode.normalize(mode)
+                : (mode === "drawing" ? "drawing" : "board");
+            if ((store.snapshot().editorMode || "board") === next) return;
+            const measureWasActive = store.snapshot().measureToolActive === true;
+            finishActiveGesture();
+            if (next === "drawing") {
+                measureArmedBeforeDrawing = measureWasActive;
+                if (measureWasActive) store.setMeasureToolActive(false);
+            }
+            store.setEditorMode(next);
+            if (next === "board" && measureArmedBeforeDrawing) {
+                measureArmedBeforeDrawing = false;
+                store.setMeasureToolActive(true);
+            }
+        }
+
         function applyDistribution(command) {
-            if (!store || !Distribution || typeof command !== "function") return;
+            if (!layoutCommandsAllowed() || !store || !Distribution || typeof command !== "function") return;
             finishActiveGesture();
             const result = command();
             if (!result || !result.ok) return;
@@ -1204,7 +1236,7 @@
             // no magnet/snap (proposeGroupMove is exact millimetre deltas).
             const PositionGeometry = window.AlmdinaBoardEditor.PositionGeometry;
             const MoveGeometryLocal = window.AlmdinaBoardEditor.MoveGeometry;
-            if (!store || !PositionGeometry || !MoveGeometryLocal || typeof proposeFn !== "function") {
+            if (!layoutCommandsAllowed() || !store || !PositionGeometry || !MoveGeometryLocal || typeof proposeFn !== "function") {
                 return { ok: false, reason: "Position controls unavailable." };
             }
             const snap = store.snapshot();
@@ -1254,7 +1286,7 @@
         function applyAlignment(mode) {
             const AlignmentGeometry = window.AlmdinaBoardEditor.AlignmentGeometry;
             const MoveGeometryLocal = window.AlmdinaBoardEditor.MoveGeometry;
-            if (!store || !AlignmentGeometry || !MoveGeometryLocal) return { ok: false };
+            if (!layoutCommandsAllowed() || !store || !AlignmentGeometry || !MoveGeometryLocal) return { ok: false };
             finishActiveGesture();
             const view = store.snapshot();
             const proposal = AlignmentGeometry.proposeAlignment(
@@ -1282,7 +1314,7 @@
         function inspectorHandlers() {
             return {
                 setPieceClassification: (pieceKey, resourceKind, parties) => {
-                    if (!store || !SessionDocument || typeof SessionDocument.classifyPiece !== "function") {
+                    if (!layoutCommandsAllowed() || !store || !SessionDocument || typeof SessionDocument.classifyPiece !== "function") {
                         return { ok: false };
                     }
                     finishActiveGesture();
@@ -1351,7 +1383,7 @@
         }
 
         function nudgeSelectedPieceByArrow(event) {
-            if (!store || suspended || !event) return false;
+            if (!layoutCommandsAllowed() || !store || suspended || !event) return false;
             if (isEditableTarget(event.target)) return false;
             if (event.metaKey || event.ctrlKey || event.altKey) return false;
             const key = event.key;
@@ -1426,7 +1458,7 @@
                     revealSheet(sheetNo);
                 },
                 returnPiece: (pieceKey) => {
-                    if (!store || !Distribution) return;
+                    if (!layoutCommandsAllowed() || !store || !Distribution) return;
                     finishActiveGesture();
                     const result = Distribution.returnPieceToStaging(store.snapshot().session, pieceKey);
                     if (!result || !result.ok) return;
@@ -1460,7 +1492,7 @@
                 },
                 setSidebarSplit: (ratio, sidebarHeight) => store.setSidebarSplit(ratio, sidebarHeight),
                 addBoard: () => {
-                    if (!store || !SessionDocument || typeof SessionDocument.addFullBoard !== "function") return;
+                    if (!layoutCommandsAllowed() || !store || !SessionDocument || typeof SessionDocument.addFullBoard !== "function") return;
                     finishActiveGesture();
                     const current = store.snapshot();
                     const result = SessionDocument.addFullBoard(current.session, current.projection);
@@ -1501,15 +1533,26 @@
                     if (!store) return;
                     store.selectPiece(null, { pieceKey: null, elementId: null });
                 },
+                setEditorMode: (mode) => setEditorMode(mode),
                 toggleMagnet: () => {
+                    if (!layoutCommandsAllowed()) return;
                     store.toggleMagnet();
                     if (moveInteraction && moveInteraction.refreshPreviewFromPointer) {
                         moveInteraction.refreshPreviewFromPointer();
                     }
                 },
-                undo: () => store.undo(),
-                redo: () => store.redo(),
-                restoreEntry: () => store.restoreEntry(),
+                undo: () => {
+                    if (!layoutCommandsAllowed()) return;
+                    store.undo();
+                },
+                redo: () => {
+                    if (!layoutCommandsAllowed()) return;
+                    store.redo();
+                },
+                restoreEntry: () => {
+                    if (!layoutCommandsAllowed()) return;
+                    store.restoreEntry();
+                },
                 removePiece: (pieceKey) => applyDistribution(() => {
                     const view = store.snapshot();
                     const key = pieceKey || view.selectedPieceKey;
@@ -1520,7 +1563,7 @@
                     return Distribution.removeBoard(view.session, sheetNo == null ? view.selectedSheetNo : sheetNo);
                 }),
                 toggleMeasureTool: () => {
-                    if (!store) return;
+                    if (!layoutCommandsAllowed() || !store) return;
                     const next = !store.snapshot().measureToolActive;
                     store.setMeasureToolActive(next);
                     if (measureInteraction) {
@@ -1534,7 +1577,9 @@
                     }
                 },
                 beginMeasureGesture: (event) => (
-                    measureInteraction && measureInteraction.beginTool(event)
+                    layoutCommandsAllowed()
+                    && measureInteraction
+                    && measureInteraction.beginTool(event)
                 ),
                 beginPieceGesture: (pieceKey, event, meta) => {
                     if (store && store.snapshot().measureToolActive) {
@@ -1550,6 +1595,7 @@
                     return moveInteraction && moveInteraction.beginBoardGesture(sheetNo, event);
                 },
                 beginRotateGesture: (pieceKey, event) => {
+                    if (!layoutCommandsAllowed()) return false;
                     if (store && store.snapshot().measureToolActive) return false;
                     if (moveInteraction && moveInteraction.onPanIntent) moveInteraction.onPanIntent();
                     return rotationInteraction && rotationInteraction.beginHandleGesture(pieceKey, event);
@@ -1727,6 +1773,8 @@
                     renderSourceConflict(orderName, context, nextToken);
                     return;
                 }
+                finishActiveGesture();
+                measureArmedBeforeDrawing = false;
                 if (unsubscribe) unsubscribe();
                 store = createStore(payload);
                 ensureSession(payload, {
@@ -2013,6 +2061,18 @@
                 }
                 if (measureInteraction && measureInteraction.refreshAltInspection) {
                     measureInteraction.refreshAltInspection();
+                }
+            }
+            if (store && !layoutCommandsAllowed() && !isEditableTarget(event.target)) {
+                const keyName = String(event.key || "");
+                const modified = event.metaKey || event.ctrlKey;
+                const distributionKey = keyName === "Delete"
+                    || keyName === "Backspace"
+                    || keyName.indexOf("Arrow") === 0
+                    || (modified && (keyName.toLowerCase() === "z" || keyName.toLowerCase() === "y"));
+                if (distributionKey) {
+                    event.preventDefault();
+                    return;
                 }
             }
             if (event.code === "Escape") {
