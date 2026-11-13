@@ -863,6 +863,10 @@ Choose a reference side.,اختر الجهة المرجعية.
 Choose a reference side to include this add-on.,اختر الجهة المرجعية لتضمين هذه الإضافة.
 Edge Offset,المسافة عن الحافة
 Liner Width,عرض اللاينر
+Liner face,اللاينر على الوجه
+Front face,الوجه الأمامي
+Back face,الوجه الخلفي
+Liner on the back,لاينر من الخلف
 Add liner,إضافة لاينر
 Liner {0},لاينر {0}
 Remove liner {0},إزالة اللاينر {0}

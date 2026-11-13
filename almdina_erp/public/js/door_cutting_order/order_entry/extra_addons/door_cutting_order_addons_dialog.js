@@ -135,6 +135,8 @@
         if (["offsetCm", "widthCm", "startCm", "lengthCm"].some(key => Number(draft[key]) !== Number(initial[key]))) {
             return true;
         }
+        const face = (value) => (value === "front" || value === "back" ? value : null);
+        if (face(draft.face) !== face(initial.face)) return true;
         return JSON.stringify(linerSnapshot(draft)) !== JSON.stringify(linerSnapshot(initial));
     }
 
@@ -642,6 +644,7 @@
             lengthCm: draft.lengthCm,
             fullLength: Boolean(draft.fullLength),
             legacyCheckboxOnly: Boolean(draft.legacyCheckboxOnly),
+            face: draft.face === "front" || draft.face === "back" ? draft.face : null,
             liners: linerSnapshot(draft),
         };
     }

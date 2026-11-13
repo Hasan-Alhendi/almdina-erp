@@ -187,8 +187,12 @@
         if (!parsed || !parsed.liners || !parsed.liners.length) {
             draft.linerId = fallbackId;
             draft.liners = [linerItemFromDraft(draft)];
+            draft.face = null;
             return draft;
         }
+        draft.face = api && typeof api.linerFaceValue === "function"
+            ? api.linerFaceValue(parsed.face)
+            : (parsed.face === "front" || parsed.face === "back" ? parsed.face : null);
         if (parsed.enabled) draft.enabled = true;
         if (Number.isFinite(parsed.widthCm) && parsed.widthCm > 0) draft.widthCm = parsed.widthCm;
         const assignedIds = [];
@@ -740,15 +744,61 @@
             </div>`;
     }
 
+    function linerFaceValue(value) {
+        const api = geometry();
+        if (api && typeof api.linerFaceValue === "function") return api.linerFaceValue(value);
+        const text = String(value == null ? "" : value).trim().toLowerCase();
+        return text === "front" || text === "back" ? text : null;
+    }
+
+    function radioChecked(radio) {
+        if (!radio) return false;
+        if (radio.checked === true || radio.checked === false) return radio.checked;
+        return radio.getAttribute("checked") != null;
+    }
+
+    function selectedLinerFace(root) {
+        const group = root && root.querySelector("[data-liner-face]");
+        if (!group) return null;
+        const radios = group.querySelectorAll("[data-liner-face-value]");
+        for (let index = 0; index < radios.length; index += 1) {
+            const radio = radios[index];
+            if (!radioChecked(radio)) continue;
+            return linerFaceValue(radio.getAttribute("data-liner-face-value") || radio.value);
+        }
+        return null;
+    }
+
+    function linerFaceHtml(draft) {
+        const face = linerFaceValue(draft && draft.face);
+        const option = (value, label) => {
+            const checked = face === value ? " checked" : "";
+            return `<label class="dco-liner-face-option">
+                <input type="radio" name="liner_face" value="${value}" data-liner-face-value="${value}"${checked}>
+                <span>${esc(__(label))}</span>
+            </label>`;
+        };
+        return `<fieldset class="dco-liner-face" data-liner-face>
+                <legend class="dco-corner-section-label">${esc(__("Liner face"))}</legend>
+                <div class="dco-liner-face-options">
+                    ${option("front", "Front face")}
+                    ${option("back", "Back face")}
+                </div>
+            </fieldset>`;
+    }
+
     function linerSetHtml(draft) {
         const items = linerItems(draft);
         const shared = `<div class="dco-liner-shared">
-                <div class="dco-corner-section-label">${esc(__("Liner Width"))}</div>
-                <div class="dco-corner-input-grid">
-                    <div class="dco-corner-input-wrap">
-                        <label>${esc(__("Liner Width"))}</label>
-                        <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                <div class="dco-liner-shared-grid">
+                    <div class="dco-liner-width-field">
+                        <div class="dco-corner-section-label">${esc(__("Liner Width"))}</div>
+                        <div class="dco-corner-input-wrap">
+                            <label>${esc(__("Liner Width"))}</label>
+                            <div class="dco-corner-input-shell"><input type="number" min="0" step="1" data-liner-width value="${formatInput(num(draft.widthCm) * 10, 2)}"><span>${esc(__("mm"))}</span></div>
+                        </div>
                     </div>
+                    ${linerFaceHtml(draft)}
                 </div>
             </div>`;
         const sections = items.map((item, index) => {
@@ -840,6 +890,9 @@
             liners: items,
             enabled: previous.enabled,
             legacyCheckboxOnly: false,
+            face: root.querySelector("[data-liner-face]")
+                ? selectedLinerFace(root)
+                : linerFaceValue(previous.face),
         });
         return hydrateLinerDraft(draft);
     }
@@ -997,6 +1050,7 @@
                 ? api.serializeDoorLiners({
                     enabled: true,
                     widthCm: draft.widthCm,
+                    face: linerFaceValue(draft.face),
                     liners: items.map(item => ({
                         id: item.id,
                         side: item.side,
@@ -1105,6 +1159,14 @@
 
     let activeDialog = null;
 
+    function readPresentedDraft(root, piece, enabled, row, kind, previous, changedField) {
+        if ((kind || (previous && previous.kind) || "liner") === "liner"
+            && root && root.querySelector && root.querySelector("[data-liner-set]")) {
+            return readLinerSet(root, piece, previous, changedField);
+        }
+        return readDraft(root, piece, enabled, row, kind, previous, changedField);
+    }
+
     function open(frm, row, kind) {
         const api = geometry();
         if (!frm || !row || !api) return false;
@@ -1141,7 +1203,7 @@
             primary_action() {
                 const root = dialog.$wrapper.find("[data-liner-editor]").get(0);
                 if (!root) return;
-                draft = readDraft(root, piece, true, row, addon.kind, draft);
+                draft = readPresentedDraft(root, piece, true, row, addon.kind, draft);
                 const message = paint(root, draft, dialog);
                 if (message) {
                     frappe.msgprint({
@@ -1169,7 +1231,7 @@
         root.addEventListener("click", (event) => {
             const side = event.target.closest("[data-liner-side]");
             if (side && root.contains(side)) {
-                draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft);
+                draft = readPresentedDraft(root, piece, draft.enabled, row, addon.kind, draft);
                 draft = selectSide(draft, piece, side.getAttribute("data-liner-side"));
                 const startInput = root.querySelector("[data-liner-start]");
                 const lengthInput = root.querySelector("[data-liner-length]");
@@ -1183,7 +1245,7 @@
                 const size = handleSizeById(sizeButton.getAttribute("data-handle-size"));
                 if (!size) return;
                 draft = applyStandardHandleSize(
-                    readDraft(root, piece, true, row, addon.kind, draft, "length"),
+                    readPresentedDraft(root, piece, true, row, addon.kind, draft, "length"),
                     size
                 );
                 writeMachiningInputs(root, draft);
@@ -1192,7 +1254,7 @@
             }
             const centerButton = event.target.closest("[data-handle-center]");
             if (centerButton && root.contains(centerButton) && addon.kind === "recessed_handle_cutout") {
-                const current = readDraft(root, piece, draft.enabled, row, addon.kind, draft, "offset");
+                const current = readPresentedDraft(root, piece, draft.enabled, row, addon.kind, draft, "offset");
                 const outcome = centerHandleDraft(current);
                 if (!outcome.ok) {
                     paint(root, current, dialog);
@@ -1235,7 +1297,7 @@
                         : target && target.matches && target.matches("[data-liner-width]")
                             ? "width"
                             : "";
-            draft = readDraft(root, piece, draft.enabled, row, addon.kind, draft, changedField);
+            draft = readPresentedDraft(root, piece, draft.enabled, row, addon.kind, draft, changedField);
             if (draft.fullLength && changedField === "start") {
                 const lengthInput = root.querySelector("[data-liner-length]");
                 if (lengthInput) lengthInput.value = formatInput(draft.lengthCm, 3);

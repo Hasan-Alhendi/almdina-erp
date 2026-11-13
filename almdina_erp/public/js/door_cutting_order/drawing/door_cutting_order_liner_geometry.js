@@ -1379,6 +1379,11 @@
         return `${parsed.liners.length} · ${Math.round(num(parsed.widthCm) * 100) / 10} ${__("mm")}`;
     }
 
+    function linerFaceValue(value) {
+        const text = String(value == null ? "" : value).trim().toLowerCase();
+        return text === "front" || text === "back" ? text : null;
+    }
+
     function allocateLinerId(existing) {
         let used = 0;
         (existing || []).forEach(id => {
@@ -1404,16 +1409,17 @@
                 }));
                 if (enabled && liners.length) {
                     const widthCm = data.width_cm != null ? num(data.width_cm) : num(row && row.liner_width_cm);
-                    return { enabled: true, widthCm, liners };
+                    return { enabled: true, widthCm, liners, face: linerFaceValue(data.face) };
                 }
             } catch (error) {
                 /* fall through to scalar fields */
             }
         }
-        if (!enabled) return { enabled: false, widthCm: 0, liners: [] };
+        if (!enabled) return { enabled: false, widthCm: 0, liners: [], face: null };
         return {
             enabled: true,
             widthCm: num(row && row.liner_width_cm),
+            face: null,
             liners: [{
                 id: "liner_1",
                 side: String((row && row.liner_reference_side) || "").trim(),
@@ -1424,18 +1430,25 @@
         };
     }
 
+    function doorLinerFace(row) {
+        return linerFaceValue(parseDoorLiners(row).face);
+    }
+
     function serializeDoorLiners(payload) {
         if (!payload || !payload.enabled || !(payload.liners || []).length) return "";
-        return JSON.stringify({
+        const body = {
             width_cm: num(payload.widthCm),
-            liners: payload.liners.map(spec => ({
-                id: spec.id,
-                side: spec.side,
-                offset_cm: num(spec.offsetCm),
-                start_cm: num(spec.startCm),
-                length_cm: num(spec.lengthCm),
-            })),
-        });
+        };
+        const face = linerFaceValue(payload.face);
+        if (face) body.face = face;
+        body.liners = payload.liners.map(spec => ({
+            id: spec.id,
+            side: spec.side,
+            offset_cm: num(spec.offsetCm),
+            start_cm: num(spec.startCm),
+            length_cm: num(spec.lengthCm),
+        }));
+        return JSON.stringify(body);
     }
 
     function millRegionsConnected(first, second) {
@@ -1637,6 +1650,8 @@
         syntheticOverlay,
         summary,
         parseDoorLiners,
+        doorLinerFace,
+        linerFaceValue,
         serializeDoorLiners,
         allocateLinerId,
         mergedToolpathsMm,
