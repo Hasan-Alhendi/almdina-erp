@@ -477,6 +477,54 @@
             emit();
         }
 
+        function selectPieces(pieceKeys, options) {
+            const opts = options || {};
+            const MarqueeGeometry = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.MarqueeGeometry;
+            let nextKeys;
+            if (MarqueeGeometry && typeof MarqueeGeometry.mergePieceKeys === "function") {
+                nextKeys = MarqueeGeometry.mergePieceKeys(
+                    state.selectedPieceKeys,
+                    pieceKeys,
+                    opts.mode === "add" ? "add" : "replace"
+                );
+            } else {
+                const seen = new Set();
+                nextKeys = [];
+                (Array.isArray(pieceKeys) ? pieceKeys : []).forEach((key) => {
+                    const value = String(key || "").trim();
+                    if (!value || seen.has(value)) return;
+                    seen.add(value);
+                    nextKeys.push(value);
+                });
+                if (opts.mode === "add") {
+                    const merged = state.selectedPieceKeys.slice();
+                    const have = new Set(merged);
+                    nextKeys.forEach((key) => {
+                        if (have.has(key)) return;
+                        have.add(key);
+                        merged.push(key);
+                    });
+                    nextKeys = merged;
+                }
+            }
+            if (state.session && state.session.pieces) {
+                nextKeys = nextKeys.filter((key) => Boolean(state.session.pieces[key]));
+            }
+            state.selectedPieceKeys = nextKeys;
+            state.selectedSheetNo = null;
+            state.selectedElementId = null;
+            syncPrimaryPiece();
+            if (opts.expandSheets) {
+                nextKeys.forEach((key) => {
+                    const piece = state.session && state.session.pieces[key];
+                    if (piece && piece.sheet_no != null) {
+                        state.expandedSheets[String(piece.sheet_no)] = true;
+                    }
+                });
+            }
+            emit();
+        }
+
         function selectSheet(sheetNo) {
             state.selectedSheetNo = sheetNo == null ? null : Number(sheetNo);
             state.selectedPieceId = null;
@@ -558,6 +606,7 @@
             setAllLayersVisible,
             showOnlyLayer,
             selectPiece,
+            selectPieces,
             selectSheet,
             toggleSheetExpanded,
             setViewport,
