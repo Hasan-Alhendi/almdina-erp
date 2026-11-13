@@ -263,6 +263,54 @@
         return Boolean(piece && piece.apply_rotated_to_geometry === false);
     }
 
+    function cornerRingSignature(points) {
+        if (!Array.isArray(points) || points.length < 3) return "";
+        const coords = points.map((point) => [Number(point[0]), Number(point[1])]);
+        if (coords.some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) return "";
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        coords.forEach((point) => {
+            minX = Math.min(minX, point[0]);
+            minY = Math.min(minY, point[1]);
+            maxX = Math.max(maxX, point[0]);
+            maxY = Math.max(maxY, point[1]);
+        });
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+        if (!(spanX > 1e-6) || !(spanY > 1e-6)) return "";
+        const edges = [];
+        for (let index = 0; index < coords.length; index += 1) {
+            const start = coords[index];
+            const end = coords[(index + 1) % coords.length];
+            const a = `${Math.round(((start[0] - minX) / spanX) * 1000)},${Math.round(((start[1] - minY) / spanY) * 1000)}`;
+            const b = `${Math.round(((end[0] - minX) / spanX) * 1000)},${Math.round(((end[1] - minY) / spanY) * 1000)}`;
+            edges.push(a < b ? `${a}|${b}` : `${b}|${a}`);
+        }
+        edges.sort();
+        return edges.join(";");
+    }
+
+    function posedOutlineMatchesRotatedCorner(piece) {
+        // System nesting bakes a 90° `rotated` swap into the Board Editor outline
+        // and then clears the flag. The saved contour still matches the rotated
+        // corner model drawn in the placed box; semantic flags do not.
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.points !== "function" || typeof geometry.isCornerCut !== "function") return false;
+        if (!geometry.isCornerCut(piece)) return false;
+        const stored = piece && piece.geometry && piece.geometry.outer;
+        const widthMm = Math.max(0, (Number(piece && piece.w) || 0) * 10);
+        const heightMm = Math.max(0, (Number(piece && piece.h) || 0) * 10);
+        if (!(widthMm > 0) || !(heightMm > 0)) return false;
+        const storedSignature = cornerRingSignature(stored);
+        if (!storedSignature) return false;
+        const flatSignature = cornerRingSignature(geometry.points({ ...piece, rotated: false }, widthMm, heightMm));
+        const rotatedSignature = cornerRingSignature(geometry.points({ ...piece, rotated: true }, widthMm, heightMm));
+        if (!rotatedSignature || storedSignature === flatSignature) return false;
+        return storedSignature === rotatedSignature;
+    }
+
     function remapRotatedCornerEdgePiece(piece) {
         // Remap selection flags and type overrides together so style stays
         // bound to the same physical side after the 90° clockwise turn.
@@ -321,10 +369,30 @@
         if (piece && piece.rotated && !posed) {
             return remapRotatedCornerEdgePiece(piece);
         }
+        // Edited plans store the already-rotated contour and clear `rotated`.
+        // With no further session angle, bands use the same 90° model as the
+        // system plan. A non-zero session angle still spins semantic bands.
+        if (posed && !(Math.abs(Number(piece && piece.rotation_deg) || 0) > 1e-6)) {
+            const recordedTurns = Number(piece && piece.rotation_quarter_turns);
+            const bakedRightAngle = Number.isInteger(recordedTurns) && ((recordedTurns % 4) + 4) % 4 === 1;
+            if (bakedRightAngle || posedOutlineMatchesRotatedCorner(piece)) {
+                return remapRotatedCornerEdgePiece({ ...piece, rotated: true });
+            }
+        }
         return piece;
     }
 
     function posedCornerEdgeMarkup(piece, geometry, sideCustom) {
+        // A baked nesting rotation is already the system-plan corner model.
+        // Do not rebuild those bands in the unrotated frame.
+        if (piece && piece.rotated && !(Math.abs(Number(piece.rotation_deg) || 0) > 1e-6)) {
+            return geometry.edgeBandSvgMarkup(piece, 100, 100, {
+                inheritStroke: true,
+                sideCustom,
+                customColor: EDGE_BAND_CUSTOM_COLOR,
+                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
+            });
+        }
         // Build bands in the unrotated manufacturing frame, then apply the same
         // session rotation that posed the usable-sheet outline — never twice.
         if (!geometry || typeof geometry.clippedEdgePaths !== "function") return "";

@@ -3254,6 +3254,7 @@ Save the current distribution before applying it to the cutting plan.,احفظ �
 Save the board editor distribution before applying it to the cutting plan.,احفظ توزيع محرر الألواح قبل تطبيقه على خطة القص.
 The edited layout was applied as cutting plan {0}. It is not approved.,طُبّق التوزيع المعدّل كخطة قص {0}. وهي غير معتمدة.
 The layout could not be applied to a cutting plan.,تعذّر تطبيق التوزيع على خطة قص.
+The saved distribution is not ready. Review it and fix blocking issues first.,التوزيع المحفوظ غير جاهز. راجعه وأصلح المشاكل المانعة أولاً.
 Applying the layout to a cutting plan failed. The saved draft is unchanged.,فشل تطبيق التوزيع على خطة القص. المسودة المحفوظة لم تتغير.
 Could not apply layout,تعذّر تطبيق التوزيع
 "The draft changed. Save again, then apply it to the cutting plan.",تغيّرت المسودة. احفظ مجدداً ثم طبّقها على خطة القص.

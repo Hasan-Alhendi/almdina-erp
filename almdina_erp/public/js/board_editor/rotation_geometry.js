@@ -50,7 +50,10 @@
         const cosA = Math.cos(rad);
         const sinA = Math.sin(rad);
         // SVG-compatible: positive angle is clockwise with Y downward.
-        return [p.x + x * cosA + y * sinA, p.y - x * sinA + y * cosA];
+        // Must match SVG `rotate(θ)` / CSS matrix (x cos − y sin, x sin + y cos).
+        // The previous (+ y sin, − x sin) form was the opposite chirality, so
+        // handle-drag preview (SVG rotate) and applyPieceRotation disagreed.
+        return [p.x + x * cosA - y * sinA, p.y + x * sinA + y * cosA];
     }
 
     function rotatePoints(points, pivot, angleDeg) {

@@ -92,9 +92,12 @@ def rotate_point(
     y = num(point[1]) - py
     rad = math.radians(normalize_angle_deg(angle_deg))
     # SVG-compatible: positive angle is clockwise when Y grows downward.
+    # Match SVG `rotate(θ)` / CSS matrix (x cos − y sin, x sin + y cos).
+    # The previous (+ y sin, − x sin) form had the opposite chirality, so a
+    # board-editor handle preview (SVG rotate) and apply_piece_rotation disagreed.
     cos_a = math.cos(rad)
     sin_a = math.sin(rad)
-    return [px + x * cos_a + y * sin_a, py - x * sin_a + y * cos_a]
+    return [px + x * cos_a - y * sin_a, py + x * sin_a + y * cos_a]
 
 
 def rotate_points(

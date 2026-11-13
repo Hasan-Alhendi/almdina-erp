@@ -220,7 +220,7 @@ function nextAnglePairTarget(currentDeg, firstDeg, secondDeg) {
     assert.match(page, /controller\.js\?v=35/);
     assert.match(page, /canvas_renderer\.js\?v=37/);
     assert.match(page, /board_editor\.css\?v=38/);
-    assert.match(page, /move_geometry\.js\?v=20/);
+    assert.match(page, /move_geometry\.js\?v=21/);
     assert.match(canvas, /data-abe-angle-mirror/);
     assert.match(canvas, /abe-l-mirror-btn/);
     assert.match(arCsv, /Toggle rotation 0° ↔ 180°/);

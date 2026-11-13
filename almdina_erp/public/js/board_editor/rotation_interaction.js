@@ -1,6 +1,43 @@
 (() => {
     "use strict";
 
+    const SHIFT_SNAP_DEG = 15;
+    const ANGLE_STEP_EPS = 1e-9;
+
+    function signedAngleDelta(fromDeg, toDeg) {
+        let delta = Number(toDeg) - Number(fromDeg);
+        if (!Number.isFinite(delta)) return 0;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        return delta;
+    }
+
+    function applyRotationSteps(baseDeg, steps) {
+        const base = Number(baseDeg) || 0;
+        const count = Number(steps) || 0;
+        if (!count) return base;
+        if (count > 0) {
+            const first = Math.ceil((base + ANGLE_STEP_EPS) / SHIFT_SNAP_DEG) * SHIFT_SNAP_DEG;
+            return first + (count - 1) * SHIFT_SNAP_DEG;
+        }
+        const first = Math.floor((base - ANGLE_STEP_EPS) / SHIFT_SNAP_DEG) * SHIFT_SNAP_DEG;
+        return first + (count + 1) * SHIFT_SNAP_DEG;
+    }
+
+    function constrainShiftRotation(freeContinuous, engageDisplay, engageFree) {
+        const freeDelta = (Number(freeContinuous) || 0) - (Number(engageFree) || 0);
+        if (Math.abs(freeDelta) <= ANGLE_STEP_EPS) {
+            return Number(engageDisplay) || 0;
+        }
+        let steps;
+        if (freeDelta > 0) {
+            steps = Math.floor(freeDelta / SHIFT_SNAP_DEG) + 1;
+        } else {
+            steps = Math.ceil(freeDelta / SHIFT_SNAP_DEG) - 1;
+        }
+        return applyRotationSteps(engageDisplay, steps);
+    }
+
     function createRotationInteraction(options) {
         const {
             store,
@@ -50,6 +87,7 @@
             window.addEventListener("pointerup", onPointerUp, true);
             window.addEventListener("pointercancel", onPointerCancel, true);
             window.addEventListener("keydown", onKeyDown, true);
+            window.addEventListener("keyup", onKeyUp, true);
             window.addEventListener("blur", onBlur);
             windowBound = true;
         }
@@ -60,6 +98,7 @@
             window.removeEventListener("pointerup", onPointerUp, true);
             window.removeEventListener("pointercancel", onPointerCancel, true);
             window.removeEventListener("keydown", onKeyDown, true);
+            window.removeEventListener("keyup", onKeyUp, true);
             window.removeEventListener("blur", onBlur);
             windowBound = false;
         }
@@ -84,23 +123,29 @@
             }
         }
 
-        function updateFromWorld(world) {
-            if (!gesture || !world) return;
+        function syncShiftMode(wantShift, pointerAngle) {
+            if (!gesture) return;
+            const pressed = Boolean(wantShift);
+            if (pressed === gesture.shiftPressed) return;
+            // Keep the currently displayed piece angle; re-base free/pointer refs.
+            gesture.freeContinuous = gesture.displayContinuous;
+            gesture.lastPointerAngle = pointerAngle != null
+                ? pointerAngle
+                : gesture.lastPointerAngle;
+            if (pressed) {
+                gesture.shiftPressed = true;
+                gesture.shiftEngageDisplay = gesture.displayContinuous;
+                gesture.shiftEngageFree = gesture.freeContinuous;
+            } else {
+                gesture.shiftPressed = false;
+            }
+        }
+
+        function publishFromDisplay() {
+            if (!gesture) return;
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
-            const pointerAngle = RotationGeometry.angleFromPointer(
-                gesture.pivotWorld,
-                world.x,
-                world.y
-            );
-            const absolute = RotationGeometry.normalizeAngleDeg(
-                gesture.startRotation + (pointerAngle - gesture.startPointerAngle)
-            );
-            // Continuous value for display without 0/360 jump.
-            let delta = pointerAngle - gesture.startPointerAngle;
-            if (delta > 180) delta -= 360;
-            if (delta < -180) delta += 360;
-            const continuous = gesture.startRotation + delta;
-            gesture.lastContinuous = continuous;
+            const absolute = RotationGeometry.normalizeAngleDeg(gesture.displayContinuous);
+            gesture.lastContinuous = gesture.displayContinuous;
             gesture.lastAngle = absolute;
 
             const snap = store.snapshot();
@@ -114,7 +159,7 @@
                 pieceKey: gesture.pieceKey,
                 ids: gesture.ids,
                 rotation_deg: absolute,
-                display_deg: continuous,
+                display_deg: gesture.displayContinuous,
                 pivotX: gesture.pivotWorld.x,
                 pivotY: gesture.pivotWorld.y,
                 pivotLocalX: gesture.pivotLocal.x,
@@ -125,6 +170,33 @@
                 guides: [],
                 snapped: false,
             });
+        }
+
+        function updateFromWorld(world, shiftKey) {
+            if (!gesture || !world) return;
+            const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
+            const pointerAngle = RotationGeometry.angleFromPointer(
+                gesture.pivotWorld,
+                world.x,
+                world.y
+            );
+            syncShiftMode(shiftKey, pointerAngle);
+
+            const pointerDelta = signedAngleDelta(gesture.lastPointerAngle, pointerAngle);
+            gesture.lastPointerAngle = pointerAngle;
+            gesture.freeContinuous += pointerDelta;
+
+            if (gesture.shiftPressed) {
+                gesture.displayContinuous = constrainShiftRotation(
+                    gesture.freeContinuous,
+                    gesture.shiftEngageDisplay,
+                    gesture.shiftEngageFree
+                );
+            } else {
+                gesture.displayContinuous = gesture.freeContinuous;
+            }
+
+            publishFromDisplay();
         }
 
         function beginHandleGesture(pieceKey, event) {
@@ -150,6 +222,13 @@
             if (!world) return false;
 
             reset();
+            const startRotation = RotationGeometry.normalizeAngleDeg(piece.rotation_deg);
+            const startPointerAngle = RotationGeometry.angleFromPointer(
+                handle.pivotWorld,
+                world.x,
+                world.y
+            );
+            const shiftPressed = Boolean(event.shiftKey);
             gesture = {
                 pieceKey,
                 pieceId: piece.piece_id,
@@ -161,14 +240,16 @@
                     x: Number(piece.pivot_mm.x) || 0,
                     y: Number(piece.pivot_mm.y) || 0,
                 },
-                startRotation: RotationGeometry.normalizeAngleDeg(piece.rotation_deg),
-                startPointerAngle: RotationGeometry.angleFromPointer(
-                    handle.pivotWorld,
-                    world.x,
-                    world.y
-                ),
-                lastAngle: RotationGeometry.normalizeAngleDeg(piece.rotation_deg),
-                lastContinuous: RotationGeometry.normalizeAngleDeg(piece.rotation_deg),
+                startRotation,
+                startPointerAngle,
+                lastPointerAngle: startPointerAngle,
+                freeContinuous: startRotation,
+                displayContinuous: startRotation,
+                shiftPressed,
+                shiftEngageDisplay: startRotation,
+                shiftEngageFree: startRotation,
+                lastAngle: startRotation,
+                lastContinuous: startRotation,
             };
             if (gesture.target && gesture.target.setPointerCapture) {
                 try {
@@ -185,14 +266,14 @@
             }
             event.preventDefault();
             event.stopPropagation();
-            updateFromWorld(world);
+            updateFromWorld(world, shiftPressed);
             return true;
         }
 
         function onPointerMove(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
             const world = clientToWorld(event.clientX, event.clientY);
-            updateFromWorld(world);
+            updateFromWorld(world, Boolean(event.shiftKey));
         }
 
         function commitOrReject(decision) {
@@ -216,6 +297,10 @@
 
         function onPointerUp(event) {
             if (!gesture || event.pointerId !== gesture.pointerId) return;
+            const world = clientToWorld(event.clientX, event.clientY);
+            if (world) {
+                updateFromWorld(world, Boolean(event.shiftKey));
+            }
             const snap = store.snapshot();
             const RotationGeometry = window.AlmdinaBoardEditor.RotationGeometry;
             const decision = RotationGeometry.validatePieceRotation(
@@ -235,6 +320,17 @@
             if (event.key === "Escape") {
                 event.preventDefault();
                 reset();
+                return;
+            }
+            if (event.key === "Shift") {
+                syncShiftMode(true, gesture.lastPointerAngle);
+            }
+        }
+
+        function onKeyUp(event) {
+            if (!gesture) return;
+            if (event.key === "Shift") {
+                syncShiftMode(false, gesture.lastPointerAngle);
             }
         }
 
@@ -288,4 +384,10 @@
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.createRotationInteraction = createRotationInteraction;
+    window.AlmdinaBoardEditor.RotationInteractionMath = Object.freeze({
+        SHIFT_SNAP_DEG,
+        signedAngleDelta,
+        applyRotationSteps,
+        constrainShiftRotation,
+    });
 })();

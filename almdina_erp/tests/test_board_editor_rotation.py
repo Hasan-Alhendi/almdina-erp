@@ -101,6 +101,17 @@ def _session(pieces):
     }
 
 
+class TestRotatePointSvgChirality(unittest.TestCase):
+    def test_positive_angle_matches_svg_clockwise_y_down(self):
+        # SVG rotate(90) takes +X to +Y when Y grows downward.
+        got = rotate_point([100, 0], {"x": 0, "y": 0}, 90)
+        self.assertAlmostEqual(got[0], 0.0, places=9)
+        self.assertAlmostEqual(got[1], 100.0, places=9)
+        got45 = rotate_point([100, 0], {"x": 0, "y": 0}, 45)
+        self.assertAlmostEqual(got45[0], 70.71067811865476, places=9)
+        self.assertAlmostEqual(got45[1], 70.71067811865476, places=9)
+
+
 class TestBoardEditorRotation(unittest.TestCase):
     def test_normalize_and_zero_crossing(self):
         self.assertEqual(normalize_angle_deg(360), 0)
