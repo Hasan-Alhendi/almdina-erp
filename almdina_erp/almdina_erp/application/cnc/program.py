@@ -20,6 +20,7 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
 from almdina_erp.almdina_erp.domain.cnc.operations import (
     CNC_OPERATIONS_BY_KEY,
     DEFAULT_MACHINING_ORDER,
+    primary_operation_for_layer,
 )
 from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     PERIMETER_JOIN_CONNECTED,
@@ -62,7 +63,11 @@ from almdina_erp.almdina_erp.domain.cutting.machining_overlay import (
     generate_toolpath,
     machining_values,
 )
-from almdina_erp.almdina_erp.domain.cutting.tool_diameters import LAYER_FIELDS
+from almdina_erp.almdina_erp.domain.cutting.tool_diameters import (
+    LAYER_FIELDS,
+    diameter_for_kind,
+    diameters_for_record,
+)
 from almdina_erp.almdina_erp.domain.orders.extra_addons import EXTRA_OVERLAY_LAYER_BY_KIND
 from almdina_erp.almdina_erp.domain.orders.liner_specs import DoorLinerError, door_liners_from_source
 
@@ -436,6 +441,8 @@ def compile_sheet_program(
     trim_x = _trim_cm(plan, sheet, "x") * 10.0
     trim_y = _trim_cm(plan, sheet, "y") * 10.0
     kerf = _kerf_mm(plan)
+    plan_kerf = float(kerf) if isinstance(kerf, (int, float)) and not isinstance(kerf, bool) else None
+    plan_diameters = diameters_for_record(plan, kerf_mm=plan_kerf)
     mode = str(manufacturing_mode or _GENERATED)
     present = {path.operation_key for path in catalog.paths}
     order = _complete_order(operation_order, present)
@@ -628,6 +635,7 @@ def compile_sheet_program(
                 sheet_pieces,
                 catalog,
                 plan=plan,
+                plan_diameters=plan_diameters,
                 trim_x=trim_x,
                 trim_y=trim_y,
                 length_mm=length_mm,
@@ -650,6 +658,7 @@ def compile_sheet_program(
         blocked_path=blocked_path,
         manufacturing_mode=mode,
         require_upload_match=mode == _PRESENT and use_file_overlays,
+        plan_diameters=plan_diameters,
     )
     extracted = {entity.path_key for entity in entities if entity.path_key}
     extracted_cut = any(entity.layer.upper() == "CUT_PATH" for entity in entities)
@@ -690,6 +699,15 @@ def compile_sheet_program(
     # Legacy cut_path_sequence is ignored for execution; operation_order wins.
     _ = cut_path_sequence
     _ = perimeter_cut_early_confirmed
+    # A validated DXF path must stay visible even when the piece catalog does
+    # not list that add-on. Dropping it here is what hides a real layer.
+    read_operations = {
+        operation.key
+        for entity in entities
+        if (operation := primary_operation_for_layer(entity.layer)) is not None
+    }
+    if read_operations - set(order):
+        order = _complete_order(order, present | read_operations)
 
     # Shared cutter centers are independent physical vectors with their own
     # stable path key.  A preset override on another, piece-bound vector does
@@ -1005,6 +1023,7 @@ def _plan_mill_display_paths(
     catalog,
     *,
     plan: Mapping[str, Any],
+    plan_diameters: Mapping[str, Any],
     trim_x: float,
     trim_y: float,
     length_mm: float,
@@ -1055,6 +1074,7 @@ def _plan_mill_display_paths(
         blocked_path=lambda _code, _path_key: None,
         manufacturing_mode=manufacturing_mode,
         require_upload_match=False,
+        plan_diameters=plan_diameters,
     )
     return _capture_mill_display_paths(preview_entities, roles={"tool_center"})
 
@@ -1308,8 +1328,6 @@ def _mill_issue(code: str) -> str:
         return code
     if code == "cutter_diameter_invalid":
         return "mill_diameter_required"
-    if code == "stepover_invalid":
-        return code
     return "mill_parameters_missing"
 
 
@@ -1413,47 +1431,36 @@ def _effective_mill_diameter(
     return next(iter(diameters))
 
 
-def _preset_stepover(
-    name: str,
-    known: Mapping[str, Mapping[str, Any]],
-    *,
-    diameter_mm: float,
-) -> float | None:
-    raw = known.get(str(name or "").strip())
-    if not isinstance(raw, Mapping):
-        return None
-    size = _positive(raw.get("stepover_size_mm"))
-    if size is not None:
-        return size
-    percent = _positive(raw.get("stepover_percent"))
-    if percent is not None:
-        return diameter_mm * percent / 100.0
-    return None
+def _approved_open_handles(existing: Sequence[CncSourceEntity]) -> list[CncSourceEntity]:
+    """Open Handle Recess polylines already stored or read from the approved DXF."""
 
-
-def _effective_mill_stepover(
-    catalog_keys: Sequence[str],
-    kind: str,
-    operation_presets: Mapping[str, str],
-    path_overrides: Mapping[str, str],
-    known_presets: Mapping[str, Mapping[str, Any]],
-    *,
-    diameter_mm: float,
-) -> float | None | str:
-    """Return one explicit handle stepover, None for legacy spacing, or conflict."""
-
-    keys = list(catalog_keys) or [""]
-    values: set[float | None] = set()
-    for key in keys:
-        value = _preset_stepover(
-            str(path_overrides.get(key) or operation_presets.get(kind) or "").strip(),
-            known_presets,
-            diameter_mm=diameter_mm,
+    return [
+        entity
+        for entity in existing
+        if (
+            not entity.closed
+            and entity.role in {"tool_center", "mill_path_unverified"}
+            and len(entity.points) >= 2
         )
-        values.add(None if value is None else round(value, 3))
-    if len(values) != 1:
-        return "conflict"
-    return next(iter(values))
+    ]
+
+
+def _consumed_handle_key(
+    entity: CncSourceEntity,
+    catalog_keys: Sequence[str],
+    index: int,
+    count: int,
+    piece_id: str,
+) -> str:
+    if entity.path_key and (not catalog_keys or entity.path_key in catalog_keys):
+        return entity.path_key
+    if count == 1 and len(catalog_keys) == 1:
+        return catalog_keys[0]
+    if index < len(catalog_keys):
+        return catalog_keys[index]
+    if entity.path_key:
+        return entity.path_key
+    return f"recessed_handle_cutout:{piece_id}:approved:{index + 1}"
 
 
 def _uploaded_matches_generated(
@@ -1491,6 +1498,7 @@ def _apply_parametric_mills(
     blocked_path,
     manufacturing_mode: str = _GENERATED,
     require_upload_match: bool = False,
+    plan_diameters: Mapping[str, Any] | None = None,
 ) -> set[str]:
     """Replace a mill outline with the existing cutter-center path when it can be calculated."""
 
@@ -1572,23 +1580,45 @@ def _apply_parametric_mills(
                 for key in catalog_keys:
                     blocked_path("mill_diameter_required", key)
                 continue
-            stepover: float | None = None
+            cutter_diameter = float(diameter)
             if kind == "recessed_handle_cutout":
-                resolved_stepover = _effective_mill_stepover(
-                    catalog_keys,
-                    kind,
-                    operation_presets,
-                    path_overrides,
-                    known_presets,
-                    diameter_mm=float(diameter),
-                )
-                if resolved_stepover == "conflict":
+                preserved_ids = {id(entity) for entity in preserved_source}
+                approved = [
+                    entity
+                    for entity in _approved_open_handles(existing)
+                    if id(entity) not in preserved_ids
+                ]
+                if approved or require_upload_match:
                     _drop_layer(entities, piece_id, layer)
-                    for key in catalog_keys:
-                        blocked_path("stepover_invalid", key)
+                    entities.extend(preserved_source)
+                    if not approved:
+                        for key in catalog_keys or [f"{kind}:{piece_id}:primary"]:
+                            blocked_path("toolpath_missing", key)
+                        continue
+                    used: set[str] = set()
+                    for index, entity in enumerate(approved):
+                        key = _consumed_handle_key(
+                            entity, catalog_keys, index, len(approved), piece_id
+                        )
+                        used.add(key)
+                        entities.append(
+                            _entity(
+                                layer=layer,
+                                points=entity.points,
+                                closed=False,
+                                entity_type=entity.entity_type or "LWPOLYLINE",
+                                role="tool_center",
+                                ring="open",
+                                path_key=key,
+                                piece_id=piece_id,
+                                piece_label=label,
+                            )
+                        )
+                    absorbed.update(key for key in catalog_keys if key not in used)
                     continue
-                if resolved_stepover is not None:
-                    stepover = float(resolved_stepover)
+                planned = diameter_for_kind(kind, plan_diameters or {})
+                if planned is not None:
+                    cutter_diameter = float(planned)
             liner_piece = LinerPiece(
                 placement["piece_type"],
                 placement["width_cm"],
@@ -1621,8 +1651,7 @@ def _apply_parametric_mills(
                         width_cm=float(width_cm),
                         start_cm=spec["start_cm"],
                         length_cm=spec["length_cm"],
-                        cutter_diameter_mm=float(diameter),
-                        stepover_mm=stepover,
+                        cutter_diameter_mm=cutter_diameter,
                         start_sawn=sawn[index][0],
                         end_sawn=sawn[index][1],
                     )
@@ -1633,7 +1662,7 @@ def _apply_parametric_mills(
                         piece=liner_piece,
                         specs=targeted_specs,
                         width_cm=float(width_cm),
-                        cutter_diameter_mm=float(diameter),
+                        cutter_diameter_mm=cutter_diameter,
                         start_sawn=[item[0] for item in sawn],
                         end_sawn=[item[1] for item in sawn],
                     )

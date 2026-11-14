@@ -380,38 +380,35 @@ def test_profile_diameter_resolves_source_vector_before_cutter_center():
     assert len(liner["motions"]) > 0
 
 
-def test_handle_profile_stepover_controls_xy_lines_without_duplicating_the_path():
-    piece = _mill_piece(
-        extra_recessed_handle_cutout=1,
-        recessed_handle_reference_side="edge_width_bottom",
-        recessed_handle_offset_cm=2,
-        recessed_handle_width_cm=1.8,
-        recessed_handle_start_cm=5,
-        recessed_handle_length_cm=20,
-    )
+def _handle_piece(**extra):
+    values = {
+        "extra_recessed_handle_cutout": 1,
+        "recessed_handle_reference_side": "edge_width_bottom",
+        "recessed_handle_offset_cm": 2,
+        "recessed_handle_width_cm": 1.8,
+        "recessed_handle_start_cm": 5,
+        "recessed_handle_length_cm": 20,
+    }
+    values.update(extra)
+    return _mill_piece(**values)
+
+
+def _calculated_handle(piece, tool, *, snapshot=None, vector_id="recessed_handle_cutout:piece-a:primary"):
     source = compile_sheet_program(
         sheet_no=1,
         pieces=[piece],
-        snapshot=_snapshot(),
+        snapshot=snapshot or _snapshot(),
         operation_presets={"cut_path": "Finish"},
         path_overrides={},
         operation_order=["recessed_handle_cutout", "cut_path"],
         known_presets=PRESETS,
     )
     catalog = catalog_rows_from_program(source)
-    handle_tool = _raw(
-        preset_name="Handle Fine",
-        tool_name="Handle Fine",
-        tool_diameter_mm=5,
-        stepdown_mm=4,
-        stepover_size_mm=2,
-        stepover_percent=40,
-    )
-    known_tools = {**PRESETS, "Handle Fine": handle_tool}
+    known_tools = {**PRESETS, tool["preset_name"]: tool}
     profile = normalize_profile(
         {
-            "name": "Handle Fine Profile",
-            "tool_preset": "Handle Fine",
+            "name": "Handle Profile",
+            "tool_preset": tool["preset_name"],
             "final_depth_mm": 10,
             "safe_z_mm": 5,
             "home_x_mm": 0,
@@ -419,39 +416,74 @@ def test_handle_profile_stepover_controls_xy_lines_without_duplicating_the_path(
             "home_z_mm": 5,
         },
         known_tools=known_tools,
-        profile_id="profile:handle-fine",
+        profile_id="profile:handle",
     )
     association = normalize_associations(
         [{
-            "association_id": "association:handle-fine",
-            "name": "Handle Fine",
+            "association_id": "association:handle",
+            "name": "Handle",
             "profile_id": profile["profile_id"],
-            "selection": {
-                "kind": "selected_vectors",
-                "vector_ids": ["recessed_handle_cutout:piece-a:primary"],
-            },
+            "selection": {"kind": "selected_vectors", "vector_ids": [vector_id]},
         }],
         profiles=[profile],
         catalog=vectors_from_paths(catalog),
     )[0]
-    known, overrides = calculation_preset_injection(
-        association,
-        known_tools,
-        catalog=catalog,
-    )
+    known, overrides = calculation_preset_injection(association, known_tools, catalog=catalog)
     calculated = compile_sheet_program(
         sheet_no=1,
         pieces=[piece],
-        snapshot=_snapshot(),
+        snapshot=snapshot or _snapshot(),
         operation_presets={"cut_path": "Finish"},
         path_overrides=overrides,
         operation_order=["recessed_handle_cutout", "cut_path"],
         known_presets=known,
     )
-    handles = _paths(calculated, "recessed_handle_cutout")
+    return calculated, _paths(calculated, "recessed_handle_cutout")
+
+
+def test_handle_profile_keeps_the_approved_path_and_still_cuts_depth_passes():
+    piece = _handle_piece()
+    spec = {
+        "side": "edge_width_bottom",
+        "offset_cm": 2,
+        "width_cm": 1.8,
+        "start_cm": 5,
+        "length_cm": 20,
+    }
+    approved = _expected_mill(piece, "recessed_handle_cutout", spec, diameter=5)
+    fine = _raw(
+        preset_name="Handle Fine",
+        tool_name="Handle Fine",
+        tool_diameter_mm=8,
+        stepdown_mm=4,
+        stepover_size_mm=2,
+        stepover_percent=40,
+    )
+    coarse = _raw(
+        preset_name="Handle Coarse",
+        tool_name="Handle Coarse",
+        tool_diameter_mm=12,
+        stepdown_mm=4,
+        stepover_size_mm=1,
+        stepover_percent=10,
+    )
+    without_stepover = _raw(
+        preset_name="Handle Plain",
+        tool_name="Handle Plain",
+        tool_diameter_mm=8,
+        stepdown_mm=4,
+    )
+    calculated, handles = _calculated_handle(piece, fine)
     assert len(handles) == 1
-    transverse_lines = {round(float(point[1]), 3) for point in handles[0]["points"]}
-    assert len(transverse_lines) == 8
+    assert handles[0]["ready"] is True
+    assert "stepover_invalid" not in _codes(calculated)
+    assert _same_sequence(handles[0]["points"], approved)
+    _other, other_handles = _calculated_handle(piece, coarse)
+    assert _same_sequence(other_handles[0]["points"], handles[0]["points"])
+    plain, plain_handles = _calculated_handle(piece, without_stepover)
+    assert plain_handles[0]["ready"] is True
+    assert "stepover_invalid" not in _codes(plain)
+    assert _same_sequence(plain_handles[0]["points"], approved)
     cut_depths = {
         float(motion["depth_mm"])
         for motion in handles[0]["motions"]
@@ -469,6 +501,75 @@ def test_handle_profile_stepover_controls_xy_lines_without_duplicating_the_path(
             if motion["kind"] == "cut" and float(motion["depth_mm"]) == depth
         ]
         assert actual_xy == expected_xy
+
+
+def test_uploaded_and_stored_handle_paths_are_reused_without_a_new_distribution():
+    tool = _raw(
+        preset_name="Handle Fine",
+        tool_name="Handle Fine",
+        tool_diameter_mm=8,
+        stepdown_mm=4,
+        stepover_size_mm=2,
+        stepover_percent=25,
+    )
+    stored = _handle_piece(
+        overlays=[{
+            "kind": "recessed_handle_cutout",
+            "layer": "Handle Recess",
+            "geometry": {
+                "unit": "mm",
+                "coordinate_space": "usable_sheet",
+                "path": [[140, 200], [260, 200], [260, 230], [140, 230]],
+                "closed": False,
+                "toolpath": True,
+                "entity_type": "LWPOLYLINE",
+            },
+        }],
+    )
+    stored_program = compile_sheet_program(
+        sheet_no=1,
+        pieces=[stored],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish", "recessed_handle_cutout": "Handle Fine"},
+        path_overrides={},
+        operation_order=["recessed_handle_cutout", "cut_path"],
+        known_presets={**PRESETS, "Handle Fine": tool},
+    )
+    stored_handle = _paths(stored_program, "recessed_handle_cutout")[0]
+    assert stored_handle["ready"] is True
+    assert "stepover_invalid" not in _codes(stored_program)
+    assert _same_sequence(
+        stored_handle["points"],
+        [(140, 2440 - 200), (260, 2440 - 200), (260, 2440 - 230), (140, 2440 - 230)],
+    )
+    piece = _handle_piece()
+    uploaded_points = [(150.0, 2000.0), (280.0, 2000.0), (280.0, 1900.0)]
+    uploaded = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish", "recessed_handle_cutout": "Handle Fine"},
+        path_overrides={},
+        operation_order=["recessed_handle_cutout", "cut_path"],
+        known_presets={**PRESETS, "Handle Fine": tool},
+        manufacturing_mode="uploaded_present",
+        uploaded={
+            "units": "mm",
+            "origin": (0, 0),
+            "cut_segments": [],
+            "overlays": [{
+                "layer": "Handle Recess",
+                "points": uploaded_points,
+                "closed": False,
+                "entity_type": "LWPOLYLINE",
+            }],
+        },
+    )
+    uploaded_handle = _paths(uploaded, "recessed_handle_cutout")[0]
+    assert uploaded_handle["ready"] is True
+    assert "stepover_invalid" not in _codes(uploaded)
+    assert _same_sequence(uploaded_handle["points"], uploaded_points)
+    assert uploaded_handle["motions"]
 
 
 def test_selected_profile_only_calculates_the_selected_liner_source_vector():
