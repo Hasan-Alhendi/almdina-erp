@@ -258,6 +258,7 @@ def test_profile_identity_and_snapshot_are_generated_without_user_input():
             "home_z_mm": created["home_z_mm"],
         },
         known_tools=known,
+        stored_profile=created,
     )
     assert kept["profile_id"] == created["profile_id"]
     assert kept["tool_values"]["diameter_mm"] == 5.0
@@ -295,6 +296,7 @@ def test_profile_identity_and_snapshot_are_generated_without_user_input():
         normalize_profile(
             {**created, "profile_id": "bad id"},
             known_tools=known,
+            stored_profile=created,
         )
     assert bad_id.value.code == "profile_id_invalid"
 
@@ -722,7 +724,7 @@ def test_frozen_calculated_paths_refresh_board_readiness_for_nc_export():
     assert unresolved["nc_export_ready"] is False
 
 
-def test_association_keeps_a_different_local_tool_without_changing_the_profile():
+def test_association_keeps_local_overrides_without_changing_the_profile_or_tool():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)
     catalog = _catalog(_vector("cut_path:piece-a:outer", "cut_path", "CUT_PATH"))
@@ -733,44 +735,87 @@ def test_association_keeps_a_different_local_tool_without_changing_the_profile()
             "profile_id": profile["profile_id"],
             "selection": {"kind": "vectors", "vector_ids": ["cut_path:piece-a:outer"]},
             "local_values": {
-                "tool_preset": "T12_LOCAL",
+                "tool_preset": profile["tool_preset"],
                 "tool_values": {
-                    **profile["tool_values"],
-                    "tool_preset": "T12_LOCAL",
-                    "description": "T12_LOCAL",
                     "tool_number": 9,
                     "feed_rate_mm_sec": 40,
+                    "stepdown_mm": 4,
                 },
+                "final_depth_mm": 12,
             },
         }],
         profiles=[profile],
         catalog=catalog,
     )
-    assert stored[0]["local_values"]["tool_preset"] == "T12_LOCAL"
+    assert stored[0]["local_values"]["tool_preset"] == profile["tool_preset"]
     assert stored[0]["local_values"]["tool_values"]["feed_rate_mm_sec"] == 40.0
-    assert profile["tool_preset"] != "T12_LOCAL"
-    with pytest.raises(MachiningSetupError) as conflict:
+    assert stored[0]["local_values"]["tool_values"]["diameter_mm"] == 5.0
+    assert stored[0]["local_values"]["final_depth_mm"] == 12
+    assert profile["tool_values"]["feed_rate_mm_sec"] == 170.0
+    other = _stored_tool()
+    other["description"] = "Other"
+    other["tool_name"] = "Other"
+    other["diameter_mm"] = 8
+    other["tool_diameter_mm"] = 8
+    other["tool_number"] = 3
+    other["feed_rate_mm_sec"] = 90
+    switched = normalize_associations(
+        [{
+            "association_id": "association:tool",
+            "name": "Local tool",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+            "local_values": {
+                "tool_preset": "Other",
+                "tool_values": {"feed_rate_mm_sec": 15, "stepdown_mm": 2},
+            },
+        }],
+        profiles=[profile],
+        catalog=catalog,
+        known_tools={"T9_CUT": known["T9_CUT"], "Other": other},
+    )
+    assert switched[0]["local_values"]["tool_preset"] == "Other"
+    assert switched[0]["local_values"]["tool_values"]["diameter_mm"] == 8
+    assert switched[0]["local_values"]["tool_values"]["tool_number"] == "T3"
+    assert switched[0]["local_values"]["tool_values"]["feed_rate_mm_sec"] == 15
+    assert switched[0]["local_values"]["tool_values"]["stepdown_mm"] == 2
+    assert profile["tool_preset"] == "T9_CUT"
+    assert profile["tool_values"]["diameter_mm"] == 5
+    assert profile["tool_values"]["feed_rate_mm_sec"] == 170
+    assert other["diameter_mm"] == 8
+    assert other["feed_rate_mm_sec"] == 90
+    with pytest.raises(MachiningSetupError) as missing:
         normalize_associations(
-            [
-                stored[0],
-                {
-                    "association_id": "association:other",
-                    "name": "Other tool",
-                    "profile_id": profile["profile_id"],
-                    "selection": {"kind": "vectors", "vector_ids": ["liner:piece-a"]},
-                    "local_values": {
-                        "tool_preset": "T8_OTHER",
-                        "tool_values": {**profile["tool_values"], "tool_number": 8},
-                    },
-                },
-            ],
+            [{
+                "association_id": "association:tool",
+                "name": "Local tool",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": "vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+                "local_values": {"tool_preset": "T12_LOCAL"},
+            }],
             profiles=[profile],
-            catalog=_catalog(
-                _vector("cut_path:piece-a:outer", "cut_path", "CUT_PATH"),
-                _vector("liner:piece-a", "liner", "Liner"),
-            ),
+            catalog=catalog,
+            known_tools=known,
         )
-    assert conflict.value.code == "tool_identity_conflict"
+    assert missing.value.code == "preset_not_found"
+    with pytest.raises(MachiningSetupError) as locked:
+        normalize_associations(
+            [{
+                "association_id": "association:tool",
+                "name": "Local tool",
+                "profile_id": profile["profile_id"],
+                "selection": {"kind": "vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+                "local_values": {
+                    "tool_preset": "Other",
+                    "tool_values": {"diameter_mm": 3},
+                },
+            }],
+            profiles=[profile],
+            catalog=catalog,
+            known_tools={"T9_CUT": known["T9_CUT"], "Other": other},
+        )
+    assert locked.value.code == "tool_property_locked"
+    assert locked.value.detail == "Diameter"
 
 
 def test_repeated_layer_order_follows_association_identity():
@@ -816,6 +861,7 @@ def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():
             "home_z_mm": saved["home_z_mm"],
         },
         known_tools=known,
+        stored_profile=saved,
     )
     assert reopened["tool_values"]["diameter_mm"] == 5.0
     assert known["T9_CUT"]["tool_diameter_mm"] == 12
@@ -1240,36 +1286,49 @@ def test_profile_edits_keep_an_independent_validated_tool_copy():
     created = normalize_profile(_profile(), known_tools=known)
     edited_tool = copy.deepcopy(created["tool_values"])
     edited_tool["diameter_mm"] = 8
-    edited_tool["feed_rate_mm_sec"] = 20
-    edited_tool["stepover_percent"] = 10
+    with pytest.raises(MachiningSetupError) as locked_diameter:
+        normalize_profile(
+            {**created, "tool_values": edited_tool},
+            known_tools={"T9_CUT": stored},
+            stored_profile=created,
+        )
+    assert locked_diameter.value.code == "tool_property_locked"
+    assert locked_diameter.value.detail == "Diameter"
+    allowed = copy.deepcopy(created["tool_values"])
+    allowed["feed_rate_mm_sec"] = 20
+    allowed["stepover_percent"] = 10
     edited = normalize_profile(
         {
             **created,
             "final_depth_mm": 22,
             "safe_z_mm": 30,
             "home_x_mm": 4,
-            "tool_values": edited_tool,
+            "tool_values": allowed,
         },
         known_tools={"T9_CUT": stored},
+        stored_profile=created,
     )
     assert stored["tool_diameter_mm"] == 5
     assert stored["feed_rate_mm_sec"] == 170
-    assert edited["tool_values"]["diameter_mm"] == 8
+    assert edited["tool_values"]["diameter_mm"] == 5
     assert edited["tool_values"]["feed_rate_mm_sec"] == 20
+    assert edited["tool_values"]["stepover_percent"] == 10
     assert edited["final_depth_mm"] == 22
     assert edited["safe_z_mm"] == 30
     assert edited["home_x_mm"] == 4
-    reopened = normalize_profile(edited, known_tools={})
-    assert reopened["tool_values"]["diameter_mm"] == 8
+    reopened = normalize_profile(edited, known_tools={}, stored_profile=edited)
+    assert reopened["tool_values"]["diameter_mm"] == 5
+    assert reopened["tool_values"]["feed_rate_mm_sec"] == 20
     stored["tool_diameter_mm"] = 11
     stored["feed_rate_mm_sec"] = 1
-    again = normalize_profile(edited, known_tools={"T9_CUT": stored})
-    assert again["tool_values"]["diameter_mm"] == 8
+    again = normalize_profile(edited, known_tools={"T9_CUT": stored}, stored_profile=edited)
+    assert again["tool_values"]["diameter_mm"] == 5
     assert again["tool_values"]["feed_rate_mm_sec"] == 20
     with pytest.raises(MachiningSetupError) as invalid:
         normalize_profile(
             {**created, "tool_values": {**created["tool_values"], "stepover_percent": 0}},
             known_tools=known,
+            stored_profile=created,
         )
     assert invalid.value.code == "stepover_invalid"
 

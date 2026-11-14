@@ -3285,6 +3285,20 @@ The CNC tool preset is not valid.,إعداد ريشة CNC غير صالح.
 The layer preset source is not valid.,مصدر إعداد الطبقة غير صالح.
 "The drawing does not state its units, so millimetres were not assumed and the path was not prepared.",الرسم لا يصرّح بوحداته، لذلك لم تُفترض المليمترات ولم يُجهَّز المسار.
 "This CUT_PATH was calculated for the approved kerf and does not match the selected tool diameter.",حُسب مسار CUT_PATH لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
+The {0} tool diameter does not match the approved cutting plan.,قطر ريشة {0} غير مطابق لخطة القص.
+"{0} — approved diameter {1} mm, selected diameter {2} mm.","{0} — القطر المعتمد {1} مم، والقطر المختار {2} مم."
+"Choose a tool whose diameter is {0} mm, the diameter used to create the approved paths.",اختر ريشة قطرها {0} مم، المطابق للقطر الذي تم إنشاء المسارات المعتمدة باستخدامه.
+Choose a tool whose diameter matches the approved cutting plan.,اختر ريشة قطرها يطابق قطر خطة القص المعتمد.
+"The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",لا يمكن تغيير خاصية الريشة {0} هنا. اختر ريشة أخرى إذا أردت استبدال الخصائص المحمية.
+Stepover size and stepover percent must describe the same fraction of the tool diameter.,يجب أن يعبّر عرض التداخل ونسبته عن الجزء نفسه من قطر الريشة.
+Handle Recess,مسكة الغطس
+Rear Groove,فرزة الظهر
+Tool settings,إعدادات الريشة
+Editable tool settings,إعدادات الريشة القابلة للتعديل
+Stepover Percent,نسبة التداخل
+Stepover Size,عرض التداخل
+Diameter (mm),قطر الريشة (مم)
+Choose a tool to copy its protected properties.,اختر ريشة لنسخ خصائصها المحمية.
 "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter.",مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
 the shared cut,القص المشترك
 "This milling path is not a verified cutter center for the selected tool.",مسار التفريز هذا ليس مركز ريشة مؤكدًا للريشة المختارة.

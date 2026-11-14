@@ -3,6 +3,11 @@
 
     if (window.AlmdinaArtcamProfileDialog) return;
 
+    function translate(message) {
+        if (typeof __ === "function") return __(message);
+        return String(message || "");
+    }
+
     function pinEnglishLabels(dialog) {
         (dialog.fields || []).forEach(df => {
             const field = dialog.fields_dict && dialog.fields_dict[df.fieldname];
@@ -14,14 +19,14 @@
                     return;
                 }
                 const caption = head.find("span").first();
-                if (caption.length) caption.text(df.label);
-                else head.text(df.label);
+                if (caption.length) caption.text(translate(df.label));
+                else head.text(translate(df.label));
                 return;
             }
-            if (df.label) field.$wrapper.find(".control-label").first().text(df.label);
+            if (df.label) field.$wrapper.find(".control-label").first().text(translate(df.label));
         });
         const button = typeof dialog.get_primary_btn === "function" ? dialog.get_primary_btn() : null;
-        if (button && button.text) button.text("Save profile");
+        if (button && button.text) button.text(translate("Save profile"));
     }
 
     function toolChoices(presets) {
@@ -85,6 +90,18 @@
             { fieldtype: "Section Break", label: "Profile" },
             { fieldname: "profile_name", fieldtype: "Data", label: "Profile Name", reqd: 1 },
             { fieldname: "tool_preset", fieldtype: "Select", label: "Tool", reqd: 1, options: "\n" },
+            { fieldname: "tool_summary", fieldtype: "HTML" },
+            { fieldtype: "Section Break", label: "Tool settings" },
+            { fieldname: "tool_number", fieldtype: "Int", label: "Tool Number", reqd: 1 },
+            { fieldname: "stepdown_mm", fieldtype: "Float", label: "Stepdown", precision: 3, reqd: 1 },
+            { fieldtype: "Column Break" },
+            { fieldname: "stepover_size_mm", fieldtype: "Float", label: "Stepover Size", precision: 3, reqd: 1 },
+            { fieldname: "stepover_percent", fieldtype: "Float", label: "Stepover Percent", precision: 3, reqd: 1 },
+            { fieldtype: "Section Break" },
+            { fieldname: "feed_rate_mm_sec", fieldtype: "Float", label: "Feed Rate (mm/sec)", precision: 3, reqd: 1 },
+            { fieldname: "plunge_rate_mm_sec", fieldtype: "Float", label: "Plunge Rate (mm/sec)", precision: 3, reqd: 1 },
+            { fieldtype: "Column Break" },
+            { fieldname: "spindle_speed_rpm", fieldtype: "Int", label: "Spindle Speed (RPM)", reqd: 1 },
             { fieldtype: "Section Break", label: "Machining" },
             { fieldname: "final_depth_mm", fieldtype: "Float", label: "Final Depth (mm)", precision: 3, reqd: 1 },
             { fieldtype: "Column Break" },
@@ -96,6 +113,40 @@
             { fieldtype: "Column Break" },
             { fieldname: "home_z_mm", fieldtype: "Float", label: "Home Z (mm)", precision: 3, reqd: 1 },
         ];
+    }
+
+    function toolDiameter(source) {
+        const value = source && (source.diameter_mm != null ? source.diameter_mm : source.tool_diameter_mm);
+        const number = Number(value);
+        return Number.isFinite(number) && number > 0 ? number : 0;
+    }
+
+    function writeSummary(dialog, source) {
+        const field = dialog.fields_dict && dialog.fields_dict.tool_summary;
+        if (!field || !field.$wrapper) return;
+        const name = (source && (source.description || source.tool_name || source.tool_preset)) || "";
+        const diameter = toolDiameter(source);
+        const text = name
+            ? `${translate("Tool")}: ${name} · ${translate("Diameter (mm)")} ${diameter}`
+            : translate("Choose a tool to copy its protected properties.");
+        field.$wrapper.html(`<p class="text-muted" data-tool-summary>${text}</p>`);
+    }
+
+    function syncStepover(dialog, source) {
+        const diameter = Number(dialog._toolDiameter || 0);
+        if (!diameter) return;
+        const sizeField = dialog.fields_dict.stepover_size_mm;
+        const percentField = dialog.fields_dict.stepover_percent;
+        if (!sizeField || !percentField) return;
+        if (source === "size") {
+            const size = Number(sizeField.get_value());
+            if (!Number.isFinite(size)) return;
+            percentField.set_value(Math.round((size / diameter) * 100000) / 1000);
+            return;
+        }
+        const percent = Number(percentField.get_value());
+        if (!Number.isFinite(percent)) return;
+        sizeField.set_value(Math.round((diameter * percent / 100) * 1000) / 1000);
     }
 
     function open(options = {}) {
@@ -117,6 +168,15 @@
                     home_x_mm: values.home_x_mm,
                     home_y_mm: values.home_y_mm,
                     home_z_mm: values.home_z_mm,
+                    tool_values: {
+                        tool_number: values.tool_number,
+                        stepdown_mm: values.stepdown_mm,
+                        stepover_size_mm: values.stepover_size_mm,
+                        stepover_percent: values.stepover_percent,
+                        feed_rate_mm_sec: values.feed_rate_mm_sec,
+                        plunge_rate_mm_sec: values.plunge_rate_mm_sec,
+                        spindle_speed_rpm: values.spindle_speed_rpm,
+                    },
                 };
                 if (profile && profile.profile_id) payload.profile_id = profile.profile_id;
                 const pending = options.onSubmit ? options.onSubmit(payload) : null;
@@ -131,13 +191,23 @@
             if (selected && selected !== dialog._currentTool) {
                 dialog._currentTool = selected;
                 const preset = presets.find(row => row && row.name === selected);
-                if (preset) dialog.set_values(toolPayload(preset));
+                if (preset) {
+                    dialog._toolDiameter = toolDiameter(preset);
+                    dialog.set_values(toolPayload(preset));
+                    writeSummary(dialog, preset);
+                }
             }
             if (typeof originalChange === "function") originalChange.apply(this, arguments);
             pinEnglishLabels(dialog);
         };
+        const sizeField = dialog.fields_dict.stepover_size_mm;
+        const percentField = dialog.fields_dict.stepover_percent;
+        if (sizeField) sizeField.df.change = function changeSize() { syncStepover(dialog, "size"); };
+        if (percentField) percentField.df.change = function changePercent() { syncStepover(dialog, "percent"); };
         dialog.show();
         if (profile) {
+            const stored = storedToolPayload(profile.tool_values || {});
+            dialog._toolDiameter = toolDiameter(stored);
             dialog.set_values(Object.assign({
                 profile_name: profile.name || "",
                 final_depth_mm: profile.final_depth_mm,
@@ -145,7 +215,8 @@
                 home_x_mm: profile.home_x_mm,
                 home_y_mm: profile.home_y_mm,
                 home_z_mm: profile.home_z_mm,
-            }, storedToolPayload(profile.tool_values || {})));
+            }, stored));
+            writeSummary(dialog, Object.assign({}, stored, { tool_preset: profile.tool_preset }));
         }
         const choices = toolChoices(presets);
         writeSelect(dialog, "tool_preset", choices, profile && profile.tool_preset);

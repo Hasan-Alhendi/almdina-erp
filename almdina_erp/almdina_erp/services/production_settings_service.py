@@ -1334,10 +1334,20 @@ def _profile_message(code: str) -> str:
         "home_z_invalid": "Home Z must be zero or a positive number of millimetres within the supported range.",
         "final_depth_invalid": "Final depth must be a positive number of millimetres within the supported range.",
         "pass_depth_exceeds_final_depth": "Pass depth cannot be deeper than the final depth.",
+        "tool_property_locked": "The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",
+        "stepover_inconsistent": "Stepover size and stepover percent must describe the same fraction of the tool diameter.",
     }
     if code in messages:
         return _(messages[code])
     return _artcam_message(code)
+
+
+def _profile_failure(exc: MachiningSetupError) -> str:
+    template = _profile_message(exc.code)
+    detail = str(getattr(exc, "detail", "") or "")
+    if "{0}" in template:
+        return template.format(detail or "—")
+    return template
 
 
 @frappe.whitelist()
@@ -1347,15 +1357,8 @@ def save_cnc_machining_profile(values: str | dict[str, Any]) -> dict[str, Any]:
     _require_machining_profile_editor()
     payload = _payload(values)
     profile_id = str(payload.get("profile_id") or "").strip()
-    try:
-        profile = normalize_profile(
-            payload,
-            known_tools=known_tool_presets(),
-            profile_id=profile_id or new_machining_id("profile"),
-        )
-    except MachiningSetupError as exc:
-        frappe.throw(_profile_message(exc.code), frappe.ValidationError)
     existing_name = ""
+    stored_profile = None
     if profile_id:
         existing_name = str(
             frappe.db.get_value("CNC Machining Profile", {"profile_id": profile_id}, "name") or ""
@@ -1364,7 +1367,24 @@ def save_cnc_machining_profile(values: str | dict[str, Any]) -> dict[str, Any]:
             frappe.throw(_profile_message("profile_id_invalid"), frappe.ValidationError)
         document = frappe.get_doc("CNC Machining Profile", existing_name)
         document.check_permission("write")
-    else:
+        stored_values = document.tool_values_json
+        if isinstance(stored_values, str) and stored_values.strip():
+            stored_values = json.loads(stored_values)
+        stored_profile = {
+            "profile_id": document.profile_id,
+            "tool_preset": document.tool_preset,
+            "tool_values": stored_values if isinstance(stored_values, dict) else {},
+        }
+    try:
+        profile = normalize_profile(
+            payload,
+            known_tools=known_tool_presets(),
+            profile_id=profile_id or new_machining_id("profile"),
+            stored_profile=stored_profile,
+        )
+    except MachiningSetupError as exc:
+        frappe.throw(_profile_failure(exc), frappe.ValidationError)
+    if not profile_id:
         document = frappe.new_doc("CNC Machining Profile")
         document.check_permission("create")
         document.profile_id = profile["profile_id"]

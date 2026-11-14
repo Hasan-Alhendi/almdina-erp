@@ -28,6 +28,7 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
     _identity,
     _motions,
     _pass_depths,
+    apply_plan_diameter_gate,
     direction_invariant_identity,
     selectable_vector_id,
     stamp_selectable_vector_ids,
@@ -297,6 +298,7 @@ def tool_copy_from_stored(raw: Mapping[str, Any], *, tool_preset: str) -> dict[s
     if tool_type == BALL_NOSE:
         tool = normalize_artcam_tool(stored)
         payload = tool.public_dict()
+        payload["enabled"] = True if stored.get("enabled", True) else False
     else:
         payload = {
             "description": str(stored.get("tool_name") or stored.get("preset_name") or tool_preset),
@@ -358,6 +360,168 @@ def _home_z(value: Any) -> float:
     )
 
 
+_LOCKED_TOOL_FIELDS = (
+    ("tool_type", "Tool Type"),
+    ("tool_units", "Tool Units"),
+    ("rate_units", "Rate Units"),
+    ("final_tool_offset_mm", "Final Tool Offset"),
+    ("final_tool_offset", "Final Tool Offset"),
+    ("description", "Description"),
+    ("tool_name", "Description"),
+    ("notes", "Notes"),
+    ("enabled", "Enabled"),
+)
+_DIAMETER_ISSUE_CODES = frozenset({"tool_diameter_kerf_mismatch", "tool_diameter_plan_mismatch"})
+_STEPOVER_AGREEMENT_MM = 0.01
+
+
+def _same_tool_value(left: Any, right: Any) -> bool:
+    if left in (None, "") and right in (None, ""):
+        return True
+    if isinstance(left, bool) or isinstance(right, bool):
+        return left is right
+    try:
+        left_number = float(left)
+        right_number = float(right)
+    except (TypeError, ValueError):
+        return str(left or "").strip() == str(right or "").strip()
+    if not math.isfinite(left_number) or not math.isfinite(right_number):
+        return False
+    return abs(left_number - right_number) <= 0.001
+
+
+def _stored_diameter(tool: Mapping[str, Any]) -> float | None:
+    raw = tool.get("diameter_mm", tool.get("tool_diameter_mm"))
+    try:
+        number = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def _present(raw: Mapping[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in raw and raw.get(key) not in (None, ""):
+            return raw.get(key)
+    return None
+
+
+def _reject_locked_tool_fields(base: Mapping[str, Any], explicit: Mapping[str, Any]) -> None:
+    base_diameter = _stored_diameter(base)
+    for key in ("diameter_mm", "tool_diameter_mm"):
+        if key in explicit and not _same_tool_value(base_diameter, explicit.get(key)):
+            raise MachiningSetupError("tool_property_locked", "Diameter")
+    for key, label in _LOCKED_TOOL_FIELDS:
+        if key not in explicit:
+            continue
+        if not _same_tool_value(base.get(key), explicit.get(key)):
+            raise MachiningSetupError("tool_property_locked", label)
+    sent_tool = str(explicit.get("tool_preset") or "").strip()
+    base_tool = str(base.get("tool_preset") or "").strip()
+    if sent_tool and base_tool and sent_tool != base_tool:
+        raise MachiningSetupError("tool_property_locked", "Tool")
+
+
+def _apply_stepover_override(merged: dict[str, Any], explicit: Mapping[str, Any]) -> dict[str, Any]:
+    size_sent = _present(explicit, "stepover_size_mm", "stepover_size") is not None
+    percent_sent = _present(explicit, "stepover_percent", "stepover_percent_of_d") is not None
+    if not size_sent and not percent_sent:
+        return merged
+    diameter = _stored_diameter(merged)
+    size = _present(explicit, "stepover_size_mm", "stepover_size") if size_sent else merged.get("stepover_size_mm")
+    percent = (
+        _present(explicit, "stepover_percent", "stepover_percent_of_d")
+        if percent_sent
+        else merged.get("stepover_percent")
+    )
+    if diameter is None:
+        if size_sent:
+            merged["stepover_size_mm"] = size
+        if percent_sent:
+            merged["stepover_percent"] = percent
+        return merged
+    size_changed = size_sent and not _same_tool_value(size, merged.get("stepover_size_mm"))
+    percent_changed = percent_sent and not _same_tool_value(percent, merged.get("stepover_percent"))
+    if size_changed and percent_changed:
+        expected = diameter * float(percent) / 100.0
+        if abs(expected - float(size)) > max(_STEPOVER_AGREEMENT_MM, diameter * 1e-4):
+            raise MachiningSetupError("stepover_inconsistent")
+        merged["stepover_size_mm"] = size
+        merged["stepover_percent"] = percent
+        return merged
+    if size_changed:
+        merged["stepover_size_mm"] = size
+        merged["stepover_percent"] = float(size) / diameter * 100.0
+        return merged
+    if percent_changed:
+        merged["stepover_percent"] = percent
+        merged["stepover_size_mm"] = diameter * float(percent) / 100.0
+    return merged
+
+
+def _apply_allowed_tool_overrides(base: Mapping[str, Any], explicit: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Keep protected tool properties and apply only the editable machining fields."""
+
+    merged = _copy(base)
+    if not isinstance(explicit, Mapping) or not explicit:
+        return merged
+    _reject_locked_tool_fields(merged, explicit)
+    if explicit.get("tool_number") not in (None, ""):
+        merged["tool_number"] = explicit.get("tool_number")
+    stepdown = _present(explicit, "stepdown_mm", "stepdown")
+    if stepdown is not None:
+        merged["stepdown_mm"] = stepdown
+        merged["pass_depth_mm"] = stepdown
+    rate_units = str(merged.get("rate_units") or "")
+    if rate_units == RATE_UNITS_MM_SEC:
+        feed = _present(explicit, "feed_rate_mm_sec", "feed_rate")
+        plunge = _present(explicit, "plunge_rate_mm_sec", "plunge_rate")
+        if feed is not None:
+            merged["feed_rate_mm_sec"] = feed
+        if plunge is not None:
+            merged["plunge_rate_mm_sec"] = plunge
+    else:
+        feed = _present(explicit, "feed_rate_mm_min")
+        plunge = _present(explicit, "plunge_rate_mm_min")
+        if feed is not None:
+            merged["feed_rate_mm_min"] = feed
+        if plunge is not None:
+            merged["plunge_rate_mm_min"] = plunge
+    spindle = explicit.get("spindle_speed_rpm")
+    if spindle not in (None, ""):
+        merged["spindle_speed_rpm"] = spindle
+    return _apply_stepover_override(merged, explicit)
+
+
+def _diameter_issue_detail(paths: Sequence[Any]) -> dict[str, Any] | None:
+    for path in paths:
+        if not isinstance(path, Mapping):
+            continue
+        for detail in path.get("issue_details") or ():
+            if isinstance(detail, Mapping) and str(detail.get("code") or "") in _DIAMETER_ISSUE_CODES:
+                return dict(detail)
+    return None
+
+
+def _plain_mm(value: Any) -> str:
+    number = float(value)
+    if abs(number - round(number)) < 1e-9:
+        return str(int(round(number)))
+    return f"{number:.3f}".rstrip("0").rstrip(".")
+
+
+def _diameter_detail_text(detail: Mapping[str, Any]) -> str:
+    return "|".join(
+        (
+            str(detail.get("operation_key") or ""),
+            _plain_mm(detail.get("approved_diameter_mm")),
+            _plain_mm(detail.get("selected_diameter_mm")),
+        )
+    )
+
+
 def canonical_tool_copy(raw: Mapping[str, Any], *, tool_preset: str) -> dict[str, Any]:
     """Validate a stored tool copy. Ball Nose uses the same rules as the base tool."""
 
@@ -374,26 +538,44 @@ def canonical_tool_copy(raw: Mapping[str, Any], *, tool_preset: str) -> dict[str
     return payload
 
 
+def _profile_tool_base(
+    tool_name: str,
+    *,
+    known_tools: Mapping[str, Mapping[str, Any]],
+    stored_profile: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Protected properties come from the saved profile, or from the tool on create or tool change."""
+
+    stored_name = str((stored_profile or {}).get("tool_preset") or "")
+    stored_values = (stored_profile or {}).get("tool_values") if isinstance(stored_profile, Mapping) else None
+    tool_changed = bool(stored_profile) and stored_name != tool_name
+    if stored_profile is not None and not tool_changed and isinstance(stored_values, Mapping) and stored_values:
+        return canonical_tool_copy(stored_values, tool_preset=tool_name)
+    catalog = known_tools.get(tool_name)
+    if catalog is None:
+        raise MachiningSetupError("preset_not_found")
+    if catalog.get("enabled", True) is False:
+        raise MachiningSetupError("preset_disabled")
+    return tool_copy_from_stored(catalog, tool_preset=tool_name)
+
+
 def normalize_profile(
     raw: Mapping[str, Any],
     *,
     known_tools: Mapping[str, Mapping[str, Any]],
     profile_id: str | None = None,
+    stored_profile: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Copy the selected tool into a profile. The stored tool is not modified."""
+    """Copy the selected tool into a profile. Only the editable machining fields may change."""
 
     name = _text(raw.get("name"), "profile_name_required")
     tool_name = _text(raw.get("tool_preset"), "tool_preset_required")
     explicit = raw.get("tool_values") if isinstance(raw.get("tool_values"), Mapping) else None
-    if explicit:
-        tool_values = canonical_tool_copy(explicit, tool_preset=tool_name)
-    else:
-        stored = known_tools.get(tool_name)
-        if stored is None:
-            raise MachiningSetupError("preset_not_found")
-        if stored.get("enabled", True) is False:
-            raise MachiningSetupError("preset_disabled")
-        tool_values = tool_copy_from_stored(stored, tool_preset=tool_name)
+    base = _profile_tool_base(tool_name, known_tools=known_tools, stored_profile=stored_profile)
+    tool_values = canonical_tool_copy(
+        _apply_allowed_tool_overrides(base, explicit),
+        tool_preset=tool_name,
+    )
     profile = {
         "profile_id": _stable_id(profile_id or raw.get("profile_id") or new_machining_id("profile"), "profile_id_invalid"),
         "name": name,
@@ -413,13 +595,22 @@ def normalize_profiles(
     rows: Sequence[Mapping[str, Any]],
     *,
     known_tools: Mapping[str, Mapping[str, Any]],
+    stored_profiles: Sequence[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     profiles: list[dict[str, Any]] = []
     seen: set[str] = set()
+    trusted: dict[str, Mapping[str, Any]] = {}
+    for stored in stored_profiles:
+        if isinstance(stored, Mapping) and stored.get("profile_id"):
+            trusted.setdefault(str(stored.get("profile_id")), stored)
     for row in rows:
         if not isinstance(row, Mapping):
             raise MachiningSetupError("profile_invalid")
-        profile = normalize_profile(row, known_tools=known_tools)
+        profile = normalize_profile(
+            row,
+            known_tools=known_tools,
+            stored_profile=trusted.get(str(row.get("profile_id") or "")),
+        )
         if profile["profile_id"] in seen or profile["name"] in {item["name"] for item in profiles}:
             raise MachiningSetupError("profile_duplicate")
         seen.add(profile["profile_id"])
@@ -565,23 +756,45 @@ def selection_coverage(
     raise MachiningSetupError("selection_invalid")
 
 
-def _local_from_profile(profile: Mapping[str, Any], raw_local: Any) -> dict[str, Any]:
+def _association_tool_base(
+    profile: Mapping[str, Any],
+    raw_local: Any,
+    known_tools: Mapping[str, Mapping[str, Any]],
+) -> tuple[str, dict[str, Any]]:
+    """Protected tool properties come from the profile, or from a tool chosen on the association."""
+
+    profile_tool = str(profile.get("tool_preset") or "")
+    requested = ""
+    if isinstance(raw_local, Mapping):
+        requested = str(raw_local.get("tool_preset") or "").strip()
+    tool_name = requested or profile_tool
+    if tool_name == profile_tool:
+        stored = profile.get("tool_values") if isinstance(profile.get("tool_values"), Mapping) else {}
+        return tool_name, _copy(stored)
+    catalog = known_tools.get(tool_name)
+    if catalog is None:
+        raise MachiningSetupError("preset_not_found")
+    if catalog.get("enabled", True) is False:
+        raise MachiningSetupError("preset_disabled")
+    return tool_name, tool_copy_from_stored(catalog, tool_preset=tool_name)
+
+
+def _local_from_profile(
+    profile: Mapping[str, Any],
+    raw_local: Any,
+    known_tools: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     if isinstance(raw_local, Mapping) and raw_local:
         local = _copy(raw_local)
     else:
         local = _copy(profile)
     local["profile_id"] = profile["profile_id"]
-    explicit_tool = ""
-    if isinstance(raw_local, Mapping):
-        explicit_tool = str(raw_local.get("tool_preset") or "").strip()
-        supplied = raw_local.get("tool_values") if isinstance(raw_local.get("tool_values"), Mapping) else {}
-        explicit_tool = explicit_tool or str(supplied.get("tool_preset") or supplied.get("description") or "").strip()
-    local["tool_preset"] = explicit_tool or str(profile.get("tool_preset") or "")
-    if not isinstance(local.get("tool_values"), Mapping) or not local.get("tool_values"):
-        local["tool_values"] = _copy(profile.get("tool_values") if isinstance(profile.get("tool_values"), Mapping) else {})
+    tool_name, base = _association_tool_base(profile, raw_local, known_tools or {})
+    local["tool_preset"] = tool_name
+    explicit = raw_local.get("tool_values") if isinstance(raw_local, Mapping) and isinstance(raw_local.get("tool_values"), Mapping) else None
     local["tool_values"] = canonical_tool_copy(
-        local["tool_values"],
-        tool_preset=str(local.get("tool_preset") or ""),
+        _apply_allowed_tool_overrides(base, explicit),
+        tool_preset=tool_name,
     )
     local["final_depth_mm"] = _depth_mm(local.get("final_depth_mm", profile.get("final_depth_mm")))
     local["safe_z_mm"] = _safe_z(local.get("safe_z_mm", profile.get("safe_z_mm")))
@@ -598,6 +811,7 @@ def normalize_associations(
     profiles: Sequence[Mapping[str, Any]],
     catalog: Sequence[MachinableVector],
     keep_unresolved: bool = False,
+    known_tools: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     by_profile = {str(profile.get("profile_id") or ""): profile for profile in profiles}
     normalized: list[dict[str, Any]] = []
@@ -644,7 +858,7 @@ def normalize_associations(
                 raise MachiningSetupError("vector_already_assigned")
             covered_owner[vector_id] = association_id
             owner_names[vector_id] = association_name or association_id
-        local = _local_from_profile(profile, row.get("local_values"))
+        local = _local_from_profile(profile, row.get("local_values"), known_tools or {})
         seen.add(association_id)
         normalized.append(
             {
@@ -922,6 +1136,9 @@ def calculate_toolpath_snapshot(
         group = resolve_geometry_group(program, vector_id)
         if not group["ready"]:
             issues = list(group.get("issues") or [])
+            detail = _diameter_issue_detail(group.get("paths") or ())
+            if detail:
+                raise MachiningSetupError(str(detail.get("code") or issues[0]), _diameter_detail_text(detail))
             raise MachiningSetupError(str(issues[0] if issues else "vector_not_machinable"))
         path = next(item for item in group["paths"] if len(item.get("points") or ()) >= 2)
         points = _points(path)
@@ -1924,6 +2141,7 @@ def unreversed_operational_program(
         snapshots or (),
         associations=associations,
     )
+    current = apply_plan_diameter_gate(current)
     current = order_program_by_associations(current, associations)
     current = _refresh_effective_readiness(current)
     return _stamp_shape_ids(current)

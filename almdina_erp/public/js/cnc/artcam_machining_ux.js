@@ -15,14 +15,21 @@
     ]);
     const TOOL_FIELDS = Object.freeze([
         ["tool_number", "Tool Number"],
-        ["diameter_mm", "Diameter (mm)"],
         ["stepdown_mm", "Stepdown"],
-        ["final_tool_offset_mm", "Final Tool Offset"],
         ["stepover_size_mm", "Stepover Size"],
-        ["stepover_percent", "Stepover Percent of D"],
+        ["stepover_percent", "Stepover Percent"],
         ["spindle_speed_rpm", "Spindle Speed (RPM)"],
-        ["feed_rate_mm_sec", "Feed Rate (mm/sec)"],
-        ["plunge_rate_mm_sec", "Plunge Rate (mm/sec)"],
+    ]);
+    const ALLOWED_TOOL_FIELDS = Object.freeze([
+        "tool_number",
+        "stepdown_mm",
+        "stepover_size_mm",
+        "stepover_percent",
+        "spindle_speed_rpm",
+        "feed_rate_mm_sec",
+        "plunge_rate_mm_sec",
+        "feed_rate_mm_min",
+        "plunge_rate_mm_min",
     ]);
 
     function translate(message) {
@@ -30,6 +37,62 @@
         if (locale && typeof locale.translate === "function") return locale.translate(message);
         if (typeof __ === "function") return __(message);
         return String(message || "");
+    }
+
+    function toolsOf(context) {
+        return ((context.workspace && context.workspace.presets) || [])
+            .filter(row => row && row.name && row.enabled !== false);
+    }
+
+    function toolOptions(context, form) {
+        const rows = toolsOf(context).slice();
+        const current = String((form && form.tool_preset) || "");
+        if (current && !rows.some(row => row.name === current)) {
+            const tool = (form && form.tool) || {};
+            rows.unshift({
+                name: current,
+                description: tool.description || tool.tool_name || current,
+                enabled: true,
+            });
+        }
+        return rows;
+    }
+
+    function toolPayload(preset) {
+        const source = preset || {};
+        const number = source.tool_number == null ? "" : String(source.tool_number).replace(/^T/i, "");
+        return {
+            description: source.description || source.tool_name || source.name || "",
+            tool_name: source.tool_name || source.description || source.name || "",
+            tool_type: source.tool_type || "",
+            tool_number: number,
+            tool_units: source.tool_units || "mm",
+            rate_units: source.rate_units || "mm/sec",
+            notes: source.notes || "",
+            diameter_mm: source.diameter_mm != null ? source.diameter_mm : source.tool_diameter_mm,
+            stepdown_mm: source.stepdown_mm != null ? source.stepdown_mm : source.pass_depth_mm,
+            final_tool_offset_mm: source.final_tool_offset_mm,
+            stepover_size_mm: source.stepover_size_mm,
+            stepover_percent: source.stepover_percent,
+            spindle_speed_rpm: source.spindle_speed_rpm,
+            feed_rate_mm_sec: source.feed_rate_mm_sec,
+            plunge_rate_mm_sec: source.plunge_rate_mm_sec,
+            feed_rate_mm_min: source.feed_rate_mm_min,
+            plunge_rate_mm_min: source.plunge_rate_mm_min,
+        };
+    }
+
+    function rateFields(tool) {
+        if (String((tool && tool.rate_units) || "") === "mm/min") {
+            return [
+                ["feed_rate_mm_min", "Feed Rate (mm/min)"],
+                ["plunge_rate_mm_min", "Plunge Rate (mm/min)"],
+            ];
+        }
+        return [
+            ["feed_rate_mm_sec", "Feed Rate (mm/sec)"],
+            ["plunge_rate_mm_sec", "Plunge Rate (mm/sec)"],
+        ];
     }
 
     function escapeHtml(value) {
@@ -57,18 +120,6 @@
         catalog.concat(data.profiles || []).forEach(row => {
             if (!row || !row.profile_id || seen.has(row.profile_id)) return;
             seen.add(row.profile_id);
-            rows.push(row);
-        });
-        return rows;
-    }
-
-    function toolsOf(context) {
-        const rows = [];
-        const seen = new Set();
-        ((context.workspace && context.workspace.presets) || []).forEach(row => {
-            const name = row && (row.tool_name || row.name || row.preset_name);
-            if (!name || seen.has(name)) return;
-            seen.add(name);
             rows.push(row);
         });
         return rows;
@@ -163,13 +214,6 @@
         </label>`;
     }
 
-    function toolSummary(tool) {
-        const number = tool.tool_number_display || tool.tool_number || "";
-        const name = tool.description || tool.tool_preset || "";
-        const diameter = tool.diameter_mm != null && tool.diameter_mm !== "" ? `${tool.diameter_mm} mm` : "";
-        return [number && `T${String(number).replace(/^T/i, "")}`, name || "Ball Nose", diameter].filter(Boolean).join(" — ");
-    }
-
     function editorMarkup(context) {
         const form = ensureForm(context.state);
         const tool = form.tool || {};
@@ -218,27 +262,22 @@
                     ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
                 </div>
             </div>
-            <label class="dco-artcam-field">${escapeHtml("Tool")}
-                <select class="form-control" data-field="replacement_tool">
+            <label class="dco-artcam-field">${escapeHtml(translate("Tool"))}
+                <select class="form-control" data-field="tool_preset">
                     <option value="">${escapeHtml(translate("Choose"))}</option>
-                    ${toolsOf(context).map(row => {
-                        const name = row.tool_name || row.name || row.preset_name;
-                        return `<option value="${escapeHtml(name)}"${name === form.tool_preset ? " selected" : ""}>${escapeHtml(`${name} · ${row.tool_number || ""} · ${row.tool_diameter_mm || ""} mm`)}</option>`;
-                    }).join("")}
+                    ${toolOptions(context, form).map(row => `<option value="${escapeHtml(row.name)}"${row.name === form.tool_preset ? " selected" : ""}>${escapeHtml(row.description || row.tool_name || row.name)}</option>`).join("")}
                 </select>
-            </label>` : ""}
+            </label>
+            <p class="dco-artcam-note" data-artcam-tool-summary>${escapeHtml(translate("Tool"))}: ${escapeHtml(tool.description || tool.tool_name || form.tool_preset || "")} · ${escapeHtml(translate("Diameter (mm)"))} ${escapeHtml(tool.diameter_mm == null ? "" : tool.diameter_mm)}</p>` : ""}
             ${toolChosen ? `<section class="dco-artcam-tool${form.toolOpen ? "" : " is-collapsed"}" data-artcam-tool>
                 <div class="dco-artcam-tool__bar">
-                    <span>${escapeHtml("Tool")}: ${escapeHtml(toolSummary(tool))}</span>
+                    <span>${escapeHtml(translate("Editable tool settings"))}</span>
                     <button type="button" class="dco-sheet-acc__toggle" data-artcam-tool-toggle aria-expanded="${form.toolOpen ? "true" : "false"}" aria-label="${escapeHtml(translate("Tool details"))}"></button>
                 </div>
                 <div class="dco-artcam-tool__body">
                     <div class="dco-artcam-row dco-artcam-row--tool">
-                        ${TOOL_FIELDS.map(([name, label]) => input(name, label, tool[name])).join("")}
+                        ${TOOL_FIELDS.concat(rateFields(tool)).map(([name, label]) => input(name, label, tool[name])).join("")}
                     </div>
-                    <label class="dco-artcam-field dco-artcam-field--notes">${escapeHtml("Notes")}
-                        <textarea class="form-control" data-field="notes">${escapeHtml(tool.notes || "")}</textarea>
-                    </label>
                 </div>
             </section>` : ""}
             <div class="dco-artcam-actions">
@@ -287,14 +326,17 @@
         form.name = value("name").trim();
         form.source = value("source");
         form.profile_id = value("profile_id");
+        const toolNode = host.querySelector("[data-artcam-editor] [data-field=\"tool_preset\"]");
+        if (toolNode) form.tool_preset = toolNode.value;
         PROFILE_FIELDS.concat(HOME_FIELDS).forEach(([name]) => {
             form.fields[name] = value(name);
         });
-        form.tool = form.tool || {};
-        TOOL_FIELDS.forEach(([name]) => {
+        const previousTool = Object.assign({}, form.tool || {});
+        form.tool = previousTool;
+        TOOL_FIELDS.concat(rateFields(previousTool)).forEach(([name]) => {
             form.tool[name] = value(name);
         });
-        form.tool.notes = value("notes");
+        syncStepover(form, host);
         const release = host.querySelector("[data-artcam-editor] [data-field=\"release_perimeter\"]");
         form.releasePerimeter = Boolean(release && release.checked);
         const toolSection = host.querySelector("[data-artcam-tool]");
@@ -313,16 +355,30 @@
         return {};
     }
 
+    function syncStepover(form, host) {
+        const tool = form.tool || {};
+        const diameter = Number(tool.diameter_mm);
+        if (!Number.isFinite(diameter) || diameter <= 0 || !host) return;
+        const active = host.querySelector("[data-artcam-editor] :focus");
+        const source = active && active.getAttribute ? active.getAttribute("data-field") : "";
+        if (source === "stepover_size_mm" && tool.stepover_size_mm !== "" && tool.stepover_size_mm != null) {
+            tool.stepover_percent = Math.round((Number(tool.stepover_size_mm) / diameter) * 100000) / 1000;
+            const percent = host.querySelector("[data-artcam-editor] [data-field=\"stepover_percent\"]");
+            if (percent) percent.value = tool.stepover_percent;
+        }
+        if (source === "stepover_percent" && tool.stepover_percent !== "" && tool.stepover_percent != null) {
+            tool.stepover_size_mm = Math.round((diameter * Number(tool.stepover_percent) / 100) * 1000) / 1000;
+            const size = host.querySelector("[data-artcam-editor] [data-field=\"stepover_size_mm\"]");
+            if (size) size.value = tool.stepover_size_mm;
+        }
+    }
+
     function payloadFromForm(form, state, previous) {
-        const tool = Object.assign({}, form.tool || {});
-        TOOL_FIELDS.forEach(([name]) => {
-            if (tool[name] !== "" && tool[name] != null && name !== "notes") tool[name] = Number(tool[name]);
+        const sourceTool = form.tool || {};
+        const tool = {};
+        ALLOWED_TOOL_FIELDS.forEach(name => {
+            if (sourceTool[name] !== "" && sourceTool[name] != null) tool[name] = Number(sourceTool[name]);
         });
-        tool.tool_type = "Ball Nose";
-        tool.tool_units = "mm";
-        tool.rate_units = "mm/sec";
-        tool.description = form.tool_preset || tool.description || "";
-        tool.tool_preset = form.tool_preset || tool.tool_preset || "";
         const payload = {
             association_id: form.association_id,
             name: form.name,
@@ -363,25 +419,6 @@
         form.tool = Object.assign({}, (profile.tool_values) || {});
     }
 
-    function fillFromTool(form, tool) {
-        const perSec = value => (value == null || value === "" ? "" : Number(value));
-        form.tool_preset = tool.tool_name || tool.name || tool.preset_name || "";
-        form.tool = {
-            description: form.tool_preset,
-            tool_preset: form.tool_preset,
-            tool_number: tool.tool_number,
-            diameter_mm: tool.tool_diameter_mm,
-            stepdown_mm: tool.stepdown_mm,
-            final_tool_offset_mm: tool.final_tool_offset_mm,
-            stepover_size_mm: tool.stepover_size_mm,
-            stepover_percent: tool.stepover_percent,
-            spindle_speed_rpm: tool.spindle_speed_rpm,
-            feed_rate_mm_sec: tool.feed_rate_mm_sec != null ? tool.feed_rate_mm_sec : perSec(tool.feed_rate_mm_min) / 60,
-            plunge_rate_mm_sec: tool.plunge_rate_mm_sec != null ? tool.plunge_rate_mm_sec : perSec(tool.plunge_rate_mm_min) / 60,
-            notes: tool.notes || "",
-        };
-    }
-
     function reportFailure(title, fallback, error) {
         const signature = `${title}|${fallback}`;
         const now = Date.now();
@@ -394,10 +431,14 @@
             }
             const board = window.AlmdinaOperationalFilesUX;
             if (board && typeof board.showSheetIssueDialog === "function") {
-                board.showSheetIssueDialog(title, [{
-                    problem: fallback,
-                    action: translate("Correct the listed issue, then generate the NC file again."),
-                }], { error });
+                const lines = String(fallback || "").split("\n").map(line => line.trim()).filter(Boolean);
+                const issue = lines.length >= 3
+                    ? { problem: lines[0], target: lines[1], action: lines[2], code: "tool_diameter_plan_mismatch" }
+                    : {
+                        problem: fallback,
+                        action: translate("Correct the listed issue, then generate the NC file again."),
+                    };
+                board.showSheetIssueDialog(title, [issue], lines.length >= 3 ? {} : { error });
                 return;
             }
             if (window.frappe && frappe.msgprint) frappe.msgprint(fallback);
@@ -434,6 +475,7 @@
         host.addEventListener("input", () => readEditor(host, context.state));
         host.addEventListener("change", event => {
             const previousProfile = ensureForm(context.state).profile_id;
+            const previousTool = ensureForm(context.state).tool_preset;
             readEditor(host, context.state);
             const form = context.state.artcamForm;
             if (event.target.matches("[data-field=\"source\"]")) {
@@ -469,18 +511,14 @@
                 fillFromProfile(form, profile);
                 if (typeof context.refresh === "function") context.refresh();
             }
-            if (event.target.matches("[data-field=\"replacement_tool\"]") && !event.target.value) {
-                form.tool_preset = "";
-                form.tool = {};
-                form.toolOpen = false;
+            if (event.target.matches("[data-field=\"tool_preset\"]") && form.tool_preset !== previousTool) {
+                const preset = toolsOf(context).find(row => row.name === form.tool_preset);
+                form.tool = preset ? toolPayload(preset) : {};
+                form.toolOpen = Boolean(form.tool_preset);
                 if (typeof context.refresh === "function") context.refresh();
             }
-            if (event.target.matches("[data-field=\"replacement_tool\"]") && event.target.value) {
-                const tool = toolsOf(context).find(row => (row.tool_name || row.name || row.preset_name) === event.target.value);
-                if (!tool) return;
-                fillFromTool(form, tool);
-                form.toolOpen = true;
-                if (typeof context.refresh === "function") context.refresh();
+            if (event.target.matches("[data-field=\"stepover_size_mm\"], [data-field=\"stepover_percent\"]")) {
+                readEditor(host, context.state);
             }
         });
         host.addEventListener("click", event => {

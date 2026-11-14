@@ -467,8 +467,9 @@ def compile_sheet_program(
             sheet_width_mm=width_mm,
             sheet_length_mm=length_mm,
             blocked_catalog_paths=blocked,
+            approved_diameters=plan_diameters,
         )
-        return program_payload(program)
+        return _stamp_plan_diameters(program_payload(program), plan_diameters)
 
     units = "mm"
     if isinstance(uploaded, Mapping):
@@ -733,9 +734,23 @@ def compile_sheet_program(
         sheet_length_mm=length_mm,
         blocked_catalog_paths=blocked,
         approved_kerf_mm=float(kerf) if isinstance(kerf, (int, float)) and not isinstance(kerf, bool) else None,
+        approved_diameters=plan_diameters,
         path_execution_order=(),
     )
-    return _attach_mill_display_paths(program_payload(program), mill_display_paths)
+    return _attach_mill_display_paths(
+        _stamp_plan_diameters(program_payload(program), plan_diameters),
+        mill_display_paths,
+    )
+
+
+def _stamp_plan_diameters(payload: dict[str, Any], plan_diameters: Mapping[str, Any]) -> dict[str, Any]:
+    stamped = dict(payload)
+    stamped["approved_tool_diameters"] = {
+        str(key): float(value)
+        for key, value in plan_diameters.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    }
+    return stamped
 
 
 def _uploaded_frame_ready(uploaded: Mapping[str, Any] | None) -> bool:
@@ -1581,6 +1596,11 @@ def _apply_parametric_mills(
                     blocked_path("mill_diameter_required", key)
                 continue
             cutter_diameter = float(diameter)
+            # The approved plan owns the cutter center. A different selected
+            # diameter is rejected later and must not move the generated path.
+            planned = diameter_for_kind(kind, plan_diameters or {})
+            if planned is not None:
+                cutter_diameter = float(planned)
             if kind == "recessed_handle_cutout":
                 preserved_ids = {id(entity) for entity in preserved_source}
                 approved = [

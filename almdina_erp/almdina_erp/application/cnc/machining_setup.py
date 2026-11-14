@@ -60,18 +60,24 @@ def accept_sheet_machining(
     associations: Sequence[Mapping[str, Any]],
     known_tools: Mapping[str, Mapping[str, Any]],
     snapshots: Sequence[Mapping[str, Any]] = (),
+    stored_profiles: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     catalog = vectors_from_paths(paths)
-    stored_profiles = normalize_profiles(profiles, known_tools=known_tools)
+    normalized_profiles = normalize_profiles(
+        profiles,
+        known_tools=known_tools,
+        stored_profiles=stored_profiles,
+    )
     stored_associations = normalize_associations(
         associations,
-        profiles=stored_profiles,
+        profiles=normalized_profiles,
         catalog=catalog,
         keep_unresolved=True,
+        known_tools=known_tools,
     )
     stored_associations = release_stale_toolpath_links(stored_associations, snapshots)
     assert_physical_tool_consistency(stored_associations, snapshots)
-    return stored_profiles, stored_associations
+    return normalized_profiles, stored_associations
 
 
 def public_sheet_machining(

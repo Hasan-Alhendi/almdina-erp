@@ -339,7 +339,7 @@ def test_profile_diameter_resolves_source_vector_before_cutter_center():
     profile = normalize_profile(
         {
             "name": "Liner Profile",
-            "tool_preset": "Wide",
+            "tool_preset": "Finish",
             "final_depth_mm": 18.5,
             "safe_z_mm": 5,
             "home_x_mm": 0,
@@ -368,14 +368,14 @@ def test_profile_diameter_resolves_source_vector_before_cutter_center():
         sheet_no=1,
         pieces=[piece],
         snapshot=_snapshot(),
-        operation_presets={"cut_path": "Wide"},
+        operation_presets={"cut_path": "Finish"},
         path_overrides=overrides,
         operation_order=["liner", "cut_path"],
         known_presets=known,
     )
     liner = _paths(calculated, "liner")[0]
     assert liner["ready"] is True
-    assert liner["preset"]["tool_diameter_mm"] == 8
+    assert liner["preset"]["tool_diameter_mm"] == 5
     assert liner["preset_name"].startswith("artcam-local:association:liner")
     assert len(liner["motions"]) > 0
 
@@ -454,7 +454,7 @@ def test_handle_profile_keeps_the_approved_path_and_still_cuts_depth_passes():
     fine = _raw(
         preset_name="Handle Fine",
         tool_name="Handle Fine",
-        tool_diameter_mm=8,
+        tool_diameter_mm=5,
         stepdown_mm=4,
         stepover_size_mm=2,
         stepover_percent=40,
@@ -479,10 +479,14 @@ def test_handle_profile_keeps_the_approved_path_and_still_cuts_depth_passes():
     assert "stepover_invalid" not in _codes(calculated)
     assert _same_sequence(handles[0]["points"], approved)
     _other, other_handles = _calculated_handle(piece, coarse)
-    assert _same_sequence(other_handles[0]["points"], handles[0]["points"])
+    assert other_handles[0]["ready"] is False
+    assert "tool_diameter_plan_mismatch" in other_handles[0]["issues"]
+    assert other_handles[0]["motions"] == []
+    assert _same_sequence(other_handles[0]["points"], approved)
     plain, plain_handles = _calculated_handle(piece, without_stepover)
-    assert plain_handles[0]["ready"] is True
+    assert plain_handles[0]["ready"] is False
     assert "stepover_invalid" not in _codes(plain)
+    assert "tool_diameter_plan_mismatch" in plain_handles[0]["issues"]
     assert _same_sequence(plain_handles[0]["points"], approved)
     cut_depths = {
         float(motion["depth_mm"])
@@ -507,10 +511,10 @@ def test_uploaded_and_stored_handle_paths_are_reused_without_a_new_distribution(
     tool = _raw(
         preset_name="Handle Fine",
         tool_name="Handle Fine",
-        tool_diameter_mm=8,
+        tool_diameter_mm=5,
         stepdown_mm=4,
         stepover_size_mm=2,
-        stepover_percent=25,
+        stepover_percent=40,
     )
     stored = _handle_piece(
         overlays=[{
@@ -597,7 +601,7 @@ def test_selected_profile_only_calculates_the_selected_liner_source_vector():
     profile = normalize_profile(
         {
             "name": "Selected Liner Profile",
-            "tool_preset": "Wide",
+            "tool_preset": "Finish",
             "final_depth_mm": 18.5,
             "safe_z_mm": 5,
             "home_x_mm": 0,
@@ -622,7 +626,7 @@ def test_selected_profile_only_calculates_the_selected_liner_source_vector():
         sheet_no=1,
         pieces=[piece],
         snapshot=_snapshot(),
-        operation_presets={"cut_path": "Wide"},
+        operation_presets={"cut_path": "Finish"},
         path_overrides=overrides,
         operation_order=["liner", "cut_path"],
         known_presets=known,
@@ -631,7 +635,7 @@ def test_selected_profile_only_calculates_the_selected_liner_source_vector():
     selected = next(path for path in liners if path["path_key"].endswith("liner_2"))
     untouched = next(path for path in liners if path["path_key"].endswith("liner_1"))
     assert selected["ready"] is True
-    assert selected["preset"]["tool_diameter_mm"] == 8
+    assert selected["preset"]["tool_diameter_mm"] == 5
     assert untouched["ready"] is False
     assert "mill_diameter_required" in untouched["issues"]
     assert untouched["motions"] == []

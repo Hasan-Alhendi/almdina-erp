@@ -378,8 +378,11 @@ const chosenEditor = artcam.markup({
     },
 }, state);
 assert.ok(chosenEditor.includes('data-field="final_depth_mm"'));
-assert.ok(chosenEditor.includes('data-field="replacement_tool"'));
-assert.ok(!chosenEditor.includes('data-field="diameter_mm"'), "tool values stay hidden until a tool is selected");
+assert.ok(chosenEditor.includes("data-artcam-tool-summary"));
+assert.ok(chosenEditor.includes('data-field="tool_preset"'));
+assert.ok(chosenEditor.includes('value="Finish"'));
+assert.ok(!chosenEditor.includes('data-field="replacement_tool"'));
+assert.ok(!chosenEditor.includes('data-field="diameter_mm"'), "diameter stays read-only");
 
 state.artcamForm.tool_preset = "Finish";
 state.artcamForm.tool = { tool_number: 9, diameter_mm: 5 };
@@ -392,8 +395,13 @@ const toolEditor = artcam.markup({
         associations: [],
     },
 }, state);
-assert.ok(toolEditor.includes('<option value="Finish" selected>'));
-assert.ok(toolEditor.includes('data-field="diameter_mm" value="5"'));
+assert.ok(toolEditor.includes("data-artcam-tool-summary"));
+assert.ok(toolEditor.includes("Diameter (mm)"));
+assert.ok(toolEditor.includes('data-field="stepdown_mm"'));
+assert.ok(toolEditor.includes('data-field="feed_rate_mm_sec"'));
+assert.ok(!toolEditor.includes('data-field="diameter_mm"'));
+assert.ok(!toolEditor.includes('data-field="final_tool_offset_mm"'));
+assert.ok(!toolEditor.includes('data-field="notes"'));
 
 const lockedState = { artcamForm: { source: "selected_vectors" }, vectorSelection: [] };
 const lockedDom = board();

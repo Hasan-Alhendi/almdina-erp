@@ -31,6 +31,7 @@ from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
 
 CHAIN_TOLERANCE_MM = 0.05
 _DIAMETER_TOLERANCE_MM = 0.05
+_DIAMETER_ISSUE_CODES = frozenset({"tool_diameter_kerf_mismatch", "tool_diameter_plan_mismatch"})
 COORDINATE_SPACE = "sheet_bottom_left_y_up_mm"
 MACHINE_ORIGIN = "not_established"
 DEPTH_CONVENTION = "positive_millimetres"
@@ -101,6 +102,7 @@ class CncToolpath:
     issues: tuple[str, ...]
     motions: tuple[CncMotion, ...]
     sequence: int
+    issue_details: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,6 +543,45 @@ def _collect_paths(
     return collected
 
 
+def _positive_diameter(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def approved_operation_diameter(
+    operation_key: str,
+    approved_diameters: Mapping[str, object] | None,
+    approved_kerf_mm: float | None,
+) -> float | None:
+    """Approved cutter diameter for one operation. Values are diameters, not radii."""
+
+    diameters = approved_diameters if isinstance(approved_diameters, Mapping) else {}
+    key = str(operation_key or "")
+    if key in {"cut_path", SHEET_PERIMETER_OPERATION_KEY}:
+        return _positive_diameter(diameters.get("kerf_mm", approved_kerf_mm))
+    if key == "liner":
+        return _positive_diameter(diameters.get("liner", diameters.get("liner_tool_diameter_mm")))
+    if key == "recessed_handle_cutout":
+        return _positive_diameter(
+            diameters.get("recessed_handle_cutout", diameters.get("handle_recess_tool_diameter_mm"))
+        )
+    if key == "back_groove":
+        return _positive_diameter(
+            diameters.get("back_groove", diameters.get("rear_groove_tool_diameter_mm"))
+        )
+    return None
+
+
+def diameter_issue_code(operation_key: str) -> str:
+    if str(operation_key or "") in {"cut_path", SHEET_PERIMETER_OPERATION_KEY}:
+        return "tool_diameter_kerf_mismatch"
+    return "tool_diameter_plan_mismatch"
+
+
 def build_board_program(
     *,
     sheet_no: int,
@@ -557,6 +598,7 @@ def build_board_program(
     blocked_catalog_paths: Sequence[Mapping[str, str]] = (),
     shared_cut_ambiguous: bool = False,
     approved_kerf_mm: float | None = None,
+    approved_diameters: Mapping[str, object] | None = None,
     path_execution_order: Sequence[str] | None = None,
 ) -> CncBoardProgram:
     """Build one board program. Confirmation never clears a geometric block."""
@@ -631,15 +673,27 @@ def build_board_program(
                         preset = None
         if not issue:
             issue = preset_issue
+        approved_diameter = approved_operation_diameter(
+            operation.key,
+            approved_diameters,
+            approved_kerf_mm,
+        )
+        diameter_detail: dict[str, object] | None = None
         if (
             not issue
             and preset is not None
-            and operation.key in {"cut_path", SHEET_PERIMETER_OPERATION_KEY}
             and entity.role == "tool_center"
-            and approved_kerf_mm is not None
-            and abs(float(preset.tool_diameter_mm) - float(approved_kerf_mm)) > _DIAMETER_TOLERANCE_MM
+            and approved_diameter is not None
+            and abs(float(preset.tool_diameter_mm) - approved_diameter) > _DIAMETER_TOLERANCE_MM
         ):
-            issue = "tool_diameter_kerf_mismatch"
+            issue = diameter_issue_code(operation.key)
+            diameter_detail = {
+                "code": issue,
+                "path_key": path_key,
+                "operation_key": operation.key,
+                "approved_diameter_mm": approved_diameter,
+                "selected_diameter_mm": float(preset.tool_diameter_mm),
+            }
         selected.append(
             (
                 {
@@ -651,6 +705,7 @@ def build_board_program(
                     "direction": direction,
                     "issue": issue,
                     "preset_name": preset_name,
+                    "issue_details": (diameter_detail,) if diameter_detail else (),
                 },
                 preset,
                 issue,
@@ -683,10 +738,11 @@ def build_board_program(
             path_issues.append("shared_cut_preset_ambiguous")
             if ("shared_cut_preset_ambiguous", "") not in issues:
                 issues.append(("shared_cut_preset_ambiguous", ""))
-        if "tool_diameter_kerf_mismatch" in path_issues:
-            pair = ("tool_diameter_kerf_mismatch", str(item["path_key"]))
-            if pair not in issues:
-                issues.append(pair)
+        for code in path_issues:
+            if code in _DIAMETER_ISSUE_CODES:
+                pair = (code, str(item["path_key"]))
+                if pair not in issues:
+                    issues.append(pair)
         ready = not path_issues
         points = item["points"] if isinstance(item["points"], tuple) else ()
         motions: tuple[CncMotion, ...] = ()
@@ -714,6 +770,7 @@ def build_board_program(
             issues=tuple(path_issues),
             motions=motions,
             sequence=0,
+            issue_details=tuple(item["issue_details"]) if isinstance(item.get("issue_details"), tuple) else (),
         )
         grouped.setdefault(operation.key, []).append(toolpath)
 
@@ -795,6 +852,7 @@ def build_board_program(
                 issues=path.issues,
                 motions=path.motions,
                 sequence=index,
+                issue_details=path.issue_details,
             )
             for index, path in enumerate(paths, start=1)
         ]
@@ -914,6 +972,7 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
                         "preset": path.preset,
                         "ready": path.ready,
                         "issues": list(path.issues),
+                        "issue_details": [dict(detail) for detail in path.issue_details],
                         "sequence": path.sequence,
                         "motions": [
                             {
@@ -934,6 +993,79 @@ def program_payload(program: CncBoardProgram) -> dict[str, object]:
     return stamp_selectable_vector_ids(payload)
 
 
+def apply_plan_diameter_gate(program: Mapping[str, object]) -> dict[str, object]:
+    """Reject a frozen snapshot whose tool diameter no longer matches the plan.
+
+    Points stay as stored. A saved snapshot must not skip the same diameter
+    comparison that blocks a new calculation.
+    """
+
+    payload = dict(program)
+    raw_diameters = payload.get("approved_tool_diameters")
+    if not isinstance(raw_diameters, Mapping):
+        return payload
+    operations = payload.get("operations")
+    if not isinstance(operations, list):
+        return payload
+    board = payload.get("issues")
+    issues = list(board) if isinstance(board, list) else []
+    for operation in operations:
+        if not isinstance(operation, dict):
+            continue
+        toolpaths = operation.get("toolpaths")
+        if not isinstance(toolpaths, list):
+            continue
+        for path in toolpaths:
+            if not isinstance(path, dict) or not path.get("ready"):
+                continue
+            preset = path.get("preset")
+            if not isinstance(preset, Mapping):
+                continue
+            operation_key = str(path.get("operation_key") or "")
+            approved = approved_operation_diameter(
+                operation_key,
+                raw_diameters,
+                _positive_diameter(raw_diameters.get("kerf_mm")),
+            )
+            selected = _positive_diameter(preset.get("tool_diameter_mm"))
+            if approved is None or selected is None:
+                continue
+            if abs(selected - approved) <= _DIAMETER_TOLERANCE_MM:
+                continue
+            code = diameter_issue_code(operation_key)
+            path_issues = [str(item) for item in path.get("issues") or [] if str(item or "")]
+            if code not in path_issues:
+                path_issues.append(code)
+            detail = {
+                "code": code,
+                "path_key": str(path.get("path_key") or ""),
+                "operation_key": operation_key,
+                "approved_diameter_mm": approved,
+                "selected_diameter_mm": selected,
+            }
+            stored = [
+                item
+                for item in path.get("issue_details") or []
+                if isinstance(item, Mapping) and str(item.get("code") or "") != code
+            ]
+            stored.append(detail)
+            path["issues"] = path_issues
+            path["issue_details"] = stored
+            path["ready"] = False
+            path["motions"] = []
+            path_key = str(path.get("path_key") or "")
+            if not any(
+                isinstance(item, Mapping)
+                and str(item.get("code") or "") == code
+                and str(item.get("path_key") or "") == path_key
+                for item in issues
+            ):
+                issues.append(dict(detail))
+    payload["operations"] = operations
+    payload["issues"] = issues
+    return payload
+
+
 __all__ = [
     "CHAIN_TOLERANCE_MM",
     "CncBoardProgram",
@@ -945,6 +1077,9 @@ __all__ = [
     "chain_line_paths",
     "direction_invariant_identity",
     "orient_path",
+    "apply_plan_diameter_gate",
+    "approved_operation_diameter",
+    "diameter_issue_code",
     "program_payload",
     "selectable_vector_id",
     "stamp_selectable_vector_ids",

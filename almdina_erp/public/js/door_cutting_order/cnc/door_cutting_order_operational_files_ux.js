@@ -1699,7 +1699,8 @@
 
     function issueAction(code) {
         const actions = {
-            tool_diameter_kerf_mismatch: translate("Choose a tool preset whose diameter matches the approved kerf."),
+            tool_diameter_kerf_mismatch: translate("Choose a tool whose diameter matches the approved cutting plan."),
+            tool_diameter_plan_mismatch: translate("Choose a tool whose diameter matches the approved cutting plan."),
             finished_geometry_missing: translate("Recalculate or re-approve the cutting plan so finished geometry is available."),
             geometry_invalid: translate("Fix the path geometry in the approved plan, then open this sheet again."),
             preset_disabled: translate("Enable the tool preset in factory settings, or choose another enabled preset."),
@@ -1750,12 +1751,12 @@
                     : `CNC_${String(code).toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`).slice(0, 80),
                 rawCode: code,
                 problem: entry.message || code,
-                target: [
+                target: entry.target_message || [
                     sheetNo ? translate("Sheet {0}", [sheetNo]) : "",
                     entry.layer || "",
                     pieceLabel ? translate("Piece {0}", [pieceLabel]) : "",
                 ].filter(Boolean).join(" — "),
-                action: issueAction(code),
+                action: entry.action_message || issueAction(code),
                 path_key: pathKey,
                 piece_label: pieceLabel,
             });
@@ -1777,9 +1778,12 @@
                     ? path.issue_messages
                     : codes;
                 codes.forEach((code, index) => {
+                    const context = path.issue_context && path.issue_context[code];
                     remember({
                         code,
-                        message: messages[index] || code,
+                        message: (context && context.problem) || messages[index] || code,
+                        target_message: context && context.target,
+                        action_message: context && context.action,
                         layer: operationLabel(path.operation_key || operation.operation_key),
                         piece_label: path.piece_label || "",
                         path_key: path.path_key || "",
@@ -1801,6 +1805,7 @@
                 .filter(Boolean);
             issues.push({
                 code: first.code,
+                rawCode: first.rawCode,
                 problem: items.length === 1
                     ? first.problem
                     : translate("{0} problems: {1}", [items.length, first.problem]),
@@ -1818,11 +1823,15 @@
 
     function showGenerationIssueDialog(error, program, sheetNo) {
         const ui = window.AlmdinaUi;
+        const collectedFirst = collectProgramIssues(program, sheetNo);
+        const diameterIssue = collectedFirst.issues.some(item => (
+            item.rawCode === "tool_diameter_plan_mismatch" || item.rawCode === "tool_diameter_kerf_mismatch"
+        ));
         const normalized = window.AlmdinaFrontend
             && typeof window.AlmdinaFrontend.normalizeError === "function"
             ? window.AlmdinaFrontend.normalizeError(error)
             : null;
-        if (ui && typeof ui.errorDialog === "function" && error
+        if (!diameterIssue && ui && typeof ui.errorDialog === "function" && error
             && normalized && normalized.issues && normalized.issues.length) {
             return ui.errorDialog(error, {
                 title: translate("NC generation could not be completed"),

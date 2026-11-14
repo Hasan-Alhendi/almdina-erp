@@ -55,6 +55,8 @@ _MESSAGES = {
     "feed_rate_invalid": "Feed rate must be a positive number of millimetres per second.",
     "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per second.",
     "notes_invalid": "The tool notes are too long.",
+    "tool_property_locked": "The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",
+    "stepover_inconsistent": "Stepover size and stepover percent must describe the same fraction of the tool diameter.",
 }
 
 
@@ -89,16 +91,25 @@ class CNCMachiningProfile(Document):
             "home_z_mm": self.home_z_mm,
         }
         previous = None if self.is_new() else self.get_doc_before_save()
-        if previous is not None and str(previous.tool_preset or "") != str(self.tool_preset or ""):
-            raw["tool_values"] = {}
+        stored = None
+        if previous is not None:
+            stored = {
+                "profile_id": previous.profile_id,
+                "tool_preset": previous.tool_preset,
+                "tool_values": _object(previous.tool_values_json),
+            }
         try:
             profile = normalize_profile(
                 raw,
                 known_tools=known_tool_presets(),
                 profile_id=self.profile_id,
+                stored_profile=stored,
             )
         except MachiningSetupError as exc:
-            frappe.throw(_MESSAGES.get(exc.code, "The profile is not valid."), frappe.ValidationError)
+            template = _MESSAGES.get(exc.code, "The profile is not valid.")
+            detail = str(getattr(exc, "detail", "") or "")
+            message = _(template).format(detail or "—") if "{0}" in template else _(template)
+            frappe.throw(message, frappe.ValidationError)
         self.profile_id = profile["profile_id"]
         self.profile_name = profile["name"]
         self.tool_preset = profile["tool_preset"]

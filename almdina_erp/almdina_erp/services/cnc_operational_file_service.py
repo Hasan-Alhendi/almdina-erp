@@ -159,7 +159,10 @@ _MESSAGES = {
     "finished_geometry_missing": "The approved plan has no finished geometry for this piece.",
     "geometry_invalid": "This path geometry cannot be used.",
     "region_not_supported": "This closed region is not a cutter path, and the approved plan does not include the mill settings needed to calculate one.",
-    "tool_diameter_kerf_mismatch": "This CUT_PATH was calculated for the approved kerf and does not match the selected tool diameter.",
+    "tool_diameter_kerf_mismatch": "The {0} tool diameter does not match the approved cutting plan.",
+    "tool_diameter_plan_mismatch": "The {0} tool diameter does not match the approved cutting plan.",
+    "tool_property_locked": "The tool property {0} cannot be changed here. Choose another tool to replace the protected tool properties.",
+    "stepover_inconsistent": "Stepover size and stepover percent must describe the same fraction of the tool diameter.",
     "mill_path_unverified": "This milling path is not a verified cutter center for the selected tool.",
     "mill_placement_unknown": "The approved plan does not record where this piece sits, so the milling path was not calculated.",
     "mill_parameters_missing": "The approved plan does not include the side, offset, and width needed to calculate this milling path.",
@@ -223,9 +226,61 @@ def _message(code: str) -> str:
     return _(_MESSAGES.get(code, _NO_APPROVED_PLAN))
 
 
+_DIAMETER_ISSUE_CODES = frozenset({"tool_diameter_kerf_mismatch", "tool_diameter_plan_mismatch"})
+_LAYER_NAMES = {
+    "cut_path": "CUT_PATH",
+    "sheet_perimeter": "Sheet Perimeter",
+    "liner": "Liner",
+    "recessed_handle_cutout": "Handle Recess",
+    "back_groove": "Rear Groove",
+}
+
+
+def _layer_name(operation_key: str) -> str:
+    return _(_LAYER_NAMES.get(str(operation_key or ""), str(operation_key or "")))
+
+
+def _diameter_dialog_parts(operation_key: str, approved: str, selected: str) -> tuple[str, str, str]:
+    layer = _layer_name(operation_key)
+    problem = _("The {0} tool diameter does not match the approved cutting plan.").format(layer)
+    where = _("{0} — approved diameter {1} mm, selected diameter {2} mm.").format(layer, approved, selected)
+    action = _("Choose a tool whose diameter is {0} mm, the diameter used to create the approved paths.").format(approved)
+    return problem, where, action
+
+
+def _diameter_dialog_message(detail: str) -> str:
+    operation_key, approved, selected = (detail.split("|") + ["", "", ""])[:3]
+    problem, where, action = _diameter_dialog_parts(operation_key, approved, selected)
+    return "\n".join((problem, where, action))
+
+
+def _diameter_program_message(program: Mapping[str, Any]) -> str:
+    """The first diameter mismatch, in the same three sentences the popup shows."""
+
+    for operation in program.get("operations") or ():
+        if not isinstance(operation, Mapping):
+            continue
+        for path in operation.get("toolpaths") or ():
+            if not isinstance(path, Mapping):
+                continue
+            for detail in path.get("issue_details") or ():
+                if not isinstance(detail, Mapping):
+                    continue
+                if str(detail.get("code") or "") not in _DIAMETER_ISSUE_CODES:
+                    continue
+                return _diameter_dialog_message("|".join((
+                    str(detail.get("operation_key") or ""),
+                    _plain_diameter(detail.get("approved_diameter_mm")),
+                    _plain_diameter(detail.get("selected_diameter_mm")),
+                )))
+    return ""
+
+
 def _failure_message(exc: Exception) -> str:
     code = str(getattr(exc, "code", "") or "")
     detail = str(getattr(exc, "detail", "") or "")
+    if code in _DIAMETER_ISSUE_CODES and detail.count("|") >= 2:
+        return _diameter_dialog_message(detail)
     template = _MESSAGES.get(code, "")
     if template and "{0}" in template:
         return _(template).format(detail or "—")
@@ -234,7 +289,14 @@ def _failure_message(exc: Exception) -> str:
     return _message(code)
 
 
-def _issue_message(code: str, path_key: str = "") -> str:
+def _issue_message(code: str, path_key: str = "", detail: dict[str, Any] | None = None) -> str:
+    if code in _DIAMETER_ISSUE_CODES and isinstance(detail, dict) and detail.get("approved_diameter_mm") is not None:
+        problem, _where, _action = _diameter_dialog_parts(
+            str(detail.get("operation_key") or ""),
+            _plain_diameter(detail.get("approved_diameter_mm")),
+            _plain_diameter(detail.get("selected_diameter_mm")),
+        )
+        return problem
     if code == "tool_diameter_kerf_mismatch":
         return _(
             "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter."
@@ -467,6 +529,7 @@ def save_cnc_operational_sheet(
             )
             profiles, associations = accept_sheet_machining(
                 paths=list(prepared.get("paths") or []),
+                stored_profiles=_trusted_machining_profiles(existing),
                 profiles=sheet_profiles_with_catalog(
                     _json_list(machining_profiles)
                     if machining_profiles is not None
@@ -587,6 +650,7 @@ def calculate_cnc_association_toolpath(
         source_catalog = catalog_rows_from_program(source_program)
         profiles, associations = accept_sheet_machining(
             paths=source_catalog,
+            stored_profiles=_trusted_machining_profiles(saved),
             profiles=sheet_profiles_with_catalog(
                 _json_list(machining_profiles) if machining_profiles is not None else list((saved or {}).get("machining_profiles") or []),
                 incoming,
@@ -738,15 +802,73 @@ def delete_cnc_association(
     return _workspace_for(order, can_prepare=True)
 
 
+def _trusted_machining_profiles(saved: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Sheet copies win over the catalog. Both are trusted snapshots, not the live tool."""
+
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    sources = (
+        list((saved or {}).get("machining_profiles") or []),
+        list(machining_profile_catalog() or []),
+    )
+    for source in sources:
+        for row in source:
+            if not isinstance(row, dict):
+                continue
+            profile_id = str(row.get("profile_id") or "")
+            if not profile_id or profile_id in seen:
+                continue
+            seen.add(profile_id)
+            rows.append(row)
+    return rows
+
+
+def _plain_diameter(value: Any) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value or "")
+    if abs(number - round(number)) < 1e-9:
+        return str(int(round(number)))
+    return f"{number:.3f}".rstrip("0").rstrip(".")
+
+
+def _issue_context(code: str, detail: dict[str, Any] | None) -> dict[str, str]:
+    if code not in _DIAMETER_ISSUE_CODES or not isinstance(detail, dict):
+        return {}
+    problem, where, action = _diameter_dialog_parts(
+        str(detail.get("operation_key") or ""),
+        _plain_diameter(detail.get("approved_diameter_mm")),
+        _plain_diameter(detail.get("selected_diameter_mm")),
+    )
+    return {"problem": problem, "target": where, "action": action}
+
+
 def _describe_program(payload: dict[str, Any]) -> dict[str, Any]:
     for issue in payload.get("issues") or []:
-        issue["message"] = _issue_message(str(issue.get("code") or ""), str(issue.get("path_key") or ""))
+        code = str(issue.get("code") or "")
+        issue["message"] = _issue_message(code, str(issue.get("path_key") or ""), issue if issue.get("approved_diameter_mm") is not None else None)
+        context = _issue_context(code, issue if issue.get("approved_diameter_mm") is not None else None)
+        if context:
+            issue["target_message"] = context["target"]
+            issue["action_message"] = context["action"]
     for operation in payload.get("operations") or []:
         for path in operation.get("toolpaths") or []:
             path_key = str(path.get("path_key") or "")
+            details = {
+                str(item.get("code") or ""): item
+                for item in path.get("issue_details") or []
+                if isinstance(item, dict)
+            }
             path["issue_messages"] = [
-                _issue_message(str(code), path_key) for code in path.get("issues") or []
+                _issue_message(str(code), path_key, details.get(str(code)))
+                for code in path.get("issues") or []
             ]
+            path["issue_context"] = {
+                code: _issue_context(code, detail)
+                for code, detail in details.items()
+                if _issue_context(code, detail)
+            }
     return payload
 
 
@@ -863,6 +985,7 @@ def get_cnc_sheet_program(
             source_catalog = catalog_rows_from_program(source_payload)
             profiles, effective_associations = accept_sheet_machining(
                 paths=source_catalog,
+                stored_profiles=_trusted_machining_profiles(saved),
                 profiles=sheet_profiles_with_catalog(
                     incoming_profiles
                     if incoming_profiles is not None
@@ -1232,6 +1355,9 @@ def generate_cnc_sheet_nc(
         fingerprint = str(prepared["settings_fingerprint"])
         if str(saved.get("settings_fingerprint") or "") != fingerprint:
             frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
+        diameter_message = _diameter_program_message(program)
+        if diameter_message:
+            frappe.throw(diameter_message, frappe.ValidationError)
         machine_row = get_cnc_machine(str(saved.get("cnc_machine") or ""))
         sheet_w, sheet_l = approved_sheet_size_cm(
             approved_plan_snapshot(order),

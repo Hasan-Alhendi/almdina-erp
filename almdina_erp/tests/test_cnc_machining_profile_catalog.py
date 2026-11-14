@@ -94,7 +94,7 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "dco-artcam-saved" not in sheet
     assert "data-artcam-add" not in sheet
     assert "Home Position (mm)" in sheet
-    assert "Choose Another Tool" in sheet
+    assert "data-artcam-tool-summary" in sheet
     assert 'data-field="source"' in sheet
     assert "data-artcam-assign" not in sheet
     assert "MultiSelectList" not in sheet
@@ -141,6 +141,27 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert 'frm.set_df_property("tool_values_json", "reqd", 0)' in form
 
 
+def test_profile_form_exposes_only_the_allowed_tool_overrides():
+    form = _text(PACKAGE / "almdina_erp" / "doctype" / "cnc_machining_profile" / "cnc_machining_profile.js")
+    assert "data-profile-tool-editor" in form
+    for fieldname in (
+        "tool_number",
+        "stepdown_mm",
+        "stepover_size_mm",
+        "stepover_percent",
+        "feed_rate_mm_sec",
+        "plunge_rate_mm_sec",
+        "spindle_speed_rpm",
+    ):
+        assert f'["{fieldname}",' in form
+    assert 'data-profile-tool="${fieldname}"' in form
+    assert '["diameter_mm"' not in form
+    assert '["final_tool_offset_mm"' not in form
+    assert '["tool_type"' not in form
+    assert '["notes"' not in form
+    assert "allowed_tool_overrides" in form
+
+
 def test_machining_profile_permission_matches_the_tool_catalog():
     from almdina_erp.almdina_erp.application.security.supporting_doctype_permissions import (
         supporting_standard_permission_projection,
@@ -175,5 +196,6 @@ def test_profile_can_be_normalized_without_a_machine():
     reopened = normalize_profile(
         {**profile, "tool_values": dict(profile["tool_values"])},
         known_tools=known,
+        stored_profile=profile,
     )
     assert reopened["tool_values"]["diameter_mm"] == 5.0
