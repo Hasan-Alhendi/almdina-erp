@@ -909,7 +909,12 @@ def compare_liner_path(
     return selected
 
 
-def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]:
+def cutter_center_offsets_mm(
+    width_mm: float,
+    diameter_mm: float,
+    *,
+    stepover_mm: float | None = None,
+) -> list[float]:
     """Centers across the liner width, measured from the edge nearest the reference.
 
     The first center sits one radius in from that edge and the last sits one
@@ -929,6 +934,23 @@ def cutter_center_offsets_mm(width_mm: float, diameter_mm: float) -> list[float]
     radius = diameter_mm / 2.0
     if abs(width_mm - diameter_mm) <= GEOMETRY_TOLERANCE_MM:
         return [width_mm / 2.0]
+    if stepover_mm is not None:
+        try:
+            stepover = float(stepover_mm)
+        except (TypeError, ValueError) as exc:
+            raise LinerGeometryError("stepover_invalid") from exc
+        if (
+            not math.isfinite(stepover)
+            or stepover <= GEOMETRY_TOLERANCE_MM
+            or stepover > diameter_mm + GEOMETRY_TOLERANCE_MM
+        ):
+            raise LinerGeometryError("stepover_invalid")
+        span = width_mm - diameter_mm
+        intervals = max(1, math.ceil((span - 1e-9) / stepover))
+        if intervals > 10_000:
+            raise LinerGeometryError("stepover_invalid")
+        actual_step = span / intervals
+        return [radius + actual_step * index for index in range(intervals + 1)]
     # Full tool steps from both edges. The leftover, which is at most one
     # diameter, sits in one interior gap instead of being spread evenly.
     leading = [radius]
@@ -1115,6 +1137,7 @@ def _cutter_passes(
     start_cm: float | None,
     length_cm: float | None,
     *,
+    stepover_mm: float | None = None,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
@@ -1133,7 +1156,11 @@ def _cutter_passes(
     error = validation_code(piece, side, offset_cm, width_cm)
     if error:
         raise LinerGeometryError(error)
-    centers = cutter_center_offsets_mm(_mm(width_cm), float(cutter_diameter_mm))
+    centers = cutter_center_offsets_mm(
+        _mm(width_cm),
+        float(cutter_diameter_mm),
+        stepover_mm=stepover_mm,
+    )
     polygon = piece_polygon_mm(piece)
     reference, clipped, _start, _end, boundary_start, boundary_end = _prepared_reference(
         piece, side, start_cm, length_cm
@@ -1254,6 +1281,7 @@ def liner_toolpath_mm(
     start_cm: float | None = None,
     length_cm: float | None = None,
     *,
+    stepover_mm: float | None = None,
     start_sawn: bool | None = None,
     end_sawn: bool | None = None,
     flat_contour: bool = False,
@@ -1278,6 +1306,7 @@ def liner_toolpath_mm(
         cutter_diameter_mm,
         start_cm,
         length_cm,
+        stepover_mm=stepover_mm,
         start_sawn=start_sawn,
         end_sawn=end_sawn,
         flat_contour=flat_contour,

@@ -171,7 +171,7 @@ _CNC_PRESET_MESSAGES = {
     "preset_not_found": "The selected CNC tool preset does not exist.",
     "preset_disabled": "The selected CNC tool preset is disabled.",
     "tool_identity_conflict": "One board file must keep the same physical tool number.",
-    "tool_diameter_conflict": "The same tool cannot use two diameters in one operational file.",
+    "mill_group_diameter_conflict": "The same milling group cannot use different tool diameters.",
 }
 _SETTINGS_FIELDS = (
     "default_kerf_mm",

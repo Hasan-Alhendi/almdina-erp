@@ -28,6 +28,12 @@ def _raw(**overrides):
 PRESETS = {
     "Finish": _raw(),
     "Shallow": _raw(preset_name="Shallow", final_depth_mm=7, pass_depth_mm=None, feed_rate_mm_min=8000),
+    "OversizedStepdown": _raw(
+        preset_name="OversizedStepdown",
+        final_depth_mm=7,
+        pass_depth_mm=20,
+        feed_rate_mm_min=8000,
+    ),
 }
 
 
@@ -109,6 +115,17 @@ def test_simulation_nc_matches_intermediate_program_with_depth_passes():
     })
     assert depths == [6.0, 12.0, 18.0]
     assert verify_nc_against_program(text, program, safe_z_mm=20).ok is True
+
+
+def test_stepdown_larger_than_final_depth_stops_at_final_depth():
+    program = _program(
+        operation_presets={"cut_path": "OversizedStepdown"},
+        operation_order=["cut_path"],
+    )
+    path = program["operations"][0]["toolpaths"][0]
+    assert path["preset"]["final_depth_mm"] == 7
+    assert path["preset"]["pass_depth_mm"] == 7
+    assert [motion["depth_mm"] for motion in path["motions"] if motion["kind"] == "plunge"] == [7]
 
 
 def test_liner_and_shared_cut_are_posted_once():
@@ -197,7 +214,12 @@ def test_mill_outlines_stay_visible_when_the_cutter_diameter_is_missing():
         operation_order=["liner", "cut_path"],
     )
     bare_liner = next(row for row in bare["operations"] if row["operation_key"] == "liner")
-    assert all(len(path.get("points") or []) < 2 for path in bare_liner["toolpaths"])
+    assert bare_liner["toolpaths"]
+    assert all(len(path.get("points") or []) >= 2 for path in bare_liner["toolpaths"])
+    assert all(
+        "mill_diameter_required" in path["issues"] and not path["motions"]
+        for path in bare_liner["toolpaths"]
+    )
 
 
 def test_unready_geometry_and_production_flag_are_rejected():

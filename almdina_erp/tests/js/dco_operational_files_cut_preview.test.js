@@ -170,7 +170,7 @@ const scoped = ux.cutPathPreviewMarkup(program, {
     selectedExecutionPathId: openA.execution_path_id,
     markerScope: "cnc-cut-test-scope",
 });
-assert.ok(scoped.includes("dco-cnc-cut-preview__frame"));
+assert.ok(!scoped.includes("dco-cnc-cut-preview__frame"));
 assert.ok(scoped.includes("dco-cnc-cut-preview__path"));
 assert.ok(scoped.includes(`marker-end="url(#cnc-cut-test-scope-arrow-${openA.path_number})"`));
 assert.ok(!scoped.includes("dco-cnc-cut-preview__badge"));
@@ -184,6 +184,13 @@ assert.ok(!scoped.includes("dco-piece"));
 assert.ok(!scoped.includes("GEOMETRY"));
 assert.ok(!scoped.includes("SHEET_OUTLINE"));
 assert.ok(!scoped.includes('id="cnc-cut-arrow-1"'));
+
+const emptyPreview = ux.cutPathPreviewMarkup({
+    sheet_width_mm: 2440,
+    sheet_length_mm: 1220,
+    operations: [],
+});
+assert.ok(!emptyPreview.includes("dco-cnc-cut-preview__frame"));
 
 const incomplete = ux.cutPathPreviewMarkup({
     sheet_width_mm: 100,

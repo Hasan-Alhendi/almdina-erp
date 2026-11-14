@@ -3116,7 +3116,7 @@ That machining path is not on this sheet.,مسار التشغيل هذا غير 
 The selected CNC tool preset does not exist.,إعداد الريشة المحدد غير موجود.
 The selected CNC tool preset is disabled.,إعداد الريشة المحدد معطّل.
 One board file must keep the same physical tool number.,يجب أن يحتفظ ملف اللوح الواحد برقم الريشة الفيزيائية نفسه.
-The same tool cannot use two diameters in one operational file.,لا يجوز استخدام قطرين مختلفين للريشة نفسها داخل ملف التشغيل الواحد.
+The same milling group cannot use different tool diameters.,لا يمكن استخدام أقطار ريش مختلفة ضمن مجموعة تفريز واحدة.
 Tool number must look like T9.,يجب أن يكون رقم الريشة بالشكل T9.
 Tool diameter must be a positive number of millimetres within the supported range.,يجب أن يكون قطر الريشة رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
 Final depth must be a positive number of millimetres within the supported range.,يجب أن يكون العمق النهائي رقمًا موجبًا بالمليمتر ضمن المدى المدعوم.
@@ -3342,7 +3342,7 @@ Fix the path geometry in the approved plan, then open this sheet again.,أصلح
 Enable the tool preset in factory settings, or choose another enabled preset.,فعّل إعداد الريشة من إعدادات المعمل، أو اختر إعدادًا مفعّلًا آخر.
 Choose an available CNC tool preset.,اختر إعداد ريشة CNC متاحًا.
 Use one physical tool number for every operation on this sheet.,استخدم رقم ريشة فيزيائيًا واحدًا لكل عمليات هذا اللوح.
-Use one tool diameter for every operation on this sheet.,استخدم قطر ريشة واحدًا لكل عمليات هذا اللوح.
+Use one tool diameter for this milling group.,استخدم قطر ريشة واحدًا لمجموعة التفريز هذه.
 Resolve the listed geometry problems, then generate the NC file again.,أصلح المشاكل الهندسية المدرجة، ثم ولّد ملف NC مجددًا.
 Complete the milling parameters on the approved plan, then try again.,أكمل معاملات التفريز في الخطة المعتمدة، ثم أعد المحاولة.
 Choose a narrower tool, or widen the milling band on the approved plan.,اختر ريشة أضيق، أو وسّع شريط التفريز في الخطة المعتمدة.

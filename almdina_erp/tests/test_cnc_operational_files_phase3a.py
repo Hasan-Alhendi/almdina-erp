@@ -298,15 +298,25 @@ def test_several_pieces_liners_shared_cuts_and_an_l_shape():
     ]
     assert len(shared_cuts) == 1
     assert shared_cuts[0]["piece_instance_id"] == ""
-    ambiguous = _compile(
+    overridden = _compile(
         [
             _piece("piece-a", _rect(0, 0, 200, 500)),
             _piece("piece-b", _rect(205, 0, 200, 500)),
         ],
         path_overrides={"cut_path:piece-a:outer": "Shallow"},
     )
-    assert any(path["issues"] == ["shared_cut_preset_ambiguous"] or "shared_cut_preset_ambiguous" in path["issues"] for path in _paths(ambiguous, "cut_path") if not path["piece_instance_id"])
-    assert ambiguous["ready"] is False
+    overridden_cuts = _paths(overridden, "cut_path")
+    assert overridden["ready"] is True
+    assert all("shared_cut_preset_ambiguous" not in path["issues"] for path in overridden_cuts)
+    assert any(
+        path["path_key"] == "cut_path:piece-a:outer" and path["preset_name"] == "Shallow"
+        for path in overridden_cuts
+    )
+    assert all(
+        path["preset_name"] == "Finish"
+        for path in overridden_cuts
+        if not path["piece_instance_id"]
+    )
     liners = _compile([
         _piece(
             "piece-a",

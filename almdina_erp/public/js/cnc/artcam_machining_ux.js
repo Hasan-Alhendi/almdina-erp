@@ -87,6 +87,20 @@
         };
     }
 
+    function formAfterCalculation(form) {
+        const current = form || blankForm();
+        return {
+            association_id: newId("association"),
+            name: "",
+            source: "",
+            profile_id: current.profile_id || "",
+            tool_preset: current.tool_preset || "",
+            fields: Object.assign({}, current.fields || {}),
+            tool: Object.assign({}, current.tool || {}),
+            toolOpen: Boolean(current.tool_preset),
+        };
+    }
+
     function ensureForm(state) {
         if (!state.artcamForm || !state.artcamForm.association_id) state.artcamForm = blankForm();
         if (!Array.isArray(state.vectorSelection)) state.vectorSelection = [];
@@ -94,18 +108,41 @@
     }
 
     function sourceOptions(context, form) {
-        const availability = machining(context.sheet).availability || {};
-        const connected = context.state && context.state.perimeterJoinMode === "connected";
+        const data = machining(context.sheet);
+        const availability = data.availability || {};
+        const editingId = String((form && form.association_id) || "");
+        const vectorOperations = new Map(
+            (availability.vectors || []).map(row => [String(row.vector_id || ""), String(row.operation_key || "")])
+        );
+        const ownedOperations = new Set();
+        let perimeterOwned = false;
+        (data.associations || []).forEach(row => {
+            if (!row || String(row.association_id || "") === editingId) return;
+            const selection = row.selection || {};
+            if (selection.kind === "layer" && selection.operation_key) {
+                ownedOperations.add(String(selection.operation_key));
+            }
+            if (selection.kind === "sheet_perimeter") perimeterOwned = true;
+            (row.vector_ids || []).forEach(id => {
+                const vectorId = String(id);
+                if (vectorId === "cut_path:sheet_perimeter") perimeterOwned = true;
+                const operation = vectorOperations.get(vectorId)
+                    || (vectorId === "cut_path:sheet_perimeter" ? "" : vectorId.split(":", 1)[0]);
+                if (operation) ownedOperations.add(operation);
+            });
+        });
         const options = [];
         (availability.layers || []).forEach(layer => {
             if (!layer || !layer.operation_key) return;
             const current = form && form.source === `layer:${layer.operation_key}`;
-            if (layer.disabled && !current) return;
+            if ((layer.disabled || ownedOperations.has(String(layer.operation_key))) && !current) return;
             options.push({ value: `layer:${layer.operation_key}`, label: layer.dxf_layer || layer.operation_key });
         });
         options.push({ value: "selected_vectors", label: "Selected Vectors" });
         const ownsPerimeter = form && form.source === "sheet_perimeter";
-        if (connected || availability.sheet_perimeter || ownsPerimeter) {
+        const perimeter = availability.sheet_perimeter;
+        const perimeterAvailable = Boolean(perimeter && !perimeter.disabled && !perimeterOwned);
+        if (perimeterAvailable || ownsPerimeter) {
             options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
         }
         return options;
@@ -136,6 +173,8 @@
     function editorMarkup(context) {
         const form = ensureForm(context.state);
         const tool = form.tool || {};
+        const profileChosen = Boolean(form.profile_id);
+        const toolChosen = profileChosen && Boolean(form.tool_preset);
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
         const options = sourceOptions(context, form);
@@ -170,7 +209,7 @@
             ${ownsSavedPerimeter ? `<label class="dco-artcam-note"><input type="checkbox" data-field="release_perimeter"> ${escapeHtml(translate("Release the sheet perimeter from this association"))}</label>` : ""}
             <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
             <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(`${count} Vectors Selected`)}</p>
-            <div class="dco-artcam-row dco-artcam-row--pair">
+            ${profileChosen ? `<div class="dco-artcam-row dco-artcam-row--pair">
                 ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
             </div>
             <div class="dco-artcam-home">
@@ -179,21 +218,21 @@
                     ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
                 </div>
             </div>
-            <section class="dco-artcam-tool${form.toolOpen ? "" : " is-collapsed"}" data-artcam-tool>
+            <label class="dco-artcam-field">${escapeHtml("Tool")}
+                <select class="form-control" data-field="replacement_tool">
+                    <option value="">${escapeHtml(translate("Choose"))}</option>
+                    ${toolsOf(context).map(row => {
+                        const name = row.tool_name || row.name || row.preset_name;
+                        return `<option value="${escapeHtml(name)}"${name === form.tool_preset ? " selected" : ""}>${escapeHtml(`${name} · ${row.tool_number || ""} · ${row.tool_diameter_mm || ""} mm`)}</option>`;
+                    }).join("")}
+                </select>
+            </label>` : ""}
+            ${toolChosen ? `<section class="dco-artcam-tool${form.toolOpen ? "" : " is-collapsed"}" data-artcam-tool>
                 <div class="dco-artcam-tool__bar">
-                    <span>${escapeHtml("Tool")}: ${escapeHtml(toolSummary(tool) || translate("Choose a profile"))}</span>
+                    <span>${escapeHtml("Tool")}: ${escapeHtml(toolSummary(tool))}</span>
                     <button type="button" class="dco-sheet-acc__toggle" data-artcam-tool-toggle aria-expanded="${form.toolOpen ? "true" : "false"}" aria-label="${escapeHtml(translate("Tool details"))}"></button>
                 </div>
                 <div class="dco-artcam-tool__body">
-                    <label class="dco-artcam-field">${escapeHtml("Choose Another Tool")}
-                        <select class="form-control" data-field="replacement_tool">
-                            <option value="">${escapeHtml(translate("Choose"))}</option>
-                            ${toolsOf(context).map(row => {
-                                const name = row.tool_name || row.name || row.preset_name;
-                                return `<option value="${escapeHtml(name)}">${escapeHtml(`${name} · ${row.tool_number || ""} · ${row.tool_diameter_mm || ""} mm`)}</option>`;
-                            }).join("")}
-                        </select>
-                    </label>
                     <div class="dco-artcam-row dco-artcam-row--tool">
                         ${TOOL_FIELDS.map(([name, label]) => input(name, label, tool[name])).join("")}
                     </div>
@@ -201,7 +240,7 @@
                         <textarea class="form-control" data-field="notes">${escapeHtml(tool.notes || "")}</textarea>
                     </label>
                 </div>
-            </section>
+            </section>` : ""}
             <div class="dco-artcam-actions">
                 <button type="submit" class="btn btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
             </div>
@@ -227,7 +266,7 @@
                 home_z_mm: local.home_z_mm,
             },
             tool: Object.assign({}, local.tool_values || {}),
-            toolOpen: false,
+            toolOpen: Boolean(row.profile_id || local.tool_preset),
         };
         state.vectorSelection = (row.selection && row.selection.vector_ids) || row.vector_ids || [];
     }
@@ -258,7 +297,8 @@
         form.tool.notes = value("notes");
         const release = host.querySelector("[data-artcam-editor] [data-field=\"release_perimeter\"]");
         form.releasePerimeter = Boolean(release && release.checked);
-        form.toolOpen = !host.querySelector("[data-artcam-tool]").classList.contains("is-collapsed");
+        const toolSection = host.querySelector("[data-artcam-tool]");
+        form.toolOpen = Boolean(toolSection && !toolSection.classList.contains("is-collapsed"));
         return form;
     }
 
@@ -312,6 +352,7 @@
     function fillFromProfile(form, profile) {
         form.profile_id = profile.profile_id;
         form.tool_preset = profile.tool_preset || "";
+        form.toolOpen = true;
         form.fields = {
             final_depth_mm: profile.final_depth_mm,
             safe_z_mm: profile.safe_z_mm,
@@ -342,15 +383,27 @@
     }
 
     function reportFailure(title, fallback, error) {
-        const board = window.AlmdinaOperationalFilesUX;
-        if (board && typeof board.showSheetIssueDialog === "function") {
-            board.showSheetIssueDialog(title, [{
-                problem: fallback,
-                action: translate("Correct the listed issue, then generate the NC file again."),
-            }], { error });
-            return;
-        }
-        if (window.frappe && frappe.msgprint) frappe.msgprint(fallback);
+        const signature = `${title}|${fallback}`;
+        const now = Date.now();
+        if (reportFailure.lastSignature === signature && now - reportFailure.lastAt < 1000) return;
+        reportFailure.lastSignature = signature;
+        reportFailure.lastAt = now;
+        const show = () => {
+            if (window.frappe && frappe.error_dialog && typeof frappe.error_dialog.hide === "function") {
+                frappe.error_dialog.hide();
+            }
+            const board = window.AlmdinaOperationalFilesUX;
+            if (board && typeof board.showSheetIssueDialog === "function") {
+                board.showSheetIssueDialog(title, [{
+                    problem: fallback,
+                    action: translate("Correct the listed issue, then generate the NC file again."),
+                }], { error });
+                return;
+            }
+            if (window.frappe && frappe.msgprint) frappe.msgprint(fallback);
+        };
+        if (window.setTimeout) window.setTimeout(show, 0);
+        else show();
     }
 
     function status(host, message, failed) {
@@ -367,6 +420,7 @@
                 args,
                 callback(response) { resolve((response && response.message) || {}); },
                 error: reject,
+                silent: true,
             });
         });
     }
@@ -396,7 +450,15 @@
             }
             if (event.target.matches("[data-field=\"profile_id\"]")) {
                 const profile = profilesOf(context).find(row => row.profile_id === event.target.value);
-                if (!profile) return;
+                if (!profile) {
+                    form.profile_id = "";
+                    form.tool_preset = "";
+                    form.fields = {};
+                    form.tool = {};
+                    form.toolOpen = false;
+                    if (typeof context.refresh === "function") context.refresh();
+                    return;
+                }
                 const dirty = Object.keys(form.fields || {}).some(key => form.fields[key] !== "" && form.fields[key] != null);
                 if (dirty && previousProfile && previousProfile !== profile.profile_id
                     && !window.confirm(translate("Changing the profile replaces the local settings on this association."))) {
@@ -405,6 +467,12 @@
                     return;
                 }
                 fillFromProfile(form, profile);
+                if (typeof context.refresh === "function") context.refresh();
+            }
+            if (event.target.matches("[data-field=\"replacement_tool\"]") && !event.target.value) {
+                form.tool_preset = "";
+                form.tool = {};
+                form.toolOpen = false;
                 if (typeof context.refresh === "function") context.refresh();
             }
             if (event.target.matches("[data-field=\"replacement_tool\"]") && event.target.value) {
@@ -484,8 +552,15 @@
             if (!row || row.association_id === form.association_id) return;
             (row.vector_ids || []).forEach(id => owned.add(String(id)));
         });
-        const clash = (state.vectorSelection || []).filter(id => owned.has(String(id)));
-        if (form.source === "selected_vectors" && clash.length) {
+        const candidateVectorIds = form.source === "selected_vectors"
+            ? (state.vectorSelection || []).slice()
+            : String(form.source || "").startsWith("layer:")
+                ? (((machining(context.sheet).availability || {}).vectors || [])
+                    .filter(row => row && row.operation_key === String(form.source).slice(6))
+                    .map(row => row.vector_id))
+                : [];
+        const clash = candidateVectorIds.filter(id => owned.has(String(id)));
+        if ((form.source === "selected_vectors" || String(form.source || "").startsWith("layer:")) && clash.length) {
             const message = translate("That vector or layer is already assigned.");
             status(host, message, true);
             reportFailure(translate("The association was not calculated."), `${message} ${clash.join(", ")}`);
@@ -526,7 +601,7 @@
             calculation_request_id: state.calculationRequestId,
             base_fingerprint: (context.sheet || {}).settings_fingerprint || "",
         })).then(workspace => {
-            state.artcamForm = blankForm();
+            state.artcamForm = formAfterCalculation(form);
             state.vectorSelection = [];
             state.calculationRequestId = "";
             state.artcamBusy = false;
@@ -546,7 +621,7 @@
                     const saved = ((sheet.machining || {}).associations || []).find(row => row.association_id === next.association_id);
                     release();
                     if (saved && saved.toolpath_id) {
-                        state.artcamForm = blankForm();
+                        state.artcamForm = formAfterCalculation(form);
                         state.vectorSelection = [];
                         state.calculationRequestId = "";
                         status(host, translate("The association was saved and calculated."), false);
@@ -577,6 +652,7 @@
         bind,
         ensureForm,
         loadAssociation,
+        formAfterCalculation,
         orderedAssociations,
     });
 })();

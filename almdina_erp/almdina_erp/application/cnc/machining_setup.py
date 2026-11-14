@@ -23,6 +23,36 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
 )
 
 
+def sheet_profiles_with_catalog(
+    sheet_profiles: Sequence[Mapping[str, Any]],
+    associations: Sequence[Mapping[str, Any]],
+    catalog_profiles: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Copy a catalog profile onto this sheet the first time an association uses it.
+
+    A profile accepted on another order lives in the shared catalog. This sheet
+    keeps its own copy. A copy already stored here is not replaced.
+    """
+
+    stored = [dict(row) for row in sheet_profiles if isinstance(row, Mapping)]
+    known = {str(row.get("profile_id") or "") for row in stored if row.get("profile_id")}
+    catalog: dict[str, dict[str, Any]] = {}
+    for row in catalog_profiles:
+        if not isinstance(row, Mapping) or row.get("enabled") is False:
+            continue
+        profile_id = str(row.get("profile_id") or "")
+        if profile_id:
+            catalog[profile_id] = dict(row)
+    for association in associations:
+        if not isinstance(association, Mapping):
+            continue
+        profile_id = str(association.get("profile_id") or "")
+        if profile_id and profile_id not in known and profile_id in catalog:
+            stored.append(dict(catalog[profile_id]))
+            known.add(profile_id)
+    return stored
+
+
 def accept_sheet_machining(
     *,
     paths: Sequence[Mapping[str, Any]],
@@ -62,17 +92,39 @@ def public_sheet_machining(
 def calculation_preset_injection(
     association: Mapping[str, Any],
     known_presets: Mapping[str, Mapping[str, Any]],
+    *,
+    catalog: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Feed the existing compiler the association copy, not the base profile."""
+    """Feed the compiler the association copy, not the base profile.
+
+    Associations store selectable vector ids. The compiler still consumes the
+    stable source ``path_key``. Resolve that boundary explicitly so a vector
+    id derived from a displayed shape never becomes a missing preset.
+    """
 
     local = association.get("local_values") if isinstance(association.get("local_values"), Mapping) else {}
     preset_name = synthetic_preset_name(str(association.get("association_id") or ""))
     known = {str(key): dict(value) for key, value in known_presets.items()}
     known[preset_name] = local_preset_payload(local)
-    overrides = {
-        str(vector_id): preset_name
-        for vector_id in association.get("vector_ids") or ()
+    rows = [row for row in catalog if isinstance(row, Mapping)]
+    by_vector = {
+        str(row.get("vector_id") or ""): str(row.get("path_key") or "")
+        for row in rows
+        if row.get("vector_id") and row.get("path_key")
     }
+    by_path: dict[str, int] = {}
+    for row in rows:
+        path_key = str(row.get("path_key") or "")
+        if path_key:
+            by_path[path_key] = by_path.get(path_key, 0) + 1
+    overrides: dict[str, str] = {}
+    for raw_vector_id in association.get("vector_ids") or ():
+        vector_id = str(raw_vector_id or "").strip()
+        path_key = by_vector.get(vector_id, "")
+        if not path_key and vector_id in by_path and by_path[vector_id] == 1:
+            path_key = vector_id
+        if path_key:
+            overrides[path_key] = preset_name
     return known, overrides
 
 
@@ -143,6 +195,7 @@ def remember_toolpath_on_association(
 
 __all__ = [
     "accept_sheet_machining",
+    "sheet_profiles_with_catalog",
     "calculation_preset_injection",
     "freeze_calculated_toolpath",
     "public_sheet_machining",

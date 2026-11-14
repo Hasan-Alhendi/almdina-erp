@@ -331,12 +331,14 @@ def test_a_sheet_rejects_a_second_tool_and_an_unconfirmed_early_cut():
         )
     assert conflict.value.code == "tool_identity_conflict"
 
-    with pytest.raises(OperationalFileError) as diameter:
-        _prepare(
-            presets={"liner": "Finish", "cut_path": "Wide"},
-            sources={"liner": "sheet", "cut_path": "sheet"},
-        )
-    assert diameter.value.code == "tool_diameter_conflict"
+    different_diameters = _prepare(
+        presets={"liner": "Finish", "cut_path": "Wide"},
+        sources={"liner": "sheet", "cut_path": "sheet"},
+    )
+    assert {
+        row["operation_key"]: row["tool_preset"]
+        for row in different_diameters["operations"]
+    } == {"liner": "Finish", "cut_path": "Wide"}
 
     with pytest.raises(OperationalFileError) as early:
         _prepare(

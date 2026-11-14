@@ -167,7 +167,11 @@ def approved_plan_snapshot(order: Any) -> dict[str, Any] | None:
     parsed = json.loads(raw_snapshot)
     if not isinstance(parsed, dict):
         raise frappe.ValidationError("Approved plan snapshot is not an object.")
-    return parsed
+    from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
+
+    runtime = dict(parsed)
+    runtime.update(diameters_for_record(plan))
+    return runtime
 
 
 def _without_permission_check(callback):

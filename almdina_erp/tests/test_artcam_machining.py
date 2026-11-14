@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     BALL_NOSE,
     RATE_UNITS_MM_SEC,
     SELECTION_LAYER,
+    SELECTION_SELECTED_VECTORS,
     SELECTION_SHEET_PERIMETER,
     SELECTION_VECTORS,
     TOOL_UNITS_MM,
@@ -33,6 +34,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     overlay_frozen_toolpaths,
     apply_reversed_directions,
     effective_operational_program,
+    local_preset_payload,
     path_geometry_id,
     reversed_direction_block,
     release_stale_toolpath_links,
@@ -40,8 +42,10 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     vectors_from_paths,
 )
 from almdina_erp.almdina_erp.application.cnc.machining_setup import (
+    accept_sheet_machining,
     freeze_calculated_toolpath,
     remember_toolpath_on_association,
+    sheet_profiles_with_catalog,
 )
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.domain.cnc.nc_interpreter import interpret_nc
@@ -180,6 +184,9 @@ def test_ball_nose_tool_uses_the_artcam_dialog_fields_and_keeps_the_physical_too
     with pytest.raises(MachiningSetupError) as caught:
         normalize_artcam_tool(_artcam(tool_type="End Mill"))
     assert caught.value.code == "tool_type_unsupported"
+    with pytest.raises(MachiningSetupError) as invalid_stepover:
+        normalize_artcam_tool(_artcam(diameter_mm=5, stepover_size_mm=6))
+    assert invalid_stepover.value.code == "stepover_invalid"
 
 
 def test_plain_tool_number_is_stored_as_an_integer_and_notes_may_be_empty():
@@ -197,6 +204,12 @@ def test_plain_tool_number_is_stored_as_an_integer_and_notes_may_be_empty():
     with pytest.raises(MachiningSetupError) as too_long:
         normalize_artcam_tool(_artcam(notes="x" * 4001))
     assert too_long.value.code == "notes_invalid"
+
+
+def test_tool_number_display_is_used_when_the_ui_sends_an_empty_tool_number():
+    tool = normalize_artcam_tool(_artcam(tool_number=None, tool_number_display=9))
+    assert tool.tool_number == "T9"
+    assert tool.tool_number_display == 9
 
 
 def test_profile_identity_and_snapshot_are_generated_without_user_input():
@@ -230,7 +243,6 @@ def test_profile_identity_and_snapshot_are_generated_without_user_input():
     assert created["profile_id"] != other["profile_id"]
     assert created["tool_values"]["diameter_mm"] == 5.0
     assert created["tool_values"]["tool_number"] == "T9"
-
     known["T9_CUT"]["diameter_mm"] = 12
     known["T9_CUT"]["tool_diameter_mm"] = 12
     kept = normalize_profile(
@@ -285,6 +297,36 @@ def test_profile_identity_and_snapshot_are_generated_without_user_input():
             known_tools=known,
         )
     assert bad_id.value.code == "profile_id_invalid"
+
+
+def test_association_profile_copy_accepts_ui_null_tool_number_with_display_value():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    stored = normalize_associations(
+        [{
+            "association_id": "association:ui-copy",
+            "name": "Liner",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "layer", "operation_key": "liner"},
+            "local_values": {
+                "profile_id": profile["profile_id"],
+                "tool_preset": "T9_CUT",
+                "tool_values": {
+                    **profile["tool_values"],
+                    "tool_number": None,
+                    "tool_number_display": 9,
+                },
+                "final_depth_mm": 20,
+                "safe_z_mm": 20,
+                "home_x_mm": 0,
+                "home_y_mm": 0,
+                "home_z_mm": 20,
+            },
+        }],
+        profiles=[profile],
+        catalog=_catalog(_vector("liner:piece-a", "liner", "Liner")),
+    )
+    assert stored[0]["local_values"]["tool_values"]["tool_number"] == "T9"
 
 
 def test_association_overrides_stay_local_and_unresolved_sources_do_not_calculate():
@@ -629,6 +671,57 @@ def test_effective_program_uses_the_frozen_path_before_reverse():
     assert changed["operations"][0]["toolpaths"][0]["shape_id"] == frozen["shape_id"]
 
 
+def test_frozen_calculated_paths_refresh_board_readiness_for_nc_export():
+    calculated = _motion_program(((0.0, 0.0), (10.0, 0.0)), depths=(4.0,))
+    frozen_path = copy.deepcopy(calculated["operations"][0]["toolpaths"][0])
+    blocked = copy.deepcopy(calculated)
+    blocked.update({
+        "geometry_ready": False,
+        "ready": False,
+        "nc_export_ready": False,
+        "issues": [{"code": "preset_missing", "path_key": "cut_path:piece-a:outer"}],
+    })
+    blocked_path = blocked["operations"][0]["toolpaths"][0]
+    blocked_path["ready"] = False
+    blocked_path["issues"] = ["preset_missing"]
+    blocked_path["motions"] = []
+    snapshot = {
+        "toolpath_id": "toolpath:frozen",
+        "association_id": "association:frozen",
+        "preset": copy.deepcopy(frozen_path["preset"]),
+        "safe_z_mm": 5,
+        "paths": [frozen_path],
+    }
+    association = {
+        "association_id": "association:frozen",
+        "toolpath_id": "toolpath:frozen",
+        "vector_ids": ["cut_path:piece-a:outer"],
+    }
+    effective = effective_operational_program(
+        blocked,
+        snapshots=[snapshot],
+        associations=[association],
+    )
+    assert effective["issues"] == []
+    assert effective["geometry_ready"] is True
+    assert effective["ready"] is True
+    assert effective["nc_export_ready"] is True
+    assert effective["operations"][0]["toolpaths"][0]["motions"]
+
+    uncovered = copy.deepcopy(blocked)
+    uncovered["operations"][0]["toolpaths"].append({
+        **copy.deepcopy(blocked_path),
+        "path_key": "cut_path:uncovered",
+    })
+    unresolved = effective_operational_program(
+        uncovered,
+        snapshots=[snapshot],
+        associations=[association],
+    )
+    assert unresolved["geometry_ready"] is False
+    assert unresolved["nc_export_ready"] is False
+
+
 def test_association_keeps_a_different_local_tool_without_changing_the_profile():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)
@@ -747,11 +840,10 @@ def test_profile_copy_is_independent_of_the_base_tool_and_of_other_profiles():
     assert (first["home_x_mm"], first["home_y_mm"], first["home_z_mm"]) == (0, 0, 20)
 
 
-def test_profile_rejects_mixed_units_and_a_stepdown_deeper_than_final_depth():
+def test_profile_caps_a_stepdown_deeper_than_final_depth():
     known = {"T9_CUT": _stored_tool()}
-    with pytest.raises(MachiningSetupError) as caught:
-        normalize_profile(_profile(final_depth_mm=10), known_tools=known)
-    assert caught.value.code == "pass_depth_exceeds_final_depth"
+    profile = normalize_profile(_profile(final_depth_mm=10), known_tools=known)
+    assert local_preset_payload(profile)["pass_depth_mm"] == 10
     with pytest.raises(MachiningSetupError) as caught:
         normalize_profile(_profile(safe_z_mm=-1), known_tools=known)
     assert caught.value.code == "safe_z_invalid"
@@ -860,6 +952,27 @@ def test_sheet_perimeter_is_absent_until_connected_and_then_uses_the_existing_pa
         _vector("cut_path:piece-a:outer"),
         _vector(SHEET_PERIMETER_PATH_KEY, operation="sheet_perimeter", layer="CUT_PATH", piece=""),
     )
+    selected = normalize_associations(
+        [
+            {
+                "association_id": "association:selected",
+                "profile_id": profile["profile_id"],
+                "selection": {
+                    "kind": SELECTION_SELECTED_VECTORS,
+                    "vector_ids": [SHEET_PERIMETER_PATH_KEY, "cut_path:piece-a:outer"],
+                },
+            }
+        ],
+        profiles=[profile],
+        catalog=connected,
+    )
+    assert selected[0]["vector_ids"] == [SHEET_PERIMETER_PATH_KEY, "cut_path:piece-a:outer"]
+    selected_availability = association_availability(connected, selected)
+    perimeter_vector = next(
+        row for row in selected_availability["vectors"] if row["vector_id"] == SHEET_PERIMETER_PATH_KEY
+    )
+    assert perimeter_vector["disabled"] is True
+    assert selected_availability["sheet_perimeter"]["disabled"] is True
     associations = normalize_associations(
         [
             {
@@ -1051,6 +1164,44 @@ def test_a_second_physical_tool_is_rejected_for_the_same_file():
     assert caught.value.code == "tool_identity_conflict"
 
 
+def test_one_tool_number_may_use_different_profile_diameters_in_the_same_file():
+    catalog = _catalog(
+        _vector("cut_path:piece-a:outer", piece="piece-a"),
+        _vector("liner:piece-a:primary", operation="liner", layer="LINER", piece="piece-a"),
+    )
+    wide = _stored_tool()
+    wide["preset_name"] = "T9_WIDE"
+    wide["description"] = "T9 Wide"
+    wide["tool_name"] = "T9 Wide"
+    wide["diameter_mm"] = 8
+    wide["tool_diameter_mm"] = 8
+    known = {"T9_CUT": _stored_tool(), "T9_WIDE": wide}
+    narrow_profile = normalize_profile(_profile(), known_tools=known)
+    wide_profile = normalize_profile(
+        _profile(profile_id="profile:wide", name="Wide", tool_preset="T9_WIDE"),
+        known_tools=known,
+    )
+
+    associations = normalize_associations(
+        [
+            {
+                "association_id": "association:narrow",
+                "profile_id": narrow_profile["profile_id"],
+                "selection": {"kind": SELECTION_VECTORS, "vector_ids": ["cut_path:piece-a:outer"]},
+            },
+            {
+                "association_id": "association:wide",
+                "profile_id": wide_profile["profile_id"],
+                "selection": {"kind": SELECTION_VECTORS, "vector_ids": ["liner:piece-a:primary"]},
+            },
+        ],
+        profiles=[narrow_profile, wide_profile],
+        catalog=catalog,
+    )
+
+    assert [row["local_values"]["tool_values"]["diameter_mm"] for row in associations] == [5.0, 8.0]
+
+
 def test_legacy_tool_copy_does_not_invent_artcam_fields():
     legacy = {
         "preset_name": "Finish",
@@ -1210,6 +1361,10 @@ def test_editing_an_association_releases_its_active_snapshot_without_deleting_hi
     changed["local_values"]["final_depth_mm"] = 25
     released = release_stale_toolpath_links([changed], [snapshot])
     assert released[0]["toolpath_id"] == ""
+    changed_stepover = copy.deepcopy(association)
+    changed_stepover["local_values"]["tool_values"]["stepover_size_mm"] = 0.3
+    released_stepover = release_stale_toolpath_links([changed_stepover], [snapshot])
+    assert released_stepover[0]["toolpath_id"] == ""
     assert snapshot["local_values"]["final_depth_mm"] == 21
     program = overlay_frozen_toolpaths(
         _program("cut_path:piece-a:outer"),
@@ -1342,9 +1497,8 @@ def test_a_tool_can_be_saved_without_final_depth_and_calculation_still_requires_
     with pytest.raises(ToolPresetError) as invalid:
         normalize_tool_preset(stored, machining_depth_mm=-1)
     assert invalid.value.code == "final_depth_invalid"
-    with pytest.raises(ToolPresetError) as deeper:
-        normalize_tool_preset({**stored, "pass_depth_mm": 19}, machining_depth_mm=10)
-    assert deeper.value.code == "pass_depth_exceeds_final_depth"
+    capped = normalize_tool_preset({**stored, "pass_depth_mm": 19}, machining_depth_mm=10)
+    assert capped.pass_depth_mm == 10
 
     known = {"T9_CUT": stored}
     with pytest.raises(MachiningSetupError) as profile_depth:
@@ -1556,6 +1710,27 @@ def test_vector_identity_survives_shared_keys_depth_passes_reverse_and_delete():
     )
     assert [path["vector_id"] for path in perimeter_snapshot["paths"]] == [SHEET_PERIMETER_PATH_KEY]
     assert perimeter_snapshot["paths"][0]["points"] == perimeter
+    selected_perimeter_row = normalize_associations(
+        [
+            {
+                "association_id": "association:selected-edge",
+                "profile_id": profile["profile_id"],
+                "selection": {
+                    "kind": SELECTION_SELECTED_VECTORS,
+                    "vector_ids": [SHEET_PERIMETER_PATH_KEY, "liner:piece-a"],
+                },
+                "local_values": copy.deepcopy(selected[0]["local_values"]),
+            }
+        ],
+        profiles=[profile],
+        catalog=catalog,
+    )
+    selected_perimeter_snapshot = calculate_toolpath_snapshot(
+        association=selected_perimeter_row[0],
+        toolpath_name="SELECTED_PERIMETER",
+        program=program,
+    )
+    assert selected_perimeter_snapshot["vector_ids"] == [SHEET_PERIMETER_PATH_KEY, "liner:piece-a"]
     stored = append_snapshot([], snapshot, live_association_ids=["association:a"])
     linked = remember_toolpath_on_association(selected, stored, "association:a")
     overlaid = overlay_frozen_toolpaths(program, stored, linked)
@@ -1669,3 +1844,44 @@ def test_vector_identity_survives_shared_keys_depth_passes_reverse_and_delete():
         archived,
     )
     assert [row["association_id"] for row in stale] == ["association:b"]
+
+
+def test_a_catalog_profile_used_on_another_order_can_be_copied_onto_this_sheet():
+    known = {"T9_CUT": _stored_tool()}
+    catalog_profile = normalize_profile(
+        _profile(profile_id="profile:shared", name="Shared pocket"),
+        known_tools=known,
+    )
+    catalog_profile["enabled"] = True
+    catalog_profile["final_depth_mm"] = 20
+    sheet_copy = normalize_profile(
+        _profile(profile_id="profile:shared", name="Shared pocket", final_depth_mm=24),
+        known_tools=known,
+    )
+    association = {
+        "association_id": "association:new",
+        "name": "Pocket",
+        "profile_id": "profile:shared",
+        "selection": {"kind": SELECTION_VECTORS, "vector_ids": ["cut_path:piece-a:outer"]},
+    }
+    copied = sheet_profiles_with_catalog([], [association], [catalog_profile])
+    assert copied[0]["profile_id"] == "profile:shared"
+    assert copied[0]["final_depth_mm"] == 20
+    kept = sheet_profiles_with_catalog([sheet_copy], [association], [catalog_profile])
+    assert len(kept) == 1
+    assert kept[0]["final_depth_mm"] == 24
+    _profiles, associations = accept_sheet_machining(
+        paths=[_vector("cut_path:piece-a:outer")],
+        profiles=copied,
+        associations=[association],
+        known_tools=known,
+    )
+    assert associations[0]["profile_id"] == "profile:shared"
+    with pytest.raises(MachiningSetupError) as missing:
+        accept_sheet_machining(
+            paths=[_vector("cut_path:piece-a:outer")],
+            profiles=sheet_profiles_with_catalog([], [association], []),
+            associations=[association],
+            known_tools=known,
+        )
+    assert missing.value.code == "profile_not_found"

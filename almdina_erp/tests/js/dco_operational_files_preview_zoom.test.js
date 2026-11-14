@@ -28,7 +28,18 @@ assert.ok(panel.includes("translate("));
 assert.ok(panel.includes("__cutPreviewPan"));
 assert.ok(css.includes(".dco-cnc-cut-preview__viewport"));
 assert.ok(css.includes("overflow: hidden"));
+assert.ok(css.includes("contain: paint"));
+assert.ok(css.includes("clip-path: inset(0 round 8px)"));
 assert.ok(translations.includes("مساحة عرض اللوح"));
+
+const issueLoaderSource = panel.split("function loadProgramForIssues", 2)[1]
+    .split("function bindGenerateNc", 1)[0];
+const generateSource = panel.split("function bindGenerateNc", 2)[1];
+const issueDialogSource = panel.split("function showGenerationIssueDialog", 2)[1]
+    .split("function syncSheetFooter", 1)[0];
+assert.ok(issueLoaderSource.includes("silent: true"));
+assert.ok(generateSource.includes("silent: true"));
+assert.ok(!issueDialogSource.includes("const shown = ui.errorDialog"));
 
 function motionChain(points, depth, closed) {
     const start = points[0];
@@ -98,10 +109,10 @@ const program = {
     ],
 };
 
-assert.equal(ux.CUT_PREVIEW_ZOOM.MIN, 0.4);
-assert.equal(ux.CUT_PREVIEW_ZOOM.INITIAL, 0.55);
-assert.equal(ux.CUT_PREVIEW_ZOOM.MAX, 2.5);
-assert.equal(ux.CUT_PREVIEW_ZOOM.STEP, 0.15);
+assert.equal(ux.CUT_PREVIEW_ZOOM.MIN, 1);
+assert.equal(ux.CUT_PREVIEW_ZOOM.INITIAL, 1);
+assert.equal(ux.CUT_PREVIEW_ZOOM.MAX, 16);
+assert.equal(ux.CUT_PREVIEW_ZOOM.STEP, 0.5);
 
 const pageMarkup = ux.cutPathPreviewMarkup(program, {
     layout: "page",
@@ -110,16 +121,17 @@ const pageMarkup = ux.cutPathPreviewMarkup(program, {
 });
 assert.ok(pageMarkup.includes("data-cut-viewport"));
 assert.ok(pageMarkup.includes("data-cut-stage"));
-assert.ok(!pageMarkup.includes('data-cut-zoom="in"'));
-assert.ok(!pageMarkup.includes('data-cut-zoom="out"'));
-assert.ok(!pageMarkup.includes('data-cut-zoom="reset"'));
+assert.ok(pageMarkup.includes('data-cut-zoom="in"'));
+assert.ok(pageMarkup.includes('data-cut-zoom="out"'));
+assert.ok(pageMarkup.includes('data-cut-zoom="reset"'));
 assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__legend"));
 assert.ok(!pageMarkup.includes("dco-cnc-cut-preview__badge"));
-assert.ok(pageMarkup.includes("max-inline-size:260px"));
+assert.ok(pageMarkup.includes("max-inline-size:390px"));
 const pageBox = pageMarkup.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
 assert.ok(pageBox[0] <= 0 && pageBox[1] <= 0);
 assert.ok(pageBox[0] + pageBox[2] >= 2440 && pageBox[1] + pageBox[3] >= 1220);
 assert.ok(pageMarkup.includes(`aspect-ratio:${pageBox[2]} / ${pageBox[3]}`));
+assert.ok(pageMarkup.indexOf('data-cut-zoom="in"') < pageMarkup.indexOf("data-cut-viewport"));
 assert.ok(pageMarkup.indexOf("data-cut-viewport") < pageMarkup.indexOf("data-cut-stage"));
 
 const dialogMarkup = ux.cutPathPreviewMarkup(program, {
@@ -141,9 +153,10 @@ assert.deepEqual(
     ux.clampCutPreviewPan({ x: 9999, y: -9999 }, 1, viewport),
     { x: 0, y: 0 }
 );
-const clamped = ux.clampCutPreviewPan({ x: 9999, y: -9999 }, 2.5, viewport);
-assert.equal(clamped.x, (800 * (2.5 - 1)) / 2);
-assert.equal(clamped.y, -((400 * (2.5 - 1)) / 2));
+assert.equal(ux.clampCutPreviewZoom(0.5), 1, "the fitted board is the minimum zoom");
+const clamped = ux.clampCutPreviewPan({ x: 9999, y: -9999 }, 4, viewport);
+assert.equal(clamped.x, (800 * (4 - 1)) / 2);
+assert.equal(clamped.y, -((400 * (4 - 1)) / 2));
 
 const scaled = ux.scaleCutPreviewPan({ x: 40, y: -20 }, 1, 2);
 assert.deepEqual(scaled, { x: 80, y: -40 });
@@ -151,7 +164,7 @@ assert.deepEqual(scaled, { x: 80, y: -40 });
 function createZoomHost() {
     const listeners = new Map();
     const stageStyle = {
-        props: { "--cut-zoom": "0.55" },
+        props: { "--cut-zoom": "1" },
         transform: "",
         getPropertyValue(name) { return this.props[name] || ""; },
         setProperty(name, value) { this.props[name] = String(value); },
@@ -187,6 +200,11 @@ function createZoomHost() {
     const stageNode = {
         style: stageStyle,
     };
+    const svgNode = {
+        attrs: { viewBox: "-8 -8 2456 1236" },
+        getAttribute(name) { return this.attrs[name] || ""; },
+        setAttribute(name, value) { this.attrs[name] = String(value); },
+    };
     const buttons = {
         out: { disabled: false, addEventListener(type, handler) { this._out = handler; } },
         in: { disabled: false, addEventListener(type, handler) { this._in = handler; } },
@@ -196,10 +214,13 @@ function createZoomHost() {
         innerHTML: "",
         __cutPreviewZoom: null,
         __cutPreviewPan: null,
+        setAttribute() {},
+        removeAttribute() {},
         getAttribute() { return "page"; },
         querySelector(selector) {
             if (selector === "[data-cut-stage]") return stageNode;
             if (selector === "[data-cut-viewport]") return viewportNode;
+            if (selector === ".dco-cnc-cut-preview__svg") return svgNode;
             if (selector === '[data-cut-zoom="out"]') return buttons.out;
             if (selector === '[data-cut-zoom="in"]') return buttons.in;
             if (selector === '[data-cut-zoom="reset"]') return buttons.reset;
@@ -217,6 +238,7 @@ function createZoomHost() {
             return [];
         },
         stageStyle,
+        svgNode,
         viewportNode,
         buttons,
     };
@@ -233,8 +255,14 @@ ux.paintCutPathPreview(host, {
 assert.equal(host.__cutPreviewZoom, 1);
 assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 });
 assert.ok(host.innerHTML.includes("data-cut-viewport"));
-assert.ok(!host.innerHTML.includes("data-cut-zoom"));
-assert.ok(host.stageStyle.transform.includes("scale(1)"));
+assert.ok(host.innerHTML.includes("data-cut-zoom"));
+assert.equal(host.stageStyle.transform, "none");
+assert.equal(host.svgNode.attrs.viewBox, "-8 -8 2456 1236");
+
+host.buttons.in._in();
+assert.equal(host.__cutPreviewZoom, 1.5);
+assert.equal(host.stageStyle.transform, "none");
+assert.ok(Number(host.svgNode.attrs.viewBox.split(/\s+/)[2]) < 2456);
 
 host.viewportNode.dispatch("pointerdown", {
     button: 0,
@@ -246,8 +274,26 @@ host.viewportNode.dispatch("pointerdown", {
     preventDefault() {},
 });
 host.viewportNode.dispatch("pointermove", { clientX: 180, clientY: 40 });
-assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 });
+assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 }, "Shift reserves the pointer for path selection");
+
+host.viewportNode.dispatch("pointerdown", {
+    button: 0,
+    shiftKey: false,
+    clientX: 100,
+    clientY: 100,
+    pointerId: 1,
+    target: host.viewportNode,
+    preventDefault() {},
+});
+host.viewportNode.dispatch("pointermove", { clientX: 180, clientY: 40 });
+assert.deepEqual(host.__cutPreviewPan, { x: 80, y: -60 });
+assert.equal(host.__cutPreviewZoom, 1.5);
+
+host.viewportNode.dispatch("pointerup", { pointerId: 1 });
+assert.deepEqual(host.__cutPreviewPan, { x: 80, y: -60 });
+host.buttons.reset._reset();
 assert.equal(host.__cutPreviewZoom, 1);
+assert.deepEqual(host.__cutPreviewPan, { x: 0, y: 0 });
 
 const physical = ux.collectPhysicalPaths(program);
 assert.ok(physical.length >= 2);

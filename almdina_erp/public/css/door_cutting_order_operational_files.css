@@ -100,7 +100,7 @@
     /* Physical left = board preview in Arabic and English. */
     direction: ltr;
     display: grid;
-    grid-template-columns: minmax(0, 260px) minmax(16rem, 1fr);
+    grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr);
     gap: 1rem;
     align-items: start;
     min-inline-size: 0;
@@ -117,7 +117,7 @@
     position: sticky;
     inset-block-start: 0;
     inline-size: 100%;
-    max-inline-size: 260px;
+    max-inline-size: 390px;
 }
 .dco-operational-sheet-dialog[dir="rtl"] .dco-operational-sheet__preview,
 .dco-operational-sheet-dialog[dir="rtl"] .dco-operational-sheet__settings,
@@ -221,6 +221,12 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-operational-order__move svg {
     inline-size: 0.95rem;
     block-size: 0.95rem;
+}
+.dco-operational-order__arrow {
+    color: currentColor;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
 }
 .dco-operational-path {
     flex-wrap: wrap;
@@ -357,7 +363,7 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-operational-sheet__preview .dco-sheet-board {
     position: relative;
     inline-size: 100%;
-    max-inline-size: 260px;
+    max-inline-size: 390px;
     block-size: auto;
     height: auto !important;
 }
@@ -366,11 +372,11 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     flex-direction: column;
     gap: 0.35rem;
     inline-size: 100%;
-    max-inline-size: 260px;
+    max-inline-size: 390px;
     min-inline-size: 0;
 }
 .dco-cnc-sheet-page .dco-cnc-cut-preview {
-    max-inline-size: 260px;
+    max-inline-size: 390px;
 }
 .dco-cnc-cut-preview__zoom {
     display: inline-flex;
@@ -383,7 +389,9 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-cnc-cut-preview__viewport {
     position: relative;
     z-index: 1;
-    overflow: visible;
+    overflow: hidden;
+    contain: paint;
+    clip-path: inset(0 round 8px);
     inline-size: 100%;
     min-inline-size: 0;
     background: #f7f9fc;
@@ -422,6 +430,10 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
 .dco-cnc-cut-preview__path,
 .dco-cnc-cut-preview__arrow {
     fill: none;
+}
+.dco-cnc-cut-preview__execution.is-dxf-display-geometry .dco-cnc-cut-preview__path {
+    stroke-width: 2.5px;
+    stroke-linecap: round;
 }
 .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__path,
 .dco-cnc-cut-preview__execution.is-cnc-path-selected .dco-cnc-cut-preview__arrow {
@@ -539,13 +551,13 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     min-block-size: 0;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__body {
-    grid-template-columns: minmax(0, 260px) minmax(16rem, 1fr);
+    grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr);
     align-items: start;
 }
 .dco-cnc-sheet-page .dco-operational-sheet__preview {
     position: sticky;
     inset-block-start: 0;
-    max-inline-size: 260px;
+    max-inline-size: 390px;
     min-inline-size: 0;
     overflow: visible;
 }
@@ -627,7 +639,7 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
     }
     .dco-operational-sheet__preview {
         position: static;
-        max-inline-size: min(260px, 100%);
+        max-inline-size: min(390px, 100%);
     }
 }
 .dco-operational-sheet .dco-artcam {
@@ -776,6 +788,13 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 }
 .dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned .dco-cnc-cut-preview__path {
     stroke: #6D597A;
+}
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned,
+.dco-operational-sheet .dco-cnc-cut-preview__execution.is-assigned .dco-cnc-cut-preview__hit {
+    pointer-events: none;
+}
+.dco-operational-sheet .dco-operational-path.is-assigned {
+    opacity: 0.72;
 }
 .dco-operational-sheet .dco-cnc-cut-preview__execution.is-vector-picked .dco-cnc-cut-preview__path {
     stroke: #EC4899;

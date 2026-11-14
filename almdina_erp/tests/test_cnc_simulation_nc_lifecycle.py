@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
@@ -149,6 +150,25 @@ def test_generate_path_persists_private_file_before_generated_status():
     assert "discard_orphan_file" in repo
     # Must not mark Generated when file_url is optional/empty.
     assert "if file_url:" not in repo.split("def record_nc_generation", 1)[1].split("def ", 1)[0]
+
+
+def test_generate_path_imports_the_saved_direction_guard_it_calls():
+    source = SERVICE.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    imported = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and node.module == "almdina_erp.almdina_erp.domain.cnc.artcam_machining"
+        for alias in node.names
+    }
+    called = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert "reversed_direction_block" in called
+    assert "reversed_direction_block" in imported
 
 
 def test_ui_uses_server_download_not_ephemeral_blob_only():

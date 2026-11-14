@@ -313,6 +313,22 @@ assert.deepEqual(
     "switching selection clears the previous geometric path"
 );
 
+const markerGroup = { innerHTML: "" };
+const markerPreview = {
+    __cutPreviewPaths: physical,
+    __cutPreviewSelectedExecutionPathId: ten.execution_path_id,
+    querySelector(selector) {
+        return selector === "[data-path-markers]" ? markerGroup : null;
+    },
+    querySelectorAll() { return []; },
+};
+ux.highlightCutPreview(markerPreview, { selectedExecutionPathId: ten.execution_path_id });
+assert.ok(markerGroup.innerHTML.includes('class="dco-cnc-cut-preview__start-mark"'));
+assert.ok(markerGroup.innerHTML.includes('class="dco-cnc-cut-preview__finish"'));
+assert.equal((markerGroup.innerHTML.match(/vector-effect="non-scaling-stroke"/g) || []).length, 2);
+assert.equal((markerGroup.innerHTML.match(/stroke-width="10"/g) || []).length, 2);
+assert.ok(!markerGroup.innerHTML.includes("<circle"), "selection markers must not scale as SVG circles");
+
 const listBody = {
     rows: [],
     querySelector(selector) {
@@ -408,6 +424,14 @@ assert.equal(state.selectedExecutionPathId, ten.execution_path_id);
 assert.equal(state.selectedPathKey, ten.path_key);
 assert.equal(listBody.scrolledTo, ten.execution_path_id);
 assert.deepEqual(Array.from(new Set(previewDom.litIds())), [ten.execution_path_id]);
+
+assert.equal(
+    ux.applyExecutionSelection(listBody, workspace, sheet, state, ten.execution_path_id),
+    true
+);
+assert.equal(state.selectedExecutionPathId, "");
+assert.equal(state.selectedPathKey, "");
+assert.deepEqual(Array.from(new Set(previewDom.litIds())), []);
 
 assert.equal(
     ux.applyExecutionSelection(listBody, workspace, sheet, state, eleven.execution_path_id),

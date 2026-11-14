@@ -20,6 +20,7 @@ from almdina_erp.almdina_erp.application.cnc.machining_setup import (
     calculation_preset_injection,
     freeze_calculated_toolpath,
     remember_toolpath_on_association,
+    sheet_profiles_with_catalog,
 )
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import _kerf_mm, compile_sheet_program
@@ -41,6 +42,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     catalog_rows_from_program,
     drop_resurrected_associations,
     effective_operational_program,
+    reversed_direction_block,
     toggle_reversed_path,
     unreversed_operational_program,
 )
@@ -100,7 +102,7 @@ _MESSAGES = {
     "preset_not_found": "The selected CNC tool preset does not exist.",
     "preset_disabled": "The selected CNC tool preset is disabled.",
     "tool_identity_conflict": "One board file must keep the same physical tool number.",
-    "tool_diameter_conflict": "The same tool cannot use two diameters in one operational file.",
+    "mill_group_diameter_conflict": "The same milling group cannot use different tool diameters.",
     "tool_type_invalid": "Choose a tool type.",
     "tool_type_unsupported": "Only a Ball Nose tool can be created here.",
     "tool_units_invalid": "Tool units must be mm.",
@@ -282,7 +284,7 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
             cnc_machines=list_cnc_machines(),
             plan_snapshot=snapshot,
         )
-    except OperationalFileError as exc:
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
@@ -465,9 +467,13 @@ def save_cnc_operational_sheet(
             )
             profiles, associations = accept_sheet_machining(
                 paths=list(prepared.get("paths") or []),
-                profiles=_json_list(machining_profiles)
-                if machining_profiles is not None
-                else list((existing or {}).get("machining_profiles") or []),
+                profiles=sheet_profiles_with_catalog(
+                    _json_list(machining_profiles)
+                    if machining_profiles is not None
+                    else list((existing or {}).get("machining_profiles") or []),
+                    incoming_associations,
+                    machining_profile_catalog(),
+                ),
                 associations=incoming_associations,
                 known_tools=known_tool_presets(),
                 snapshots=snapshots,
@@ -564,7 +570,45 @@ def calculate_cnc_association_toolpath(
     if perimeter_cut_early_confirmed is not None:
         perimeter_early = bool(cint(perimeter_cut_early_confirmed))
     try:
-        known, overrides = calculation_preset_injection(provisional, known_tool_presets())
+        base_known = known_tool_presets()
+        _plan, source_program, _presets = _compile_authorized_program(
+            order,
+            sheet_no=cint(sheet_no),
+            operation_presets=operations if isinstance(operations, dict) else {},
+            path_overrides=paths if isinstance(paths, dict) else {},
+            operation_order=order_keys if isinstance(order_keys, list) else [],
+            cut_path_early_confirmed=confirmed,
+            viewed_plan_token=viewed_plan_token,
+            perimeter_join_mode=join_mode,
+            cut_path_sequence=sequence,
+            perimeter_cut_early_confirmed=perimeter_early,
+            known_presets=base_known,
+        )
+        source_catalog = catalog_rows_from_program(source_program)
+        profiles, associations = accept_sheet_machining(
+            paths=source_catalog,
+            profiles=sheet_profiles_with_catalog(
+                _json_list(machining_profiles) if machining_profiles is not None else list((saved or {}).get("machining_profiles") or []),
+                incoming,
+                machining_profile_catalog(),
+            ),
+            associations=incoming,
+            known_tools=base_known,
+            snapshots=list((saved or {}).get("toolpath_snapshots") or []),
+        )
+        association = next(
+            (row for row in associations if str(row.get("association_id") or "") == target_id),
+            None,
+        )
+        if association is None:
+            frappe.throw(_message("association_not_found"), frappe.ValidationError)
+        if association.get("conflict") or not association.get("vector_ids"):
+            raise MachiningSetupError(str(association.get("conflict") or "vector_not_machinable"))
+        known, overrides = calculation_preset_injection(
+            association,
+            base_known,
+            catalog=source_catalog,
+        )
         _plan, program, _presets = _compile_authorized_program(
             order,
             sheet_no=cint(sheet_no),
@@ -579,21 +623,6 @@ def calculate_cnc_association_toolpath(
             known_presets=known,
             extra_path_overrides=overrides,
         )
-        profiles, associations = accept_sheet_machining(
-            paths=catalog_rows_from_program(program),
-            profiles=_json_list(machining_profiles) if machining_profiles is not None else list((saved or {}).get("machining_profiles") or []),
-            associations=incoming,
-            known_tools=known_tool_presets(),
-            snapshots=list((saved or {}).get("toolpath_snapshots") or []),
-        )
-        association = next(
-            (row for row in associations if str(row.get("association_id") or "") == target_id),
-            None,
-        )
-        if association is None:
-            frappe.throw(_message("association_not_found"), frappe.ValidationError)
-        if association.get("conflict") or not association.get("vector_ids"):
-            raise MachiningSetupError(str(association.get("conflict") or "vector_not_machinable"))
         prior_snapshots = list((saved or {}).get("toolpath_snapshots") or [])
         snapshots = freeze_calculated_toolpath(
             association=association,
@@ -791,6 +820,8 @@ def get_cnc_sheet_program(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
+    machining_profiles: str | list[Any] | None = None,
+    vector_associations: str | list[Any] | None = None,
 ) -> dict[str, Any]:
     """Return a computed motion program. This does not save or write NC text."""
 
@@ -802,31 +833,73 @@ def get_cnc_sheet_program(
     parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
     parsed_order = frappe.parse_json(operation_order) if isinstance(operation_order, str) else list(operation_order or [])
     parsed_sequence = _parse_optional_sequence(cut_path_sequence)
+    incoming_profiles = None if machining_profiles is None else _json_list(machining_profiles)
+    incoming_associations = None if vector_associations is None else _json_list(vector_associations)
     if not isinstance(parsed_operations, dict) or not isinstance(parsed_paths, dict) or not isinstance(parsed_order, list):
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
         mode, uploaded = _manufacturing_inputs(order, cint(sheet_no))
-        payload = compile_sheet_program(
-            sheet_no=cint(sheet_no),
-            pieces=placed_piece_views(order),
-            snapshot=approved_plan_snapshot(order),
-            operation_presets={str(key): value for key, value in parsed_operations.items()},
-            path_overrides={str(key): value for key, value in parsed_paths.items()},
-            operation_order=[str(item) for item in parsed_order],
-            known_presets=known_tool_presets(),
-            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
-            manufacturing_mode=mode,
-            uploaded=uploaded,
-            perimeter_join_mode=str(perimeter_join_mode or "separate"),
-            cut_path_sequence=parsed_sequence,
-            perimeter_cut_early_confirmed=bool(cint(perimeter_cut_early_confirmed)),
-        )
-    except OperationalFileError as exc:
+        compile_args = {
+            "sheet_no": cint(sheet_no),
+            "pieces": placed_piece_views(order),
+            "snapshot": approved_plan_snapshot(order),
+            "operation_presets": {str(key): value for key, value in parsed_operations.items()},
+            "path_overrides": {str(key): value for key, value in parsed_paths.items()},
+            "operation_order": [str(item) for item in parsed_order],
+            "known_presets": known_tool_presets(),
+            "cut_path_early_confirmed": bool(cint(cut_path_early_confirmed)),
+            "manufacturing_mode": mode,
+            "uploaded": uploaded,
+            "perimeter_join_mode": str(perimeter_join_mode or "separate"),
+            "cut_path_sequence": parsed_sequence,
+            "perimeter_cut_early_confirmed": bool(cint(perimeter_cut_early_confirmed)),
+        }
+        saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
+        effective_associations = None
+        if incoming_associations is not None:
+            base_known = known_tool_presets()
+            source_payload = compile_sheet_program(**compile_args)
+            source_catalog = catalog_rows_from_program(source_payload)
+            profiles, effective_associations = accept_sheet_machining(
+                paths=source_catalog,
+                profiles=sheet_profiles_with_catalog(
+                    incoming_profiles
+                    if incoming_profiles is not None
+                    else list((saved or {}).get("machining_profiles") or []),
+                    incoming_associations,
+                    machining_profile_catalog(),
+                ),
+                associations=incoming_associations,
+                known_tools=base_known,
+                snapshots=list((saved or {}).get("toolpath_snapshots") or []),
+            )
+            known = dict(base_known)
+            overrides: dict[str, str] = {}
+            for association in effective_associations:
+                injected, association_overrides = calculation_preset_injection(
+                    association,
+                    base_known,
+                    catalog=source_catalog,
+                )
+                known.update(injected)
+                overrides.update(association_overrides)
+            final_compile_args = dict(compile_args)
+            final_compile_args["known_presets"] = known
+            final_compile_args["path_overrides"] = {
+                **compile_args["path_overrides"],
+                **overrides,
+            }
+            payload = compile_sheet_program(**final_compile_args)
+        else:
+            payload = compile_sheet_program(**compile_args)
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
-    saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
+    if effective_associations is not None:
+        saved = dict(saved or {})
+        saved["vector_associations"] = effective_associations
     payload = _effective_sheet_program(payload, saved)
     return _describe_program(payload)
 

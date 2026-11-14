@@ -362,6 +362,14 @@ def test_cutter_centers_cover_width_without_crossing_it():
         cutter_center_offsets_mm(18, 0)
 
 
+def test_cutter_centers_honor_a_smaller_stepover_and_keep_both_width_edges_covered():
+    centers = cutter_center_offsets_mm(18, 5, stepover_mm=2)
+    assert len(centers) == 8
+    assert centers[0] == pytest.approx(2.5)
+    assert centers[-1] == pytest.approx(15.5)
+    assert max(right - left for left, right in zip(centers, centers[1:])) <= 2 + 1e-9
+
+
 def test_centerline_follows_the_middle_of_the_strip():
     piece = _regular()
     line = liner_centerline_mm(piece, "edge_width_top", 2, 1.5)

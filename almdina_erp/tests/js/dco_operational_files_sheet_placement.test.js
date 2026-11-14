@@ -110,6 +110,9 @@ assert.ok(viewBox[0] + viewBox[2] >= 1300 && viewBox[1] + viewBox[3] >= 2500, "m
 assert.ok(markup.includes("100,200"));
 assert.ok(markup.includes("dco-cnc-cut-preview__void"));
 assert.ok(markup.includes("dco-cnc-cut-preview__machine"));
+assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
+assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
+assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
 assert.ok(markup.includes('transform="translate(30,40)"'));
 assert.ok(markup.includes("data-placement-caption"));
 // Path numbers stay on sheet-local geometry; geometry points are not rewritten in the program.

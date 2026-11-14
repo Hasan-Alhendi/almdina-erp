@@ -1,8 +1,8 @@
 """Reusable CNC tool preset rules.
 
-One physical tool stays mounted for a board in this version. Several presets
-may describe that tool, but they must share its number and diameter inside
-one operational file. This module does not model an automatic tool changer.
+One physical tool number stays mounted for a board in this version. Presets
+may keep different diameter parameters inside one operational file. This
+module does not model an automatic tool changer.
 """
 
 from __future__ import annotations
@@ -167,8 +167,10 @@ def normalize_tool_preset(
         pass_depth = None
     else:
         pass_depth = _positive(pass_raw, "pass_depth_invalid", upper=MAX_DEPTH_MM)
-        if final_depth is not None and pass_depth > final_depth + 1e-9:
-            raise ToolPresetError("pass_depth_exceeds_final_depth")
+        if final_depth is not None:
+            # Final depth is the machining boundary. A larger configured
+            # stepdown is valid; the last (and only) pass is capped at it.
+            pass_depth = min(pass_depth, final_depth)
 
     raw_spindle = raw.get("spindle_speed_rpm")
     if isinstance(raw_spindle, bool):
@@ -303,7 +305,7 @@ def unused_tool_preset_can_be_deleted(
 
 
 def assert_single_tool_for_file(presets: Sequence[ToolPresetValues]) -> None:
-    """Reject a board file that would require another physical cutter."""
+    """Reject a board file that would require another physical tool number."""
 
     selected = list(presets)
     if len(selected) < 2:
@@ -311,9 +313,6 @@ def assert_single_tool_for_file(presets: Sequence[ToolPresetValues]) -> None:
     numbers = {preset.tool_number for preset in selected}
     if len(numbers) != 1:
         raise ToolPresetError("tool_identity_conflict")
-    diameters = {preset.tool_diameter_mm for preset in selected}
-    if len(diameters) != 1:
-        raise ToolPresetError("tool_diameter_conflict")
 
 
 __all__ = [

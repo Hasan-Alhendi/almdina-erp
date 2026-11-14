@@ -11,6 +11,13 @@ from pathlib import Path
 import ezdxf
 
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
+from almdina_erp.almdina_erp.application.cnc.machining_setup import calculation_preset_injection
+from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
+    catalog_rows_from_program,
+    normalize_associations,
+    normalize_profile,
+    vectors_from_paths,
+)
 from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import cutter_center_paths
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
     LinerPiece,
@@ -279,6 +286,256 @@ def test_cut_path_and_liner_use_the_existing_cutter_center():
     assert len(_paths(program, "cut_path")) == 1
 
 
+def test_parametric_source_vectors_stay_visible_without_layer_presets():
+    piece = _mill_piece(
+        extra_liner=1,
+        liner_reference_side="edge_width_top",
+        liner_offset_cm=2,
+        liner_width_cm=1.8,
+        extra_back_groove=1,
+        back_groove_reference_side="edge_long_left",
+        back_groove_offset_cm=2,
+        back_groove_width_cm=1.8,
+        extra_recessed_handle_cutout=1,
+        recessed_handle_reference_side="edge_width_bottom",
+        recessed_handle_offset_cm=2,
+        recessed_handle_width_cm=1.8,
+    )
+    program = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["liner", "recessed_handle_cutout", "back_groove", "cut_path"],
+        known_presets=PRESETS,
+    )
+    for operation in ("liner", "recessed_handle_cutout", "back_groove"):
+        paths = _paths(program, operation)
+        assert len(paths) == 1
+        assert len(paths[0]["points"]) >= 2
+        assert paths[0]["ready"] is False
+        assert paths[0]["motions"] == []
+        assert "mill_diameter_required" in paths[0]["issues"]
+
+
+def test_profile_diameter_resolves_source_vector_before_cutter_center():
+    piece = _mill_piece(
+        extra_liner=1,
+        liner_reference_side="edge_width_top",
+        liner_offset_cm=2,
+        liner_width_cm=1.8,
+    )
+    source = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["liner", "cut_path"],
+        known_presets=PRESETS,
+    )
+    catalog = catalog_rows_from_program(source)
+    profile = normalize_profile(
+        {
+            "name": "Liner Profile",
+            "tool_preset": "Wide",
+            "final_depth_mm": 18.5,
+            "safe_z_mm": 5,
+            "home_x_mm": 0,
+            "home_y_mm": 0,
+            "home_z_mm": 5,
+        },
+        known_tools=PRESETS,
+        profile_id="profile:liner",
+    )
+    association = normalize_associations(
+        [{
+            "association_id": "association:liner",
+            "name": "Liner",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "selected_vectors", "vector_ids": ["liner:piece-a:liner_1"]},
+        }],
+        profiles=[profile],
+        catalog=vectors_from_paths(catalog),
+    )[0]
+    known, overrides = calculation_preset_injection(
+        association,
+        PRESETS,
+        catalog=catalog,
+    )
+    calculated = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Wide"},
+        path_overrides=overrides,
+        operation_order=["liner", "cut_path"],
+        known_presets=known,
+    )
+    liner = _paths(calculated, "liner")[0]
+    assert liner["ready"] is True
+    assert liner["preset"]["tool_diameter_mm"] == 8
+    assert liner["preset_name"].startswith("artcam-local:association:liner")
+    assert len(liner["motions"]) > 0
+
+
+def test_handle_profile_stepover_controls_xy_lines_without_duplicating_the_path():
+    piece = _mill_piece(
+        extra_recessed_handle_cutout=1,
+        recessed_handle_reference_side="edge_width_bottom",
+        recessed_handle_offset_cm=2,
+        recessed_handle_width_cm=1.8,
+        recessed_handle_start_cm=5,
+        recessed_handle_length_cm=20,
+    )
+    source = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["recessed_handle_cutout", "cut_path"],
+        known_presets=PRESETS,
+    )
+    catalog = catalog_rows_from_program(source)
+    handle_tool = _raw(
+        preset_name="Handle Fine",
+        tool_name="Handle Fine",
+        tool_diameter_mm=5,
+        stepdown_mm=4,
+        stepover_size_mm=2,
+        stepover_percent=40,
+    )
+    known_tools = {**PRESETS, "Handle Fine": handle_tool}
+    profile = normalize_profile(
+        {
+            "name": "Handle Fine Profile",
+            "tool_preset": "Handle Fine",
+            "final_depth_mm": 10,
+            "safe_z_mm": 5,
+            "home_x_mm": 0,
+            "home_y_mm": 0,
+            "home_z_mm": 5,
+        },
+        known_tools=known_tools,
+        profile_id="profile:handle-fine",
+    )
+    association = normalize_associations(
+        [{
+            "association_id": "association:handle-fine",
+            "name": "Handle Fine",
+            "profile_id": profile["profile_id"],
+            "selection": {
+                "kind": "selected_vectors",
+                "vector_ids": ["recessed_handle_cutout:piece-a:primary"],
+            },
+        }],
+        profiles=[profile],
+        catalog=vectors_from_paths(catalog),
+    )[0]
+    known, overrides = calculation_preset_injection(
+        association,
+        known_tools,
+        catalog=catalog,
+    )
+    calculated = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides=overrides,
+        operation_order=["recessed_handle_cutout", "cut_path"],
+        known_presets=known,
+    )
+    handles = _paths(calculated, "recessed_handle_cutout")
+    assert len(handles) == 1
+    transverse_lines = {round(float(point[1]), 3) for point in handles[0]["points"]}
+    assert len(transverse_lines) == 8
+    cut_depths = {
+        float(motion["depth_mm"])
+        for motion in handles[0]["motions"]
+        if motion["kind"] == "cut"
+    }
+    assert cut_depths == {4.0, 8.0, 10.0}
+    expected_xy = [
+        (round(float(point[0]), 6), round(float(point[1]), 6))
+        for point in handles[0]["points"][1:]
+    ]
+    for depth in cut_depths:
+        actual_xy = [
+            (round(float(motion["x_mm"]), 6), round(float(motion["y_mm"]), 6))
+            for motion in handles[0]["motions"]
+            if motion["kind"] == "cut" and float(motion["depth_mm"]) == depth
+        ]
+        assert actual_xy == expected_xy
+
+
+def test_selected_profile_only_calculates_the_selected_liner_source_vector():
+    piece = _mill_piece(
+        extra_liner=1,
+        liner_width_cm=1.8,
+        liner_specs_json=json.dumps({
+            "width_cm": 1.8,
+            "liners": [
+                {"id": "liner_1", "side": "edge_width_top", "offset_cm": 2, "start_cm": 0, "length_cm": 20},
+                {"id": "liner_2", "side": "edge_long_left", "offset_cm": 2, "start_cm": 0, "length_cm": 20},
+            ],
+        }),
+    )
+    source = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["liner", "cut_path"],
+        known_presets=PRESETS,
+    )
+    catalog = catalog_rows_from_program(source)
+    profile = normalize_profile(
+        {
+            "name": "Selected Liner Profile",
+            "tool_preset": "Wide",
+            "final_depth_mm": 18.5,
+            "safe_z_mm": 5,
+            "home_x_mm": 0,
+            "home_y_mm": 0,
+            "home_z_mm": 5,
+        },
+        known_tools=PRESETS,
+        profile_id="profile:selected-liner",
+    )
+    association = normalize_associations(
+        [{
+            "association_id": "association:selected-liner",
+            "name": "One liner",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "selected_vectors", "vector_ids": ["liner:piece-a:liner_2"]},
+        }],
+        profiles=[profile],
+        catalog=vectors_from_paths(catalog),
+    )[0]
+    known, overrides = calculation_preset_injection(association, PRESETS, catalog=catalog)
+    calculated = compile_sheet_program(
+        sheet_no=1,
+        pieces=[piece],
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Wide"},
+        path_overrides=overrides,
+        operation_order=["liner", "cut_path"],
+        known_presets=known,
+    )
+    liners = _paths(calculated, "liner")
+    selected = next(path for path in liners if path["path_key"].endswith("liner_2"))
+    untouched = next(path for path in liners if path["path_key"].endswith("liner_1"))
+    assert selected["ready"] is True
+    assert selected["preset"]["tool_diameter_mm"] == 8
+    assert untouched["ready"] is False
+    assert "mill_diameter_required" in untouched["issues"]
+    assert untouched["motions"] == []
+
+
 def test_four_operations_and_a_closed_region_are_not_the_same_thing():
     spec = {"side": "edge_long_left", "offset_cm": 3, "width_cm": 1.6, "start_cm": 4, "length_cm": 20}
     piece = _mill_piece(
@@ -308,6 +565,7 @@ def test_four_operations_and_a_closed_region_are_not_the_same_thing():
         "cut_path",
     ]
     groove = _paths(program, "back_groove")[0]
+    liner = _paths(program, "liner")[0]
     handle = _paths(program, "recessed_handle_cutout")[0]
     assert groove["closed"] is False and handle["closed"] is False
     assert groove["path_key"] == "back_groove:piece-a:primary"
@@ -321,6 +579,37 @@ def test_four_operations_and_a_closed_region_are_not_the_same_thing():
             {"side": "edge_width_bottom", "offset_cm": 2, "width_cm": 1.8, "start_cm": 10, "length_cm": 18},
         ),
     )
+    assert liner["display_paths"]
+    assert handle["display_paths"]
+    assert all(len(path) >= 2 for path in liner["display_paths"])
+    assert all(len(path) >= 2 for path in handle["display_paths"])
+    assert handle["display_paths"][0] != handle["points"]
+    assert handle["motions"], "preview-only source lines must not replace cutter-center NC motions"
+    dxf_snapshot = _snapshot(
+        liner_tool_diameter_mm=5,
+        handle_recess_tool_diameter_mm=5,
+        rear_groove_tool_diameter_mm=5,
+    )
+    dxf_program = _compile([piece], snapshot=dxf_snapshot)
+    dxf_liner = _paths(dxf_program, "liner")[0]
+    dxf_handle = _paths(dxf_program, "recessed_handle_cutout")[0]
+    assert _same_sequence(dxf_liner["display_paths"][0], dxf_liner["points"])
+    assert _same_sequence(dxf_handle["display_paths"][0], dxf_handle["points"])
+    pending = _compile(
+        [piece],
+        snapshot=dxf_snapshot,
+        operation_presets={
+            "liner": "",
+            "recessed_handle_cutout": "",
+            "back_groove": "",
+        },
+    )
+    pending_liner = _paths(pending, "liner")[0]
+    pending_handle = _paths(pending, "recessed_handle_cutout")[0]
+    assert pending_liner["ready"] is False and len(pending_liner["points"]) == 2
+    assert pending_handle["ready"] is False and len(pending_handle["points"]) == 2
+    assert len(pending_liner["display_paths"][0]) > 2
+    assert len(pending_handle["display_paths"][0]) > 2
     closed = _compile([
         _piece(
             "piece-a",
@@ -462,7 +751,7 @@ def test_overlapping_liners_are_milled_once_and_a_split_preset_is_rejected():
     assert _paths(rejected, "liner")[0]["motions"] == []
 
 
-def test_a_shared_cut_is_not_repeated_or_given_one_piece_preset():
+def test_shared_cut_and_piece_bound_vectors_keep_independent_presets():
     pieces = [
         _piece("piece-a", _rect(0, 0, 200, 500), label="1.1"),
         _piece("piece-b", _rect(205, 0, 200, 500), label="1.2"),
@@ -475,9 +764,19 @@ def test_a_shared_cut_is_not_repeated_or_given_one_piece_preset():
     assert len(shared) == 1
     assert shared[0]["piece_instance_id"] == ""
     assert program["ready"] is True
-    ambiguous = _compile(pieces, path_overrides={"cut_path:piece-a:outer": "Shallow"})
-    assert ambiguous["ready"] is False
-    assert "shared_cut_preset_ambiguous" in _codes(ambiguous)
+    overridden = _compile(pieces, path_overrides={"cut_path:piece-a:outer": "Shallow"})
+    paths = _paths(overridden, "cut_path")
+    shared = [
+        path for path in paths
+        if path["points"] and all(abs(point[0] - 202.5) < 0.2 for point in path["points"])
+    ]
+    piece_a = [path for path in paths if path["path_key"] == "cut_path:piece-a:outer"]
+    piece_b = [path for path in paths if path["path_key"] == "cut_path:piece-b:outer"]
+    assert overridden["ready"] is True
+    assert "shared_cut_preset_ambiguous" not in _codes(overridden)
+    assert len(shared) == 1 and shared[0]["preset_name"] == "Finish"
+    assert piece_a and all(path["preset_name"] == "Shallow" for path in piece_a)
+    assert piece_b and all(path["preset_name"] == "Finish" for path in piece_b)
 
 
 def test_rotated_piece_and_trim_keep_the_same_mill_placement():

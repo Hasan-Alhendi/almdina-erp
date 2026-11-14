@@ -44,6 +44,7 @@ _ROLE_ISSUES = {
     "mill_placement_unknown": "mill_placement_unknown",
     "mill_parameters_missing": "mill_parameters_missing",
     "mill_diameter_required": "mill_diameter_required",
+    "source_geometry": "mill_diameter_required",
     "liner_narrower_than_cutter": "liner_narrower_than_cutter",
     "side_unavailable": "side_unavailable",
     "merged_mill_preset_ambiguous": "merged_mill_preset_ambiguous",

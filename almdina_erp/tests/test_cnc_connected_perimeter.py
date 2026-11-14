@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from almdina_erp.almdina_erp.application.cnc import program as cnc_program
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import build_generation_snapshot
@@ -340,6 +341,50 @@ def test_compile_separate_unchanged_and_connected_adds_one_perimeter():
     assert perimeter_paths[0]["piece_label"] == ""
     assert not any(path["path_key"] == SHEET_PERIMETER_PATH_KEY for path in connected_cut)
     assert len(connected_cut) <= len(separate_paths)
+
+
+def test_connected_perimeter_keeps_original_paths_if_chaining_loses_a_segment(monkeypatch):
+    pieces = [
+        _piece("A", _rect(40, 40, 300, 400), label="A"),
+        _piece("B", _rect(345, 40, 250, 200), label="B"),
+    ]
+    separate = compile_sheet_program(
+        sheet_no=1,
+        pieces=pieces,
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["cut_path"],
+        known_presets=PRESETS,
+        perimeter_join_mode="separate",
+    )
+    monkeypatch.setattr(cnc_program, "chain_line_paths", lambda _segments: [])
+    guarded = compile_sheet_program(
+        sheet_no=1,
+        pieces=pieces,
+        snapshot=_snapshot(),
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        operation_order=["sheet_perimeter", "cut_path"],
+        known_presets=PRESETS,
+        perimeter_join_mode="connected",
+    )
+    assert "perimeter_geometry_invalid" in {issue["code"] for issue in guarded["issues"]}
+    separate_points = [
+        path["points"]
+        for operation in separate["operations"]
+        if operation["operation_key"] == "cut_path"
+        for path in operation["toolpaths"]
+        if path.get("points")
+    ]
+    guarded_points = [
+        path["points"]
+        for operation in guarded["operations"]
+        if operation["operation_key"] == "cut_path"
+        for path in operation["toolpaths"]
+        if path.get("points")
+    ]
+    assert guarded_points == separate_points
 
 
 def test_perimeter_preset_override_accepted():

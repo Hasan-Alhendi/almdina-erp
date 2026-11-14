@@ -176,12 +176,12 @@ function createDocumentDom() {
     };
 }
 
-assert.equal(ux.CUT_PREVIEW_ZOOM.MIN, 0.4);
-assert.equal(ux.CUT_PREVIEW_ZOOM.INITIAL, 0.55);
-assert.equal(ux.CUT_PREVIEW_ZOOM.MAX, 2.5);
-assert.equal(ux.CUT_PREVIEW_ZOOM.STEP, 0.15);
-assert.equal(ux.clampCutPreviewZoom(0.1), 0.4);
-assert.equal(ux.clampCutPreviewZoom(9), 2.5);
+assert.equal(ux.CUT_PREVIEW_ZOOM.MIN, 1);
+assert.equal(ux.CUT_PREVIEW_ZOOM.INITIAL, 1);
+assert.equal(ux.CUT_PREVIEW_ZOOM.MAX, 16);
+assert.equal(ux.CUT_PREVIEW_ZOOM.STEP, 0.5);
+assert.equal(ux.clampCutPreviewZoom(0.1), 1);
+assert.equal(ux.clampCutPreviewZoom(20), 16);
 assert.equal(ux.PROGRAM_COLORS.cut_path, "#C62828");
 assert.equal(ux.PROGRAM_COLORS.liner, "#C62828");
 assert.equal(ux.PROGRAM_COLORS.recessed_handle_cutout, "#C62828");
@@ -208,7 +208,7 @@ const colored = ux.cutPathPreviewMarkup(program, {
 assert.ok(!colored.includes("--cut-zoom:"));
 assert.ok(!colored.includes("dco-cnc-cut-preview__legend"));
 assert.ok(!colored.includes("data-cut-layer"));
-assert.ok(colored.includes("max-inline-size:260px"));
+assert.ok(colored.includes("max-inline-size:390px"));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.liner));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.recessed_handle_cutout));
 assert.ok(colored.includes(ux.PROGRAM_COLORS.back_groove));
@@ -229,6 +229,8 @@ assert.ok(hiddenLiner.includes("data-execution-path-id="));
 
 const zoomHost = {
     innerHTML: "",
+    setAttribute() {},
+    removeAttribute() {},
     getAttribute() { return "page"; },
     querySelector(selector) {
         if (selector === "[data-cut-stage]") {
@@ -281,9 +283,9 @@ ux.paintCutPathPreview(zoomHost, {
     layout: "page",
     selectedPathKey: "liner:a",
 });
-assert.equal(zoomHost.__cutPreviewZoom, 1, "the board stays fitted");
-assert.equal(ux.clampCutPreviewZoom(0.4 - ux.CUT_PREVIEW_ZOOM.STEP), 0.4);
-assert.equal(ux.clampCutPreviewZoom(2.5 + ux.CUT_PREVIEW_ZOOM.STEP), 2.5);
+assert.equal(zoomHost.__cutPreviewZoom, 1, "the board stays inside its fitted viewport");
+assert.equal(ux.clampCutPreviewZoom(1 - ux.CUT_PREVIEW_ZOOM.STEP), 1);
+assert.equal(ux.clampCutPreviewZoom(16 + ux.CUT_PREVIEW_ZOOM.STEP), 16);
 
 const staleDom = createDocumentDom();
 
@@ -327,7 +329,12 @@ const allIds = liveDom.ids();
 assert.equal(allIds.length, new Set(allIds).size, "marker ids across repeated paints must remain unique in the DOM");
 assert.ok(!allIds.includes("cnc-cut-arrow-1"));
 
-const host = { innerHTML: "", getAttribute() { return "page"; } };
+const host = {
+    innerHTML: "",
+    getAttribute() { return "page"; },
+    setAttribute() {},
+    removeAttribute() {},
+};
 for (let index = 0; index < 10; index += 1) {
     ux.paintCutPathPreview(host, {
         status: "ready",

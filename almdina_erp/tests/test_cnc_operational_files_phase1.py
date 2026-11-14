@@ -130,9 +130,8 @@ def test_tool_preset_rejects_invalid_measurements():
         _preset(spindle_speed_rpm=True)
     assert spindle.value.code == "spindle_speed_invalid"
 
-    with pytest.raises(ToolPresetError) as depth:
-        normalize_tool_preset(_raw(pass_depth_mm=20), machining_depth_mm=18.5)
-    assert depth.value.code == "pass_depth_exceeds_final_depth"
+    capped = normalize_tool_preset(_raw(pass_depth_mm=20), machining_depth_mm=18.5)
+    assert capped.pass_depth_mm == 18.5
     assert normalize_tool_preset(_raw(final_depth_mm=18.5)).final_depth_mm is None
 
     valid = _preset()
@@ -146,9 +145,7 @@ def test_one_operational_file_keeps_one_physical_tool():
     wide = _preset(preset_name="Wide", tool_diameter_mm=8)
     other = _preset(preset_name="Other", tool_number="T8", tool_diameter_mm=6)
 
-    with pytest.raises(ToolPresetError) as diameter:
-        assert_single_tool_for_file([narrow, wide])
-    assert diameter.value.code == "tool_diameter_conflict"
+    assert_single_tool_for_file([narrow, wide])
 
     with pytest.raises(ToolPresetError) as identity:
         assert_single_tool_for_file([narrow, other])

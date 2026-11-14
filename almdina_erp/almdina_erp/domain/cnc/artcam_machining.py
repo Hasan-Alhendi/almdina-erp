@@ -194,7 +194,10 @@ def normalize_artcam_tool(raw: Mapping[str, Any]) -> ArtcamToolValues:
     rate_units = _text(raw.get("rate_units"), "rate_units_invalid")
     if rate_units != RATE_UNITS_MM_SEC:
         raise MachiningSetupError("rate_units_invalid")
-    tool_number, display = _tool_number(raw.get("tool_number", raw.get("tool_number_display")))
+    raw_tool_number = raw.get("tool_number")
+    if raw_tool_number in (None, ""):
+        raw_tool_number = raw.get("tool_number_display")
+    tool_number, display = _tool_number(raw_tool_number)
     feed = _finite(
         raw.get("feed_rate_mm_sec", raw.get("feed_rate")),
         "feed_rate_invalid",
@@ -216,6 +219,15 @@ def normalize_artcam_tool(raw: Mapping[str, Any]) -> ArtcamToolValues:
         upper=MAX_DIAMETER_MM,
         inclusive_lower=False,
     )
+    stepover_size = _finite(
+        raw.get("stepover_size_mm", raw.get("stepover_size")),
+        "stepover_invalid",
+        lower=0,
+        upper=MAX_DIAMETER_MM,
+        inclusive_lower=False,
+    )
+    if stepover_size > diameter + 1e-9:
+        raise MachiningSetupError("stepover_invalid")
     return ArtcamToolValues(
         description=_text(raw.get("description", raw.get("tool_name")), "description_required"),
         tool_type=tool_type,
@@ -239,16 +251,7 @@ def normalize_artcam_tool(raw: Mapping[str, Any]) -> ArtcamToolValues:
             ),
             3,
         ),
-        stepover_size_mm=round(
-            _finite(
-                raw.get("stepover_size_mm", raw.get("stepover_size")),
-                "stepover_invalid",
-                lower=0,
-                upper=MAX_DIAMETER_MM,
-                inclusive_lower=False,
-            ),
-            3,
-        ),
+        stepover_size_mm=round(stepover_size, 3),
         stepover_percent=round(
             _finite(
                 raw.get("stepover_percent", raw.get("stepover_percent_of_d")),
@@ -302,7 +305,7 @@ def tool_copy_from_stored(raw: Mapping[str, Any], *, tool_preset: str) -> dict[s
             "tool_units": TOOL_UNITS_MM,
             "rate_units": str(stored.get("rate_units") or LEGACY_RATE_UNITS_MM_MIN),
             "notes": str(stored.get("notes") or ""),
-            "diameter_mm": stored.get("tool_diameter_mm"),
+            "diameter_mm": stored.get("tool_diameter_mm", stored.get("diameter_mm")),
             "stepdown_mm": stored.get("stepdown_mm", stored.get("pass_depth_mm")),
             "final_tool_offset_mm": stored.get("final_tool_offset_mm"),
             "stepover_size_mm": stored.get("stepover_size_mm"),
@@ -436,9 +439,6 @@ def _preset_from_local(local: Mapping[str, Any]) -> ToolPresetValues:
         plunge = tool_values.get("plunge_rate_mm_min")
         stepdown = tool_values.get("stepdown_mm", tool_values.get("pass_depth_mm"))
     final_depth = _depth_mm(local.get("final_depth_mm"))
-    if stepdown not in (None, ""):
-        if float(stepdown) > float(final_depth) + 1e-9:
-            raise MachiningSetupError("pass_depth_exceeds_final_depth")
     description = str(tool_values.get("description") or tool_values.get("tool_preset") or local.get("name") or "tool")
     raw = {
         "preset_name": str(tool_values.get("tool_preset") or description),
@@ -552,7 +552,7 @@ def selection_coverage(
         for raw_id in raw_ids:
             vector_id = str(raw_id or "").strip()
             vector = index.get(vector_id)
-            if vector is None or vector.vector_id == SHEET_PERIMETER_PATH_KEY:
+            if vector is None:
                 raise MachiningSetupError("vector_not_machinable")
             if vector_id not in covered:
                 covered.append(vector_id)
@@ -720,7 +720,6 @@ def association_availability(
             "used": vector.vector_id in owners,
         }
         for vector in catalog
-        if vector.vector_id != SHEET_PERIMETER_PATH_KEY
     ]
     perimeter = next((vector for vector in catalog if vector.vector_id == SHEET_PERIMETER_PATH_KEY), None)
     sheet_perimeter = None
@@ -1025,7 +1024,7 @@ def assert_physical_tool_consistency(
     associations: Sequence[Mapping[str, Any]],
     snapshots: Sequence[Mapping[str, Any]] = (),
 ) -> None:
-    """One file keeps one physical tool number and one diameter."""
+    """One file keeps one physical tool number; diameter may vary by profile."""
 
     linked = {
         str(row.get("toolpath_id") or "").strip()
@@ -1055,6 +1054,7 @@ def synthetic_preset_name(association_id: str) -> str:
 
 def local_preset_payload(local: Mapping[str, Any]) -> dict[str, Any]:
     preset = _preset_from_local(local)
+    tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}
     return {
         "preset_name": preset.preset_name,
         "tool_name": preset.tool_name,
@@ -1065,6 +1065,8 @@ def local_preset_payload(local: Mapping[str, Any]) -> dict[str, Any]:
         "feed_rate_mm_min": preset.feed_rate_mm_min,
         "plunge_rate_mm_min": preset.plunge_rate_mm_min,
         "pass_depth_mm": preset.pass_depth_mm,
+        "stepover_size_mm": tool_values.get("stepover_size_mm"),
+        "stepover_percent": tool_values.get("stepover_percent"),
         "enabled": True,
     }
 
@@ -1084,12 +1086,15 @@ def _canon_number(value: Any) -> Any:
 
 def _nc_signature(local: Mapping[str, Any], vector_ids: Sequence[Any]) -> dict[str, Any]:
     preset = _preset_from_local(local)
+    tool_values = local.get("tool_values") if isinstance(local.get("tool_values"), Mapping) else {}
     return {
         "vectors": [str(vector_id) for vector_id in vector_ids],
         "tool_number": preset.tool_number,
         "diameter_mm": _canon_number(preset.tool_diameter_mm),
         "final_depth_mm": _canon_number(preset.final_depth_mm),
         "pass_depth_mm": _canon_number(preset.pass_depth_mm),
+        "stepover_size_mm": _canon_number(tool_values.get("stepover_size_mm")),
+        "stepover_percent": _canon_number(tool_values.get("stepover_percent")),
         "spindle_speed_rpm": preset.spindle_speed_rpm,
         "feed_rate_mm_min": _canon_number(preset.feed_rate_mm_min),
         "plunge_rate_mm_min": _canon_number(preset.plunge_rate_mm_min),
@@ -1920,7 +1925,53 @@ def unreversed_operational_program(
         associations=associations,
     )
     current = order_program_by_associations(current, associations)
+    current = _refresh_effective_readiness(current)
     return _stamp_shape_ids(current)
+
+
+def _refresh_effective_readiness(program: Mapping[str, Any]) -> dict[str, Any]:
+    """Recompute board readiness after frozen calculated paths replace live placeholders."""
+
+    payload = deepcopy(dict(program))
+    paths = [
+        path
+        for operation in payload.get("operations") or ()
+        if isinstance(operation, Mapping)
+        for path in operation.get("toolpaths") or ()
+        if isinstance(path, Mapping)
+    ]
+
+    def executable(path: Mapping[str, Any]) -> bool:
+        return bool(
+            path.get("ready")
+            and isinstance(path.get("points"), Sequence)
+            and len(path.get("points") or ()) >= 2
+            and isinstance(path.get("motions"), Sequence)
+            and len(path.get("motions") or ()) > 0
+            and not (path.get("issues") or ())
+        )
+
+    readiness_by_key: dict[str, list[bool]] = {}
+    for path in paths:
+        readiness_by_key.setdefault(str(path.get("path_key") or ""), []).append(executable(path))
+    resolved_keys = {
+        key for key, readiness in readiness_by_key.items()
+        if key and readiness and all(readiness)
+    }
+    issues = [
+        deepcopy(issue)
+        for issue in payload.get("issues") or ()
+        if not (
+            isinstance(issue, Mapping)
+            and str(issue.get("path_key") or "") in resolved_keys
+        )
+    ]
+    ready = bool(paths) and not issues and all(executable(path) for path in paths)
+    payload["issues"] = issues
+    payload["geometry_ready"] = ready
+    payload["ready"] = ready
+    payload["nc_export_ready"] = ready
+    return payload
 
 
 def effective_operational_program(

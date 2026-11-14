@@ -236,14 +236,17 @@ def test_sheet_settings_reject_a_disabled_preset_a_tool_conflict_and_a_stale_pla
         )
     assert disabled.value.code == "preset_disabled"
 
-    with pytest.raises(OperationalFileError) as diameter:
-        _prepare(
-            [piece],
-            presets={"cut_path": "Finish", "back_groove": "Finish"},
-            paths={"back_groove:piece-a:primary": "Wide"},
-            order=["back_groove", "cut_path"],
-        )
-    assert diameter.value.code == "tool_diameter_conflict"
+    different_diameters = _prepare(
+        [piece],
+        presets={"cut_path": "Finish", "back_groove": "Finish"},
+        paths={"back_groove:piece-a:primary": "Wide"},
+        order=["back_groove", "cut_path"],
+    )
+    assert next(
+        row
+        for row in different_diameters["paths"]
+        if row["path_key"] == "back_groove:piece-a:primary"
+    )["tool_preset"] == "Wide"
 
     with pytest.raises(OperationalFileError) as number:
         _prepare(

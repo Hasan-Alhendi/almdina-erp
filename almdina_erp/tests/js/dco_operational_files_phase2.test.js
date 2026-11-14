@@ -51,7 +51,7 @@ const sheet = {
 };
 assert.strictEqual(
     ux.toolConflict(workspace, sheet, { operations: { cut_path: "Finish", liner: "Wide" }, overrides: {} }),
-    "diameter"
+    ""
 );
 assert.strictEqual(
     ux.toolConflict(workspace, sheet, { operations: { cut_path: "Finish", liner: "Other" }, overrides: {} }),

@@ -143,6 +143,10 @@ assert.ok(dialog.includes("dco-operational-sheet__settings"));
 assert.ok(dialog.includes("dco-operational-order__move"));
 assert.ok(dialog.includes("Move earlier"));
 assert.ok(dialog.includes("data-move=\"earlier\""));
+assert.ok(dialog.includes('data-move="later"'));
+assert.ok(dialog.includes('dco-operational-order__arrow'));
+assert.ok(dialog.includes('aria-hidden="true">↓</span>'));
+assert.ok(dialog.includes('<section class="dco-sheet-acc" data-sheet-section="order">'));
 assert.ok(dialog.includes("data-delete-association=\"association:a\""));
 assert.ok(dialog.indexOf("dco-operational-sheet__preview") < dialog.indexOf("dco-operational-sheet__settings"));
 
@@ -220,9 +224,9 @@ assert.ok(
         .includes("Simulation NC is for review only")
 );
 
-assert.ok(css.includes("grid-template-columns: minmax(0, 260px) minmax(16rem, 1fr)"));
+assert.ok(css.includes("grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr)"));
 assert.ok(css.includes("direction: ltr"));
-assert.ok(css.includes("max-inline-size: 260px"));
+assert.ok(css.includes("max-inline-size: 390px"));
 assert.ok(!css.includes(".dco-operational-layers__scroll"));
 assert.ok(!css.includes(".dco-operational-sheet__nc-actions"));
 assert.ok(css.includes(".dco-operational-sheet-dialog .modal-body"));
@@ -233,18 +237,18 @@ assert.ok(!/syncSheetFooter[\s\S]*data-cnc-footer-action="download"/.test(panel)
 assert.ok(panel.includes('data-cnc-footer-action="generate"'));
 assert.ok(panel.includes("preserveDialogScroll("));
 assert.ok(panel.includes("paintLayerMeta("));
-assert.ok(panel.includes("SHEET_PREVIEW_MAX_WIDTH_PX = 260"));
+assert.ok(panel.includes("SHEET_PREVIEW_MAX_WIDTH_PX = 390"));
 assert.ok(panel.includes("onPresetChosen("));
 assert.ok(panel.includes("options.fullRefresh"));
 assert.ok(panel.includes("layers.forEach(key => paintLayerMeta"));
-assert.equal(ux.SHEET_PREVIEW_MAX_WIDTH_PX, 260);
+assert.equal(ux.SHEET_PREVIEW_MAX_WIDTH_PX, 390);
 
 const fitted = ux.fitBoard(
     { style: {}, dataset: { naturalWidth: "1220", naturalHeight: "2440" } },
     { maxWidthPx: ux.SHEET_PREVIEW_MAX_WIDTH_PX }
 );
-assert.equal(fitted.style.width, "260px");
-assert.equal(fitted.style.maxWidth, "260px");
+assert.equal(fitted.style.width, "390px");
+assert.equal(fitted.style.maxWidth, "390px");
 assert.equal(fitted.style.height, "auto");
 assert.equal(fitted.style.aspectRatio, "1220 / 2440");
 

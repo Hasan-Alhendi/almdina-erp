@@ -267,7 +267,7 @@ def test_tool_number_conflict_rejected_for_perimeter_override():
             operation_sources={"cut_path": "sheet", "sheet_perimeter": "sheet"},
             factory_defaults={"cut_path": "Finish"},
         )
-    assert exc.value.code in {"tool_identity_conflict", "tool_diameter_conflict"}
+    assert exc.value.code == "tool_identity_conflict"
 
 
 def test_perimeter_before_cut_path_is_accepted_without_error():
