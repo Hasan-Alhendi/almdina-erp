@@ -1272,7 +1272,7 @@ def _artcam_message(code: str) -> str:
         "tool_diameter_invalid": "Diameter must be a positive number of millimetres.",
         "stepdown_invalid": "Stepdown must be a positive number of millimetres.",
         "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres.",
-        "stepover_invalid": "Enter the stepover size and its percent of diameter.",
+        "stepover_invalid": "Stepover size must be positive and no greater than the tool diameter.",
         "spindle_speed_invalid": "Spindle speed must be a positive whole number of RPM.",
         "feed_rate_invalid": "Feed rate must be a positive number of millimetres per second.",
         "plunge_rate_invalid": "Plunge rate must be a positive number of millimetres per second.",

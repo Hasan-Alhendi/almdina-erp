@@ -21,6 +21,8 @@ assert.ok(typeof ux.collectPhysicalPaths === "function");
 assert.ok(typeof ux.findPhysicalPath === "function");
 assert.ok(typeof ux.highlightCutPreview === "function");
 assert.ok(typeof ux.applyExecutionSelection === "function");
+assert.ok(typeof ux.paintAssociationVisibility === "function");
+assert.ok(typeof ux.assignedVectorIds === "function");
 assert.ok(panel.includes("execution_path_id"));
 assert.ok(panel.includes("data-execution-path-id"));
 assert.ok(panel.includes("collectPhysicalPaths("));
@@ -501,6 +503,114 @@ assert.deepEqual(
     "preset/UI identity rebuild must not invent new NC geometry"
 );
 assert.equal(ux.collectCutExecutions(program).length, executions.length);
+
+const sharedIdentity = "cut_path:shared-key#shape-a";
+const reorderedSharedProgram = {
+    sheet_width_mm: 400,
+    sheet_length_mm: 300,
+    geometry_ready: true,
+    operations: [
+        { operation_key: "liner", toolpaths: [{
+            path_key: "liner:a",
+            shape_id: "liner-shape",
+            vector_id: "liner:a",
+            operation_key: "liner",
+            closed: false,
+            ready: true,
+            motions: motionChain([[5, 5], [40, 5]], 3, false),
+        }] },
+        { operation_key: "cut_path", toolpaths: [{
+            path_key: "cut_path:shared-key",
+            shape_id: "shape-a",
+            vector_id: sharedIdentity,
+            operation_key: "cut_path",
+            closed: false,
+            ready: true,
+            motions: motionChain([[20, 20], [80, 20]], 6, false),
+        }, {
+            path_key: "cut_path:shared-key",
+            shape_id: "shape-b",
+            vector_id: "cut_path:shared-key#shape-b",
+            operation_key: "cut_path",
+            closed: false,
+            ready: true,
+            motions: motionChain([[20, 40], [80, 40]], 6, false),
+        }] },
+    ],
+};
+const swappedSharedProgram = Object.assign({}, reorderedSharedProgram, {
+    operations: reorderedSharedProgram.operations.slice().reverse(),
+});
+const assignedBefore = ux.cutPathPreviewMarkup(reorderedSharedProgram, {
+    assignedVectorIds: [sharedIdentity],
+    markerScope: "assigned-before",
+});
+const assignedAfter = ux.cutPathPreviewMarkup(swappedSharedProgram, {
+    assignedVectorIds: [sharedIdentity],
+    markerScope: "assigned-after",
+});
+assert.equal((assignedBefore.match(/is-assigned/g) || []).length, 1);
+assert.equal((assignedAfter.match(/is-assigned/g) || []).length, 1);
+assert.deepEqual(
+    new Set(ux.collectPhysicalPaths(reorderedSharedProgram).map(item => item.vector_id)),
+    new Set(ux.collectPhysicalPaths(swappedSharedProgram).map(item => item.vector_id)),
+    "operation order cannot alter stable vector identity"
+);
+const unstampedSharedProgram = Object.assign({}, reorderedSharedProgram, {
+    operations: reorderedSharedProgram.operations.map(operation => Object.assign({}, operation, {
+        toolpaths: operation.toolpaths.map(toolpath => {
+            const copy = Object.assign({}, toolpath);
+            delete copy.vector_id;
+            return copy;
+        }),
+    })),
+});
+assert.deepEqual(
+    new Set(ux.collectPhysicalPaths(unstampedSharedProgram).map(item => item.vector_id)),
+    new Set(["liner:a", sharedIdentity, "cut_path:shared-key#shape-b"]),
+    "a preview fallback derives the same stable ids from path key and shape id"
+);
+assert.deepEqual(
+    ux.assignedVectorIds({
+        machining: {
+            associations: [{
+                association_id: "layer-cut",
+                selection: { kind: "layer", operation_key: "cut_path" },
+                vector_ids: ["cut_path:shared-key"],
+            }],
+        },
+    }, reorderedSharedProgram),
+    new Set(["cut_path:shared-key", sharedIdentity, "cut_path:shared-key#shape-b"]),
+    "a saved layer association owns current stable vectors without matching by label"
+);
+
+function visibilityNode(vectorId, pathKey) {
+    return {
+        hidden: false,
+        getAttribute(name) {
+            if (name === "data-vector-id") return vectorId;
+            if (name === "data-execution-path") return pathKey;
+            return "";
+        },
+        classList: {
+            toggle(name, force) {
+                if (name === "is-association-hidden") this.parent.hidden = Boolean(force);
+            },
+            parent: null,
+        },
+    };
+}
+const hiddenShared = visibilityNode(sharedIdentity, "cut_path:shared-key");
+const visibleShared = visibilityNode("cut_path:shared-key#shape-b", "cut_path:shared-key");
+hiddenShared.classList.parent = hiddenShared;
+visibleShared.classList.parent = visibleShared;
+ux.paintAssociationVisibility({
+    __cutSheet: { machining: { associations: [{ association_id: "a", vector_ids: [sharedIdentity] }] } },
+    __hiddenAssociations: { a: true },
+    querySelectorAll() { return [hiddenShared, visibleShared]; },
+});
+assert.equal(hiddenShared.hidden, true);
+assert.equal(visibleShared.hidden, false, "a sibling with the same path key remains visible");
 
 assert.ok(!panel.includes("cutter_center_paths"));
 assert.ok(panel.includes("selectedExecutionPathId"));

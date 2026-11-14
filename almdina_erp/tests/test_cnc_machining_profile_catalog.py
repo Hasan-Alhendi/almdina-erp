@@ -148,18 +148,35 @@ def test_profile_form_exposes_only_the_allowed_tool_overrides():
         "tool_number",
         "stepdown_mm",
         "stepover_size_mm",
-        "stepover_percent",
         "feed_rate_mm_sec",
         "plunge_rate_mm_sec",
         "spindle_speed_rpm",
     ):
         assert f'["{fieldname}",' in form
+    assert '["stepover_percent",' not in form
+    assert "Stepover Size (mm)" in form
     assert 'data-profile-tool="${fieldname}"' in form
     assert '["diameter_mm"' not in form
     assert '["final_tool_offset_mm"' not in form
     assert '["tool_type"' not in form
     assert '["notes"' not in form
     assert "allowed_tool_overrides" in form
+
+
+def test_profile_and_association_editors_hide_stepover_percent_and_normalize_tool_number():
+    profile_dialog = _text(PACKAGE / "public" / "js" / "cnc" / "artcam_profile_dialog.js")
+    association = _text(PACKAGE / "public" / "js" / "cnc" / "artcam_machining_ux.js")
+    for source in (profile_dialog, association):
+        assert 'label: "Stepover Percent"' not in source
+        assert '["stepover_percent", "Stepover Percent"]' not in source
+        assert "Stepover Size (mm)" in source
+        assert "displayToolNumber" in source or "display_tool_number" in source
+
+    tool_form = _text(PACKAGE / "almdina_erp" / "doctype" / "cnc_tool_preset" / "cnc_tool_preset.js")
+    tool_dialog = _text(PACKAGE / "public" / "js" / "cnc" / "artcam_tool_dialog.js")
+    assert "display_tool_number(frm.doc.tool_number)" in tool_form
+    assert "/^(?:T)?([1-9][0-9]{0,2})$/i" in tool_form
+    assert "/^(?:T)?([1-9][0-9]{0,2})$/i" in tool_dialog
 
 
 def test_machining_profile_permission_matches_the_tool_catalog():

@@ -307,11 +307,21 @@ artcam.loadAssociation(state, {
     name: "B edited",
     profile_id: "profile-1",
     selection: { kind: "selected_vectors", vector_ids: ["cut_path:shared"] },
+    local_values: {
+        tool_preset: "Finish",
+        tool_values: {
+            tool_number: "T9",
+            diameter_mm: 8,
+            stepover_size_mm: 4,
+            stepover_percent: 50,
+        },
+    },
 });
 assert.deepEqual(state.vectorSelection, ["cut_path:shared"]);
 assert.equal(state.artcamForm.association_id, "b");
 assert.equal(state.artcamForm.source, "selected_vectors");
 assert.equal(state.artcamForm.toolOpen, true);
+assert.equal(state.artcamForm.tool.tool_number, "9", "legacy NC tokens are numeric in the editor");
 
 const blankEditor = artcam.markup({ presets: [] }, { machining: { profiles: [], associations: [] } }, {});
 assert.ok(blankEditor.includes('data-field="profile_id"'));
@@ -398,6 +408,9 @@ const toolEditor = artcam.markup({
 assert.ok(toolEditor.includes("data-artcam-tool-summary"));
 assert.ok(toolEditor.includes("Diameter (mm)"));
 assert.ok(toolEditor.includes('data-field="stepdown_mm"'));
+assert.ok(toolEditor.includes('data-field="stepover_size_mm"'));
+assert.ok(toolEditor.includes("Stepover Size (mm)"));
+assert.ok(!toolEditor.includes('data-field="stepover_percent"'));
 assert.ok(toolEditor.includes('data-field="feed_rate_mm_sec"'));
 assert.ok(!toolEditor.includes('data-field="diameter_mm"'));
 assert.ok(!toolEditor.includes('data-field="final_tool_offset_mm"'));

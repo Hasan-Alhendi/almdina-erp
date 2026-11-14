@@ -111,7 +111,7 @@ _MESSAGES = {
     "notes_invalid": "The tool notes are too long.",
     "stepdown_invalid": "Stepdown must be a positive number of millimetres within the supported range.",
     "final_tool_offset_invalid": "Final tool offset must be zero or a positive number of millimetres within the supported range.",
-    "stepover_invalid": "Enter the stepover size and its percent of diameter.",
+    "stepover_invalid": "Stepover size must be positive and no greater than the tool diameter.",
     "profile_name_required": "Enter a profile name.",
     "profile_invalid": "The profile is not valid.",
     "profile_duplicate": "Each profile needs its own name.",
@@ -527,8 +527,38 @@ def save_cnc_operational_sheet(
                 incoming_associations,
                 snapshots,
             )
+            source_operations = {
+                str(row.get("operation_key") or ""): row.get("tool_preset")
+                for row in prepared.get("operations") or []
+                if str(row.get("operation_key") or "")
+            }
+            source_paths = {
+                str(row.get("path_key") or ""): row.get("tool_preset")
+                for row in prepared.get("paths") or []
+                if str(row.get("path_key") or "") and str(row.get("tool_preset") or "").strip()
+            }
+            source_order = [
+                str(row.get("operation_key") or "")
+                for row in prepared.get("operations") or []
+                if str(row.get("operation_key") or "")
+            ]
+            base_known = known_tool_presets()
+            _plan, source_program, _presets = _compile_authorized_program(
+                order,
+                sheet_no=cint(sheet_no),
+                operation_presets=source_operations,
+                path_overrides=source_paths,
+                operation_order=source_order,
+                cut_path_early_confirmed=bool(prepared.get("cut_path_early_confirmed")),
+                viewed_plan_token=viewed_plan_token,
+                perimeter_join_mode=str(prepared.get("perimeter_join_mode") or "separate"),
+                cut_path_sequence=list(prepared.get("cut_path_sequence") or []),
+                perimeter_cut_early_confirmed=bool(prepared.get("perimeter_cut_early_confirmed")),
+                known_presets=base_known,
+            )
+            source_catalog = catalog_rows_from_program(source_program)
             profiles, associations = accept_sheet_machining(
-                paths=list(prepared.get("paths") or []),
+                paths=source_catalog,
                 stored_profiles=_trusted_machining_profiles(existing),
                 profiles=sheet_profiles_with_catalog(
                     _json_list(machining_profiles)
@@ -538,7 +568,7 @@ def save_cnc_operational_sheet(
                     machining_profile_catalog(),
                 ),
                 associations=incoming_associations,
-                known_tools=known_tool_presets(),
+                known_tools=base_known,
                 snapshots=snapshots,
             )
             prepared = prepare_sheet_settings(

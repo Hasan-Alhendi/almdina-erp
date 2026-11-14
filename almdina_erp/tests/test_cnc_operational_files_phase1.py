@@ -428,3 +428,12 @@ def test_server_boundary_does_not_accept_a_client_plan_or_offer_machine_output()
     translations = (APP_ROOT / "translations" / "ar.csv").read_text(encoding="utf-8")
     assert "الملفات التشغيلية" in translations
     assert "لا توجد خطة قص معتمدة لهذا الطلب" in translations
+
+
+def test_association_reorder_save_uses_the_compiled_vector_catalog():
+    service = SERVICE.read_text(encoding="utf-8")
+    save_body = service.split("def save_cnc_operational_sheet", 1)[1].split("@frappe.whitelist()", 1)[0]
+    assert "source_program" in save_body
+    assert "source_catalog = catalog_rows_from_program(source_program)" in save_body
+    assert "paths=source_catalog" in save_body
+    assert 'paths=list(prepared.get("paths") or [])' not in save_body

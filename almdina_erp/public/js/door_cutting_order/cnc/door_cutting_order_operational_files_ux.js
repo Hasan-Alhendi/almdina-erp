@@ -2509,7 +2509,7 @@
 
     function requestPathReverse(frm, dialog, workspace, sheet, state, pathKey, shapeId, clearSaved) {
         if (!pathKey || !state || state.reverseBusy) return;
-        const assigned = assignedVectorIds(sheet);
+        const assigned = assignedVectorIds(sheet, state.program);
         const locked = collectPhysicalPaths(state.program).some(path => (
             path.path_key === pathKey && assigned.has(String(path.vector_id || ""))
         ));
@@ -2680,7 +2680,7 @@
         const preview = body && typeof body.querySelector === "function"
             ? body.querySelector("[data-sheet-preview]")
             : null;
-        if (preview && boardDisplayState(preview.__cutSheet, state).assigned.has(String(vectorId))) return true;
+        if (preview && boardDisplayState(preview.__cutSheet, state, state.program).assigned.has(String(vectorId))) return true;
         if (!Array.isArray(state.vectorSelection)) state.vectorSelection = [];
         const selected = new Set(state.vectorSelection.map(String));
         if (selected.has(String(vectorId))) selected.delete(String(vectorId));
@@ -2697,13 +2697,13 @@
         return true;
     }
 
-    function boardDisplayState(sheet, state) {
+    function boardDisplayState(sheet, state, program) {
         const form = (state && state.artcamForm) || {};
         const source = String(form.source || "");
         let active = "";
         if (source === "sheet_perimeter") active = "sheet_perimeter";
         else if (source.indexOf("layer:") === 0) active = source.slice(6);
-        const assigned = assignedVectorIds(sheet);
+        const assigned = assignedVectorIds(sheet, program || (state && state.program));
         return {
             active,
             assigned,
@@ -2711,23 +2711,37 @@
         };
     }
 
-    function assignedVectorIds(sheet) {
+    function assignedVectorIds(sheet, program) {
         const assigned = new Set();
-        ((((sheet || {}).machining) || {}).associations || []).forEach(row => {
+        const associations = ((((sheet || {}).machining) || {}).associations || []);
+        associations.forEach(row => {
             if (!row) return;
             (row.vector_ids || []).forEach(id => assigned.add(String(id)));
         });
+        const physical = program ? collectPhysicalPaths(program) : [];
+        if (physical.length) {
+            associations.forEach(row => {
+                const selection = (row && row.selection) || {};
+                if (selection.kind !== "layer" || !selection.operation_key) return;
+                physical.forEach(path => {
+                    if (String(path.operation_key || "") === String(selection.operation_key)) {
+                        assigned.add(String(path.vector_id || ""));
+                    }
+                });
+            });
+        }
+        assigned.delete("");
         return assigned;
     }
 
-    function physicalPathIsAssigned(sheet, path) {
-        return Boolean(path && assignedVectorIds(sheet).has(String(path.vector_id || "")));
+    function physicalPathIsAssigned(sheet, path, program) {
+        return Boolean(path && assignedVectorIds(sheet, program).has(String(path.vector_id || "")));
     }
 
     function paintBoardAppearance(body, sheet, state) {
         const preview = body && body.querySelector("[data-sheet-preview]");
         if (!preview) return;
-        const display = boardDisplayState(sheet || preview.__cutSheet, state);
+        const display = boardDisplayState(sheet || preview.__cutSheet, state, state && state.program);
         preview.querySelectorAll("[data-execution-path]").forEach(node => {
             const vectorId = node.getAttribute("data-vector-id") || "";
             const operation = node.getAttribute("data-operation-key") || "";
@@ -2751,6 +2765,16 @@
         let pathNumber = 0;
         let passOrdinal = 0;
         const operations = Array.isArray(program && program.operations) ? program.operations : [];
+        const shapesByPathKey = new Map();
+        operations.forEach(operation => {
+            (operation.toolpaths || []).forEach(toolpath => {
+                const pathKey = String(toolpath && toolpath.path_key || "");
+                const shapeId = String(toolpath && toolpath.shape_id || "");
+                if (!pathKey || !shapeId) return;
+                if (!shapesByPathKey.has(pathKey)) shapesByPathKey.set(pathKey, new Set());
+                shapesByPathKey.get(pathKey).add(shapeId);
+            });
+        });
         operations.forEach(operation => {
             const operationKey = String(operation.operation_key || "");
             if (!PROGRAM_COLORS[operationKey]) return;
@@ -2842,7 +2866,11 @@
                         preset_name: String(toolpath.preset_name || ""),
                         geometry_fingerprint: group.fingerprint,
                         shape_id: String(toolpath.shape_id || ""),
-                        vector_id: String(toolpath.vector_id || ""),
+                        vector_id: String(toolpath.vector_id || (
+                            toolpath.shape_id && (shapesByPathKey.get(pathKey) || new Set()).size > 1
+                                ? `${pathKey}#${toolpath.shape_id}`
+                                : pathKey
+                        )),
                         display_paths: (Array.isArray(toolpath.display_paths) ? toolpath.display_paths : [])
                             .map(points => (Array.isArray(points) ? points.map(point => [Number(point[0]), Number(point[1])]) : []))
                             .filter(points => points.length >= 2),
@@ -3370,7 +3398,7 @@
         host.__cutPreviewSelectedExecutionPathId = payload.selectedExecutionPathId || "";
         const display = boardDisplayState(payload.sheet || host.__cutSheet, payload.state || {
             vectorSelection: payload.selectedVectorIds || host.__cutPreviewVectorIds || [],
-        });
+        }, nextProgram);
         host.innerHTML = cutPathPreviewMarkup(nextProgram, {
             selectedExecutionPathId: payload.selectedExecutionPathId || "",
             selectedPathKey: payload.selectedPathKey || "",
@@ -3388,21 +3416,23 @@
         paintAssociationVisibility(host);
     }
 
-    function hiddenAssociationPathKeys(sheet, state) {
-        const hidden = new Set();
+    function hiddenAssociationVectorIds(sheet, state, program) {
         const flags = (state && state.hiddenAssociations) || {};
-        ((((sheet || {}).machining) || {}).associations || []).forEach(row => {
-            if (!row || !flags[row.association_id]) return;
-            (row.vector_ids || []).forEach(key => hidden.add(String(key)));
-        });
-        return hidden;
+        const associations = ((((sheet || {}).machining) || {}).associations || [])
+            .filter(row => row && flags[row.association_id]);
+        return assignedVectorIds({ machining: { associations } }, program);
     }
 
     function paintAssociationVisibility(preview) {
         if (!preview || typeof preview.querySelectorAll !== "function") return;
-        const hidden = hiddenAssociationPathKeys(preview.__cutSheet, { hiddenAssociations: preview.__hiddenAssociations || {} });
-        preview.querySelectorAll("[data-execution-path]").forEach(node => {
-            node.classList.toggle("is-association-hidden", hidden.has(node.getAttribute("data-execution-path") || ""));
+        const hidden = hiddenAssociationVectorIds(
+            preview.__cutSheet,
+            { hiddenAssociations: preview.__hiddenAssociations || {} },
+            preview.__cutPreviewProgram
+        );
+        preview.querySelectorAll("[data-vector-id]").forEach(node => {
+            const vectorId = node.getAttribute("data-vector-id") || "";
+            node.classList.toggle("is-association-hidden", hidden.has(vectorId));
         });
     }
 
@@ -3480,7 +3510,7 @@
     function syncPhysicalPathList(body, workspace, sheet, state, program, dialog) {
         if (!body) return;
         const physical = collectPhysicalPaths(program);
-        const assigned = assignedVectorIds(sheet);
+        const assigned = assignedVectorIds(sheet, program);
         state.program = program;
         if (state.selectedExecutionPathId) {
             const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
@@ -3556,7 +3586,7 @@
 
     function applyExecutionSelection(body, workspace, sheet, state, executionPathId) {
         const physical = findPhysicalPath(state.program, executionPathId);
-        if (!physical || physicalPathIsAssigned(sheet, physical)) return false;
+        if (!physical || physicalPathIsAssigned(sheet, physical, state.program)) return false;
         const deselect = state.selectedExecutionPathId === physical.execution_path_id;
         state.selectedExecutionPathId = deselect ? "" : physical.execution_path_id;
         state.selectedPathKey = deselect ? "" : physical.path_key;
@@ -4070,6 +4100,8 @@
         boardVectorHit,
         applyBoardVectorClick,
         paintBoardAppearance,
+        assignedVectorIds,
+        paintAssociationVisibility,
         showSheetIssueDialog,
         resolveBoardPointer,
         boardPointerZone,

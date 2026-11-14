@@ -40,8 +40,7 @@ frappe.ui.form.on("CNC Machining Profile", {
 const PROFILE_TOOL_FIELDS = [
     ["tool_number", "Tool Number"],
     ["stepdown_mm", "Stepdown"],
-    ["stepover_size_mm", "Stepover Size"],
-    ["stepover_percent", "Stepover Percent"],
+    ["stepover_size_mm", "Stepover Size (mm)"],
     ["feed_rate_mm_sec", "Feed Rate (mm/sec)"],
     ["plunge_rate_mm_sec", "Plunge Rate (mm/sec)"],
     ["spindle_speed_rpm", "Spindle Speed (RPM)"],
@@ -79,7 +78,10 @@ function tool_diameter(tool) {
 }
 
 function display_tool_number(value) {
-    return String(value == null ? "" : value).replace(/^T/i, "");
+    if (value == null || value === "") return "";
+    const raw = String(value).trim();
+    const match = raw.match(/^(?:T)?([1-9][0-9]{0,2})$/i);
+    return match ? match[1] : raw;
 }
 
 function editor_box(frm) {
@@ -117,26 +119,6 @@ function paint_profile_tool_editor(frm, force) {
         <p class="text-muted" data-tool-summary>${escape_text(summary)}</p>
         <div class="row">${inputs}</div>`
     );
-    box.find('[data-profile-tool="stepover_size_mm"]').on("change", () => sync_profile_stepover(frm, "size"));
-    box.find('[data-profile-tool="stepover_percent"]').on("change", () => sync_profile_stepover(frm, "percent"));
-}
-
-function sync_profile_stepover(frm, source) {
-    const box = editor_box(frm);
-    if (!box) return;
-    const diameter = tool_diameter(frm._profile_tool || stored_tool(frm));
-    if (!diameter) return;
-    const size = box.find('[data-profile-tool="stepover_size_mm"]');
-    const percent = box.find('[data-profile-tool="stepover_percent"]');
-    if (source === "size") {
-        const value = Number(size.val());
-        if (!Number.isFinite(value)) return;
-        percent.val(Math.round((value / diameter) * 100000) / 1000);
-        return;
-    }
-    const value = Number(percent.val());
-    if (!Number.isFinite(value)) return;
-    size.val(Math.round((diameter * value / 100) * 1000) / 1000);
 }
 
 function allowed_tool_overrides(frm) {

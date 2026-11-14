@@ -842,6 +842,43 @@ def test_repeated_layer_order_follows_association_identity():
     ] == ["layer-1:a", "layer-2:b", "layer-1:c"]
 
 
+def test_shared_path_key_order_uses_vector_identity_not_the_ambiguous_path_key():
+    ordered = order_program_by_associations(
+        {
+            "operations": [{
+                "operation_key": "cut_path",
+                "toolpaths": [
+                    {
+                        "path_key": "cut_path:shared",
+                        "shape_id": "shape-a",
+                        "vector_id": "cut_path:shared#shape-a",
+                        "points": [[0, 0], [10, 0]],
+                    },
+                    {
+                        "path_key": "cut_path:shared",
+                        "shape_id": "shape-b",
+                        "vector_id": "cut_path:shared#shape-b",
+                        "points": [[0, 10], [10, 10]],
+                    },
+                ],
+            }],
+        },
+        [
+            {"association_id": "b", "vector_ids": ["cut_path:shared#shape-b"]},
+            {"association_id": "a", "vector_ids": ["cut_path:shared#shape-a"]},
+        ],
+    )
+    paths = [path for operation in ordered["operations"] for path in operation["toolpaths"]]
+    assert [path["vector_id"] for path in paths] == [
+        "cut_path:shared#shape-b",
+        "cut_path:shared#shape-a",
+    ]
+    assert [path["points"] for path in paths] == [
+        [[0, 10], [10, 10]],
+        [[0, 0], [10, 0]],
+    ]
+
+
 def test_reopened_profile_keeps_its_tool_copy_after_the_base_tool_changes():
     stored = _stored_tool()
     known = {"T9_CUT": stored}
@@ -1333,6 +1370,30 @@ def test_profile_edits_keep_an_independent_validated_tool_copy():
     assert invalid.value.code == "stepover_invalid"
 
 
+def test_association_stepover_size_alone_derives_percent_from_the_protected_diameter():
+    known = {"T9_CUT": _stored_tool()}
+    profile = normalize_profile(_profile(), known_tools=known)
+    catalog = _catalog(_vector("cut_path:piece-a:outer"))
+    association = normalize_associations(
+        [{
+            "association_id": "association:stepover",
+            "profile_id": profile["profile_id"],
+            "selection": {"kind": "selected_vectors", "vector_ids": ["cut_path:piece-a:outer"]},
+            "local_values": {
+                "tool_values": {"stepover_size_mm": 1.25},
+            },
+        }],
+        profiles=[profile],
+        catalog=catalog,
+        known_tools=known,
+    )[0]
+    assert association["local_values"]["tool_values"]["diameter_mm"] == 5
+    assert association["local_values"]["tool_values"]["stepover_size_mm"] == 1.25
+    assert association["local_values"]["tool_values"]["stepover_percent"] == 25
+    assert profile["tool_values"]["stepover_size_mm"] == 0.2
+    assert profile["tool_values"]["stepover_percent"] == 4
+
+
 def test_feed_rate_is_converted_from_mm_per_second_once():
     known = {"T9_CUT": _stored_tool()}
     profile = normalize_profile(_profile(), known_tools=known)
@@ -1792,6 +1853,21 @@ def test_vector_identity_survives_shared_keys_depth_passes_reverse_and_delete():
     assert selected_perimeter_snapshot["vector_ids"] == [SHEET_PERIMETER_PATH_KEY, "liner:piece-a"]
     stored = append_snapshot([], snapshot, live_association_ids=["association:a"])
     linked = remember_toolpath_on_association(selected, stored, "association:a")
+    reordered_program = {**program, "operations": list(reversed(program["operations"]))}
+    reordered_catalog = catalog_rows_from_program(reordered_program)
+    assert {row["vector_id"] for row in reordered_catalog} == {row["vector_id"] for row in rows}
+    reopened_profiles, reopened_associations = accept_sheet_machining(
+        paths=reordered_catalog,
+        profiles=[profile],
+        stored_profiles=[profile],
+        associations=linked,
+        known_tools=known,
+        snapshots=stored,
+    )
+    assert reopened_profiles[0]["profile_id"] == profile["profile_id"]
+    assert reopened_associations[0]["association_id"] == linked[0]["association_id"]
+    assert reopened_associations[0]["vector_ids"] == linked[0]["vector_ids"]
+    assert reopened_associations[0]["toolpath_id"] == linked[0]["toolpath_id"]
     overlaid = overlay_frozen_toolpaths(program, stored, linked)
     square_copies = [
         path

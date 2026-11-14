@@ -16,15 +16,13 @@
     const TOOL_FIELDS = Object.freeze([
         ["tool_number", "Tool Number"],
         ["stepdown_mm", "Stepdown"],
-        ["stepover_size_mm", "Stepover Size"],
-        ["stepover_percent", "Stepover Percent"],
+        ["stepover_size_mm", "Stepover Size (mm)"],
         ["spindle_speed_rpm", "Spindle Speed (RPM)"],
     ]);
     const ALLOWED_TOOL_FIELDS = Object.freeze([
         "tool_number",
         "stepdown_mm",
         "stepover_size_mm",
-        "stepover_percent",
         "spindle_speed_rpm",
         "feed_rate_mm_sec",
         "plunge_rate_mm_sec",
@@ -60,7 +58,7 @@
 
     function toolPayload(preset) {
         const source = preset || {};
-        const number = source.tool_number == null ? "" : String(source.tool_number).replace(/^T/i, "");
+        const number = displayToolNumber(source.tool_number);
         return {
             description: source.description || source.tool_name || source.name || "",
             tool_name: source.tool_name || source.description || source.name || "",
@@ -80,6 +78,13 @@
             feed_rate_mm_min: source.feed_rate_mm_min,
             plunge_rate_mm_min: source.plunge_rate_mm_min,
         };
+    }
+
+    function displayToolNumber(value) {
+        if (value == null || value === "") return "";
+        const raw = String(value).trim();
+        const match = raw.match(/^(?:T)?([1-9][0-9]{0,2})$/i);
+        return match ? match[1] : raw;
     }
 
     function rateFields(tool) {
@@ -209,7 +214,7 @@
     }
 
     function input(name, label, value) {
-        return `<label class="dco-artcam-field">${escapeHtml(label)}
+        return `<label class="dco-artcam-field">${escapeHtml(translate(label))}
             <input class="form-control" data-field="${escapeHtml(name)}" value="${escapeHtml(value == null ? "" : value)}">
         </label>`;
     }
@@ -304,7 +309,7 @@
                 home_y_mm: local.home_y_mm,
                 home_z_mm: local.home_z_mm,
             },
-            tool: Object.assign({}, local.tool_values || {}),
+            tool: toolPayload(local.tool_values || {}),
             toolOpen: Boolean(row.profile_id || local.tool_preset),
         };
         state.vectorSelection = (row.selection && row.selection.vector_ids) || row.vector_ids || [];
@@ -336,7 +341,6 @@
         TOOL_FIELDS.concat(rateFields(previousTool)).forEach(([name]) => {
             form.tool[name] = value(name);
         });
-        syncStepover(form, host);
         const release = host.querySelector("[data-artcam-editor] [data-field=\"release_perimeter\"]");
         form.releasePerimeter = Boolean(release && release.checked);
         const toolSection = host.querySelector("[data-artcam-tool]");
@@ -353,24 +357,6 @@
             return { kind: "layer", operation_key: String(form.source).slice(6) };
         }
         return {};
-    }
-
-    function syncStepover(form, host) {
-        const tool = form.tool || {};
-        const diameter = Number(tool.diameter_mm);
-        if (!Number.isFinite(diameter) || diameter <= 0 || !host) return;
-        const active = host.querySelector("[data-artcam-editor] :focus");
-        const source = active && active.getAttribute ? active.getAttribute("data-field") : "";
-        if (source === "stepover_size_mm" && tool.stepover_size_mm !== "" && tool.stepover_size_mm != null) {
-            tool.stepover_percent = Math.round((Number(tool.stepover_size_mm) / diameter) * 100000) / 1000;
-            const percent = host.querySelector("[data-artcam-editor] [data-field=\"stepover_percent\"]");
-            if (percent) percent.value = tool.stepover_percent;
-        }
-        if (source === "stepover_percent" && tool.stepover_percent !== "" && tool.stepover_percent != null) {
-            tool.stepover_size_mm = Math.round((diameter * Number(tool.stepover_percent) / 100) * 1000) / 1000;
-            const size = host.querySelector("[data-artcam-editor] [data-field=\"stepover_size_mm\"]");
-            if (size) size.value = tool.stepover_size_mm;
-        }
     }
 
     function payloadFromForm(form, state, previous) {
@@ -416,7 +402,7 @@
             home_y_mm: profile.home_y_mm,
             home_z_mm: profile.home_z_mm,
         };
-        form.tool = Object.assign({}, (profile.tool_values) || {});
+        form.tool = toolPayload(profile.tool_values || {});
     }
 
     function reportFailure(title, fallback, error) {
@@ -517,9 +503,7 @@
                 form.toolOpen = Boolean(form.tool_preset);
                 if (typeof context.refresh === "function") context.refresh();
             }
-            if (event.target.matches("[data-field=\"stepover_size_mm\"], [data-field=\"stepover_percent\"]")) {
-                readEditor(host, context.state);
-            }
+            if (event.target.matches("[data-field=\"stepover_size_mm\"]")) readEditor(host, context.state);
         });
         host.addEventListener("click", event => {
             const toggle = event.target.closest("[data-artcam-tool-toggle]");

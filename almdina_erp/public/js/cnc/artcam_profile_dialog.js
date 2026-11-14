@@ -56,7 +56,7 @@
 
     function toolPayload(preset) {
         const source = preset || {};
-        const number = source.tool_number == null ? "" : String(source.tool_number).replace(/^T/i, "");
+        const number = displayToolNumber(source.tool_number);
         return {
             description: source.description || source.tool_name || "",
             tool_type: "Ball Nose",
@@ -73,6 +73,13 @@
             feed_rate_mm_sec: source.feed_rate_mm_sec,
             plunge_rate_mm_sec: source.plunge_rate_mm_sec,
         };
+    }
+
+    function displayToolNumber(value) {
+        if (value == null || value === "") return "";
+        const raw = String(value).trim();
+        const match = raw.match(/^(?:T)?([1-9][0-9]{0,2})$/i);
+        return match ? match[1] : raw;
     }
 
     function storedToolPayload(tool) {
@@ -95,8 +102,7 @@
             { fieldname: "tool_number", fieldtype: "Int", label: "Tool Number", reqd: 1 },
             { fieldname: "stepdown_mm", fieldtype: "Float", label: "Stepdown", precision: 3, reqd: 1 },
             { fieldtype: "Column Break" },
-            { fieldname: "stepover_size_mm", fieldtype: "Float", label: "Stepover Size", precision: 3, reqd: 1 },
-            { fieldname: "stepover_percent", fieldtype: "Float", label: "Stepover Percent", precision: 3, reqd: 1 },
+            { fieldname: "stepover_size_mm", fieldtype: "Float", label: "Stepover Size (mm)", precision: 3, reqd: 1 },
             { fieldtype: "Section Break" },
             { fieldname: "feed_rate_mm_sec", fieldtype: "Float", label: "Feed Rate (mm/sec)", precision: 3, reqd: 1 },
             { fieldname: "plunge_rate_mm_sec", fieldtype: "Float", label: "Plunge Rate (mm/sec)", precision: 3, reqd: 1 },
@@ -132,23 +138,6 @@
         field.$wrapper.html(`<p class="text-muted" data-tool-summary>${text}</p>`);
     }
 
-    function syncStepover(dialog, source) {
-        const diameter = Number(dialog._toolDiameter || 0);
-        if (!diameter) return;
-        const sizeField = dialog.fields_dict.stepover_size_mm;
-        const percentField = dialog.fields_dict.stepover_percent;
-        if (!sizeField || !percentField) return;
-        if (source === "size") {
-            const size = Number(sizeField.get_value());
-            if (!Number.isFinite(size)) return;
-            percentField.set_value(Math.round((size / diameter) * 100000) / 1000);
-            return;
-        }
-        const percent = Number(percentField.get_value());
-        if (!Number.isFinite(percent)) return;
-        sizeField.set_value(Math.round((diameter * percent / 100) * 1000) / 1000);
-    }
-
     function open(options = {}) {
         const ui = window.frappe && frappe.ui;
         if (!ui || typeof ui.Dialog !== "function" || !options.editable) return null;
@@ -172,7 +161,6 @@
                         tool_number: values.tool_number,
                         stepdown_mm: values.stepdown_mm,
                         stepover_size_mm: values.stepover_size_mm,
-                        stepover_percent: values.stepover_percent,
                         feed_rate_mm_sec: values.feed_rate_mm_sec,
                         plunge_rate_mm_sec: values.plunge_rate_mm_sec,
                         spindle_speed_rpm: values.spindle_speed_rpm,
@@ -200,10 +188,6 @@
             if (typeof originalChange === "function") originalChange.apply(this, arguments);
             pinEnglishLabels(dialog);
         };
-        const sizeField = dialog.fields_dict.stepover_size_mm;
-        const percentField = dialog.fields_dict.stepover_percent;
-        if (sizeField) sizeField.df.change = function changeSize() { syncStepover(dialog, "size"); };
-        if (percentField) percentField.df.change = function changePercent() { syncStepover(dialog, "percent"); };
         dialog.show();
         if (profile) {
             const stored = storedToolPayload(profile.tool_values || {});

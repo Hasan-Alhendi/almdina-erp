@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
 from almdina_erp.almdina_erp.domain.cnc.nc_interpreter import interpret_nc, verify_nc_against_program
@@ -167,6 +169,40 @@ def test_liner_and_shared_cut_are_posted_once():
     assert len(shared) == 1
     assert shared[0]["piece_instance_id"] == ""
     assert package["text"].count(f"(Path {shared[0]['path_key']})") == 1
+
+
+def test_reordering_operations_changes_nc_order_without_changing_paths_or_tool_number():
+    piece = _piece(
+        extra_liner=1,
+        liner_reference_side="edge_width_top",
+        liner_offset_cm=2,
+        liner_width_cm=1.8,
+    )
+    before = _program(pieces=[piece], operation_order=["liner", "cut_path"])
+    after = _program(pieces=[piece], operation_order=["cut_path", "liner"])
+    machine = {"retract_z_mm": 20, "production_approved": 0}
+    before_nc = build_simulation_nc(before, machine_profile=machine)
+    after_nc = build_simulation_nc(after, machine_profile=machine)
+
+    def geometry(program):
+        return sorted(
+            (
+                path["vector_id"],
+                tuple((round(point[0], 3), round(point[1], 3)) for point in path["points"]),
+            )
+            for operation in program["operations"]
+            for path in operation["toolpaths"]
+        )
+
+    def posted_paths(text):
+        return re.findall(r"^\(Path ([^)]+)\)$", text, flags=re.MULTILINE)
+
+    assert geometry(before) == geometry(after)
+    assert sorted(posted_paths(before_nc["text"])) == sorted(posted_paths(after_nc["text"]))
+    assert posted_paths(before_nc["text"]) != posted_paths(after_nc["text"])
+    assert before_nc["tool_number"] == after_nc["tool_number"] == "T9"
+    assert before_nc["verification"]["ok"] is True
+    assert after_nc["verification"]["ok"] is True
 
 
 def test_mill_outlines_stay_visible_when_the_cutter_diameter_is_missing():

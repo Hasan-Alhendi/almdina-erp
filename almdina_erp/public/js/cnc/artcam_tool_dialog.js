@@ -30,9 +30,9 @@
     }
 
     function fieldsFor(tool) {
-        const displayNumber = tool && tool.tool_number
-            ? String(tool.tool_number).replace(/^T/i, "")
-            : "";
+        const rawNumber = tool && tool.tool_number != null ? String(tool.tool_number).trim() : "";
+        const numberMatch = rawNumber.match(/^(?:T)?([1-9][0-9]{0,2})$/i);
+        const displayNumber = numberMatch ? numberMatch[1] : rawNumber;
         return [
             { fieldtype: "Section Break", label: "Tool" },
             { fieldname: "description", fieldtype: "Data", label: "Tool Name", reqd: 1, default: (tool && (tool.description || tool.tool_name)) || "" },

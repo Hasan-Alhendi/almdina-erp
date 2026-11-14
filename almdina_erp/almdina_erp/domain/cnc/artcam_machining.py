@@ -1626,7 +1626,8 @@ def order_program_by_associations(
         for path in operation.get("toolpaths") or ():
             if not isinstance(path, Mapping):
                 continue
-            index = owner.get(str(path.get("path_key") or ""))
+            vector_id = str(path.get("vector_id") or "").strip()
+            index = owner.get(vector_id or str(path.get("path_key") or ""))
             if index is None:
                 leftovers.append((operation, path))
             else:

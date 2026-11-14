@@ -3297,6 +3297,7 @@ Tool settings,إعدادات الريشة
 Editable tool settings,إعدادات الريشة القابلة للتعديل
 Stepover Percent,نسبة التداخل
 Stepover Size,عرض التداخل
+Stepover Size (mm),عرض التداخل (مم)
 Diameter (mm),قطر الريشة (مم)
 Choose a tool to copy its protected properties.,اختر ريشة لنسخ خصائصها المحمية.
 "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter.",مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
@@ -3903,6 +3904,7 @@ Diameter must be a positive number of millimetres.,القطر يجب أن يكو
 Stepdown must be a positive number of millimetres.,عمق التمريرة يجب أن يكون عددًا موجبًا بالمليمتر.
 Final tool offset must be zero or a positive number of millimetres.,إزاحة الريشة النهائية يجب أن تكون صفرًا أو عددًا موجبًا بالمليمتر.
 Enter the stepover size and its percent of diameter.,أدخل عرض التداخل ونسبته من القطر.
+Stepover size must be positive and no greater than the tool diameter.,يجب أن يكون عرض التداخل موجبًا وألا يتجاوز قطر الريشة.
 Spindle speed must be a positive whole number of RPM.,سرعة الدوران يجب أن تكون عددًا صحيحًا موجبًا من اللفات في الدقيقة.
 Feed rate must be a positive number of millimetres per second.,سرعة التغذية يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
 Plunge rate must be a positive number of millimetres per second.,سرعة النزول يجب أن تكون عددًا موجبًا من المليمتر في الثانية.
