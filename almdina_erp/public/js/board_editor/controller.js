@@ -203,6 +203,10 @@
         let scrollOwned = false;
         let measureArmedBeforeDrawing = false;
         let drawingTool = "select";
+        let drawingShapeKind = "rectangle";
+        let shapeAnchor = null;
+        let shapeEntry = {};
+        let nodeDrag = null;
         let drawingPointer = null;
         let drawingEntry = { lengthLocked: false, angleLocked: false, lengthText: "", angleText: "" };
         let pendingMeasureFocus = null;
@@ -1323,18 +1327,104 @@
             }
         }
 
+        function worldPoint(frame, Space, point) {
+            if (!point) return null;
+            const world = frame ? Space.doorToWorld(frame, point.x, point.y) : point;
+            return { x: world.x, y: world.y, role: point.role || "" };
+        }
+
+        function drawingShapes(record, frame, Space) {
+            if (!Space.normalizeShape) return [];
+            return (record.document.shapes || []).filter((shape) => shape && !shape.exploded).map((shape) => {
+                const built = Space.normalizeShape(shape.kind, shape.params);
+                if (!built.ok) return null;
+                return {
+                    id: shape.id,
+                    kind: shape.kind,
+                    closed: built.figure.closed !== false,
+                    selected: Boolean(record.selection && record.selection.shapeId === shape.id),
+                    points: built.figure.points.map((point) => worldPoint(frame, Space, point)),
+                    handles: (built.figure.handles || []).map((point) => worldPoint(frame, Space, point)),
+                };
+            }).filter(Boolean);
+        }
+
+        function shapeFieldValue(key, params) {
+            if (shapeEntry[key] != null) return shapeEntry[key];
+            if (!params || params[key] == null) return "";
+            return String(params[key]);
+        }
+
+        function shapeFormState(record, Space) {
+            if (!Space.shapeFieldDefs) return null;
+            if (drawingTool === "node_edit" && record.selection && record.selection.nodeId && String(record.selection.nodeId).indexOf("control:") !== 0) {
+                const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
+                const node = path && path.nodes.find((row) => row.id === record.selection.nodeId);
+                if (!node) return null;
+                return {
+                    mode: "node",
+                    fields: [
+                        { key: "x_mm", labelKey: "X (mm)", value: shapeFieldValue("x_mm", { x_mm: node.x_mm }) },
+                        { key: "y_mm", labelKey: "Y (mm)", value: shapeFieldValue("y_mm", { y_mm: node.y_mm }) },
+                    ],
+                    errorKey: record.measureError && record.measureError.messageKey,
+                    actions: { copy: true, paste: Boolean(record.clipboard), remove: true, insert: true },
+                };
+            }
+            const editing = (drawingTool === "select" || drawingTool === "node_edit")
+                && record.selection && record.selection.shapeId && !record.selection.pathId
+                ? (record.document.shapes || []).find((shape) => shape.id === record.selection.shapeId && !shape.exploded)
+                : null;
+            if (!editing && drawingTool !== "shapes") {
+                if (!record.clipboard) return null;
+                return { mode: "create", kind: drawingShapeKind, fields: [], actions: { paste: true } };
+            }
+            const kind = editing ? editing.kind : drawingShapeKind;
+            return {
+                mode: editing ? "edit" : "create",
+                kind,
+                fields: Space.shapeFieldDefs(kind).map((field) => ({
+                    key: field.key,
+                    labelKey: field.labelKey,
+                    value: shapeFieldValue(field.key, editing && editing.params),
+                })),
+                errorKey: record.measureError && record.measureError.messageKey,
+                actions: editing
+                    ? { convert: true, copy: true, paste: Boolean(record.clipboard), remove: true }
+                    : { paste: Boolean(record.clipboard) },
+            };
+        }
+
         function buildDrawingView(view, record, Space) {
             if (!record) return null;
             const frame = drawingFrame(view);
             const paths = (record.document.paths || []).map((path) => ({
                 id: path.id,
                 closed: path.closed === true,
-                selected: Boolean(record.selection && record.selection.pathId === path.id),
+                selected: Boolean(record.selection && record.selection.pathId === path.id && !record.selection.shapeId),
                 active: Boolean(record.cursor && record.cursor.pathId === path.id),
+                markup: Space.pathMarkup ? Space.pathMarkup(frame, path) : "",
                 points: (path.nodes || []).map((node) => {
                     const world = frame ? Space.doorToWorld(frame, node.x_mm, node.y_mm) : { x: node.x_mm, y: node.y_mm };
-                    return { id: node.id, x: world.x, y: world.y };
+                    return {
+                        id: node.id,
+                        x: world.x,
+                        y: world.y,
+                        selected: Boolean(record.selection && record.selection.nodeId === node.id),
+                    };
                 }),
+                controls: drawingTool === "node_edit" && record.selection && record.selection.pathId === path.id
+                    ? (path.segments || []).reduce((list, segment) => {
+                        if (segment.kind !== "bezier" || !segment.controls) return list;
+                        segment.controls.forEach((control, index) => {
+                            const world = frame
+                                ? Space.doorToWorld(frame, control.x_mm, control.y_mm)
+                                : { x: control.x_mm, y: control.y_mm };
+                            list.push({ segmentId: segment.id, index, x: world.x, y: world.y });
+                        });
+                        return list;
+                    }, [])
+                    : [],
             }));
             if (record.cursor && !record.cursor.pathId && frame) {
                 const world = Space.doorToWorld(frame, record.cursor.x, record.cursor.y);
@@ -1355,6 +1445,9 @@
                 canClose: Boolean(record.cursor && record.cursor.pathId),
                 canCancel: Boolean(record.cursor),
                 paths,
+                shapes: drawingShapes(record, frame, Space),
+                shapeKind: drawingShapeKind,
+                shapeForm: shapeFormState(record, Space),
                 preview: drawingPointer && drawingPointer.preview,
                 snap: drawingPointer && drawingPointer.snap,
                 measure: drawingMeasureState(record),
@@ -1377,14 +1470,24 @@
                 errorField: measureError && measureError.field,
             };
             }
-            if (drawingTool !== "select" || !record || !record.selection || !record.selection.segmentId) return null;
+            if ((drawingTool !== "select" && drawingTool !== "node_edit") || !record || !record.selection || !record.selection.segmentId || record.selection.nodeId) return null;
             const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
             if (!path) return null;
             if (path.closed) {
+                const measured = drawingSession.metrics(record.selection.pathId, record.selection.segmentId);
+                if (!measured) return null;
                 return {
-                    mode: "closed",
-                    enabled: false,
-                    messageKey: "Closed paths cannot be resized one segment at a time.",
+                    mode: "edit",
+                    enabled: true,
+                    hintKey: "This edit moves only the segment end and keeps the path closed.",
+                    lengthMm: measured.lengthMm,
+                    angleDeg: measured.angleDeg,
+                    lengthText: drawingEntry.lengthText,
+                    angleText: drawingEntry.angleText,
+                    lengthLocked: drawingEntry.lengthLocked,
+                    angleLocked: drawingEntry.angleLocked,
+                    errorKey: record.measureError && record.measureError.messageKey,
+                    errorField: record.measureError && record.measureError.field,
                 };
             }
             const measured = drawingSession.metrics(record.selection.pathId, record.selection.segmentId);
@@ -1512,7 +1615,7 @@
 
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
-            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure]")) {
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form]")) {
                 return false;
             }
             const view = store.snapshot();
@@ -1527,10 +1630,13 @@
                 const hit = drawingSession.selectHit(mapped.door, Space.thresholdMm(scale));
                 if (!hit) return false;
                 drawingPointer = null;
+                shapeEntry = {};
                 resetDrawingEntry();
                 syncDrawing();
                 return true;
             }
+            if (drawingTool === "shapes") return placeShapePoint(mapped.door);
+            if (drawingTool === "node_edit") return beginNodeEdit(mapped.door, view);
             if (drawingTool !== "polyline") return false;
             const resolved = record.cursor ? resolvedDoorPoint(mapped, event.shiftKey) : mapped.door;
             drawingSession.placePoint(resolved.x, resolved.y);
@@ -1579,7 +1685,7 @@
             committingMeasure = true;
             try {
                 let committed = false;
-                if (drawingTool === "select") {
+                if (drawingTool === "select" || drawingTool === "node_edit") {
                     const parsedLength = Model.parseMeasure(length);
                     const parsedAngle = Model.parseMeasure(angle);
                     const error = selectMeasureError(parsedLength, parsedAngle);
@@ -1622,6 +1728,29 @@
             if (action === "finish") drawingSession.finish();
             else if (action === "close") drawingSession.close();
             else if (action === "cancel") drawingSession.cancelPath();
+            else if (action === "convert") {
+                const selected = activeDrawingRecord();
+                if (selected && selected.selection && selected.selection.shapeId) {
+                    drawingSession.convertShape(selected.selection.shapeId);
+                }
+            } else if (action === "copy") drawingSession.copySelection();
+            else if (action === "paste") drawingSession.pasteClipboard();
+            else if (action === "remove") drawingSession.deleteSelection();
+            else if (action === "insert-node") {
+                const selected = activeDrawingRecord();
+                const path = selected && (selected.document.paths || []).find((row) => row.id === (selected.selection && selected.selection.pathId));
+                const segment = path && (
+                    path.segments.find((row) => row.id === selected.selection.segmentId && row.kind === "line")
+                    || path.segments.find((row) => row.kind === "line" && (
+                        row.from_node === selected.selection.nodeId || row.to_node === selected.selection.nodeId
+                    ))
+                );
+                if (path && segment) {
+                    const from = path.nodes.find((node) => node.id === segment.from_node);
+                    const to = path.nodes.find((node) => node.id === segment.to_node);
+                    if (from && to) drawingSession.insertNode(path.id, segment.id, (from.x_mm + to.x_mm) / 2, (from.y_mm + to.y_mm) / 2);
+                }
+            }
             drawingPointer = null;
             resetDrawingEntry();
             const record = activeDrawingRecord();
@@ -1629,12 +1758,144 @@
             syncDrawing();
         }
 
+        function readShapeFields(host) {
+            const fields = {};
+            if (!host) return fields;
+            host.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
+                fields[input.getAttribute("data-abe-shape-field")] = input.value;
+            });
+            return fields;
+        }
+
+        function placeShapePoint(door) {
+            const Space = drawingSpaceApi();
+            if (!Space || !door) return false;
+            if (!shapeAnchor) {
+                shapeAnchor = { x: door.x, y: door.y };
+                drawingPointer = null;
+                syncDrawing();
+                return true;
+            }
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            const fields = readShapeFields(host);
+            const typed = Object.keys(fields).some((key) => {
+                if (!fields[key] || !String(fields[key]).trim()) return false;
+                return key !== "x_mm" && key !== "y_mm" && key !== "cx_mm" && key !== "cy_mm" && key !== "corner" && key !== "rotation_deg" && key !== "start_angle_deg";
+            });
+            let created = false;
+            if (typed) created = drawingSession.commitShapeFields(drawingShapeKind, fields, shapeAnchor, "create").ok === true;
+            else if (drawingShapeKind === "bezier") created = drawingSession.createBezier(shapeAnchor, door) === true;
+            else {
+                const built = Space.shapeFromDrag(drawingShapeKind, shapeAnchor, door);
+                created = Boolean(built.ok && drawingSession.createShape(drawingShapeKind, built.params));
+                if (!created && built && !built.ok) {
+                    const record = activeDrawingRecord();
+                    if (record) record.measureError = { field: "", messageKey: built.messageKey };
+                }
+            }
+            shapeAnchor = null;
+            shapeEntry = {};
+            drawingPointer = null;
+            syncDrawing();
+            return created || true;
+        }
+
+        function beginNodeEdit(door, view) {
+            const Space = drawingSpaceApi();
+            const scale = Number(view.viewport.scale) || 1;
+            const hit = drawingSession.hitNode(door, Space.thresholdMm(scale));
+            shapeEntry = {};
+            if (hit && hit.kind === "control") {
+                nodeDrag = { kind: "control", pathId: hit.pathId, segmentId: hit.segmentId, controlIndex: hit.controlIndex, history: false };
+                syncDrawing();
+                return true;
+            }
+            if (hit && hit.kind === "node") {
+                drawingSession.selectNode(hit.pathId, hit.nodeId);
+                nodeDrag = { kind: "node", pathId: hit.pathId, nodeId: hit.nodeId, history: false };
+                syncDrawing();
+                return true;
+            }
+            nodeDrag = null;
+            const selected = drawingSession.selectHit(door, Space.thresholdMm(scale));
+            syncDrawing();
+            return selected === true;
+        }
+
+        function updateShapePointer(event) {
+            if (drawingTool === "node_edit" && nodeDrag) {
+                const view = store.snapshot();
+                const mapped = doorPointFromEvent(view, event);
+                if (!mapped) return;
+                const options = { history: nodeDrag.history !== true };
+                const moved = nodeDrag.kind === "control"
+                    ? drawingSession.moveBezierControl(nodeDrag.pathId, nodeDrag.segmentId, nodeDrag.controlIndex, mapped.door.x, mapped.door.y, options)
+                    : drawingSession.moveNode(nodeDrag.pathId, nodeDrag.nodeId, mapped.door.x, mapped.door.y, options);
+                if (moved) nodeDrag.history = true;
+                syncDrawing();
+                return;
+            }
+            if (drawingTool !== "shapes" || !shapeAnchor) return;
+            const view = store.snapshot();
+            const mapped = doorPointFromEvent(view, event);
+            const Space = drawingSpaceApi();
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            if (!mapped || !Space || !host || !CanvasRenderer.patchShapePreview) return;
+            const frame = drawingFrame(view);
+            let figure = null;
+            if (drawingShapeKind === "bezier") {
+                const built = Space.bezierFromPoints(shapeAnchor, mapped.door);
+                if (built.ok) {
+                    const start = built.parts.nodes[0];
+                    const end = built.parts.nodes[1];
+                    const controls = built.parts.segments[0].controls;
+                    figure = {
+                        closed: false,
+                        points: [start, controls[0], controls[1], end].map((point) => ({ x: point.x_mm, y: point.y_mm })),
+                    };
+                }
+            } else {
+                const built = Space.shapeFromDrag(drawingShapeKind, shapeAnchor, mapped.door);
+                if (built.ok) figure = built.figure;
+            }
+            if (!figure) {
+                CanvasRenderer.patchShapePreview(host, null, false);
+                return;
+            }
+            const points = figure.points.map((point) => (frame ? Space.doorToWorld(frame, point.x, point.y) : point));
+            CanvasRenderer.patchShapePreview(host, points, figure.closed !== false);
+        }
+
+        function commitShapeForm() {
+            const record = activeDrawingRecord();
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            const form = host && host.querySelector("[data-abe-shape-form]");
+            if (!record || !form || !drawingSession) return;
+            const mode = form.getAttribute("data-abe-shape-mode") || "create";
+            const fields = readShapeFields(host);
+            if (mode === "node" && record.selection && record.selection.nodeId) {
+                drawingSession.moveNode(record.selection.pathId, record.selection.nodeId, fields.x_mm, fields.y_mm);
+            } else {
+                const kind = mode === "edit" && record.selection && record.selection.shapeId
+                    ? ((record.document.shapes || []).find((shape) => shape.id === record.selection.shapeId) || {}).kind
+                    : drawingShapeKind;
+                drawingSession.commitShapeFields(kind, fields, shapeAnchor || null, mode);
+            }
+            shapeAnchor = null;
+            shapeEntry = {};
+            drawingPointer = null;
+            syncDrawing();
+        }
+
         function setDrawingTool(tool) {
-            if (tool !== "polyline" && tool !== "select") return;
+            if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit") return;
             const view = store && store.snapshot();
             if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
             drawingTool = tool;
             drawingPointer = null;
+            shapeAnchor = null;
+            shapeEntry = {};
+            nodeDrag = null;
             resetDrawingEntry();
             const record = activeDrawingRecord();
             if (record) record.measureError = null;
@@ -1975,6 +2236,17 @@
                 },
                 setEditorMode: (mode) => setEditorMode(mode),
                 setDrawingTool: (tool) => setDrawingTool(tool),
+                setShapeKind: (kind) => {
+                    drawingShapeKind = kind || "rectangle";
+                    shapeAnchor = null;
+                    shapeEntry = {};
+                    if (drawingTool !== "shapes") setDrawingTool("shapes");
+                    else syncDrawing();
+                },
+                onShapeInput: (key, value) => {
+                    if (key) shapeEntry[key] = value == null ? "" : String(value);
+                },
+                commitShapeForm: () => commitShapeForm(),
                 drawingAction: (action) => drawingAction(action),
                 drawingPointerDown: (event) => drawingPointerDown(event),
                 commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
@@ -2069,6 +2341,7 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    updateShapePointer(event);
                     updateDrawingPointer(event);
                     // Keep Alt latch aligned with live modifier state (keyup can be lost
                     // after focus changes). Drag snap-bypass still reads the same flag.
@@ -2096,6 +2369,7 @@
                     if (moveInteraction) moveInteraction.onPointerMove(event);
                 },
                 onStagePointerUp: (event) => {
+                    nodeDrag = null;
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
                         || (store && store.snapshot().measureToolActive)
@@ -2622,7 +2896,7 @@
                         if (event.shiftKey || keyName.toLowerCase() === "y") drawingSession.redo();
                         else drawingSession.undo();
                         syncDrawing();
-                    } else if ((keyName === "Delete" || keyName === "Backspace") && drawingTool === "select" && drawingSession) {
+                    } else if ((keyName === "Delete" || keyName === "Backspace") && drawingSession && (drawingTool === "select" || drawingTool === "node_edit" || drawingTool === "shapes")) {
                         drawingSession.deleteSelection();
                         syncDrawing();
                     }

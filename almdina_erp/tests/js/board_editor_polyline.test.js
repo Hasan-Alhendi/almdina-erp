@@ -124,10 +124,17 @@ blocked.current().selection = {
     pathId: blocked.current().document.paths[0].id,
     segmentId: blocked.current().document.paths[0].segments[0].id,
 };
-const closedJson = JSON.stringify(blocked.current().document);
-assert.equal(blocked.editSelected(80, 0), false);
-assert.equal(blocked.current().errorCode, "closed_edit");
-assert.equal(JSON.stringify(blocked.current().document), closedJson);
+assert.equal(blocked.editSelected(80, 0), true);
+assert.equal(blocked.current().document.paths[0].closed, true);
+assert.equal(blocked.current().document.paths[0].segments[blocked.current().document.paths[0].segments.length - 1].to_node, nodes(blocked)[0].id);
+assert.equal(nodes(blocked)[0].x_mm, 0);
+assert.equal(nodes(blocked)[1].x_mm, 80);
+assert.equal(nodes(blocked)[1].y_mm, 0);
+assert.equal(nodes(blocked)[2].x_mm, 30);
+assert.equal(nodes(blocked)[2].y_mm, 20);
+assert.equal(blocked.editSelected(0, 0), false);
+assert.equal(blocked.current().errorCode, "zero_length");
+assert.equal(nodes(blocked)[1].x_mm, 80);
 
 const history = readySession();
 assert.equal(history.undo(), false);

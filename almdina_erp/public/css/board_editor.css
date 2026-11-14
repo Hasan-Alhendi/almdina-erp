@@ -878,6 +878,39 @@ button.abe-drawing-tool:disabled {
   cursor: not-allowed;
 }
 
+.abe-shape-menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 36rem;
+}
+
+.abe-shape-kind {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.abe-shape-kind.is-active {
+  background: #dbe7ff;
+}
+
+.abe-shape-form select {
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
+}
+
 .abe-drawing-actions {
   display: flex;
   flex-wrap: wrap;

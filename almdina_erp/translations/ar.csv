@@ -3547,3 +3547,55 @@ Click a start point before entering a length.,انقر نقطة البداية �
 That point is outside the drawing range.,هذه النقطة خارج مدى الرسم.
 Finish at least one segment before closing the path.,ثبّت ضلعًا واحدًا على الأقل قبل إغلاق المسار.
 A saved drawing arrived after your edits. Your lines were kept.,وصل رسم محفوظ بعد تعديلاتك. أُبقيت خطوطك.
+Ellipse,قطع ناقص
+Arc,قوس
+Polygon,مضلع
+L shape,شكل L
+Clipped corner,زاوية مقصوصة
+Bézier curve,منحنى بيزييه
+Width (mm),العرض (مم)
+Height (mm),الارتفاع (مم)
+Radius (mm),نصف القطر (مم)
+Radius X (mm),نصف القطر الأفقي (مم)
+Radius Y (mm),نصف القطر الرأسي (مم)
+Start angle (°),زاوية البداية (°)
+Sweep (°),الامتداد (°)
+Sides,الأضلاع
+Bottom width (mm),عرض القاعدة (مم)
+Top width (mm),عرض الأعلى (مم)
+Outer width (mm),العرض الخارجي (مم)
+Outer height (mm),الارتفاع الخارجي (مم)
+Cutout width (mm),عرض القصّة (مم)
+Cutout height (mm),ارتفاع القصّة (مم)
+Cut width (mm),عرض القص (مم)
+Cut height (mm),ارتفاع القص (مم)
+Corner,الزاوية
+Top left,أعلى اليسار
+Top right,أعلى اليمين
+Bottom left,أسفل اليسار
+Bottom right,أسفل اليمين
+End X (mm),نهاية X (مم)
+End Y (mm),نهاية Y (مم)
+Y (mm),Y (مم)
+Convert to path,تحويل إلى مسار
+Copy,نسخ
+Paste,لصق
+Add node,إضافة عقدة
+Enter a valid dimension.,أدخل قياسًا صالحًا.
+Enter a positive dimension.,أدخل قياسًا موجبًا.
+Enter a positive radius.,أدخل نصف قطر موجبًا.
+Enter a sweep angle.,أدخل زاوية الامتداد.
+Choose a corner.,اختر الزاوية.
+A polygon needs between 3 and 360 sides.,يحتاج المضلع إلى عدد أضلاع بين 3 و360.
+The cutout must stay inside the outer shape.,يجب أن تبقى القصّة داخل الشكل الخارجي.
+The clipped corner must stay inside the outer shape.,يجب أن يبقى قص الزاوية داخل الشكل الخارجي.
+That shape is not available.,هذا الشكل غير متاح.
+Edit the path nodes after converting the shape.,بعد تحويل الشكل عدّل عقد المسار.
+This shape is already a path.,هذا الشكل مسار بالفعل.
+The shape could not be converted.,تعذر تحويل الشكل.
+A node can be inserted on a straight segment.,يمكن إضافة عقدة على مقطع مستقيم.
+A closed path needs at least three nodes.,يحتاج المسار المغلق إلى ثلاث عقد على الأقل.
+A path needs at least two nodes.,يحتاج المسار إلى عقدتين على الأقل.
+Delete a node where both joined segments are straight.,احذف عقدة يجتمع عندها مقطعان مستقيمان.
+The arc radius no longer reaches both nodes.,نصف قطر القوس لم يعد يصل إلى العقدتين.
+This edit moves only the segment end and keeps the path closed.,هذا التعديل يحرّك نهاية الضلع فقط ويبقي المسار مغلقًا.

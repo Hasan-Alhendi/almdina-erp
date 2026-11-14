@@ -1367,7 +1367,7 @@
         const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
         const tools = (EditorMode && EditorMode.futureTools) || [];
         const enabled = target.status === "special" && target.canEdit === true && drawing.ready !== false;
-        const activeTool = drawing.tool === "polyline" ? "polyline" : "select";
+        const activeTool = drawing.tool || "select";
         const message = __(drawing.messageKey || target.messageKey || "Select a special piece to start drawing.");
         const name = target.label
             ? `<strong class="abe-drawing-name">${esc(target.label)}</strong>`
@@ -1382,6 +1382,9 @@
             if (tool.id === "select" || tool.id === "polyline") {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
             }
+            if ((tool.id === "shapes" || tool.id === "node_edit") && enabled) {
+                return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, true);
+            }
             return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
         }).join("");
         const actions = enabled && activeTool === "polyline" ? `
@@ -1394,7 +1397,9 @@
         return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
             <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
             <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
+            ${shapeMenuHtml(drawing)}
             ${measure}
+            ${shapeFormHtml(drawing)}
             ${actions}
             <p class="abe-drawing-note">${esc(__("These lines are construction guides. They are not manufacturing geometry yet."))}</p>
         </div>`;
@@ -1467,7 +1472,52 @@
                 <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-drawing-angle="1" value="${esc(angleValue)}"${disabled}${angleLocked}${angleInvalid} aria-label="${esc(__("Angle (°)"))}" />
             </label>
             ${error}
+            ${source.hintKey ? `<p class="abe-drawing-closed">${esc(__(source.hintKey))}</p>` : ""}
         </div>`;
+    }
+
+    function shapeMenuHtml(drawing) {
+        if (!drawing || drawing.tool !== "shapes") return "";
+        const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
+        const tools = Space && Space.shapeTools ? Space.shapeTools() : [];
+        return `<div class="abe-shape-menu" role="group" aria-label="${esc(__("Shapes"))}">${tools.map((tool) => {
+            const active = drawing.shapeKind === tool.id;
+            return `<button type="button" class="abe-shape-kind${active ? " is-active" : ""}" data-abe-shape-kind="${esc(tool.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+        }).join("")}</div>`;
+    }
+
+    function shapeFormHtml(drawing) {
+        const form = drawing && drawing.shapeForm;
+        const actions = form && form.actions || {};
+        const hasActions = actions.convert || actions.copy || actions.paste || actions.remove || actions.insert;
+        if (!form || ((!form.fields || !form.fields.length) && !hasActions)) return "";
+        const corners = [
+            ["top_left", "Top left"],
+            ["top_right", "Top right"],
+            ["bottom_left", "Bottom left"],
+            ["bottom_right", "Bottom right"],
+        ];
+        const fields = (form.fields || []).map((field) => {
+            if (field.key === "corner") {
+                const options = corners.map(([value, label]) => (
+                    `<option value="${esc(value)}"${String(field.value) === value ? " selected" : ""}>${esc(__(label))}</option>`
+                )).join("");
+                return `<label><span>${esc(__(field.labelKey))}</span><select data-abe-shape-field="${esc(field.key)}" aria-label="${esc(__(field.labelKey))}">${options}</select></label>`;
+            }
+            return `<label><span>${esc(__(field.labelKey))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-shape-field="${esc(field.key)}" value="${esc(field.value == null ? "" : field.value)}" aria-label="${esc(__(field.labelKey))}" /></label>`;
+        }).join("");
+        const error = form.errorKey
+            ? `<p class="abe-drawing-measure-error" data-abe-shape-error="1" role="alert">${esc(__(form.errorKey))}</p>`
+            : "";
+        const buttons = [
+            actions.convert ? `<button type="button" data-abe-drawing-action="convert">${esc(__("Convert to path"))}</button>` : "",
+            actions.copy ? `<button type="button" data-abe-drawing-action="copy">${esc(__("Copy"))}</button>` : "",
+            actions.paste ? `<button type="button" data-abe-drawing-action="paste">${esc(__("Paste"))}</button>` : "",
+            actions.remove ? `<button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>` : "",
+            actions.insert ? `<button type="button" data-abe-drawing-action="insert-node">${esc(__("Add node"))}</button>` : "",
+        ].join("");
+        const actionRow = buttons ? `<div class="abe-drawing-actions">${buttons}</div>` : "";
+        return `<div class="abe-drawing-measure abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${fields}${error}${actionRow}</div>`;
     }
 
     function drawingOverlaySvg(storeView, scale) {
@@ -1479,18 +1529,31 @@
         (drawing.paths || []).forEach((path) => {
             const points = path.points || [];
             if (!points.length) return;
-            if (points.length >= 2) {
-                const commands = points.map((point, index) => (
+            if (points.length >= 2 || path.markup) {
+                const commands = path.markup || points.map((point, index) => (
                     `${index === 0 ? "M" : "L"}${point.x} ${point.y}`
                 )).join(" ");
-                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" d="${commands}${path.closed ? " Z" : ""}" fill="none" stroke="${path.selected ? "#0b5fff" : "#344054"}" stroke-width="${path.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
+                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" d="${commands}${path.markup || !path.closed ? "" : " Z"}" fill="none" stroke="${path.selected ? "#0b5fff" : "#344054"}" stroke-width="${path.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
             }
             if (!path.selected && !path.active) return;
             points.forEach((point, index) => {
                 const end = index === points.length - 1 && !path.closed;
                 const start = index === 0;
-                const fill = start ? "#12b76a" : (end ? "#0b5fff" : "#fff");
-                parts.push(`<circle data-abe-drawing-node="${esc(point.id)}" cx="${point.x}" cy="${point.y}" r="${nodeRadius}" fill="${fill}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+                const fill = point.selected ? "#f79009" : (start ? "#12b76a" : (end ? "#0b5fff" : "#fff"));
+                parts.push(`<circle data-abe-drawing-node="${esc(point.id)}" cx="${point.x}" cy="${point.y}" r="${point.selected ? nodeRadius * 1.35 : nodeRadius}" fill="${fill}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+            });
+            (path.controls || []).forEach((control) => {
+                parts.push(`<circle data-abe-drawing-control="${esc(control.segmentId)}" data-abe-control-index="${esc(control.index)}" cx="${control.x}" cy="${control.y}" r="${3.2 / safeScale}" fill="#f79009" stroke="#7a2e0e" stroke-width="${1.2 / safeScale}"/>`);
+            });
+        });
+        (drawing.shapes || []).forEach((shape) => {
+            const points = shape.points || [];
+            if (points.length < 2) return;
+            const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+            parts.push(`<path data-abe-drawing-shape="${esc(shape.id)}" d="${commands}${shape.closed ? " Z" : ""}" fill="none" stroke="${shape.selected ? "#0b5fff" : "#344054"}" stroke-width="${shape.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
+            if (!shape.selected) return;
+            (shape.handles || []).forEach((handle) => {
+                parts.push(`<circle data-abe-shape-handle="${esc(shape.id)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
             });
         });
         if (drawing.preview) {
@@ -2301,6 +2364,32 @@
                 }
             });
         });
+        host.querySelectorAll("[data-abe-shape-kind]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setShapeKind) handlers.setShapeKind(button.getAttribute("data-abe-shape-kind"));
+            });
+        });
+        host.querySelectorAll("[data-abe-shape-form]").forEach((form) => {
+            const stop = (event) => event.stopPropagation();
+            form.addEventListener("pointerdown", stop);
+            form.addEventListener("click", stop);
+            form.querySelectorAll("[data-abe-shape-field]").forEach((input) => {
+                input.addEventListener("input", () => {
+                    if (handlers && handlers.onShapeInput) {
+                        handlers.onShapeInput(input.getAttribute("data-abe-shape-field"), input.value);
+                    }
+                });
+                input.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.code !== "Enter" && event.code !== "NumpadEnter" && (event.keyCode || event.which) !== 13) {
+                        return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (handlers && handlers.commitShapeForm) handlers.commitShapeForm(input.getAttribute("data-abe-shape-field"));
+                });
+            });
+        });
         bindDrawingMeasure(host, handlers);
         const drawingCursor = host.querySelector("[data-abe-drawing-cursor]");
         if (drawingCursor) {
@@ -2502,7 +2591,7 @@
                 return;
             }
             const drawingField = event.target && event.target.closest
-                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure]");
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form]");
             if (drawingField) return;
             if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
                 ignoreBackgroundClick = true;
@@ -3011,6 +3100,33 @@
         patchDrawingMeasure(host, hud, preview);
     }
 
+    function patchShapePreview(host, points, closed) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        const existing = world.querySelector("[data-abe-shape-preview]");
+        if (!points || points.length < 2) {
+            if (existing) existing.remove();
+            return;
+        }
+        const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+        const markup = `${commands}${closed ? " Z" : ""}`;
+        if (existing) {
+            existing.setAttribute("d", markup);
+            return;
+        }
+        if (typeof document === "undefined" || !document.createElementNS) return;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("data-abe-shape-preview", "1");
+        path.setAttribute("d", markup);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#0b5fff");
+        path.setAttribute("stroke-width", "1.4");
+        path.setAttribute("stroke-dasharray", "7 5");
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        path.setAttribute("pointer-events", "none");
+        world.appendChild(path);
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.CanvasRenderer = Object.freeze({
         render,
@@ -3039,6 +3155,7 @@
         patchDragPreview,
         patchMeasureOverlay,
         patchDrawingPreview,
+        patchShapePreview,
         clickTargetKeepsSelection,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,
