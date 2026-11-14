@@ -782,6 +782,424 @@
         };
     }
 
+    // Pen samples are door-local millimetres. The fit does not use the
+    // documentation pen's 6mm tolerance: that gap erases small geometry.
+    // Off/Low/Medium/High change the allowed deviation and the corner angle.
+    // Straight spans stay lines. Curved spans become cubic Bézier segments
+    // through the simplified knots, then split again if a sample is too far.
+    const PEN_SAMPLE_MM = 0.2;
+    const PEN_RAW_LIMIT = 6000;
+    const PEN_LEVELS = Object.freeze({
+        off: Object.freeze({ id: "off", labelKey: "Off", noiseMm: 0.05, toleranceMm: 0.12, cornerDeg: 18, straightMm: 0.15, maxErrorMm: 0.28, relaxMm: 0.35 }),
+        low: Object.freeze({ id: "low", labelKey: "Low", noiseMm: 0.12, toleranceMm: 0.30, cornerDeg: 34, straightMm: 0.30, maxErrorMm: 0.55, relaxMm: 0.80 }),
+        medium: Object.freeze({ id: "medium", labelKey: "Medium", noiseMm: 0.25, toleranceMm: 0.70, cornerDeg: 48, straightMm: 0.65, maxErrorMm: 1.05, relaxMm: 1.60 }),
+        high: Object.freeze({ id: "high", labelKey: "High", noiseMm: 0.50, toleranceMm: 1.25, cornerDeg: 64, straightMm: 1.15, maxErrorMm: 1.80, relaxMm: 2.20 }),
+    });
+
+    function penLevel(id) {
+        return PEN_LEVELS[id] || PEN_LEVELS.low;
+    }
+
+    function penTools() {
+        return ["off", "low", "medium", "high"].map((id) => PEN_LEVELS[id]);
+    }
+
+    function penDistance(a, b) {
+        return Math.hypot(b.x - a.x, b.y - a.y);
+    }
+
+    function penPerp(point, start, end) {
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const lengthSq = dx * dx + dy * dy;
+        if (lengthSq <= 0) return penDistance(point, start);
+        const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq));
+        return penDistance(point, { x: start.x + dx * t, y: start.y + dy * t });
+    }
+
+    function penPathLength(points) {
+        let total = 0;
+        for (let index = 1; index < points.length; index += 1) total += penDistance(points[index - 1], points[index]);
+        return total;
+    }
+
+    function penDedupe(points, gap) {
+        const clean = [];
+        (points || []).forEach((point) => {
+            const x = Number(point && point.x);
+            const y = Number(point && point.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            const next = { x, y };
+            if (!clean.length || penDistance(clean[clean.length - 1], next) >= gap) clean.push(next);
+        });
+        const source = points || [];
+        const last = source.length ? source[source.length - 1] : null;
+        if (last && clean.length) {
+            const end = { x: Number(last.x), y: Number(last.y) };
+            if (Number.isFinite(end.x) && Number.isFinite(end.y) && penDistance(clean[clean.length - 1], end) > 0.001) {
+                clean.push(end);
+            }
+        }
+        return clean;
+    }
+
+    function penTurn(a, b, c) {
+        let delta = (Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x)) * 180 / Math.PI;
+        while (delta > 180) delta -= 360;
+        while (delta < -180) delta += 360;
+        return Math.abs(delta);
+    }
+
+    function penRdp(points, tolerance) {
+        if (points.length <= 2) return points.slice();
+        const keep = new Array(points.length).fill(false);
+        keep[0] = true;
+        keep[points.length - 1] = true;
+        const stack = [[0, points.length - 1]];
+        while (stack.length) {
+            const range = stack.pop();
+            let max = 0;
+            let index = -1;
+            for (let cursor = range[0] + 1; cursor < range[1]; cursor += 1) {
+                const deviation = penPerp(points[cursor], points[range[0]], points[range[1]]);
+                if (deviation > max) {
+                    max = deviation;
+                    index = cursor;
+                }
+            }
+            if (index >= 0 && max > tolerance) {
+                keep[index] = true;
+                stack.push([range[0], index], [index, range[1]]);
+            }
+        }
+        const simplified = [];
+        for (let index = 0; index < points.length; index += 1) {
+            if (keep[index]) simplified.push(points[index]);
+        }
+        return simplified;
+    }
+
+    function penStraight(points, tolerance) {
+        if (!points || points.length < 2) return false;
+        let max = 0;
+        for (let index = 1; index < points.length - 1; index += 1) {
+            max = Math.max(max, penPerp(points[index], points[0], points[points.length - 1]));
+        }
+        return max <= tolerance;
+    }
+
+    function penCorners(points, settings) {
+        const indexes = [0];
+        const minLeg = Math.max(0.4, settings.noiseMm * 2);
+        for (let index = 1; index < points.length - 1; index += 1) {
+            if (penDistance(points[index - 1], points[index]) < minLeg) continue;
+            if (penDistance(points[index], points[index + 1]) < minLeg) continue;
+            if (penTurn(points[index - 1], points[index], points[index + 1]) >= settings.cornerDeg) indexes.push(index);
+        }
+        indexes.push(points.length - 1);
+        return indexes;
+    }
+
+    function cubicPoint(curve, t) {
+        const u = 1 - t;
+        return {
+            x: (u * u * u * curve.from.x) + (3 * u * u * t * curve.c1.x) + (3 * u * t * t * curve.c2.x) + (t * t * t * curve.to.x),
+            y: (u * u * u * curve.from.y) + (3 * u * u * t * curve.c1.y) + (3 * u * t * t * curve.c2.y) + (t * t * t * curve.to.y),
+        };
+    }
+
+    function penCubics(knots) {
+        const curves = [];
+        for (let index = 0; index < knots.length - 1; index += 1) {
+            const p1 = knots[index];
+            const p2 = knots[index + 1];
+            const prev = index === 0 ? { x: (p1.x * 2) - p2.x, y: (p1.y * 2) - p2.y } : knots[index - 1];
+            const next = index + 2 >= knots.length ? { x: (p2.x * 2) - p1.x, y: (p2.y * 2) - p1.y } : knots[index + 2];
+            curves.push({
+                from: p1,
+                to: p2,
+                c1: { x: p1.x + ((p2.x - prev.x) / 6), y: p1.y + ((p2.y - prev.y) / 6) },
+                c2: { x: p2.x - ((next.x - p1.x) / 6), y: p2.y - ((next.y - p1.y) / 6) },
+            });
+        }
+        return curves;
+    }
+
+    function distanceToCurves(point, curves) {
+        let best = Infinity;
+        curves.forEach((curve) => {
+            if (!curve.c1) {
+                best = Math.min(best, penPerp(point, curve.from, curve.to));
+                return;
+            }
+            for (let step = 0; step <= 20; step += 1) {
+                best = Math.min(best, penDistance(point, cubicPoint(curve, step / 20)));
+            }
+        });
+        return best;
+    }
+
+    function worstSpanPoint(span, curves, knots) {
+        let worst = null;
+        span.forEach((point) => {
+            if (knots.some((knot) => penDistance(knot, point) <= 0.001)) return;
+            const deviation = distanceToCurves(point, curves);
+            if (!worst || deviation > worst.deviation) worst = { point, deviation };
+        });
+        return worst;
+    }
+
+    function fitSpan(span, settings, nodeBudget) {
+        if (!span || span.length < 2) return [];
+        if (span.length === 2 || penStraight(span, settings.straightMm)) {
+            return [{ kind: "line", from: span[0], to: span[span.length - 1] }];
+        }
+        let knots = penRdp(span, settings.toleranceMm);
+        if (knots.length < 3) return [{ kind: "line", from: span[0], to: span[span.length - 1] }];
+        const indexOf = new Map();
+        span.forEach((point, index) => indexOf.set(point, index));
+        let curves = penCubics(knots);
+        for (let guard = 0; guard < 8; guard += 1) {
+            const worst = worstSpanPoint(span, curves, knots);
+            if (!worst || worst.deviation <= settings.maxErrorMm || knots.length >= nodeBudget) break;
+            const at = indexOf.get(worst.point);
+            let insertAt = knots.length;
+            for (let index = 0; index < knots.length; index += 1) {
+                if (indexOf.get(knots[index]) > at) {
+                    insertAt = index;
+                    break;
+                }
+            }
+            knots = knots.slice();
+            knots.splice(insertAt, 0, worst.point);
+            curves = penCubics(knots);
+        }
+        return curves;
+    }
+
+    function assemblePen(pieces) {
+        const nodes = [];
+        const segments = [];
+        const add = (point) => {
+            const xMm = quantizeMm(point.x);
+            const yMm = quantizeMm(point.y);
+            if (xMm == null || yMm == null) return -1;
+            const last = nodes[nodes.length - 1];
+            if (last && last.x_mm === xMm && last.y_mm === yMm) return nodes.length - 1;
+            nodes.push({ x_mm: xMm, y_mm: yMm });
+            return nodes.length - 1;
+        };
+        for (let index = 0; index < pieces.length; index += 1) {
+            const piece = pieces[index];
+            const from = add(piece.from);
+            const to = add(piece.to);
+            if (from < 0 || to < 0) return null;
+            if (from === to) continue;
+            if (!piece.c1) {
+                segments.push({ kind: "line", from, to });
+                continue;
+            }
+            const c1 = { x_mm: quantizeMm(piece.c1.x), y_mm: quantizeMm(piece.c1.y) };
+            const c2 = { x_mm: quantizeMm(piece.c2.x), y_mm: quantizeMm(piece.c2.y) };
+            if (c1.x_mm == null || c1.y_mm == null || c2.x_mm == null || c2.y_mm == null) return null;
+            segments.push({ kind: "bezier", from, to, controls: [c1, c2] });
+        }
+        return { nodes, segments };
+    }
+
+    function fitPenOnce(points, settings, maxNodes) {
+        if (penStraight(points, settings.straightMm)) {
+            return assemblePen([{ kind: "line", from: points[0], to: points[points.length - 1] }]);
+        }
+        const corners = penCorners(points, settings);
+        const pieces = [];
+        const budget = Math.max(4, Math.min(80, maxNodes));
+        for (let index = 0; index < corners.length - 1; index += 1) {
+            const span = points.slice(corners[index], corners[index + 1] + 1);
+            fitSpan(span, settings, budget).forEach((piece) => pieces.push(piece));
+        }
+        return assemblePen(pieces);
+    }
+
+    function suggestPenClose(points) {
+        if (!points || points.length < 3) return false;
+        const length = penPathLength(points);
+        const gap = penDistance(points[0], points[points.length - 1]);
+        const limit = Math.max(2, Math.min(8, length * 0.015));
+        return length >= 12 && gap > 0.001 && gap <= limit;
+    }
+
+    function penCurvesFromParts(parts) {
+        return (parts.segments || []).map((segment) => {
+            const from = parts.nodes[segment.from];
+            const to = parts.nodes[segment.to];
+            const curve = {
+                from: { x: from.x_mm, y: from.y_mm },
+                to: { x: to.x_mm, y: to.y_mm },
+            };
+            if (segment.kind === "bezier" && segment.controls && segment.controls.length === 2) {
+                curve.c1 = { x: segment.controls[0].x_mm, y: segment.controls[0].y_mm };
+                curve.c2 = { x: segment.controls[1].x_mm, y: segment.controls[1].y_mm };
+            }
+            return curve;
+        });
+    }
+
+    function penDeviationMm(points, parts) {
+        if (!parts || !parts.nodes || !parts.segments) return Infinity;
+        const curves = penCurvesFromParts(parts);
+        let max = 0;
+        (points || []).forEach((point) => {
+            const x = Number(point && point.x);
+            const y = Number(point && point.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+            max = Math.max(max, distanceToCurves({ x, y }, curves));
+        });
+        return max;
+    }
+
+    function fitPenStroke(rawPoints, levelOrId, options) {
+        const base = levelOrId && typeof levelOrId === "object" ? levelOrId : penLevel(levelOrId);
+        const maxNodes = Math.max(2, Number(options && options.maxNodes) || 4000);
+        const cleaned = penDedupe(rawPoints, base.noiseMm);
+        const rejected = (code, messageKey) => ({
+            ok: false,
+            code,
+            messageKey,
+            suggestClose: false,
+            parts: null,
+            stats: null,
+        });
+        if (cleaned.length < 2 || penPathLength(cleaned) < 0.2) {
+            return rejected("short_stroke", "The stroke is too short.");
+        }
+        let tolerance = base.toleranceMm;
+        let straight = base.straightMm;
+        let maxError = base.maxErrorMm;
+        let built = null;
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+            built = fitPenOnce(cleaned, {
+                noiseMm: base.noiseMm,
+                cornerDeg: base.cornerDeg,
+                toleranceMm: tolerance,
+                straightMm: straight,
+                maxErrorMm: maxError,
+            }, maxNodes);
+            if (!built) return rejected("invalid_point", "That point is outside the drawing range.");
+            if (built.segments.length && built.nodes.length <= maxNodes) break;
+            if (tolerance >= base.relaxMm) break;
+            const nextTolerance = Math.min(base.relaxMm, tolerance * 1.75);
+            if (nextTolerance <= tolerance) break;
+            tolerance = nextTolerance;
+            straight = Math.min(base.relaxMm, straight * 1.75);
+            maxError = Math.min(base.relaxMm * 1.4, maxError * 1.75);
+        }
+        if (!built || built.nodes.length < 2 || !built.segments.length) {
+            return rejected("short_stroke", "The stroke is too short.");
+        }
+        if (built.nodes.length > maxNodes || built.segments.length > maxNodes) {
+            return rejected("too_many_elements", "This stroke has too many points to store. The existing drawing was kept.");
+        }
+        const parts = { closed: false, nodes: built.nodes, segments: built.segments };
+        return {
+            ok: true,
+            code: "",
+            messageKey: "",
+            suggestClose: suggestPenClose(cleaned),
+            parts,
+            stats: {
+                input: cleaned.length,
+                nodes: built.nodes.length,
+                segments: built.segments.length,
+                maxErrorMm: penDeviationMm(cleaned, parts),
+                level: base.id,
+            },
+        };
+    }
+
+    function penPreviewPoints(points, maxCount) {
+        const source = points || [];
+        const limit = Math.max(2, Number(maxCount) || 480);
+        if (source.length <= limit) return source.map((point) => ({ x: point.x, y: point.y }));
+        const sampled = [];
+        for (let index = 0; index < limit; index += 1) {
+            const cursor = Math.round((index * (source.length - 1)) / (limit - 1));
+            sampled.push({ x: source[cursor].x, y: source[cursor].y });
+        }
+        return sampled;
+    }
+
+    function penResample(points, count) {
+        if (points.length <= count) return points.slice();
+        const sampled = [];
+        for (let index = 0; index < count; index += 1) {
+            const cursor = Math.round((index * (points.length - 1)) / (count - 1));
+            const point = points[cursor];
+            const last = sampled[sampled.length - 1];
+            if (!last || penDistance(last, point) > 0.001) sampled.push({ x: point.x, y: point.y });
+        }
+        return sampled;
+    }
+
+    function createPenGesture(levelId) {
+        const level = penLevel(levelId);
+        let pointerId = null;
+        let points = [];
+        let active = false;
+        let finished = false;
+
+        function push(sample, force) {
+            const x = Number(sample && sample.x);
+            const y = Number(sample && sample.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+            const next = { x, y };
+            const last = points[points.length - 1];
+            if (last && penDistance(last, next) <= (force ? 0.001 : PEN_SAMPLE_MM)) return false;
+            points.push(next);
+            if (points.length > PEN_RAW_LIMIT) points = penResample(points, Math.floor(PEN_RAW_LIMIT / 2));
+            return true;
+        }
+
+        return {
+            pointerDown(sample) {
+                if (active || finished || !sample || sample.pointerId == null) return false;
+                pointerId = sample.pointerId;
+                active = true;
+                points = [];
+                push(sample, true);
+                return true;
+            },
+            pointerMove(sample) {
+                if (!active || !sample || sample.pointerId !== pointerId) return false;
+                return push(sample, false);
+            },
+            pointerUp(sample) {
+                if (!active) return null;
+                if (sample && sample.pointerId != null && sample.pointerId !== pointerId) return null;
+                if (sample) push(sample, true);
+                active = false;
+                finished = true;
+                return fitPenStroke(points, level);
+            },
+            pointerCancel(sample) {
+                if (!active) return false;
+                if (sample && sample.pointerId != null && sample.pointerId !== pointerId) return false;
+                active = false;
+                finished = true;
+                points = [];
+                return true;
+            },
+            cancel() {
+                active = false;
+                finished = true;
+                points = [];
+            },
+            active() { return active; },
+            pointerId() { return pointerId; },
+            preview() { return points.map((point) => ({ x: point.x, y: point.y })); },
+        };
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.DrawingSpace = Object.freeze({
         SNAP_PX,
@@ -811,5 +1229,11 @@
         outlineDistance,
         pointInPolygon,
         pathMarkup,
+        penLevel,
+        penTools,
+        fitPenStroke,
+        penDeviationMm,
+        penPreviewPoints,
+        createPenGesture,
     });
 })();

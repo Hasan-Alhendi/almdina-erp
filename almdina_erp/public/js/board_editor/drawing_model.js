@@ -662,6 +662,91 @@
         return true;
     }
 
+    const PEN_LIMITS = Object.freeze({
+        maxNodes: 12000,
+        maxNodesPerPath: 4000,
+        maxSegments: 12000,
+        maxPaths: 256,
+        maxBytes: 1000000,
+    });
+
+    function documentUsage(record) {
+        let nodes = 0;
+        let segments = 0;
+        (record.document.paths || []).forEach((path) => {
+            nodes += path.nodes.length;
+            segments += path.segments.length;
+        });
+        return { nodes, segments, paths: record.document.paths.length };
+    }
+
+    function createPenPath(record, built, limits) {
+        if (!record.ready) return fail(record, "not_ready", "The drawing is still loading.");
+        const caps = Object.assign({}, PEN_LIMITS, limits || {});
+        if (!built || built.ok !== true || !built.parts || !built.parts.segments || !built.parts.segments.length) {
+            return fail(
+                record,
+                (built && built.code) || "short_stroke",
+                (built && built.messageKey) || "The stroke is too short."
+            );
+        }
+        const usage = documentUsage(record);
+        const addNodes = built.parts.nodes.length;
+        const addSegments = built.parts.segments.length;
+        if (
+            usage.paths >= caps.maxPaths
+            || addNodes > caps.maxNodesPerPath
+            || usage.nodes + addNodes > caps.maxNodes
+            || usage.segments + addSegments > caps.maxSegments
+        ) {
+            return fail(record, "too_many_elements", "This stroke has too many points to store. The existing drawing was kept.");
+        }
+        const path = installParts(record, built.parts);
+        path.closed = false;
+        path.role = "construction";
+        path.source_shape_id = null;
+        const trial = clone(record.document);
+        trial.paths = trial.paths.concat([path]);
+        if (JSON.stringify(trial).length > caps.maxBytes) {
+            return fail(record, "too_many_elements", "This stroke has too many points to store. The existing drawing was kept.");
+        }
+        remember(record);
+        record.document.paths.push(path);
+        record.cursor = null;
+        record.selection = selectionOf({ pathId: path.id, segmentId: path.segments[0] && path.segments[0].id });
+        record.measureError = null;
+        record.messageKey = built.suggestClose ? "The stroke ends near its start. Close the path if you want a loop." : "";
+        record.errorCode = "";
+        return true;
+    }
+
+    function closePenPath(record, pathId) {
+        const path = pathById(record, pathId);
+        if (!path || path.closed || path.source_shape_id || path.nodes.length < 2 || !path.segments.length) {
+            return fail(record, "cannot_close", "Finish at least one segment before closing the path.");
+        }
+        const first = path.nodes[0];
+        const last = path.nodes[path.nodes.length - 1];
+        if (path.segments[0].from_node !== first.id || path.segments[path.segments.length - 1].to_node !== last.id) {
+            return fail(record, "cannot_close", "The path could not be closed.");
+        }
+        if (Space().samePoint({ x: first.x_mm, y: first.y_mm }, { x: last.x_mm, y: last.y_mm })) {
+            return fail(record, "zero_length", "A zero-length segment was not created.");
+        }
+        remember(record);
+        path.segments.push({
+            id: nextId(record, "s"),
+            kind: "line",
+            from_node: last.id,
+            to_node: first.id,
+        });
+        path.closed = true;
+        record.cursor = null;
+        record.selection = selectionOf({ pathId: path.id, segmentId: path.segments[path.segments.length - 1].id });
+        clearStatus(record);
+        return true;
+    }
+
     function createBezier(record, start, end) {
         if (!record.ready) return fail(record, "not_ready", "The drawing is still loading.");
         const built = Space().bezierFromPoints(start, end);
@@ -1105,6 +1190,14 @@
             createBezier(start, end) {
                 const record = current();
                 return Boolean(record && createBezier(record, start, end));
+            },
+            createPenPath(built, limits) {
+                const record = current();
+                return Boolean(record && createPenPath(record, built, limits));
+            },
+            closePenPath(pathId) {
+                const record = current();
+                return Boolean(record && closePenPath(record, pathId));
             },
             updateShape(shapeId, params, options) {
                 const record = current();

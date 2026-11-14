@@ -204,6 +204,15 @@
         let measureArmedBeforeDrawing = false;
         let drawingTool = "select";
         let drawingShapeKind = "rectangle";
+        let penSmoothing = "low";
+        let penGesture = null;
+        let penCapture = null;
+        let penLostHandler = null;
+        let penWindowUp = null;
+        let penWindowCancel = null;
+        let penReleasing = false;
+        let penCommitting = false;
+        let penClosePathId = null;
         let shapeAnchor = null;
         let shapeEntry = {};
         let nodeDrag = null;
@@ -1229,6 +1238,7 @@
 
         function setEditorMode(mode) {
             if (!store) return;
+            cancelPenStroke(false);
             const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
             const next = EditorMode && typeof EditorMode.normalize === "function"
                 ? EditorMode.normalize(mode)
@@ -1284,6 +1294,7 @@
 
         function syncDrawing() {
             if (!store || !drawingSession || syncingDrawing) return;
+            if (penGesture && penGesture.active() && !penCommitting) cancelPenStroke(false);
             syncingDrawing = true;
             try {
             if (!store || !drawingSession) return;
@@ -1376,6 +1387,13 @@
                 ? (record.document.shapes || []).find((shape) => shape.id === record.selection.shapeId && !shape.exploded)
                 : null;
             if (!editing && drawingTool !== "shapes") {
+                if (drawingTool === "select" && record.selection && record.selection.pathId && !record.selection.shapeId) {
+                    return {
+                        mode: "path",
+                        fields: [],
+                        actions: { copy: true, paste: Boolean(record.clipboard), remove: true },
+                    };
+                }
                 if (!record.clipboard) return null;
                 return { mode: "create", kind: drawingShapeKind, fields: [], actions: { paste: true } };
             }
@@ -1448,6 +1466,7 @@
                 shapes: drawingShapes(record, frame, Space),
                 shapeKind: drawingShapeKind,
                 shapeForm: shapeFormState(record, Space),
+                pen: drawingTool === "pen" ? { smoothing: penSmoothing, canClose: Boolean(penClosePathId) } : null,
                 preview: drawingPointer && drawingPointer.preview,
                 snap: drawingPointer && drawingPointer.snap,
                 measure: drawingMeasureState(record),
@@ -1615,7 +1634,7 @@
 
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
-            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form]")) {
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings]")) {
                 return false;
             }
             const view = store.snapshot();
@@ -1637,6 +1656,7 @@
             }
             if (drawingTool === "shapes") return placeShapePoint(mapped.door);
             if (drawingTool === "node_edit") return beginNodeEdit(mapped.door, view);
+            if (drawingTool === "pen") return beginPenStroke(event, mapped.door);
             if (drawingTool !== "polyline") return false;
             const resolved = record.cursor ? resolvedDoorPoint(mapped, event.shiftKey) : mapped.door;
             drawingSession.placePoint(resolved.x, resolved.y);
@@ -1728,6 +1748,9 @@
             if (action === "finish") drawingSession.finish();
             else if (action === "close") drawingSession.close();
             else if (action === "cancel") drawingSession.cancelPath();
+            else if (action === "close-pen" && penClosePathId) {
+                if (drawingSession.closePenPath(penClosePathId)) penClosePathId = null;
+            }
             else if (action === "convert") {
                 const selected = activeDrawingRecord();
                 if (selected && selected.selection && selected.selection.shapeId) {
@@ -1887,8 +1910,146 @@
             syncDrawing();
         }
 
+        function releasePenCapture(pointerId) {
+            penReleasing = true;
+            try {
+                if (penCapture && penCapture.releasePointerCapture && pointerId != null) {
+                    penCapture.releasePointerCapture(pointerId);
+                }
+            } catch (err) {
+                void err;
+            }
+            if (penCapture && penLostHandler && penCapture.removeEventListener) {
+                penCapture.removeEventListener("lostpointercapture", penLostHandler);
+            }
+            if (penWindowUp) window.removeEventListener("pointerup", penWindowUp, true);
+            if (penWindowCancel) window.removeEventListener("pointercancel", penWindowCancel, true);
+            penCapture = null;
+            penLostHandler = null;
+            penWindowUp = null;
+            penWindowCancel = null;
+            penReleasing = false;
+        }
+
+        function clearPenPreview() {
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            if (host && CanvasRenderer && CanvasRenderer.patchPenPreview) CanvasRenderer.patchPenPreview(host, null);
+        }
+
+        function cancelPenStroke(sync) {
+            const pointerId = penGesture && penGesture.pointerId();
+            const active = Boolean(penGesture && penGesture.active());
+            if (penGesture && penGesture.cancel) penGesture.cancel();
+            penGesture = null;
+            releasePenCapture(pointerId);
+            clearPenPreview();
+            if (sync && active) syncDrawing();
+        }
+
+        function paintPenPreview() {
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            const Space = drawingSpaceApi();
+            if (!host || !store || !Space || !penGesture || !CanvasRenderer || !CanvasRenderer.patchPenPreview) return;
+            const frame = drawingFrame(store.snapshot());
+            const sampled = Space.penPreviewPoints ? Space.penPreviewPoints(penGesture.preview(), 480) : penGesture.preview();
+            const points = sampled.map((point) => (frame ? Space.doorToWorld(frame, point.x, point.y) : point));
+            CanvasRenderer.patchPenPreview(host, points);
+        }
+
+        function beginPenStroke(event, door) {
+            if (!event || event.button !== 0 || spaceHeld || event.isPrimary === false || !door) return false;
+            if (penGesture && penGesture.active()) return event.pointerId === penGesture.pointerId();
+            const Space = drawingSpaceApi();
+            if (!Space || typeof Space.createPenGesture !== "function") return false;
+            penGesture = Space.createPenGesture(penSmoothing);
+            if (!penGesture.pointerDown({ pointerId: event.pointerId, x: door.x, y: door.y })) {
+                penGesture = null;
+                return false;
+            }
+            penClosePathId = null;
+            const stage = ensureShell().querySelector("[data-abe-stage]");
+            const captureNode = event.currentTarget && event.currentTarget.setPointerCapture ? event.currentTarget : stage;
+            penCapture = captureNode;
+            penLostHandler = () => {
+                if (!penReleasing && penGesture && penGesture.active()) cancelPenStroke(true);
+            };
+            if (captureNode && captureNode.addEventListener) captureNode.addEventListener("lostpointercapture", penLostHandler);
+            if (captureNode && captureNode.setPointerCapture) {
+                try { captureNode.setPointerCapture(event.pointerId); } catch (err) { void err; }
+            }
+            const pointerId = event.pointerId;
+            penWindowUp = (upEvent) => {
+                if (!upEvent || upEvent.pointerId !== pointerId) return;
+                finishPenStroke(upEvent);
+            };
+            penWindowCancel = (cancelEvent) => {
+                if (!cancelEvent || cancelEvent.pointerId !== pointerId) return;
+                cancelPenStroke(true);
+            };
+            window.addEventListener("pointerup", penWindowUp, true);
+            window.addEventListener("pointercancel", penWindowCancel, true);
+            paintPenPreview();
+            return true;
+        }
+
+        function updatePenPointer(event) {
+            if (drawingTool !== "pen" || !penGesture || !penGesture.active() || !event || !store) return false;
+            if (event.pointerId !== penGesture.pointerId()) return true;
+            if (spaceHeld) {
+                cancelPenStroke(true);
+                return true;
+            }
+            const mapped = doorPointFromEvent(store.snapshot(), event);
+            if (mapped) penGesture.pointerMove({ pointerId: event.pointerId, x: mapped.door.x, y: mapped.door.y });
+            paintPenPreview();
+            return true;
+        }
+
+        function finishPenStroke(event) {
+            if (!penGesture || !penGesture.active()) return;
+            if (event && event.pointerId != null && penGesture.pointerId() !== event.pointerId) return;
+            const mapped = event && store ? doorPointFromEvent(store.snapshot(), event) : null;
+            const sample = {
+                pointerId: penGesture.pointerId(),
+                x: mapped ? mapped.door.x : null,
+                y: mapped ? mapped.door.y : null,
+            };
+            penCommitting = true;
+            let built = null;
+            try {
+                built = penGesture.pointerUp(sample);
+            } finally {
+                const pointerId = penGesture && penGesture.pointerId();
+                penGesture = null;
+                releasePenCapture(pointerId);
+                clearPenPreview();
+                penCommitting = false;
+            }
+            if (!built || built.ok !== true || !drawingSession) {
+                const record = activeDrawingRecord();
+                if (record && built && built.messageKey) {
+                    record.messageKey = built.messageKey;
+                    record.errorCode = built.code || "";
+                }
+                penClosePathId = null;
+                syncDrawing();
+                return;
+            }
+            const created = drawingSession.createPenPath(built);
+            const record = activeDrawingRecord();
+            penClosePathId = created && built.suggestClose && record && record.selection ? record.selection.pathId : null;
+            syncDrawing();
+        }
+
+        function setPenSmoothing(level) {
+            const Space = drawingSpaceApi();
+            penSmoothing = Space && Space.penLevel ? Space.penLevel(level).id : "low";
+            syncDrawing();
+        }
+
         function setDrawingTool(tool) {
-            if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit") return;
+            if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit" && tool !== "pen") return;
+            cancelPenStroke(false);
             const view = store && store.snapshot();
             if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
             drawingTool = tool;
@@ -2236,6 +2397,7 @@
                 },
                 setEditorMode: (mode) => setEditorMode(mode),
                 setDrawingTool: (tool) => setDrawingTool(tool),
+                setPenSmoothing: (level) => setPenSmoothing(level),
                 setShapeKind: (kind) => {
                     drawingShapeKind = kind || "rectangle";
                     shapeAnchor = null;
@@ -2341,6 +2503,7 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    if (updatePenPointer(event)) return;
                     updateShapePointer(event);
                     updateDrawingPointer(event);
                     // Keep Alt latch aligned with live modifier state (keyup can be lost
@@ -2369,6 +2532,7 @@
                     if (moveInteraction) moveInteraction.onPointerMove(event);
                 },
                 onStagePointerUp: (event) => {
+                    finishPenStroke(event);
                     nodeDrag = null;
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
@@ -2384,11 +2548,13 @@
                     if (moveInteraction) moveInteraction.onPointerUp(event);
                 },
                 onStagePointerCancel: (event) => {
+                    if (penGesture && event && event.pointerId === penGesture.pointerId()) cancelPenStroke(true);
                     if (measureInteraction) measureInteraction.onPointerCancel(event);
                     if (rotationInteraction) rotationInteraction.onPointerCancel(event);
                     if (moveInteraction) moveInteraction.onPointerCancel(event);
                 },
                 onPanIntent: () => {
+                    cancelPenStroke(true);
                     if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
                     if (rotationInteraction) rotationInteraction.cancel();
                     if (moveInteraction) moveInteraction.onPanIntent();
@@ -2571,6 +2737,7 @@
         }
 
         function suspend() {
+            cancelPenStroke(false);
             if (moveInteraction) moveInteraction.cancel();
             if (measureInteraction) measureInteraction.clearAll();
             suspended = true;
@@ -2871,6 +3038,7 @@
             }
             if (event.code === "Space" && !isEditableTarget(event.target)) {
                 spaceHeld = true;
+                if (penGesture && penGesture.active()) cancelPenStroke(true);
                 if (moveInteraction) moveInteraction.onPanIntent();
             }
             if (event.key === "Alt" || event.code === "AltLeft" || event.code === "AltRight") {
@@ -2913,6 +3081,11 @@
                 }
             }
             if (event.code === "Escape") {
+                if (penGesture && penGesture.active() && !isEditableTarget(event.target)) {
+                    event.preventDefault();
+                    cancelPenStroke(true);
+                    return;
+                }
                 if (store && !layoutCommandsAllowed() && drawingSession && !isEditableTarget(event.target)) {
                     if (drawingSession.escape()) {
                         event.preventDefault();

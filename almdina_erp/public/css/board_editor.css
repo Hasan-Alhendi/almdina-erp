@@ -853,8 +853,46 @@
 }
 
 .abe-canvas-stage.is-polyline,
-.abe-canvas-stage.is-polyline .abe-piece {
+.abe-canvas-stage.is-polyline .abe-piece,
+.abe-canvas-stage.is-pen,
+.abe-canvas-stage.is-pen .abe-piece,
+.abe-canvas-stage.is-pen .abe-svg {
   cursor: crosshair;
+}
+
+.abe-canvas-stage.is-pen {
+  touch-action: none;
+}
+
+.abe-pen-settings {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  max-width: 36rem;
+}
+
+.abe-pen-level,
+.abe-pen-settings [data-abe-drawing-action] {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.abe-pen-level.is-active {
+  background: #dbe7ff;
+}
+
+.abe-pen-settings [data-abe-drawing-action]:disabled {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
 }
 
 button.abe-drawing-tool {

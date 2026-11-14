@@ -1382,7 +1382,7 @@
             if (tool.id === "select" || tool.id === "polyline") {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
             }
-            if ((tool.id === "shapes" || tool.id === "node_edit") && enabled) {
+            if ((tool.id === "shapes" || tool.id === "node_edit" || tool.id === "pen") && enabled) {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, true);
             }
             return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
@@ -1398,6 +1398,7 @@
             <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
             <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
             ${shapeMenuHtml(drawing)}
+            ${penSettingsHtml(drawing, enabled)}
             ${measure}
             ${shapeFormHtml(drawing)}
             ${actions}
@@ -1473,6 +1474,22 @@
             </label>
             ${error}
             ${source.hintKey ? `<p class="abe-drawing-closed">${esc(__(source.hintKey))}</p>` : ""}
+        </div>`;
+    }
+
+    function penSettingsHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.tool !== "pen") return "";
+        const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
+        const levels = Space && Space.penTools ? Space.penTools() : [];
+        const current = drawing.pen && drawing.pen.smoothing ? drawing.pen.smoothing : "low";
+        const closeDisabled = drawing.pen && drawing.pen.canClose ? "" : " disabled";
+        return `<div class="abe-pen-settings" data-abe-pen-settings="1" dir="${esc(pageDirection())}">
+            <span>${esc(__("Smoothing"))}</span>
+            <div role="group" aria-label="${esc(__("Smoothing"))}">${levels.map((level) => {
+                const active = current === level.id;
+                return `<button type="button" class="abe-pen-level${active ? " is-active" : ""}" data-abe-pen-smoothing="${esc(level.id)}" aria-pressed="${active ? "true" : "false"}">${esc(__(level.labelKey))}</button>`;
+            }).join("")}</div>
+            <button type="button" data-abe-drawing-action="close-pen"${closeDisabled}>${esc(__("Close path"))}</button>
         </div>`;
     }
 
@@ -2200,7 +2217,7 @@
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "pen" ? " is-pen" : ""}" data-abe-stage="1">
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
@@ -2364,6 +2381,19 @@
                 }
             });
         });
+        host.querySelectorAll("[data-abe-pen-settings]").forEach((bar) => {
+            const stop = (event) => event.stopPropagation();
+            bar.addEventListener("pointerdown", stop);
+            bar.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-pen-smoothing]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setPenSmoothing) {
+                    handlers.setPenSmoothing(button.getAttribute("data-abe-pen-smoothing"));
+                }
+            });
+        });
         host.querySelectorAll("[data-abe-shape-kind]").forEach((button) => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
@@ -2490,6 +2520,11 @@
             node.addEventListener("pointerdown", (event) => {
                 if (handlers && handlers.isPanKey && handlers.isPanKey()) return;
                 if (event.button === 1) return;
+                if (handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const pieceKey = node.getAttribute("data-abe-rotate-handle");
                 if (handlers && handlers.beginRotateGesture) {
                     handlers.beginRotateGesture(pieceKey, event);
@@ -2591,7 +2626,7 @@
                 return;
             }
             const drawingField = event.target && event.target.closest
-                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form]");
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings]");
             if (drawingField) return;
             if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
                 ignoreBackgroundClick = true;
@@ -3100,6 +3135,33 @@
         patchDrawingMeasure(host, hud, preview);
     }
 
+    function patchPenPreview(host, points) {
+        const world = host && host.querySelector(".abe-world");
+        if (!world) return;
+        const existing = world.querySelector("[data-abe-pen-preview]");
+        if (!points || points.length < 2) {
+            if (existing && existing.remove) existing.remove();
+            return;
+        }
+        const markup = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
+        if (existing) {
+            existing.setAttribute("d", markup);
+            return;
+        }
+        if (typeof document === "undefined" || !document.createElementNS) return;
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("data-abe-pen-preview", "1");
+        path.setAttribute("d", markup);
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "#243044");
+        path.setAttribute("stroke-width", "1.8");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        path.setAttribute("pointer-events", "none");
+        world.appendChild(path);
+    }
+
     function patchShapePreview(host, points, closed) {
         const world = host && host.querySelector(".abe-world");
         if (!world) return;
@@ -3156,6 +3218,7 @@
         patchMeasureOverlay,
         patchDrawingPreview,
         patchShapePreview,
+        patchPenPreview,
         clickTargetKeepsSelection,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,

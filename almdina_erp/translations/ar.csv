@@ -3599,3 +3599,12 @@ A path needs at least two nodes.,يحتاج المسار إلى عقدتين ع�
 Delete a node where both joined segments are straight.,احذف عقدة يجتمع عندها مقطعان مستقيمان.
 The arc radius no longer reaches both nodes.,نصف قطر القوس لم يعد يصل إلى العقدتين.
 This edit moves only the segment end and keeps the path closed.,هذا التعديل يحرّك نهاية الضلع فقط ويبقي المسار مغلقًا.
+Smoothing,التنعيم
+Off,بدون
+Low,منخفض
+Medium,متوسط
+High,عالٍ
+The stroke is too short.,الخط أقصر من أن يُحفظ.
+This stroke has too many points to store. The existing drawing was kept.,هذا الخط يحتوي نقاطًا أكثر مما يمكن حفظه. بقي الرسم السابق كما هو.
+The stroke ends near its start. Close the path if you want a loop.,نهاية الخط قريبة من بدايته. أغلق المسار إذا أردت حلقة.
+The path could not be closed.,تعذر إغلاق المسار.
