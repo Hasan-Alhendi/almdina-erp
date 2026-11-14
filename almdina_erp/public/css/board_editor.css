@@ -852,6 +852,142 @@
   cursor: pointer;
 }
 
+.abe-canvas-stage.is-polyline,
+.abe-canvas-stage.is-polyline .abe-piece {
+  cursor: crosshair;
+}
+
+button.abe-drawing-tool {
+  border: 0;
+  background: transparent;
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.abe-drawing-tool.is-active {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+button.abe-drawing-tool:disabled {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
+}
+
+.abe-drawing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.abe-drawing-actions button {
+  border: 0;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  color: var(--alm-text, #172033);
+  border-radius: 8px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.abe-drawing-actions button:disabled {
+  opacity: 0.45;
+}
+
+.abe-drawing-dirty {
+  color: #b54708;
+  font-weight: 600;
+}
+
+.abe-drawing-measure {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.abe-drawing-measure label,
+.abe-drawing-cursor label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.abe-drawing-measure input,
+.abe-drawing-cursor input {
+  width: 4.6rem;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  padding: 0 6px;
+  direction: ltr;
+  text-align: left;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  box-shadow: none;
+}
+
+.abe-drawing-measure input:disabled {
+  opacity: 0.55;
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+  cursor: not-allowed;
+}
+
+.abe-drawing-measure-error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.abe-drawing-measure input:focus-visible,
+.abe-drawing-cursor input:focus-visible {
+  outline: 2px solid var(--alm-focus, #3b6fd8);
+  outline-offset: 1px;
+}
+
+.abe-drawing-closed {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--alm-text-muted, #667085);
+  font-size: 12px;
+  text-align: center;
+}
+
+.abe-drawing-cursor {
+  position: absolute;
+  z-index: 6;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding: 4px 6px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: var(--alm-radius-md, 14px);
+  background: var(--alm-surface, #fff);
+  box-shadow: var(--alm-shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04), 0 5px 18px rgba(15, 23, 42, 0.045));
+  font-size: 12px;
+  pointer-events: auto;
+}
+
+.abe-drawing-cursor.is-visible {
+  display: flex;
+}
+
 .abe-canvas-tools,
 .abe-float-tools {
   pointer-events: auto;
@@ -1173,6 +1309,7 @@
 [data-theme="dark"] .abe-section-head,
 [data-theme="dark"] .abe-mode-switch,
 [data-theme="dark"] .abe-drawing-workspace,
+[data-theme="dark"] .abe-drawing-cursor,
 [data-theme="dark"] .abe-float-tools,
 [data-theme="dark"] .abe-state {
   background: var(--alm-surface, #1b2430);

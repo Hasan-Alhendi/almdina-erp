@@ -218,6 +218,8 @@ async function pageBootstrapLoadsVersionedScripts() {
         "plan_display_style.js",
         "plan_edge_marks.js",
         "editor_mode.js",
+        "drawing_space.js",
+        "drawing_model.js",
         "store.js",
         "canvas_renderer.js",
         "sidebar_renderer.js",

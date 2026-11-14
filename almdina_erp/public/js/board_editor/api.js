@@ -13,6 +13,10 @@
         "almdina_erp.almdina_erp.services.board_editor_plan_create_service.create_board_editor_plan_copy";
     const BEGIN_FROM_SOURCE_METHOD =
         "almdina_erp.almdina_erp.services.board_editor_draft_service.begin_board_editor_draft_from_current_source";
+    const GET_DRAWING_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.get_board_editor_drawing";
+    const SAVE_DRAWING_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.save_board_editor_drawing";
 
     function call(method, args) {
         return new Promise((resolve, reject) => {
@@ -70,6 +74,27 @@
         });
     }
 
+    function getDrawing(args) {
+        const payload = args || {};
+        return call(GET_DRAWING_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            piece_instance_id: String(payload.pieceInstanceId || "").trim(),
+        });
+    }
+
+    function saveDrawing(args) {
+        const payload = args || {};
+        return call(SAVE_DRAWING_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            piece_instance_id: String(payload.pieceInstanceId || "").trim(),
+            expected_drawing_version: Number(payload.expectedDrawingVersion) || 0,
+            source_content_revision: String(payload.sourceContentRevision || ""),
+            drawing: payload.drawing || null,
+        });
+    }
+
     function beginDraftFromCurrentSource(args) {
         const payload = args || {};
         return call(BEGIN_FROM_SOURCE_METHOD, {
@@ -88,6 +113,8 @@
         reviewDraft,
         createPlanCopy,
         beginDraftFromCurrentSource,
+        getDrawing,
+        saveDrawing,
         METHOD,
         STATUS_METHOD,
         SAVE_METHOD,

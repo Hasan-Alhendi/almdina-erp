@@ -89,8 +89,12 @@
             return Boolean(store.snapshot().distributionDirty);
         }
 
+        function editorDirty() {
+            return distributionDirty() || Boolean(drawingSession && drawingSession.anyDirty());
+        }
+
         function confirmLeave() {
-            if (leaveConfirmed || !distributionDirty()) return true;
+            if (leaveConfirmed || !editorDirty()) return true;
             const accepted = window.confirm(translate(
                 "Board editor changes are not saved. Leave without saving?"
             ));
@@ -101,7 +105,7 @@
         function installLeaveGuards() {
             removeLeaveGuards();
             beforeUnloadHandler = (event) => {
-                if (!distributionDirty()) return;
+                if (!editorDirty()) return;
                 event.preventDefault();
                 event.returnValue = "";
             };
@@ -198,6 +202,43 @@
         let activeOrderName = "";
         let scrollOwned = false;
         let measureArmedBeforeDrawing = false;
+        let drawingTool = "select";
+        let drawingPointer = null;
+        let drawingEntry = { lengthLocked: false, angleLocked: false, lengthText: "", angleText: "" };
+        let pendingMeasureFocus = null;
+        let committingMeasure = false;
+
+        function resetDrawingEntry() {
+            drawingEntry = { lengthLocked: false, angleLocked: false, lengthText: "", angleText: "" };
+        }
+
+        function rememberMeasureInput(field, value) {
+            const text = value == null ? "" : String(value);
+            const locked = text.trim() !== "";
+            if (field === "angle") {
+                drawingEntry.angleLocked = locked;
+                drawingEntry.angleText = locked ? text : "";
+                return;
+            }
+            drawingEntry.lengthLocked = locked;
+            drawingEntry.lengthText = locked ? text : "";
+        }
+
+        function restoreDrawingMeasureFocus(canvas) {
+            if (!pendingMeasureFocus || !canvas || typeof canvas.querySelector !== "function") return;
+            const field = pendingMeasureFocus;
+            pendingMeasureFocus = null;
+            const input = canvas.querySelector(
+                field === "angle"
+                    ? "[data-abe-drawing-measure] [data-abe-drawing-angle]"
+                    : "[data-abe-drawing-measure] [data-abe-drawing-length]"
+            );
+            if (input && !input.disabled && typeof input.focus === "function") input.focus();
+        }
+        let drawingPartialMessage = "";
+        const drawingSession = window.AlmdinaBoardEditor.DrawingModel
+            ? window.AlmdinaBoardEditor.DrawingModel.createSession()
+            : null;
         let loadedRevisionToken = "";
         let loadedPlanName = "";
         let freshnessRetryTimer = null;
@@ -655,7 +696,7 @@
         function onCanvasWheel(event) {
             if (!store || suspended || !CanvasRenderer.shouldZoomWheel(event)) return;
             const target = event.target;
-            if (target && target.closest && target.closest(".abe-float-tools, .abe-float-stack, .abe-right-sidebar, .abe-angle-field, .abe-angle-input, .abe-pos-input")) {
+            if (target && target.closest && target.closest(".abe-float-tools, .abe-float-stack, .abe-right-sidebar, .abe-angle-field, .abe-angle-input, .abe-pos-input, .abe-drawing-measure, .abe-drawing-cursor")) {
                 event.preventDefault();
                 return;
             }
@@ -1200,6 +1241,404 @@
                 measureArmedBeforeDrawing = false;
                 store.setMeasureToolActive(true);
             }
+            syncDrawing();
+        }
+
+        function drawingSpaceApi() {
+            return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
+        }
+
+        function activeDrawingRecord() {
+            return drawingSession && drawingSession.current && drawingSession.current();
+        }
+
+        function doorPointFromEvent(view, event) {
+            const Space = drawingSpaceApi();
+            const frame = drawingFrame(view);
+            const svg = ensureShell().querySelector("[data-abe-canvas] .abe-svg");
+            const metrics = (svg && svg.closest("[data-abe-canvas]") && svg.closest("[data-abe-canvas]").__abeWorldMetrics)
+                || (lastCanvasApi && lastCanvasApi.metrics);
+            if (!Space || !frame || !svg || !CanvasRenderer || !event) return null;
+            const world = CanvasRenderer.clientToWorld(svg, metrics, event.clientX, event.clientY);
+            if (!world) return null;
+            const door = Space.worldToDoor(frame, world.x, world.y);
+            return { door, world, frame };
+        }
+
+        function drawingFrame(view) {
+            const Space = drawingSpaceApi();
+            const target = view && view.drawingTarget;
+            const piece = target && view.session && view.session.pieces[target.pieceKey];
+            if (!Space || !piece || target.widthCm == null || target.lengthCm == null) return null;
+            return Space.pieceFrame(piece, view.session.boards || {}, {
+                widthMm: Space.cmToMm(target.widthCm),
+                lengthMm: Space.cmToMm(target.lengthCm),
+            });
+        }
+
+        let syncingDrawing = false;
+
+        function syncDrawing() {
+            if (!store || !drawingSession || syncingDrawing) return;
+            syncingDrawing = true;
+            try {
+            if (!store || !drawingSession) return;
+            const view = store.snapshot();
+            const Space = drawingSpaceApi();
+            const target = view.drawingTarget;
+            if (view.editorMode !== "drawing" || !target || target.status !== "special" || !Space) {
+                if (view.drawingView) store.setDrawingView(null);
+                return;
+            }
+            const widthMm = Space.cmToMm(target.widthCm);
+            const lengthMm = Space.cmToMm(target.lengthCm);
+            const record = drawingSession.activate({
+                pieceInstanceId: target.pieceInstanceId,
+                widthMm,
+                lengthMm,
+            });
+            if (record && !record.ready && record.loadToken === 0) {
+                const ticket = drawingSession.beginLoad();
+                if (ticket && Api && Api.getDrawing) {
+                    Api.getDrawing({
+                        orderName: activeOrderName,
+                        planName: loadedPlanName,
+                        pieceInstanceId: ticket.pieceInstanceId,
+                    }).then((response) => {
+                        if (drawingSession.applyLoaded(ticket.pieceInstanceId, ticket.token, response || { ok: false })) {
+                            syncDrawing();
+                        }
+                    }).catch(() => {
+                        if (drawingSession.applyLoaded(ticket.pieceInstanceId, ticket.token, { ok: false, code: "load_failed" })) {
+                            syncDrawing();
+                        }
+                    });
+                } else if (ticket) {
+                    drawingSession.applyLoaded(ticket.pieceInstanceId, ticket.token, { ok: true, drawing: null, drawing_version: 0 });
+                }
+            }
+            store.setDrawingView(buildDrawingView(view, record, Space));
+            } finally {
+                syncingDrawing = false;
+            }
+        }
+
+        function buildDrawingView(view, record, Space) {
+            if (!record) return null;
+            const frame = drawingFrame(view);
+            const paths = (record.document.paths || []).map((path) => ({
+                id: path.id,
+                closed: path.closed === true,
+                selected: Boolean(record.selection && record.selection.pathId === path.id),
+                active: Boolean(record.cursor && record.cursor.pathId === path.id),
+                points: (path.nodes || []).map((node) => {
+                    const world = frame ? Space.doorToWorld(frame, node.x_mm, node.y_mm) : { x: node.x_mm, y: node.y_mm };
+                    return { id: node.id, x: world.x, y: world.y };
+                }),
+            }));
+            if (record.cursor && !record.cursor.pathId && frame) {
+                const world = Space.doorToWorld(frame, record.cursor.x, record.cursor.y);
+                paths.push({
+                    id: "draft-start",
+                    closed: false,
+                    selected: true,
+                    active: true,
+                    points: [{ id: record.cursor.nodeId, x: world.x, y: world.y }],
+                });
+            }
+            return {
+                tool: drawingTool,
+                ready: record.ready === true,
+                dirty: drawingSession.documentDirty(record),
+                messageKey: drawingPartialMessage || record.messageKey || "",
+                canFinish: Boolean(record.cursor && record.cursor.pathId),
+                canClose: Boolean(record.cursor && record.cursor.pathId),
+                canCancel: Boolean(record.cursor),
+                paths,
+                preview: drawingPointer && drawingPointer.preview,
+                snap: drawingPointer && drawingPointer.snap,
+                measure: drawingMeasureState(record),
+            };
+        }
+
+        function drawingMeasureState(record) {
+            if (drawingTool === "polyline") {
+            const measureError = record && record.measureError;
+            return {
+                mode: "draw",
+                enabled: Boolean(record && record.cursor),
+                lengthMm: drawingPointer ? drawingPointer.lengthMm : null,
+                angleDeg: drawingPointer ? drawingPointer.angleDeg : null,
+                lengthText: drawingEntry.lengthText,
+                angleText: drawingEntry.angleText,
+                lengthLocked: drawingEntry.lengthLocked,
+                angleLocked: drawingEntry.angleLocked,
+                errorKey: measureError && measureError.messageKey,
+                errorField: measureError && measureError.field,
+            };
+            }
+            if (drawingTool !== "select" || !record || !record.selection || !record.selection.segmentId) return null;
+            const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
+            if (!path) return null;
+            if (path.closed) {
+                return {
+                    mode: "closed",
+                    enabled: false,
+                    messageKey: "Closed paths cannot be resized one segment at a time.",
+                };
+            }
+            const measured = drawingSession.metrics(record.selection.pathId, record.selection.segmentId);
+            if (!measured) return null;
+            const measureError = record.measureError;
+            return {
+                mode: "edit",
+                enabled: true,
+                lengthMm: measured.lengthMm,
+                angleDeg: measured.angleDeg,
+                lengthText: drawingEntry.lengthText,
+                angleText: drawingEntry.angleText,
+                lengthLocked: drawingEntry.lengthLocked,
+                angleLocked: drawingEntry.angleLocked,
+                errorKey: measureError && measureError.messageKey,
+                errorField: measureError && measureError.field,
+            };
+        }
+
+        function resolvedDoorPoint(mapped, shiftKey) {
+            const Space = drawingSpaceApi();
+            const record = activeDrawingRecord();
+            if (!Space || !mapped || !record || !record.cursor) return mapped && mapped.door;
+            const scale = store ? (Number(store.snapshot().viewport.scale) || 1) : 1;
+            const snap = Space.endpointSnap(
+                record.document.paths,
+                mapped.door,
+                Space.thresholdMm(scale),
+                { pathId: record.cursor.pathId, nodeId: record.cursor.nodeId }
+            );
+            if (snap) return { x: snap.x, y: snap.y, snap };
+            const angle = Space.snapAngleDeg(Space.angleDeg(record.cursor.x, record.cursor.y, mapped.door.x, mapped.door.y), shiftKey);
+            const length = Space.lengthMm(record.cursor.x, record.cursor.y, mapped.door.x, mapped.door.y);
+            return { ...Space.polarPoint(record.cursor, length, angle), snap: null, angle, length };
+        }
+
+        function updateDrawingPointer(event) {
+            if (!store || !drawingSession || drawingTool !== "polyline") return;
+            const view = store.snapshot();
+            if (view.editorMode !== "drawing") return;
+            const mapped = doorPointFromEvent(view, event);
+            const record = activeDrawingRecord();
+            if (!mapped || !record || !record.cursor) {
+                drawingPointer = null;
+                return;
+            }
+            const Space = drawingSpaceApi();
+            const resolved = resolvedDoorPoint(mapped, Boolean(event && event.shiftKey));
+            const from = Space.doorToWorld(mapped.frame, record.cursor.x, record.cursor.y);
+            const to = Space.doorToWorld(mapped.frame, resolved.x, resolved.y);
+            const pointerLength = Space.lengthMm(record.cursor.x, record.cursor.y, resolved.x, resolved.y);
+            const pointerAngle = resolved.angle != null
+                ? resolved.angle
+                : Space.angleDeg(record.cursor.x, record.cursor.y, resolved.x, resolved.y);
+            drawingPointer = {
+                pointerLength,
+                pointerAngle,
+                lengthMm: pointerLength,
+                angleDeg: pointerAngle,
+                preview: { x1: from.x, y1: from.y, x2: to.x, y2: to.y },
+                snap: resolved.snap ? Space.doorToWorld(mapped.frame, resolved.snap.x, resolved.snap.y) : null,
+                door: resolved,
+                clientX: event.clientX,
+                clientY: event.clientY,
+            };
+            applyTypedSegmentPreview(record, mapped.frame, Space);
+            patchLiveDrawingPreview();
+        }
+
+        function applyTypedSegmentPreview(record, frame, Space) {
+            if (!drawingPointer || !record || !record.cursor || !frame || !Space) return;
+            if (!drawingEntry.lengthLocked && !drawingEntry.angleLocked) return;
+            const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+            if (!Model || typeof Model.resolveNumericSegment !== "function" || typeof Space.segmentEnd !== "function") return;
+            const decision = Model.resolveNumericSegment({
+                lengthText: drawingEntry.lengthLocked ? drawingEntry.lengthText : "",
+                angleText: drawingEntry.angleLocked ? drawingEntry.angleText : "",
+                previewLength: drawingPointer.pointerLength,
+                previewAngle: drawingPointer.pointerAngle,
+            });
+            if (!decision.ok) return;
+            const end = Space.segmentEnd(record.cursor, decision.lengthMm, decision.angleDeg);
+            if (!end) return;
+            const from = Space.doorToWorld(frame, record.cursor.x, record.cursor.y);
+            const to = Space.doorToWorld(frame, end.x, end.y);
+            drawingPointer.lengthMm = end.lengthMm;
+            drawingPointer.angleDeg = decision.angleDeg;
+            drawingPointer.preview = { x1: from.x, y1: from.y, x2: to.x, y2: to.y };
+            drawingPointer.snap = null;
+        }
+
+        function patchLiveDrawingPreview() {
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            if (!host || !CanvasRenderer || !CanvasRenderer.patchDrawingPreview || !drawingPointer) return;
+            CanvasRenderer.patchDrawingPreview(host, drawingPointer.preview, drawingPointer.snap, {
+                lengthMm: drawingPointer.lengthMm,
+                angleDeg: drawingPointer.angleDeg,
+                clientX: drawingPointer.clientX,
+                clientY: drawingPointer.clientY,
+            });
+        }
+
+        function refreshTypedPreviewFromEntry() {
+            if (!store || drawingTool !== "polyline") return;
+            const record = activeDrawingRecord();
+            const Space = drawingSpaceApi();
+            const frame = drawingFrame(store.snapshot());
+            if (!record || !record.cursor || !Space || !frame) return;
+            if (!drawingPointer) {
+                drawingPointer = {
+                    pointerLength: null,
+                    pointerAngle: null,
+                    lengthMm: null,
+                    angleDeg: null,
+                    preview: null,
+                    snap: null,
+                    door: null,
+                    clientX: null,
+                    clientY: null,
+                };
+            }
+            applyTypedSegmentPreview(record, frame, Space);
+            if (drawingPointer.preview) patchLiveDrawingPreview();
+        }
+
+        function drawingPointerDown(event) {
+            if (!store || !drawingSession || !event || event.button !== 0) return false;
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure]")) {
+                return false;
+            }
+            const view = store.snapshot();
+            if (view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return false;
+            const record = activeDrawingRecord();
+            if (!record || !record.ready) return false;
+            const mapped = doorPointFromEvent(view, event);
+            if (!mapped) return false;
+            if (drawingTool === "select") {
+                const Space = drawingSpaceApi();
+                const scale = Number(view.viewport.scale) || 1;
+                const hit = drawingSession.selectHit(mapped.door, Space.thresholdMm(scale));
+                if (!hit) return false;
+                drawingPointer = null;
+                resetDrawingEntry();
+                syncDrawing();
+                return true;
+            }
+            if (drawingTool !== "polyline") return false;
+            const resolved = record.cursor ? resolvedDoorPoint(mapped, event.shiftKey) : mapped.door;
+            drawingSession.placePoint(resolved.x, resolved.y);
+            drawingPointer = null;
+            resetDrawingEntry();
+            syncDrawing();
+            return true;
+        }
+
+        function textOrEntry(text, field) {
+            const live = text == null ? "" : String(text);
+            if (live.trim() !== "") return live;
+            if (field === "angle" && drawingEntry.angleLocked) return drawingEntry.angleText;
+            if (field !== "angle" && drawingEntry.lengthLocked) return drawingEntry.lengthText;
+            return live;
+        }
+
+        function selectMeasureError(length, angle) {
+            if (length.invalid || length.empty) {
+                return {
+                    field: "length",
+                    messageKey: length.invalid ? "Enter a valid length." : "Enter a length.",
+                };
+            }
+            if (!(length.value > 0)) {
+                return { field: "length", messageKey: "A zero-length segment was not created." };
+            }
+            if (angle.invalid || angle.empty) {
+                return {
+                    field: "angle",
+                    messageKey: angle.invalid ? "Enter a valid angle." : "Enter a valid angle.",
+                };
+            }
+            return null;
+        }
+
+        function commitDrawingHud(lengthText, angleText, sourceField) {
+            if (committingMeasure) return;
+            const record = activeDrawingRecord();
+            const Space = drawingSpaceApi();
+            const Model = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingModel;
+            const target = store && store.snapshot().drawingTarget;
+            if (!record || !Space || !Model || !target || target.canEdit !== true) return;
+            const length = textOrEntry(lengthText, "length");
+            const angle = textOrEntry(angleText, "angle");
+            committingMeasure = true;
+            try {
+                let committed = false;
+                if (drawingTool === "select") {
+                    const parsedLength = Model.parseMeasure(length);
+                    const parsedAngle = Model.parseMeasure(angle);
+                    const error = selectMeasureError(parsedLength, parsedAngle);
+                    if (error) {
+                        record.measureError = error;
+                    } else {
+                        committed = drawingSession.editSelected(parsedLength.value, parsedAngle.value) === true;
+                        record.measureError = committed
+                            ? null
+                            : { field: "length", messageKey: record.messageKey || "Enter a valid length." };
+                    }
+                } else if (drawingTool === "polyline") {
+                    const result = drawingSession.commitNumeric({
+                        lengthText: length,
+                        angleText: angle,
+                        previewLength: drawingPointer ? drawingPointer.pointerLength : null,
+                        previewAngle: drawingPointer ? drawingPointer.pointerAngle : null,
+                    });
+                    committed = Boolean(result && result.ok);
+                } else {
+                    return;
+                }
+                if (committed) {
+                    resetDrawingEntry();
+                    drawingPointer = null;
+                }
+                pendingMeasureFocus = sourceField === "angle" ? "angle" : "length";
+                syncDrawing();
+                if (pendingMeasureFocus) {
+                    restoreDrawingMeasureFocus(ensureShell().querySelector("[data-abe-canvas]"));
+                }
+            } finally {
+                committingMeasure = false;
+            }
+        }
+
+        function drawingAction(action) {
+            const target = store && store.snapshot().drawingTarget;
+            if (!drawingSession || !target || target.canEdit !== true) return;
+            if (action === "finish") drawingSession.finish();
+            else if (action === "close") drawingSession.close();
+            else if (action === "cancel") drawingSession.cancelPath();
+            drawingPointer = null;
+            resetDrawingEntry();
+            const record = activeDrawingRecord();
+            if (record) record.measureError = null;
+            syncDrawing();
+        }
+
+        function setDrawingTool(tool) {
+            if (tool !== "polyline" && tool !== "select") return;
+            const view = store && store.snapshot();
+            if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
+            drawingTool = tool;
+            drawingPointer = null;
+            resetDrawingEntry();
+            const record = activeDrawingRecord();
+            if (record) record.measureError = null;
+            syncDrawing();
         }
 
         function applyDistribution(command) {
@@ -1439,6 +1878,7 @@
         function paint() {
             if (!store || suspended) return;
             syncEditorHeight();
+            syncDrawing();
             const view = store.snapshot();
             paintPageActions(view);
             const root = ensureShell().querySelector(".abe-root");
@@ -1534,6 +1974,27 @@
                     store.selectPiece(null, { pieceKey: null, elementId: null });
                 },
                 setEditorMode: (mode) => setEditorMode(mode),
+                setDrawingTool: (tool) => setDrawingTool(tool),
+                drawingAction: (action) => drawingAction(action),
+                drawingPointerDown: (event) => drawingPointerDown(event),
+                commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
+                onDrawingMeasureInput: (field, value) => {
+                    rememberMeasureInput(field, value);
+                    const record = activeDrawingRecord();
+                    if (record && record.measureError) record.measureError = null;
+                    const host = ensureShell().querySelector("[data-abe-canvas]");
+                    const error = host && host.querySelector("[data-abe-drawing-measure-error]");
+                    if (error && error.remove) error.remove();
+                    refreshTypedPreviewFromEntry();
+                },
+                cancelDrawingPreview: () => {
+                    drawingPointer = null;
+                    const host = ensureShell().querySelector("[data-abe-canvas]");
+                    if (host && CanvasRenderer && CanvasRenderer.patchDrawingPreview) {
+                        CanvasRenderer.patchDrawingPreview(host, null, null, null);
+                    }
+                    if (drawingSession && drawingSession.escape()) syncDrawing();
+                },
                 toggleMagnet: () => {
                     if (!layoutCommandsAllowed()) return;
                     store.toggleMagnet();
@@ -1608,6 +2069,7 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    updateDrawingPointer(event);
                     // Keep Alt latch aligned with live modifier state (keyup can be lost
                     // after focus changes). Drag snap-bypass still reads the same flag.
                     const wasAltHeld = altHeld;
@@ -1683,6 +2145,7 @@
                 reviewDraft: () => reviewDraft(),
                 createPlanCopy: () => createPlanCopy(),
             });
+            restoreDrawingMeasureFocus(canvas);
             syncReviewDialog(view);
             if (!view.viewport.opened && !view.viewport.userAdjusted) scheduleOpeningCamera();
         }
@@ -1775,6 +2238,10 @@
                 }
                 finishActiveGesture();
                 measureArmedBeforeDrawing = false;
+                if (drawingSession) drawingSession.reset();
+                drawingTool = "select";
+                drawingPointer = null;
+                drawingPartialMessage = "";
                 if (unsubscribe) unsubscribe();
                 store = createStore(payload);
                 ensureSession(payload, {
@@ -1843,6 +2310,10 @@
                 unsubscribe = null;
             }
             store = null;
+            if (drawingSession) drawingSession.reset();
+            drawingTool = "select";
+            drawingPointer = null;
+            drawingPartialMessage = "";
             moveInteraction = null;
             rotationInteraction = null;
             measureInteraction = null;
@@ -1874,25 +2345,63 @@
         async function saveDraft() {
             if (!store || !activeOrderName || !loadedPlanName) return;
             const view = store.snapshot();
-            if (!view.canSaveLayout || view.saveInFlight || !view.distributionDirty || !view.session) return;
+            const drawings = drawingSession ? drawingSession.dirtyRecords() : [];
+            if (!view.canSaveLayout || view.saveInFlight || !view.session) return;
+            if (!view.distributionDirty && !drawings.length) return;
             const sentFingerprint = SessionDocument.distributionFingerprint(view.session);
-            const layout = SessionDocument.exportLayout(view.session);
-            const expectedDraftVersion = view.draftVersion || 0;
             const sourceContentRevision = contentRevisionToken(view.payload || {});
             if (!store.beginDraftSave()) return;
+            let distributionSaved = !view.distributionDirty;
             try {
-                const response = await Api.saveDraft({
-                    orderName: activeOrderName,
-                    planName: loadedPlanName,
-                    expectedDraftVersion,
-                    sourceContentRevision,
-                    layout,
-                });
-                if (!store) return;
-                store.settleDraftSave(sentFingerprint, response || { ok: false, code: "failed" });
+                if (view.distributionDirty) {
+                    const response = await Api.saveDraft({
+                        orderName: activeOrderName,
+                        planName: loadedPlanName,
+                        expectedDraftVersion: view.draftVersion || 0,
+                        sourceContentRevision,
+                        layout: SessionDocument.exportLayout(view.session),
+                    });
+                    if (!store) return;
+                    store.settleDraftSave(sentFingerprint, response || { ok: false, code: "failed" });
+                    distributionSaved = Boolean(response && response.ok !== false);
+                    if (!distributionSaved) return;
+                    if (drawings.length && store && !store.snapshot().saveInFlight) store.beginDraftSave();
+                }
+                let failed = false;
+                for (let index = 0; index < drawings.length; index += 1) {
+                    const record = drawings[index];
+                    let response = null;
+                    try {
+                        response = await Api.saveDrawing({
+                            orderName: activeOrderName,
+                            planName: loadedPlanName,
+                            pieceInstanceId: record.pieceInstanceId,
+                            expectedDrawingVersion: record.drawingVersion,
+                            sourceContentRevision,
+                            drawing: record.document,
+                        });
+                    } catch (error) {
+                        response = { ok: false, code: "save_failed" };
+                    }
+                    if (!drawingSession.applySave(record.pieceInstanceId, response)) {
+                        failed = true;
+                        break;
+                    }
+                }
+                drawingPartialMessage = failed && distributionSaved && view.distributionDirty
+                    ? "The layout was saved. This drawing is still here and was not saved."
+                    : "";
             } catch (error) {
-                if (!store) return;
-                store.settleDraftSave(sentFingerprint, null);
+                if (store && !distributionSaved) store.settleDraftSave(sentFingerprint, null);
+            } finally {
+                if (store && store.snapshot().saveInFlight) {
+                    const current = store.snapshot();
+                    store.settleDraftSave(current.savedFingerprint, {
+                        ok: true,
+                        draft_version: current.draftVersion,
+                    });
+                }
+                syncDrawing();
             }
         }
 
@@ -2049,7 +2558,43 @@
 
         lifecycle.listen(window, "resize", onShellGeometryChange);
         lifecycle.listen(window, "wheel", onCanvasWheel, { capture: true, passive: false }, "abe-wheel-zoom");
+        function isMeasureEnter(event) {
+            if (!event || event.isComposing) return false;
+            if (event.key === "Enter" || event.code === "Enter" || event.code === "NumpadEnter") return true;
+            return (event.keyCode || event.which) === 13;
+        }
+
+        function isDrawingMeasureField(target) {
+            if (!target || !target.getAttribute) return false;
+            return Boolean(
+                target.getAttribute("data-abe-drawing-length")
+                || target.getAttribute("data-abe-drawing-angle")
+            );
+        }
+
         lifecycle.listen(window, "keydown", (event) => {
+            if (isDrawingMeasureField(event.target) && isMeasureEnter(event)) {
+                if (!event.defaultPrevented && drawingTool === "polyline") {
+                    event.preventDefault();
+                    const kind = event.target.getAttribute("data-abe-drawing-angle") ? "angle" : "length";
+                    const host = ensureShell().querySelector("[data-abe-canvas]");
+                    const bar = host && host.querySelector("[data-abe-drawing-measure]");
+                    const lengthInput = bar && bar.querySelector("[data-abe-drawing-length]");
+                    const angleInput = bar && bar.querySelector("[data-abe-drawing-angle]");
+                    if (kind === "length" && lengthInput && lengthInput !== event.target) {
+                        lengthInput.value = event.target.value;
+                    }
+                    if (kind === "angle" && angleInput && angleInput !== event.target) {
+                        angleInput.value = event.target.value;
+                    }
+                    commitDrawingHud(
+                        lengthInput ? lengthInput.value : event.target.value,
+                        angleInput ? angleInput.value : "",
+                        kind
+                    );
+                }
+                return;
+            }
             if (event.code === "Space" && !isEditableTarget(event.target)) {
                 spaceHeld = true;
                 if (moveInteraction) moveInteraction.onPanIntent();
@@ -2066,16 +2611,42 @@
             if (store && !layoutCommandsAllowed() && !isEditableTarget(event.target)) {
                 const keyName = String(event.key || "");
                 const modified = event.metaKey || event.ctrlKey;
+                const undoKey = modified && (keyName.toLowerCase() === "z" || keyName.toLowerCase() === "y");
                 const distributionKey = keyName === "Delete"
                     || keyName === "Backspace"
                     || keyName.indexOf("Arrow") === 0
-                    || (modified && (keyName.toLowerCase() === "z" || keyName.toLowerCase() === "y"));
+                    || undoKey;
                 if (distributionKey) {
                     event.preventDefault();
+                    if (undoKey && drawingSession) {
+                        if (event.shiftKey || keyName.toLowerCase() === "y") drawingSession.redo();
+                        else drawingSession.undo();
+                        syncDrawing();
+                    } else if ((keyName === "Delete" || keyName === "Backspace") && drawingTool === "select" && drawingSession) {
+                        drawingSession.deleteSelection();
+                        syncDrawing();
+                    }
                     return;
+                }
+                if (keyName === "Enter" && drawingTool === "polyline") {
+                    const host = ensureShell().querySelector("[data-abe-canvas]");
+                    const lengthInput = host && host.querySelector("[data-abe-drawing-measure] [data-abe-drawing-length]");
+                    const angleInput = host && host.querySelector("[data-abe-drawing-measure] [data-abe-drawing-angle]");
+                    if (lengthInput && !lengthInput.disabled) {
+                        event.preventDefault();
+                        commitDrawingHud(lengthInput.value, angleInput && angleInput.value, "length");
+                    }
                 }
             }
             if (event.code === "Escape") {
+                if (store && !layoutCommandsAllowed() && drawingSession && !isEditableTarget(event.target)) {
+                    if (drawingSession.escape()) {
+                        event.preventDefault();
+                        drawingPointer = null;
+                        syncDrawing();
+                        return;
+                    }
+                }
                 if (measureInteraction && measureInteraction.cancel && measureInteraction.cancel()) {
                     event.preventDefault();
                     return;

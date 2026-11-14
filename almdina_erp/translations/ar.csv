@@ -3517,3 +3517,33 @@ Shapes,الأشكال
 Pen,القلم
 Node edit,تعديل العقد
 Snap tool,أداة الالتقاط
+Finish path,إنهاء المسار
+Close path,إغلاق المسار
+Cancel path,إلغاء المسار
+Length (mm),الطول (مم)
+Angle (°),الزاوية (°)
+Enter a length.,أدخل الطول.
+Enter a valid length.,أدخل طولًا صالحًا.
+Enter a valid angle.,أدخل زاوية صالحة.
+Unsaved drawing,رسم غير محفوظ
+Drawing saved,تم حفظ الرسم
+Save drawing,حفظ الرسم
+Save layout and drawing,حفظ التوزيع والرسم
+These lines are construction guides. They are not manufacturing geometry yet.,هذه الخطوط إرشادات إنشاء. لم تصبح هندسة تصنيع بعد.
+Closed paths cannot be resized one segment at a time.,لا يمكن تغيير قياس مسار مغلق ضلعًا بعد ضلع.
+A zero-length segment was not created.,لم يُنشأ مقطع بطول صفري.
+Drawing storage is not installed. This drawing is still here.,تخزين الرسومات غير مثبّت. هذا الرسم ما زال هنا.
+The layout was saved. This drawing is still here and was not saved.,تم حفظ التوزيع. هذا الرسم ما زال هنا ولم يُحفظ.
+This drawing was saved somewhere else. Your lines are still here.,حُفظ هذا الرسم في مكان آخر. خطوطك ما زالت هنا.
+The source plan changed. Your drawing is still here.,تغيرت خطة المصدر. رسمك ما زال هنا.
+This piece cannot store a drawing.,لا يمكن حفظ رسم لهذه الدرفة.
+The drawing blank does not match this piece.,مقاس فراغ الرسم لا يطابق هذه الدرفة.
+This order is locked. The drawing was not saved.,هذا الطلب مقفل. لم يُحفظ الرسم.
+Could not save the drawing. Your lines are still here.,تعذر حفظ الرسم. خطوطك ما زالت هنا.
+Could not load the drawing. Your lines are still here.,تعذر تحميل الرسم. خطوطك ما زالت هنا.
+Loading drawing,جارٍ تحميل الرسم
+The drawing is still loading.,ما زال الرسم يُحمّل.
+Click a start point before entering a length.,انقر نقطة البداية قبل إدخال الطول.
+That point is outside the drawing range.,هذه النقطة خارج مدى الرسم.
+Finish at least one segment before closing the path.,ثبّت ضلعًا واحدًا على الأقل قبل إغلاق المسار.
+A saved drawing arrived after your edits. Your lines were kept.,وصل رسم محفوظ بعد تعديلاتك. أُبقيت خطوطك.

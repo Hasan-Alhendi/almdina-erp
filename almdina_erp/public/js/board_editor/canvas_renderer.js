@@ -57,10 +57,16 @@
         return __("No unsaved changes");
     }
 
+    function drawingDirty(storeView) {
+        return Boolean(storeView && storeView.drawingView && storeView.drawingView.dirty);
+    }
+
     function saveDisabled(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
         if (!storeView || storeView.canSaveLayout === false || storeView.sourceOnly) return true;
-        return state === "saving" || state === "saved" || state === "clean";
+        if (state === "saving") return true;
+        if (drawingDirty(storeView)) return false;
+        return state === "saved" || state === "clean";
     }
 
     function saveTitle(storeView) {
@@ -70,6 +76,10 @@
         if (storeView && storeView.canSaveLayout === false) {
             return __("You do not have permission to save this layout.");
         }
+        if (drawingDirty(storeView) && storeView.distributionDirty) {
+            return `${__("Save layout and drawing")}. ${saveStatusText(storeView)}`;
+        }
+        if (drawingDirty(storeView)) return __("Save drawing");
         return `${__("Save layout")}. ${saveStatusText(storeView)}`;
     }
 
@@ -140,7 +150,7 @@
     function clickTargetKeepsSelection(target) {
         if (!target || typeof target.closest !== "function") return false;
         return Boolean(target.closest(
-            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], [data-sheet]"
+            "[data-piece-id], [data-piece-key], [data-abe-rotate-handle], [data-abe-angle-mirror], [data-board-drag], [data-sheet], [data-abe-drawing-path], [data-abe-drawing-measure], [data-abe-drawing-cursor]"
         ));
     }
 
@@ -1346,25 +1356,167 @@
         return `<div class="abe-mode-switch" role="group" aria-label="${esc(__("Editor mode"))}">${button("board", "Board")}${button("drawing", "Drawing")}</div>`;
     }
 
+    function drawingToolControl(tool, label, pressed, enabled) {
+        return `<button type="button" class="abe-drawing-tool${pressed ? " is-active" : ""}" data-abe-drawing-tool="${tool}" aria-pressed="${pressed ? "true" : "false"}"${enabled ? "" : " disabled"}>${esc(__(label))}</button>`;
+    }
+
     function drawingWorkspaceHtml(storeView) {
         if ((storeView && storeView.editorMode) !== "drawing") return "";
         const target = (storeView && storeView.drawingTarget) || {};
+        const drawing = storeView.drawingView || {};
         const EditorMode = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.EditorMode;
         const tools = (EditorMode && EditorMode.futureTools) || [];
-        const message = __(target.messageKey || "Select a special piece to start drawing.");
+        const enabled = target.status === "special" && target.canEdit === true && drawing.ready !== false;
+        const activeTool = drawing.tool === "polyline" ? "polyline" : "select";
+        const message = __(drawing.messageKey || target.messageKey || "Select a special piece to start drawing.");
         const name = target.label
             ? `<strong class="abe-drawing-name">${esc(target.label)}</strong>`
             : "";
         const size = target.widthCm != null && target.lengthCm != null
             ? `<span class="abe-drawing-size" dir="ltr">${esc(target.widthCm)} × ${esc(target.lengthCm)} cm</span>`
             : "";
-        const toolHtml = tools.map((tool) => (
-            `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`
-        )).join("");
+        const dirty = drawing.dirty
+            ? `<span class="abe-drawing-dirty">${esc(__("Unsaved drawing"))}</span>`
+            : "";
+        const toolHtml = tools.map((tool) => {
+            if (tool.id === "select" || tool.id === "polyline") {
+                return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
+            }
+            return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
+        }).join("");
+        const actions = enabled && activeTool === "polyline" ? `
+            <div class="abe-drawing-actions">
+                <button type="button" data-abe-drawing-action="finish"${drawing.canFinish ? "" : " disabled"}>${esc(__("Finish path"))}</button>
+                <button type="button" data-abe-drawing-action="close"${drawing.canClose ? "" : " disabled"}>${esc(__("Close path"))}</button>
+                <button type="button" data-abe-drawing-action="cancel"${drawing.canCancel ? "" : " disabled"}>${esc(__("Cancel path"))}</button>
+            </div>` : "";
+        const measure = drawingMeasureHtml(storeView, activeTool, enabled);
         return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
-            <p class="abe-drawing-status" role="status">${name}${size}<span>${esc(message)}</span></p>
-            <div class="abe-drawing-tools" role="group" aria-disabled="true" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
-            <p class="abe-drawing-note">${esc(__("These drawing tools are not available yet."))}</p>
+            <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
+            <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
+            ${measure}
+            ${actions}
+            <p class="abe-drawing-note">${esc(__("These lines are construction guides. They are not manufacturing geometry yet."))}</p>
+        </div>`;
+    }
+
+    function pageDirection() {
+        const locale = window.AlmdinaLocale;
+        if (locale && typeof locale.direction === "function") return locale.direction();
+        return (frappe.boot && frappe.boot.lang === "ar") ? "rtl" : "ltr";
+    }
+
+    function formatMeasureMm(value) {
+        if (value == null || value === "") return "";
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        return String(Math.round(number * 1000) / 1000);
+    }
+
+    function formatMeasureAngle(value) {
+        if (value == null || value === "") return "";
+        const number = Number(value);
+        if (!Number.isFinite(number)) return "";
+        let wrapped = number % 360;
+        if (wrapped < 0) wrapped += 360;
+        if (Math.abs(wrapped) < 1e-9 || Math.abs(wrapped - 360) < 1e-9) wrapped = 0;
+        return String(Math.round(wrapped * 1000) / 1000);
+    }
+
+    function drawingMeasureHtml(storeView, activeTool, pieceEnabled) {
+        if (!pieceEnabled) return "";
+        const drawing = (storeView && storeView.drawingView) || {};
+        const measure = drawing.measure || null;
+        if (activeTool === "polyline") {
+            return measureFieldsHtml(measure || { mode: "draw", enabled: false });
+        }
+        if (!measure || (measure.mode !== "edit" && measure.mode !== "closed")) return "";
+        if (measure.mode === "closed") {
+            return `<p class="abe-drawing-closed" data-abe-drawing-closed="1">${esc(__(measure.messageKey || "Closed paths cannot be resized one segment at a time."))}</p>`;
+        }
+        return measureFieldsHtml(measure);
+    }
+
+    function measureFieldsHtml(measure) {
+        const source = measure || {};
+        const enabled = source.enabled === true;
+        const lengthValue = source.lengthLocked
+            ? String(source.lengthText == null ? "" : source.lengthText)
+            : formatMeasureMm(source.lengthMm);
+        const angleValue = source.angleLocked
+            ? String(source.angleText == null ? "" : source.angleText)
+            : formatMeasureAngle(source.angleDeg);
+        const disabled = enabled ? "" : " disabled";
+        const lengthLocked = source.lengthLocked ? ` data-locked="1"` : "";
+        const angleLocked = source.angleLocked ? ` data-locked="1"` : "";
+        const title = enabled
+            ? ""
+            : ` title="${esc(__("Click a start point before entering a length."))}"`;
+        const lengthInvalid = source.errorField === "length" ? ` aria-invalid="true"` : "";
+        const angleInvalid = source.errorField === "angle" ? ` aria-invalid="true"` : "";
+        const error = source.errorKey
+            ? `<p class="abe-drawing-measure-error" data-abe-drawing-measure-error="1" role="alert">${esc(__(source.errorKey))}</p>`
+            : "";
+        return `<div class="abe-drawing-measure" data-abe-drawing-measure="1" data-abe-measure-mode="${esc(source.mode || "draw")}" dir="${esc(pageDirection())}"${title}>
+            <label>
+                <span>${esc(__("Length (mm)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-drawing-length="1" value="${esc(lengthValue)}"${disabled}${lengthLocked}${lengthInvalid} aria-label="${esc(__("Length (mm)"))}" />
+            </label>
+            <label>
+                <span>${esc(__("Angle (°)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-drawing-angle="1" value="${esc(angleValue)}"${disabled}${angleLocked}${angleInvalid} aria-label="${esc(__("Angle (°)"))}" />
+            </label>
+            ${error}
+        </div>`;
+    }
+
+    function drawingOverlaySvg(storeView, scale) {
+        const drawing = storeView && storeView.drawingView;
+        if (!drawing || storeView.editorMode !== "drawing") return "";
+        const safeScale = Math.max(0.05, Number(scale) || 1);
+        const nodeRadius = 4.5 / safeScale;
+        const parts = [];
+        (drawing.paths || []).forEach((path) => {
+            const points = path.points || [];
+            if (!points.length) return;
+            if (points.length >= 2) {
+                const commands = points.map((point, index) => (
+                    `${index === 0 ? "M" : "L"}${point.x} ${point.y}`
+                )).join(" ");
+                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" d="${commands}${path.closed ? " Z" : ""}" fill="none" stroke="${path.selected ? "#0b5fff" : "#344054"}" stroke-width="${path.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
+            }
+            if (!path.selected && !path.active) return;
+            points.forEach((point, index) => {
+                const end = index === points.length - 1 && !path.closed;
+                const start = index === 0;
+                const fill = start ? "#12b76a" : (end ? "#0b5fff" : "#fff");
+                parts.push(`<circle data-abe-drawing-node="${esc(point.id)}" cx="${point.x}" cy="${point.y}" r="${nodeRadius}" fill="${fill}" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
+            });
+        });
+        if (drawing.preview) {
+            const preview = drawing.preview;
+            parts.push(`<line data-abe-drawing-preview="1" x1="${preview.x1}" y1="${preview.y1}" x2="${preview.x2}" y2="${preview.y2}" stroke="#0b5fff" stroke-width="1.4" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+        }
+        if (drawing.snap) {
+            parts.push(`<circle data-abe-drawing-snap="1" cx="${drawing.snap.x}" cy="${drawing.snap.y}" r="${6 / safeScale}" fill="none" stroke="#f79009" stroke-width="${2 / safeScale}" pointer-events="none"/>`);
+        }
+        return parts.join("");
+    }
+
+    function drawingCursorHtml(storeView) {
+        const drawing = storeView && storeView.drawingView;
+        const target = storeView && storeView.drawingTarget;
+        if (!drawing || storeView.editorMode !== "drawing" || drawing.tool !== "polyline") return "";
+        if (!target || target.canEdit !== true) return "";
+        return `<div class="abe-drawing-cursor" data-abe-drawing-cursor="1" dir="ltr" aria-hidden="true">
+            <label>
+                <span>${esc(__("Length (mm)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" tabindex="-1" data-abe-drawing-length="1" aria-label="${esc(__("Length (mm)"))}" />
+            </label>
+            <label>
+                <span>${esc(__("Angle (°)"))}</span>
+                <input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" tabindex="-1" data-abe-drawing-angle="1" aria-label="${esc(__("Angle (°)"))}" />
+            </label>
         </div>`;
     }
 
@@ -1985,14 +2137,16 @@
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}" data-abe-stage="1">
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
                         ${body.join("")}
+                        ${drawingOverlaySvg(storeView, scale)}
                     </g>
                 </svg>
             </div>
+            ${drawingCursorHtml(storeView)}
             <div class="abe-float-dock">
                 <div class="abe-float-stack">
                 ${editorModeSwitch(storeView.editorMode)}
@@ -2131,6 +2285,32 @@
                 }
             });
         });
+        host.querySelectorAll("[data-abe-drawing-tool]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled) return;
+                if (handlers && handlers.setDrawingTool) {
+                    handlers.setDrawingTool(button.getAttribute("data-abe-drawing-tool"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-drawing-action]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled) return;
+                if (handlers && handlers.drawingAction) {
+                    handlers.drawingAction(button.getAttribute("data-abe-drawing-action"));
+                }
+            });
+        });
+        bindDrawingMeasure(host, handlers);
+        const drawingCursor = host.querySelector("[data-abe-drawing-cursor]");
+        if (drawingCursor) {
+            const keepDrawingGesture = (event) => {
+                event.stopPropagation();
+            };
+            drawingCursor.addEventListener("pointerdown", keepDrawingGesture);
+            drawingCursor.addEventListener("pointerup", keepDrawingGesture);
+            drawingCursor.addEventListener("click", keepDrawingGesture);
+        }
         const floatDock = host.querySelector(".abe-float-dock");
         if (floatDock) {
             floatDock.addEventListener("pointerdown", (event) => {
@@ -2248,6 +2428,11 @@
             node.addEventListener("pointerdown", (event) => {
                 if (handlers && handlers.isPanKey && handlers.isPanKey()) return;
                 if (event.button === 1) return;
+                if (handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const pieceKey = node.getAttribute("data-piece-key");
                 const pieceId = node.getAttribute("data-piece-id");
                 if (handlers && handlers.beginPieceGesture) {
@@ -2314,6 +2499,14 @@
                 stage.classList.add("is-panning");
                 event.preventDefault();
                 stage.setPointerCapture(event.pointerId);
+                return;
+            }
+            const drawingField = event.target && event.target.closest
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure]");
+            if (drawingField) return;
+            if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
+                ignoreBackgroundClick = true;
+                event.preventDefault();
                 return;
             }
             if (measureOn && event.button === 0 && handlers && handlers.beginMeasureGesture) {
@@ -2441,6 +2634,383 @@
         return clientToWorldViaMetrics(svg, metrics, clientX, clientY);
     }
 
+    function measureInputs(host, kind) {
+        if (!host || typeof host.querySelectorAll !== "function") return [];
+        const attr = kind === "angle" ? "data-abe-drawing-angle" : "data-abe-drawing-length";
+        return Array.from(host.querySelectorAll(`[${attr}]`));
+    }
+
+    function measureFocused(node) {
+        return typeof document !== "undefined"
+            && document
+            && node
+            && document.activeElement === node;
+    }
+
+    function measureLocked(node) {
+        return Boolean(node && node.dataset && node.dataset.locked === "1");
+    }
+
+    function writeUnlockedMeasure(node, value) {
+        if (!node || node.disabled || measureLocked(node) || measureFocused(node)) return;
+        node.value = value;
+    }
+
+    function syncMeasureTwins(host, kind) {
+        const inputs = measureInputs(host, kind);
+        if (!inputs.length) return;
+        const source = inputs.find((node) => measureFocused(node))
+            || inputs.find((node) => measureLocked(node))
+            || inputs[0];
+        inputs.forEach((node) => {
+            if (node === source || measureFocused(node)) return;
+            node.value = source.value;
+            if (measureLocked(source) && node.dataset) node.dataset.locked = "1";
+        });
+    }
+
+    function bindDrawingMeasure(host, handlers) {
+        if (!host || typeof host.querySelectorAll !== "function") return;
+        const inputs = measureInputs(host, "length").concat(measureInputs(host, "angle"));
+        if (!inputs.length) return;
+        const isMeasureEnter = (event) => {
+            if (!event || event.isComposing) return false;
+            if (event.key === "Enter" || event.code === "Enter" || event.code === "NumpadEnter") return true;
+            return (event.keyCode || event.which) === 13;
+        };
+        const commit = (event) => {
+            if (!isMeasureEnter(event) || event.defaultPrevented) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const kind = event.target && event.target.getAttribute
+                && event.target.getAttribute("data-abe-drawing-angle") ? "angle" : "length";
+            measureInputs(host, kind).forEach((input) => {
+                if (input !== event.target) input.value = event.target.value;
+            });
+            const bar = host.querySelector("[data-abe-drawing-measure]") || host;
+            const lengthInput = bar.querySelector("[data-abe-drawing-length]");
+            const angleInput = bar.querySelector("[data-abe-drawing-angle]");
+            if (handlers && handlers.commitDrawingHud) {
+                handlers.commitDrawingHud(
+                    lengthInput && lengthInput.value,
+                    angleInput && angleInput.value,
+                    kind
+                );
+            }
+        };
+        inputs.forEach((input) => {
+            input.addEventListener("input", () => {
+                const text = input.value == null ? "" : String(input.value);
+                const locked = text.trim() !== "";
+                if (input.dataset) input.dataset.locked = locked ? "1" : "";
+                const kind = input.getAttribute("data-abe-drawing-angle") ? "angle" : "length";
+                measureInputs(host, kind).forEach((twin) => {
+                    if (twin === input) return;
+                    twin.value = text;
+                    if (twin.dataset) twin.dataset.locked = locked ? "1" : "";
+                });
+                if (handlers && handlers.onDrawingMeasureInput) {
+                    handlers.onDrawingMeasureInput(kind, locked ? text : "");
+                }
+            });
+            input.addEventListener("keydown", (event) => {
+                if (isMeasureEnter(event)) commit(event);
+                if (
+                    event.key === "Escape"
+                    || event.key === " "
+                    || event.key === "Delete"
+                    || event.key === "Backspace"
+                    || (event.key && event.key.indexOf("Arrow") === 0)
+                ) {
+                    event.stopPropagation();
+                }
+                if (event.key === "Enter" || event.key === "Escape" || event.key === " ") {
+                    event.preventDefault();
+                }
+            });
+            input.addEventListener("wheel", (event) => {
+                event.stopPropagation();
+            });
+        });
+    }
+
+    const DRAWING_HUD_GAP_PX = 24;
+    const DRAWING_HUD_HYSTERESIS_PX = 16;
+
+    function clampNumber(value, min, max) {
+        if (!(max > min)) return min;
+        return Math.min(max, Math.max(min, value));
+    }
+
+    function computePolylineHudPosition(spec) {
+        const input = spec || {};
+        const endX = Number(input.endX);
+        const startX = Number(input.startX);
+        const startY = Number(input.startY);
+        const width = Math.max(1, Number(input.width) || 1);
+        const height = Math.max(1, Number(input.height) || 1);
+        const gap = input.gap == null ? DRAWING_HUD_GAP_PX : Math.max(0, Number(input.gap) || 0);
+        const hysteresis = input.hysteresis == null
+            ? DRAWING_HUD_HYSTERESIS_PX
+            : Math.max(0, Number(input.hysteresis) || 0);
+        const bounds = input.bounds || {
+            left: 0,
+            top: 0,
+            right: startX + width + gap + 8,
+            bottom: startY + height + gap + 8,
+        };
+        // End point chooses the side only. The box itself is anchored to the fixed start node.
+        const dx = Number.isFinite(startX) && Number.isFinite(endX) ? endX - startX : 0;
+        let side = input.previousSide === "left" ? "left" : "right";
+        if (dx >= hysteresis) side = "right";
+        else if (dx <= -hysteresis) side = "left";
+        const opposite = side === "right" ? "left" : "right";
+
+        function candidate(placeSide, above) {
+            return {
+                left: placeSide === "right" ? startX + gap : startX - width - gap,
+                top: above ? startY - height - gap : startY + gap,
+                side,
+                placedSide: placeSide,
+                above,
+            };
+        }
+
+        function fits(pos) {
+            return pos.left >= bounds.left
+                && pos.top >= bounds.top
+                && pos.left + width <= bounds.right
+                && pos.top + height <= bounds.bottom;
+        }
+
+        function covers(pos) {
+            return startX >= pos.left
+                && startX <= pos.left + width
+                && startY >= pos.top
+                && startY <= pos.top + height;
+        }
+
+        const options = [
+            candidate(side, true),
+            candidate(opposite, true),
+            candidate(side, false),
+            candidate(opposite, false),
+        ];
+        let chosen = null;
+        for (let index = 0; index < options.length; index += 1) {
+            if (fits(options[index]) && !covers(options[index])) {
+                chosen = options[index];
+                break;
+            }
+        }
+        if (!chosen) {
+            const maxLeft = Math.max(bounds.left, bounds.right - width);
+            const maxTop = Math.max(bounds.top, bounds.bottom - height);
+            const preferred = options[0];
+            preferred.left = clampNumber(preferred.left, bounds.left, maxLeft);
+            preferred.top = clampNumber(preferred.top, bounds.top, maxTop);
+            const below = options[2];
+            below.left = clampNumber(below.left, bounds.left, maxLeft);
+            below.top = clampNumber(below.top, bounds.top, maxTop);
+            chosen = covers(preferred) && !covers(below) ? below : preferred;
+            if (covers(chosen)) {
+                chosen.left = clampNumber(side === "right" ? startX + gap : startX - width - gap, bounds.left, maxLeft);
+            }
+            chosen.side = side;
+        }
+        return {
+            left: chosen.left,
+            top: chosen.top,
+            side: chosen.side,
+            placedSide: chosen.placedSide,
+            above: chosen.above === true,
+        };
+    }
+
+    const computeDynamicInputPosition = computePolylineHudPosition;
+
+    function parseWorldTransform(world) {
+        const raw = world && world.getAttribute ? String(world.getAttribute("transform") || "") : "";
+        const translate = raw.match(/translate\(\s*([-\d.eE]+)(?:[,\s]+([-\d.eE]+))?\s*\)/);
+        const scale = raw.match(/scale\(\s*([-\d.eE]+)\s*\)/);
+        if (!translate || !scale) return null;
+        const tx = Number(translate[1]);
+        const ty = translate[2] == null ? 0 : Number(translate[2]);
+        const factor = Number(scale[1]);
+        if (![tx, ty, factor].every(Number.isFinite) || !(Math.abs(factor) > 1e-9)) return null;
+        return { tx, ty, scale: factor };
+    }
+
+    function worldToHostLocal(host, worldX, worldY) {
+        if (!host || !Number.isFinite(Number(worldX)) || !Number.isFinite(Number(worldY))) return null;
+        const svg = host.querySelector(".abe-svg");
+        const world = host.querySelector(".abe-world");
+        if (!svg || !world) return null;
+        if (typeof world.getScreenCTM === "function" && typeof svg.createSVGPoint === "function") {
+            try {
+                const ctm = world.getScreenCTM();
+                if (ctm && typeof ctm.a === "number") {
+                    const point = svg.createSVGPoint();
+                    point.x = Number(worldX);
+                    point.y = Number(worldY);
+                    const mapped = point.matrixTransform(ctm);
+                    if (mapped && Number.isFinite(mapped.x) && Number.isFinite(mapped.y)) {
+                        const local = clientPointToLocal(host, mapped.x, mapped.y);
+                        return { x: local.x, y: local.y, clientX: mapped.x, clientY: mapped.y };
+                    }
+                }
+            } catch (err) {
+                /* metric fallback below */
+            }
+        }
+        const transform = parseWorldTransform(world);
+        if (!transform || typeof svg.getBoundingClientRect !== "function") return null;
+        const svgX = transform.tx + Number(worldX) * transform.scale;
+        const svgY = transform.ty + Number(worldY) * transform.scale;
+        const rect = svg.getBoundingClientRect();
+        const contentW = Number(svg.getAttribute && svg.getAttribute("width")) || rect.width;
+        const contentH = Number(svg.getAttribute && svg.getAttribute("height")) || rect.height;
+        if (!(contentW > 0) || !(contentH > 0) || !(rect.width > 0) || !(rect.height > 0)) return null;
+        const clientX = rect.left + (svgX / contentW) * rect.width;
+        const clientY = rect.top + (svgY / contentH) * rect.height;
+        const local = clientPointToLocal(host, clientX, clientY);
+        return { x: local.x, y: local.y, clientX, clientY };
+    }
+
+    function drawingHudBounds(host) {
+        const width = host.clientWidth || 0;
+        const height = host.clientHeight || 0;
+        const bounds = { left: 8, top: 8, right: Math.max(8, width - 8), bottom: Math.max(8, height - 8) };
+        const stage = host.querySelector("[data-abe-stage]");
+        if (stage && typeof stage.getBoundingClientRect === "function") {
+            const rect = stage.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                const origin = clientPointToLocal(host, rect.left, rect.top);
+                const far = clientPointToLocal(host, rect.right, rect.bottom);
+                bounds.left = Math.max(bounds.left, origin.x + 8);
+                bounds.top = Math.max(bounds.top, origin.y + 8);
+                bounds.right = Math.min(bounds.right, far.x - 8);
+                bounds.bottom = Math.min(bounds.bottom, far.y - 8);
+            }
+        }
+        const dock = host.querySelector(".abe-float-dock");
+        if (dock && typeof dock.getBoundingClientRect === "function") {
+            const dockTop = clientPointToLocal(host, 0, dock.getBoundingClientRect().top).y;
+            if (dockTop > bounds.top + 8) bounds.bottom = Math.min(bounds.bottom, dockTop - 8);
+        }
+        return bounds;
+    }
+
+    function drawingCursorFocused(cursor) {
+        const active = typeof document !== "undefined" && document ? document.activeElement : null;
+        let node = active;
+        while (node) {
+            if (node === cursor) return true;
+            node = node.parentElement || null;
+        }
+        return false;
+    }
+
+    function placeDrawingCursor(host, cursor, hud, preview) {
+        if (drawingCursorFocused(cursor) && cursor.style && cursor.style.left) return;
+        const width = cursor.offsetWidth || 180;
+        const height = cursor.offsetHeight || 28;
+        const bounds = drawingHudBounds(host);
+        const previewStart = preview ? worldToHostLocal(host, preview.x1, preview.y1) : null;
+        const previewEnd = preview ? worldToHostLocal(host, preview.x2, preview.y2) : null;
+        const pointer = hud && hud.clientX != null && hud.clientY != null
+            ? clientPointToLocal(host, hud.clientX, hud.clientY)
+            : null;
+        const anchor = previewStart || (hud && hud.startClientX != null
+            ? clientPointToLocal(host, hud.startClientX, hud.startClientY)
+            : null);
+        const end = previewEnd || pointer;
+        if (!anchor || !end) return;
+        const previousSide = cursor.dataset && (cursor.dataset.hudSide === "left" || cursor.dataset.hudSide === "right")
+            ? cursor.dataset.hudSide
+            : null;
+        const placed = computePolylineHudPosition({
+            startX: anchor.x,
+            startY: anchor.y,
+            endX: end.x,
+            endY: end.y,
+            width,
+            height,
+            bounds,
+            gap: DRAWING_HUD_GAP_PX,
+            hysteresis: DRAWING_HUD_HYSTERESIS_PX,
+            previousSide,
+        });
+        if (cursor.dataset) cursor.dataset.hudSide = placed.side;
+        if (cursor.setAttribute) {
+            cursor.setAttribute("data-abe-hud-side", placed.side);
+            cursor.setAttribute("data-abe-hud-placed", placed.placedSide);
+        }
+        cursor.style.left = `${placed.left}px`;
+        cursor.style.top = `${placed.top}px`;
+    }
+
+    function patchDrawingMeasure(host, hud, preview) {
+        if (!host) return;
+        const cursor = host.querySelector("[data-abe-drawing-cursor]");
+        const toolbar = host.querySelector("[data-abe-drawing-measure]");
+        const toolbarLength = toolbar && toolbar.querySelector("[data-abe-drawing-length]");
+        if (!hud || !toolbarLength || toolbarLength.disabled) {
+            if (cursor && cursor.classList) cursor.classList.remove("is-visible");
+            return;
+        }
+        if (hud.lengthMm != null) {
+            measureInputs(host, "length").forEach((input) => writeUnlockedMeasure(input, formatMeasureMm(hud.lengthMm)));
+        }
+        if (hud.angleDeg != null) {
+            measureInputs(host, "angle").forEach((input) => writeUnlockedMeasure(input, formatMeasureAngle(hud.angleDeg)));
+        }
+        syncMeasureTwins(host, "length");
+        syncMeasureTwins(host, "angle");
+        if (!cursor || hud.clientX == null || hud.clientY == null) {
+            if (cursor && cursor.classList) cursor.classList.remove("is-visible");
+            return;
+        }
+        if (cursor.classList) cursor.classList.add("is-visible");
+        placeDrawingCursor(host, cursor, hud, preview);
+    }
+
+    function patchDrawingPreview(host, preview, snap, hud) {
+        const world = host && host.querySelector(".abe-world");
+        if (world) {
+            world.querySelectorAll("[data-abe-drawing-preview], [data-abe-drawing-snap]").forEach((node) => node.remove());
+            const svgNs = "http://www.w3.org/2000/svg";
+            if (preview && typeof document !== "undefined" && document.createElementNS) {
+                const line = document.createElementNS(svgNs, "line");
+                line.setAttribute("data-abe-drawing-preview", "1");
+                line.setAttribute("x1", String(preview.x1));
+                line.setAttribute("y1", String(preview.y1));
+                line.setAttribute("x2", String(preview.x2));
+                line.setAttribute("y2", String(preview.y2));
+                line.setAttribute("stroke", "#0b5fff");
+                line.setAttribute("stroke-width", "1.4");
+                line.setAttribute("stroke-dasharray", "7 5");
+                line.setAttribute("vector-effect", "non-scaling-stroke");
+                line.setAttribute("pointer-events", "none");
+                world.appendChild(line);
+            }
+            if (snap && typeof document !== "undefined" && document.createElementNS) {
+                const scale = Math.max(0.05, Number((host.__abeWorldMetrics || {}).scale) || 1);
+                const marker = document.createElementNS(svgNs, "circle");
+                marker.setAttribute("data-abe-drawing-snap", "1");
+                marker.setAttribute("cx", String(snap.x));
+                marker.setAttribute("cy", String(snap.y));
+                marker.setAttribute("r", String(6 / scale));
+                marker.setAttribute("fill", "none");
+                marker.setAttribute("stroke", "#f79009");
+                marker.setAttribute("stroke-width", String(2 / scale));
+                marker.setAttribute("pointer-events", "none");
+                world.appendChild(marker);
+            }
+        }
+        patchDrawingMeasure(host, hud, preview);
+    }
+
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};
     window.AlmdinaBoardEditor.CanvasRenderer = Object.freeze({
         render,
@@ -2468,6 +3038,7 @@
         SCALE_MAX,
         patchDragPreview,
         patchMeasureOverlay,
+        patchDrawingPreview,
         clickTargetKeepsSelection,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,
@@ -2480,6 +3051,9 @@
         elementCssZoom,
         clientPointToLocal,
         clientDeltaToLocal,
+        computePolylineHudPosition,
+        computeDynamicInputPosition,
+        worldToHostLocal,
         BOARD_SCREEN_MIN_PX,
         BOARD_SCREEN_MAX_PX,
         BOARD_TITLE_MM,

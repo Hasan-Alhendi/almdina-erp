@@ -34,6 +34,7 @@
             magnetEnabled: true,
             measureToolActive: false,
             editorMode: "board",
+            drawingView: null,
             // Visual-only edge-band preference for this open editor session.
             // Never enters History / draft fingerprint / manufacturing data.
             showEdgeBands: false,
@@ -94,6 +95,7 @@
                 measureToolActive: state.measureToolActive === true,
                 editorMode: state.editorMode === "drawing" ? "drawing" : "board",
                 drawingTarget: drawingTargetFor(state),
+                drawingView: state.drawingView,
                 showEdgeBands: state.showEdgeBands === true,
                 pieceEdgeBandOverrides: { ...state.pieceEdgeBandOverrides },
                 session: state.session,
@@ -190,6 +192,14 @@
                 selectedPieceKeys: current.selectedPieceKeys,
                 canEditLayout: current.canSaveLayout === true && current.sourceOnly !== true,
             });
+        }
+
+        function setDrawingView(view) {
+            const next = view || null;
+            if (JSON.stringify(state.drawingView) === JSON.stringify(next)) return snapshot();
+            state.drawingView = next;
+            emit();
+            return snapshot();
         }
 
         function setEditorMode(mode) {
@@ -564,6 +574,7 @@
             setMeasureToolActive,
             toggleMeasureTool,
             setEditorMode,
+            setDrawingView,
             setShowEdgeBands,
             setPieceEdgeBandVisible,
             isPieceEdgeBandVisible,

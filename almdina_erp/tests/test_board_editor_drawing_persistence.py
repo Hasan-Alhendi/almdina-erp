@@ -618,6 +618,60 @@ class BoardEditorDrawingPersistenceTests(unittest.TestCase):
         ):
             self.assertIn(name, contracts)
 
+    def test_construction_polyline_reloads_without_touching_distribution(self):
+        path = {
+            "id": "p1",
+            "role": "construction",
+            "closed": False,
+            "source_shape_id": None,
+            "nodes": [
+                {"id": "n1", "x_mm": 0, "y_mm": 0},
+                {"id": "n2", "x_mm": 350, "y_mm": 0},
+                {"id": "n3", "x_mm": 350, "y_mm": 120},
+            ],
+            "segments": [
+                {"id": "s1", "kind": "line", "from_node": "n1", "to_node": "n2"},
+                {"id": "s2", "kind": "line", "from_node": "n2", "to_node": "n3"},
+            ],
+        }
+        document = _document(paths=[path])
+        normalized = normalize_document(document)
+        self.assertEqual(normalized["paths"][0]["role"], "construction")
+        self.assertEqual(len(normalized["paths"][0]["nodes"]), 3)
+        self.assertEqual(normalized["paths"][0]["segments"][0]["to_node"], "n2")
+        self.assertEqual(normalized["paths"][0]["segments"][1]["from_node"], "n2")
+        self.assertNotIn("length_mm", normalized["paths"][0]["segments"][0])
+        store = MemoryDrawingStore()
+        saved = execute_save_drawing(_request(document), _context(), store)
+        self.assertTrue(saved["ok"])
+        self.assertNotIn("distribution_fingerprint", saved)
+        loaded = execute_get_drawing(_request(None), _context(), store)
+        self.assertEqual(loaded["drawing"]["paths"][0]["nodes"][1]["x_mm"], 350.0)
+        self.assertEqual(loaded["drawing"]["paths"][0]["nodes"][2]["y_mm"], 120.0)
+        other = execute_save_drawing(
+            _request(_document("piece:b", paths=[_line(x=80)], width=400, length=800), piece_id="piece:b"),
+            _context(),
+            store,
+        )
+        self.assertTrue(other["ok"])
+        reloaded = execute_get_drawing(_request(None), _context(), store)
+        self.assertEqual(reloaded["drawing"]["paths"][0]["nodes"][1]["x_mm"], 350.0)
+        changed = _document(paths=[{
+            **path,
+            "nodes": [
+                {"id": "n1", "x_mm": 0, "y_mm": 0},
+                {"id": "n2", "x_mm": 360, "y_mm": 0},
+                {"id": "n3", "x_mm": 360, "y_mm": 120},
+            ],
+        }])
+        conflict = execute_save_drawing(_request(changed, version=0), _context(), store)
+        self.assertEqual(conflict["code"], "version_conflict")
+        self.assertEqual(store.rows[drawing_key("ORD-1", "PLAN-1", "piece:a")]["drawing_json"]["paths"][0]["nodes"][1]["x_mm"], 350.0)
+        source = execute_save_drawing(_request(document, version=1, revision="rev-old"), _context(), store)
+        self.assertEqual(source["code"], "source_conflict")
+        self.assertNotIn("special_shape_geometry_json", saved)
+        self.assertNotIn("snapshot_json", saved)
+
 
 if __name__ == "__main__":
     unittest.main()
