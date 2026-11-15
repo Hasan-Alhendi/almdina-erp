@@ -40,6 +40,7 @@ from almdina_erp.almdina_erp.domain.cnc.program import (
     build_board_program,
     chain_line_paths,
 )
+from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import merge_collinear_segments
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -698,6 +699,147 @@ def test_interior_crossing_splits_and_keeps_outer_union():
         network,
         polyline_segments(perimeter.points, closed=True) + leftovers,
     )
+
+
+def test_connected_perimeter_preserves_full_internal_entity_through_three_intersections():
+    outer = CncSourceEntity(
+        layer="CUT_PATH",
+        points=tuple(_rect(0, 0, 200, 100)),
+        closed=True,
+        entity_type="LWPOLYLINE",
+        role="tool_center",
+        ring="outer",
+        path_key="cut_path:outer",
+        piece_instance_id="outer-piece",
+        piece_label="Outer",
+    )
+    vertical = CncSourceEntity(
+        layer="CUT_PATH",
+        points=((100.0, 0.0), (100.0, 100.0)),
+        closed=False,
+        entity_type="LINE",
+        role="tool_center",
+        ring="open",
+        path_key="cut_path:vertical",
+        piece_instance_id="vertical-piece",
+        piece_label="Vertical",
+    )
+    horizontals = [
+        CncSourceEntity(
+            layer="CUT_PATH",
+            points=((0.0, y), (200.0, y)),
+            closed=False,
+            entity_type="LINE",
+            role="tool_center",
+            ring="open",
+            path_key=f"cut_path:horizontal:{index}",
+        )
+        for index, y in enumerate((25.0, 50.0, 75.0), start=1)
+    ]
+    entities = [outer, vertical, *horizontals]
+    blocked = []
+    original_network = [
+        segment
+        for entity in entities
+        for segment in polyline_segments(entity.points, closed=entity.closed)
+    ]
+    legacy_perimeter = extract_connected_perimeter(original_network)
+    legacy_paths = chain_line_paths(
+        remaining_segments_after_perimeter(original_network, legacy_perimeter)
+    )
+    legacy_vertical_paths = [
+        points
+        for points, _closed in legacy_paths
+        if all(abs(point[0] - 100.0) < 0.01 for point in points)
+    ]
+    assert len(legacy_vertical_paths) == 4
+
+    connected = cnc_program._apply_connected_perimeter(
+        entities,
+        uploaded=None,
+        blocked_path=lambda code, key: blocked.append((code, key)),
+    )
+
+    assert blocked == []
+    assert any(entity is vertical for entity in connected)
+    preserved = next(entity for entity in connected if entity.path_key == "cut_path:vertical")
+    assert preserved.points == ((100.0, 0.0), (100.0, 100.0))
+    assert preserved.piece_instance_id == "vertical-piece"
+    assert sum(entity.path_key == "cut_path:vertical" for entity in connected) == 1
+    assert sum(entity.path_key == SHEET_PERIMETER_PATH_KEY for entity in connected) == 1
+    connected_segments = [
+        segment
+        for entity in connected
+        for segment in polyline_segments(entity.points, closed=entity.closed)
+    ]
+    assert segment_edge_multiset(connected_segments) == segment_edge_multiset(original_network)
+
+    motion_program = build_board_program(
+        sheet_no=1,
+        entities=[preserved],
+        operation_order=["cut_path"],
+        operation_presets={"cut_path": "Finish"},
+        path_overrides={},
+        known_presets=PRESETS,
+        units="mm",
+        frame_origin_mm=(0.0, 0.0),
+        sheet_width_mm=200,
+        sheet_length_mm=100,
+        approved_kerf_mm=5,
+    )
+    paths = [path for operation in motion_program.operations for path in operation.toolpaths]
+    assert len(paths) == 1
+    kinds = [motion.kind for motion in paths[0].motions]
+    assert kinds.count("plunge") == 3
+    assert kinds.count("retract") == 3
+
+
+def test_connected_perimeter_keeps_unaffected_inner_closed_loop_identity():
+    outer = CncSourceEntity(
+        layer="CUT_PATH",
+        points=tuple(_rect(0, 0, 200, 120)),
+        closed=True,
+        entity_type="LWPOLYLINE",
+        role="tool_center",
+        ring="outer",
+        path_key="cut_path:outer",
+    )
+    hole = CncSourceEntity(
+        layer="CUT_PATH",
+        points=tuple(_rect(60, 30, 40, 30)),
+        closed=True,
+        entity_type="LWPOLYLINE",
+        role="tool_center",
+        ring="hole",
+        path_key="cut_path:piece-a:hole:1",
+        piece_instance_id="piece-a",
+        piece_label="A",
+    )
+    blocked = []
+
+    connected = cnc_program._apply_connected_perimeter(
+        [outer, hole],
+        uploaded=None,
+        blocked_path=lambda code, key: blocked.append((code, key)),
+    )
+
+    assert blocked == []
+    assert any(entity is hole for entity in connected)
+    preserved = next(entity for entity in connected if entity.path_key == hole.path_key)
+    assert preserved.closed is True
+    assert preserved.ring == "hole"
+    assert preserved.piece_instance_id == "piece-a"
+
+
+def test_specialized_collinear_repair_does_not_bridge_a_real_gap():
+    merged = merge_collinear_segments([
+        ((0.0, 0.0), (40.0, 0.0)),
+        ((40.0, 0.0), (70.0, 0.0)),
+        ((70.2, 0.0), (100.0, 0.0)),
+    ])
+
+    assert len(merged) == 2
+    assert sorted(round(abs(end[0] - start[0]), 1) for start, end in merged) == [29.8, 70.0]
 
 
 def test_partial_collinear_overlap_splits_without_zero_length():

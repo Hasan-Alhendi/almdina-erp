@@ -29,8 +29,8 @@ assert.ok(panel.includes("collectPhysicalPaths("));
 assert.ok(translations.includes("المسار {0}"));
 assert.ok(translations.includes("مسار مشترك"));
 assert.ok(translations.includes("التمريرة {0}: العمق {1} مم"));
-assert.ok(translations.includes("استعادة الاتجاهات المتعارضة"));
-assert.ok(panel.includes("clear_conflicts: 1"));
+assert.ok(!panel.includes("clear_conflicts: 1"));
+assert.ok(!panel.includes("Restore conflicting directions"));
 
 function motionChain(points, depth, closed) {
     const start = points[0];

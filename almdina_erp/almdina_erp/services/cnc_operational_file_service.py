@@ -480,6 +480,9 @@ def save_cnc_operational_sheet(
         parsed_order is not None and not isinstance(parsed_order, list)
     ) or (parsed_sources is not None and not isinstance(parsed_sources, dict)):
         frappe.throw(_("Operational file settings are not valid."), frappe.ValidationError)
+    direction_snapshots = list((existing or {}).get("toolpath_snapshots") or [])
+    direction_associations = list((existing or {}).get("vector_associations") or [])
+    stored_profiles: list[dict[str, Any]] | None = None
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
         sheet_arguments = {
@@ -572,13 +575,32 @@ def save_cnc_operational_sheet(
                 known_tools=base_known,
                 snapshots=snapshots,
             )
+            direction_snapshots = snapshots
+            direction_associations = associations
+            stored_profiles = profiles
             prepared = prepare_sheet_settings(
                 **sheet_arguments,
                 toolpath_snapshots=snapshots,
                 vector_associations=associations,
             )
-            prepared["machining_profiles_json"] = profiles
-            prepared["vector_associations_json"] = associations
+        direction_records = _reconciled_direction_records(
+            order,
+            sheet_no=cint(sheet_no),
+            prepared=prepared,
+            saved=existing,
+            viewed_plan_token=viewed_plan_token,
+            snapshots=direction_snapshots,
+            associations=direction_associations,
+        )
+        prepared = prepare_sheet_settings(
+            **sheet_arguments,
+            toolpath_snapshots=direction_snapshots,
+            vector_associations=direction_associations,
+            reversed_path_keys=direction_records,
+        )
+        if stored_profiles is not None:
+            prepared["machining_profiles_json"] = stored_profiles
+            prepared["vector_associations_json"] = direction_associations
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
@@ -961,6 +983,56 @@ def _effective_sheet_program(program: dict[str, Any], saved: dict[str, Any] | No
     )
 
 
+def _reconciled_direction_records(
+    order: Any,
+    *,
+    sheet_no: int,
+    prepared: Mapping[str, Any],
+    saved: Mapping[str, Any] | None,
+    viewed_plan_token: str | None,
+    snapshots: Sequence[Mapping[str, Any]],
+    associations: Sequence[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    """Resolve saved directions against the exact settings being persisted."""
+
+    operations = {
+        str(row.get("operation_key") or ""): row.get("tool_preset")
+        for row in prepared.get("operations") or ()
+        if str(row.get("operation_key") or "")
+    }
+    paths = {
+        str(row.get("path_key") or ""): row.get("tool_preset")
+        for row in prepared.get("paths") or ()
+        if str(row.get("path_key") or "") and str(row.get("tool_preset") or "").strip()
+    }
+    operation_order = [
+        str(row.get("operation_key") or "")
+        for row in prepared.get("operations") or ()
+        if str(row.get("operation_key") or "")
+    ]
+    _plan, program, _presets = _compile_authorized_program(
+        order,
+        sheet_no=sheet_no,
+        operation_presets=operations,
+        path_overrides=paths,
+        operation_order=operation_order,
+        cut_path_early_confirmed=bool(prepared.get("cut_path_early_confirmed")),
+        viewed_plan_token=viewed_plan_token,
+        perimeter_join_mode=str(prepared.get("perimeter_join_mode") or "separate"),
+        cut_path_sequence=list(prepared.get("cut_path_sequence") or ()),
+        perimeter_cut_early_confirmed=bool(prepared.get("perimeter_cut_early_confirmed")),
+    )
+    direction_program = unreversed_operational_program(
+        program,
+        snapshots=snapshots,
+        associations=associations,
+    )
+    return clear_reversed_direction_conflicts(
+        direction_program,
+        (saved or {}).get("reversed_path_keys"),
+    )
+
+
 @frappe.whitelist()
 def get_cnc_sheet_program(
     order_name: str,
@@ -1065,7 +1137,6 @@ def set_cnc_path_direction(
     path_key: str,
     shape_id: str | None = None,
     clear_saved: int | str | bool = 0,
-    clear_conflicts: int | str | bool = 0,
     viewed_plan_token: str | None = None,
     operation_presets: str | dict[str, Any] | None = None,
     path_overrides: str | dict[str, Any] | None = None,
@@ -1075,7 +1146,7 @@ def set_cnc_path_direction(
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
 ) -> dict[str, Any]:
-    """Toggle one path direction or clear only unresolved saved directions."""
+    """Toggle one path direction and persist the exact geometry settings used."""
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -1083,15 +1154,14 @@ def set_cnc_path_direction(
     if not saved or not saved.get("name"):
         frappe.throw(_message("sheet_settings_required"), frappe.ValidationError)
     key = str(path_key or "").strip()
-    reset_conflicts = bool(cint(clear_conflicts))
-    if not key and not reset_conflicts:
+    if not key:
         frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
     (
         operations,
         paths,
         order_keys,
         confirmed,
-        _sources,
+        sources,
         join_mode,
         sequence,
         perimeter_early,
@@ -1100,6 +1170,7 @@ def set_cnc_path_direction(
     probe_paths = paths
     probe_order = order_keys
     probe_confirmed = confirmed
+    probe_sources = dict(sources)
     probe_join = join_mode
     probe_sequence = sequence
     probe_early = perimeter_early
@@ -1107,6 +1178,9 @@ def set_cnc_path_direction(
         parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
         if isinstance(parsed_operations, dict):
             probe_operations = {str(item): value for item, value in parsed_operations.items()}
+            for item, value in probe_operations.items():
+                if str(value or "").strip() != str(operations.get(item) or "").strip():
+                    probe_sources[item] = "sheet"
     if path_overrides is not None:
         parsed_paths = frappe.parse_json(path_overrides) if isinstance(path_overrides, str) else dict(path_overrides or {})
         if isinstance(parsed_paths, dict):
@@ -1141,19 +1215,17 @@ def set_cnc_path_direction(
             snapshots=list(saved.get("toolpath_snapshots") or []),
             associations=list(saved.get("vector_associations") or []),
         )
-        if reset_conflicts:
-            records = clear_reversed_direction_conflicts(
-                direction_program,
-                saved.get("reversed_path_keys"),
-            )
-        else:
-            records = toggle_reversed_path(
-                saved.get("reversed_path_keys"),
-                direction_program,
-                key,
-                str(shape_id or ""),
-                clear=bool(cint(clear_saved)),
-            )
+        current_records = clear_reversed_direction_conflicts(
+            direction_program,
+            saved.get("reversed_path_keys"),
+        )
+        records = toggle_reversed_path(
+            current_records,
+            direction_program,
+            key,
+            str(shape_id or ""),
+            clear=bool(cint(clear_saved)),
+        )
     except MachiningSetupError as exc:
         detail = exc.detail or key
         frappe.throw(_issue_message(exc.code, detail), frappe.ValidationError)
@@ -1165,16 +1237,21 @@ def set_cnc_path_direction(
             pieces=placed_piece_views(order),
             sheet_no=cint(sheet_no),
             existing=saved,
-            operation_presets=operations,
-            path_overrides=paths,
+            operation_presets=probe_operations,
+            path_overrides=probe_paths,
             known_presets=known_tool_presets(),
             machine_profile=machine_profile_view(),
-            operation_order=order_keys,
-            cut_path_early_confirmed=confirmed,
+            operation_order=probe_order,
+            cut_path_early_confirmed=probe_confirmed,
+            operation_sources={
+                item: source
+                for item, source in probe_sources.items()
+                if item in probe_operations
+            },
             factory_defaults=factory_operation_defaults(),
-            perimeter_join_mode=join_mode,
-            cut_path_sequence=sequence,
-            perimeter_cut_early_confirmed=perimeter_early,
+            perimeter_join_mode=probe_join,
+            cut_path_sequence=probe_sequence,
+            perimeter_cut_early_confirmed=probe_early,
             cnc_machine=saved.get("cnc_machine"),
             offset_left_cm=saved.get("offset_left_cm"),
             offset_bottom_cm=saved.get("offset_bottom_cm"),
@@ -1323,39 +1400,57 @@ def generate_cnc_sheet_nc(
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
-        prepared = prepare_sheet_settings(
-            order_name=str(order.name),
-            approved_plan=plan,
-            plan_is_current=plan is not None,
-            pieces=placed_piece_views(order),
-            sheet_no=cint(sheet_no),
-            existing=existing,
-            operation_presets={str(key): value for key, value in parsed_operations.items()},
-            path_overrides={str(key): value for key, value in parsed_paths.items()},
-            known_presets=known_tool_presets(),
-            machine_profile=machine_profile_view(),
-            operation_order=[str(item) for item in parsed_order],
-            cut_path_early_confirmed=bool(cint(cut_path_early_confirmed)),
-            operation_sources=None if parsed_sources is None else {
+        sheet_arguments = {
+            "order_name": str(order.name),
+            "approved_plan": plan,
+            "plan_is_current": plan is not None,
+            "pieces": placed_piece_views(order),
+            "sheet_no": cint(sheet_no),
+            "existing": existing,
+            "operation_presets": {str(key): value for key, value in parsed_operations.items()},
+            "path_overrides": {str(key): value for key, value in parsed_paths.items()},
+            "known_presets": known_tool_presets(),
+            "machine_profile": machine_profile_view(),
+            "operation_order": [str(item) for item in parsed_order],
+            "cut_path_early_confirmed": bool(cint(cut_path_early_confirmed)),
+            "operation_sources": None if parsed_sources is None else {
                 str(key): value for key, value in parsed_sources.items()
             },
-            factory_defaults=factory_operation_defaults(),
-            perimeter_join_mode=perimeter_join_mode,
-            cut_path_sequence=parsed_sequence,
-            perimeter_cut_early_confirmed=(
+            "factory_defaults": factory_operation_defaults(),
+            "perimeter_join_mode": perimeter_join_mode,
+            "cut_path_sequence": parsed_sequence,
+            "perimeter_cut_early_confirmed": (
                 None
                 if perimeter_cut_early_confirmed is None
                 else bool(cint(perimeter_cut_early_confirmed))
             ),
-            cnc_machine=cnc_machine,
-            offset_left_cm=offset_left_cm,
-            offset_bottom_cm=offset_bottom_cm,
-            machine_catalog=list_cnc_machines(),
-            plan_snapshot=approved_plan_snapshot(order),
-            require_cnc_machine=True,
+            "cnc_machine": cnc_machine,
+            "offset_left_cm": offset_left_cm,
+            "offset_bottom_cm": offset_bottom_cm,
+            "machine_catalog": list_cnc_machines(),
+            "plan_snapshot": approved_plan_snapshot(order),
+            "require_cnc_machine": True,
+        }
+        prepared = prepare_sheet_settings(**sheet_arguments)
+        direction_snapshots = list((existing or {}).get("toolpath_snapshots") or [])
+        direction_associations = list((existing or {}).get("vector_associations") or [])
+        direction_records = _reconciled_direction_records(
+            order,
+            sheet_no=cint(sheet_no),
+            prepared=prepared,
+            saved=existing,
+            viewed_plan_token=viewed_plan_token,
+            snapshots=direction_snapshots,
+            associations=direction_associations,
         )
-    except (OperationalFileError, ToolPresetError, PlacementError) as exc:
-        frappe.throw(_message(exc.code), frappe.ValidationError)
+        prepared = prepare_sheet_settings(
+            **sheet_arguments,
+            toolpath_snapshots=direction_snapshots,
+            vector_associations=direction_associations,
+            reversed_path_keys=direction_records,
+        )
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     operational_name = save_sheet(str((existing or {}).get("name") or ""), prepared)
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
     if not saved or str(saved.get("name") or "") != operational_name:

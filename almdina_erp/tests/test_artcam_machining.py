@@ -508,9 +508,10 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
         [{"path_key": "cut_path:piece-a:outer", "geometry_id": "not-this-path"}],
     )
     assert stale["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
-    assert stale["issues"][0]["code"] == "path_reverse_stale"
-    assert stale["nc_export_ready"] is False
-    assert reversed_direction_block(stale) == "path_reverse_stale"
+    assert stale.get("issues") == []
+    assert stale.get("nc_export_ready") is not False
+    assert reversed_direction_block(stale) == ""
+    assert emit_nc(stale).text == original_nc
     unsupported = apply_reversed_directions(
         {
             "operations": [{
@@ -544,7 +545,7 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
         closed_reversed,
         [{"path_key": "cut_path:closed", "geometry_id": closed_id}],
     )
-    assert second["direction_blocked"] is True
+    assert not second.get("direction_blocked")
     assert second["operations"][0]["toolpaths"][0]["points"] == closed_path["points"]
     legacy_remapped = apply_reversed_directions(
         closed,
@@ -556,8 +557,8 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
         closed,
         [{"path_key": "cut_path:gone", "geometry_id": "unknown-legacy-geometry"}],
     )
-    assert missing["issues"][0]["code"] == "path_reverse_missing"
-    assert missing["nc_export_ready"] is False
+    assert missing.get("issues") == []
+    assert missing.get("nc_export_ready") is not False
     restored = apply_reversed_directions(closed, [])
     assert restored["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
 
@@ -595,8 +596,8 @@ def test_reverse_targets_one_shape_when_several_toolpaths_share_a_path_key():
         program,
         [{"path_key": "cut_path:shared", "geometry_id": path_geometry_id(target)}],
     )
-    assert ambiguous["direction_blocked"] is True
-    assert ambiguous["issues"][0]["code"] == "path_reverse_ambiguous"
+    assert not ambiguous.get("direction_blocked")
+    assert ambiguous.get("issues") == []
     assert ambiguous["operations"][0]["toolpaths"][0]["points"][0] == [0.0, 0.0]
     assert ambiguous["operations"][0]["toolpaths"][1]["points"][0] == [0.0, 20.0]
     cleared = toggle_reversed_path(
@@ -680,7 +681,7 @@ def test_saved_direction_does_not_guess_after_one_shape_becomes_two_paths():
 
     ambiguous = apply_reversed_directions(rebuilt, saved)
 
-    assert reversed_direction_block(ambiguous) == "path_reverse_ambiguous"
+    assert reversed_direction_block(ambiguous) == ""
     assert [path["points"][0] for path in ambiguous["operations"][0]["toolpaths"]] == [[0.0, 0.0], [0.0, 0.0]]
 
 
@@ -705,12 +706,10 @@ def test_clear_direction_conflicts_preserves_every_valid_saved_direction():
     ]
     stored_before_preview = copy.deepcopy(records)
 
-    blocked = apply_reversed_directions(program, records)
+    reconciled = apply_reversed_directions(program, records)
     assert records == stored_before_preview
-    assert [issue["path_key"] for issue in blocked["issues"]] == [
-        "cut_path:missing-a",
-        "cut_path:missing-b",
-    ]
+    assert reconciled.get("issues") == []
+    assert reconciled.get("nc_export_ready") is not False
     assert clear_reversed_direction_conflicts(program, records) == [valid]
     retained = apply_reversed_directions(
         program,
@@ -718,6 +717,26 @@ def test_clear_direction_conflicts_preserves_every_valid_saved_direction():
     )
     assert retained["operations"][0]["toolpaths"][0]["points"][0] == [10.0, 0.0]
     assert retained["operations"][0]["toolpaths"][1]["points"][0] == [0.0, 20.0]
+
+    unsupported_program = {
+        "operations": [{
+            "operation_key": "cut_path",
+            "toolpaths": [{
+                "path_key": "cut_path:unsupported",
+                "closed": False,
+                "points": [[0, 0, 1], [2, 0, 1]],
+                "motions": [],
+            }],
+        }],
+    }
+    unsupported_record = {"path_key": "cut_path:unsupported", "geometry_id": ""}
+    assert clear_reversed_direction_conflicts(
+        unsupported_program,
+        [unsupported_record],
+    ) == [unsupported_record]
+    assert reversed_direction_block(
+        apply_reversed_directions(unsupported_program, [unsupported_record])
+    ) == "path_reverse_unsupported"
 
 
 def _undirected_edges(points, *, closed):
@@ -771,8 +790,8 @@ def test_effective_program_uses_the_frozen_path_before_reverse():
         associations=associations,
         reversed_path_keys=[{"path_key": "cut_path:local", "geometry_id": "old-plan"}],
     )
-    assert reversed_direction_block(stale) == "path_reverse_stale"
-    assert stale["nc_export_ready"] is False
+    assert reversed_direction_block(stale) == ""
+    assert stale["nc_export_ready"] is True
     from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
         shape_id,
         toggle_reversed_path,

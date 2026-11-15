@@ -9,6 +9,7 @@ settings. This module does not nest, approve, or write a machine file.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -31,6 +32,8 @@ from almdina_erp.almdina_erp.domain.cnc.perimeter import (
     prefer_uploaded_perimeter_polyline,
     remaining_segments_after_perimeter,
     segment_edge_multiset,
+    split_segments_at_vertices,
+    undirected_edge,
 )
 from almdina_erp.almdina_erp.domain.cnc.program import (
     CncSourceEntity,
@@ -43,6 +46,7 @@ from almdina_erp.almdina_erp.domain.cutting.cutter_center_paths import (
     classify_saw_center_segments,
     cutter_center_paths,
     cutter_center_segments,
+    merge_collinear_segments,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import point_in_polygon
 from almdina_erp.almdina_erp.domain.cutting.finished_piece_geometry import (
@@ -343,11 +347,6 @@ def _apply_connected_perimeter(
         for entity in entities
         if entity.layer.upper() == "CUT_PATH" and entity.role == "tool_center"
     ]
-    other_entities = [
-        entity
-        for entity in entities
-        if not (entity.layer.upper() == "CUT_PATH" and entity.role == "tool_center")
-    ]
     if not cut_entities:
         blocked_path("perimeter_unavailable", SHEET_PERIMETER_PATH_KEY)
         return entities
@@ -364,45 +363,80 @@ def _apply_connected_perimeter(
     except OperationalFileError as exc:
         blocked_path(exc.code, SHEET_PERIMETER_PATH_KEY)
         return entities
-    chained_leftovers = chain_line_paths(leftovers)
-    chained_segments = [
-        segment
-        for points, closed in chained_leftovers
-        for segment in polyline_segments(points, closed=closed)
-    ]
-    if segment_edge_multiset(chained_segments) != segment_edge_multiset(leftovers):
+    planar_network = split_segments_at_vertices(network)
+    network_vertices = sorted({point for segment in planar_network for point in segment})
+    perimeter_remaining = Counter(
+        segment_edge_multiset(polyline_segments(perimeter.points, closed=True))
+    )
+    rebuilt: list[CncSourceEntity] = []
+    rebuilt_cut_segments: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    try:
+        for entity in entities:
+            if entity.layer.upper() != "CUT_PATH" or entity.role != "tool_center":
+                rebuilt.append(entity)
+                continue
+            source_segments = polyline_segments(entity.points, closed=entity.closed)
+            planar_entity = split_segments_at_vertices(
+                source_segments,
+                extra_vertices=network_vertices,
+            )
+            retained: list[tuple[tuple[float, float], tuple[float, float]]] = []
+            removed = 0
+            for segment in planar_entity:
+                edge = undirected_edge(segment[0], segment[1])
+                if perimeter_remaining.get(edge, 0) > 0:
+                    perimeter_remaining[edge] -= 1
+                    removed += 1
+                else:
+                    retained.append(segment)
+            if not removed:
+                # Preserve the exact source entity and therefore its stable
+                # identity, piece/ring metadata, associations, and snapshots.
+                rebuilt.append(entity)
+                rebuilt_cut_segments.extend(source_segments)
+                continue
+            for points, closed in chain_line_paths(merge_collinear_segments(retained)):
+                if len(points) < 2:
+                    continue
+                replacement = _entity(
+                    layer=entity.layer,
+                    points=points,
+                    closed=closed,
+                    entity_type="LWPOLYLINE" if len(points) > 2 or closed else "LINE",
+                    role=entity.role,
+                    ring=entity.ring if closed else "open",
+                    path_key="",
+                    piece_id=entity.piece_instance_id,
+                    piece_label=entity.piece_label,
+                )
+                rebuilt.append(replacement)
+                rebuilt_cut_segments.extend(polyline_segments(points, closed=closed))
+    except OperationalFileError:
         blocked_path("perimeter_geometry_invalid", SHEET_PERIMETER_PATH_KEY)
         return entities
-    rebuilt: list[CncSourceEntity] = list(other_entities)
-    rebuilt.append(
-        _entity(
-            layer="CUT_PATH",
-            points=perimeter.points,
-            closed=True,
-            entity_type="LWPOLYLINE",
-            role="tool_center",
-            ring="outer",
-            path_key=SHEET_PERIMETER_PATH_KEY,
-            piece_id="",
-            piece_label="",
-        )
+
+    if any(perimeter_remaining.values()):
+        blocked_path("perimeter_geometry_invalid", SHEET_PERIMETER_PATH_KEY)
+        return entities
+    perimeter_entity = _entity(
+        layer="CUT_PATH",
+        points=perimeter.points,
+        closed=True,
+        entity_type="LWPOLYLINE",
+        role="tool_center",
+        ring="outer",
+        path_key=SHEET_PERIMETER_PATH_KEY,
+        piece_id="",
+        piece_label="",
     )
-    for points, closed in chained_leftovers:
-        if len(points) < 2:
-            continue
-        rebuilt.append(
-            _entity(
-                layer="CUT_PATH",
-                points=points,
-                closed=closed,
-                entity_type="LWPOLYLINE" if len(points) > 2 or closed else "LINE",
-                role="tool_center",
-                ring="outer" if closed else "open",
-                path_key="",
-                piece_id="",
-                piece_label="",
-            )
-        )
+    perimeter_segments = polyline_segments(perimeter.points, closed=True)
+    if segment_edge_multiset(rebuilt_cut_segments) != segment_edge_multiset(leftovers):
+        blocked_path("perimeter_geometry_invalid", SHEET_PERIMETER_PATH_KEY)
+        return entities
+    if segment_edge_multiset(rebuilt_cut_segments + perimeter_segments) != segment_edge_multiset(network):
+        blocked_path("perimeter_geometry_invalid", SHEET_PERIMETER_PATH_KEY)
+        return entities
+    rebuilt.append(perimeter_entity)
     return rebuilt
 
 

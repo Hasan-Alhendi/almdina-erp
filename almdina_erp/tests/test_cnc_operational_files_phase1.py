@@ -437,3 +437,18 @@ def test_association_reorder_save_uses_the_compiled_vector_catalog():
     assert "source_catalog = catalog_rows_from_program(source_program)" in save_body
     assert "paths=source_catalog" in save_body
     assert 'paths=list(prepared.get("paths") or [])' not in save_body
+
+
+def test_direction_reconciliation_is_read_only_in_preview_and_persisted_on_save():
+    service = SERVICE.read_text(encoding="utf-8")
+    preview_body = service.split("def get_cnc_sheet_program", 1)[1].split("@frappe.whitelist()", 1)[0]
+    save_body = service.split("def save_cnc_operational_sheet", 1)[1].split("@frappe.whitelist()", 1)[0]
+    direction_body = service.split("def set_cnc_path_direction", 1)[1].split("def _compile_authorized_program", 1)[0]
+    generate_body = service.split("def generate_cnc_sheet_nc", 1)[1].split("@frappe.whitelist()", 1)[0]
+
+    assert "save_sheet(" not in preview_body
+    assert "_reconciled_direction_records(" in save_body
+    assert "_reconciled_direction_records(" in generate_body
+    assert "clear_conflicts" not in direction_body
+    assert "operation_presets=probe_operations" in direction_body
+    assert "perimeter_join_mode=probe_join" in direction_body

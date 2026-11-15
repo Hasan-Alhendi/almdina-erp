@@ -2542,34 +2542,6 @@
         });
     }
 
-    function requestDirectionConflictReset(frm, dialog, workspace, sheet, state) {
-        if (!state || state.reverseBusy) return;
-        state.reverseBusy = "conflicts";
-        frappe.call({
-            method: `${METHOD}.set_cnc_path_direction`,
-            args: Object.assign({}, sheetGenerateArgs(frm, workspace, sheet, state), {
-                path_key: "",
-                clear_conflicts: 1,
-            }),
-            callback() {
-                state.reverseBusy = "";
-                state.shownDirectionSignature = "";
-                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
-            },
-            error(error) {
-                state.reverseBusy = "";
-                const problem = serverErrorText(error)
-                    || translate("The conflicting saved directions could not be restored.");
-                showSheetIssueDialog(translate("The path direction was not changed."), [{
-                    problem,
-                    target: "",
-                    action: translate("Try restoring the conflicting directions again."),
-                    code: "path_reverse_unsupported",
-                }]);
-            },
-        });
-    }
-
     function serverErrorText(error) {
         const ui = window.AlmdinaFrontend;
         if (ui && typeof ui.normalizeError === "function") {
@@ -2618,11 +2590,11 @@
             secondary_action_label: translate("Close"),
             secondary_action() { dialogBox.hide(); },
         });
-        const restore = options && (options.restorePath || options.restoreConflicts)
-            ? `<p><button type="button" class="btn btn-default btn-sm" data-restore-direction>${escapeHtml(translate(options.restoreConflicts ? "Restore conflicting directions" : "Restore the original direction"))}</button></p>`
+        const restore = options && options.restorePath
+            ? `<p><button type="button" class="btn btn-default btn-sm" data-restore-direction>${escapeHtml(translate("Restore the original direction"))}</button></p>`
             : "";
         dialogBox.$body.html(`<div class="almdina-ui"><div class="alm-error-summary" role="alert">${cards}${restore}</div></div>`);
-        if (options && (options.restorePath || options.restoreConflicts) && dialogBox.$body) {
+        if (options && options.restorePath && dialogBox.$body) {
             dialogBox.$body.find("[data-restore-direction]").on("click", () => {
                 dialogBox.hide();
                 if (typeof options.onRestore === "function") options.onRestore(options.restorePath || "");
@@ -2649,22 +2621,6 @@
                 code,
                 problem: issue.message || issueAction(code),
                 target: issue.path_key || "SHEET_PERIMETER",
-                action: issueAction(code),
-            });
-        });
-        return found;
-    }
-
-    function directionIssues(program) {
-        const found = [];
-        (Array.isArray(program && program.issues) ? program.issues : []).forEach(issue => {
-            if (!issue) return;
-            const code = String(issue.code || "");
-            if (!["path_reverse_unsupported", "path_reverse_stale", "path_reverse_missing", "path_reverse_ambiguous"].includes(code)) return;
-            found.push({
-                code,
-                problem: issue.message || issueAction(code),
-                target: issue.path_key || "",
                 action: issueAction(code),
             });
         });
@@ -3787,21 +3743,6 @@
                             perimeter
                         );
                     }
-                }
-                const direction = directionIssues(program);
-                const signature = direction.map(item => `${item.code}:${item.target}`).join("|");
-                if (signature && state.shownDirectionSignature !== signature) {
-                    state.shownDirectionSignature = signature;
-                    showSheetIssueDialog(
-                        translate("The path direction was not changed."),
-                        direction,
-                        {
-                            restoreConflicts: true,
-                            onRestore() {
-                                requestDirectionConflictReset(frm, dialog, workspace, sheet, state);
-                            },
-                        }
-                    );
                 }
             },
             error(error) {

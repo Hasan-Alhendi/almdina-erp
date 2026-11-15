@@ -1862,12 +1862,13 @@ def _motions_for_depths(
     ]
 
 
-_DIRECTION_BLOCK_CODES = frozenset({
-    "path_reverse_unsupported",
+_EXPIRED_DIRECTION_CODES = frozenset({
     "path_reverse_stale",
     "path_reverse_missing",
     "path_reverse_ambiguous",
 })
+_DIRECTION_BLOCK_CODES = frozenset({"path_reverse_unsupported"})
+_DIRECTION_RECONCILIATION_CODES = _DIRECTION_BLOCK_CODES | _EXPIRED_DIRECTION_CODES
 
 
 def reversed_direction_block(program: Mapping[str, Any] | None) -> str:
@@ -1979,7 +1980,13 @@ def apply_reversed_directions(
     program: Mapping[str, Any],
     records: Sequence[Any] | None,
 ) -> dict[str, Any]:
-    """Reverse saved path directions. A record that cannot be applied blocks NC."""
+    """Apply valid saved directions and default expired records safely.
+
+    Missing, stale, or ambiguous records describe geometry that no longer has
+    one provable target. They are ignored here (read-only reconciliation),
+    while a matched path whose motion cannot be reversed remains a real NC
+    blocker.
+    """
 
     payload = deepcopy(dict(program))
     saved = normalize_reversed_paths(records)
@@ -1995,12 +2002,15 @@ def apply_reversed_directions(
         dict(issue)
         for issue in payload.get("issues") or ()
         if isinstance(issue, Mapping)
-        and str(issue.get("code") or "") not in _DIRECTION_BLOCK_CODES
+        and str(issue.get("code") or "") not in _DIRECTION_RECONCILIATION_CODES
     ]
-    blocked = any(resolution.get("code") for resolution in resolutions)
+    blocked = any(
+        str(resolution.get("code") or "") in _DIRECTION_BLOCK_CODES
+        for resolution in resolutions
+    )
     for resolution in resolutions:
         code = str(resolution.get("code") or "")
-        if not code:
+        if code not in _DIRECTION_BLOCK_CODES:
             continue
         row = resolution["row"]
         issues.append({
@@ -2042,14 +2052,14 @@ def clear_reversed_direction_conflicts(
     program: Mapping[str, Any],
     records: Sequence[Any] | None,
 ) -> list[dict[str, str]]:
-    """Remove only saved directions that cannot map safely to this program."""
+    """Drop expired records while retaining valid and real motion failures."""
 
     saved = normalize_reversed_paths(records)
     resolutions = _reverse_record_resolutions(program, saved)
     return normalize_reversed_paths([
         resolution["row"]
         for resolution in resolutions
-        if not resolution.get("code")
+        if str(resolution.get("code") or "") not in _EXPIRED_DIRECTION_CODES
     ])
 
 
