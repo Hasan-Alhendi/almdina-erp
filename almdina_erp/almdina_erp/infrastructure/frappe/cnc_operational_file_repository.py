@@ -20,7 +20,6 @@ from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import mm_per_min_from_sec
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
-    generation_snapshot_is_complete,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATION_TYPES
 from almdina_erp.almdina_erp.domain.cutting.finished_piece_geometry import (
@@ -196,10 +195,6 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
     rows = []
     for name in names:
         document = _without_permission_check(lambda: frappe.get_doc("CNC Operational File", name))
-        snapshot = document.generation_snapshot_json or {}
-        if isinstance(snapshot, str):
-            snapshot = json.loads(snapshot) if snapshot else {}
-        file_url = str(document.generated_file or "")
         rows.append(
             {
                 "name": document.name,
@@ -209,16 +204,6 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "sheet_no": cint(document.sheet_no),
                 "status": document.status,
                 "settings_fingerprint": str(document.settings_fingerprint or ""),
-                "generation_fingerprint": str((snapshot or {}).get("settings_fingerprint") or ""),
-                "generation_snapshot": dict(snapshot or {}),
-                "snapshot_complete": generation_snapshot_is_complete(snapshot),
-                "generated_file": file_url,
-                "file_present": private_generated_file_present(
-                    file_url,
-                    attached_to_name=str(document.name),
-                ),
-                "generated_by": document.generated_by,
-                "generated_on": document.generated_on,
                 "cut_path_early_confirmed": bool(cint(document.cut_path_early_confirmed)),
                 "perimeter_join_mode": str(getattr(document, "perimeter_join_mode", None) or "separate"),
                 "cut_path_sequence": _sequence_list(getattr(document, "cut_path_sequence", None)),
@@ -694,10 +679,6 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
         )
     else:
         document = frappe.new_doc("CNC Operational File")
-    kept_snapshot = document.get("generation_snapshot_json") if existing_name else None
-    kept_file = document.get("generated_file") if existing_name else None
-    kept_by = document.get("generated_by") if existing_name else None
-    kept_on = document.get("generated_on") if existing_name else None
     for field in (
         "door_cutting_order",
         "cutting_plan",
@@ -746,10 +727,6 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
     ):
         if field in payload:
             document.set(field, _object_list_json(payload.get(field)))
-    document.generation_snapshot_json = kept_snapshot
-    document.generated_file = kept_file
-    document.generated_by = kept_by
-    document.generated_on = kept_on
     document.flags.ignore_permissions = True
     # Link targets are validated by the service layer's order/plan authorization.
     document.flags.ignore_links = True

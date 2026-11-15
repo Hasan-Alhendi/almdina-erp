@@ -12,7 +12,8 @@ from almdina_erp.almdina_erp.application.orders.plan_snapshot_security import (
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATIONS_BY_KEY
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     FACTORY_PRESET_SOURCE,
-    NOT_GENERATED,
+    SETTINGS_NOT_CONFIGURED,
+    SETTINGS_SAVED,
     SHEET_PRESET_SOURCE,
     ApprovedPlanRef,
     OperationalFileError,
@@ -20,7 +21,6 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     assign_sheet_presets,
     catalog_sheet,
     confirmed_operation_order,
-    effective_status,
     merge_operation_order,
     operation_preset_choice,
     resolve_operation_order,
@@ -285,7 +285,6 @@ def build_operational_workspace(
             "order_name": order_name,
             "can_prepare": can_prepare,
             "sheets": [],
-            "historical_files": [],
         }
 
     profile_payload = {
@@ -367,7 +366,7 @@ def build_operational_workspace(
             if inherited:
                 proposed[SHEET_PERIMETER_OPERATION_KEY] = inherited
         if saved is None:
-            status = NOT_GENERATED
+            status = SETTINGS_NOT_CONFIGURED
             operational_file = ""
             overrides: dict[str, str] = {}
             fingerprint = ""
@@ -427,15 +426,7 @@ def build_operational_workspace(
                 vector_associations=list((saved or {}).get("vector_associations") or ()),
                 reversed_path_keys=list((saved or {}).get("reversed_path_keys") or ()),
             )
-            status = effective_status(
-                generation_fingerprint=str(saved.get("generation_fingerprint") or ""),
-                current_fingerprint=current_fingerprint,
-                stored_plan=(str(saved.get("cutting_plan") or ""), int(saved.get("plan_revision") or 0)),
-                current_plan=plan.identity,
-                generated_file=str(saved.get("generated_file") or ""),
-                file_present=saved.get("file_present"),
-                snapshot_complete=saved.get("snapshot_complete"),
-            )
+            status = SETTINGS_SAVED
             operational_file = str(saved.get("name") or "")
             fingerprint = current_fingerprint
         sheet_width_cm = None
@@ -479,45 +470,8 @@ def build_operational_workspace(
                     associations=(saved or {}).get("vector_associations"),
                     snapshots=(saved or {}).get("toolpath_snapshots"),
                 ),
-                "generated_file": str((saved or {}).get("generated_file") or ""),
-                "file_present": bool((saved or {}).get("file_present")),
-                "can_download_current": bool(
-                    (saved or {}).get("file_present")
-                    and str((saved or {}).get("generated_file") or "").strip()
-                    and status in {"Generated", "Needs Regeneration"}
-                ),
-                "download_is_previous": status == "Needs Regeneration"
-                and bool((saved or {}).get("file_present")),
-                "generated_by": str((saved or {}).get("generated_by") or ""),
-                "generated_on": (saved or {}).get("generated_on") or None,
-                "content_sha256": str(
-                    ((saved or {}).get("generation_snapshot") or {}).get("content_sha256") or ""
-                ),
             }
         )
-
-    historical = [
-        {
-            "name": str(row.get("name") or ""),
-            "cutting_plan": str(row.get("cutting_plan") or ""),
-            "plan_revision": int(row.get("plan_revision") or 0),
-            "sheet_no": int(row.get("sheet_no") or 0),
-            "status": effective_status(
-                generation_fingerprint=str(row.get("generation_fingerprint") or ""),
-                current_fingerprint="",
-                stored_plan=(str(row.get("cutting_plan") or ""), int(row.get("plan_revision") or 0)),
-                current_plan=plan.identity,
-                generated_file=str(row.get("generated_file") or ""),
-                file_present=row.get("file_present"),
-                snapshot_complete=row.get("snapshot_complete"),
-            ),
-            "generated_file": str(row.get("generated_file") or ""),
-            "file_present": bool(row.get("file_present")),
-            "can_download": bool(row.get("file_present") and str(row.get("generated_file") or "").strip()),
-        }
-        for row in saved_files
-        if (str(row.get("cutting_plan") or ""), int(row.get("plan_revision") or 0)) != plan.identity
-    ]
     return {
         "eligible": True,
         "reason_code": "",
@@ -567,7 +521,6 @@ def build_operational_workspace(
             for name, values in sorted(known_presets.items())
         ],
         "sheets": sheets,
-        "historical_files": historical,
     }
 
 
@@ -726,17 +679,6 @@ def prepare_sheet_settings(
         if reversed_path_keys is None
         else list(reversed_path_keys),
     )
-    generation_fingerprint = str((existing or {}).get("generation_fingerprint") or "")
-    generated_file = str((existing or {}).get("generated_file") or "")
-    status = effective_status(
-        generation_fingerprint=generation_fingerprint,
-        current_fingerprint=fingerprint,
-        stored_plan=plan.identity,
-        current_plan=plan.identity,
-        generated_file=generated_file,
-        file_present=(existing or {}).get("file_present"),
-        snapshot_complete=(existing or {}).get("snapshot_complete"),
-    )
     return {
         "door_cutting_order": order_name,
         "cutting_plan": plan.name,
@@ -744,7 +686,7 @@ def prepare_sheet_settings(
         "plan_source_type": plan.source_type,
         "sheet_no": int(sheet_no),
         "sheet_key": f"sheet:{int(sheet_no)}",
-        "status": status,
+        "status": SETTINGS_SAVED,
         "settings_fingerprint": fingerprint,
         "cut_path_early_confirmed": confirmed,
         "perimeter_join_mode": join_mode if join_mode == PERIMETER_JOIN_CONNECTED else PERIMETER_JOIN_SEPARATE,
@@ -768,10 +710,6 @@ def prepare_sheet_settings(
         "paths": validate_operational_path_rows(
             _path_rows(catalog, assigned.path_overrides, _piece_labels(pieces))
         ),
-        "keep_generation_snapshot": bool(generation_fingerprint),
-        "generated_file": generated_file,
-        "generated_by": str((existing or {}).get("generated_by") or ""),
-        "generated_on": (existing or {}).get("generated_on"),
     }
 
 

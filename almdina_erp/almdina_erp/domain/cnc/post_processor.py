@@ -266,7 +266,7 @@ def nc_payload(document: NcDocument) -> dict[str, Any]:
         "tool_number": document.tool_number,
         "spindle_speed_rpm": document.spindle_speed_rpm,
         "warnings": list(document.warnings),
-        "filename_suffix": ".sim.nc",
+        "filename_suffix": ".nc",
     }
 
 

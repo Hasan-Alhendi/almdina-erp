@@ -1,12 +1,13 @@
 """Thin RPC boundary for CNC operational files.
 
 Authorization and the current approved plan are resolved here. Machining
-rules stay in the domain. NC text is generated only through the simulation
+rules stay in the domain. NC text is generated on demand through the existing
 post processor and is never treated as a workshop controller approval.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -25,9 +26,8 @@ from almdina_erp.almdina_erp.application.cnc.machining_setup import (
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import _kerf_mm, compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
-    build_generation_snapshot,
+    nc_export_filename,
     nc_content_sha256,
-    simulation_nc_filename,
 )
 from almdina_erp.almdina_erp.application.cnc.workspace import (
     approved_sheet_size_cm,
@@ -66,8 +66,6 @@ from almdina_erp.almdina_erp.infrastructure.cutting.dxf_reader import DxfReadErr
 from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository import (
     approved_plan_ref,
     approved_plan_snapshot,
-    attach_simulation_nc,
-    discard_orphan_file,
     factory_operation_defaults,
     get_cnc_machine,
     known_tool_presets,
@@ -76,11 +74,8 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_reposito
     machine_profile_view,
     manufacturing_source,
     placed_piece_views,
-    read_simulation_nc_bytes,
-    record_nc_generation,
     save_sheet,
     saved_operational_files,
-    sync_status,
     update_machining_json,
 )
 
@@ -189,7 +184,6 @@ _MESSAGES = {
     "toolpath_missing": "The approved drawing does not contain this machining path.",
     "cut_path_does_not_match_approved_centers": "The uploaded cut does not match the approved cutter centers.",
     "dxf_unreadable": "The operational drawing could not be read.",
-    "file_persist_failed": "The simulation NC file could not be stored.",
     "path_reverse_unsupported": "This path cannot be reversed safely, so the NC file was not created.",
     "path_reverse_stale": "A saved path direction belongs to an older geometry, so the NC file was not created.",
     "path_reverse_missing": "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",
@@ -363,8 +357,6 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
     for sheet in workspace["sheets"]:
-        if sheet["operational_file"]:
-            sync_status(sheet["operational_file"], sheet["status"])
         try:
             width_cm, length_cm = approved_sheet_size_cm(
                 approved_plan_snapshot(order) if plan is not None else None,
@@ -375,9 +367,6 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
         except (OperationalFileError, json.JSONDecodeError):
             sheet["sheet_width_cm"] = None
             sheet["sheet_length_cm"] = None
-    for historical in workspace["historical_files"]:
-        if historical["name"]:
-            sync_status(historical["name"], historical["status"])
     return workspace
 
 
