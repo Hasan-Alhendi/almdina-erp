@@ -1391,6 +1391,10 @@
                 const menuOpen = drawing.snapMenuOpen === true;
                 return `<button type="button" class="abe-drawing-tool${menuOpen ? " is-active" : ""}" data-abe-snap-toggle="1" aria-pressed="${snapOn ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
             }
+            if (tool.id === "reference_image" && enabled) {
+                const menuOpen = drawing.referenceMenuOpen === true;
+                return `<button type="button" class="abe-drawing-tool${menuOpen ? " is-active" : ""}" data-abe-reference-toggle="1" aria-pressed="${menuOpen ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+            }
             return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
         }).join("");
         const actions = enabled && activeTool === "polyline" ? `
@@ -1406,7 +1410,9 @@
             ${shapeMenuHtml(drawing)}
             ${penSettingsHtml(drawing, enabled)}
             ${snapMenuHtml(drawing, enabled)}
+            ${referenceMenuHtml(drawing, enabled)}
             ${measure}
+            ${referenceFormHtml(drawing)}
             ${shapeFormHtml(drawing)}
             ${actions}
             <p class="abe-drawing-note">${esc(__("These lines are construction guides. They are not manufacturing geometry yet."))}</p>
@@ -1522,6 +1528,49 @@
         </div>`;
     }
 
+    function referenceMenuHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.referenceMenuOpen !== true) return "";
+        const rows = (drawing.references || []).map((reference, index) => {
+            const selected = reference.selected ? " is-active" : "";
+            return `<span class="abe-reference-row${selected}">
+                <button type="button" data-abe-reference-select="${esc(reference.id)}">${esc(__("Reference image"))} ${index + 1}</button>
+                <button type="button" data-abe-reference-action="hide" data-abe-reference-id="${esc(reference.id)}" title="${esc(__(reference.hidden ? "Show reference image" : "Hide reference image"))}">${esc(__(reference.hidden ? "Show" : "Hide"))}</button>
+                <button type="button" data-abe-reference-action="lock" data-abe-reference-id="${esc(reference.id)}" title="${esc(__(reference.locked ? "Unlock reference image" : "Lock reference image"))}">${esc(__(reference.locked ? "Unlock" : "Lock"))}</button>
+                <button type="button" data-abe-reference-action="delete" data-abe-reference-id="${esc(reference.id)}" title="${esc(__("Delete reference image"))}">${esc(__("Delete"))}</button>
+            </span>`;
+        }).join("");
+        return `<div class="abe-reference-menu" data-abe-reference-menu="1" dir="${esc(pageDirection())}">
+            <button type="button" data-abe-reference-upload="1">${esc(__("Upload reference image"))}</button>
+            <input type="file" accept="image/*,.svg,.heic" data-abe-reference-file="1" hidden />
+            ${rows}
+        </div>`;
+    }
+
+    function referenceFormHtml(drawing) {
+        const form = drawing && drawing.referenceForm;
+        if (!form) return "";
+        const field = (key, label, value) => `<label><span>${esc(__(label))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-reference-field="${esc(key)}" value="${esc(value)}" aria-label="${esc(__(label))}" /></label>`;
+        const percent = Math.round(Number(form.opacity) * 1000) / 10;
+        const calibration = form.calibration
+            ? `<p class="abe-reference-note" data-abe-reference-calibration="1">${esc(__("Calibrated"))}: <span dir="ltr">${esc(form.calibration.known_distance_mm)} mm</span></p>`
+            : (form.calibrating
+                ? `<p class="abe-reference-note">${esc(__(form.calibrationMessage || "Pick the first point on the image."))}${form.currentDistance != null ? ` <span dir="ltr">${esc(form.currentDistance)} mm</span>` : ""}</p>
+                    <label><span>${esc(__("Known distance (mm)"))}</span><input type="text" inputmode="decimal" dir="ltr" data-abe-reference-known="1" value="${esc(form.knownText || "")}" /></label>
+                    <button type="button" data-abe-reference-action="apply-calibration">${esc(__("Apply calibration"))}</button>`
+                : "");
+        return `<div class="abe-reference-form" data-abe-reference-form="1" dir="${esc(pageDirection())}">
+            ${field("x_mm", "X (mm)", form.x_mm)}
+            ${field("y_mm", "Y (mm)", form.y_mm)}
+            ${field("width_mm", "Width (mm)", form.width_mm)}
+            ${field("height_mm", "Height (mm)", form.height_mm)}
+            ${field("rotation_deg", "Angle (°)", form.rotation_deg)}
+            <label><span>${esc(__("Opacity (%)"))}</span><input type="range" min="0" max="100" step="1" dir="ltr" data-abe-reference-opacity="1" value="${esc(percent)}" aria-label="${esc(__("Opacity (%)"))}" /></label>
+            <label><input type="checkbox" data-abe-reference-aspect="1"${form.aspectLocked !== false ? " checked" : ""} />${esc(__("Lock aspect ratio"))}</label>
+            <button type="button" data-abe-reference-action="calibrate">${esc(__("Calibrate"))}</button>
+            ${calibration}
+        </div>`;
+    }
+
     function shapeMenuHtml(drawing) {
         if (!drawing || drawing.tool !== "shapes") return "";
         const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
@@ -1566,12 +1615,43 @@
         return `<div class="abe-drawing-measure abe-shape-form" data-abe-shape-form="1" data-abe-shape-mode="${esc(form.mode || "create")}" dir="${esc(pageDirection())}">${fields}${error}${actionRow}</div>`;
     }
 
+    function referenceImageMarkup(reference, scale) {
+        const world = reference && reference.world;
+        const width = Number(reference && reference.widthMm);
+        const height = Number(reference && reference.heightMm);
+        if (!world || !(width > 0) || !(height > 0)) return "";
+        const a = (world.xAxis.x - world.origin.x) / width;
+        const b = (world.xAxis.y - world.origin.y) / width;
+        const c = (world.yAxis.x - world.origin.x) / height;
+        const d = (world.yAxis.y - world.origin.y) / height;
+        const matrix = `matrix(${a} ${b} ${c} ${d} ${world.origin.x} ${world.origin.y})`;
+        const opacity = reference.opacity == null ? 0.5 : reference.opacity;
+        const image = reference.href
+            ? `<image data-abe-reference-image="${esc(reference.id)}" href="${esc(reference.href)}" width="${width}" height="${height}" transform="${matrix}" opacity="${opacity}" pointer-events="none" preserveAspectRatio="none"/>`
+            : `<g data-abe-reference-image="${esc(reference.id)}" transform="${matrix}" pointer-events="none"><rect width="${width}" height="${height}" fill="none" stroke="#98a2b3" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/></g>`;
+        if (!reference.selected || !reference.interactive) return image;
+        const corners = [world.origin, world.xAxis, {
+            x: world.xAxis.x + (world.yAxis.x - world.origin.x),
+            y: world.xAxis.y + (world.yAxis.y - world.origin.y),
+        }, world.yAxis];
+        const outline = corners.map((point) => `${point.x},${point.y}`).join(" ");
+        const handles = reference.locked ? "" : ["nw", "ne", "se", "sw"].map((corner, index) => {
+            const point = corners[index === 0 ? 0 : (index === 1 ? 1 : (index === 2 ? 2 : 3))];
+            return `<circle data-abe-reference-handle="${esc(corner)}" data-abe-reference-id="${esc(reference.id)}" cx="${point.x}" cy="${point.y}" r="${6 / scale}" fill="#fff" stroke="#0b5fff" pointer-events="all"/>`;
+        }).join("") + `<circle data-abe-reference-handle="rotate" data-abe-reference-id="${esc(reference.id)}" cx="${(world.origin.x + world.xAxis.x) / 2}" cy="${(world.origin.y + world.xAxis.y) / 2 - (16 / scale)}" r="${6 / scale}" fill="#f79009" stroke="#7a2e0e" pointer-events="all"/>`;
+        return `${image}<polygon data-abe-reference-bounds="${esc(reference.id)}" points="${outline}" fill="none" stroke="#0b5fff" stroke-width="1.2" vector-effect="non-scaling-stroke" pointer-events="none"/>${handles}`;
+    }
+
     function drawingOverlaySvg(storeView, scale) {
         const drawing = storeView && storeView.drawingView;
         if (!drawing || storeView.editorMode !== "drawing") return "";
         const safeScale = Math.max(0.05, Number(scale) || 1);
         const nodeRadius = 4.5 / safeScale;
         const parts = [];
+        (drawing.references || []).forEach((reference) => {
+            if (reference.hidden) return;
+            parts.push(referenceImageMarkup(reference, safeScale));
+        });
         (drawing.paths || []).forEach((path) => {
             const points = path.points || [];
             if (!points.length) return;
@@ -2408,6 +2488,59 @@
                 }
             });
         });
+        host.querySelectorAll("[data-abe-reference-toggle]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.toggleReferenceMenu) handlers.toggleReferenceMenu();
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-menu], [data-abe-reference-form]").forEach((panel) => {
+            const stop = (event) => event.stopPropagation();
+            panel.addEventListener("pointerdown", stop);
+            panel.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-reference-upload]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const input = button.parentElement && button.parentElement.querySelector("[data-abe-reference-file]");
+                if (input && input.click) input.click();
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-file]").forEach((input) => {
+            input.addEventListener("change", () => {
+                const files = input.files ? Array.prototype.slice.call(input.files) : [];
+                if (handlers && handlers.uploadReferenceFiles && files.length) handlers.uploadReferenceFiles(files);
+                input.value = "";
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-select]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.selectReference) handlers.selectReference(button.getAttribute("data-abe-reference-select"));
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-action]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.referenceAction) {
+                    handlers.referenceAction(button.getAttribute("data-abe-reference-action"), button.getAttribute("data-abe-reference-id"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-field], [data-abe-reference-opacity], [data-abe-reference-known]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.commitReferenceField) {
+                    handlers.commitReferenceField(input.getAttribute("data-abe-reference-field") || (input.hasAttribute("data-abe-reference-opacity") ? "opacity" : "known"), input.value);
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-reference-aspect]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setReferenceAspect) handlers.setReferenceAspect(input.checked === true);
+            });
+        });
         host.querySelectorAll("[data-abe-snap-toggle]").forEach((button) => {
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
@@ -2664,6 +2797,19 @@
             if (clickTargetKeepsSelection(event.target)) return;
             if (handlers && handlers.clearSelection) handlers.clearSelection();
         });
+        stage.addEventListener("dragover", (event) => {
+            const files = event.dataTransfer && event.dataTransfer.types;
+            const hasFile = files && Array.prototype.indexOf.call(files, "Files") >= 0;
+            if (!hasFile || !handlers || !handlers.uploadReferenceFiles) return;
+            event.preventDefault();
+        });
+        stage.addEventListener("drop", (event) => {
+            const files = event.dataTransfer && event.dataTransfer.files;
+            if (!files || !files.length || !handlers || !handlers.uploadReferenceFiles) return;
+            event.preventDefault();
+            event.stopPropagation();
+            handlers.uploadReferenceFiles(Array.prototype.slice.call(files));
+        });
         stage.addEventListener("pointerdown", (event) => {
             if (panRequested(event)) {
                 ignoreBackgroundClick = true;
@@ -2678,8 +2824,14 @@
                 return;
             }
             const drawingField = event.target && event.target.closest
-                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle]");
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]");
             if (drawingField) return;
+            if (event.button === 0 && event.target && event.target.closest && event.target.closest("[data-abe-reference-handle]")) {
+                ignoreBackgroundClick = true;
+                if (handlers && handlers.referencePointerDown) handlers.referencePointerDown(event);
+                event.preventDefault();
+                return;
+            }
             if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
                 ignoreBackgroundClick = true;
                 event.preventDefault();
@@ -3174,6 +3326,37 @@
         return `<g data-abe-drawing-snap="1" data-abe-snap-type="${esc(type)}" pointer-events="none">${guide}${glyph}${text}</g>`;
     }
 
+    function patchReferenceFrame(host, reference, frame, Space) {
+        const Reference = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingReference;
+        const node = host && reference && host.querySelector(`[data-abe-reference-image="${reference.id}"]`);
+        if (!Reference || !node || !frame || !Space) return;
+        const width = Number(reference.width_mm);
+        const height = Number(reference.height_mm);
+        if (!(width > 0) || !(height > 0)) return;
+        const project = Reference.project(reference, (x, y) => Space.doorToWorld(frame, x, y));
+        const a = (project.xAxis.x - project.origin.x) / width;
+        const b = (project.xAxis.y - project.origin.y) / width;
+        const c = (project.yAxis.x - project.origin.x) / height;
+        const d = (project.yAxis.y - project.origin.y) / height;
+        node.setAttribute("transform", `matrix(${a} ${b} ${c} ${d} ${project.origin.x} ${project.origin.y})`);
+        if (node.tagName && String(node.tagName).toLowerCase() === "image") {
+            node.setAttribute("width", String(width));
+            node.setAttribute("height", String(height));
+        }
+        const corners = [project.origin, project.xAxis, {
+            x: project.xAxis.x + (project.yAxis.x - project.origin.x),
+            y: project.xAxis.y + (project.yAxis.y - project.origin.y),
+        }, project.yAxis];
+        const bounds = host.querySelector(`[data-abe-reference-bounds="${reference.id}"]`);
+        if (bounds) bounds.setAttribute("points", corners.map((point) => `${point.x},${point.y}`).join(" "));
+        ["nw", "ne", "se", "sw"].forEach((corner, index) => {
+            const handle = host.querySelector(`[data-abe-reference-handle="${corner}"][data-abe-reference-id="${reference.id}"]`);
+            if (!handle) return;
+            handle.setAttribute("cx", String(corners[index].x));
+            handle.setAttribute("cy", String(corners[index].y));
+        });
+    }
+
     function patchDrawingPreview(host, preview, snap, hud) {
         const world = host && host.querySelector(".abe-world");
         if (world) {
@@ -3327,6 +3510,7 @@
         patchDragPreview,
         patchMeasureOverlay,
         patchDrawingPreview,
+        patchReferenceFrame,
         patchShapePreview,
         patchPenPreview,
         clickTargetKeepsSelection,

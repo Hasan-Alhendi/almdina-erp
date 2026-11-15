@@ -17,6 +17,10 @@
         "almdina_erp.almdina_erp.services.board_editor_drawing_service.get_board_editor_drawing";
     const SAVE_DRAWING_METHOD =
         "almdina_erp.almdina_erp.services.board_editor_drawing_service.save_board_editor_drawing";
+    const UPLOAD_REFERENCE_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.upload_board_editor_reference_image";
+    const GET_REFERENCE_METHOD =
+        "almdina_erp.almdina_erp.services.board_editor_drawing_service.get_board_editor_reference_image";
 
     function call(method, args) {
         return new Promise((resolve, reject) => {
@@ -95,6 +99,27 @@
         });
     }
 
+    function uploadReferenceImage(args) {
+        const payload = args || {};
+        return call(UPLOAD_REFERENCE_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            piece_instance_id: String(payload.pieceInstanceId || "").trim(),
+            file_name: String(payload.fileName || ""),
+            content_base64: String(payload.contentBase64 || ""),
+        });
+    }
+
+    function getReferenceImage(args) {
+        const payload = args || {};
+        return call(GET_REFERENCE_METHOD, {
+            order_name: String(payload.orderName || "").trim(),
+            plan_name: String(payload.planName || "").trim(),
+            piece_instance_id: String(payload.pieceInstanceId || "").trim(),
+            file_id: String(payload.fileId || "").trim(),
+        });
+    }
+
     function beginDraftFromCurrentSource(args) {
         const payload = args || {};
         return call(BEGIN_FROM_SOURCE_METHOD, {
@@ -115,6 +140,8 @@
         beginDraftFromCurrentSource,
         getDrawing,
         saveDrawing,
+        uploadReferenceImage,
+        getReferenceImage,
         METHOD,
         STATUS_METHOD,
         SAVE_METHOD,

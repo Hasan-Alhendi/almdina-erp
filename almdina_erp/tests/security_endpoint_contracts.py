@@ -58,6 +58,8 @@ _GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "get_board_editor_drawing_archive",
             "list_board_editor_drawings",
             "save_board_editor_drawing",
+            "upload_board_editor_reference_image",
+            "get_board_editor_reference_image",
         ),
     ),
     ("almdina_erp.almdina_erp.services.board_editor_draft_review_service", C, ("validate_board_editor_draft",)),

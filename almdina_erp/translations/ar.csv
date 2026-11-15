@@ -3617,3 +3617,33 @@ Horizontal / Vertical,أفقي / عمودي
 Grid spacing,خطوة الشبكة
 Horizontal,أفقي
 Vertical,عمودي
+Upload reference image,رفع صورة مرجعية
+Hide reference image,إخفاء الصورة المرجعية
+Show reference image,إظهار الصورة المرجعية
+Lock reference image,قفل الصورة المرجعية
+Unlock reference image,فك قفل الصورة المرجعية
+Delete reference image,حذف الصورة المرجعية
+Show,إظهار
+Hide,إخفاء
+Lock,قفل
+Unlock,فك القفل
+Opacity (%),الشفافية (%)
+Lock aspect ratio,تثبيت نسبة العرض إلى الارتفاع
+Calibrate,معايرة
+Apply calibration,تطبيق المعايرة
+Known distance (mm),المسافة الحقيقية (مم)
+Calibrated,تمت المعايرة
+Pick the first point on the image.,اختر النقطة الأولى على الصورة.
+Pick the second point on the image.,اختر النقطة الثانية على الصورة.
+Enter the known distance.,أدخل المسافة الحقيقية.
+Pick both calibration points on the image.,اختر نقطتي المعايرة على الصورة.
+Enter a valid known distance.,أدخل مسافة حقيقية صالحة.
+This SVG contains active content and was rejected.,يحتوي ملف SVG على محتوى نشط وتم رفضه.
+SVG reference images cannot be imported safely here.,لا يمكن استيراد صورة SVG المرجعية بأمان هنا.
+This image format is not supported.,صيغة الصورة غير مدعومة.
+The reference image is too large.,الصورة المرجعية أكبر من الحد المسموح.
+The reference image could not be read.,تعذر قراءة الصورة المرجعية.
+The reference image could not be loaded.,تعذر تحميل الصورة المرجعية.
+Select one editable special piece before uploading a reference image.,اختر درفة خاصة واحدة قابلة للتحرير قبل رفع صورة مرجعية.
+This drawing already has the maximum number of reference images.,بلغ هذا الرسم الحد الأقصى لعدد الصور المرجعية.
+The reference image could not be placed.,تعذر وضع الصورة المرجعية.

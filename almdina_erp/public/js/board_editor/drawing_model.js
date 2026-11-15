@@ -388,8 +388,88 @@
         return true;
     }
 
+    function referenceById(record, referenceId) {
+        return (record.document.references || []).find((row) => row.id === referenceId) || null;
+    }
+
+    function addReference(record, spec) {
+        if (!record.ready) return fail(record, "not_ready", "The drawing is still loading.");
+        const placed = spec || {};
+        const rows = record.document.references || [];
+        if (rows.length >= 32) {
+            return fail(record, "too_many_elements", "This drawing already has the maximum number of reference images.");
+        }
+        const width = quantize(placed.width_mm);
+        const height = quantize(placed.height_mm);
+        const fileId = String(placed.file_id || "");
+        if (!(width > 0) || !(height > 0) || !fileId || /\s/.test(fileId)) {
+            return fail(record, "invalid_reference", "The reference image could not be placed.");
+        }
+        remember(record);
+        const reference = {
+            id: nextId(record, "r"),
+            file_id: fileId,
+            x_mm: quantize(placed.x_mm) || 0,
+            y_mm: quantize(placed.y_mm) || 0,
+            width_mm: width,
+            height_mm: height,
+            rotation_deg: quantize(placed.rotation_deg) || 0,
+            opacity: placed.opacity == null ? 0.5 : Math.round(Number(placed.opacity) * 1000) / 1000,
+            locked: false,
+            hidden: false,
+            calibration: null,
+        };
+        record.document.references = rows.concat([reference]);
+        record.selection = selectionOf({ referenceId: reference.id });
+        clearStatus(record);
+        return reference.id;
+    }
+
+    function updateReference(record, referenceId, patch, options) {
+        const reference = referenceById(record, referenceId);
+        const changes = patch || {};
+        if (!reference) return false;
+        if (!options || options.history !== false) remember(record);
+        let geometryChanged = false;
+        ["x_mm", "y_mm", "width_mm", "height_mm", "rotation_deg"].forEach((key) => {
+            if (changes[key] == null) return;
+            const next = quantize(changes[key]);
+            if (next == null) return;
+            if (reference[key] !== next) geometryChanged = true;
+            reference[key] = next;
+        });
+        if (changes.opacity != null && changes.opacity >= 0 && changes.opacity <= 1) {
+            reference.opacity = Math.round(Number(changes.opacity) * 1000) / 1000;
+        }
+        if (typeof changes.locked === "boolean") reference.locked = changes.locked;
+        if (typeof changes.hidden === "boolean") reference.hidden = changes.hidden;
+        if (Object.prototype.hasOwnProperty.call(changes, "calibration")) reference.calibration = changes.calibration;
+        else if (geometryChanged) reference.calibration = null;
+        clearStatus(record);
+        return true;
+    }
+
+    function deleteReference(record, referenceId) {
+        if (!referenceById(record, referenceId)) return false;
+        remember(record);
+        record.document.references = (record.document.references || []).filter((row) => row.id !== referenceId);
+        if (record.selection && record.selection.referenceId === referenceId) record.selection = null;
+        clearStatus(record);
+        return true;
+    }
+
+    function selectReference(record, referenceId) {
+        if (!referenceById(record, referenceId)) return false;
+        record.selection = selectionOf({ referenceId });
+        clearStatus(record);
+        return true;
+    }
+
     function deleteSelection(record) {
         if (!record.selection) return false;
+        if (record.selection.referenceId && !record.selection.pathId && !record.selection.nodeId && !record.selection.shapeId) {
+            return deleteReference(record, record.selection.referenceId);
+        }
         if (record.selection.nodeId) return deleteNode(record, record.selection.pathId, record.selection.nodeId);
         if (record.selection.shapeId && !record.selection.pathId) {
             return deleteShape(record, record.selection.shapeId);
@@ -1171,6 +1251,22 @@
                 return editSegment(record, record.selection.pathId, record.selection.segmentId, length, angle);
             },
             deleteSelection() { const record = current(); return Boolean(record && deleteSelection(record)); },
+            addReference(spec) {
+                const record = current();
+                return record ? addReference(record, spec) : false;
+            },
+            updateReference(referenceId, patch, options) {
+                const record = current();
+                return Boolean(record && updateReference(record, referenceId, patch, options));
+            },
+            deleteReference(referenceId) {
+                const record = current();
+                return Boolean(record && deleteReference(record, referenceId));
+            },
+            selectReference(referenceId) {
+                const record = current();
+                return Boolean(record && selectReference(record, referenceId));
+            },
             selectHit(point, threshold) {
                 const record = current();
                 if (!record) return false;
@@ -1282,6 +1378,15 @@
                 const record = current();
                 if (!record) return;
                 record.selection = null;
+            },
+            isCurrent(pieceInstanceId, token) {
+                const record = current();
+                return Boolean(
+                    record
+                    && record.ready
+                    && record.pieceInstanceId === String(pieceInstanceId || "")
+                    && record.loadToken === token
+                );
             },
             beginLoad() {
                 const record = current();

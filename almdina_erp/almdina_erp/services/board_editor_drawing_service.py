@@ -2,11 +2,13 @@
 
 The drawing row is independent of the distribution draft. This module does not
 modify Cutting Plan snapshots, order geometry, pricing, or DXF/NC output.
-Reference file ids are not trusted in this phase.
+Reference file ids are trusted only after a private File is proven for this
+order, source plan, and piece.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -30,6 +32,12 @@ from almdina_erp.almdina_erp.domain.orders.lifecycle import LOCKED_ORDER_STATUSE
 from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
     FrappeBoardEditorDrawingStore,
     drawing_storage_ready,
+)
+from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_reference_files import (
+    decode_reference_image,
+    proven_reference_file_ids,
+    read_reference_png,
+    store_reference_png,
 )
 from almdina_erp.almdina_erp.services.board_editor_query_service import (
     _authorized_order,
@@ -69,7 +77,13 @@ def _authorize_drawing(order_name: str, plan_name: str, *, write: bool):
     return order, plan, order_status, None
 
 
-def _editor_context(order: Any, plan: Any, order_status: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+def _editor_context(
+    order: Any,
+    plan: Any,
+    order_status: str,
+    payload: Mapping[str, Any],
+    piece_instance_id: str = "",
+) -> dict[str, Any]:
     plan_payload = payload.get("plan") or {}
     projection = payload.get("projection") or {}
     pieces = projection.get("pieces") if isinstance(projection, Mapping) else []
@@ -82,7 +96,7 @@ def _editor_context(order: Any, plan: Any, order_status: str, payload: Mapping[s
         "source_input_fingerprint": str(plan_payload.get("input_fingerprint") or ""),
         "source_content_revision": str(plan_payload.get("content_revision_token") or ""),
         "catalog": drawing_catalog_from_pieces(pieces if isinstance(pieces, list) else []),
-        "trusted_file_ids": (),
+        "trusted_file_ids": proven_reference_file_ids(str(order.name), str(plan.name), piece_instance_id),
     }
 
 
@@ -134,7 +148,7 @@ def get_board_editor_drawing(
             "plan_name": str(plan.name),
             "piece_instance_id": str(piece_instance_id or ""),
         },
-        _editor_context(order, plan, order_status, payload),
+        _editor_context(order, plan, order_status, payload, str(piece_instance_id or "")),
         FrappeBoardEditorDrawingStore(),
     )
 
@@ -186,7 +200,7 @@ def save_board_editor_drawing(
             "source_content_revision": str(source_content_revision or ""),
             "drawing": _parse_drawing(drawing),
         },
-        _editor_context(order, plan, order_status, payload),
+        _editor_context(order, plan, order_status, payload, str(piece_instance_id or "")),
         FrappeBoardEditorDrawingStore(),
     )
 
@@ -211,7 +225,7 @@ def get_board_editor_drawing_archive(
             "plan_name": str(plan.name),
             "piece_instance_id": str(piece_instance_id or ""),
         },
-        _editor_context(order, plan, order_status, payload),
+        _editor_context(order, plan, order_status, payload, str(piece_instance_id or "")),
         FrappeBoardEditorDrawingStore(),
     )
 
@@ -246,6 +260,70 @@ def archive_drawings_after_source_begin(
     return result
 
 
+def _drawable_piece(context: Mapping[str, Any], piece_instance_id: str) -> dict[str, Any] | None:
+    catalog = context.get("catalog") or {}
+    piece = catalog.get(str(piece_instance_id or "")) if isinstance(catalog, Mapping) else None
+    if not isinstance(piece, Mapping) or str(piece.get("piece_type") or "") != "Special":
+        return None
+    return piece
+
+
+@frappe.whitelist(methods=["POST"])
+def upload_board_editor_reference_image(
+    order_name: str,
+    plan_name: str,
+    piece_instance_id: str,
+    file_name: str = "",
+    content_base64: str = "",
+) -> dict[str, Any]:
+    """Store one private reference image for this special piece."""
+
+    order, plan, order_status, early = _authorize_drawing(order_name, plan_name, write=True)
+    if early is not None:
+        return early
+    payload = _load_editor(order_name, plan_name, order, plan)
+    context = _editor_context(order, plan, order_status, payload, str(piece_instance_id or ""))
+    if _drawable_piece(context, str(piece_instance_id or "")) is None:
+        return {"ok": False, "code": "piece_not_drawable"}
+    encoded = str(content_base64 or "")
+    if "," in encoded and encoded.lstrip().startswith("data:"):
+        encoded = encoded.split(",", 1)[1]
+    if len(encoded) > ((8 * 1024 * 1024 * 4) // 3) + 32:
+        return {"ok": False, "code": "image_too_large"}
+    try:
+        content = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        return {"ok": False, "code": "image_corrupt"}
+    decoded = decode_reference_image(content)
+    if not decoded.get("ok"):
+        return {"ok": False, "code": decoded.get("code") or "image_corrupt"}
+    file_id = store_reference_png(str(order.name), str(plan.name), str(piece_instance_id or ""), decoded["png"])
+    return {
+        "ok": True,
+        "file_id": file_id,
+        "width_px": decoded["width_px"],
+        "height_px": decoded["height_px"],
+        "content_type": "image/png",
+        "content_base64": base64.b64encode(decoded["png"]).decode("ascii"),
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def get_board_editor_reference_image(
+    order_name: str,
+    plan_name: str,
+    piece_instance_id: str,
+    file_id: str,
+) -> dict[str, Any]:
+    """Return one proven reference image. A missing file does not change the drawing."""
+
+    order, plan, _order_status, early = _authorize_drawing(order_name, plan_name, write=False)
+    if early is not None:
+        return early
+    _load_editor(order_name, plan_name, order, plan)
+    return read_reference_png(str(order.name), str(plan.name), str(piece_instance_id or ""), str(file_id or ""))
+
+
 def _parse_drawing(drawing: Any) -> Any:
     if isinstance(drawing, str):
         try:
@@ -260,4 +338,6 @@ __all__ = [
     "get_board_editor_drawing_archive",
     "list_board_editor_drawings",
     "save_board_editor_drawing",
+    "upload_board_editor_reference_image",
+    "get_board_editor_reference_image",
 ]

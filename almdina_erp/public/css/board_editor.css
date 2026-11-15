@@ -926,6 +926,43 @@ button.abe-drawing-tool:disabled {
   max-width: 36rem;
 }
 
+.abe-reference-menu,
+.abe-reference-form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px 8px;
+  max-width: 36rem;
+}
+
+.abe-reference-form label,
+.abe-reference-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.abe-reference-form input[type="text"] {
+  width: 4.5rem;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
+}
+
+.abe-reference-form input[type="range"] {
+  width: 5rem;
+}
+
+.abe-reference-note {
+  margin: 0;
+  font-size: 12px;
+}
+
 .abe-snap-menu label {
   display: inline-flex;
   align-items: center;

@@ -603,7 +603,9 @@ class BoardEditorDrawingPersistenceTests(unittest.TestCase):
             self.assertNotIn("special_shape_geometry_json", source)
             self.assertNotIn("plan_needs_recalculation", source)
         self.assertNotIn("EDIT_SPECIAL_DRAWING", service_source)
-        self.assertIn('"trusted_file_ids": ()', service_source)
+        self.assertIn("proven_reference_file_ids", service_source)
+        self.assertNotIn("request.get(\"trusted_file_ids\")", service_source)
+        self.assertNotIn("drawing.get(\"references\")", service_source)
         self.assertIn("archive_drawings_after_source_begin", draft_service)
         self.assertIn("frappe.db.rollback()", service_source)
         self.assertNotIn('get_doc("Cutting Plan"', store_source)
@@ -615,6 +617,8 @@ class BoardEditorDrawingPersistenceTests(unittest.TestCase):
             "list_board_editor_drawings",
             "save_board_editor_drawing",
             "get_board_editor_drawing_archive",
+            "upload_board_editor_reference_image",
+            "get_board_editor_reference_image",
         ):
             self.assertIn(name, contracts)
 

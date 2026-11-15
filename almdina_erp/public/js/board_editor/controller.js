@@ -219,6 +219,11 @@
         let snapOverlay = null;
         let snapIndex = null;
         let snapRevisionKey = "";
+        let referenceMenuOpen = false;
+        let referenceAspectLock = true;
+        let referenceCalibration = null;
+        let referenceDrag = null;
+        const referenceLoads = {};
         let shapeAnchor = null;
         let shapeEntry = {};
         let nodeDrag = null;
@@ -1339,6 +1344,7 @@
                 }
             }
             store.setDrawingView(buildDrawingView(view, record, Space));
+            ensureReferenceMedia(record);
             } finally {
                 syncingDrawing = false;
             }
@@ -1477,6 +1483,9 @@
                 snap: snapOverlay || (drawingPointer && drawingPointer.snap),
                 snapSettings: snapState(),
                 snapMenuOpen: snapMenuOpen === true,
+                references: drawingReferenceViews(record, frame, Space),
+                referenceMenuOpen: referenceMenuOpen === true,
+                referenceForm: referenceFormState(record),
                 measure: drawingMeasureState(record),
             };
         }
@@ -1733,9 +1742,347 @@
             if (drawingPointer.preview) patchLiveDrawingPreview();
         }
 
+        function drawingReferenceApi() {
+            return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingReference;
+        }
+
+        function selectedReference(record) {
+            const id = record && record.selection && record.selection.referenceId;
+            return id ? (record.document.references || []).find((row) => row.id === id) || null : null;
+        }
+
+        function drawingReferenceViews(record, frame, Space) {
+            const Reference = drawingReferenceApi();
+            const selectedId = record.selection && record.selection.referenceId;
+            return (record.document.references || []).map((reference) => {
+                const source = referenceDrag && referenceDrag.id === reference.id && referenceDrag.live
+                    ? Object.assign({}, reference, referenceDrag.live)
+                    : reference;
+                const project = Reference && frame
+                    ? Reference.project(source, (x, y) => Space.doorToWorld(frame, x, y))
+                    : null;
+                const media = record.referenceMedia && record.referenceMedia[reference.file_id];
+                return {
+                    id: reference.id,
+                    hidden: reference.hidden === true,
+                    locked: reference.locked === true,
+                    selected: selectedId === reference.id,
+                    interactive: drawingTool === "select" && reference.locked !== true,
+                    opacity: source.opacity,
+                    widthMm: source.width_mm,
+                    heightMm: source.height_mm,
+                    href: media || "",
+                    world: project,
+                };
+            });
+        }
+
+        function referenceFormState(record) {
+            const reference = selectedReference(record);
+            if (!reference) return null;
+            const live = referenceDrag && referenceDrag.id === reference.id && referenceDrag.live
+                ? Object.assign({}, reference, referenceDrag.live)
+                : reference;
+            const calibrating = Boolean(referenceCalibration && referenceCalibration.id === reference.id);
+            return {
+                x_mm: live.x_mm,
+                y_mm: live.y_mm,
+                width_mm: live.width_mm,
+                height_mm: live.height_mm,
+                rotation_deg: live.rotation_deg,
+                opacity: live.opacity,
+                aspectLocked: referenceAspectLock !== false,
+                calibrating,
+                calibrationMessage: calibrating ? referenceCalibration.messageKey : "",
+                currentDistance: calibrating ? referenceCalibration.currentDistance : null,
+                knownText: calibrating ? referenceCalibration.knownText || "" : "",
+                calibration: live.calibration,
+            };
+        }
+
+        function drawingServerIdentity() {
+            return {
+                orderName: String(activeOrderName || "").trim(),
+                planName: String(loadedPlanName || "").trim(),
+            };
+        }
+
+        function ensureReferenceMedia(record) {
+            const Api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.Api;
+            const identity = drawingServerIdentity();
+            if (!Api || !record || !identity.orderName || !identity.planName || typeof Api.getReferenceImage !== "function") return;
+            record.referenceMedia = record.referenceMedia || {};
+            (record.document.references || []).forEach((reference) => {
+                const fileId = reference.file_id;
+                if (!fileId || record.referenceMedia[fileId] || referenceLoads[fileId]) return;
+                referenceLoads[fileId] = true;
+                const pieceId = record.pieceInstanceId;
+                const token = record.loadToken;
+                Api.getReferenceImage({
+                    orderName: identity.orderName,
+                    planName: identity.planName,
+                    pieceInstanceId: pieceId,
+                    fileId,
+                }).then((response) => {
+                    delete referenceLoads[fileId];
+                    const current = drawingSession.current();
+                    if (!current || current.pieceInstanceId !== pieceId || current.loadToken !== token) return;
+                    current.referenceMedia = current.referenceMedia || {};
+                    if (response && response.ok && response.content_base64) {
+                        current.referenceMedia[fileId] = `data:image/png;base64,${response.content_base64}`;
+                        if (current.referenceMissing) delete current.referenceMissing[fileId];
+                    } else {
+                        current.referenceMissing = current.referenceMissing || {};
+                        current.referenceMissing[fileId] = true;
+                        current.messageKey = "The reference image could not be loaded.";
+                    }
+                    syncDrawing();
+                }).catch(() => {
+                    delete referenceLoads[fileId];
+                });
+            });
+        }
+
+        function readReferenceFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || "").split(",").pop() || "");
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function uploadReferenceFiles(files) {
+            const Api = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.Api;
+            const Reference = drawingReferenceApi();
+            const Space = drawingSpaceApi();
+            const view = store && store.snapshot();
+            const target = view && view.drawingTarget;
+            const record = activeDrawingRecord();
+            const identity = drawingServerIdentity();
+            const file = files && files[0];
+            if (!Api || !Reference || !Space || !view || !target || target.canEdit !== true || !record || !record.ready || !file) return;
+            if (!identity.orderName || !identity.planName || !record.pieceInstanceId) {
+                record.messageKey = "The reference image could not be loaded.";
+                syncDrawing();
+                return;
+            }
+            const pieceId = record.pieceInstanceId;
+            const token = record.loadToken;
+            readReferenceFile(file).then((contentBase64) => Api.uploadReferenceImage({
+                orderName: identity.orderName,
+                planName: identity.planName,
+                pieceInstanceId: pieceId,
+                fileName: file.name || "",
+                contentBase64,
+            })).then((response) => {
+                if (!drawingSession.isCurrent(pieceId, token)) return;
+                const current = drawingSession.current();
+                if (!response || response.ok !== true) {
+                    current.messageKey = referenceErrorKey(response && response.code);
+                    syncDrawing();
+                    return;
+                }
+                const placed = Reference.initialPlacement(
+                    Space.cmToMm(target.widthCm),
+                    Space.cmToMm(target.lengthCm),
+                    response.width_px,
+                    response.height_px
+                );
+                const id = drawingSession.addReference(Object.assign({ file_id: response.file_id }, placed));
+                if (!id) {
+                    syncDrawing();
+                    return;
+                }
+                current.referenceMedia = current.referenceMedia || {};
+                current.referenceMedia[response.file_id] = `data:image/png;base64,${response.content_base64}`;
+                syncDrawing();
+            }).catch(() => {
+                if (!drawingSession.isCurrent(pieceId, token)) return;
+                const current = drawingSession.current();
+                current.messageKey = "The reference image could not be loaded.";
+                syncDrawing();
+            });
+        }
+
+        function referenceErrorKey(code) {
+            if (code === "unsafe_svg") return "This SVG contains active content and was rejected.";
+            if (code === "svg_not_supported") return "SVG reference images cannot be imported safely here.";
+            if (code === "unsupported_image") return "This image format is not supported.";
+            if (code === "image_too_large" || code === "image_too_many_pixels") return "The reference image is too large.";
+            if (code === "image_corrupt") return "The reference image could not be read.";
+            if (code === "piece_not_drawable") return "Select one editable special piece before uploading a reference image.";
+            return "The reference image could not be loaded.";
+        }
+
+        function toggleReferenceMenu() {
+            const view = store && store.snapshot();
+            if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
+            referenceMenuOpen = referenceMenuOpen !== true;
+            syncDrawing();
+        }
+
+        function referenceAction(action, referenceId) {
+            const record = activeDrawingRecord();
+            if (!record) return;
+            if (action === "calibrate") {
+                const selected = selectedReference(record);
+                if (!selected) return;
+                referenceCalibration = { id: selected.id, messageKey: "Pick the first point on the image.", knownText: "" };
+                syncDrawing();
+                return;
+            }
+            if (action === "apply-calibration") return applyReferenceCalibration();
+            const id = referenceId || (record.selection && record.selection.referenceId);
+            const reference = (record.document.references || []).find((row) => row.id === id);
+            if (!reference) return;
+            if (action === "hide") drawingSession.updateReference(id, { hidden: reference.hidden !== true });
+            else if (action === "lock") drawingSession.updateReference(id, { locked: reference.locked !== true });
+            else if (action === "delete") drawingSession.deleteReference(id);
+            syncDrawing();
+        }
+
+        function commitReferenceField(field, value) {
+            const record = activeDrawingRecord();
+            const reference = selectedReference(record);
+            const Reference = drawingReferenceApi();
+            if (!record || !reference || !field) return;
+            if (field === "known") {
+                if (referenceCalibration && referenceCalibration.id === reference.id) referenceCalibration.knownText = value;
+                return;
+            }
+            if (field === "opacity") {
+                drawingSession.updateReference(reference.id, { opacity: Number(value) / 100 });
+                syncDrawing();
+                return;
+            }
+            const number = Reference ? Reference.quantize(String(value).replace(",", ".")) : Number(value);
+            if (number == null) return;
+            const patch = {};
+            patch[field] = number;
+            if (field === "width_mm" && referenceAspectLock && reference.width_mm > 0) {
+                patch.height_mm = number * reference.height_mm / reference.width_mm;
+            }
+            if (field === "height_mm" && referenceAspectLock && reference.height_mm > 0) {
+                patch.width_mm = number * reference.width_mm / reference.height_mm;
+            }
+            drawingSession.updateReference(reference.id, patch);
+            syncDrawing();
+        }
+
+        function applyReferenceCalibration() {
+            const record = activeDrawingRecord();
+            const reference = selectedReference(record);
+            const Reference = drawingReferenceApi();
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            const knownInput = host && host.querySelector("[data-abe-reference-known]");
+            if (!record || !reference || !Reference || !referenceCalibration || referenceCalibration.id !== reference.id) return;
+            if (!referenceCalibration.start || !referenceCalibration.end) return;
+            const known = Reference.quantize(String((knownInput && knownInput.value) || referenceCalibration.knownText || "").replace(",", "."));
+            const result = Reference.applyCalibration(reference, referenceCalibration.start, referenceCalibration.end, known);
+            if (!result.ok) {
+                record.messageKey = result.code === "calibration_outside"
+                    ? "Pick both calibration points on the image."
+                    : "Enter a valid known distance.";
+                syncDrawing();
+                return;
+            }
+            drawingSession.updateReference(reference.id, result);
+            referenceCalibration = null;
+            syncDrawing();
+        }
+
+        function takeCalibrationPoint(door) {
+            const record = activeDrawingRecord();
+            const reference = selectedReference(record);
+            const Reference = drawingReferenceApi();
+            if (!referenceCalibration || !reference || referenceCalibration.id !== reference.id || !Reference) return false;
+            if (!Reference.contains(reference, door)) {
+                record.messageKey = "Pick both calibration points on the image.";
+                syncDrawing();
+                return true;
+            }
+            if (!referenceCalibration.start) {
+                referenceCalibration.start = { x: door.x, y: door.y };
+                referenceCalibration.messageKey = "Pick the second point on the image.";
+            } else if (!referenceCalibration.end) {
+                referenceCalibration.end = { x: door.x, y: door.y };
+                referenceCalibration.currentDistance = Math.round(Math.hypot(door.x - referenceCalibration.start.x, door.y - referenceCalibration.start.y) * 1000) / 1000;
+                referenceCalibration.messageKey = "Enter the known distance.";
+            }
+            syncDrawing();
+            return true;
+        }
+
+        function beginReferenceDrag(reference, mode, door) {
+            referenceDrag = {
+                id: reference.id,
+                mode,
+                originDoor: { x: door.x, y: door.y },
+                snapshot: {
+                    id: reference.id,
+                    x_mm: reference.x_mm,
+                    y_mm: reference.y_mm,
+                    width_mm: reference.width_mm,
+                    height_mm: reference.height_mm,
+                    rotation_deg: reference.rotation_deg,
+                    opacity: reference.opacity,
+                },
+                live: null,
+            };
+        }
+
+        function updateReferencePointer(event) {
+            if (!referenceDrag || !store) return false;
+            const Reference = drawingReferenceApi();
+            const mapped = doorPointFromEvent(store.snapshot(), event);
+            if (!Reference || !mapped) return true;
+            const start = referenceDrag.snapshot;
+            let live = null;
+            if (referenceDrag.mode === "move") {
+                live = {
+                    x_mm: start.x_mm + (mapped.door.x - referenceDrag.originDoor.x),
+                    y_mm: start.y_mm + (mapped.door.y - referenceDrag.originDoor.y),
+                };
+            } else if (referenceDrag.mode === "rotate") {
+                const center = Reference.doorPoint(start, start.width_mm / 2, start.height_mm / 2);
+                const angle = Math.atan2(mapped.door.y - center.y, mapped.door.x - center.x) * 180 / Math.PI;
+                live = Reference.rotateAroundCenter(start, angle);
+            } else {
+                const local = Reference.toLocal(start, mapped.door);
+                let factorX = referenceDrag.mode === "nw" || referenceDrag.mode === "sw"
+                    ? (start.width_mm - local.x) / start.width_mm
+                    : local.x / start.width_mm;
+                let factorY = referenceDrag.mode === "nw" || referenceDrag.mode === "ne"
+                    ? (start.height_mm - local.y) / start.height_mm
+                    : local.y / start.height_mm;
+                if (referenceAspectLock !== false) {
+                    const factor = Math.max(Math.abs(factorX), Math.abs(factorY));
+                    factorX = factor;
+                    factorY = factor;
+                }
+                live = Reference.resizeReference(start, referenceDrag.mode, factorX, factorY);
+            }
+            if (live) referenceDrag.live = live;
+            const host = ensureShell().querySelector("[data-abe-canvas]");
+            if (host && CanvasRenderer && CanvasRenderer.patchReferenceFrame && referenceDrag.live) {
+                CanvasRenderer.patchReferenceFrame(host, Object.assign({}, start, referenceDrag.live), mapped.frame, drawingSpaceApi());
+            }
+            return true;
+        }
+
+        function finishReferenceDrag() {
+            if (!referenceDrag) return;
+            const live = referenceDrag.live;
+            const id = referenceDrag.id;
+            referenceDrag = null;
+            if (live) drawingSession.updateReference(id, live);
+            syncDrawing();
+        }
+
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
-            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle]")) {
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]")) {
                 return false;
             }
             const view = store.snapshot();
@@ -1744,16 +2091,30 @@
             if (!record || !record.ready) return false;
             const mapped = doorPointFromEvent(view, event);
             if (!mapped) return false;
+            if (referenceCalibration && takeCalibrationPoint(mapped.door)) return true;
             if (drawingTool === "select") {
                 const Space = drawingSpaceApi();
+                const Reference = drawingReferenceApi();
                 const scale = Number(view.viewport.scale) || 1;
                 const hit = drawingSession.selectHit(mapped.door, Space.thresholdMm(scale));
-                if (!hit) return false;
-                drawingPointer = null;
-                shapeEntry = {};
-                resetDrawingEntry();
-                syncDrawing();
-                return true;
+                if (hit) {
+                    drawingPointer = null;
+                    shapeEntry = {};
+                    resetDrawingEntry();
+                    syncDrawing();
+                    return true;
+                }
+                if (Reference) {
+                    const references = (record.document.references || []).slice().reverse();
+                    const image = references.find((row) => row.hidden !== true && row.locked !== true && Reference.contains(row, mapped.door));
+                    if (image) {
+                        drawingSession.selectReference(image.id);
+                        beginReferenceDrag(image, "move", mapped.door);
+                        syncDrawing();
+                        return true;
+                    }
+                }
+                return false;
             }
             if (drawingTool === "shapes") return placeShapePoint(mapped, event);
             if (drawingTool === "node_edit") return beginNodeEdit(mapped, view, event);
@@ -2576,6 +2937,26 @@
                 setEditorMode: (mode) => setEditorMode(mode),
                 setDrawingTool: (tool) => setDrawingTool(tool),
                 toggleSnapMenu: () => toggleSnapMenu(),
+                toggleReferenceMenu: () => toggleReferenceMenu(),
+                uploadReferenceFiles: (files) => uploadReferenceFiles(files),
+                selectReference: (id) => {
+                    if (drawingSession.selectReference(id)) syncDrawing();
+                },
+                referenceAction: (action, id) => referenceAction(action, id),
+                commitReferenceField: (field, value) => commitReferenceField(field, value),
+                setReferenceAspect: (locked) => {
+                    referenceAspectLock = locked !== false;
+                },
+                referencePointerDown: (event) => {
+                    const handle = event.target && event.target.closest && event.target.closest("[data-abe-reference-handle]");
+                    const record = activeDrawingRecord();
+                    const mapped = store && doorPointFromEvent(store.snapshot(), event);
+                    const id = handle && handle.getAttribute("data-abe-reference-id");
+                    const reference = record && (record.document.references || []).find((row) => row.id === id);
+                    if (!reference || reference.locked || !mapped) return;
+                    drawingSession.selectReference(reference.id);
+                    beginReferenceDrag(reference, handle.getAttribute("data-abe-reference-handle") || "move", mapped.door);
+                },
                 setSnapOption: (name, value) => setSnapOption(name, value),
                 setPenSmoothing: (level) => setPenSmoothing(level),
                 setShapeKind: (kind) => {
@@ -2683,6 +3064,7 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    if (updateReferencePointer(event)) return;
                     if (updatePenPointer(event)) return;
                     updateShapePointer(event);
                     updateDrawingPointer(event);
@@ -2712,6 +3094,7 @@
                     if (moveInteraction) moveInteraction.onPointerMove(event);
                 },
                 onStagePointerUp: (event) => {
+                    finishReferenceDrag();
                     finishPenStroke(event);
                     nodeDrag = null;
                     snapHold = null;
@@ -3278,6 +3661,12 @@
                 }
             }
             if (event.code === "Escape") {
+                if (referenceCalibration && !isEditableTarget(event.target)) {
+                    event.preventDefault();
+                    referenceCalibration = null;
+                    syncDrawing();
+                    return;
+                }
                 if (penGesture && penGesture.active() && !isEditableTarget(event.target)) {
                     event.preventDefault();
                     cancelPenStroke(true);
