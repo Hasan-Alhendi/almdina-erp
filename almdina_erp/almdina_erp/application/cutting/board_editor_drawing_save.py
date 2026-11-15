@@ -23,6 +23,9 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing import (
     empty_document,
     normalize_document,
 )
+from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_copy import (
+    restore_document_from_catalog,
+)
 from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_persistence import (
     DRAWABLE_PIECE_TYPE,
     archive_stack_exceeds_limit,
@@ -219,7 +222,13 @@ def execute_get_drawing(
     order_name = str(context.get("order_name") or "")
     plan_name = str(context.get("plan_name") or "")
     row = store.read(drawing_key(order_name, plan_name, piece_id))
-    return _view(row, context, piece_id)
+    view = _view(row, context, piece_id)
+    if row is None and view.get("ok"):
+        restored = restore_document_from_catalog(piece, piece_id)
+        if restored is not None:
+            view["drawing"] = restored
+            view["reconstructed"] = True
+    return view
 
 
 def execute_list_drawings(

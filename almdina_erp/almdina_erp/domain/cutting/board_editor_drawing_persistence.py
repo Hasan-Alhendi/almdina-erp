@@ -47,6 +47,9 @@ def drawing_catalog_from_pieces(pieces: Sequence[Mapping[str, Any]] | None) -> d
             "blank_width_mm": _cm_to_mm(_first_present(piece, ("original_w", "width_cm"))),
             "blank_length_mm": _cm_to_mm(_first_present(piece, ("original_h", "length_cm"))),
         }
+        outline = piece.get("editable_outline_mm")
+        if isinstance(outline, list) and len(outline) >= 3:
+            catalog[instance]["editable_outline_mm"] = outline
     return catalog
 
 

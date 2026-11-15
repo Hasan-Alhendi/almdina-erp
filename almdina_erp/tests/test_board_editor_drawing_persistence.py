@@ -676,6 +676,28 @@ class BoardEditorDrawingPersistenceTests(unittest.TestCase):
         self.assertNotIn("special_shape_geometry_json", saved)
         self.assertNotIn("snapshot_json", saved)
 
+    def test_missing_draft_restores_only_the_stored_polygon(self):
+        context = _context()
+        context["catalog"]["piece:a"]["editable_outline_mm"] = [
+            [0.0, 0.0], [600.0, 0.0], [600.0, 2100.0], [0.0, 2100.0],
+        ]
+        loaded = execute_get_drawing(_request(None), context, MemoryDrawingStore())
+        self.assertTrue(loaded["reconstructed"])
+        self.assertFalse(loaded["present"])
+        self.assertEqual(loaded["drawing_version"], 0)
+        path = loaded["drawing"]["paths"][0]
+        self.assertEqual(path["role"], "manufacturing_outer")
+        self.assertTrue(all(segment["kind"] == "line" for segment in path["segments"]))
+        self.assertEqual(loaded["drawing"]["references"], [])
+        self.assertEqual(loaded["drawing"]["shapes"], [])
+        saved = execute_save_drawing(_request(_document()), _context(), MemoryDrawingStore())
+        self.assertTrue(saved["ok"])
+        store = MemoryDrawingStore()
+        execute_save_drawing(_request(_document()), context, store)
+        again = execute_get_drawing(_request(None), context, store)
+        self.assertNotIn("reconstructed", again)
+        self.assertEqual(again["drawing"]["paths"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

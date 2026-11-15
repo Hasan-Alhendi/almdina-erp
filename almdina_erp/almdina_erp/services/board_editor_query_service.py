@@ -668,6 +668,7 @@ def get_board_editor_projection(
             source_content_revision=str(freshness["content_revision_token"] or ""),
             source_input_fingerprint=str(freshness["input_fingerprint"] or ""),
         ),
+        "saved_drawings": _saved_drawing_versions(str(order.name), str(plan.name)),
         "mode": "view_select_only",
         "projection": projection,
         "meta": {
@@ -678,6 +679,21 @@ def get_board_editor_projection(
             "mutates_plan_on_read": False,
         },
     }
+
+
+def _saved_drawing_versions(order_name: str, plan_name: str) -> dict[str, int]:
+    """Versions already stored for this plan. Missing storage yields an empty map."""
+
+    from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
+        FrappeBoardEditorDrawingStore,
+    )
+
+    versions: dict[str, int] = {}
+    for row in FrappeBoardEditorDrawingStore().read_for_plan(order_name, plan_name):
+        instance = str(row.get("piece_instance_id") or "")
+        if instance:
+            versions[instance] = int(row.get("drawing_version") or 0)
+    return versions
 
 
 __all__ = [

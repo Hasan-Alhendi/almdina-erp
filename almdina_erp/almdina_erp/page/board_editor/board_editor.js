@@ -9,7 +9,7 @@
         "/assets/almdina_erp/js/frontend_foundation.js",
     ]);
     const MODULES = Object.freeze([
-        `${ASSET_ROOT}/api.js?v=21`,
+        `${ASSET_ROOT}/api.js?v=22`,
         `${ASSET_ROOT}/history.js?v=18`,
         `${ASSET_ROOT}/session_document.js?v=24`,
         `${ASSET_ROOT}/distribution.js?v=18`,
@@ -29,14 +29,15 @@
         `${ASSET_ROOT}/plan_edge_marks.js?v=18`,
         `${ASSET_ROOT}/editor_mode.js?v=1`,
         `${ASSET_ROOT}/drawing_space.js?v=4`,
-        `${ASSET_ROOT}/drawing_model.js?v=6`,
+        `${ASSET_ROOT}/drawing_model.js?v=8`,
+        `${ASSET_ROOT}/drawing_compile.js?v=2`,
         `${ASSET_ROOT}/drawing_snap.js?v=1`,
         `${ASSET_ROOT}/drawing_reference.js?v=1`,
         `${ASSET_ROOT}/store.js?v=23`,
-        `${ASSET_ROOT}/canvas_renderer.js?v=47`,
+        `${ASSET_ROOT}/canvas_renderer.js?v=50`,
         `${ASSET_ROOT}/sidebar_renderer.js?v=21`,
         `${ASSET_ROOT}/right_sidebar_renderer.js?v=5`,
-        `${ASSET_ROOT}/controller.js?v=45`,
+        `${ASSET_ROOT}/controller.js?v=48`,
     ]);
 
     function pageModule() {

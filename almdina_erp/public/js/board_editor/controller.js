@@ -93,6 +93,17 @@
             return distributionDirty() || Boolean(drawingSession && drawingSession.anyDirty());
         }
 
+        function savedDrawingReady(view) {
+            const listed = (view && view.payload && view.payload.saved_drawings) || {};
+            const fromPayload = Object.keys(listed).some((key) => Number(listed[key]) > 0);
+            const fromSession = Boolean(
+                drawingSession
+                && typeof drawingSession.loadedRecords === "function"
+                && drawingSession.loadedRecords().some((record) => Number(record.drawingVersion) > 0)
+            );
+            return fromPayload || fromSession;
+        }
+
         function confirmLeave() {
             if (leaveConfirmed || !editorDirty()) return true;
             const accepted = window.confirm(translate(
@@ -226,7 +237,15 @@
         const referenceLoads = {};
         let shapeAnchor = null;
         let shapeEntry = {};
-        let nodeDrag = null;
+        let vectorGesture = null;
+        let pendingCutPieceId = "";
+        let pendingCutPathId = "";
+        let vectorCapture = null;
+        let vectorLostHandler = null;
+        let vectorWindowMove = null;
+        let vectorWindowUp = null;
+        let vectorWindowCancel = null;
+        let vectorReleasing = false;
         let drawingPointer = null;
         let drawingEntry = { lengthLocked: false, angleLocked: false, lengthText: "", angleText: "" };
         let pendingMeasureFocus = null;
@@ -293,7 +312,7 @@
         }
 
         function sessionIsDirty() {
-            return distributionDirty();
+            return editorDirty();
         }
 
         function clearFreshnessRetry() {
@@ -1228,12 +1247,118 @@
         }
 
         function finishActiveGesture() {
+            endVectorGesture("cancel");
             if (moveInteraction && moveInteraction.cancel) moveInteraction.cancel();
             if (rotationInteraction && rotationInteraction.cancel) rotationInteraction.cancel();
             if (measureInteraction && measureInteraction.cancel) measureInteraction.cancel();
             if (store) {
                 store.setDragPreview(null);
                 store.setDropMessage("");
+            }
+        }
+
+        function releaseVectorPointer(pointerId) {
+            vectorReleasing = true;
+            try {
+                if (vectorCapture && pointerId != null && vectorCapture.releasePointerCapture) {
+                    vectorCapture.releasePointerCapture(pointerId);
+                }
+            } catch (err) {
+                void err;
+            }
+            if (vectorCapture && vectorLostHandler && vectorCapture.removeEventListener) {
+                vectorCapture.removeEventListener("lostpointercapture", vectorLostHandler);
+            }
+            if (vectorWindowMove) window.removeEventListener("pointermove", vectorWindowMove, true);
+            if (vectorWindowUp) window.removeEventListener("pointerup", vectorWindowUp, true);
+            if (vectorWindowCancel) window.removeEventListener("pointercancel", vectorWindowCancel, true);
+            vectorCapture = null;
+            vectorLostHandler = null;
+            vectorWindowMove = null;
+            vectorWindowUp = null;
+            vectorWindowCancel = null;
+            vectorReleasing = false;
+        }
+
+        function ownVectorPointer(event) {
+            const shell = ensureShell();
+            const pointerId = event.pointerId;
+            vectorCapture = shell;
+            vectorLostHandler = () => {
+                if (!vectorReleasing) endVectorGesture("cancel");
+            };
+            if (shell && shell.addEventListener) shell.addEventListener("lostpointercapture", vectorLostHandler);
+            if (shell && shell.setPointerCapture) {
+                try { shell.setPointerCapture(pointerId); } catch (err) { void err; }
+            }
+            vectorWindowMove = (moveEvent) => {
+                if (!vectorGesture || !moveEvent || moveEvent.pointerId !== pointerId) return;
+                try {
+                    if (vectorGesture.kind === "node") updateNodeGesture(moveEvent);
+                    else updateSelectGesture(moveEvent);
+                } catch (error) {
+                    endVectorGesture("cancel");
+                    throw error;
+                }
+            };
+            vectorWindowUp = (upEvent) => {
+                if (!upEvent || upEvent.pointerId !== pointerId) return;
+                endVectorGesture("commit");
+            };
+            vectorWindowCancel = (cancelEvent) => {
+                if (!cancelEvent || cancelEvent.pointerId !== pointerId) return;
+                endVectorGesture("cancel");
+            };
+            window.addEventListener("pointermove", vectorWindowMove, true);
+            window.addEventListener("pointerup", vectorWindowUp, true);
+            window.addEventListener("pointercancel", vectorWindowCancel, true);
+        }
+
+        function endVectorGesture(mode) {
+            const gesture = vectorGesture;
+            if (!gesture || gesture.ending) return;
+            gesture.ending = true;
+            const pointerId = gesture.pointerId;
+            const undo = mode !== "commit" && gesture.history === true;
+            vectorGesture = null;
+            releaseVectorPointer(pointerId);
+            if (undo && drawingSession) drawingSession.undo();
+            if (mode === "commit") refreshCutValidation();
+            syncDrawing();
+        }
+
+        function refreshCutValidation() {
+            const Compile = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingCompile;
+            const Space = drawingSpaceApi();
+            if (!drawingSession || !Compile || typeof drawingSession.loadedRecords !== "function") return;
+            const view = store && store.snapshot();
+            const target = view && view.drawingTarget;
+            drawingSession.loadedRecords().forEach((record) => {
+                if (!record || !record.document) return;
+                let width = Number(record.document.blank && record.document.blank.width_mm);
+                let length = Number(record.document.blank && record.document.blank.length_mm);
+                if (target && String(target.pieceInstanceId) === String(record.pieceInstanceId) && Space) {
+                    const targetWidth = Space.cmToMm(target.widthCm);
+                    const targetLength = Space.cmToMm(target.lengthCm);
+                    if (targetWidth) width = targetWidth;
+                    if (targetLength) length = targetLength;
+                }
+                const result = Compile.compile(record.document, width, length);
+                const rejected = result && result.status === "rejected";
+                record.manufacturingIssue = rejected ? result : null;
+                const active = target && String(target.pieceInstanceId) === String(record.pieceInstanceId);
+                if (!active) return;
+                const known = Compile.messages || {};
+                const knownText = Object.keys(known).map((key) => known[key]);
+                if (rejected) record.messageKey = result.messageKey || "";
+                else if (knownText.indexOf(record.messageKey) >= 0) record.messageKey = "";
+            });
+        }
+
+        function markGestureHistory() {
+            if (!vectorGesture || !drawingSession || typeof drawingSession.documentCanonical !== "function") return;
+            if (vectorGesture.beforeCanonical !== drawingSession.documentCanonical()) {
+                vectorGesture.history = true;
             }
         }
 
@@ -1343,6 +1468,21 @@
                     drawingSession.applyLoaded(ticket.pieceInstanceId, ticket.token, { ok: true, drawing: null, drawing_version: 0 });
                 }
             }
+            refreshCutValidation();
+            if (
+                pendingCutPathId
+                && record
+                && record.ready
+                && String(record.pieceInstanceId) === pendingCutPieceId
+            ) {
+                const problemPath = (record.document.paths || []).find((row) => row.id === pendingCutPathId);
+                if (problemPath) {
+                    record.selection = { pathId: problemPath.id };
+                    drawingTool = "select";
+                }
+                pendingCutPathId = "";
+                pendingCutPieceId = "";
+            }
             store.setDrawingView(buildDrawingView(view, record, Space));
             ensureReferenceMedia(record);
             } finally {
@@ -1430,6 +1570,8 @@
             const frame = drawingFrame(view);
             const paths = (record.document.paths || []).map((path) => ({
                 id: path.id,
+                role: path.role || "construction",
+                problem: Boolean(record.manufacturingIssue && record.manufacturingIssue.pathId === path.id),
                 closed: path.closed === true,
                 selected: Boolean(record.selection && record.selection.pathId === path.id && !record.selection.shapeId),
                 active: Boolean(record.cursor && record.cursor.pathId === path.id),
@@ -1468,6 +1610,7 @@
             }
             return {
                 tool: drawingTool,
+                dragging: Boolean(vectorGesture),
                 ready: record.ready === true,
                 dirty: drawingSession.documentDirty(record),
                 messageKey: drawingPartialMessage || record.messageKey || "",
@@ -1486,8 +1629,48 @@
                 references: drawingReferenceViews(record, frame, Space),
                 referenceMenuOpen: referenceMenuOpen === true,
                 referenceForm: referenceFormState(record),
+                pathForm: pathFormState(record),
                 measure: drawingMeasureState(record),
+                cutProblem: record.manufacturingIssue ? {
+                    pathId: record.manufacturingIssue.pathId,
+                    messageKey: record.manufacturingIssue.messageKey,
+                    label: view.drawingTarget && view.drawingTarget.label,
+                    widthCm: view.drawingTarget && view.drawingTarget.widthCm,
+                    lengthCm: view.drawingTarget && view.drawingTarget.lengthCm,
+                } : null,
             };
+        }
+
+        function validateSelectedCut() {
+            refreshCutValidation();
+        }
+
+        function proposedCutsFor(view) {
+            const Compile = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingCompile;
+            const Space = drawingSpaceApi();
+            if (!Compile || !Space || !drawingSession || !view || view.editorMode === "drawing" || !view.session) return [];
+            const cuts = [];
+            drawingSession.loadedRecords().forEach((record) => {
+                if (!record || !record.document) return;
+                const piece = Object.values(view.session.pieces || {}).find((row) => row.piece_instance_id === record.pieceInstanceId);
+                const width = Number(record.document.blank && record.document.blank.width_mm);
+                const length = Number(record.document.blank && record.document.blank.length_mm);
+                const result = Compile.compile(record.document, width, length);
+                if (!piece || result.status !== "ready" || !result.geometry) return;
+                const frame = Space.pieceFrame(piece, view.session.boards || {}, { widthMm: width, lengthMm: length });
+                cuts.push({
+                    pieceInstanceId: record.pieceInstanceId,
+                    points: result.geometry.points.map((point) => Space.doorToWorld(frame, point[0] * 10, point[1] * 10)),
+                });
+            });
+            return cuts;
+        }
+
+        function pathFormState(record) {
+            if (!record || !record.selection || !record.selection.pathId || record.selection.shapeId) return null;
+            const path = (record.document.paths || []).find((row) => row.id === record.selection.pathId);
+            if (!path) return null;
+            return { pathId: path.id, role: path.role || "construction" };
         }
 
         function drawingMeasureState(record) {
@@ -2082,7 +2265,7 @@
 
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
-            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]")) {
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-path-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle], [data-abe-reference-menu], [data-abe-reference-form], [data-abe-reference-toggle]")) {
                 return false;
             }
             const view = store.snapshot();
@@ -2101,6 +2284,7 @@
                     drawingPointer = null;
                     shapeEntry = {};
                     resetDrawingEntry();
+                    beginSelectGesture(record, mapped.door, event);
                     syncDrawing();
                     return true;
                 }
@@ -2225,7 +2409,32 @@
             } else if (action === "copy") drawingSession.copySelection();
             else if (action === "paste") drawingSession.pasteClipboard();
             else if (action === "remove") drawingSession.deleteSelection();
-            else if (action === "insert-node") {
+            else if (action === "role-construction" || action === "role-annotation" || action === "role-manufacturing" || action === "role-clear") {
+                const selected = activeDrawingRecord();
+                const pathId = selected && selected.selection && selected.selection.pathId;
+                const role = action === "role-annotation"
+                    ? "annotation"
+                    : (action === "role-manufacturing" ? "manufacturing_outer" : "construction");
+                if (pathId) drawingSession.setPathRole(pathId, role);
+            } else if (action === "select-problem" || action === "clear-problem") {
+                const selected = activeDrawingRecord();
+                const pathId = selected && selected.manufacturingIssue && selected.manufacturingIssue.pathId;
+                if (action === "select-problem" && selected && pathId) {
+                    selected.selection = { pathId };
+                    drawingTool = "select";
+                } else if (pathId) {
+                    drawingSession.setPathRole(pathId, "construction");
+                }
+            } else if (action === "move-path") {
+                const selected = activeDrawingRecord();
+                const pathId = selected && selected.selection && selected.selection.pathId;
+                const host = ensureShell();
+                const dx = host && host.querySelector("[data-abe-path-dx]");
+                const dy = host && host.querySelector("[data-abe-path-dy]");
+                if (pathId && dx && dy) drawingSession.translatePath(pathId, dx.value, dy.value);
+            } else if (action === "validate-path") {
+                validateSelectedCut();
+            } else if (action === "insert-node") {
                 const selected = activeDrawingRecord();
                 const path = selected && (selected.document.paths || []).find((row) => row.id === (selected.selection && selected.selection.pathId));
                 const segment = path && (
@@ -2292,66 +2501,148 @@
             return created || true;
         }
 
+        function beginSelectGesture(record, door, event) {
+            const selection = record && record.selection;
+            if (!selection || !event) return;
+            const base = selectionBase(record, selection);
+            if (!base) return;
+            vectorGesture = {
+                kind: "select",
+                pointerId: event.pointerId,
+                history: false,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                originDoor: { x: door.x, y: door.y },
+                base,
+            };
+            ownVectorPointer(event);
+        }
+
+        function selectionBase(record, selection) {
+            if (selection.shapeId && !selection.pathId) {
+                const shape = (record.document.shapes || []).find((row) => row.id === selection.shapeId);
+                if (!shape || shape.exploded) return null;
+                return { kind: "shape", id: shape.id, params: JSON.parse(JSON.stringify(shape.params)) };
+            }
+            const path = (record.document.paths || []).find((row) => row.id === selection.pathId);
+            if (!path) return null;
+            const shape = path.source_shape_id
+                ? (record.document.shapes || []).find((row) => row.id === path.source_shape_id)
+                : null;
+            return {
+                kind: "path",
+                id: path.id,
+                nodes: JSON.parse(JSON.stringify(path.nodes || [])),
+                segments: JSON.parse(JSON.stringify(path.segments || [])),
+                shapeParams: shape ? JSON.parse(JSON.stringify(shape.params)) : null,
+            };
+        }
+
+        function updateSelectGesture(event) {
+            const gesture = vectorGesture;
+            if (!gesture || gesture.kind !== "select" || !store || !drawingSession) return;
+            const distance = Math.hypot(event.clientX - gesture.clientX, event.clientY - gesture.clientY);
+            if (!gesture.history && distance < 4) return;
+            const mapped = doorPointFromEvent(store.snapshot(), event);
+            if (!mapped) return;
+            const dx = mapped.door.x - gesture.originDoor.x;
+            const dy = mapped.door.y - gesture.originDoor.y;
+            const before = drawingSession.documentCanonical();
+            const options = {
+                history: gesture.history ? false : undefined,
+                base: gesture.base.kind === "shape" ? gesture.base.params : gesture.base,
+            };
+            const moved = gesture.base.kind === "shape"
+                ? drawingSession.moveShape(gesture.base.id, dx, dy, options)
+                : drawingSession.translatePath(gesture.base.id, dx, dy, options);
+            if (moved && drawingSession.documentCanonical() !== before) gesture.history = true;
+            refreshCutValidation();
+            syncDrawing();
+        }
+
         function beginNodeEdit(mapped, view, event) {
             const Space = drawingSpaceApi();
             const door = mapped && mapped.door;
+            const record = activeDrawingRecord();
             const scale = Number(view.viewport.scale) || 1;
             const hit = drawingSession.hitNode(door, Space.thresholdMm(scale));
             shapeEntry = {};
             if (hit && hit.kind === "control") {
-                nodeDrag = { kind: "control", pathId: hit.pathId, segmentId: hit.segmentId, controlIndex: hit.controlIndex, history: false };
+                vectorGesture = {
+                    kind: "node",
+                    mode: "control",
+                    pointerId: event && event.pointerId,
+                    pathId: hit.pathId,
+                    segmentId: hit.segmentId,
+                    controlIndex: hit.controlIndex,
+                    history: false,
+                };
+                if (event) ownVectorPointer(event);
                 syncDrawing();
                 return true;
             }
             if (hit && hit.kind === "node") {
                 drawingSession.selectNode(hit.pathId, hit.nodeId);
-                const path = (activeDrawingRecord().document.paths || []).find((row) => row.id === hit.pathId);
+                const path = record && (record.document.paths || []).find((row) => row.id === hit.pathId);
                 const node = path && path.nodes.find((row) => row.id === hit.nodeId);
-                nodeDrag = {
+                vectorGesture = {
                     kind: "node",
+                    mode: "node",
+                    pointerId: event && event.pointerId,
                     pathId: hit.pathId,
                     nodeId: hit.nodeId,
                     history: false,
                     origin: node ? { x: node.x_mm, y: node.y_mm } : { x: door.x, y: door.y },
                 };
+                if (event) ownVectorPointer(event);
                 syncDrawing();
                 return true;
             }
-            nodeDrag = null;
+            endVectorGesture("cancel");
             const selected = drawingSession.selectHit(door, Space.thresholdMm(scale));
             syncDrawing();
             return selected === true;
         }
 
+        function updateNodeGesture(event) {
+            const gesture = vectorGesture;
+            if (!gesture || gesture.kind !== "node" || !store || !drawingSession) return;
+            const record = activeDrawingRecord();
+            if (!record) return;
+            const view = store.snapshot();
+            const mapped = doorPointFromEvent(view, event);
+            if (!mapped) return;
+            const options = { history: gesture.history ? false : undefined };
+            let door = mapped.door;
+            if (gesture.mode === "node") {
+                const path = (record.document.paths || []).find((row) => row.id === gesture.pathId);
+                const blockPoints = [];
+                (path && path.segments || []).forEach((segment) => {
+                    if (segment.from_node !== gesture.nodeId && segment.to_node !== gesture.nodeId) return;
+                    const otherId = segment.from_node === gesture.nodeId ? segment.to_node : segment.from_node;
+                    const other = path.nodes.find((row) => row.id === otherId);
+                    if (other) blockPoints.push({ x: other.x_mm, y: other.y_mm });
+                });
+                door = resolveSmartPoint(mapped.door, {
+                    alt: event && event.altKey,
+                    frame: mapped.frame,
+                    anchor: gesture.origin,
+                    exclude: { pathId: gesture.pathId, nodeId: gesture.nodeId },
+                    blockPoints,
+                });
+            }
+            const before = drawingSession.documentCanonical();
+            const moved = gesture.mode === "control"
+                ? drawingSession.moveBezierControl(gesture.pathId, gesture.segmentId, gesture.controlIndex, door.x, door.y, options)
+                : drawingSession.moveNode(gesture.pathId, gesture.nodeId, door.x, door.y, options);
+            if (moved && drawingSession.documentCanonical() !== before) gesture.history = true;
+            refreshCutValidation();
+            syncDrawing();
+        }
+
         function updateShapePointer(event) {
-            if (drawingTool === "node_edit" && nodeDrag) {
-                const view = store.snapshot();
-                const mapped = doorPointFromEvent(view, event);
-                if (!mapped) return;
-                const options = { history: nodeDrag.history !== true };
-                let door = mapped.door;
-                if (nodeDrag.kind === "node") {
-                    const path = (activeDrawingRecord().document.paths || []).find((row) => row.id === nodeDrag.pathId);
-                    const blockPoints = [];
-                    (path && path.segments || []).forEach((segment) => {
-                        if (segment.from_node !== nodeDrag.nodeId && segment.to_node !== nodeDrag.nodeId) return;
-                        const otherId = segment.from_node === nodeDrag.nodeId ? segment.to_node : segment.from_node;
-                        const other = path.nodes.find((row) => row.id === otherId);
-                        if (other) blockPoints.push({ x: other.x_mm, y: other.y_mm });
-                    });
-                    door = resolveSmartPoint(mapped.door, {
-                        alt: event && event.altKey,
-                        frame: mapped.frame,
-                        anchor: nodeDrag.origin,
-                        exclude: { pathId: nodeDrag.pathId, nodeId: nodeDrag.nodeId },
-                        blockPoints,
-                    });
-                }
-                const moved = nodeDrag.kind === "control"
-                    ? drawingSession.moveBezierControl(nodeDrag.pathId, nodeDrag.segmentId, nodeDrag.controlIndex, door.x, door.y, options)
-                    : drawingSession.moveNode(nodeDrag.pathId, nodeDrag.nodeId, door.x, door.y, options);
-                if (moved) nodeDrag.history = true;
-                syncDrawing();
+            if (drawingTool === "node_edit" && vectorGesture && vectorGesture.kind === "node") {
+                updateNodeGesture(event);
                 return;
             }
             if (drawingTool !== "shapes" || !shapeAnchor) return;
@@ -2586,6 +2877,7 @@
 
         function setDrawingTool(tool) {
             if (tool !== "polyline" && tool !== "select" && tool !== "shapes" && tool !== "node_edit" && tool !== "pen") return;
+            endVectorGesture("cancel");
             cancelPenStroke(false);
             const view = store && store.snapshot();
             if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
@@ -2593,7 +2885,6 @@
             drawingPointer = null;
             shapeAnchor = null;
             shapeEntry = {};
-            nodeDrag = null;
             snapHold = null;
             snapOverlay = null;
             resetDrawingEntry();
@@ -2841,6 +3132,8 @@
             syncEditorHeight();
             syncDrawing();
             const view = store.snapshot();
+            view.drawingsDirty = Boolean(drawingSession && drawingSession.anyDirty());
+            view.savedDrawingReady = savedDrawingReady(view);
             paintPageActions(view);
             const root = ensureShell().querySelector(".abe-root");
             if (!root) return;
@@ -2874,6 +3167,7 @@
                     }
                 },
                 selectPiece: (pieceId, sheetNo, meta) => {
+                    endVectorGesture("cancel");
                     const piece = ((view.projection.pieces) || []).find((row) => Number(row.piece_id) === Number(pieceId));
                     const sessionPiece = view.session
                         && (
@@ -2917,8 +3211,10 @@
             if (RightSidebarRenderer && typeof RightSidebarRenderer.render === "function") {
                 RightSidebarRenderer.render(rightSidebar, view, inspectorHandlers());
             }
+            view.proposedCuts = proposedCutsFor(view);
             lastCanvasApi = CanvasRenderer.render(canvas, view, {
                 selectPiece: (pieceId, elementId) => {
+                    endVectorGesture("cancel");
                     const piece = ((view.projection.pieces) || []).find((row) => Number(row.piece_id) === Number(pieceId));
                     const sessionPiece = view.session
                         && Object.values(view.session.pieces || {}).find((row) => Number(row.piece_id) === Number(pieceId));
@@ -3064,6 +3360,7 @@
                 rotateByDegrees: (pieceKey, delta) => rotateByDegrees(pieceKey, delta),
                 mirrorAngle: (pieceKey) => mirrorAngle(pieceKey),
                 onStagePointerMove: (event) => {
+                    if (vectorGesture) return;
                     if (updateReferencePointer(event)) return;
                     if (updatePenPointer(event)) return;
                     updateShapePointer(event);
@@ -3096,7 +3393,7 @@
                 onStagePointerUp: (event) => {
                     finishReferenceDrag();
                     finishPenStroke(event);
-                    nodeDrag = null;
+                    if (vectorGesture && event && event.pointerId === vectorGesture.pointerId) endVectorGesture("commit");
                     snapHold = null;
                     snapOverlay = null;
                     if (drawingPointer) drawingPointer.snap = null;
@@ -3128,6 +3425,7 @@
                     if (moveInteraction) moveInteraction.onPointerUp(event);
                 },
                 onStagePointerCancel: (event) => {
+                    if (vectorGesture && event && event.pointerId === vectorGesture.pointerId) endVectorGesture("cancel");
                     if (penGesture && event && event.pointerId === penGesture.pointerId()) cancelPenStroke(true);
                     if (measureInteraction) measureInteraction.onPointerCancel(event);
                     if (rotationInteraction) rotationInteraction.onPointerCancel(event);
@@ -3195,13 +3493,21 @@
 
         async function open(context, options) {
             const opts = options || {};
+            const orderName = String(context.orderName || "").trim();
+            const planName = String(context.planName || "").trim();
+            if (
+                store
+                && !opts.acceptSourceChange
+                && editorDirty()
+                && (orderName !== activeOrderName || planName !== loadedPlanName)
+            ) {
+                if (!confirmLeave()) return;
+            }
             const openGeneration = ++generation;
             suspended = false;
             clearFreshnessRetry();
             pendingSourceConflict = null;
             const requestToken = requestGate.begin();
-            const orderName = String(context.orderName || "").trim();
-            const planName = String(context.planName || "").trim();
             if (!orderName || !planName) {
                 renderState(
                     "error",
@@ -3317,6 +3623,7 @@
         }
 
         function suspend() {
+            endVectorGesture("cancel");
             cancelPenStroke(false);
             if (moveInteraction) moveInteraction.cancel();
             if (measureInteraction) measureInteraction.clearAll();
@@ -3363,18 +3670,20 @@
             lifecycle.dispose();
         }
 
-        async function saveDraft() {
-            if (!store || !activeOrderName || !loadedPlanName) return;
+        async function saveDraft(options) {
+            const forceDistribution = Boolean(options && options.forceDistribution);
+            if (!store || !activeOrderName || !loadedPlanName) return false;
             const view = store.snapshot();
             const drawings = drawingSession ? drawingSession.dirtyRecords() : [];
-            if (!view.canSaveLayout || view.saveInFlight || !view.session) return;
-            if (!view.distributionDirty && !drawings.length) return;
+            const persistDistribution = Boolean(view.distributionDirty || forceDistribution);
+            if (!view.canSaveLayout || view.saveInFlight || !view.session) return false;
+            if (!persistDistribution && !drawings.length) return true;
             const sentFingerprint = SessionDocument.distributionFingerprint(view.session);
             const sourceContentRevision = contentRevisionToken(view.payload || {});
-            if (!store.beginDraftSave()) return;
-            let distributionSaved = !view.distributionDirty;
+            if (!store.beginDraftSave()) return false;
+            let distributionSaved = !persistDistribution;
             try {
-                if (view.distributionDirty) {
+                if (persistDistribution) {
                     const response = await Api.saveDraft({
                         orderName: activeOrderName,
                         planName: loadedPlanName,
@@ -3382,10 +3691,10 @@
                         sourceContentRevision,
                         layout: SessionDocument.exportLayout(view.session),
                     });
-                    if (!store) return;
+                    if (!store) return false;
                     store.settleDraftSave(sentFingerprint, response || { ok: false, code: "failed" });
                     distributionSaved = Boolean(response && response.ok !== false);
-                    if (!distributionSaved) return;
+                    if (!distributionSaved) return false;
                     if (drawings.length && store && !store.snapshot().saveInFlight) store.beginDraftSave();
                 }
                 let failed = false;
@@ -3409,11 +3718,24 @@
                         break;
                     }
                 }
-                drawingPartialMessage = failed && distributionSaved && view.distributionDirty
-                    ? "The layout was saved. This drawing is still here and was not saved."
-                    : "";
+                if (failed) {
+                    drawingPartialMessage = distributionSaved && persistDistribution
+                        ? "The layout was saved. This drawing is still here and was not saved."
+                        : "Could not save the drawing. Your lines are still here.";
+                    if (typeof frappe !== "undefined" && frappe.msgprint) {
+                        frappe.msgprint({
+                            title: __("Save layout"),
+                            message: __(drawingPartialMessage),
+                            indicator: "orange",
+                        });
+                    }
+                    return false;
+                }
+                drawingPartialMessage = "";
+                return true;
             } catch (error) {
                 if (store && !distributionSaved) store.settleDraftSave(sentFingerprint, null);
+                return false;
             } finally {
                 if (store && store.snapshot().saveInFlight) {
                     const current = store.snapshot();
@@ -3485,21 +3807,62 @@
             }
         }
 
+        function drawingVersionPayload() {
+            const versions = {};
+            if (!drawingSession || typeof drawingSession.loadedRecords !== "function") return "";
+            drawingSession.loadedRecords().forEach((record) => {
+                if (record && record.pieceInstanceId && Number(record.drawingVersion) > 0) {
+                    versions[record.pieceInstanceId] = Number(record.drawingVersion);
+                }
+            });
+            return JSON.stringify(versions);
+        }
+
+        function revealCutProblem(response) {
+            if (!store || !response) return;
+            pendingCutPieceId = String(response.piece_instance_id || "");
+            pendingCutPathId = String(response.path_id || "");
+            const session = store.snapshot().session;
+            if (!session || !pendingCutPieceId) return;
+            const piece = Object.values(session.pieces || {}).find((row) => (
+                String(row.piece_instance_id || "") === pendingCutPieceId
+            ));
+            if (!piece) return;
+            store.selectPiece(piece.piece_id, {
+                pieceKey: piece.piece_key,
+                sheetNo: piece.sheet_no,
+                expandSheet: true,
+                elementId: null,
+            });
+            setEditorMode("drawing");
+            syncDrawing();
+        }
+
         async function createPlanCopy() {
             if (!store || !activeOrderName || !loadedPlanName) return;
             const view = store.snapshot();
-            if (!view.session || view.createPlanInFlight) return;
-            if (view.distributionDirty) {
-                if (typeof frappe !== "undefined" && frappe.msgprint) {
-                    frappe.msgprint({
-                        title: __("Apply to cutting plan"),
-                        message: __("Save the current distribution before applying it to the cutting plan."),
-                        indicator: "orange",
-                    });
+            if (!view.session || view.createPlanInFlight || view.sourceOnly || view.canSaveLayout === false) return;
+            const needsDistribution = Boolean(view.distributionDirty || !(Number(view.draftVersion) > 0));
+            const needsDrawings = Boolean(drawingSession && drawingSession.dirtyRecords().length);
+            if (needsDistribution || needsDrawings) {
+                const saved = await saveDraft({ forceDistribution: needsDistribution });
+                const afterSave = store && store.snapshot();
+                const distributionBlocked = !afterSave || afterSave.distributionDirty || !(Number(afterSave.draftVersion) > 0);
+                if (!store || saved !== true || distributionBlocked || (drawingSession && drawingSession.dirtyRecords().length)) {
+                    if (typeof frappe !== "undefined" && frappe.msgprint) {
+                        frappe.msgprint({
+                            title: __("Apply to cutting plan"),
+                            message: distributionBlocked
+                                ? __("Save the board editor distribution before applying it to the cutting plan.")
+                                : __("Save the door drawings before copying the cutting plan."),
+                            indicator: "orange",
+                        });
+                    }
+                    return;
                 }
-                return;
             }
-            if (!(Number(view.draftVersion) > 0)) {
+            const latest = store.snapshot();
+            if (!latest.session || latest.distributionDirty || !(Number(latest.draftVersion) > 0)) {
                 if (typeof frappe !== "undefined" && frappe.msgprint) {
                     frappe.msgprint({
                         title: __("Apply to cutting plan"),
@@ -3511,17 +3874,18 @@
             }
             const request = store.beginCreatePlan();
             if (!request) return;
-            const draft = (view.payload && view.payload.editor_draft) || {};
-            const planMeta = (view.payload && view.payload.plan) || {};
+            const draft = (latest.payload && latest.payload.editor_draft) || {};
+            const planMeta = (latest.payload && latest.payload.plan) || {};
             try {
                 const response = await Api.createPlanCopy({
                     orderName: activeOrderName,
                     planName: loadedPlanName,
                     expectedDraftVersion: request.draftVersion,
-                    sourceContentRevision: contentRevisionToken(view.payload || {}),
+                    sourceContentRevision: contentRevisionToken(latest.payload || {}),
                     sourceInputFingerprint: String(planMeta.input_fingerprint || ""),
                     createRequestId: request.requestId,
                     draftName: String(draft.name || ""),
+                    drawingVersions: drawingVersionPayload(),
                 });
                 if (!store) return;
                 store.settleCreatePlan(response || null);
@@ -3542,15 +3906,18 @@
                     backToOrder(orderName);
                 } else if (typeof frappe !== "undefined" && frappe.msgprint) {
                     const code = String((response && response.code) || "");
-                    const title = (code === "version_conflict" || code === "source_conflict" || code === "source_changed")
-                        ? __("Could not apply layout")
-                        : __("Apply to cutting plan");
+                    const title = code === "geometry_rejected"
+                        ? __("Invalid cut outline")
+                        : ((code === "version_conflict" || code === "source_conflict" || code === "source_changed" || code === "drawing_version_conflict")
+                            ? __("Could not apply layout")
+                            : __("Apply to cutting plan"));
                     frappe.msgprint({
                         title,
                         message: (response && response.message)
                             || __("The layout could not be applied to a cutting plan."),
                         indicator: "orange",
                     });
+                    if (code === "geometry_rejected") revealCutProblem(response);
                 }
             } catch (error) {
                 if (!store) return;
@@ -3643,9 +4010,11 @@
                     if (undoKey && drawingSession) {
                         if (event.shiftKey || keyName.toLowerCase() === "y") drawingSession.redo();
                         else drawingSession.undo();
+                        refreshCutValidation();
                         syncDrawing();
                     } else if ((keyName === "Delete" || keyName === "Backspace") && drawingSession && (drawingTool === "select" || drawingTool === "node_edit" || drawingTool === "shapes")) {
                         drawingSession.deleteSelection();
+                        refreshCutValidation();
                         syncDrawing();
                     }
                     return;
@@ -3661,6 +4030,11 @@
                 }
             }
             if (event.code === "Escape") {
+                if (vectorGesture && !isEditableTarget(event.target)) {
+                    event.preventDefault();
+                    endVectorGesture("cancel");
+                    return;
+                }
                 if (referenceCalibration && !isEditableTarget(event.target)) {
                     event.preventDefault();
                     referenceCalibration = null;

@@ -6,6 +6,7 @@ generated only after the resulting Cutting Plan is approved and exported.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import frappe
@@ -15,6 +16,7 @@ from almdina_erp.almdina_erp.application.cutting.board_editor_plan_create import
     CreateBoardEditorPlanCommand,
     create_write_allowed,
     execute_create,
+    geometry_rejection_parts,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_plan_create_adapter import (
     FrappeBoardEditorCuttingPlanPort,
@@ -44,6 +46,10 @@ def _error_message(code: str) -> str:
         "not_ready": _("The saved distribution is not ready. Review it and fix blocking issues first."),
         "invalid_create_request_id": _("The apply request token is missing or invalid."),
         "create_failed": _("Applying the layout to a cutting plan failed. The saved draft is unchanged."),
+        "geometry_rejected": _("The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan."),
+        "drawing_version_conflict": _("A door drawing changed while the cutting plan copy was being created. Save again and retry."),
+        "drawing_copy_failed": _("The drawing could not be copied onto the new cutting plan. The plan was not created."),
+        "addon_unproven": _("This door has machining that was not proven against the new cut outline. The copy was not created."),
     }
     return messages.get(code, _("The layout could not be applied to a cutting plan."))
 
@@ -57,6 +63,7 @@ def create_board_editor_plan_copy(
     source_input_fingerprint: str = "",
     create_request_id: str = "",
     draft_name: str = "",
+    drawing_versions: str = "",
 ) -> dict[str, Any]:
     """Create one Board Editor Cutting Plan Draft from the locked saved draft."""
 
@@ -104,6 +111,12 @@ def create_board_editor_plan_copy(
             "message": _error_message("source_changed"),
         }
 
+    from almdina_erp.almdina_erp.infrastructure.frappe.board_editor_drawing_store import (
+        FrappeBoardEditorDrawingStore,
+    )
+
+    drawing_records = FrappeBoardEditorDrawingStore().read_for_plan(str(order.name), str(plan.name))
+    expected_versions = _drawing_versions(drawing_versions)
     try:
         result = execute_create(
             CreateBoardEditorPlanCommand(
@@ -120,6 +133,9 @@ def create_board_editor_plan_copy(
             machine_type=str(getattr(plan, "machine_type", "") or ""),
             draft_store=FrappeBoardEditorPlanCreateStore(),
             plan_port=FrappeBoardEditorCuttingPlanPort(),
+            drawing_records=drawing_records,
+            expected_drawing_versions=expected_versions,
+            drawing_store=FrappeBoardEditorDrawingStore(),
         )
     except ValueError as exc:
         code = str(exc)
@@ -136,6 +152,11 @@ def create_board_editor_plan_copy(
 
     if not result.get("ok"):
         result["message"] = _error_message(str(result.get("code") or ""))
+        if result.get("code") == "geometry_rejected":
+            result["message"] = _geometry_message(
+                str(result.get("reason") or ""),
+                _piece_for_instance(payload.get("projection") or {}, result.get("piece_instance_id")),
+            )
         return result
 
     result["order_name"] = str(order.name)
@@ -147,6 +168,52 @@ def create_board_editor_plan_copy(
     result["exports_plan"] = False
     result["prefer_plan_tab"] = "BoardEditor"
     return result
+
+
+def _piece_for_instance(projection: dict[str, Any] | None, instance: Any) -> dict[str, Any]:
+    wanted = str(instance or "")
+    for piece in (projection or {}).get("pieces") or []:
+        if isinstance(piece, dict) and str(piece.get("piece_instance_id") or "") == wanted:
+            return piece
+    return {}
+
+
+def _geometry_message(reason: str, piece: dict[str, Any] | None) -> str:
+    messages = {
+        "path_open": _("The cut outline is not closed. Close the path, then validate it again."),
+        "self_intersection": _("The cut outline crosses itself. Move the nodes so the edges no longer cross."),
+        "outside_blank": _("The cut outline extends outside the door blank. Move the whole path inside the blank."),
+        "bounds_not_touched": _("The cut outline must touch all four edges of the door blank. Move it; it will not be scaled automatically."),
+        "multiple_outers": _("This door already has a cut outline. Clear the extra one before copying the plan."),
+        "invalid_area": _("The cut outline does not enclose a usable area. Redraw a closed shape with area."),
+        "holes_unsupported": _("Internal cutouts are not supported by the manufacturing geometry. Clear that role."),
+        "zero_edge": _("The cut outline has a zero-length edge. Remove the duplicate node."),
+        "curve_unrepresentable": _("This curve cannot be represented within 0.05 mm and the 64-corner manufacturing limit. Simplify it."),
+        "non_finite": _("The cut outline contains a value that is not a number. Edit the path and validate again."),
+        "addon_unproven": _("This door has machining that was not proven against the new cut outline. The copy was not created."),
+    }
+    detail = messages.get(reason) or _(
+        "The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan."
+    )
+    label, width, height = geometry_rejection_parts(piece)
+    if label and width and height:
+        return _("Door {0}. Size {1} × {2} cm. {3}").format(label, width, height, detail)
+    if label:
+        return _("Door {0}. {1}").format(label, detail)
+    return detail
+
+
+def _drawing_versions(raw: str) -> dict[str, Any] | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        value = json.loads(text)
+    except (TypeError, ValueError):
+        return {"__invalid__": -1}
+    if not isinstance(value, dict):
+        return {"__invalid__": -1}
+    return value
 
 
 __all__ = ["create_board_editor_plan_copy"]

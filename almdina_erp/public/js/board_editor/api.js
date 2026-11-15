@@ -75,6 +75,7 @@
             source_input_fingerprint: String(payload.sourceInputFingerprint || ""),
             create_request_id: String(payload.createRequestId || ""),
             draft_name: String(payload.draftName || ""),
+            drawing_versions: String(payload.drawingVersions || ""),
         });
     }
 

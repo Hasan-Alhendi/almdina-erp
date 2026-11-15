@@ -3647,3 +3647,44 @@ The reference image could not be loaded.,تعذر تحميل الصورة الم
 Select one editable special piece before uploading a reference image.,اختر درفة خاصة واحدة قابلة للتحرير قبل رفع صورة مرجعية.
 This drawing already has the maximum number of reference images.,بلغ هذا الرسم الحد الأقصى لعدد الصور المرجعية.
 The reference image could not be placed.,تعذر وضع الصورة المرجعية.
+Guide line,خط إرشادي
+Note,ملاحظة
+Cut outline,محيط قص خارجي
+Clear cut outline,إلغاء محيط القص
+Validate cut outline,التحقق من محيط القص
+Path purpose,غرض المسار
+Move path,تحريك المسار
+Move X (mm),تحريك س (مم)
+Move Y (mm),تحريك ص (مم)
+Cut,قص
+Cut outline problem,مشكلة في محيط القص
+Proposed cut,قص مقترح
+"The cut outline is not closed. Close the path, then validate it again.",المسار غير مغلق. أغلقه ثم أعد التحقق.
+The cut outline crosses itself. Move the nodes so the edges no longer cross.,محيط القص يتقاطع مع نفسه. حرّك العقد حتى لا تتقاطع الأضلاع.
+The cut outline extends outside the door blank. Move the whole path inside the blank.,محيط القص خارج حدود الدرفة. انقل المسار كاملًا إلى داخل الخام.
+The cut outline must touch all four edges of the door blank. Move it; it will not be scaled automatically.,يجب أن يلامس محيط القص حواف الخام الأربع. حرّكه، ولن يُغيَّر حجمه تلقائيًا.
+This door already has a cut outline. Clear the extra one before copying the plan.,يوجد أكثر من محيط قص لهذه الدرفة. ألغِ المحيط الزائد قبل نسخ الخطة.
+The cut outline does not enclose a usable area. Redraw a closed shape with area.,مساحة المحيط غير صالحة. أعد رسم شكل مغلق له مساحة.
+Internal cutouts are not supported by the manufacturing geometry. Clear that role.,الفتحات الداخلية غير مدعومة في هندسة التصنيع. ألغِ هذا الاعتماد.
+The cut outline has a zero-length edge. Remove the duplicate node.,المحيط يحتوي ضلعًا صفريًا. احذف العقدة المكررة.
+This curve cannot be represented within 0.05 mm and the 64-corner manufacturing limit. Simplify it.,لا يمكن تمثيل هذا المنحنى ضمن دقة 0.05 مم وحد 64 رأسًا. بسّطه.
+The cut outline contains a value that is not a number. Edit the path and validate again.,المحيط يحتوي قيمة غير رقمية. عدّل المسار ثم أعد التحقق.
+The drawing could not be read. Reload the piece and try again.,تعذر قراءة الرسم. أعد تحميل الدرفة ثم حاول مرة أخرى.
+The cut outline is valid for manufacturing.,محيط القص صالح للتصنيع.
+"Choose a guide line, a note, or one cut outline.",اختر خطًا إرشاديًا أو ملاحظة أو محيط قص واحدًا.
+Enter a numeric move in millimetres.,أدخل قيمة تحريك رقمية بالمليمتر.
+That move puts the path outside the drawing range.,هذا التحريك يخرج المسار عن مدى الرسم.
+Save the door drawings before copying the cutting plan.,احفظ رسومات الدرف قبل نسخ خطة القص.
+The adopted cut outline cannot be manufactured. Fix it in Drawing Mode before copying the plan.,لا يمكن تصنيع محيط القص المعتمد. أصلحه في وضع الرسم قبل نسخ الخطة.
+A door drawing changed while the cutting plan copy was being created. Save again and retry.,تغيّر رسم درفة أثناء إنشاء النسخة. احفظ ثم أعد المحاولة.
+Internal cutouts are not supported. This path was left unchanged.,الفتحات الداخلية غير مدعومة. بقي المسار كما هو.
+{0} Piece: {1}.,{0} الدرفة: {1}.
+The drawing could not be copied onto the new cutting plan. The plan was not created.,تعذر نسخ الرسم إلى خطة القص الجديدة. لم تُنشأ الخطة.
+This door has machining that was not proven against the new cut outline. The copy was not created.,هذه الدرفة فيها تشغيل لم يُثبَت توافقه مع محيط القص الجديد. لم تُنشأ النسخة.
+Invalid cut outline,محيط قص غير صالح
+Door {0}. Size {1} × {2} cm. {3},الدرفة: {0}. المقاس: {1} × {2} سم. {3}
+Door {0}. {1},الدرفة: {0}. {1}
+Select the problem path,تحديد المسار المسبب للمشكلة
+Convert the shape into independent nodes and segments so its geometry can be edited.,تحويل الشكل إلى عقد ومقاطع مستقلة للتحكم في تفاصيله الهندسية.
+Unsaved edits are saved before the cutting plan is copied.,تُحفظ التعديلات غير المحفوظة قبل نسخ خطة القص.
+Save a door drawing or the board distribution before copying the cutting plan.,احفظ رسم الدرفة أو توزيع الألواح قبل نسخ خطة القص.

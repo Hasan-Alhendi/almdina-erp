@@ -107,6 +107,14 @@ class FrappeBoardEditorDrawingStore:
             raise DrawingInsertConflict from exc
         return _row_to_record(doc)
 
+    def delete(self, key: str) -> None:
+        if not drawing_storage_ready():
+            return
+        name = frappe.db.get_value(DOCTYPE, {"drawing_key": key}, "name")
+        if not name:
+            return
+        frappe.delete_doc(DOCTYPE, name, ignore_permissions=True, force=True)
+
     def update_if_version(
         self,
         key: str,

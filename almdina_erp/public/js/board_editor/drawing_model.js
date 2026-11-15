@@ -289,6 +289,67 @@
         return true;
     }
 
+    function setPathRole(record, pathId, role) {
+        const path = pathById(record, pathId);
+        const allowed = role === "construction" || role === "annotation" || role === "manufacturing_outer";
+        if (!path || !allowed) {
+            return fail(record, role === "manufacturing_hole" ? "holes_unsupported" : "invalid_role", role === "manufacturing_hole"
+                ? "Internal cutouts are not supported. This path was left unchanged."
+                : "Choose a guide line, a note, or one cut outline.");
+        }
+        if (path.role === role) return true;
+        remember(record);
+        path.role = role;
+        clearStatus(record);
+        return true;
+    }
+
+    function translatePath(record, pathId, dx, dy, options) {
+        const path = pathById(record, pathId);
+        const base = options && options.base;
+        const shiftX = quantize(dx);
+        const shiftY = quantize(dy);
+        if (!path || shiftX == null || shiftY == null) {
+            return fail(record, "invalid_point", "Enter a numeric move in millimetres.");
+        }
+        const sourceNodes = (base && base.nodes) || path.nodes;
+        const sourceSegments = (base && base.segments) || path.segments;
+        if (shiftX === 0 && shiftY === 0 && !base) return true;
+        const moved = sourceNodes.map((node) => pointOf(node.x_mm + shiftX, node.y_mm + shiftY));
+        const movedControls = sourceSegments.map((segment) => {
+            if (segment.kind !== "bezier" || !segment.controls) return null;
+            return segment.controls.map((control) => pointOf(control.x_mm + shiftX, control.y_mm + shiftY));
+        });
+        if (moved.some((point) => point.x == null) || movedControls.some((row) => row && row.some((point) => point.x == null))) {
+            return fail(record, "invalid_point", "That move puts the path outside the drawing range.");
+        }
+        const same = sourceNodes.every((node, index) => node.x_mm === moved[index].x && node.y_mm === moved[index].y)
+            && path.nodes.every((node, index) => node.x_mm === moved[index].x && node.y_mm === moved[index].y);
+        if (same) {
+            clearStatus(record);
+            return true;
+        }
+        if (!options || options.history !== false) remember(record);
+        path.nodes.forEach((node, index) => {
+            node.x_mm = moved[index].x;
+            node.y_mm = moved[index].y;
+        });
+        path.segments.forEach((segment, index) => {
+            if (!movedControls[index]) return;
+            segment.controls.forEach((control, controlIndex) => {
+                control.x_mm = movedControls[index][controlIndex].x;
+                control.y_mm = movedControls[index][controlIndex].y;
+            });
+        });
+        if (path.source_shape_id) {
+            const shape = shapeById(record, path.source_shape_id);
+            const params = (base && base.shapeParams) || (shape && shape.params);
+            if (shape && params) shape.params = shiftParams(shape.kind, params, shiftX, shiftY);
+        }
+        clearStatus(record);
+        return true;
+    }
+
     function cancelPath(record) {
         if (!record.cursor) return false;
         remember(record);
@@ -871,7 +932,8 @@
     function moveShape(record, shapeId, dx, dy, options) {
         const shape = shapeById(record, shapeId);
         if (!shape || shape.exploded) return false;
-        return updateShape(record, shapeId, shiftParams(shape.kind, shape.params, dx, dy), options);
+        const params = (options && options.base) || shape.params;
+        return updateShape(record, shapeId, shiftParams(shape.kind, params, dx, dy), options);
     }
 
     function deleteShape(record, shapeId) {
@@ -1212,6 +1274,10 @@
             current,
             activeId() { return activeId; },
             documentDirty(record) { return documentDirty(record || current() || { document: {}, savedCanonical: "" }); },
+            documentCanonical() {
+                const record = current();
+                return record ? canonical(record.document) : "";
+            },
             anyDirty() {
                 let dirty = false;
                 records.forEach((record) => { if (documentDirty(record)) dirty = true; });
@@ -1219,6 +1285,9 @@
             },
             dirtyRecords() {
                 return Array.from(records.values()).filter(documentDirty);
+            },
+            loadedRecords() {
+                return Array.from(records.values());
             },
             placePoint(x, y) {
                 const record = current();
@@ -1290,6 +1359,14 @@
             createPenPath(built, limits) {
                 const record = current();
                 return Boolean(record && createPenPath(record, built, limits));
+            },
+            setPathRole(pathId, role) {
+                const record = current();
+                return Boolean(record && setPathRole(record, pathId, role));
+            },
+            translatePath(pathId, dx, dy, options) {
+                const record = current();
+                return Boolean(record && translatePath(record, pathId, dx, dy, options));
             },
             closePenPath(pathId) {
                 const record = current();

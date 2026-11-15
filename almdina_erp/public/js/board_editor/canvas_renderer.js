@@ -38,8 +38,18 @@
         return `<button type="button" class="alm-btn-secondary ${className} abe-tool-btn"${disabled}${pressed}${attrs} title="${esc(title)}" aria-label="${esc(label)}">${icon}</button>`;
     }
 
+    function drawingsDirty(storeView) {
+        return Boolean(
+            (storeView && storeView.drawingsDirty)
+            || (storeView && storeView.drawingView && storeView.drawingView.dirty)
+        );
+    }
+
     function saveStatusText(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
+        if (drawingsDirty(storeView) && state !== "saving" && state !== "failed" && state !== "conflict") {
+            return __("Unsaved changes");
+        }
         if (state === "dirty") return __("Unsaved changes");
         if (state === "saving") return __("Saving layout");
         if (state === "saved") return __("Layout saved");
@@ -57,15 +67,11 @@
         return __("No unsaved changes");
     }
 
-    function drawingDirty(storeView) {
-        return Boolean(storeView && storeView.drawingView && storeView.drawingView.dirty);
-    }
-
     function saveDisabled(storeView) {
         const state = (storeView && storeView.saveState) || "clean";
         if (!storeView || storeView.canSaveLayout === false || storeView.sourceOnly) return true;
         if (state === "saving") return true;
-        if (drawingDirty(storeView)) return false;
+        if (drawingsDirty(storeView)) return false;
         return state === "saved" || state === "clean";
     }
 
@@ -76,31 +82,42 @@
         if (storeView && storeView.canSaveLayout === false) {
             return __("You do not have permission to save this layout.");
         }
-        if (drawingDirty(storeView) && storeView.distributionDirty) {
+        if (drawingsDirty(storeView) && storeView.distributionDirty) {
             return `${__("Save layout and drawing")}. ${saveStatusText(storeView)}`;
         }
-        if (drawingDirty(storeView)) return __("Save drawing");
+        if (drawingsDirty(storeView)) return __("Save drawing");
         return `${__("Save layout")}. ${saveStatusText(storeView)}`;
     }
 
+    function copyPlanReady(storeView) {
+        if (!storeView || storeView.createPlanInFlight || storeView.sourceOnly || storeView.canSaveLayout === false) {
+            return false;
+        }
+        if (storeView.distributionDirty || drawingsDirty(storeView)) return true;
+        if (Number(storeView.draftVersion) > 0) return true;
+        return storeView.savedDrawingReady === true;
+    }
+
     function pageActionsHtml(storeView) {
-        const createDisabled = Boolean(
-            storeView.createPlanInFlight
-            || storeView.distributionDirty
-            || !(Number(storeView.draftVersion) > 0)
-            || storeView.sourceOnly
-            || storeView.canSaveLayout === false
-        );
-        const createTitle = storeView.distributionDirty
-            ? __("Save the current distribution before applying it to the cutting plan.")
-            : __("Apply this layout as an unapproved edited cutting plan copy.");
+        const createDisabled = !copyPlanReady(storeView);
+        const createTitle = !copyPlanReady(storeView)
+            ? (
+                storeView.sourceOnly
+                    ? __("This view shows the source plan. The saved draft is unchanged.")
+                    : (storeView.canSaveLayout === false
+                        ? __("You do not have permission to save this layout.")
+                        : __("Save a door drawing or the board distribution before copying the cutting plan."))
+            )
+            : ((storeView.distributionDirty || drawingsDirty(storeView))
+                ? __("Unsaved edits are saved before the cutting plan is copied.")
+                : __("Apply this layout as an unapproved edited cutting plan copy."));
         return `
             <div class="abe-page-actions" role="toolbar" aria-label="${esc(__("Board editor page actions"))}">
                 ${toolButton("abe-save", "save", saveTitle(storeView), {
                     disabled: saveDisabled(storeView),
                     attrs: ` data-abe-save-state="${esc(storeView.saveState || "clean")}"`,
                 })}
-                <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" role="status">${esc(saveStatusText(storeView))}</span>
+                <span class="abe-save-state" data-abe-save-state="${esc(storeView.saveState || "clean")}" data-abe-drawings-dirty="${drawingsDirty(storeView) ? "1" : "0"}" role="status">${esc(saveStatusText(storeView))}</span>
                 ${toolButton("abe-create-plan", "copy", __("Apply to cutting plan"), {
                     disabled: createDisabled,
                     title: createTitle,
@@ -1360,6 +1377,24 @@
         return `<button type="button" class="abe-drawing-tool${pressed ? " is-active" : ""}" data-abe-drawing-tool="${tool}" aria-pressed="${pressed ? "true" : "false"}"${enabled ? "" : " disabled"}>${esc(__(label))}</button>`;
     }
 
+    function cutProblemHtml(drawing) {
+        const problem = drawing && drawing.cutProblem;
+        if (!problem || !problem.messageKey) return "";
+        const size = problem.widthCm != null && problem.lengthCm != null
+            ? __("Door {0}. Size {1} × {2} cm. {3}")
+                .replace("{0}", String(problem.label || ""))
+                .replace("{1}", String(problem.widthCm))
+                .replace("{2}", String(problem.lengthCm))
+                .replace("{3}", __(problem.messageKey))
+            : __(problem.messageKey);
+        return `<div class="abe-cut-problem" data-abe-cut-problem="1" role="alert">
+            <strong>${esc(__("Invalid cut outline"))}</strong>
+            <span>${esc(size)}</span>
+            <button type="button" data-abe-drawing-action="select-problem">${esc(__("Select the problem path"))}</button>
+            <button type="button" data-abe-drawing-action="clear-problem">${esc(__("Clear cut outline"))}</button>
+        </div>`;
+    }
+
     function drawingWorkspaceHtml(storeView) {
         if ((storeView && storeView.editorMode) !== "drawing") return "";
         const target = (storeView && storeView.drawingTarget) || {};
@@ -1404,6 +1439,7 @@
                 <button type="button" data-abe-drawing-action="cancel"${drawing.canCancel ? "" : " disabled"}>${esc(__("Cancel path"))}</button>
             </div>` : "";
         const measure = drawingMeasureHtml(storeView, activeTool, enabled);
+        const problem = cutProblemHtml(drawing);
         return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
             <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
             <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
@@ -1412,8 +1448,10 @@
             ${snapMenuHtml(drawing, enabled)}
             ${referenceMenuHtml(drawing, enabled)}
             ${measure}
+            ${problem}
             ${referenceFormHtml(drawing)}
             ${shapeFormHtml(drawing)}
+            ${pathFormHtml(drawing)}
             ${actions}
             <p class="abe-drawing-note">${esc(__("These lines are construction guides. They are not manufacturing geometry yet."))}</p>
         </div>`;
@@ -1605,7 +1643,7 @@
             ? `<p class="abe-drawing-measure-error" data-abe-shape-error="1" role="alert">${esc(__(form.errorKey))}</p>`
             : "";
         const buttons = [
-            actions.convert ? `<button type="button" data-abe-drawing-action="convert">${esc(__("Convert to path"))}</button>` : "",
+            actions.convert ? `<button type="button" data-abe-drawing-action="convert" title="${esc(__("Convert the shape into independent nodes and segments so its geometry can be edited."))}">${esc(__("Convert to path"))}</button>` : "",
             actions.copy ? `<button type="button" data-abe-drawing-action="copy">${esc(__("Copy"))}</button>` : "",
             actions.paste ? `<button type="button" data-abe-drawing-action="paste">${esc(__("Paste"))}</button>` : "",
             actions.remove ? `<button type="button" data-abe-drawing-action="remove">${esc(__("Delete"))}</button>` : "",
@@ -1642,11 +1680,59 @@
         return `${image}<polygon data-abe-reference-bounds="${esc(reference.id)}" points="${outline}" fill="none" stroke="#0b5fff" stroke-width="1.2" vector-effect="non-scaling-stroke" pointer-events="none"/>${handles}`;
     }
 
+    function proposedCutSvg(storeView) {
+        const cuts = storeView && storeView.proposedCuts;
+        if (!Array.isArray(cuts) || !cuts.length) return "";
+        return cuts.map((cut) => {
+            const points = cut.points || [];
+            if (points.length < 3) return "";
+            const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ") + " Z";
+            const label = points[0];
+            return `<g class="abe-proposed-cut" data-abe-proposed-cut="${esc(cut.pieceInstanceId || "")}" pointer-events="none"><path d="${commands}" fill="none" stroke="#b54708" stroke-width="2" stroke-dasharray="7 3" vector-effect="non-scaling-stroke"/><text x="${label.x}" y="${label.y}" font-size="12" fill="#b54708">${esc(__("Proposed cut"))}</text></g>`;
+        }).join("");
+    }
+
+    function drawingPathPaint(path) {
+        if (path.selected) return { stroke: "#0b5fff", width: 2.4, dash: "" };
+        if (path.role === "manufacturing_outer" && path.problem) return { stroke: "#d92d20", width: 2.2, dash: ' stroke-dasharray="5 3"' };
+        if (path.role === "manufacturing_outer") return { stroke: "#b54708", width: 2.2, dash: "" };
+        if (path.role === "annotation") return { stroke: "#667085", width: 1.4, dash: ' stroke-dasharray="2 3"' };
+        return { stroke: "#344054", width: 1.6, dash: "" };
+    }
+
+    function pathFormHtml(drawing) {
+        const form = drawing && drawing.pathForm;
+        if (!form) return "";
+        const role = form.role || "construction";
+        const current = { construction: "role-construction", annotation: "role-annotation", manufacturing_outer: "role-manufacturing" }[role];
+        const button = (value, label) => `<button type="button" data-abe-drawing-action="${value}"${current === value ? ' aria-pressed="true"' : ""}>${esc(__(label))}</button>`;
+        const clear = role === "manufacturing_outer"
+            ? `<button type="button" data-abe-drawing-action="role-clear">${esc(__("Clear cut outline"))}</button>`
+            : "";
+        const validate = role === "manufacturing_outer"
+            ? `<button type="button" data-abe-drawing-action="validate-path">${esc(__("Validate cut outline"))}</button>`
+            : "";
+        return `<div class="abe-path-form abe-drawing-actions" data-abe-path-form="1">
+            <span>${esc(__("Path purpose"))}</span>
+            ${button("role-construction", "Guide line")}
+            ${button("role-annotation", "Note")}
+            ${button("role-manufacturing", "Cut outline")}
+            ${clear}
+            ${validate}
+            <label>${esc(__("Move X (mm)"))}<input data-abe-path-dx="1" inputmode="decimal" value="0"></label>
+            <label>${esc(__("Move Y (mm)"))}<input data-abe-path-dy="1" inputmode="decimal" value="0"></label>
+            <button type="button" data-abe-drawing-action="move-path">${esc(__("Move path"))}</button>
+        </div>`;
+    }
+
     function drawingOverlaySvg(storeView, scale) {
         const drawing = storeView && storeView.drawingView;
         if (!drawing || storeView.editorMode !== "drawing") return "";
         const safeScale = Math.max(0.05, Number(scale) || 1);
         const nodeRadius = 4.5 / safeScale;
+        const selectCursor = drawing && drawing.tool === "select"
+            ? (drawing.dragging ? ' style="cursor:grabbing"' : ' style="cursor:grab"')
+            : "";
         const parts = [];
         (drawing.references || []).forEach((reference) => {
             if (reference.hidden) return;
@@ -1659,7 +1745,12 @@
                 const commands = path.markup || points.map((point, index) => (
                     `${index === 0 ? "M" : "L"}${point.x} ${point.y}`
                 )).join(" ");
-                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" d="${commands}${path.markup || !path.closed ? "" : " Z"}" fill="none" stroke="${path.selected ? "#0b5fff" : "#344054"}" stroke-width="${path.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
+                const paint = drawingPathPaint(path);
+                parts.push(`<path data-abe-drawing-path="${esc(path.id)}" data-abe-drawing-role="${esc(path.role || "construction")}"${path.problem ? ' data-abe-path-problem="1"' : ""} d="${commands}${path.markup || !path.closed ? "" : " Z"}" fill="none" stroke="${paint.stroke}" stroke-width="${paint.width}"${paint.dash} vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
+                if (path.role === "manufacturing_outer" && points[0]) {
+                    const mark = path.problem ? __("Cut outline problem") : __("Cut");
+                    parts.push(`<text data-abe-cut-mark="${esc(path.id)}" x="${points[0].x}" y="${points[0].y}" font-size="${11 / safeScale}" fill="${paint.stroke}">${esc(mark)}</text>`);
+                }
             }
             if (!path.selected && !path.active) return;
             points.forEach((point, index) => {
@@ -1676,7 +1767,7 @@
             const points = shape.points || [];
             if (points.length < 2) return;
             const commands = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ");
-            parts.push(`<path data-abe-drawing-shape="${esc(shape.id)}" d="${commands}${shape.closed ? " Z" : ""}" fill="none" stroke="${shape.selected ? "#0b5fff" : "#344054"}" stroke-width="${shape.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`);
+            parts.push(`<path data-abe-drawing-shape="${esc(shape.id)}" d="${commands}${shape.closed ? " Z" : ""}" fill="none" stroke="${shape.selected ? "#0b5fff" : "#344054"}" stroke-width="${shape.selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"${selectCursor}/>`);
             if (!shape.selected) return;
             (shape.handles || []).forEach((handle) => {
                 parts.push(`<circle data-abe-shape-handle="${esc(shape.id)}" cx="${handle.x}" cy="${handle.y}" r="${nodeRadius}" fill="#fff" stroke="#0b5fff" stroke-width="${1.4 / safeScale}"/>`);
@@ -2253,6 +2344,7 @@
         if ((sheetGroups.__outside || []).length) {
             body.push(`<g data-sheet-group="outside" class="abe-outside-group">${sheetGroups.__outside.join("")}</g>`);
         }
+        body.push(proposedCutSvg(storeView));
         const selectionChrome = selectionChromeSvg(session, storeView, metrics.scale || 1);
         if (selectionChrome) body.push(selectionChrome);
 
@@ -2320,11 +2412,14 @@
         const magnetOn = storeView.magnetEnabled !== false;
         const drawingMode = storeView.editorMode === "drawing";
         const boardCommands = !drawingMode;
+        const selectCursor = drawingMode && storeView.drawingView && storeView.drawingView.tool === "select"
+            ? (storeView.drawingView.dragging ? "cursor:grabbing;" : "cursor:grab;")
+            : "";
         const measureOn = boardCommands && storeView.measureToolActive === true;
         const toolSep = `<span class="abe-tool-sep" aria-hidden="true"></span>`;
         host.innerHTML = `
             ${dropNote}
-            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "pen" ? " is-pen" : ""}" data-abe-stage="1">
+            <div class="abe-canvas-stage${measureOn ? " is-measuring" : ""}${drawingMode ? " is-drawing" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "select" ? " is-select" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "polyline" ? " is-polyline" : ""}${drawingMode && storeView.drawingView && storeView.drawingView.tool === "pen" ? " is-pen" : ""}" data-abe-stage="1"${selectCursor ? ` style="${selectCursor}"` : ""}>
                 <svg class="abe-svg" xmlns="http://www.w3.org/2000/svg" width="${contentW}" height="${contentH}" viewBox="0 0 ${contentW} ${contentH}" role="img" aria-label="${esc(__("Board layout canvas"))}" style="direction:ltr;touch-action:pan-x pan-y">
                     <defs>${(displayStyle() && displayStyle().defs(scale)) || ""}</defs>
                     <g class="abe-world" transform="translate(${padX - metrics.minX * scale},${padY - metrics.minY * scale}) scale(${scale})">
@@ -2494,7 +2589,7 @@
                 if (handlers && handlers.toggleReferenceMenu) handlers.toggleReferenceMenu();
             });
         });
-        host.querySelectorAll("[data-abe-reference-menu], [data-abe-reference-form]").forEach((panel) => {
+        host.querySelectorAll("[data-abe-reference-menu], [data-abe-reference-form], [data-abe-path-form]").forEach((panel) => {
             const stop = (event) => event.stopPropagation();
             panel.addEventListener("pointerdown", stop);
             panel.addEventListener("click", stop);
@@ -3513,6 +3608,7 @@
         patchReferenceFrame,
         patchShapePreview,
         patchPenPreview,
+        copyPlanReady,
         clickTargetKeepsSelection,
         leftOuterEdgeMidpoint,
         FIT_PADDING_PX,

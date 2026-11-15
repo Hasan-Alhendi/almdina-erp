@@ -125,6 +125,8 @@ class FrappeBoardEditorCuttingPlanPort:
             "name": plan.name,
             "revision": cint(plan.revision),
             "status": str(plan.status or DRAFT),
+            "input_fingerprint": str(getattr(plan, "input_fingerprint", "") or ""),
+            "content_revision_token": _content_revision_token(plan),
         }
 
     def discard_incomplete_plan(self, plan_name: str) -> None:
@@ -180,6 +182,29 @@ class FrappeBoardEditorCuttingPlanPort:
             "trim_margin_mm": plan.trim_margin_mm,
             "snapshot": snapshot if isinstance(snapshot, dict) else {},
         }
+
+
+def _content_revision_token(plan: Any) -> str:
+    """Same slots the board editor reads when a copied drawing is opened."""
+
+    layout_sha = ""
+    raw = getattr(plan, "snapshot_json", "") or ""
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        if isinstance(parsed, dict):
+            layout_sha = str(parsed.get("saved_layout_sha256") or "")
+    except (TypeError, ValueError):
+        layout_sha = ""
+    return "|".join(
+        [
+            str(getattr(plan, "name", "") or ""),
+            layout_sha,
+            str(cint(getattr(plan, "revision", 0))),
+            str(getattr(plan, "input_fingerprint", "") or ""),
+            "1" if getattr(plan, "plan_needs_recalculation", 0) else "0",
+            "0",
+        ]
+    )
 
 
 __all__ = [

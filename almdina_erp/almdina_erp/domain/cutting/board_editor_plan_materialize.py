@@ -108,6 +108,7 @@ def materialize_plan_snapshot(
     expected_draft_version: int,
     source_content_revision: str,
     source_input_fingerprint: str,
+    adopted_geometry: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a sanitized operational snapshot for one Board Editor plan copy."""
 
@@ -151,6 +152,7 @@ def materialize_plan_snapshot(
         source_plan_name=source_plan_name,
         draft_version=int(expected_draft_version),
         distribution_fingerprint=distribution_fingerprint(normalized),
+        adopted_geometry=adopted_geometry,
     )
     return snapshot
 
@@ -180,6 +182,7 @@ def _build_snapshot(
     source_plan_name: str,
     draft_version: int,
     distribution_fingerprint: str,
+    adopted_geometry: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     source_index = _index_source_pieces(source_snapshot)
     source_sheets = {
@@ -204,6 +207,7 @@ def _build_snapshot(
                 posed=posed,
                 source_piece=source_index.get(str(posed.get("piece_instance_id") or "")),
                 trusted_piece=(trusted.get("pieces") or {}).get(str(posed.get("piece_instance_id") or "")),
+                adopted_geometry=(adopted_geometry or {}).get(str(posed.get("piece_instance_id") or "")),
             )
         )
 
@@ -365,6 +369,7 @@ def _materialize_piece(
     posed: Mapping[str, Any],
     source_piece: Mapping[str, Any] | None,
     trusted_piece: Mapping[str, Any] | None,
+    adopted_geometry: str | None = None,
 ) -> dict[str, Any]:
     source = dict(source_piece or {})
     for key in _DERIVED_PIECE_KEYS:
@@ -465,11 +470,17 @@ def _materialize_piece(
     else:
         piece.pop("glass_hole_local_mm", None)
     # Preserve manufacturing Special contracts from source; layout pose is x/y/w/h.
+    # An adopted drawing replaces that contract on this copy only.
     if piece_type == "Special":
-        if source.get("special_shape_geometry_json") not in (None, ""):
+        if adopted_geometry not in (None, ""):
+            piece["special_shape_geometry_json"] = adopted_geometry
+            piece.pop("placement_outline_cm", None)
+        elif source.get("special_shape_geometry_json") not in (None, ""):
             piece["special_shape_geometry_json"] = source.get("special_shape_geometry_json")
         if geometry_source == "cnc_raw_rect" or (
-            not exact_geometry and not source_geometry and not source.get("special_shape_geometry_json")
+            not exact_geometry
+            and not source_geometry
+            and not piece.get("special_shape_geometry_json")
         ):
             piece.pop("geometry", None)
     return piece
