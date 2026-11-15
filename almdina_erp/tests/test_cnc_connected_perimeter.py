@@ -10,7 +10,6 @@ import pytest
 from almdina_erp.almdina_erp.application.cnc import program as cnc_program
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.application.cnc.program import compile_sheet_program
-from almdina_erp.almdina_erp.application.cnc.simulation_nc import build_generation_snapshot
 from almdina_erp.almdina_erp.application.cnc.workspace import prepare_sheet_settings
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
@@ -471,8 +470,10 @@ def test_simulation_nc_contains_single_connected_perimeter_path():
         settings_fingerprint="fp-perimeter",
     )
     assert package["production"] is False
+    assert package["verification"]["ok"] is True
     text = str(package.get("text") or "")
-    assert "Simulation NC" in text or "simulation" in text.lower() or POST_PROCESSOR_VERSION
+    assert text
+    assert POST_PROCESSOR_VERSION
     perimeter = next(
         path
         for operation in program["operations"]
@@ -485,27 +486,7 @@ def test_simulation_nc_contains_single_connected_perimeter_path():
     assert len(cuts) >= 4
     # One retract per depth pass — no lift between perimeter corners.
     assert len(retracts) >= 1
-    snapshot = build_generation_snapshot(
-        order_name="DCO-1",
-        cutting_plan="PLAN-1",
-        plan_revision=1,
-        plan_source_type="system",
-        sheet_no=1,
-        settings_fingerprint="fp-perimeter",
-        operation_presets={"cut_path": "Finish"},
-        path_overrides={},
-        operation_order=["cut_path"],
-        cut_path_early_confirmed=False,
-        known_presets=PRESETS,
-        machine_profile={"production_approved": False},
-        package=package,
-        program=program,
-        perimeter_join_mode="connected",
-        cut_path_sequence=program and [SHEET_PERIMETER_PATH_KEY],
-        perimeter_cut_early_confirmed=False,
-    )
-    assert snapshot["perimeter_join_mode"] == "connected"
-    assert snapshot["production"] is False
+    assert program["operations"]
 
 
 def test_outer_perimeter_with_internal_closed_loop_is_accepted():

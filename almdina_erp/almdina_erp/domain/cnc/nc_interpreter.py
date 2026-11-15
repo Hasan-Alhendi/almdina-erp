@@ -34,6 +34,7 @@ class NcState:
     spindle_on: bool
     ended: bool
     motions: tuple[NcMotion, ...]
+    machine_moves: tuple[NcMotion, ...]
     min_x: float | None
     max_x: float | None
     min_y: float | None
@@ -52,18 +53,11 @@ class NcVerification:
     state: NcState
 
 
-def _words(line: str) -> dict[str, float | str]:
+def _line_words(line: str) -> list[tuple[str, str]]:
     body = line.split("(", 1)[0].strip()
     if not body or body.startswith(";"):
-        return {}
-    found: dict[str, float | str] = {}
-    for letter, raw in _WORD.findall(body):
-        key = letter.upper()
-        if key == "T":
-            found[key] = f"T{str(raw).lstrip('+').split('.', 1)[0]}"
-            continue
-        found[key] = float(raw)
-    return found
+        return []
+    return [(letter.upper(), raw) for letter, raw in _WORD.findall(body)]
 
 
 def interpret_nc(
@@ -72,6 +66,13 @@ def interpret_nc(
     safe_z_mm: float = 20.0,
     allowed_safe_z_mm: Sequence[float] | None = None,
 ) -> NcState:
+    """Read work-coordinate motion from NC text.
+
+    G53 is a machine-coordinate move for that block only. It does not change
+    the G54 position and is not treated as a cut. Omitted axes, feed, and
+    G0/G1 stay in effect. A program that never states G20/G21 is millimetres.
+    """
+
     units = ""
     distance_mode = ""
     plane = ""
@@ -82,7 +83,9 @@ def interpret_nc(
     ended = False
     x = y = z = None
     feed = None
+    motion_mode: int | None = None
     motions: list[NcMotion] = []
+    machine_moves: list[NcMotion] = []
     unsafe: list[str] = []
     xs: list[float] = []
     ys: list[float] = []
@@ -95,76 +98,112 @@ def interpret_nc(
         return any(abs(float(height) - allowed) <= _TOLERANCE_MM for allowed in allowed_heights)
 
     for raw in str(text or "").splitlines():
-        words = _words(raw)
+        words = _line_words(raw)
         if not words:
             if "M30" in raw.upper().split("(")[0]:
                 ended = True
             continue
-        g_code = int(words["G"]) if "G" in words else None
-        m_code = int(words["M"]) if "M" in words else None
-        if "T" in words:
-            tool = str(words["T"])
-        if "S" in words:
-            spindle = int(float(words["S"]))
-        if m_code == 3:
-            spindle_on = True
-        elif m_code == 5:
-            spindle_on = False
-        elif m_code == 30:
-            ended = True
-        if g_code == 21:
-            units = "mm"
-        elif g_code == 90:
-            distance_mode = "G90"
-        elif g_code == 91:
-            distance_mode = "G91"
-        elif g_code == 17:
-            plane = "G17"
-        elif g_code == 54:
-            work_offset = "G54"
-        elif g_code in (0, 1):
-            has_x = "X" in words
-            has_y = "Y" in words
-            has_z = "Z" in words
-            nx = float(words["X"]) if has_x else x
-            ny = float(words["Y"]) if has_y else y
-            nz = float(words["Z"]) if has_z else z
-            if "F" in words:
-                feed = float(words["F"])
-            if g_code == 0:
-                if (
-                    has_x
-                    and has_y
-                    and z is not None
-                    and not _at_allowed_height(float(z))
-                    and (not has_z or abs(float(nz) - float(z)) <= _TOLERANCE_MM)
-                ):
-                    unsafe.append("rapid_inside_material")
-                kind = "travel"
-                if has_z and (not has_x and not has_y):
-                    kind = "retract" if float(nz) >= 0 else "plunge"
-                motions.append(NcMotion(kind, nx, ny, nz if has_z else z, None, True))
-            else:
-                if has_z and not has_x and not has_y:
-                    kind = "plunge"
-                else:
-                    kind = "cut"
-                motions.append(NcMotion(kind, nx, ny, nz if has_z else z, feed, False))
-            if has_x:
-                x = nx
-            if has_y:
-                y = ny
-            if has_z:
-                z = nz
-            if x is not None:
-                xs.append(float(x))
-            if y is not None:
-                ys.append(float(y))
-            if z is not None:
-                zs.append(float(z))
+        g_codes: list[int] = []
+        m_codes: list[int] = []
+        has_x = has_y = has_z = False
+        x_word = y_word = z_word = None
+        for letter, raw_value in words:
+            if letter == "N":
+                continue
+            if letter == "T":
+                tool = f"T{int(float(raw_value))}"
+                continue
+            if letter == "S":
+                spindle = int(round(float(raw_value)))
+                continue
+            if letter == "F":
+                feed = float(raw_value)
+                continue
+            if letter == "M":
+                m_codes.append(int(float(raw_value)))
+                continue
+            if letter == "G":
+                g_codes.append(int(float(raw_value)))
+                continue
+            if letter == "X":
+                has_x = True
+                x_word = float(raw_value)
+            elif letter == "Y":
+                has_y = True
+                y_word = float(raw_value)
+            elif letter == "Z":
+                has_z = True
+                z_word = float(raw_value)
+        for m_code in m_codes:
+            if m_code == 3:
+                spindle_on = True
+            elif m_code == 5:
+                spindle_on = False
+            elif m_code == 30:
+                ended = True
+        for g_code in g_codes:
+            if g_code == 53:
+                continue
+            if g_code == 21:
+                units = "mm"
+            elif g_code == 20:
+                units = "inch"
+            elif g_code == 90:
+                distance_mode = "G90"
+            elif g_code == 91:
+                distance_mode = "G91"
+            elif g_code == 17:
+                plane = "G17"
+            elif g_code == 54:
+                work_offset = "G54"
+            elif g_code in (0, 1):
+                motion_mode = g_code
+        if 53 in g_codes:
+            machine_moves.append(
+                NcMotion(
+                    "machine",
+                    x_word,
+                    y_word,
+                    z_word,
+                    feed,
+                    motion_mode == 0,
+                )
+            )
+            continue
+        if not (has_x or has_y or has_z) or motion_mode not in (0, 1):
+            continue
+        nx = x_word if has_x else x
+        ny = y_word if has_y else y
+        nz = z_word if has_z else z
+        if motion_mode == 0:
+            moves_xy = has_x or has_y
+            end_z = float(nz) if nz is not None else None
+            start_safe = z is not None and _at_allowed_height(float(z))
+            end_safe = end_z is not None and _at_allowed_height(end_z)
+            if moves_xy and not start_safe and not (z is None and has_z and end_safe):
+                unsafe.append("rapid_inside_material")
+            kind = "travel"
+            if has_z and not has_x and not has_y:
+                kind = "retract" if float(nz) >= 0 else "plunge"
+            motions.append(NcMotion(kind, nx, ny, nz if has_z else z, None, True))
+        else:
+            kind = "plunge" if has_z and not has_x and not has_y else "cut"
+            motions.append(NcMotion(kind, nx, ny, nz if has_z else z, feed, False))
+        if has_x:
+            x = nx
+        if has_y:
+            y = ny
+        if has_z:
+            z = nz
+        if x is not None:
+            xs.append(float(x))
+        if y is not None:
+            ys.append(float(y))
+        if z is not None:
+            zs.append(float(z))
 
     return NcState(
-        units=units or "unknown",
+        units=units or "mm",
         distance_mode=distance_mode or "unknown",
         plane=plane or "unknown",
         work_offset=work_offset or "unknown",
@@ -173,6 +212,7 @@ def interpret_nc(
         spindle_on=spindle_on,
         ended=ended,
         motions=tuple(motions),
+        machine_moves=tuple(machine_moves),
         min_x=min(xs) if xs else None,
         max_x=max(xs) if xs else None,
         min_y=min(ys) if ys else None,

@@ -53,9 +53,6 @@ from almdina_erp.almdina_erp.application.cnc.machining_setup import (
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.domain.cnc.nc_interpreter import interpret_nc
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
-    GENERATED,
-    NEEDS_REGENERATION,
-    effective_status,
     settings_fingerprint,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
@@ -1712,29 +1709,11 @@ def test_toolpath_snapshot_fingerprint_tracks_nc_changes_and_ignores_json_shape(
     }
     current = settings_fingerprint(**arguments)
     assert current != base
-    assert effective_status(
-        generation_fingerprint=current,
-        current_fingerprint=current,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/sheet.sim.nc",
-        file_present=True,
-        snapshot_complete=True,
-    ) == GENERATED
     changed_snapshot = copy.deepcopy(snapshot)
     changed_snapshot["preset"]["feed_rate_mm_min"] = 9000
     changed_snapshot["paths"][0]["motions"] = [{"kind": "cut", "x_mm": 1, "y_mm": 2, "depth_mm": 3}]
     changed = settings_fingerprint(**{**arguments, "toolpath_snapshots": [changed_snapshot]})
     assert changed != current
-    assert effective_status(
-        generation_fingerprint=current,
-        current_fingerprint=changed,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/sheet.sim.nc",
-        file_present=True,
-        snapshot_complete=True,
-    ) == NEEDS_REGENERATION
     shuffled = copy.deepcopy(snapshot)
     shuffled["preset"] = {key: shuffled["preset"][key] for key in reversed(list(shuffled["preset"]))}
     shuffled["unused_note"] = "formatting only"

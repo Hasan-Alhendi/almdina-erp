@@ -12,8 +12,7 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
     prepare_sheet_settings,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
-    NEEDS_REGENERATION,
-    NOT_GENERATED,
+    SETTINGS_SAVED,
     OperationalFileError,
     ApprovedPlanRef,
     cut_path_precedes_internal,
@@ -250,7 +249,7 @@ def test_factory_inheritance_keeps_sheet_choices_and_marks_a_generated_file():
     )
     current = first["sheets"][0]["settings_fingerprint"]
     assert next(row for row in first["sheets"][0]["operations"] if row["operation_key"] == "liner")["tool_preset"] == "Finish"
-    assert first["sheets"][0]["status"] == NOT_GENERATED
+    assert first["sheets"][0]["status"] == SETTINGS_SAVED
 
     generated = {
         "name": "CNC-1",
@@ -267,8 +266,8 @@ def test_factory_inheritance_keeps_sheet_choices_and_marks_a_generated_file():
         saved=generated,
     )
     assert next(row for row in changed_factory["sheets"][0]["operations"] if row["operation_key"] == "liner")["tool_preset"] == "Shallow"
-    assert changed_factory["sheets"][0]["status"] == NEEDS_REGENERATION
-    assert changed_factory["sheets"][0]["generated_file"] == "kept-file"
+    assert changed_factory["sheets"][0]["status"] == SETTINGS_SAVED
+    assert "generated_file" not in changed_factory["sheets"][0]
     assert generated["generation_fingerprint"] == current
 
     choice = _prepare(

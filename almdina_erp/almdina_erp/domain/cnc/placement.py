@@ -1,7 +1,8 @@
 """Sheet placement on a CNC machine bed (origin bottom-left, X right, Y up).
 
-Sheet-local cutter geometry is never recomputed here. Offsets only translate
-approved sheet XY into machine XY for preview bounds checks and NC emission.
+Sheet-local cutter geometry is never recomputed here. Offsets translate
+approved sheet XY into G54 work XY once. Profile home stays in G54 work
+coordinates and is not shifted again.
 """
 
 from __future__ import annotations
@@ -217,13 +218,6 @@ def iter_program_xy_mm(program: Mapping[str, Any]) -> list[tuple[float, float]]:
                 if not isinstance(point, Sequence) or len(point) < 2:
                     continue
                 points.append((float(point[0]), float(point[1])))
-            home = path.get("home")
-            if (
-                isinstance(home, Mapping)
-                and home.get("x_mm") is not None
-                and home.get("y_mm") is not None
-            ):
-                points.append((float(home.get("x_mm")), float(home.get("y_mm"))))
     return points
 
 
@@ -252,10 +246,11 @@ def apply_placement_to_program(
     program: Mapping[str, Any],
     placement: SheetPlacement,
 ) -> dict[str, Any]:
-    """Return a deep-copied program whose XY values are in machine coordinates.
+    """Return a deep-copied program whose cutter XY is in G54 work coordinates.
 
-    Z depths and non-XY fields stay unchanged. The original sheet program is
-    not mutated.
+    Z depths, profile home, and other non-path fields stay unchanged. Home is
+    already a G54 position and must not receive the sheet offset. The original
+    sheet program is not mutated.
     """
 
     validate_program_within_machine(program, placement)
@@ -288,19 +283,6 @@ def apply_placement_to_program(
             cloned = dict(path)
             cloned["points"] = points
             cloned["motions"] = motions
-            home = cloned.get("home")
-            if (
-                isinstance(home, Mapping)
-                and home.get("x_mm") is not None
-                and home.get("y_mm") is not None
-            ):
-                home_x, home_y = sheet_to_machine_xy(
-                    float(home.get("x_mm")),
-                    float(home.get("y_mm")),
-                    offset_left_cm=left,
-                    offset_bottom_cm=bottom,
-                )
-                cloned["home"] = {**dict(home), "x_mm": home_x, "y_mm": home_y}
             toolpaths.append(cloned)
         cloned_op = dict(operation)
         cloned_op["toolpaths"] = toolpaths

@@ -179,7 +179,7 @@ def test_save_sheet_from_generate_payload_keeps_snapshot(monkeypatch):
             "plan_source_type": "System",
             "sheet_no": 2,
             "sheet_key": "sheet:2",
-            "status": "Needs Regeneration",
+            "status": "Settings Saved",
             "settings_fingerprint": "fp2",
             "cut_path_early_confirmed": 0,
             "perimeter_join_mode": "connected",

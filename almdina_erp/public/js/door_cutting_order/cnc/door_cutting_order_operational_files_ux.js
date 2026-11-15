@@ -46,9 +46,8 @@
         recessed_handle_cutout: "Handle recess",
     });
     const STATUS_LABELS = Object.freeze({
-        "Not Generated": "Not generated",
-        Generated: "Generated",
-        "Needs Regeneration": "Needs regeneration",
+        "Not Configured": "Not Configured",
+        "Settings Saved": "Settings Saved",
     });
     const INTERNAL_OPERATIONS = Object.freeze([
         "liner",
@@ -118,7 +117,7 @@
     }
 
     function statusLabel(status) {
-        return translate(STATUS_LABELS[status] || status || "Not generated");
+        return translate(STATUS_LABELS[status] || status || "Not Configured");
     }
 
     function sourceLabel(source) {
@@ -362,6 +361,7 @@
             cncMachine: String(sheet.cnc_machine || ""),
             offsetLeftCm: Number(sheet.offset_left_cm || 0),
             offsetBottomCm: Number(sheet.offset_bottom_cm || 0),
+            postProcessor: String(sheet.post_processor || ""),
             sheetWidthCm: sheet.sheet_width_cm == null ? null : Number(sheet.sheet_width_cm),
             sheetLengthCm: sheet.sheet_length_cm == null ? null : Number(sheet.sheet_length_cm),
             expanded: {},
@@ -395,6 +395,7 @@
             cncMachine: String(state.cncMachine || ""),
             offsetLeftCm: Number(state.offsetLeftCm || 0),
             offsetBottomCm: Number(state.offsetBottomCm || 0),
+            postProcessor: String(state.postProcessor || ""),
         });
     }
 
@@ -667,59 +668,37 @@
         target.appendChild(clone);
     }
 
-    function downloadServerNc(frm, operationalFile, fileUrl) {
-        if (!operationalFile || !frm || !frm.doc || !frm.doc.name) return;
-        const params = new URLSearchParams({
-            order_name: String(frm.doc.name),
-            operational_file_name: String(operationalFile),
-        });
-        if (fileUrl) params.set("file_url", String(fileUrl));
-        window.open(`/api/method/${METHOD}.download_cnc_sheet_nc?${params.toString()}`, "_blank");
+    function decodeBase64Bytes(value) {
+        const binary = atob(String(value || ""));
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+        return bytes;
+    }
+
+    function downloadGeneratedNc(filename, contentB64) {
+        const name = String(filename || "").trim();
+        const encoded = String(contentB64 || "").trim();
+        if (!name || !encoded || !document.body) return false;
+        const blob = new Blob([decodeBase64Bytes(encoded)], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = name;
+        document.body.appendChild(anchor);
+        anchor.click();
+        setTimeout(() => {
+            if (anchor.parentNode) anchor.parentNode.removeChild(anchor);
+            URL.revokeObjectURL(url);
+        }, 500);
+        return true;
     }
 
     function sheetCardActions(sheet) {
-        const status = String(sheet.status || "");
-        const notes = [];
-        if (status === "Needs Regeneration") {
-            notes.push(`<p class="dco-operational-files__note" role="status">${escapeHtml(translate("The stored simulation NC needs regeneration."))}</p>`);
-        }
-        notes.push(`<p class="dco-operational-files__note">${escapeHtml(translate("Simulation NC is for review only. It is not approved for a workshop machine."))}</p>`);
-        let download = "";
-        if (sheet.can_download_current && sheet.operational_file) {
-            const label = sheet.download_is_previous
-                ? translate("Download previous simulation NC")
-                : translate("Download simulation NC");
-            download = `<button type="button" class="btn btn-primary btn-sm" data-cnc-card-download="${escapeHtml(sheet.operational_file)}" data-file-url="${escapeHtml(sheet.generated_file || "")}">${escapeHtml(label)}</button>`;
-        }
-        return `${notes.join("")}
-            <div class="dco-operational-files__actions">
+        return `<div class="dco-operational-files__actions">
                 <button type="button" class="btn btn-default btn-sm dco-operational-files__open" data-sheet-no="${escapeHtml(sheet.sheet_no)}">${escapeHtml(translate("Open sheet settings"))}</button>
-                ${download}
             </div>`;
-    }
-
-    function historicalHtml(rows) {
-        if (!Array.isArray(rows) || !rows.length) return "";
-        const body = rows.map(row => {
-            const download = row.can_download && row.name
-                ? `<button type="button" class="btn btn-default btn-xs" data-cnc-history-download="${escapeHtml(row.name)}" data-file-url="${escapeHtml(row.generated_file || "")}">${escapeHtml(translate("Download previous simulation NC"))}</button>`
-                : "";
-            return `<tr>
-            <td>${escapeHtml(row.cutting_plan || "")}</td>
-            <td>${escapeHtml(row.plan_revision || "")}</td>
-            <td>${escapeHtml(row.sheet_no || "")}</td>
-            <td>${escapeHtml(statusLabel(row.status))}</td>
-            <td>${download}</td>
-        </tr>`;
-        }).join("");
-        return `<section class="dco-operational-files__history">
-            <h3>${escapeHtml(translate("Earlier operational files"))}</h3>
-            <p>${escapeHtml(translate("These files stay linked to the plan revision they were prepared for."))}</p>
-            <table class="dco-operational-files__table">
-                <thead><tr><th>${escapeHtml(translate("Cutting plan"))}</th><th>${escapeHtml(translate("Plan revision"))}</th><th>${escapeHtml(translate("Sheet"))}</th><th>${escapeHtml(translate("Status"))}</th><th>${escapeHtml(translate("Download"))}</th></tr></thead>
-                <tbody>${body}</tbody>
-            </table>
-        </section>`;
     }
 
     function paint(frm, root, workspace) {
@@ -740,10 +719,9 @@
             ${sheetCardActions(sheet)}
         </article>`).join("");
         root.innerHTML = `<div class="dco-operational-files">
-            <p class="dco-operational-files__banner" role="status">${escapeHtml(approval)} ${escapeHtml(translate("Simulation NC is for review only. It is not approved for a workshop machine."))}</p>
+            <p class="dco-operational-files__banner" role="status">${escapeHtml(approval)}</p>
             <p class="dco-operational-files__meta">${escapeHtml(translate("Approved plan"))}: ${escapeHtml(workspace.cutting_plan || "")} · ${escapeHtml(translate("Plan revision"))} ${escapeHtml(workspace.plan_revision || "")} · ${sourceLabel(workspace.plan_source_type)}</p>
             <div class="dco-operational-files__gallery">${cards}</div>
-            ${historicalHtml(workspace.historical_files)}
         </div>`;
         const boards = boardsBySheet(frm, workspace.layout);
         root.querySelectorAll("[data-sheet-board]").forEach(target => {
@@ -754,12 +732,6 @@
                 const sheetNo = Number(button.getAttribute("data-sheet-no"));
                 if (!frm || !frm.doc || !frm.doc.name || !sheetNo) return;
                 openSheetSettingsTab(frm.doc.name, sheetNo);
-            });
-        });
-        root.querySelectorAll("[data-cnc-card-download], [data-cnc-history-download]").forEach(button => {
-            button.addEventListener("click", () => {
-                const name = button.getAttribute("data-cnc-card-download") || button.getAttribute("data-cnc-history-download");
-                downloadServerNc(frm, name, button.getAttribute("data-file-url"));
             });
         });
     }
@@ -896,7 +868,33 @@
         return "↓";
     }
 
-    function dialogMarkup(workspace, sheet, state) {
+    function exportControlsMarkup(workspace, state) {
+        const canPrepare = Boolean(workspace && workspace.can_prepare);
+        const selected = String((state && state.postProcessor) || "");
+        const processors = workspace && Array.isArray(workspace.post_processors) && workspace.post_processors.length
+            ? workspace.post_processors
+            : [{ id: "ima_wh_ncstudio", label: "IMA-WH (*.nc)" }];
+        const options = [
+            `<option value=""${selected ? "" : " selected"}>${escapeHtml(translate("Select a post processor"))}</option>`,
+        ].concat(processors.map(item => {
+            const id = String(item.id || "");
+            const label = String(item.label || id);
+            return `<option value="${escapeHtml(id)}"${id === selected ? " selected" : ""}>${escapeHtml(translate(label))}</option>`;
+        })).join("");
+        const control = generateNcControlState({ canPrepare });
+        return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
+            <label class="dco-operational-sheet__post-processor">
+                <span>${escapeHtml(translate("Post Processor"))}</span>
+                <select class="form-control" data-cnc-post-processor required${canPrepare ? "" : " disabled"}>${options}</select>
+            </label>
+            <div class="dco-operational-sheet__export-actions">
+                <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
+                <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(control.reason || "")}">${escapeHtml(translate("Generate NC file"))}</button>
+            </div>
+        </div>`;
+    }
+
+    function dialogMarkup(workspace, sheet, state, options) {
         const canPrepare = Boolean(workspace.can_prepare);
         const disabled = canPrepare ? "" : " disabled";
         const early = cutPathIsEarly(state.order);
@@ -940,6 +938,7 @@
             state._artcamSheetNo = Number(sheet && sheet.sheet_no);
         }
         if (!state.sections) state.sections = { placement: false, perimeter: false, associations: true, order: true };
+        const exportBar = options && options.exportBar ? exportControlsMarkup(workspace, state) : "";
         const section = (id, title, body) => {
             const open = Boolean(state.sections[id]);
             return `<section class="dco-sheet-acc${open ? "" : " is-collapsed"}" data-sheet-section="${id}">
@@ -965,6 +964,7 @@
                     ${section("perimeter", "Sheet Perimeter", perimeterJoinControlsMarkup(state, canPrepare))}
                     ${section("associations", "Vector Associations", window.AlmdinaArtcamMachining ? window.AlmdinaArtcamMachining.markup(workspace, sheet, state) : "")}
                     ${section("order", "Operation order", `<ol class="dco-operational-order">${orderItems || `<li class="dco-artcam-note">${escapeHtml(translate("Associations appear here after they are saved."))}</li>`}</ol>${warning}`)}
+                    ${exportBar}
                 </div>
             </div>
         </div>`;
@@ -979,7 +979,7 @@
         }
         return {
             disabled: false,
-            reason: translate("Simulation NC is for review only. It is not approved for a workshop machine."),
+            reason: translate("Generate NC file"),
         };
     }
 
@@ -1127,6 +1127,10 @@
                 }
                 if (target.hasAttribute("data-cut-confirm")) {
                     live.state.confirmed = Boolean(target.checked);
+                    return;
+                }
+                if (target.hasAttribute("data-cnc-post-processor")) {
+                    live.state.postProcessor = String(target.value || "");
                     return;
                 }
                 if (target.hasAttribute("data-cnc-machine")) {
@@ -1696,6 +1700,7 @@
             cnc_machine: String(state.cncMachine || ""),
             offset_left_cm: Number(state.offsetLeftCm || 0),
             offset_bottom_cm: Number(state.offsetBottomCm || 0),
+            post_processor: String(state.postProcessor || ""),
         };
     }
 
@@ -1919,11 +1924,6 @@
         const dir = locale && typeof locale.direction === "function"
             ? locale.direction()
             : (document.documentElement && document.documentElement.getAttribute("dir")) || "rtl";
-        const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const canDownload = Boolean(sheet && sheet.can_download_current && sheet.operational_file);
-        const downloadLabel = sheet && sheet.download_is_previous
-            ? translate("Download previous simulation NC")
-            : translate("Download simulation NC");
         return `<div class="dco-cnc-sheet-page" dir="${dir === "ltr" ? "ltr" : "rtl"}">
             <header class="dco-cnc-sheet-page__toolbar">
                 <div class="dco-cnc-sheet-page__identity">
@@ -1933,13 +1933,6 @@
                         · ${escapeHtml(translate("Approved plan"))}: ${escapeHtml(workspace.cutting_plan || "")}
                         · ${escapeHtml(translate("Plan revision"))} ${escapeHtml(workspace.plan_revision || "")}
                     </p>
-                    <p class="dco-operational-files__note">${escapeHtml(translate("Simulation NC is for review only. It is not approved for a workshop machine."))}</p>
-                </div>
-                <div class="dco-cnc-sheet-page__actions">
-                    <button type="button" class="btn btn-default btn-sm" data-cnc-back-order>${escapeHtml(translate("Back to the order"))}</button>
-                    <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
-                    <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Generate NC file"))}</button>
-                    <button type="button" class="btn btn-default btn-sm" data-cnc-page-download data-operational-file="${escapeHtml((sheet && sheet.operational_file) || "")}" data-file-url="${escapeHtml((sheet && sheet.generated_file) || "")}"${canDownload ? "" : " hidden"}>${escapeHtml(downloadLabel)}</button>
                 </div>
             </header>
             <div class="dco-cnc-sheet-page__workspace" data-sheet-body></div>
@@ -1951,23 +1944,11 @@
         const canPrepare = Boolean(workspace && workspace.can_prepare);
         const save = ui.root.querySelector("[data-cnc-save-sheet]");
         const generate = ui.root.querySelector("[data-cnc-generate-nc]");
-        const download = ui.root.querySelector("[data-cnc-page-download]");
         const control = generateNcControlState({ canPrepare });
         if (save) save.disabled = !canPrepare;
         if (generate) {
             generate.disabled = Boolean(control.disabled);
             generate.setAttribute("title", control.reason || "");
-        }
-        if (download) {
-            const canDownload = Boolean(sheet && sheet.can_download_current && sheet.operational_file);
-            download.hidden = !canDownload;
-            if (canDownload) {
-                download.setAttribute("data-operational-file", sheet.operational_file || "");
-                download.setAttribute("data-file-url", sheet.generated_file || "");
-                download.textContent = translate(
-                    sheet.download_is_previous ? "Download previous simulation NC" : "Download simulation NC"
-                );
-            }
         }
         bindGenerateNc(ui, ui.root, {
             canPrepare,
@@ -1990,7 +1971,7 @@
                 const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
                 if (saved) refreshSheetUi(frm, ui, message, saved, state);
             };
-            wrapper.innerHTML = dialogMarkup(workspace, sheet, state);
+            wrapper.innerHTML = dialogMarkup(workspace, sheet, state, { exportBar: ui.mode === "page" });
             const preview = wrapper.querySelector("[data-sheet-preview]");
             if (preview && ui.mode === "page") preview.setAttribute("data-preview-layout", "page");
             bindDialog(frm, ui, workspace, sheet, state, null);
@@ -2073,6 +2054,7 @@
                     state.cncMachine = next.cncMachine;
                     state.offsetLeftCm = next.offsetLeftCm;
                     state.offsetBottomCm = next.offsetBottomCm;
+                    state.postProcessor = next.postProcessor;
                     state.sheetWidthCm = next.sheetWidthCm;
                     state.sheetLengthCm = next.sheetLengthCm;
                     baselineHolder.value = stateSnapshot(state);
@@ -2145,31 +2127,14 @@
                     _cncNcRequest: 0,
                     _cncPresetRequest: 0,
                 };
-                const back = pageRoot.querySelector("[data-cnc-back-order]");
-                if (back) {
-                    back.addEventListener("click", () => {
-                        if (typeof frappe.set_route === "function") {
-                            frappe.set_route("Form", "Door Cutting Order", orderName);
-                        }
-                    });
-                }
-                const save = pageRoot.querySelector("[data-cnc-save-sheet]");
-                if (save) {
-                    save.addEventListener("click", () => {
-                        const live = ui._almdinaSheet || { workspace, sheet, state };
-                        saveSheetSettings(frm, ui, live.workspace || workspace, live.sheet || sheet, live.state || state, baselineHolder);
-                    });
-                }
-                const download = pageRoot.querySelector("[data-cnc-page-download]");
-                if (download) {
-                    download.addEventListener("click", () => {
-                        downloadServerNc(
-                            frm,
-                            download.getAttribute("data-operational-file"),
-                            download.getAttribute("data-file-url")
-                        );
-                    });
-                }
+                pageRoot.addEventListener("click", event => {
+                    const save = event.target && event.target.closest
+                        ? event.target.closest("[data-cnc-save-sheet]")
+                        : null;
+                    if (!save || save.disabled) return;
+                    const live = ui._almdinaSheet || { workspace, sheet, state };
+                    saveSheetSettings(frm, ui, live.workspace || workspace, live.sheet || sheet, live.state || state, baselineHolder);
+                });
                 pageRoot.addEventListener("keydown", event => {
                     const live = ui._almdinaSheet;
                     const target = event.target;
@@ -2431,7 +2396,7 @@
             "[data-move]",
             "[data-artcam-root]",
             "[data-cnc-save-sheet]",
-            "[data-cnc-page-download]",
+            "[data-cnc-generate-nc]",
             "[data-generate-nc]",
         ];
         if (controls.some(selector => target.closest(selector))) return "control";
@@ -3784,7 +3749,7 @@
         const readiness = [
             geometryReady ? translate("Geometry ready") : translate("Geometry not ready"),
             machineReady ? translate("Machine ready") : translate("Machine not ready"),
-            drawing.nc_export_ready ? translate("Simulation NC export ready") : translate("Simulation NC export not ready"),
+            drawing.nc_export_ready ? translate("NC export ready") : translate("NC export not ready"),
         ].join(" · ");
         const uniqueIssues = new Map();
         function rememberIssue(entry) {
@@ -3835,7 +3800,7 @@
         });
         const uniqueCount = uniqueIssues.size;
         const groupHtml = Array.from(grouped.entries()).map(([code, items]) => {
-            let title = translate("{0} geometry problems block simulation NC generation.", [items.length]);
+            let title = translate("{0} geometry problems block NC generation.", [items.length]);
             if (code === "finished_geometry_missing") {
                 title = translate(
                     "Cut paths for {0} pieces could not be prepared because finished geometry is missing from the approved plan.",
@@ -3862,11 +3827,11 @@
         }).join("");
         const blockingHtml = !geometryReady && uniqueCount
             ? `<div class="dco-cnc-program__blockers" role="status">
-                <p class="dco-cnc-program__error">${escapeHtml(translate("{0} geometry problems block simulation NC generation.", [uniqueCount]))}</p>
+                <p class="dco-cnc-program__error">${escapeHtml(translate("{0} geometry problems block NC generation.", [uniqueCount]))}</p>
                 ${groupHtml}
                </div>`
             : (!geometryReady
-                ? `<p class="dco-cnc-program__error" role="status">${escapeHtml(translate("Geometry is not ready, so simulation NC generation stays disabled."))}</p>`
+                ? `<p class="dco-cnc-program__error" role="status">${escapeHtml(translate("Geometry is not ready, so NC generation stays disabled."))}</p>`
                 : "");
         const rows = steps.map(step => {
             const path = step.path;
@@ -3928,12 +3893,12 @@
         return { list, drawing: svg };
     }
 
-    function paintNcPanel(host, packagePayload, context) {
+    function paintNcPanel(host, packagePayload) {
         if (!host) return;
         const payload = packagePayload || {};
         const verification = payload.verification || {};
         const summary = [
-            translate("Simulation NC"),
+            translate("NC"),
             payload.tool_number || "",
             payload.spindle_speed_rpm ? translate("{0} RPM", [payload.spindle_speed_rpm]) : "",
             payload.path_count ? translate("{0} paths", [payload.path_count]) : "",
@@ -3942,24 +3907,11 @@
             payload.status ? statusLabel(payload.status) : "",
         ].filter(Boolean).join(" · ");
         const warnings = (payload.warnings || []).map(code => `<p class="dco-cnc-program__error">${escapeHtml(translate(String(code)))}</p>`).join("");
-        const canDownload = Boolean(payload.operational_file && payload.file_url);
         host.innerHTML = `
             <p class="dco-cnc-program__note">${escapeHtml(summary)}</p>
             ${warnings}
-            <p class="dco-cnc-program__note">${escapeHtml(payload.message || translate("Simulation NC prepared. This file is not approved for a workshop machine."))}</p>
-            ${payload.text ? `<pre class="dco-cnc-program__nc" tabindex="0">${escapeHtml(payload.text || "")}</pre>` : ""}
-            ${canDownload ? `<button type="button" class="btn btn-primary btn-sm" data-cnc-download-nc data-operational-file="${escapeHtml(payload.operational_file)}" data-file-url="${escapeHtml(payload.file_url)}">${escapeHtml(translate("Download simulation NC"))}</button>` : ""}
+            <p class="dco-cnc-program__note">${escapeHtml(payload.message || "")}</p>
         `;
-        const download = host.querySelector("[data-cnc-download-nc]");
-        if (download && context && context.frm) {
-            download.addEventListener("click", () => {
-                downloadServerNc(
-                    context.frm,
-                    download.getAttribute("data-operational-file"),
-                    download.getAttribute("data-file-url")
-                );
-            });
-        }
     }
 
     function applyGenerateNcControl(root, state) {
@@ -4008,18 +3960,12 @@
         const canPrepare = Boolean(context.canPrepare);
         const control = generateNcControlState({ canPrepare });
         const generate = applyGenerateNcControl(root, control);
-        root.querySelectorAll("[data-cnc-dialog-download]").forEach(button => {
-            button.onclick = () => downloadServerNc(
-                context.frm,
-                button.getAttribute("data-cnc-dialog-download"),
-                button.getAttribute("data-file-url")
-            );
-        });
         if (!generate) return;
         generate.onclick = null;
         if (!canPrepare) return;
         generate.onclick = () => {
             if (!window.frappe || typeof frappe.call !== "function") return;
+            if (dialog._cncNcInFlight) return;
             if (cutPathIsEarly(context.state.order) && !context.state.confirmed) {
                 frappe.msgprint(translate("Cutting first may let the pieces move after they separate from the board."));
                 return;
@@ -4040,11 +3986,16 @@
             )) {
                 return;
             }
+            if (!String(context.state.postProcessor || "").trim()) {
+                frappe.msgprint(translate("Choose a post processor before generating the NC file."));
+                return;
+            }
             const request = (dialog._cncNcRequest || 0) + 1;
             dialog._cncNcRequest = request;
+            dialog._cncNcInFlight = true;
             applyGenerateNcControl(root, {
                 disabled: true,
-                reason: translate("Preparing the simulation NC file..."),
+                reason: translate("Preparing the NC file..."),
             });
             const args = sheetGenerateArgs(
                 context.frm,
@@ -4057,45 +4008,42 @@
                 args,
                 callback(response) {
                     if (dialog._cncNcRequest !== request) return;
+                    dialog._cncNcInFlight = false;
                     applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
                     const payload = (response && response.message) || {};
-                    if (payload.workspace && context.frm) {
-                        const hostEl = host(context.frm);
-                        if (hostEl) paint(context.frm, hostEl, payload.workspace);
-                        const saved = (payload.workspace.sheets || []).find(
-                            item => Number(item.sheet_no) === Number(context.sheetNo)
+                    const verification = payload.verification || {};
+                    if (!payload.filename || !payload.content_b64 || verification.ok !== true) {
+                        showGenerationIssueDialog(
+                            { message: payload.message || translate("The NC file could not be prepared.") },
+                            null,
+                            context.sheetNo
                         );
-                        const live = dialog._almdinaSheet;
-                        if (saved && live) {
-                            live.workspace = payload.workspace;
-                            live.sheet = saved;
-                            const status = dialogRoot(dialog) && dialogRoot(dialog).querySelector("[data-sheet-nc-status]");
-                            if (status) {
-                                status.setAttribute("data-sheet-nc-status", saved.status || "");
-                                status.textContent = statusLabel(saved.status);
-                            }
-                            if (dialog.mode === "page") {
-                                syncPageToolbar(dialog, live.workspace, saved, live.state);
-                            } else {
-                                syncSheetFooter(dialog, live.workspace, saved, live.state);
-                            }
-                        }
+                        return;
+                    }
+                    let downloaded = false;
+                    try {
+                        downloaded = downloadGeneratedNc(payload.filename, payload.content_b64);
+                    } catch (error) {
+                        downloaded = false;
+                    }
+                    if (!downloaded) {
+                        showGenerationIssueDialog(
+                            { message: translate("The NC file could not be prepared.") },
+                            null,
+                            context.sheetNo
+                        );
+                        return;
                     }
                     if (window.frappe && frappe.show_alert) {
                         frappe.show_alert({
-                            message: translate("Simulation NC prepared. This file is not approved for a workshop machine."),
+                            message: translate("NC file generated successfully."),
                             indicator: "green",
                         }, 7);
-                    }
-                    if (payload.operational_file && payload.file_url) {
-                        frappe.confirm(
-                            translate("Download the simulation NC file now? It is not approved for a workshop machine."),
-                            () => downloadServerNc(context.frm, payload.operational_file, payload.file_url)
-                        );
                     }
                 },
                 error(err) {
                     if (dialog._cncNcRequest !== request) return;
+                    dialog._cncNcInFlight = false;
                     applyGenerateNcControl(root, generateNcControlState({ canPrepare: true }));
                     loadProgramForIssues(args).then(program => {
                         if (dialog._cncNcRequest !== request) return;

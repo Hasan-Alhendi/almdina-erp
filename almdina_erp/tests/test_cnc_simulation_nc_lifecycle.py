@@ -1,21 +1,29 @@
-"""Simulation NC lifecycle: status, snapshot, persistence contracts."""
+"""On-demand NC export: one verified download, no stored operational file."""
 
 from __future__ import annotations
 
 import ast
+import base64
+import importlib
 from pathlib import Path
 
+import pytest
+
+from almdina_erp.almdina_erp.application.cnc.legacy_nc_cleanup import plan_legacy_nc_cleanup
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
-    build_generation_snapshot,
     nc_content_sha256,
-    simulation_nc_filename,
+    nc_download_payload,
+    nc_export_filename,
 )
+from almdina_erp.almdina_erp.application.cnc.workspace import build_operational_workspace
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
-    GENERATED,
-    NEEDS_REGENERATION,
-    NOT_GENERATED,
-    effective_status,
-    generation_snapshot_is_complete,
+    SETTINGS_NOT_CONFIGURED,
+    SETTINGS_SAVED,
+    ApprovedPlanRef,
+    settings_fingerprint,
+)
+from almdina_erp.patches.v1_0.migrate_cnc_operational_file_status import (
+    mapped_operational_status,
 )
 
 
@@ -25,131 +33,83 @@ REPO = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cnc_operational
 UX = APP_ROOT / "public" / "js" / "door_cutting_order" / "cnc" / "door_cutting_order_operational_files_ux.js"
 
 
-def _preset(**overrides):
-    values = {
-        "preset_name": "Finish",
-        "tool_name": "Finish",
-        "tool_number": "T9",
-        "tool_diameter_mm": 5,
-        "final_depth_mm": 18.5,
-        "spindle_speed_rpm": 15000,
-        "feed_rate_mm_min": 10200,
-        "plunge_rate_mm_min": 1800,
-        "pass_depth_mm": None,
-        "enabled": True,
-    }
-    values.update(overrides)
-    return values
+def test_cnc_modules_import_without_broken_names():
+    modules = (
+        "almdina_erp.almdina_erp.application.cnc.simulation_nc",
+        "almdina_erp.almdina_erp.application.cnc.workspace",
+        "almdina_erp.almdina_erp.application.cnc.nc_export",
+        "almdina_erp.almdina_erp.application.cnc.legacy_nc_cleanup",
+        "almdina_erp.almdina_erp.domain.cnc.operational_file",
+        "almdina_erp.almdina_erp.domain.cnc.post_processor",
+        "almdina_erp.almdina_erp.services.cnc_operational_file_service",
+        "almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository",
+    )
+    for name in modules:
+        importlib.import_module(name)
 
 
-def test_effective_status_requires_real_file_and_complete_snapshot():
-    fingerprint = "abc"
-    assert (
-        effective_status(
-            generation_fingerprint=fingerprint,
-            current_fingerprint=fingerprint,
-            stored_plan=("PLAN", 1),
-            current_plan=("PLAN", 1),
-        )
-        == NOT_GENERATED
+def test_verified_download_uses_the_same_nc_bytes_once():
+    text = "G90\nG00 X0 Y0\nM30\n"
+    payload = nc_download_payload(
+        filename="sheet.nc",
+        text=text,
+        verification={"ok": True, "issues": []},
     )
-    assert (
-        effective_status(
-            generation_fingerprint=fingerprint,
-            current_fingerprint=fingerprint,
-            stored_plan=("PLAN", 1),
-            current_plan=("PLAN", 1),
-            generated_file="/private/files/x.sim.nc",
-            file_present=True,
-            snapshot_complete=False,
-        )
-        == NOT_GENERATED
-    )
-    assert (
-        effective_status(
-            generation_fingerprint=fingerprint,
-            current_fingerprint=fingerprint,
-            stored_plan=("PLAN", 1),
-            current_plan=("PLAN", 1),
-            generated_file="/private/files/x.sim.nc",
-            file_present=True,
-            snapshot_complete=True,
-        )
-        == GENERATED
-    )
-    assert (
-        effective_status(
-            generation_fingerprint=fingerprint,
-            current_fingerprint="other",
-            stored_plan=("PLAN", 1),
-            current_plan=("PLAN", 1),
-            generated_file="/private/files/x.sim.nc",
-            file_present=True,
-            snapshot_complete=True,
-        )
-        == NEEDS_REGENERATION
-    )
+    assert payload["filename"].endswith(".nc")
+    assert base64.standard_b64decode(payload["content_b64"]).decode("utf-8") == text
+    assert payload["verification"]["ok"] is True
+    with pytest.raises(ValueError):
+        nc_download_payload(filename="sheet.nc", text=text, verification={"ok": False})
 
 
-def test_generation_snapshot_freezes_settings_and_content_hash():
-    text = "G90\nG54\nM30\n"
-    package = {
-        "text": text,
-        "post_processor_version": "almadina_simulation_v1",
-        "dialect": "simulation",
-        "tool_number": "T9",
-        "path_count": 1,
-        "pass_count": 1,
-        "verification": {"ok": True, "issues": []},
-        "content_sha256": nc_content_sha256(text),
-    }
-    snapshot = build_generation_snapshot(
-        order_name="DCO-1",
-        cutting_plan="PLAN-1",
-        plan_revision=3,
-        plan_source_type="System",
-        sheet_no=2,
-        settings_fingerprint="fp-1",
-        operation_presets={"cut_path": "Finish"},
-        path_overrides={},
-        operation_order=["cut_path"],
-        cut_path_early_confirmed=False,
-        known_presets={"Finish": _preset()},
-        machine_profile={"tool_number": "T9", "production_approved": False},
-        package=package,
-        program={"geometry_ready": True},
-        previous_generated_file="/private/files/old.sim.nc",
-        generated_by="operator@example.com",
-        generated_on="2026-01-01 00:00:00",
-    )
-    assert generation_snapshot_is_complete(snapshot)
-    assert snapshot["file_kind"] == "simulation"
-    assert snapshot["production"] is False
-    assert snapshot["content_sha256"] == nc_content_sha256(text)
-    assert snapshot["layer_presets"]["cut_path"]["values"]["tool_number"] == "T9"
-    assert snapshot["previous_generated_file"].endswith("old.sim.nc")
-    assert simulation_nc_filename(
+def test_export_filename_is_nc_and_does_not_imply_a_stored_copy():
+    name = nc_export_filename(
         order_name="DCO-1",
         cutting_plan="PLAN-1",
         plan_revision=3,
         sheet_no=2,
-        content_sha256=snapshot["content_sha256"],
-    ).endswith(".sim.nc")
+        content_sha256=nc_content_sha256("G90\nM30\n"),
+    )
+    assert name.endswith(".nc")
+    assert not name.endswith(".sim.nc")
 
 
-def test_generate_path_persists_private_file_before_generated_status():
+def test_generate_returns_content_without_saving_a_file_or_settings():
     service = SERVICE.read_text(encoding="utf-8")
     repo = REPO.read_text(encoding="utf-8")
-    assert "attach_simulation_nc" in service
-    assert "record_nc_generation" in service
-    assert "download_cnc_sheet_nc" in service
-    assert "Capability.VIEW_CNC_OPERATIONAL_FILES" in service
-    assert "save_sheet(" in service.split("def generate_cnc_sheet_nc", 1)[1]
-    assert 'is_private=1' in repo
-    assert "Generated status requires a stored simulation NC file." in repo
-    assert "discard_orphan_file" in repo
-    # Must not mark Generated when file_url is optional/empty.
-    assert "if file_url:" not in repo.split("def record_nc_generation", 1)[1].split("def ", 1)[0]
+    generate = service.split("def generate_cnc_sheet_nc", 1)[1].split("@frappe.whitelist()", 1)[0]
+    download = service.split("def download_cnc_sheet_nc", 1)[1].split("def _existing_sheet", 1)[0]
+    assert "nc_download_payload(" in generate
+    assert "build_post_processed_nc(" in generate
+    assert "build_simulation_nc(" not in generate
+    assert "_effective_sheet_program(" in generate
+    assert "resolve_sheet_placement(" in generate
+    assert "save_sheet(" not in generate
+    assert "save_file(" not in generate
+    for retired in (
+        "simulation_nc_filename",
+        "attach_simulation_nc",
+        "build_generation_snapshot",
+        "record_nc_generation",
+        "discard_orphan_file",
+        "read_simulation_nc_bytes",
+        "file_url",
+        "workspace",
+    ):
+        assert retired not in generate
+    assert "Capability.PREPARE_CNC_OPERATIONAL_FILES" in download
+    assert "stored_nc_unavailable" in download
+    assert "filecontent" not in download
+    assert "save_file" not in repo
+    for retired in (
+        "def attach_simulation_nc",
+        "def read_simulation_nc_bytes",
+        "def record_nc_generation",
+        "def discard_orphan_file",
+        "def sync_status",
+        "generation_snapshot_is_complete",
+    ):
+        assert retired not in repo
 
 
 def test_generate_path_imports_the_saved_direction_guard_it_calls():
@@ -169,24 +129,29 @@ def test_generate_path_imports_the_saved_direction_guard_it_calls():
     }
     assert "reversed_direction_block" in called
     assert "reversed_direction_block" in imported
+    assert "nc_download_payload" in called
 
 
-def test_ui_uses_server_download_not_ephemeral_blob_only():
+def test_ui_downloads_the_returned_nc_without_a_stored_file_prompt():
     panel = UX.read_text(encoding="utf-8")
-    assert "download_cnc_sheet_nc" in panel
-    assert "data-cnc-card-download" in panel
-    assert "Generate simulation NC" in panel
-    assert "Download previous simulation NC" in panel
-    assert "URL.createObjectURL" not in panel
-    assert "geometry problems block simulation NC generation" in panel
+    assert "content_b64" in panel
+    assert "downloadGeneratedNc(" in panel
+    assert "Preparing the NC file..." in panel
+    assert "NC file generated successfully." in panel
+    assert "Save sheet settings" in panel
+    assert "Generate NC file" in panel
+    assert "_cncNcInFlight" in panel
+    assert "download_cnc_sheet_nc" not in panel
+    assert "frappe.confirm(" not in panel
+    assert "Earlier operational files" not in panel
+    assert "data-cnc-back-order" not in panel
+    assert "data-cnc-card-download" not in panel
+    assert "Simulation NC" not in panel
+    assert "not approved for a workshop machine" not in panel
+    assert "geometry problems block NC generation" in panel
 
-def test_workspace_marks_generated_only_with_file_and_needs_regen_after_settings_change():
-    from almdina_erp.almdina_erp.application.cnc.workspace import build_operational_workspace
-    from almdina_erp.almdina_erp.domain.cnc.operational_file import (
-        ApprovedPlanRef,
-        settings_fingerprint,
-    )
 
+def test_workspace_status_follows_saved_settings_not_a_stored_nc_file():
     plan = ApprovedPlanRef(name="PLAN-1", revision=1, source_type="System", status="Approved")
     piece = {
         "piece_instance_id": "p1",
@@ -203,88 +168,124 @@ def test_workspace_marks_generated_only_with_file_and_needs_regen_after_settings
             "holes": [],
         },
     }
-    presets = {"Finish": _preset()}
-    fingerprint = settings_fingerprint(
+    presets = {
+        "Finish": {
+            "preset_name": "Finish",
+            "tool_name": "Finish",
+            "tool_number": "T9",
+            "tool_diameter_mm": 5,
+            "enabled": True,
+        }
+    }
+    empty = build_operational_workspace(
+        order_name="DCO-1",
+        approved_plan=plan,
+        plan_is_current=True,
+        pieces=[piece],
+        saved_files=[],
+        factory_defaults={"cut_path": "Finish"},
+        known_presets=presets,
+        machine_profile={"production_approved": False, "source_note": "sample", "fingerprint_payload": {"tool_number": "T9"}},
+        can_prepare=True,
+    )
+    assert empty["sheets"][0]["status"] == SETTINGS_NOT_CONFIGURED
+    assert "historical_files" not in empty
+    assert "can_download_current" not in empty["sheets"][0]
+    saved = build_operational_workspace(
+        order_name="DCO-1",
+        approved_plan=plan,
+        plan_is_current=True,
+        pieces=[piece],
+        saved_files=[{
+            "name": "CNC-FILE-1",
+            "cutting_plan": "PLAN-1",
+            "plan_revision": 1,
+            "plan_source_type": "System",
+            "sheet_no": 1,
+            "status": "Generated",
+            "settings_fingerprint": "",
+            "cut_path_early_confirmed": False,
+            "operations": [{"operation_key": "cut_path", "dxf_layer": "CUT_PATH", "sequence": 1, "tool_preset": "", "preset_source": "Factory"}],
+            "paths": [],
+            "generated_file": "/private/files/a.sim.nc",
+        }],
+        factory_defaults={"cut_path": "Finish"},
+        known_presets=presets,
+        machine_profile={"production_approved": False, "source_note": "sample", "fingerprint_payload": {"tool_number": "T9"}},
+        can_prepare=True,
+    )
+    assert saved["sheets"][0]["status"] == SETTINGS_SAVED
+    assert saved["sheets"][0]["operational_file"] == "CNC-FILE-1"
+    assert "generated_file" not in saved["sheets"][0]
+
+
+def test_legacy_status_migration_preserves_saved_sheet_meaning():
+    assert mapped_operational_status("Not Generated") == SETTINGS_SAVED
+    assert mapped_operational_status("Generated") == SETTINGS_SAVED
+    assert mapped_operational_status("Needs Regeneration") == SETTINGS_SAVED
+    assert mapped_operational_status(SETTINGS_SAVED) is None
+    assert mapped_operational_status(SETTINGS_NOT_CONFIGURED) is None
+    assert settings_fingerprint(
         operation_presets={"cut_path": "Finish"},
         path_overrides={},
-        presets=presets,
+        presets={"Finish": {"tool_number": "T9"}},
         machine_profile={"tool_number": "T9"},
         operation_order=["cut_path"],
         cut_path_early_confirmed=False,
     )
-    snapshot = build_generation_snapshot(
-        order_name="DCO-1",
-        cutting_plan="PLAN-1",
-        plan_revision=1,
-        plan_source_type="System",
-        sheet_no=1,
-        settings_fingerprint=fingerprint,
-        operation_presets={"cut_path": "Finish"},
-        path_overrides={},
-        operation_order=["cut_path"],
-        cut_path_early_confirmed=False,
-        known_presets=presets,
-        machine_profile={"tool_number": "T9", "production_approved": False},
-        package={
-            "text": "G90\nM30\n",
-            "post_processor_version": "almadina_simulation_v1",
-            "dialect": "simulation",
-            "tool_number": "T9",
-            "path_count": 1,
-            "pass_count": 1,
-            "verification": {"ok": True},
-            "content_sha256": nc_content_sha256("G90\nM30\n"),
-        },
-    )
-    saved = [{
-        "name": "CNC-FILE-1",
-        "cutting_plan": "PLAN-1",
-        "plan_revision": 1,
-        "plan_source_type": "System",
-        "sheet_no": 1,
-        "status": "Generated",
-        "settings_fingerprint": fingerprint,
-        "generation_fingerprint": fingerprint,
-        "generation_snapshot": snapshot,
-        "snapshot_complete": True,
-        "generated_file": "/private/files/a.sim.nc",
-        "file_present": True,
-        "generated_by": "user",
-        "generated_on": "2026-01-01",
-        "cut_path_early_confirmed": False,
-        "operations": [{"operation_key": "cut_path", "dxf_layer": "CUT_PATH", "sequence": 1, "tool_preset": "", "preset_source": "Factory"}],
-        "paths": [],
-    }]
-    workspace = build_operational_workspace(
-        order_name="DCO-1",
-        approved_plan=plan,
-        plan_is_current=True,
-        pieces=[piece],
-        saved_files=saved,
-        factory_defaults={"cut_path": "Finish"},
-        known_presets=presets,
-        machine_profile={"production_approved": False, "source_note": "sample", "fingerprint_payload": {"tool_number": "T9"}},
-        can_prepare=True,
-    )
-    sheet = workspace["sheets"][0]
-    assert sheet["status"] == GENERATED
-    assert sheet["can_download_current"] is True
-    assert sheet["download_is_previous"] is False
 
-    orphan = dict(saved[0])
-    orphan["generated_file"] = ""
-    orphan["file_present"] = False
-    orphan_workspace = build_operational_workspace(
-        order_name="DCO-1",
-        approved_plan=plan,
-        plan_is_current=True,
-        pieces=[piece],
-        saved_files=[orphan],
-        factory_defaults={"cut_path": "Finish"},
-        known_presets=presets,
-        machine_profile={"production_approved": False, "source_note": "sample", "fingerprint_payload": {"tool_number": "T9"}},
-        can_prepare=True,
-    )
-    assert orphan_workspace["sheets"][0]["status"] == NOT_GENERATED
-    assert orphan_workspace["sheets"][0]["can_download_current"] is False
 
+def test_legacy_nc_cleanup_is_a_dry_run_and_skips_shared_files():
+    plan = plan_legacy_nc_cleanup(
+        [
+            {
+                "name": "CNC-1",
+                "generated_file": "/private/files/a.nc",
+                "generation_snapshot_json": {"previous_generated_file": "/private/files/old.sim.nc"},
+                "generated_by": "user@example.com",
+            },
+            {
+                "name": "CNC-2",
+                "generated_file": "/private/files/shared.nc",
+            },
+        ],
+        [
+            {
+                "name": "FILE-1",
+                "file_name": "a.nc",
+                "file_url": "/private/files/a.nc",
+                "attached_to_doctype": "CNC Operational File",
+                "attached_to_name": "CNC-1",
+            },
+            {
+                "name": "FILE-2",
+                "file_name": "old.sim.nc",
+                "file_url": "/private/files/old.sim.nc",
+                "attached_to_doctype": "CNC Operational File",
+                "attached_to_name": "CNC-1",
+            },
+            {
+                "name": "FILE-3",
+                "file_name": "shared.nc",
+                "file_url": "/private/files/shared.nc",
+                "attached_to_doctype": "CNC Operational File",
+                "attached_to_name": "CNC-2",
+            },
+            {
+                "name": "FILE-4",
+                "file_name": "shared.nc",
+                "file_url": "/private/files/shared.nc",
+                "attached_to_doctype": "Door Cutting Order",
+                "attached_to_name": "DCO-9",
+            },
+        ],
+    )
+    assert plan["dry_run"] is True
+    assert plan["deletes_executed"] == 0
+    assert "/private/files/a.nc" in plan["deletable_file_urls"]
+    assert "/private/files/old.sim.nc" in plan["deletable_file_urls"]
+    assert "/private/files/shared.nc" in plan["shared_file_urls"]
+    assert "/private/files/shared.nc" not in plan["deletable_file_urls"]
+    assert plan["would_clear_generated_file"] == 2
+    assert plan["would_clear_generation_snapshot"] == 1
+    assert plan["operational_files_with_legacy_fields"] == 2

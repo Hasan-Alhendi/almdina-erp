@@ -20,6 +20,11 @@ from almdina_erp.almdina_erp.domain.cnc.post_processor import (
     emit_nc,
     nc_payload,
 )
+from almdina_erp.almdina_erp.domain.cnc.post_processors import (
+    IMA_WH_ID,
+    emit_ima_wh,
+    resolve_post_processor,
+)
 
 
 def build_simulation_nc(
@@ -77,4 +82,56 @@ def build_simulation_nc(
     return payload
 
 
-__all__ = ["build_simulation_nc"]
+def build_post_processed_nc(
+    program: Mapping[str, Any],
+    *,
+    post_processor_id: str,
+    sheet_placement: SheetPlacement | None,
+    sheet_no: int | None = None,
+    settings_fingerprint: str = "",
+) -> dict[str, Any]:
+    """Post a sheet with the selected processor and verify the cutter motions.
+
+    The simulation emitter is not used when the processor is missing or unknown.
+    Sheet settings and the NC text are not stored by this function.
+    """
+
+    processor = resolve_post_processor(post_processor_id, required=True)
+    if not program.get("geometry_ready", program.get("ready")):
+        raise PostProcessorError("geometry_not_ready")
+    if not program.get("nc_export_ready", program.get("geometry_ready", program.get("ready"))):
+        raise PostProcessorError("geometry_not_ready")
+    if sheet_placement is None:
+        raise PostProcessorError("placement_incomplete")
+    try:
+        emit_program = apply_placement_to_program(program, sheet_placement)
+    except PlacementError as exc:
+        raise PostProcessorError(exc.code) from exc
+    if processor == IMA_WH_ID:
+        document = emit_ima_wh(
+            emit_program,
+            machine_width_mm=sheet_placement.machine_width_mm,
+            machine_length_mm=sheet_placement.machine_length_mm,
+        )
+    else:
+        raise PostProcessorError("post_processor_unsupported")
+    verification = verify_nc_against_program(document.text, emit_program, safe_z_mm=20.0)
+    if not verification.ok:
+        raise PostProcessorError("nc_verification_failed")
+    payload = nc_payload(document)
+    payload["verification"] = verification_payload(verification)
+    payload["geometry_ready"] = True
+    payload["machine_ready"] = False
+    payload["nc_export_ready"] = True
+    payload["production"] = False
+    payload["machine_coordinate_transform_unverified"] = True
+    payload["settings_fingerprint"] = str(settings_fingerprint or "")
+    payload["post_processor"] = processor
+    payload["post_processor_version"] = document.post_processor_version
+    payload["sheet_no"] = sheet_no
+    payload["sheet_placement"] = dict(emit_program.get("placement") or {})
+    payload["coordinate_space"] = str(emit_program.get("coordinate_space") or "")
+    return payload
+
+
+__all__ = ["build_post_processed_nc", "build_simulation_nc"]

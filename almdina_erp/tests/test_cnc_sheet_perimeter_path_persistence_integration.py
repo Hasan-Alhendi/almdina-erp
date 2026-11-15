@@ -32,7 +32,7 @@ def _payload(*, sheet_no: int, join_mode: str, paths: list[dict], operations: li
         "plan_source_type": "System",
         "sheet_no": sheet_no,
         "sheet_key": f"sheet:{sheet_no}",
-        "status": "Not Generated",
+        "status": "Settings Saved",
         "settings_fingerprint": f"fp-{token}",
         "cut_path_early_confirmed": 0,
         "perimeter_join_mode": join_mode,
@@ -204,7 +204,7 @@ class TestCncSheetPerimeterPathPersistence(FrappeTestCase):
         document.plan_revision = 1
         document.plan_source_type = "System"
         document.sheet_no = 3
-        document.status = "Not Generated"
+        document.status = "Settings Saved"
         document.perimeter_join_mode = "separate"
         document.append(
             "paths",
@@ -230,7 +230,7 @@ class TestCncSheetPerimeterPathPersistence(FrappeTestCase):
         document.plan_revision = 1
         document.plan_source_type = "System"
         document.sheet_no = 4
-        document.status = "Not Generated"
+        document.status = "Settings Saved"
         document.perimeter_join_mode = "connected"
         document.append(
             "paths",

@@ -123,7 +123,7 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
     assert "data-edit-association" in sheet_page
     assert "data-path-markers" in sheet_page
     assert "dco-cnc-cut-preview__badge" not in sheet_page
-    assert "Zoom out" not in sheet_page
+    assert "Zoom out" in sheet_page
     assert "event.shiftKey" in sheet_page
     cleanup = _text(PACKAGE / "patches" / "v1_0" / "clear_artcam_catalog_and_operational_files.py")
     restore = _text(PACKAGE / "patches" / "v1_0" / "restore_cnc_profile_tool_snapshot.py")

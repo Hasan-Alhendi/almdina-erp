@@ -1,8 +1,8 @@
 """Translate a ready intermediate CNC program into simulation NC text.
 
 This module never recalculates cutter centers. It consumes motions already
-prepared by the board program. The default dialect is simulation-only and is
-not a workshop controller approval.
+prepared by the board program. The simulation dialect is not an export
+default and is not a workshop controller approval.
 """
 
 from __future__ import annotations

@@ -315,10 +315,12 @@ def test_phase2_surface_does_not_generate_nc_or_recompute_cutting():
     assert "AlmdinaCuttingPlanRender.build" in panel
     assert "data-path-key" in panel
     assert "Move earlier" in panel
-    assert "draggable" in panel
+    assert "draggable" not in panel
     assert "Cutting first may let the pieces move" in panel
     assert "G01" not in panel
     assert "generate_cnc_sheet_nc" in panel
-    assert "Download simulation NC" in panel
-    assert "not approved for a workshop machine" in panel
+    assert "Generate NC file" in panel
+    assert "content_b64" in panel
+    assert "Download simulation NC" not in panel
+    assert "not approved for a workshop machine" not in panel
     assert Capability.VIEW_CNC_OPERATIONAL_FILES

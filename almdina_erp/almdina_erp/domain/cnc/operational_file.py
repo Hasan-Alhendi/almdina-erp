@@ -317,6 +317,7 @@ def settings_fingerprint(
     toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
     vector_associations: Sequence[Mapping[str, Any]] | None = None,
     reversed_path_keys: Sequence[Any] | None = None,
+    post_processor: str = "",
 ) -> str:
     resolved = []
     for key in sorted(set(operation_presets) | set(path_overrides)):
@@ -333,6 +334,9 @@ def settings_fingerprint(
         "machine_profile": dict(machine_profile or {}),
         "sheet_placement": dict(sheet_placement or {}),
     }
+    chosen_processor = str(post_processor or "").strip()
+    if chosen_processor:
+        payload["post_processor"] = chosen_processor
     if toolpath_snapshots is not None or vector_associations is not None:
         from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
             nc_toolpath_fingerprint_rows,

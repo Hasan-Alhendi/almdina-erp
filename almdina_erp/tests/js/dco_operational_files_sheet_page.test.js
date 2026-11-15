@@ -352,6 +352,61 @@ for (let index = 0; index < 10; index += 1) {
 
 assert.ok(panel.includes("data-preview-layout"));
 assert.ok(panel.includes("mountSheetSettingsPage("));
-assert.ok(panel.includes("Back to the order"));
+assert.ok(!panel.includes("data-cnc-back-order"));
+assert.ok(!panel.includes("dco-cnc-sheet-page__actions"));
+assert.ok(panel.includes("Save sheet settings"));
+assert.ok(panel.includes("Generate NC file"));
+assert.ok(panel.includes("data-cnc-export-bar"));
+assert.ok(panel.includes("data-cnc-post-processor"));
+assert.ok(panel.includes("ima_wh_ncstudio"));
+assert.ok(panel.includes("IMA-WH (*.nc)"));
+assert.ok(panel.includes("Post Processor"));
+assert.ok(panel.includes("_blank"));
+assert.ok(css.includes("dco-operational-sheet__export"));
+assert.ok(translations.includes("Post Processor,معالج المخرجات"));
+assert.ok(translations.includes("IMA-WH (*.nc),IMA-WH (*.nc)"));
+
+const restored = ux.sheetState({
+    sheet_no: 1,
+    post_processor: "ima_wh_ncstudio",
+    operations: [],
+    paths: [],
+});
+assert.equal(restored.postProcessor, "ima_wh_ncstudio");
+const unset = ux.sheetState({ sheet_no: 1, operations: [], paths: [] });
+assert.equal(unset.postProcessor, "");
+const generateArgs = ux.sheetGenerateArgs(
+    { doc: { name: "ORD-1" } },
+    { cutting_plan: "PLAN", plan_revision: 3 },
+    { sheet_no: 1 },
+    restored
+);
+assert.equal(generateArgs.post_processor, "ima_wh_ncstudio");
+const pageMarkup = ux.dialogMarkup(
+    {
+        can_prepare: true,
+        cutting_plan: "PLAN",
+        plan_revision: 3,
+        cnc_machines: [],
+        post_processors: [{ id: "ima_wh_ncstudio", label: "IMA-WH (*.nc)" }],
+    },
+    { sheet_no: 1, status: "Settings Saved", machining: { associations: [], profiles: [] } },
+    unset,
+    { exportBar: true }
+);
+const settingsMarkup = pageMarkup.slice(pageMarkup.indexOf("dco-operational-sheet__settings"));
+assert.ok(settingsMarkup.indexOf('data-sheet-section="order"') < settingsMarkup.indexOf("data-cnc-export-bar"));
+assert.equal(settingsMarkup.includes("dco-operational-sheet__preview"), false);
+assert.ok(pageMarkup.includes('class="form-control" data-cnc-post-processor'));
+assert.ok(pageMarkup.includes("data-cnc-save-sheet"));
+assert.ok(pageMarkup.includes("data-cnc-generate-nc"));
+assert.ok(pageMarkup.includes('value="" selected'));
+assert.equal(pageMarkup.includes('value="ima_wh_ncstudio" selected'), false);
+const dialogMarkup = ux.dialogMarkup(
+    { can_prepare: true, cutting_plan: "PLAN", plan_revision: 3, cnc_machines: [] },
+    { sheet_no: 1, status: "Settings Saved", machining: { associations: [], profiles: [] } },
+    unset
+);
+assert.equal(dialogMarkup.includes("data-cnc-export-bar"), false);
 
 console.log("dco_operational_files_sheet_page.test.js passed");

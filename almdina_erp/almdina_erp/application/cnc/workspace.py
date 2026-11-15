@@ -27,6 +27,10 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     settings_fingerprint,
     validate_operational_path_rows,
 )
+from almdina_erp.almdina_erp.domain.cnc.post_processors import (
+    list_post_processors,
+    resolve_post_processor,
+)
 from almdina_erp.almdina_erp.domain.cnc.placement import (
     PlacementError,
     build_sheet_placement,
@@ -425,6 +429,7 @@ def build_operational_workspace(
                 toolpath_snapshots=list((saved or {}).get("toolpath_snapshots") or ()),
                 vector_associations=list((saved or {}).get("vector_associations") or ()),
                 reversed_path_keys=list((saved or {}).get("reversed_path_keys") or ()),
+                post_processor=str((saved or {}).get("post_processor") or ""),
             )
             status = SETTINGS_SAVED
             operational_file = str(saved.get("name") or "")
@@ -453,6 +458,7 @@ def build_operational_workspace(
                 "cnc_machine": str((saved or {}).get("cnc_machine") or ""),
                 "offset_left_cm": float((saved or {}).get("offset_left_cm") or 0),
                 "offset_bottom_cm": float((saved or {}).get("offset_bottom_cm") or 0),
+                "post_processor": str((saved or {}).get("post_processor") or ""),
                 "reversed_path_keys": list((saved or {}).get("reversed_path_keys") or ()),
                 "sheet_width_cm": sheet_width_cm,
                 "sheet_length_cm": sheet_length_cm,
@@ -520,6 +526,7 @@ def build_operational_workspace(
             }
             for name, values in sorted(known_presets.items())
         ],
+        "post_processors": list(list_post_processors()),
         "sheets": sheets,
     }
 
@@ -552,6 +559,7 @@ def prepare_sheet_settings(
     toolpath_snapshots: Sequence[Mapping[str, Any]] | None = None,
     vector_associations: Sequence[Mapping[str, Any]] | None = None,
     reversed_path_keys: Sequence[Any] | None = None,
+    post_processor: str | None = None,
 ) -> dict[str, Any]:
     from almdina_erp.almdina_erp.domain.cnc.operational_file import (
         apply_legacy_cut_path_sequence_to_order,
@@ -678,6 +686,10 @@ def prepare_sheet_settings(
         reversed_path_keys=list((existing or {}).get("reversed_path_keys") or ())
         if reversed_path_keys is None
         else list(reversed_path_keys),
+        post_processor=resolve_post_processor(
+            str((existing or {}).get("post_processor") or "") if post_processor is None else post_processor,
+            required=False,
+        ),
     )
     return {
         "door_cutting_order": order_name,
@@ -695,6 +707,10 @@ def prepare_sheet_settings(
         "cnc_machine": placement.machine_name if placement else "",
         "offset_left_cm": placement.offset_left_cm if placement else 0.0,
         "offset_bottom_cm": placement.offset_bottom_cm if placement else 0.0,
+        "post_processor": resolve_post_processor(
+            str((existing or {}).get("post_processor") or "") if post_processor is None else post_processor,
+            required=False,
+        ),
         "reversed_path_keys": list((existing or {}).get("reversed_path_keys") or ())
         if reversed_path_keys is None
         else list(reversed_path_keys),

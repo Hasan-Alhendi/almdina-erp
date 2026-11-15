@@ -24,17 +24,20 @@ assert.ok(ux.dialogMarkup);
 assert.ok(ux.paintNcPanel);
 assert.ok(ux.sheetCardActions);
 assert.ok(ux.collectProgramIssues);
-assert.ok(panel.includes("download_cnc_sheet_nc"));
+assert.ok(!panel.includes("download_cnc_sheet_nc"));
 assert.ok(panel.includes("Generate NC file"));
-assert.ok(panel.includes("data-cnc-card-download"));
+assert.ok(panel.includes("content_b64"));
+assert.ok(panel.includes("downloadGeneratedNc("));
+assert.ok(!panel.includes("data-cnc-card-download"));
 assert.ok(panel.includes("syncSheetFooter("));
 assert.ok(panel.includes("showGenerationIssueDialog("));
 assert.ok(panel.includes("AlmdinaUi"));
 assert.ok(panel.includes("errorDialog"));
-assert.ok(!panel.includes("URL.createObjectURL"));
+assert.ok(panel.includes("URL.createObjectURL"));
+assert.ok(!panel.includes("frappe.confirm("));
 assert.ok(!panel.includes("scheduleProgram("));
 assert.ok(!panel.includes("data-cnc-program"));
-assert.ok(!panel.includes('translate("Simulation NC")') || panel.includes("Simulation NC prepared"));
+assert.ok(!panel.includes("Simulation NC"));
 
 const markup = ux.programMarkup({
     sheet_width_mm: 1000,
@@ -61,7 +64,7 @@ const markup = ux.programMarkup({
         },
     ],
 });
-assert.ok(markup.list.includes("geometry problems block simulation NC generation") || markup.list.includes("{0} geometry problems"));
+assert.ok(markup.list.includes("geometry problems block NC generation") || markup.list.includes("{0} geometry problems"));
 assert.ok(!markup.list.includes("data-cnc-generate-nc"));
 
 const collected = ux.collectProgramIssues({
@@ -80,25 +83,19 @@ assert.ok(collected.issues.every(item => item.action));
 
 const card = ux.sheetCardActions({
     sheet_no: 1,
-    status: "Generated",
-    can_download_current: true,
-    download_is_previous: false,
+    status: "Settings Saved",
     operational_file: "CNC-FILE-1",
-    generated_file: "/private/files/a.sim.nc",
 });
-assert.ok(card.includes("data-cnc-card-download"));
-assert.ok(card.includes("Download simulation NC"));
+assert.ok(card.includes("Open sheet settings"));
+assert.ok(!card.includes("Download"));
+assert.ok(!card.includes("data-cnc-card-download"));
 
 const needs = ux.sheetCardActions({
-    sheet_no: 1,
-    status: "Needs Regeneration",
-    can_download_current: true,
-    download_is_previous: true,
-    operational_file: "CNC-FILE-1",
-    generated_file: "/private/files/a.sim.nc",
+    sheet_no: 2,
+    status: "Not Configured",
 });
-assert.ok(needs.includes("Download previous simulation NC"));
-assert.ok(needs.includes("needs regeneration") || needs.includes("Needs regeneration"));
+assert.ok(needs.includes("Open sheet settings"));
+assert.ok(!needs.includes("Earlier operational files"));
 
 const dialog = ux.dialogMarkup(
     {
@@ -221,8 +218,9 @@ assert.equal(ux.generateNcControlState({ canPrepare: false }).disabled, true);
 assert.equal(ux.generateNcControlState({ canPrepare: true, geometryReady: false, previewPending: true }).disabled, false);
 assert.ok(
     ux.generateNcControlState({ canPrepare: true }).reason
-        .includes("Simulation NC is for review only")
+        .includes("Generate NC file")
 );
+assert.ok(!panel.includes("not approved for a workshop machine"));
 
 assert.ok(css.includes("grid-template-columns: minmax(0, 390px) minmax(16rem, 1fr)"));
 assert.ok(css.includes("direction: ltr"));
@@ -305,21 +303,14 @@ ux.paintNcPanel(host, {
     tool_number: "T9",
     path_count: 1,
     pass_count: 1,
-    status: "Generated",
-    message: "Simulation NC prepared. This file is not approved for a workshop machine.",
-    text: "G90\nM30\n",
-    operational_file: "CNC-FILE-1",
-    file_url: "/private/files/a.sim.nc",
+    status: "Settings Saved",
+    message: "NC file generated successfully.",
     sheet_no: 1,
-}, { frm: { doc: { name: "DCO-1" } } });
-assert.ok(host.innerHTML.includes("data-cnc-download-nc"), "download button should appear after successful generation payload");
-assert.ok(host.innerHTML.includes("CNC-FILE-1"));
-assert.ok(host.innerHTML.includes("/private/files/a.sim.nc"));
+});
+assert.ok(!host.innerHTML.includes("data-cnc-download-nc"));
+assert.ok(host.innerHTML.includes("NC file generated successfully."));
 assert.ok(!host.innerHTML.includes("blob:"));
-const button = host.querySelector("[data-cnc-download-nc]");
-assert.ok(button);
-assert.equal(button.getAttribute("data-operational-file"), "CNC-FILE-1");
-assert.equal(button.getAttribute("data-file-url"), "/private/files/a.sim.nc");
+assert.equal(host.querySelector("[data-cnc-download-nc]"), null);
 
 assert.ok(translations.includes("توليد ملف NC"));
 assert.ok(translations.includes("تنزيل ملف NC"));
@@ -328,7 +319,9 @@ assert.ok(translations.includes("أين المشكلة؟"));
 assert.ok(translations.includes("ماذا أفعل؟"));
 assert.ok(translations.includes("تقديم العملية"));
 assert.ok(translations.includes("تأخير العملية"));
-assert.ok(translations.includes("ملف NC التجريبي للمراجعة فقط"));
+assert.ok(translations.includes("تم توليد ملف NC بنجاح"));
+assert.ok(translations.includes("غير مهيأ"));
+assert.ok(translations.includes("تم حفظ الإعدادات"));
 assert.ok(translations.includes("جارٍ تحميل مسارات القص"));
 assert.ok(translations.includes("لا توجد مسارات قص متاحة لمعاينة هذا اللوح"));
 assert.ok(panel.includes("requestSheetProgramPreview("));

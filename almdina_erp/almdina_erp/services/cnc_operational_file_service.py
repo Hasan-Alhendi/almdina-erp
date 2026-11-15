@@ -7,7 +7,6 @@ post processor and is never treated as a workshop controller approval.
 
 from __future__ import annotations
 
-import base64
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -23,11 +22,12 @@ from almdina_erp.almdina_erp.application.cnc.machining_setup import (
     remember_toolpath_on_association,
     sheet_profiles_with_catalog,
 )
-from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
+from almdina_erp.almdina_erp.application.cnc.nc_export import build_post_processed_nc
 from almdina_erp.almdina_erp.application.cnc.program import _kerf_mm, compile_sheet_program
 from almdina_erp.almdina_erp.application.cnc.simulation_nc import (
-    nc_export_filename,
     nc_content_sha256,
+    nc_download_payload,
+    nc_export_filename,
 )
 from almdina_erp.almdina_erp.application.cnc.workspace import (
     approved_sheet_size_cm,
@@ -184,6 +184,7 @@ _MESSAGES = {
     "toolpath_missing": "The approved drawing does not contain this machining path.",
     "cut_path_does_not_match_approved_centers": "The uploaded cut does not match the approved cutter centers.",
     "dxf_unreadable": "The operational drawing could not be read.",
+    "stored_nc_unavailable": "Stored NC files are no longer available. Generate NC to download the current file.",
     "path_reverse_unsupported": "This path cannot be reversed safely, so the NC file was not created.",
     "path_reverse_stale": "A saved path direction belongs to an older geometry, so the NC file was not created.",
     "path_reverse_missing": "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",
@@ -214,6 +215,19 @@ _MESSAGES = {
     "sheet_exceeds_machine_length": "The sheet plus the bottom offset exceeds the machine length.",
     "toolpath_exceeds_machine": "A cutter path would leave the machine travel area after placement.",
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
+    "post_processor_required": "Choose a post processor before generating the NC file.",
+    "post_processor_unsupported": "The selected post processor is not supported.",
+    "machine_parking_outside_limits": "The IMA-WH parking move is outside the selected machine.",
+    "machine_parking_unverified": "The selected machine travel is not known, so the IMA-WH parking move was not posted.",
+    "profile_home_missing": "The last machining profile has no home position.",
+    "profile_home_outside_machine": "The profile home is outside the selected machine.",
+    "profile_home_unsafe": "The profile home is not high enough for a safe move.",
+    "home_move_unsafe": "The move to profile home would travel at cutting depth.",
+    "tool_number_invalid": "The tool number cannot be posted.",
+    "feed_rate_inconsistent": "The feed rate and plunge rate do not match their per-minute values.",
+    "tool_identity_conflict": "This sheet uses more than one tool number, so the NC file was not created.",
+    "line_number_overflow": "The NC program is too long for the selected post processor.",
+    "nc_not_ascii": "The NC program contains a character this post processor cannot write.",
 }
 
 
@@ -439,6 +453,7 @@ def save_cnc_operational_sheet(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    post_processor: str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
     base_fingerprint: str | None = None,
@@ -503,6 +518,7 @@ def save_cnc_operational_sheet(
             "cnc_machine": cnc_machine,
             "offset_left_cm": offset_left_cm,
             "offset_bottom_cm": offset_bottom_cm,
+            "post_processor": post_processor,
             "machine_catalog": list_cnc_machines(),
             "plan_snapshot": approved_plan_snapshot(order),
             "require_cnc_machine": False,
@@ -590,7 +606,7 @@ def save_cnc_operational_sheet(
         if stored_profiles is not None:
             prepared["machining_profiles_json"] = stored_profiles
             prepared["vector_associations_json"] = direction_associations
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError, PostProcessorError) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
     save_sheet(existing_name, prepared)
@@ -1374,8 +1390,13 @@ def generate_cnc_sheet_nc(
     cnc_machine: str | None = None,
     offset_left_cm: float | int | str | None = None,
     offset_bottom_cm: float | int | str | None = None,
+    post_processor: str | None = None,
 ) -> dict[str, Any]:
-    """Save sheet settings, then persist a verified Simulation NC file. Not production-approved."""
+    """Build one verified NC file from the current sheet settings and return it.
+
+    Sheet settings are not saved. Associations and toolpath snapshots already
+    stored by their own operations are applied in memory. No NC file is stored.
+    """
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     parsed_operations, parsed_paths, parsed_order, parsed_sources = _parse_sheet_settings(
@@ -1386,13 +1407,15 @@ def generate_cnc_sheet_nc(
     )
     parsed_sequence = _parse_optional_sequence(cut_path_sequence)
     plan = approved_plan_ref(order)
+    if plan is None:
+        frappe.throw(_message("no_approved_plan"), frappe.ValidationError)
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
     try:
         assert_viewed_plan_token(plan, viewed_plan_token)
         sheet_arguments = {
             "order_name": str(order.name),
             "approved_plan": plan,
-            "plan_is_current": plan is not None,
+            "plan_is_current": True,
             "pieces": placed_piece_views(order),
             "sheet_no": cint(sheet_no),
             "existing": existing,
@@ -1416,6 +1439,7 @@ def generate_cnc_sheet_nc(
             "cnc_machine": cnc_machine,
             "offset_left_cm": offset_left_cm,
             "offset_bottom_cm": offset_bottom_cm,
+            "post_processor": post_processor,
             "machine_catalog": list_cnc_machines(),
             "plan_snapshot": approved_plan_snapshot(order),
             "require_cnc_machine": True,
@@ -1438,12 +1462,8 @@ def generate_cnc_sheet_nc(
             vector_associations=direction_associations,
             reversed_path_keys=direction_records,
         )
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError, PostProcessorError) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
-    operational_name = save_sheet(str((existing or {}).get("name") or ""), prepared)
-    saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    if not saved or str(saved.get("name") or "") != operational_name:
-        frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
     (
         operations,
         paths,
@@ -1454,11 +1474,11 @@ def generate_cnc_sheet_nc(
         sequence,
         perimeter_early,
     ) = _settings_from_saved(
-        saved,
+        prepared,
         factory_operation_defaults(),
     )
     try:
-        plan, program, presets = _compile_authorized_program(
+        plan, program, _presets = _compile_authorized_program(
             order,
             sheet_no=cint(sheet_no),
             operation_presets=operations,
@@ -1470,18 +1490,22 @@ def generate_cnc_sheet_nc(
             cut_path_sequence=sequence,
             perimeter_cut_early_confirmed=perimeter_early,
         )
-        program = _effective_sheet_program(program, saved)
+        program = _effective_sheet_program(
+            program,
+            {
+                "toolpath_snapshots": direction_snapshots,
+                "vector_associations": direction_associations,
+                "reversed_path_keys": direction_records,
+            },
+        )
         blocked = reversed_direction_block(program)
         if blocked:
             frappe.throw(_message(blocked), frappe.ValidationError)
-        machine = machine_profile_view()
         fingerprint = str(prepared["settings_fingerprint"])
-        if str(saved.get("settings_fingerprint") or "") != fingerprint:
-            frappe.throw(_message("generation_incomplete"), frappe.ValidationError)
         diameter_message = _diameter_program_message(program)
         if diameter_message:
             frappe.throw(diameter_message, frappe.ValidationError)
-        machine_row = get_cnc_machine(str(saved.get("cnc_machine") or ""))
+        machine_row = get_cnc_machine(str(prepared.get("cnc_machine") or ""))
         sheet_w, sheet_l = approved_sheet_size_cm(
             approved_plan_snapshot(order),
             sheet_no=cint(sheet_no),
@@ -1490,20 +1514,16 @@ def generate_cnc_sheet_nc(
             machine=machine_row,
             sheet_width_cm=sheet_w,
             sheet_length_cm=sheet_l,
-            offset_left_cm=saved.get("offset_left_cm"),
-            offset_bottom_cm=saved.get("offset_bottom_cm"),
+            offset_left_cm=prepared.get("offset_left_cm"),
+            offset_bottom_cm=prepared.get("offset_bottom_cm"),
             require_machine=True,
         )
-        package = build_simulation_nc(
+        package = build_post_processed_nc(
             program,
-            machine_profile={
-                **(machine.get("fingerprint_payload") or {}),
-                "production_approved": machine.get("production_approved"),
-                "retract_z_mm": (machine.get("fingerprint_payload") or {}).get("retract_z_mm", 20),
-            },
+            post_processor_id=str(prepared.get("post_processor") or ""),
+            sheet_placement=placement,
             sheet_no=cint(sheet_no),
             settings_fingerprint=fingerprint,
-            sheet_placement=placement,
         )
     except (OperationalFileError, ToolPresetError, PostProcessorError, PlacementError) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
@@ -1511,78 +1531,30 @@ def generate_cnc_sheet_nc(
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
 
     text = str(package.get("text") or "")
-    content_hash = nc_content_sha256(text)
-    package["content_sha256"] = content_hash
-    package["production"] = False
-    filename = simulation_nc_filename(
-        order_name=str(order.name),
-        cutting_plan=str(plan.name),
-        plan_revision=int(plan.revision),
-        sheet_no=cint(sheet_no),
-        content_sha256=content_hash,
-    )
-    previous_file = str(saved.get("generated_file") or "")
-    file_url = ""
     try:
-        file_url = attach_simulation_nc(
-            operational_file_name=operational_name,
-            filename=filename,
-            content=text,
+        download = nc_download_payload(
+            filename=nc_export_filename(
+                order_name=str(order.name),
+                cutting_plan=str(plan.name),
+                plan_revision=int(plan.revision),
+                sheet_no=cint(sheet_no),
+                content_sha256=nc_content_sha256(text),
+            ),
+            text=text,
+            verification=package.get("verification"),
         )
-        snapshot = build_generation_snapshot(
-            order_name=str(order.name),
-            cutting_plan=str(plan.name),
-            plan_revision=int(plan.revision),
-            plan_source_type=str(plan.source_type or ""),
-            sheet_no=cint(sheet_no),
-            settings_fingerprint=fingerprint,
-            operation_presets=operations,
-            path_overrides=paths,
-            operation_order=order_keys,
-            cut_path_early_confirmed=confirmed,
-            known_presets=presets,
-            machine_profile={
-                **(machine.get("fingerprint_payload") or {}),
-                "production_approved": bool(machine.get("production_approved")),
-                "source_note": str(machine.get("source_note") or ""),
-            },
-            package=package,
-            program=program,
-            previous_generated_file=previous_file if previous_file != file_url else "",
-            generated_by=str(frappe.session.user or ""),
-            generated_on=str(frappe.utils.now_datetime()),
-            perimeter_join_mode=join_mode,
-            cut_path_sequence=sequence,
-            perimeter_cut_early_confirmed=perimeter_early,
-            sheet_placement=dict(package.get("sheet_placement") or {}),
-        )
-        record_nc_generation(operational_name, snapshot, file_url)
-    except Exception as exc:
-        if file_url:
-            discard_orphan_file(file_url)
-        if isinstance(exc, frappe.ValidationError):
-            raise
-        frappe.throw(_message("file_persist_failed"), frappe.ValidationError)
-
-    workspace = _workspace_for(order, can_prepare=True)
-    sheet = next(
-        (
-            item
-            for item in workspace.get("sheets") or []
-            if int(item.get("sheet_no") or 0) == int(cint(sheet_no))
-        ),
-        None,
-    )
-    package["message"] = _(
-        "Simulation NC prepared. This file is not approved for a workshop machine."
-    )
-    package["filename"] = filename
-    package["file_url"] = file_url
-    package["operational_file"] = operational_name
-    package["status"] = (sheet or {}).get("status") or "Generated"
-    package["workspace"] = workspace
-    package["download_method"] = "almdina_erp.almdina_erp.services.cnc_operational_file_service.download_cnc_sheet_nc"
-    return package
+    except ValueError as exc:
+        frappe.throw(_message("nc_verification_failed"), frappe.ValidationError)
+        raise AssertionError("unreachable") from exc
+    download["message"] = _("NC file generated successfully.")
+    download["production"] = False
+    download["content_sha256"] = nc_content_sha256(text)
+    download["tool_number"] = package.get("tool_number")
+    download["path_count"] = package.get("path_count")
+    download["pass_count"] = package.get("pass_count")
+    download["post_processor_version"] = package.get("post_processor_version")
+    download["sheet_no"] = cint(sheet_no)
+    return download
 
 
 @frappe.whitelist()
@@ -1591,28 +1563,22 @@ def download_cnc_sheet_nc(
     operational_file_name: str,
     file_url: str | None = None,
 ) -> None:
-    """Stream a private Simulation NC attachment after VIEW + order scope checks."""
+    """Reject a stored NC download after generation permission and order scope checks."""
 
-    order = _authorized_order(order_name, Capability.VIEW_CNC_OPERATIONAL_FILES)
+    order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     name = str(operational_file_name or "").strip()
-    if not name:
+    if name:
+        owner = frappe.db.get_value("CNC Operational File", name, "door_cutting_order")
+        if not owner:
+            frappe.throw(_("Operational file was not found."), frappe.ValidationError)
+        if str(owner) != str(order.name):
+            frappe.throw(
+                _("You do not have permission to download this NC file."),
+                frappe.PermissionError,
+            )
+    if file_url is not None and str(file_url).strip() and not name:
         frappe.throw(_("Operational file was not found."), frappe.ValidationError)
-    try:
-        filename, content = read_simulation_nc_bytes(
-            operational_file_name=name,
-            expected_order=str(order.name),
-            file_url=file_url,
-        )
-    except frappe.PermissionError:
-        frappe.throw(
-            _("You do not have permission to download this simulation NC file."),
-            frappe.PermissionError,
-        )
-    except frappe.ValidationError as exc:
-        frappe.throw(str(exc) or _("The simulation NC file could not be downloaded."), frappe.ValidationError)
-    frappe.local.response.filename = filename
-    frappe.local.response.filecontent = content
-    frappe.local.response.type = "download"
+    frappe.throw(_message("stored_nc_unavailable"), frappe.ValidationError)
 
 
 def _existing_sheet(order_name: str, plan: Any, sheet_no: int) -> dict[str, Any] | None:

@@ -22,9 +22,7 @@ from almdina_erp.almdina_erp.domain.cnc.operations import (
     is_operational_layer,
 )
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
-    GENERATED,
-    NEEDS_REGENERATION,
-    NOT_GENERATED,
+    SETTINGS_SAVED,
     SYSTEM_PLAN_SOURCE,
     UPLOADED_PLAN_SOURCE,
     ApprovedPlanRef,
@@ -32,7 +30,6 @@ from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     assess_approved_plan,
     assign_sheet_presets,
     catalog_sheet,
-    effective_status,
     settings_fingerprint,
 )
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import (
@@ -239,10 +236,10 @@ def test_saved_sheet_settings_ignore_a_later_factory_default_change():
     )
     assert workspace["eligible"] is True
     assert workspace["sheets"][0]["operations"][0]["tool_preset"] == "Saved preset"
-    assert workspace["sheets"][0]["status"] == NOT_GENERATED
+    assert workspace["sheets"][0]["status"] == SETTINGS_SAVED
 
 
-def test_status_asks_for_regeneration_without_deleting_the_previous_file():
+def test_preset_fingerprint_changes_without_a_stored_nc_status():
     known = {"Finish T9": _raw()}
     original = settings_fingerprint(
         operation_presets={"cut_path": "Finish T9"},
@@ -256,55 +253,8 @@ def test_status_asks_for_regeneration_without_deleting_the_previous_file():
         presets={"Finish T9": _raw(feed_rate_mm_min=8000)},
         machine_profile={"tool_number": "T9"},
     )
-    assert effective_status(
-        generation_fingerprint="",
-        current_fingerprint=original,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/a.sim.nc",
-    ) == NOT_GENERATED
-    assert effective_status(
-        generation_fingerprint=original,
-        current_fingerprint=original,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-    ) == NOT_GENERATED
-    assert effective_status(
-        generation_fingerprint=original,
-        current_fingerprint=original,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/a.sim.nc",
-        file_present=True,
-        snapshot_complete=True,
-    ) == GENERATED
-    assert effective_status(
-        generation_fingerprint=original,
-        current_fingerprint=changed,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/a.sim.nc",
-        file_present=True,
-        snapshot_complete=True,
-    ) == NEEDS_REGENERATION
-    assert effective_status(
-        generation_fingerprint=original,
-        current_fingerprint=original,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 2),
-        generated_file="/private/files/a.sim.nc",
-        file_present=True,
-        snapshot_complete=True,
-    ) == NEEDS_REGENERATION
-    assert effective_status(
-        generation_fingerprint=original,
-        current_fingerprint=original,
-        stored_plan=("PLAN-1", 1),
-        current_plan=("PLAN-1", 1),
-        generated_file="/private/files/a.sim.nc",
-        file_present=False,
-        snapshot_complete=True,
-    ) == NOT_GENERATED
+    assert original != changed
+    assert SETTINGS_SAVED == "Settings Saved"
 
 
 def test_sheet_assignment_rejects_conflicting_tools_and_unknown_paths():
@@ -406,8 +356,10 @@ def test_server_boundary_does_not_accept_a_client_plan_or_offer_machine_output()
     assert "Save sheet settings" in panel
     assert "G01" not in panel
     assert "generate_cnc_sheet_nc" in panel
-    assert "Download simulation NC" in panel
-    assert "not approved for a workshop machine" in panel
+    assert "Generate NC file" in panel
+    assert "content_b64" in panel
+    assert "Download simulation NC" not in panel
+    assert "not approved for a workshop machine" not in panel
 
     order = json.loads(
         (APP_ROOT / "almdina_erp" / "doctype" / "door_cutting_order" / "door_cutting_order.json").read_text(

@@ -3991,3 +3991,30 @@ The cutting preview could not be loaded.,تعذر تحميل معاينة الق
 The connected sheet perimeter could not be formed.,تعذر تكوين محيط اللوح المتصل.
 The association could not be removed.,تعذر حذف الربط.
 "Keep this association, or try removing it again.",أبقِ هذا الربط، أو حاول حذفه مرة أخرى.
+Not Configured,غير مهيأ
+Settings Saved,تم حفظ الإعدادات
+NC,NC
+NC export ready,تصدير NC جاهز
+NC export not ready,تصدير NC غير جاهز
+Preparing the NC file...,جاري تجهيز ملف NC...
+NC file generated successfully.,تم توليد ملف NC بنجاح.
+"{0} geometry problems block NC generation.","{0} مشاكل هندسية تمنع توليد ملف NC."
+"Geometry is not ready, so NC generation stays disabled.",الهندسة غير جاهزة، لذلك يبقى توليد ملف NC متوقفًا.
+Stored NC files are no longer available. Generate NC to download the current file.,ملفات NC المخزنة لم تعد متاحة. ولّد ملف NC لتنزيل الملف الحالي.
+You do not have permission to download this NC file.,ليست لديك صلاحية تنزيل ملف NC هذا.
+Post Processor,معالج المخرجات
+Select a post processor,اختر معالج المخرجات
+IMA-WH (*.nc),IMA-WH (*.nc)
+Choose a post processor before generating the NC file.,اختر معالج المخرجات قبل توليد ملف NC.
+The selected post processor is not supported.,معالج المخرجات المحدد غير مدعوم.
+The IMA-WH parking move is outside the selected machine.,حركة التوقف الخاصة بـ IMA-WH خارج حدود الماكينة المحددة.
+"The selected machine travel is not known, so the IMA-WH parking move was not posted.",حدود حركة الماكينة المحددة غير معروفة، لذلك لم تُدرج حركة التوقف الخاصة بـ IMA-WH.
+The last machining profile has no home position.,آخر ملف تشغيل لا يحتوي على نقطة البداية.
+The profile home is outside the selected machine.,نقطة البداية خارج حدود الماكينة المحددة.
+The profile home is not high enough for a safe move.,ارتفاع نقطة البداية غير كافٍ لحركة آمنة.
+The move to profile home would travel at cutting depth.,الانتقال إلى نقطة البداية يتحرك عند عمق القص.
+The tool number cannot be posted.,لا يمكن إخراج رقم الريشة.
+The feed rate and plunge rate do not match their per-minute values.,سرعة التغذية وسرعة النزول لا تطابقان قيمهما بالدقيقة.
+"This sheet uses more than one tool number, so the NC file was not created.",هذا اللوح يستخدم أكثر من رقم ريشة، لذلك لم يُنشأ ملف NC.
+The NC program is too long for the selected post processor.,برنامج NC أطول مما يسمح به معالج المخرجات المحدد.
+The NC program contains a character this post processor cannot write.,برنامج NC يحتوي على حرف لا يستطيع معالج المخرجات كتابته.

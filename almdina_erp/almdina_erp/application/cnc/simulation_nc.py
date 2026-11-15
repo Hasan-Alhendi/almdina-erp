@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import re
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -32,6 +34,28 @@ def nc_export_filename(
     return f"{'_'.join(parts)}.nc"
 
 
+def nc_download_payload(
+    *,
+    filename: str,
+    text: str,
+    verification: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Encode the already verified NC text once for a Desk JSON download."""
+
+    verdict = dict(verification or {})
+    if verdict.get("ok") is not True:
+        raise ValueError("nc_verification_failed")
+    raw = str(text or "").encode("utf-8")
+    encoded = base64.standard_b64encode(raw).decode("ascii")
+    if base64.standard_b64decode(encoded) != raw:
+        raise ValueError("nc_verification_failed")
+    return {
+        "filename": str(filename or ""),
+        "content_b64": encoded,
+        "verification": verdict,
+    }
+
+
 def _safe_token(value: Any, fallback: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip())
     text = text.strip("-._")
@@ -39,6 +63,7 @@ def _safe_token(value: Any, fallback: str) -> str:
 
 
 __all__ = [
-    "nc_export_filename",
     "nc_content_sha256",
+    "nc_download_payload",
+    "nc_export_filename",
 ]
