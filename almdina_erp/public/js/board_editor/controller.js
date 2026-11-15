@@ -213,6 +213,12 @@
         let penReleasing = false;
         let penCommitting = false;
         let penClosePathId = null;
+        let snapSettings = null;
+        let snapMenuOpen = false;
+        let snapHold = null;
+        let snapOverlay = null;
+        let snapIndex = null;
+        let snapRevisionKey = "";
         let shapeAnchor = null;
         let shapeEntry = {};
         let nodeDrag = null;
@@ -1468,7 +1474,9 @@
                 shapeForm: shapeFormState(record, Space),
                 pen: drawingTool === "pen" ? { smoothing: penSmoothing, canClose: Boolean(penClosePathId) } : null,
                 preview: drawingPointer && drawingPointer.preview,
-                snap: drawingPointer && drawingPointer.snap,
+                snap: snapOverlay || (drawingPointer && drawingPointer.snap),
+                snapSettings: snapState(),
+                snapMenuOpen: snapMenuOpen === true,
                 measure: drawingMeasureState(record),
             };
         }
@@ -1526,21 +1534,113 @@
             };
         }
 
-        function resolvedDoorPoint(mapped, shiftKey) {
+        function drawingSnapApi() {
+            return window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSnap;
+        }
+
+        function snapState() {
+            const Snap = drawingSnapApi();
+            const defaults = Snap && Snap.defaultSettings ? Snap.defaultSettings() : {
+                enabled: true, endpoint: true, midpoint: true, intersection: true, alignment: true, grid: false, spacing: 10,
+            };
+            return Object.assign({}, defaults, snapSettings || {});
+        }
+
+        function rememberSnapRevision(record) {
+            const paths = (record && record.document && record.document.paths) || [];
+            const shapes = (record && record.document && record.document.shapes) || [];
+            let signature = `${paths.length}:${shapes.length}`;
+            paths.forEach((path) => {
+                let sum = 0;
+                (path.nodes || []).forEach((node) => { sum += Number(node.x_mm) + Number(node.y_mm); });
+                signature += `|${path.id}:${path.closed ? 1 : 0}:${(path.nodes || []).length}:${(path.segments || []).length}:${Math.round(sum * 1000)}`;
+            });
+            shapes.forEach((shape) => {
+                signature += `|${shape.id}:${shape.exploded ? 1 : 0}:${JSON.stringify(shape.params || {})}`;
+            });
+            return signature;
+        }
+
+        function indexForSnap(record) {
+            const Snap = drawingSnapApi();
+            if (!Snap || !record) return null;
+            const revision = rememberSnapRevision(record);
+            if (!snapIndex || snapRevisionKey !== revision) {
+                snapIndex = Snap.buildIndex(record.document);
+                snapRevisionKey = revision;
+            }
+            return snapIndex;
+        }
+
+        function showSnapOverlay(frame, Space, snap) {
+            snapHold = snap;
+            if (!snap || !frame || !Space) {
+                snapOverlay = null;
+                return;
+            }
+            const origin = Space.doorToWorld(frame, snap.point.x, snap.point.y);
+            let guide = null;
+            if (snap.guide) {
+                const from = Space.doorToWorld(frame, snap.guide.x1, snap.guide.y1);
+                const to = Space.doorToWorld(frame, snap.guide.x2, snap.guide.y2);
+                guide = { x1: from.x, y1: from.y, x2: to.x, y2: to.y };
+            }
+            snapOverlay = { x: origin.x, y: origin.y, type: snap.type, labelKey: snap.labelKey, guide };
+        }
+
+        function resolveSmartPoint(door, options) {
+            const input = options || {};
+            const Snap = drawingSnapApi();
             const Space = drawingSpaceApi();
             const record = activeDrawingRecord();
-            if (!Space || !mapped || !record || !record.cursor) return mapped && mapped.door;
+            if (!door) return { x: 0, y: 0, snap: null };
+            if (!Snap || !record || input.alt) {
+                showSnapOverlay(input.frame, Space, null);
+                return { x: door.x, y: door.y, snap: null };
+            }
             const scale = store ? (Number(store.snapshot().viewport.scale) || 1) : 1;
-            const snap = Space.endpointSnap(
-                record.document.paths,
-                mapped.door,
-                Space.thresholdMm(scale),
-                { pathId: record.cursor.pathId, nodeId: record.cursor.nodeId }
-            );
-            if (snap) return { x: snap.x, y: snap.y, snap };
-            const angle = Space.snapAngleDeg(Space.angleDeg(record.cursor.x, record.cursor.y, mapped.door.x, mapped.door.y), shiftKey);
-            const length = Space.lengthMm(record.cursor.x, record.cursor.y, mapped.door.x, mapped.door.y);
-            return { ...Space.polarPoint(record.cursor, length, angle), snap: null, angle, length };
+            const result = Snap.resolve({
+                index: indexForSnap(record),
+                pointer: door,
+                settings: snapState(),
+                scale,
+                anchor: input.anchor || null,
+                shift: input.shift === true,
+                alt: false,
+                hold: snapHold,
+                exclude: input.exclude || null,
+                blockPoints: input.blockPoints || null,
+            });
+            showSnapOverlay(input.frame, Space, result.snap);
+            return {
+                x: result.point.x,
+                y: result.point.y,
+                snap: result.snap,
+                angle: result.angle,
+            };
+        }
+
+        function resolvedDoorPoint(mapped, shiftKey, altKey) {
+            const Space = drawingSpaceApi();
+            const record = activeDrawingRecord();
+            if (!Space || !mapped || !mapped.door) return null;
+            const anchor = record && record.cursor ? { x: record.cursor.x, y: record.cursor.y } : null;
+            const exclude = record && record.cursor && record.cursor.pathId
+                ? { pathId: record.cursor.pathId, nodeId: record.cursor.nodeId }
+                : null;
+            const resolved = resolveSmartPoint(mapped.door, {
+                shift: shiftKey === true && Boolean(anchor),
+                alt: altKey === true,
+                anchor,
+                exclude,
+                frame: mapped.frame,
+            });
+            if (!anchor || resolved.snap) return resolved;
+            const angle = Space.snapAngleDeg(Space.angleDeg(anchor.x, anchor.y, mapped.door.x, mapped.door.y), shiftKey);
+            const length = Space.lengthMm(anchor.x, anchor.y, resolved.x, resolved.y);
+            if (!shiftKey) return resolved;
+            const end = Space.polarPoint(anchor, length, angle);
+            return { x: end.x, y: end.y, snap: null, angle, length };
         }
 
         function updateDrawingPointer(event) {
@@ -1554,7 +1654,7 @@
                 return;
             }
             const Space = drawingSpaceApi();
-            const resolved = resolvedDoorPoint(mapped, Boolean(event && event.shiftKey));
+            const resolved = resolvedDoorPoint(mapped, Boolean(event && event.shiftKey), Boolean(event && event.altKey));
             const from = Space.doorToWorld(mapped.frame, record.cursor.x, record.cursor.y);
             const to = Space.doorToWorld(mapped.frame, resolved.x, resolved.y);
             const pointerLength = Space.lengthMm(record.cursor.x, record.cursor.y, resolved.x, resolved.y);
@@ -1567,7 +1667,7 @@
                 lengthMm: pointerLength,
                 angleDeg: pointerAngle,
                 preview: { x1: from.x, y1: from.y, x2: to.x, y2: to.y },
-                snap: resolved.snap ? Space.doorToWorld(mapped.frame, resolved.snap.x, resolved.snap.y) : null,
+                snap: snapOverlay,
                 door: resolved,
                 clientX: event.clientX,
                 clientY: event.clientY,
@@ -1596,6 +1696,7 @@
             drawingPointer.angleDeg = decision.angleDeg;
             drawingPointer.preview = { x1: from.x, y1: from.y, x2: to.x, y2: to.y };
             drawingPointer.snap = null;
+            snapOverlay = null;
         }
 
         function patchLiveDrawingPreview() {
@@ -1634,7 +1735,7 @@
 
         function drawingPointerDown(event) {
             if (!store || !drawingSession || !event || event.button !== 0) return false;
-            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings]")) {
+            if (event.target && event.target.closest && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle]")) {
                 return false;
             }
             const view = store.snapshot();
@@ -1654,12 +1755,16 @@
                 syncDrawing();
                 return true;
             }
-            if (drawingTool === "shapes") return placeShapePoint(mapped.door);
-            if (drawingTool === "node_edit") return beginNodeEdit(mapped.door, view);
-            if (drawingTool === "pen") return beginPenStroke(event, mapped.door);
+            if (drawingTool === "shapes") return placeShapePoint(mapped, event);
+            if (drawingTool === "node_edit") return beginNodeEdit(mapped, view, event);
+            if (drawingTool === "pen") return beginPenStroke(event, mapped);
             if (drawingTool !== "polyline") return false;
-            const resolved = record.cursor ? resolvedDoorPoint(mapped, event.shiftKey) : mapped.door;
-            drawingSession.placePoint(resolved.x, resolved.y);
+            const resolved = resolvedDoorPoint(mapped, event.shiftKey, event.altKey) || mapped.door;
+            if (resolved.snap && resolved.snap.closes && record.cursor && record.cursor.pathId) {
+                drawingSession.close();
+            } else {
+                drawingSession.placePoint(resolved.x, resolved.y);
+            }
             drawingPointer = null;
             resetDrawingEntry();
             syncDrawing();
@@ -1790,8 +1895,11 @@
             return fields;
         }
 
-        function placeShapePoint(door) {
+        function placeShapePoint(mapped, event) {
             const Space = drawingSpaceApi();
+            const door = mapped && mapped.frame
+                ? resolveSmartPoint(mapped.door, { alt: event && event.altKey, anchor: shapeAnchor, frame: mapped.frame })
+                : mapped && mapped.door;
             if (!Space || !door) return false;
             if (!shapeAnchor) {
                 shapeAnchor = { x: door.x, y: door.y };
@@ -1823,8 +1931,9 @@
             return created || true;
         }
 
-        function beginNodeEdit(door, view) {
+        function beginNodeEdit(mapped, view, event) {
             const Space = drawingSpaceApi();
+            const door = mapped && mapped.door;
             const scale = Number(view.viewport.scale) || 1;
             const hit = drawingSession.hitNode(door, Space.thresholdMm(scale));
             shapeEntry = {};
@@ -1835,7 +1944,15 @@
             }
             if (hit && hit.kind === "node") {
                 drawingSession.selectNode(hit.pathId, hit.nodeId);
-                nodeDrag = { kind: "node", pathId: hit.pathId, nodeId: hit.nodeId, history: false };
+                const path = (activeDrawingRecord().document.paths || []).find((row) => row.id === hit.pathId);
+                const node = path && path.nodes.find((row) => row.id === hit.nodeId);
+                nodeDrag = {
+                    kind: "node",
+                    pathId: hit.pathId,
+                    nodeId: hit.nodeId,
+                    history: false,
+                    origin: node ? { x: node.x_mm, y: node.y_mm } : { x: door.x, y: door.y },
+                };
                 syncDrawing();
                 return true;
             }
@@ -1851,9 +1968,27 @@
                 const mapped = doorPointFromEvent(view, event);
                 if (!mapped) return;
                 const options = { history: nodeDrag.history !== true };
+                let door = mapped.door;
+                if (nodeDrag.kind === "node") {
+                    const path = (activeDrawingRecord().document.paths || []).find((row) => row.id === nodeDrag.pathId);
+                    const blockPoints = [];
+                    (path && path.segments || []).forEach((segment) => {
+                        if (segment.from_node !== nodeDrag.nodeId && segment.to_node !== nodeDrag.nodeId) return;
+                        const otherId = segment.from_node === nodeDrag.nodeId ? segment.to_node : segment.from_node;
+                        const other = path.nodes.find((row) => row.id === otherId);
+                        if (other) blockPoints.push({ x: other.x_mm, y: other.y_mm });
+                    });
+                    door = resolveSmartPoint(mapped.door, {
+                        alt: event && event.altKey,
+                        frame: mapped.frame,
+                        anchor: nodeDrag.origin,
+                        exclude: { pathId: nodeDrag.pathId, nodeId: nodeDrag.nodeId },
+                        blockPoints,
+                    });
+                }
                 const moved = nodeDrag.kind === "control"
-                    ? drawingSession.moveBezierControl(nodeDrag.pathId, nodeDrag.segmentId, nodeDrag.controlIndex, mapped.door.x, mapped.door.y, options)
-                    : drawingSession.moveNode(nodeDrag.pathId, nodeDrag.nodeId, mapped.door.x, mapped.door.y, options);
+                    ? drawingSession.moveBezierControl(nodeDrag.pathId, nodeDrag.segmentId, nodeDrag.controlIndex, door.x, door.y, options)
+                    : drawingSession.moveNode(nodeDrag.pathId, nodeDrag.nodeId, door.x, door.y, options);
                 if (moved) nodeDrag.history = true;
                 syncDrawing();
                 return;
@@ -1864,6 +1999,12 @@
             const Space = drawingSpaceApi();
             const host = ensureShell().querySelector("[data-abe-canvas]");
             if (!mapped || !Space || !host || !CanvasRenderer.patchShapePreview) return;
+            const snapped = resolveSmartPoint(mapped.door, {
+                alt: event && event.altKey,
+                anchor: shapeAnchor,
+                frame: mapped.frame,
+            });
+            mapped.door = { x: snapped.x, y: snapped.y };
             const frame = drawingFrame(view);
             let figure = null;
             if (drawingShapeKind === "bezier") {
@@ -1887,6 +2028,9 @@
             }
             const points = figure.points.map((point) => (frame ? Space.doorToWorld(frame, point.x, point.y) : point));
             CanvasRenderer.patchShapePreview(host, points, figure.closed !== false);
+            if (CanvasRenderer.patchDrawingPreview) {
+                CanvasRenderer.patchDrawingPreview(host, null, snapOverlay, null);
+            }
         }
 
         function commitShapeForm() {
@@ -1956,13 +2100,17 @@
             CanvasRenderer.patchPenPreview(host, points);
         }
 
-        function beginPenStroke(event, door) {
+        function beginPenStroke(event, mapped) {
+            const door = mapped && mapped.door;
             if (!event || event.button !== 0 || spaceHeld || event.isPrimary === false || !door) return false;
             if (penGesture && penGesture.active()) return event.pointerId === penGesture.pointerId();
             const Space = drawingSpaceApi();
             if (!Space || typeof Space.createPenGesture !== "function") return false;
+            const snapped = mapped.frame
+                ? resolveSmartPoint(door, { alt: event.altKey === true, frame: mapped.frame })
+                : door;
             penGesture = Space.createPenGesture(penSmoothing);
-            if (!penGesture.pointerDown({ pointerId: event.pointerId, x: door.x, y: door.y })) {
+            if (!penGesture.pointerDown({ pointerId: event.pointerId, x: snapped.x, y: snapped.y })) {
                 penGesture = null;
                 return false;
             }
@@ -2000,7 +2148,14 @@
                 return true;
             }
             const mapped = doorPointFromEvent(store.snapshot(), event);
-            if (mapped) penGesture.pointerMove({ pointerId: event.pointerId, x: mapped.door.x, y: mapped.door.y });
+            if (mapped) {
+                penGesture.pointerMove({ pointerId: event.pointerId, x: mapped.door.x, y: mapped.door.y });
+                resolveSmartPoint(mapped.door, { alt: event.altKey === true, frame: mapped.frame });
+                const host = ensureShell().querySelector("[data-abe-canvas]");
+                if (host && CanvasRenderer && CanvasRenderer.patchDrawingPreview) {
+                    CanvasRenderer.patchDrawingPreview(host, null, snapOverlay, null);
+                }
+            }
             paintPenPreview();
             return true;
         }
@@ -2009,10 +2164,13 @@
             if (!penGesture || !penGesture.active()) return;
             if (event && event.pointerId != null && penGesture.pointerId() !== event.pointerId) return;
             const mapped = event && store ? doorPointFromEvent(store.snapshot(), event) : null;
+            const snapped = mapped && mapped.door
+                ? resolveSmartPoint(mapped.door, { alt: event.altKey === true, frame: mapped.frame })
+                : null;
             const sample = {
                 pointerId: penGesture.pointerId(),
-                x: mapped ? mapped.door.x : null,
-                y: mapped ? mapped.door.y : null,
+                x: snapped ? snapped.x : (mapped ? mapped.door.x : null),
+                y: snapped ? snapped.y : (mapped ? mapped.door.y : null),
             };
             penCommitting = true;
             let built = null;
@@ -2041,6 +2199,24 @@
             syncDrawing();
         }
 
+        function toggleSnapMenu() {
+            const view = store && store.snapshot();
+            if (!view || view.editorMode !== "drawing" || !view.drawingTarget || view.drawingTarget.canEdit !== true) return;
+            snapMenuOpen = snapMenuOpen !== true;
+            syncDrawing();
+        }
+
+        function setSnapOption(name, value) {
+            const Snap = drawingSnapApi();
+            const next = snapState();
+            if (name === "spacing") next.spacing = Number(value);
+            else next[name] = value === true || value === "true" || value === "1";
+            snapSettings = Snap && Snap.normalizeSettings ? Snap.normalizeSettings(next) : next;
+            snapHold = null;
+            if (!snapSettings.enabled) snapOverlay = null;
+            syncDrawing();
+        }
+
         function setPenSmoothing(level) {
             const Space = drawingSpaceApi();
             penSmoothing = Space && Space.penLevel ? Space.penLevel(level).id : "low";
@@ -2057,6 +2233,8 @@
             shapeAnchor = null;
             shapeEntry = {};
             nodeDrag = null;
+            snapHold = null;
+            snapOverlay = null;
             resetDrawingEntry();
             const record = activeDrawingRecord();
             if (record) record.measureError = null;
@@ -2397,6 +2575,8 @@
                 },
                 setEditorMode: (mode) => setEditorMode(mode),
                 setDrawingTool: (tool) => setDrawingTool(tool),
+                toggleSnapMenu: () => toggleSnapMenu(),
+                setSnapOption: (name, value) => setSnapOption(name, value),
                 setPenSmoothing: (level) => setPenSmoothing(level),
                 setShapeKind: (kind) => {
                     drawingShapeKind = kind || "rectangle";
@@ -2534,6 +2714,23 @@
                 onStagePointerUp: (event) => {
                     finishPenStroke(event);
                     nodeDrag = null;
+                    snapHold = null;
+                    snapOverlay = null;
+                    if (drawingPointer) drawingPointer.snap = null;
+                    const snapHost = ensureShell().querySelector("[data-abe-canvas]");
+                    if (snapHost && CanvasRenderer && CanvasRenderer.patchDrawingPreview && store && store.snapshot().editorMode === "drawing") {
+                        CanvasRenderer.patchDrawingPreview(
+                            snapHost,
+                            drawingPointer && drawingPointer.preview,
+                            null,
+                            drawingPointer ? {
+                                lengthMm: drawingPointer.lengthMm,
+                                angleDeg: drawingPointer.angleDeg,
+                                clientX: drawingPointer.clientX,
+                                clientY: drawingPointer.clientY,
+                            } : null
+                        );
+                    }
                     if (measureInteraction && (
                         measureInteraction.isToolGestureActive()
                         || (store && store.snapshot().measureToolActive)

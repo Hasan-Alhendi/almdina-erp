@@ -1385,6 +1385,12 @@
             if ((tool.id === "shapes" || tool.id === "node_edit" || tool.id === "pen") && enabled) {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, true);
             }
+            if (tool.id === "snap" && enabled) {
+                const settings = drawing.snapSettings || {};
+                const snapOn = settings.enabled !== false;
+                const menuOpen = drawing.snapMenuOpen === true;
+                return `<button type="button" class="abe-drawing-tool${menuOpen ? " is-active" : ""}" data-abe-snap-toggle="1" aria-pressed="${snapOn ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+            }
             return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
         }).join("");
         const actions = enabled && activeTool === "polyline" ? `
@@ -1399,6 +1405,7 @@
             <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
             ${shapeMenuHtml(drawing)}
             ${penSettingsHtml(drawing, enabled)}
+            ${snapMenuHtml(drawing, enabled)}
             ${measure}
             ${shapeFormHtml(drawing)}
             ${actions}
@@ -1493,6 +1500,28 @@
         </div>`;
     }
 
+    function snapMenuHtml(drawing, enabled) {
+        if (!enabled || !drawing || drawing.snapMenuOpen !== true) return "";
+        const settings = drawing.snapSettings || {};
+        const box = (key, label) => {
+            const checked = key === "grid" ? settings.grid === true : settings[key] !== false;
+            return `<label><input type="checkbox" data-abe-snap-option="${esc(key)}"${checked ? " checked" : ""} />${esc(__(label))}</label>`;
+        };
+        const spacing = [1, 5, 10, 25, 50].indexOf(Number(settings.spacing)) >= 0 ? Number(settings.spacing) : 10;
+        const options = [1, 5, 10, 25, 50].map((step) => (
+            `<option value="${step}"${step === spacing ? " selected" : ""}>${step} mm</option>`
+        )).join("");
+        return `<div class="abe-snap-menu" data-abe-snap-menu="1" dir="${esc(pageDirection())}">
+            ${box("enabled", "Smart Snap")}
+            ${box("endpoint", "Endpoint")}
+            ${box("midpoint", "Midpoint")}
+            ${box("intersection", "Intersection")}
+            ${box("alignment", "Horizontal / Vertical")}
+            ${box("grid", "Grid")}
+            <label><span>${esc(__("Grid spacing"))}</span><select data-abe-snap-spacing="1" aria-label="${esc(__("Grid spacing"))}">${options}</select></label>
+        </div>`;
+    }
+
     function shapeMenuHtml(drawing) {
         if (!drawing || drawing.tool !== "shapes") return "";
         const Space = window.AlmdinaBoardEditor && window.AlmdinaBoardEditor.DrawingSpace;
@@ -1577,9 +1606,7 @@
             const preview = drawing.preview;
             parts.push(`<line data-abe-drawing-preview="1" x1="${preview.x1}" y1="${preview.y1}" x2="${preview.x2}" y2="${preview.y2}" stroke="#0b5fff" stroke-width="1.4" stroke-dasharray="7 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
         }
-        if (drawing.snap) {
-            parts.push(`<circle data-abe-drawing-snap="1" cx="${drawing.snap.x}" cy="${drawing.snap.y}" r="${6 / safeScale}" fill="none" stroke="#f79009" stroke-width="${2 / safeScale}" pointer-events="none"/>`);
-        }
+        if (drawing.snap) parts.push(drawingSnapMarkup(drawing.snap, safeScale));
         return parts.join("");
     }
 
@@ -2381,6 +2408,31 @@
                 }
             });
         });
+        host.querySelectorAll("[data-abe-snap-toggle]").forEach((button) => {
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.toggleSnapMenu) handlers.toggleSnapMenu();
+            });
+        });
+        host.querySelectorAll("[data-abe-snap-menu]").forEach((menu) => {
+            const stop = (event) => event.stopPropagation();
+            menu.addEventListener("pointerdown", stop);
+            menu.addEventListener("click", stop);
+        });
+        host.querySelectorAll("[data-abe-snap-option]").forEach((input) => {
+            input.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setSnapOption) {
+                    handlers.setSnapOption(input.getAttribute("data-abe-snap-option"), input.checked === true);
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-snap-spacing]").forEach((select) => {
+            select.addEventListener("change", (event) => {
+                event.stopPropagation();
+                if (handlers && handlers.setSnapOption) handlers.setSnapOption("spacing", select.value);
+            });
+        });
         host.querySelectorAll("[data-abe-pen-settings]").forEach((bar) => {
             const stop = (event) => event.stopPropagation();
             bar.addEventListener("pointerdown", stop);
@@ -2626,7 +2678,7 @@
                 return;
             }
             const drawingField = event.target && event.target.closest
-                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings]");
+                && event.target.closest("[data-abe-drawing-cursor], [data-abe-drawing-measure], [data-abe-shape-form], [data-abe-pen-settings], [data-abe-snap-menu], [data-abe-snap-toggle]");
             if (drawingField) return;
             if (event.button === 0 && handlers && handlers.drawingPointerDown && handlers.drawingPointerDown(event)) {
                 ignoreBackgroundClick = true;
@@ -3099,6 +3151,29 @@
         placeDrawingCursor(host, cursor, hud, preview);
     }
 
+    function drawingSnapMarkup(snap, scale) {
+        if (!snap || snap.x == null || snap.y == null) return "";
+        const safeScale = Math.max(0.05, Number(scale) || 1);
+        const type = snap.type || "endpoint";
+        const label = snap.labelKey ? esc(__(snap.labelKey)) : "";
+        const unit = 1 / safeScale;
+        const guide = snap.guide
+            ? `<line data-abe-snap-guide="1" x1="${snap.guide.x1}" y1="${snap.guide.y1}" x2="${snap.guide.x2}" y2="${snap.guide.y2}" stroke="#f79009" stroke-width="${unit}" pointer-events="none"/>`
+            : "";
+        let glyph = `<rect x="${snap.x - (4 * unit)}" y="${snap.y - (4 * unit)}" width="${8 * unit}" height="${8 * unit}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        if (type === "midpoint") {
+            glyph = `<polygon points="${snap.x},${snap.y - (6 * unit)} ${snap.x + (6 * unit)},${snap.y + (4 * unit)} ${snap.x - (6 * unit)},${snap.y + (4 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        } else if (type === "intersection") {
+            glyph = `<path d="M${snap.x - (5 * unit)} ${snap.y - (5 * unit)} L${snap.x + (5 * unit)} ${snap.y + (5 * unit)} M${snap.x + (5 * unit)} ${snap.y - (5 * unit)} L${snap.x - (5 * unit)} ${snap.y + (5 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        } else if (type === "grid") {
+            glyph = `<path d="M${snap.x} ${snap.y - (6 * unit)} V${snap.y + (6 * unit)} M${snap.x - (6 * unit)} ${snap.y} H${snap.x + (6 * unit)}" fill="none" stroke="#b54708" stroke-width="${1.6 * unit}" pointer-events="none"/>`;
+        }
+        const text = label
+            ? `<text data-abe-snap-label="${label}" x="${snap.x + (12 * unit)}" y="${snap.y + (16 * unit)}" fill="#b54708" font-size="${11 * unit}" pointer-events="none">${label}</text>`
+            : "";
+        return `<g data-abe-drawing-snap="1" data-abe-snap-type="${esc(type)}" pointer-events="none">${guide}${glyph}${text}</g>`;
+    }
+
     function patchDrawingPreview(host, preview, snap, hud) {
         const world = host && host.querySelector(".abe-world");
         if (world) {
@@ -3118,18 +3193,53 @@
                 line.setAttribute("pointer-events", "none");
                 world.appendChild(line);
             }
-            if (snap && typeof document !== "undefined" && document.createElementNS) {
+            if (snap && snap.x != null && typeof document !== "undefined" && document.createElementNS) {
                 const scale = Math.max(0.05, Number((host.__abeWorldMetrics || {}).scale) || 1);
-                const marker = document.createElementNS(svgNs, "circle");
-                marker.setAttribute("data-abe-drawing-snap", "1");
-                marker.setAttribute("cx", String(snap.x));
-                marker.setAttribute("cy", String(snap.y));
-                marker.setAttribute("r", String(6 / scale));
-                marker.setAttribute("fill", "none");
-                marker.setAttribute("stroke", "#f79009");
-                marker.setAttribute("stroke-width", String(2 / scale));
-                marker.setAttribute("pointer-events", "none");
-                world.appendChild(marker);
+                const unit = 1 / scale;
+                const type = snap.type || "endpoint";
+                const group = document.createElementNS(svgNs, "g");
+                group.setAttribute("data-abe-drawing-snap", "1");
+                group.setAttribute("data-abe-snap-type", type);
+                group.setAttribute("pointer-events", "none");
+                if (snap.guide) {
+                    const guide = document.createElementNS(svgNs, "line");
+                    guide.setAttribute("data-abe-snap-guide", "1");
+                    guide.setAttribute("x1", String(snap.guide.x1));
+                    guide.setAttribute("y1", String(snap.guide.y1));
+                    guide.setAttribute("x2", String(snap.guide.x2));
+                    guide.setAttribute("y2", String(snap.guide.y2));
+                    guide.setAttribute("stroke", "#f79009");
+                    guide.setAttribute("pointer-events", "none");
+                    group.appendChild(guide);
+                }
+                const glyph = document.createElementNS(svgNs, type === "midpoint" ? "polygon" : (type === "endpoint" ? "rect" : "path"));
+                glyph.setAttribute("fill", "none");
+                glyph.setAttribute("stroke", "#b54708");
+                glyph.setAttribute("stroke-width", String(1.6 * unit));
+                glyph.setAttribute("pointer-events", "none");
+                if (type === "midpoint") {
+                    glyph.setAttribute("points", `${snap.x},${snap.y - (6 * unit)} ${snap.x + (6 * unit)},${snap.y + (4 * unit)} ${snap.x - (6 * unit)},${snap.y + (4 * unit)}`);
+                } else if (type === "endpoint") {
+                    glyph.setAttribute("x", String(snap.x - (4 * unit)));
+                    glyph.setAttribute("y", String(snap.y - (4 * unit)));
+                    glyph.setAttribute("width", String(8 * unit));
+                    glyph.setAttribute("height", String(8 * unit));
+                } else if (type === "grid") {
+                    glyph.setAttribute("d", `M${snap.x} ${snap.y - (6 * unit)} V${snap.y + (6 * unit)} M${snap.x - (6 * unit)} ${snap.y} H${snap.x + (6 * unit)}`);
+                } else {
+                    glyph.setAttribute("d", `M${snap.x - (5 * unit)} ${snap.y - (5 * unit)} L${snap.x + (5 * unit)} ${snap.y + (5 * unit)} M${snap.x + (5 * unit)} ${snap.y - (5 * unit)} L${snap.x - (5 * unit)} ${snap.y + (5 * unit)}`);
+                }
+                group.appendChild(glyph);
+                if (snap.labelKey) {
+                    const text = document.createElementNS(svgNs, "text");
+                    text.setAttribute("data-abe-snap-label", String(__(snap.labelKey)));
+                    text.setAttribute("x", String(snap.x + (12 * unit)));
+                    text.setAttribute("y", String(snap.y + (16 * unit)));
+                    text.setAttribute("pointer-events", "none");
+                    text.textContent = String(__(snap.labelKey));
+                    group.appendChild(text);
+                }
+                world.appendChild(group);
             }
         }
         patchDrawingMeasure(host, hud, preview);

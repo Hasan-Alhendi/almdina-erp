@@ -916,12 +916,30 @@ button.abe-drawing-tool:disabled {
   cursor: not-allowed;
 }
 
-.abe-shape-menu {
+.abe-shape-menu,
+.abe-snap-menu {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px;
+  align-items: center;
+  gap: 4px 8px;
   max-width: 36rem;
+}
+
+.abe-snap-menu label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.abe-snap-menu select {
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: inherit;
+  font-size: 12px;
 }
 
 .abe-shape-kind {

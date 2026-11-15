@@ -220,6 +220,7 @@ async function pageBootstrapLoadsVersionedScripts() {
         "editor_mode.js",
         "drawing_space.js",
         "drawing_model.js",
+        "drawing_snap.js",
         "store.js",
         "canvas_renderer.js",
         "sidebar_renderer.js",

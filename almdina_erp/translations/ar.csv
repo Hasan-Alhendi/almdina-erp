@@ -3608,3 +3608,12 @@ The stroke is too short.,الخط أقصر من أن يُحفظ.
 This stroke has too many points to store. The existing drawing was kept.,هذا الخط يحتوي نقاطًا أكثر مما يمكن حفظه. بقي الرسم السابق كما هو.
 The stroke ends near its start. Close the path if you want a loop.,نهاية الخط قريبة من بدايته. أغلق المسار إذا أردت حلقة.
 The path could not be closed.,تعذر إغلاق المسار.
+Smart Snap,الالتقاط الذكي
+Endpoint,نهاية
+Midpoint,منتصف
+Intersection,تقاطع
+Grid,شبكة
+Horizontal / Vertical,أفقي / عمودي
+Grid spacing,خطوة الشبكة
+Horizontal,أفقي
+Vertical,عمودي
