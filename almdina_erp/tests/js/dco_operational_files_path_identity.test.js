@@ -29,6 +29,8 @@ assert.ok(panel.includes("collectPhysicalPaths("));
 assert.ok(translations.includes("المسار {0}"));
 assert.ok(translations.includes("مسار مشترك"));
 assert.ok(translations.includes("التمريرة {0}: العمق {1} مم"));
+assert.ok(translations.includes("استعادة الاتجاهات المتعارضة"));
+assert.ok(panel.includes("clear_conflicts: 1"));
 
 function motionChain(points, depth, closed) {
     const start = points[0];
@@ -407,6 +409,8 @@ const state = {
     expanded: {},
     selectedPathKey: "",
     selectedExecutionPathId: "",
+    selectedPathIdentity: null,
+    vectorSelection: ["kept-vector-a", "kept-vector-b"],
     program: null,
     customizing: {},
 };
@@ -426,6 +430,34 @@ assert.equal(state.selectedExecutionPathId, ten.execution_path_id);
 assert.equal(state.selectedPathKey, ten.path_key);
 assert.equal(listBody.scrolledTo, ten.execution_path_id);
 assert.deepEqual(Array.from(new Set(previewDom.litIds())), [ten.execution_path_id]);
+
+assert.equal(
+    ux.ensureExecutionSelection(listBody, workspace, sheet, state, ten.execution_path_id),
+    true
+);
+assert.equal(
+    state.selectedExecutionPathId,
+    ten.execution_path_id,
+    "Reverse Direction selection is idempotent instead of toggling off"
+);
+assert.deepEqual(state.vectorSelection, ["kept-vector-a", "kept-vector-b"]);
+
+const rebuiltPhysical = physical.map(item => (
+    item.execution_path_id === ten.execution_path_id
+        ? Object.assign({}, item, {
+            execution_path_id: "cut_path::rebuilt-execution-id",
+            path_key: "cut_path:center:rebuilt-key",
+            vector_id: "cut_path:center:rebuilt-key",
+        })
+        : item
+));
+const restoredSelection = ux.restoreSelectedPhysicalPath(state, rebuiltPhysical);
+assert.equal(restoredSelection.execution_path_id, "cut_path::rebuilt-execution-id");
+assert.equal(state.selectedExecutionPathId, "cut_path::rebuilt-execution-id");
+assert.equal(state.selectedPathKey, "cut_path:center:rebuilt-key");
+assert.deepEqual(state.vectorSelection, ["kept-vector-a", "kept-vector-b"]);
+ux.restoreSelectedPhysicalPath(state, physical);
+assert.equal(state.selectedExecutionPathId, ten.execution_path_id);
 
 assert.equal(
     ux.applyExecutionSelection(listBody, workspace, sheet, state, ten.execution_path_id),

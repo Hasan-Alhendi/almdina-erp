@@ -397,6 +397,44 @@ def _identity(points: Sequence[tuple[float, float]], closed: bool) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _closed_rotation(
+    points: Sequence[tuple[float, float]],
+) -> tuple[tuple[float, float], ...]:
+    """Canonical cyclic start without changing travel direction."""
+
+    sequence = tuple(points)
+    if not sequence:
+        return ()
+    minimum = min(sequence)
+    candidates = (
+        sequence[index:] + sequence[:index]
+        for index, point in enumerate(sequence)
+        if point == minimum
+    )
+    return min(candidates)
+
+
+def directed_path_identity(
+    points: Sequence[tuple[float, float]],
+    closed: bool,
+) -> str:
+    """Path identity that ignores only the cyclic start of a closed ring."""
+
+    sequence = tuple(
+        (round(float(point[0]), 3), round(float(point[1]), 3))
+        for point in points
+    )
+    if (
+        closed
+        and len(sequence) > 2
+        and math.dist(sequence[0], sequence[-1]) <= CHAIN_TOLERANCE_MM
+    ):
+        sequence = sequence[:-1]
+    if closed:
+        sequence = _closed_rotation(sequence)
+    return _identity(sequence, closed)
+
+
 def selectable_vector_id(path_key: str, shape_id: str, *, shared: bool) -> str:
     """Identity of one selectable vector.
 
@@ -448,7 +486,10 @@ def direction_invariant_identity(
 ) -> str:
     """Same value for a polyline and its reverse. Depth passes of one shape share it."""
 
-    sequence = [(round(float(point[0]), 3), round(float(point[1]), 3)) for point in points]
+    sequence = tuple(
+        (round(float(point[0]), 3), round(float(point[1]), 3))
+        for point in points
+    )
     if (
         closed
         and len(sequence) > 2
@@ -457,8 +498,14 @@ def direction_invariant_identity(
         sequence = sequence[:-1]
     if len(sequence) < 2:
         return _identity(sequence, closed)
-    forward = _identity(sequence, closed)
-    backward = _identity(list(reversed(sequence)), closed)
+    if closed:
+        forward_points = _closed_rotation(sequence)
+        backward_points = _closed_rotation(tuple(reversed(sequence)))
+    else:
+        forward_points = sequence
+        backward_points = tuple(reversed(sequence))
+    forward = _identity(forward_points, closed)
+    backward = _identity(backward_points, closed)
     return forward if forward <= backward else backward
 
 
@@ -1075,6 +1122,7 @@ __all__ = [
     "CncToolpath",
     "build_board_program",
     "chain_line_paths",
+    "directed_path_identity",
     "direction_invariant_identity",
     "orient_path",
     "apply_plan_diameter_gate",

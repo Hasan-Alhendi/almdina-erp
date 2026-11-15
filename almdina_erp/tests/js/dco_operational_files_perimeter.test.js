@@ -195,6 +195,71 @@ const preview = ux.cutPathPreviewMarkup(makeConnectedProgram(), {
 });
 assert.ok(preview.includes(String(connectedPaths.find(item => item.is_sheet_perimeter).path_number)));
 
+const closedBeforeProfile = {
+    sheet_width_mm: 300,
+    sheet_length_mm: 200,
+    operations: [{
+        operation_key: "cut_path",
+        toolpaths: [{
+            path_key: "cut_path:closed-before-profile",
+            shape_id: "closed-shape",
+            closed: true,
+            ready: false,
+            issues: ["preset_missing"],
+            sequence: 1,
+            points: [[0, 0], [100, 0], [100, 60], [0, 60]],
+            motions: [],
+        }, {
+            path_key: "cut_path:already-closed",
+            shape_id: "already-closed-shape",
+            closed: true,
+            ready: false,
+            issues: ["preset_missing"],
+            sequence: 2,
+            points: [[120, 0], [200, 0], [200, 60], [120, 60], [120, 0]],
+            motions: [],
+        }, {
+            path_key: "cut_path:open",
+            shape_id: "open-shape",
+            closed: false,
+            ready: false,
+            issues: ["preset_missing"],
+            sequence: 3,
+            points: [[0, 100], [100, 100], [100, 150]],
+            motions: [],
+        }, {
+            path_key: "cut_path:sloped-closed",
+            shape_id: "sloped-closed-shape",
+            closed: true,
+            ready: false,
+            issues: ["preset_missing"],
+            sequence: 4,
+            points: [[140, 100], [230, 115], [210, 170], [150, 155]],
+            motions: [],
+        }],
+    }],
+};
+const preProfileMarkup = ux.cutPathPreviewMarkup(closedBeforeProfile, { markerScope: "pre-profile" });
+assert.ok(
+    preProfileMarkup.includes('points="0,0 100,0 100,60 0,60 0,0"'),
+    "a closed path without a calculated profile draws its closing edge"
+);
+assert.ok(
+    preProfileMarkup.includes('points="120,0 200,0 200,60 120,60 120,0"'),
+    "an existing closing point is not duplicated"
+);
+assert.ok(
+    !preProfileMarkup.includes('points="120,0 200,0 200,60 120,60 120,0 120,0"')
+);
+assert.ok(
+    preProfileMarkup.includes('points="0,100 100,100 100,150"'),
+    "an open path stays open"
+);
+assert.ok(
+    preProfileMarkup.includes('points="140,100 230,115 210,170 150,155 140,100"'),
+    "a sloped closed perimeter keeps its closing segment"
+);
+
 // In-place perimeter control updates must keep the fieldset node (event host) alive.
 const radios = {
     separate: {

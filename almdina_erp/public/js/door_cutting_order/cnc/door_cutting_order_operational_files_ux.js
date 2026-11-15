@@ -368,6 +368,7 @@
             customizing: {},
             selectedPathKey: "",
             selectedExecutionPathId: "",
+            selectedPathIdentity: null,
             program: null,
         };
         if (joinMode === "connected") {
@@ -1189,7 +1190,7 @@
                     }
                     if (reverse && pathKey && live.workspace.can_prepare) {
                         if (executionId) {
-                            applyExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
+                            ensureExecutionSelection(body, live.workspace, live.sheet, live.state, executionId);
                         }
                         requestPathReverse(
                             live.frm,
@@ -1246,6 +1247,7 @@
                 if (settingsHit && !settingsHit.getAttribute("data-select-execution")) {
                     live.state.selectedPathKey = settingsHit.getAttribute("data-select-path") || "";
                     live.state.selectedExecutionPathId = "";
+                    live.state.selectedPathIdentity = null;
                     refreshSelection();
                     return;
                 }
@@ -2540,6 +2542,34 @@
         });
     }
 
+    function requestDirectionConflictReset(frm, dialog, workspace, sheet, state) {
+        if (!state || state.reverseBusy) return;
+        state.reverseBusy = "conflicts";
+        frappe.call({
+            method: `${METHOD}.set_cnc_path_direction`,
+            args: Object.assign({}, sheetGenerateArgs(frm, workspace, sheet, state), {
+                path_key: "",
+                clear_conflicts: 1,
+            }),
+            callback() {
+                state.reverseBusy = "";
+                state.shownDirectionSignature = "";
+                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
+            },
+            error(error) {
+                state.reverseBusy = "";
+                const problem = serverErrorText(error)
+                    || translate("The conflicting saved directions could not be restored.");
+                showSheetIssueDialog(translate("The path direction was not changed."), [{
+                    problem,
+                    target: "",
+                    action: translate("Try restoring the conflicting directions again."),
+                    code: "path_reverse_unsupported",
+                }]);
+            },
+        });
+    }
+
     function serverErrorText(error) {
         const ui = window.AlmdinaFrontend;
         if (ui && typeof ui.normalizeError === "function") {
@@ -2588,14 +2618,14 @@
             secondary_action_label: translate("Close"),
             secondary_action() { dialogBox.hide(); },
         });
-        const restore = options && options.restorePath
-            ? `<p><button type="button" class="btn btn-default btn-sm" data-restore-direction>${escapeHtml(translate("Restore the original direction"))}</button></p>`
+        const restore = options && (options.restorePath || options.restoreConflicts)
+            ? `<p><button type="button" class="btn btn-default btn-sm" data-restore-direction>${escapeHtml(translate(options.restoreConflicts ? "Restore conflicting directions" : "Restore the original direction"))}</button></p>`
             : "";
         dialogBox.$body.html(`<div class="almdina-ui"><div class="alm-error-summary" role="alert">${cards}${restore}</div></div>`);
-        if (options && options.restorePath && dialogBox.$body) {
+        if (options && (options.restorePath || options.restoreConflicts) && dialogBox.$body) {
             dialogBox.$body.find("[data-restore-direction]").on("click", () => {
                 dialogBox.hide();
-                if (typeof options.onRestore === "function") options.onRestore(options.restorePath);
+                if (typeof options.onRestore === "function") options.onRestore(options.restorePath || "");
             });
         }
         dialogBox.show();
@@ -2903,6 +2933,81 @@
         return collectPhysicalPaths(program).find(item => item.execution_path_id === selected) || null;
     }
 
+    function pathSelectionIdentity(path) {
+        if (!path) return null;
+        return {
+            path_key: String(path.path_key || ""),
+            shape_id: String(path.shape_id || ""),
+            vector_id: String(path.vector_id || ""),
+            geometry_fingerprint: String(path.geometry_fingerprint || ""),
+            operation_key: String(path.operation_key || ""),
+        };
+    }
+
+    function findPhysicalPathByIdentity(paths, identity) {
+        const rows = Array.isArray(paths) ? paths : [];
+        if (!identity) return null;
+        const shape = String(identity.shape_id || "");
+        const geometry = String(identity.geometry_fingerprint || "");
+        const matches = (predicate) => {
+            const found = rows.filter(predicate);
+            return found.length === 1 ? found[0] : null;
+        };
+        if (identity.vector_id) {
+            const vector = matches(path => (
+                String(path.vector_id || "") === String(identity.vector_id)
+                && (!shape || String(path.shape_id || "") === shape)
+                && (!geometry || String(path.geometry_fingerprint || "") === geometry)
+            ));
+            if (vector) return vector;
+        }
+        if (identity.path_key) {
+            const keyed = matches(path => (
+                String(path.path_key || "") === String(identity.path_key)
+                && (!shape || String(path.shape_id || "") === shape)
+                && (!geometry || String(path.geometry_fingerprint || "") === geometry)
+            ));
+            if (keyed) return keyed;
+        }
+        if (shape && geometry) {
+            return matches(path => (
+                String(path.shape_id || "") === shape
+                && String(path.geometry_fingerprint || "") === geometry
+                && (!identity.operation_key
+                    || String(path.operation_key || "") === String(identity.operation_key))
+            ));
+        }
+        if (!shape && geometry) {
+            return matches(path => (
+                String(path.geometry_fingerprint || "") === geometry
+                && (!identity.operation_key
+                    || String(path.operation_key || "") === String(identity.operation_key))
+            ));
+        }
+        return null;
+    }
+
+    function restoreSelectedPhysicalPath(state, paths) {
+        if (!state) return null;
+        const rows = Array.isArray(paths) ? paths : [];
+        if (!state.selectedExecutionPathId && !state.selectedPathIdentity) return null;
+        let selected = rows.find(path => (
+            state.selectedExecutionPathId
+            && path.execution_path_id === state.selectedExecutionPathId
+        )) || null;
+        if (!selected) selected = findPhysicalPathByIdentity(rows, state.selectedPathIdentity);
+        if (!selected) {
+            state.selectedExecutionPathId = "";
+            state.selectedPathKey = "";
+            state.selectedPathIdentity = null;
+            return null;
+        }
+        state.selectedExecutionPathId = selected.execution_path_id;
+        state.selectedPathKey = selected.path_key;
+        state.selectedPathIdentity = pathSelectionIdentity(selected);
+        return selected;
+    }
+
     function cutExecutionArrowSegment(points, closed) {
         if (!Array.isArray(points) || points.length < 2) return null;
         if (closed && points.length >= 3) {
@@ -2914,13 +3019,29 @@
 
     function previewPathSets(item) {
         if (item && item.ready && Array.isArray(item.points) && item.points.length >= 2) {
-            return [item.points];
+            return [previewPolylinePoints(item.points, item.closed)];
         }
         const display = item && Array.isArray(item.display_paths)
             ? item.display_paths.filter(points => Array.isArray(points) && points.length >= 2)
             : [];
         if (display.length) return display;
-        return item && Array.isArray(item.points) && item.points.length >= 2 ? [item.points] : [];
+        return item && Array.isArray(item.points) && item.points.length >= 2
+            ? [previewPolylinePoints(item.points, item.closed)]
+            : [];
+    }
+
+    function previewPolylinePoints(points, closed) {
+        const shown = (Array.isArray(points) ? points : []).map(point => [
+            Number(point[0]),
+            Number(point[1]),
+        ]);
+        if (!closed || shown.length < 3) return shown;
+        const first = shown[0];
+        const last = shown[shown.length - 1];
+        if (Math.hypot(last[0] - first[0], last[1] - first[1]) > 0.05) {
+            shown.push(first.slice());
+        }
+        return shown;
     }
 
     function groupCutExecutionLabels(executionsOrPaths) {
@@ -3512,20 +3633,11 @@
         const physical = collectPhysicalPaths(program);
         const assigned = assignedVectorIds(sheet, program);
         state.program = program;
-        if (state.selectedExecutionPathId) {
-            const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
-            if (selected && assigned.has(String(selected.vector_id || ""))) {
-                state.selectedExecutionPathId = "";
-                state.selectedPathKey = "";
-            }
-        }
-        if (state.selectedExecutionPathId
-            && !physical.some(item => item.execution_path_id === state.selectedExecutionPathId)) {
+        const selectedPhysical = restoreSelectedPhysicalPath(state, physical);
+        if (selectedPhysical && assigned.has(String(selectedPhysical.vector_id || ""))) {
             state.selectedExecutionPathId = "";
-        }
-        if (state.selectedExecutionPathId) {
-            const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
-            if (selected) state.selectedPathKey = selected.path_key;
+            state.selectedPathKey = "";
+            state.selectedPathIdentity = null;
         } else if (state.selectedPathKey
             && !physical.some(item => item.path_key === state.selectedPathKey)) {
             state.selectedPathKey = "";
@@ -3584,12 +3696,14 @@
         }
     }
 
-    function applyExecutionSelection(body, workspace, sheet, state, executionPathId) {
+    function applyExecutionSelection(body, workspace, sheet, state, executionPathId, options = {}) {
         const physical = findPhysicalPath(state.program, executionPathId);
         if (!physical || physicalPathIsAssigned(sheet, physical, state.program)) return false;
-        const deselect = state.selectedExecutionPathId === physical.execution_path_id;
+        const deselect = options.toggle !== false
+            && state.selectedExecutionPathId === physical.execution_path_id;
         state.selectedExecutionPathId = deselect ? "" : physical.execution_path_id;
         state.selectedPathKey = deselect ? "" : physical.path_key;
+        state.selectedPathIdentity = deselect ? null : pathSelectionIdentity(physical);
         if (!deselect) expandLayerForPath(body, state, physical.operation_key);
         const selection = body.querySelector(".dco-operational-sheet__selection");
         if (selection) selection.textContent = selectionText(workspace, sheet, state);
@@ -3609,6 +3723,17 @@
             row.scrollIntoView({ block: "nearest" });
         }
         return true;
+    }
+
+    function ensureExecutionSelection(body, workspace, sheet, state, executionPathId) {
+        return applyExecutionSelection(
+            body,
+            workspace,
+            sheet,
+            state,
+            executionPathId,
+            { toggle: false }
+        );
     }
 
     function requestSheetProgramPreview(frm, dialog, workspace, sheet, state) {
@@ -3636,14 +3761,7 @@
                 if (dialog._almdinaSheet) dialog._almdinaSheet.program = program;
                 state.program = program;
                 const physical = collectPhysicalPaths(program);
-                if (state.selectedExecutionPathId
-                    && !physical.some(item => item.execution_path_id === state.selectedExecutionPathId)) {
-                    state.selectedExecutionPathId = "";
-                    state.selectedPathKey = "";
-                } else if (state.selectedExecutionPathId) {
-                    const selected = physical.find(item => item.execution_path_id === state.selectedExecutionPathId);
-                    if (selected) state.selectedPathKey = selected.path_key;
-                }
+                restoreSelectedPhysicalPath(state, physical);
                 syncPhysicalPathList(liveBody, workspace, sheet, state, program, dialog);
                 paintCutPathPreview(livePreview, {
                     status: "ready",
@@ -3678,9 +3796,9 @@
                         translate("The path direction was not changed."),
                         direction,
                         {
-                            restorePath: direction[0] && direction[0].target,
-                            onRestore(pathKey) {
-                                requestPathReverse(frm, dialog, workspace, sheet, state, pathKey, "", true);
+                            restoreConflicts: true,
+                            onRestore() {
+                                requestDirectionConflictReset(frm, dialog, workspace, sheet, state);
                             },
                         }
                     );
@@ -4093,6 +4211,8 @@
         collectCutExecutions,
         collectPhysicalPaths,
         findPhysicalPath,
+        findPhysicalPathByIdentity,
+        restoreSelectedPhysicalPath,
         geometryFingerprint,
         buildExecutionPathId,
         cutPathPreviewMarkup,
@@ -4108,6 +4228,7 @@
         paintCutPathPreview,
         highlightCutPreview,
         applyExecutionSelection,
+        ensureExecutionSelection,
         syncPhysicalPathList,
         groupCutExecutionLabels,
         cutExecutionArrowSegment,

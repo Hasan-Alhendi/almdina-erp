@@ -22,6 +22,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     active_toolpath_snapshots,
     calculate_toolpath_snapshot,
     catalog_rows_from_program,
+    clear_reversed_direction_conflicts,
     drop_resurrected_associations,
     geometry_groups,
     resolve_geometry_group,
@@ -38,6 +39,8 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     path_geometry_id,
     reversed_direction_block,
     release_stale_toolpath_links,
+    shape_id,
+    toggle_reversed_path,
     tool_copy_from_stored,
     vectors_from_paths,
 )
@@ -543,9 +546,15 @@ def test_reverse_changes_nc_direction_without_changing_depth_or_tool():
     )
     assert second["direction_blocked"] is True
     assert second["operations"][0]["toolpaths"][0]["points"] == closed_path["points"]
-    missing = apply_reversed_directions(
+    legacy_remapped = apply_reversed_directions(
         closed,
         [{"path_key": "cut_path:gone", "geometry_id": closed_id}],
+    )
+    assert reversed_direction_block(legacy_remapped) == ""
+    assert legacy_remapped["operations"][0]["toolpaths"][0]["points"][0] == [4.0, 4.0]
+    missing = apply_reversed_directions(
+        closed,
+        [{"path_key": "cut_path:gone", "geometry_id": "unknown-legacy-geometry"}],
     )
     assert missing["issues"][0]["code"] == "path_reverse_missing"
     assert missing["nc_export_ready"] is False
@@ -597,6 +606,118 @@ def test_reverse_targets_one_shape_when_several_toolpaths_share_a_path_key():
         clear=True,
     )
     assert cleared == []
+
+
+def test_closed_path_identity_survives_cyclic_start_and_reverse():
+    original = {"points": [[0, 0], [8, 0], [8, 5], [0, 5]], "closed": True}
+    shifted = {"points": [[8, 5], [0, 5], [0, 0], [8, 0]], "closed": True}
+    reversed_ring = {"points": [[0, 0], [0, 5], [8, 5], [8, 0]], "closed": True}
+
+    assert shape_id(original) == shape_id(shifted) == shape_id(reversed_ring)
+    assert path_geometry_id(original) == path_geometry_id(shifted)
+    assert path_geometry_id(original) != path_geometry_id(reversed_ring)
+
+
+def test_closed_nc_motion_repeats_the_closing_edge_at_every_depth_pass():
+    program = _motion_program(
+        ((0, 0), (8, 0), (8, 5), (0, 5)),
+        depths=(2.0, 4.0, 6.0),
+        closed=True,
+        path_key="cut_path:closed-depths",
+    )
+    motions = program["operations"][0]["toolpaths"][0]["motions"]
+    cuts_by_depth = {
+        depth: [
+            (motion["x_mm"], motion["y_mm"])
+            for motion in motions
+            if motion["kind"] == "cut" and motion["depth_mm"] == depth
+        ]
+        for depth in (2.0, 4.0, 6.0)
+    }
+
+    assert all(points[-1] == (0, 0) for points in cuts_by_depth.values())
+    assert all(len(points) == 4 for points in cuts_by_depth.values())
+
+
+def test_saved_direction_follows_one_unchanged_shape_when_path_key_changes():
+    original = _motion_program(
+        ((0, 0), (10, 0), (10, 6)),
+        depths=(4.0, 8.0),
+        path_key="cut_path:center:old",
+    )
+    old_path = original["operations"][0]["toolpaths"][0]
+    saved = toggle_reversed_path([], original, old_path["path_key"], shape_id(old_path))
+
+    rebuilt = _motion_program(
+        ((0, 0), (10, 0), (10, 6)),
+        depths=(4.0, 8.0, 12.0),
+        path_key="cut_path:center:new",
+    )
+    changed = apply_reversed_directions(rebuilt, saved)
+    current = changed["operations"][0]["toolpaths"][0]
+
+    assert reversed_direction_block(changed) == ""
+    assert current["points"] == [[10.0, 6.0], [10.0, 0.0], [0.0, 0.0]]
+    assert [motion["depth_mm"] for motion in current["motions"] if motion["kind"] == "plunge"] == [4.0, 8.0, 12.0]
+    assert toggle_reversed_path(saved, rebuilt, "cut_path:center:new", shape_id(current)) == []
+
+
+def test_saved_direction_does_not_guess_after_one_shape_becomes_two_paths():
+    original = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:center:old")
+    old_path = original["operations"][0]["toolpaths"][0]
+    saved = toggle_reversed_path([], original, old_path["path_key"], shape_id(old_path))
+    first = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:center:a")
+    second = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:center:b")
+    rebuilt = {
+        "operations": [{
+            "operation_key": "cut_path",
+            "toolpaths": [
+                first["operations"][0]["toolpaths"][0],
+                second["operations"][0]["toolpaths"][0],
+            ],
+        }],
+    }
+
+    ambiguous = apply_reversed_directions(rebuilt, saved)
+
+    assert reversed_direction_block(ambiguous) == "path_reverse_ambiguous"
+    assert [path["points"][0] for path in ambiguous["operations"][0]["toolpaths"]] == [[0.0, 0.0], [0.0, 0.0]]
+
+
+def test_clear_direction_conflicts_preserves_every_valid_saved_direction():
+    first = _motion_program(((0, 0), (10, 0)), depths=(4.0,), path_key="cut_path:first")
+    second = _motion_program(((0, 20), (12, 20)), depths=(4.0,), path_key="cut_path:second")
+    program = {
+        "operations": [{
+            "operation_key": "cut_path",
+            "toolpaths": [
+                first["operations"][0]["toolpaths"][0],
+                second["operations"][0]["toolpaths"][0],
+            ],
+        }],
+    }
+    first_path = program["operations"][0]["toolpaths"][0]
+    valid = toggle_reversed_path([], program, "cut_path:first", shape_id(first_path))[0]
+    records = [
+        valid,
+        {"path_key": "cut_path:missing-a", "shape_id": "gone-a", "geometry_id": "old-a"},
+        {"path_key": "cut_path:missing-b", "shape_id": "gone-b", "geometry_id": "old-b"},
+    ]
+    stored_before_preview = copy.deepcopy(records)
+
+    blocked = apply_reversed_directions(program, records)
+    assert records == stored_before_preview
+    assert [issue["path_key"] for issue in blocked["issues"]] == [
+        "cut_path:missing-a",
+        "cut_path:missing-b",
+    ]
+    assert clear_reversed_direction_conflicts(program, records) == [valid]
+    retained = apply_reversed_directions(
+        program,
+        clear_reversed_direction_conflicts(program, records),
+    )
+    assert retained["operations"][0]["toolpaths"][0]["points"][0] == [10.0, 0.0]
+    assert retained["operations"][0]["toolpaths"][1]["points"][0] == [0.0, 20.0]
 
 
 def _undirected_edges(points, *, closed):

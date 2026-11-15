@@ -3981,6 +3981,9 @@ The saved direction could not be cleared.,تعذر إلغاء الاتجاه ا�
 "A saved path direction no longer matches a path on this sheet, so the NC file was not created.",اتجاه محفوظ لم يعد يطابق مساراً على هذا اللوح، لذلك لم يُنشأ ملف NC.
 The path direction was not changed.,لم يتغير اتجاه المسار.
 Restore the original direction,استعادة الاتجاه الأصلي
+Restore conflicting directions,استعادة الاتجاهات المتعارضة
+The conflicting saved directions could not be restored.,تعذر استعادة الاتجاهات المحفوظة المتعارضة.
+Try restoring the conflicting directions again.,حاول استعادة الاتجاهات المتعارضة مرة أخرى.
 The association was not calculated.,لم يُحسب الربط.
 Calculating the toolpath...,جارٍ حساب مسار التشغيل...
 "A saved path direction matches more than one path, so the NC file was not created. Restore the direction, then set it again on the path you want.",اتجاه محفوظ يطابق أكثر من مسار، لذلك لم يُنشأ ملف NC. استعد الاتجاه ثم عيّنه من جديد على المسار المطلوب.

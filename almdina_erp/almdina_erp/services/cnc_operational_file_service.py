@@ -40,6 +40,7 @@ from almdina_erp.almdina_erp.domain.cnc.artcam_machining import (
     MachiningSetupError,
     archive_association,
     catalog_rows_from_program,
+    clear_reversed_direction_conflicts,
     drop_resurrected_associations,
     effective_operational_program,
     reversed_direction_block,
@@ -1064,6 +1065,7 @@ def set_cnc_path_direction(
     path_key: str,
     shape_id: str | None = None,
     clear_saved: int | str | bool = 0,
+    clear_conflicts: int | str | bool = 0,
     viewed_plan_token: str | None = None,
     operation_presets: str | dict[str, Any] | None = None,
     path_overrides: str | dict[str, Any] | None = None,
@@ -1073,7 +1075,7 @@ def set_cnc_path_direction(
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
 ) -> dict[str, Any]:
-    """Toggle one path direction and keep it for the next NC generation."""
+    """Toggle one path direction or clear only unresolved saved directions."""
 
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
@@ -1081,7 +1083,8 @@ def set_cnc_path_direction(
     if not saved or not saved.get("name"):
         frappe.throw(_message("sheet_settings_required"), frappe.ValidationError)
     key = str(path_key or "").strip()
-    if not key:
+    reset_conflicts = bool(cint(clear_conflicts))
+    if not key and not reset_conflicts:
         frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
     (
         operations,
@@ -1138,13 +1141,19 @@ def set_cnc_path_direction(
             snapshots=list(saved.get("toolpath_snapshots") or []),
             associations=list(saved.get("vector_associations") or []),
         )
-        records = toggle_reversed_path(
-            saved.get("reversed_path_keys"),
-            direction_program,
-            key,
-            str(shape_id or ""),
-            clear=bool(cint(clear_saved)),
-        )
+        if reset_conflicts:
+            records = clear_reversed_direction_conflicts(
+                direction_program,
+                saved.get("reversed_path_keys"),
+            )
+        else:
+            records = toggle_reversed_path(
+                saved.get("reversed_path_keys"),
+                direction_program,
+                key,
+                str(shape_id or ""),
+                clear=bool(cint(clear_saved)),
+            )
     except MachiningSetupError as exc:
         detail = exc.detail or key
         frappe.throw(_issue_message(exc.code, detail), frappe.ValidationError)
