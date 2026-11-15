@@ -451,6 +451,11 @@ def build_operational_workspace(
                 "persisted": bool(operational_file),
                 "status": status,
                 "settings_fingerprint": fingerprint,
+                "settings_revision": (
+                    max(1, int((saved or {}).get("settings_revision") or 0))
+                    if saved is not None
+                    else 0
+                ),
                 "cut_path_early_confirmed": confirmed,
                 "perimeter_join_mode": join_mode,
                 "cut_path_sequence": list(sequence),
@@ -700,6 +705,7 @@ def prepare_sheet_settings(
         "sheet_key": f"sheet:{int(sheet_no)}",
         "status": SETTINGS_SAVED,
         "settings_fingerprint": fingerprint,
+        "settings_revision": max(1, int((existing or {}).get("settings_revision") or 0)),
         "cut_path_early_confirmed": confirmed,
         "perimeter_join_mode": join_mode if join_mode == PERIMETER_JOIN_CONNECTED else PERIMETER_JOIN_SEPARATE,
         "cut_path_sequence": list(sequence),

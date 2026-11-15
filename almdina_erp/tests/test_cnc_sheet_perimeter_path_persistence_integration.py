@@ -9,7 +9,10 @@ import frappe
 import pytest
 from frappe.tests.utils import FrappeTestCase
 
-from almdina_erp.almdina_erp.domain.cnc.operational_file import validate_operational_path_rows
+from almdina_erp.almdina_erp.domain.cnc.operational_file import (
+    OperationalFileError,
+    validate_operational_path_rows,
+)
 from almdina_erp.almdina_erp.domain.cnc.perimeter import SHEET_PERIMETER_PATH_KEY
 from almdina_erp.almdina_erp.infrastructure.frappe.cnc_operational_file_repository import (
     _sequence_json,
@@ -282,3 +285,53 @@ class TestCncSheetPerimeterPathPersistence(FrappeTestCase):
         self.assertEqual(saved.perimeter_join_mode, "connected")
         # Failed save would not create a document; no orphan NC is attached here.
         self.assertFalse(bool(saved.generated_file))
+
+    def test_settings_revision_compare_and_save_rejects_lost_update(self) -> None:
+        payload = _payload(
+            sheet_no=6,
+            join_mode="separate",
+            paths=[
+                {
+                    "path_key": "cut_path:piece-e:outer",
+                    "operation_key": "cut_path",
+                    "piece_instance_id": "piece-e",
+                    "dxf_layer": "CUT_PATH",
+                    "sequence": 1,
+                    "tool_preset": "",
+                }
+            ],
+        )
+        payload["vector_associations_json"] = [
+            {"association_id": "assoc-1", "toolpath_id": "snap-1"}
+        ]
+        payload["toolpath_snapshots_json"] = [
+            {"snapshot_id": "snap-1", "association_id": "assoc-1"}
+        ]
+        payload["reversed_path_keys"] = [
+            {"path_key": "cut_path:piece-e:outer", "shape_id": "shape-1"}
+        ]
+        with _allow_missing_links():
+            name = save_sheet("", payload)
+        self.created.append(name)
+        self.assertEqual(frappe.db.get_value("CNC Operational File", name, "settings_revision"), 1)
+
+        changed = dict(payload, post_processor="ima_wh_ncstudio")
+        with _allow_missing_links():
+            save_sheet(name, changed, expected_revision=1)
+        self.assertEqual(frappe.db.get_value("CNC Operational File", name, "settings_revision"), 2)
+
+        stale = dict(payload, post_processor="")
+        with self.assertRaises(OperationalFileError) as conflict:
+            with _allow_missing_links():
+                save_sheet(name, stale, expected_revision=1)
+        self.assertEqual(conflict.exception.code, "association_stale")
+        saved = frappe.get_doc("CNC Operational File", name)
+        self.assertEqual(saved.settings_revision, 2)
+        self.assertEqual(saved.post_processor, "ima_wh_ncstudio")
+        self.assertIn("assoc-1", str(saved.vector_associations_json))
+        self.assertIn("snap-1", str(saved.toolpath_snapshots_json))
+        self.assertIn("shape-1", str(saved.reversed_path_keys))
+
+        with _allow_missing_links():
+            save_sheet(name, changed, expected_revision=2)
+        self.assertEqual(frappe.db.get_value("CNC Operational File", name, "settings_revision"), 2)

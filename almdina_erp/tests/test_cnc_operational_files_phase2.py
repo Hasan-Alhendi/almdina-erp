@@ -73,7 +73,20 @@ def _plan():
     return ApprovedPlanRef("PLAN-1", 3, "System", "Approved")
 
 
-def _prepare(pieces, *, sheet_no=1, existing=None, presets=None, paths=None, order=None, confirmed=False, plan=None):
+def _prepare(
+    pieces,
+    *,
+    sheet_no=1,
+    existing=None,
+    presets=None,
+    paths=None,
+    order=None,
+    confirmed=False,
+    plan=None,
+    post_processor=None,
+    toolpath_snapshots=None,
+    vector_associations=None,
+):
     return prepare_sheet_settings(
         order_name="DCO-1",
         approved_plan=plan or _plan(),
@@ -93,6 +106,9 @@ def _prepare(pieces, *, sheet_no=1, existing=None, presets=None, paths=None, ord
         machine_profile={"fingerprint_payload": {}},
         operation_order=order,
         cut_path_early_confirmed=confirmed,
+        post_processor=post_processor,
+        toolpath_snapshots=toolpath_snapshots,
+        vector_associations=vector_associations,
     )
 
 
@@ -141,6 +157,63 @@ def test_workspace_lists_every_approved_sheet_and_factory_defaults():
     assert [row["operation_key"] for row in workspace["sheets"][0]["operations"]] == ["liner", "cut_path"]
     assert workspace["sheets"][1]["operations"][0]["operation_key"] == "cut_path"
     assert workspace["can_prepare"] is True
+
+
+def test_workspace_recomputes_manufacturing_fingerprint_without_changing_saved_revision():
+    piece = _piece("piece-a", extra_liner=1)
+    saved = _prepare(
+        [piece],
+        presets={"liner": "Finish", "cut_path": "Finish"},
+        order=["liner", "cut_path"],
+    )
+    saved["name"] = "CNC-FILE-1"
+    saved["settings_revision"] = 7
+    persisted_fingerprint = saved["settings_fingerprint"]
+
+    workspace = build_operational_workspace(
+        order_name="DCO-1",
+        approved_plan=_plan(),
+        plan_is_current=True,
+        pieces=[piece],
+        saved_files=[saved],
+        factory_defaults={"liner": "Finish", "cut_path": "Finish"},
+        known_presets={
+            "Finish": _raw(preset_name="Finish", feed_rate_mm_min=9900),
+        },
+        machine_profile={
+            "production_approved": False,
+            "source_note": "",
+            "fingerprint_payload": {},
+        },
+        can_prepare=True,
+    )
+
+    sheet = workspace["sheets"][0]
+    assert sheet["settings_fingerprint"] != persisted_fingerprint
+    assert sheet["settings_revision"] == 7
+
+
+def test_association_calculation_settings_allow_empty_post_processor_and_preserve_a_choice():
+    piece = _piece("piece-a")
+    without_processor = _prepare(
+        [piece],
+        presets={"cut_path": "Finish"},
+        order=["cut_path"],
+        post_processor="",
+    )
+    assert without_processor["post_processor"] == ""
+
+    chosen = _prepare(
+        [piece],
+        existing=without_processor,
+        presets={"cut_path": "Finish"},
+        order=["cut_path"],
+        post_processor="ima_wh_ncstudio",
+        toolpath_snapshots=[{"snapshot_id": "snap-1", "association_id": "assoc-1"}],
+        vector_associations=[{"association_id": "assoc-1", "toolpath_id": "snap-1"}],
+    )
+    assert chosen["post_processor"] == "ima_wh_ncstudio"
+    assert chosen["settings_fingerprint"] != without_processor["settings_fingerprint"]
 
 
 def test_path_override_is_kept_when_the_layer_preset_changes_and_can_be_cleared():

@@ -527,16 +527,21 @@
                 event.preventDefault();
                 if (!window.confirm(translate("Remove this association from the operation order?"))) return;
                 const id = remove.getAttribute("data-artcam-remove-association");
+                const mutationRequest = context.beginMutation ? context.beginMutation() : 1;
+                if (!mutationRequest) return;
                 call(`${METHOD}.delete_cnc_association`, Object.assign({}, context.getArgs ? context.getArgs() : {}, {
                     association_id: id,
-                    base_fingerprint: (context.sheet || {}).settings_fingerprint || "",
                 })).then(workspace => {
+                    if (context.finishMutation && !context.finishMutation(mutationRequest)) return;
                     if (context.state.artcamForm && context.state.artcamForm.association_id === id) {
                         context.state.artcamForm = blankForm();
                         context.state.vectorSelection = [];
                     }
                     if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
-                }).catch(() => status(host, translate("The association could not be removed."), true));
+                }).catch(() => {
+                    if (context.finishMutation && !context.finishMutation(mutationRequest)) return;
+                    status(host, translate("The association could not be removed."), true);
+                });
             }
         });
         host.addEventListener("submit", event => {
@@ -606,6 +611,8 @@
             .find(row => row.association_id === form.association_id) || null;
         const next = payloadFromForm(form, state, previous);
         const rows = orderedAssociations(machining(context.sheet).associations || [], next);
+        const mutationRequest = context.beginMutation ? context.beginMutation() : 1;
+        if (!mutationRequest) return;
         state.artcamBusy = true;
         const button = host.querySelector("[data-artcam-calculate]");
         if (button) button.disabled = true;
@@ -621,8 +628,8 @@
             machining_profiles: machining(context.sheet).profiles || [],
             vector_associations: rows,
             calculation_request_id: state.calculationRequestId,
-            base_fingerprint: (context.sheet || {}).settings_fingerprint || "",
         })).then(workspace => {
+            if (context.finishMutation && !context.finishMutation(mutationRequest)) return;
             state.artcamForm = formAfterCalculation(form);
             state.vectorSelection = [];
             state.calculationRequestId = "";
@@ -634,14 +641,16 @@
                 ? window.AlmdinaFrontend.normalizeError(error)
                 : { outcome: "unknown", message: "" };
             const release = () => {
+                if (context.finishMutation && !context.finishMutation(mutationRequest)) return false;
                 state.artcamBusy = false;
                 if (button) button.disabled = false;
+                return true;
             };
             if (problem.outcome === "unknown") {
                 call(`${METHOD}.get_cnc_operational_workspace`, args).then(workspace => {
                     const sheet = ((workspace.sheets || []).find(item => Number(item.sheet_no) === Number((context.sheet || {}).sheet_no))) || {};
                     const saved = ((sheet.machining || {}).associations || []).find(row => row.association_id === next.association_id);
-                    release();
+                    if (!release()) return;
                     if (saved && saved.toolpath_id) {
                         state.artcamForm = formAfterCalculation(form);
                         state.vectorSelection = [];
@@ -653,13 +662,13 @@
                     status(host, translate("The result could not be confirmed. Check the current status before repeating the operation."), true);
                     if (typeof context.onWorkspace === "function") context.onWorkspace(workspace);
                 }).catch(() => {
-                    release();
+                    if (!release()) return;
                     status(host, translate("The result could not be confirmed. Check the current status before repeating the operation."), true);
                 });
                 return;
             }
             state.calculationRequestId = "";
-            release();
+            if (!release()) return;
             status(host, problem.message || translate("The association was not calculated. The values on this page are still here."), true);
             reportFailure(
                 translate("The association was not calculated."),

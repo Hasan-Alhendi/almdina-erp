@@ -355,7 +355,13 @@ def _workspace_for(order: Any, *, can_prepare: bool) -> dict[str, Any]:
             cnc_machines=list_cnc_machines(),
             plan_snapshot=snapshot,
         )
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+    except (
+        OperationalFileError,
+        ToolPresetError,
+        PlacementError,
+        MachiningSetupError,
+        PostProcessorError,
+    ) as exc:
         frappe.throw(_message(exc.code), frappe.ValidationError)
     except json.JSONDecodeError as exc:
         raise frappe.ValidationError(_("The approved plan snapshot cannot be read.")) from exc
@@ -394,12 +400,21 @@ def get_cnc_operational_workspace(order_name: str) -> dict[str, Any]:
     return _workspace_for(order, can_prepare=can_prepare)
 
 
-def _reject_stale_sheet(saved: Mapping[str, Any] | None, base_fingerprint: str | None) -> None:
-    expected = str(base_fingerprint or "").strip()
-    if not saved or not expected:
+def _revision(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
+def _reject_stale_sheet(saved: Mapping[str, Any] | None, base_revision: Any) -> None:
+    expected = _revision(base_revision)
+    if not saved:
+        if expected not in (-1, 0):
+            frappe.throw(_message("association_stale"), frappe.ValidationError)
         return
-    current = str(saved.get("settings_fingerprint") or "")
-    if current and current != expected:
+    current = max(1, _revision(saved.get("settings_revision")))
+    if expected != current:
         frappe.throw(_message("association_stale"), frappe.ValidationError)
 
 
@@ -456,12 +471,12 @@ def save_cnc_operational_sheet(
     post_processor: str | None = None,
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
-    base_fingerprint: str | None = None,
+    base_revision: int | str | None = None,
 ) -> dict[str, Any]:
     order = _authorized_order(order_name, Capability.PREPARE_CNC_OPERATIONAL_FILES)
     plan = approved_plan_ref(order)
     existing = _existing_sheet(str(order.name), plan, cint(sheet_no))
-    _reject_stale_sheet(existing, base_fingerprint)
+    _reject_stale_sheet(existing, base_revision)
     parsed_operations = frappe.parse_json(operation_presets) if isinstance(operation_presets, str) else dict(operation_presets or {})
     if path_overrides is None and existing is not None:
         parsed_paths = {
@@ -609,7 +624,10 @@ def save_cnc_operational_sheet(
     except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError, PostProcessorError) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
     existing_name = str((existing or {}).get("name") or "")
-    save_sheet(existing_name, prepared)
+    try:
+        save_sheet(existing_name, prepared, expected_revision=_revision(base_revision))
+    except OperationalFileError as exc:
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     return _workspace_for(order, can_prepare=True)
 
 
@@ -634,7 +652,8 @@ def calculate_cnc_association_toolpath(
     machining_profiles: str | list[Any] | None = None,
     vector_associations: str | list[Any] | None = None,
     calculation_request_id: str | None = None,
-    base_fingerprint: str | None = None,
+    base_revision: int | str | None = None,
+    post_processor: str | None = None,
 ) -> dict[str, Any]:
     """Validate, calculate, and save one association in a single request.
 
@@ -649,7 +668,7 @@ def calculate_cnc_association_toolpath(
     target_id = str(association_id or "").strip()
     if saved and request_id and _snapshot_for_request(saved.get("toolpath_snapshots"), request_id, target_id):
         return _workspace_for(order, can_prepare=True)
-    _reject_stale_sheet(saved, base_fingerprint)
+    _reject_stale_sheet(saved, base_revision)
     incoming = drop_resurrected_associations(
         list((saved or {}).get("vector_associations") or []),
         _json_list(vector_associations) if vector_associations is not None else list((saved or {}).get("vector_associations") or []),
@@ -783,13 +802,38 @@ def calculate_cnc_association_toolpath(
             plan_snapshot=approved_plan_snapshot(order),
             toolpath_snapshots=snapshots,
             vector_associations=stored_associations,
+            post_processor=post_processor,
         )
         restamped["machining_profiles_json"] = profiles
         restamped["vector_associations_json"] = stored_associations
         restamped["toolpath_snapshots_json"] = snapshots
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+    except (
+        OperationalFileError,
+        ToolPresetError,
+        PlacementError,
+        MachiningSetupError,
+        PostProcessorError,
+    ) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
-    save_sheet(str((saved or {}).get("name") or ""), restamped)
+    try:
+        save_sheet(
+            str((saved or {}).get("name") or ""),
+            restamped,
+            expected_revision=_revision(base_revision),
+        )
+    except OperationalFileError as exc:
+        latest = _existing_sheet(str(order.name), plan, cint(sheet_no))
+        if (
+            exc.code == "association_stale"
+            and request_id
+            and _snapshot_for_request(
+                (latest or {}).get("toolpath_snapshots"),
+                request_id,
+                target_id,
+            )
+        ):
+            return _workspace_for(order, can_prepare=True)
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     return _workspace_for(order, can_prepare=True)
 
 
@@ -799,7 +843,7 @@ def delete_cnc_association(
     sheet_no: int | str,
     association_id: str,
     viewed_plan_token: str | None = None,
-    base_fingerprint: str | None = None,
+    base_revision: int | str | None = None,
 ) -> dict[str, Any]:
     """Remove one association by its id and archive its snapshots."""
 
@@ -808,7 +852,7 @@ def delete_cnc_association(
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
     if not saved or not saved.get("name"):
         return _workspace_for(order, can_prepare=True)
-    _reject_stale_sheet(saved, base_fingerprint)
+    _reject_stale_sheet(saved, base_revision)
     target = str(association_id or "").strip()
     current = list(saved.get("vector_associations") or [])
     if not any(str(row.get("association_id") or "") == target for row in current):
@@ -854,9 +898,22 @@ def delete_cnc_association(
         restamped["machining_profiles_json"] = list(saved.get("machining_profiles") or [])
         restamped["vector_associations_json"] = kept
         restamped["toolpath_snapshots_json"] = snapshots
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+    except (
+        OperationalFileError,
+        ToolPresetError,
+        PlacementError,
+        MachiningSetupError,
+        PostProcessorError,
+    ) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
-    save_sheet(str(saved.get("name") or ""), restamped)
+    try:
+        save_sheet(
+            str(saved.get("name") or ""),
+            restamped,
+            expected_revision=_revision(base_revision),
+        )
+    except OperationalFileError as exc:
+        frappe.throw(_failure_message(exc), frappe.ValidationError)
     return _workspace_for(order, can_prepare=True)
 
 
@@ -1150,6 +1207,11 @@ def set_cnc_path_direction(
     perimeter_join_mode: str | None = None,
     cut_path_sequence: str | list[Any] | None = None,
     perimeter_cut_early_confirmed: int | str | bool = 0,
+    cnc_machine: str | None = None,
+    offset_left_cm: float | int | str | None = None,
+    offset_bottom_cm: float | int | str | None = None,
+    post_processor: str | None = None,
+    base_revision: int | str | None = None,
 ) -> dict[str, Any]:
     """Toggle one path direction and persist the exact geometry settings used."""
 
@@ -1158,6 +1220,7 @@ def set_cnc_path_direction(
     saved = _existing_sheet(str(order.name), plan, cint(sheet_no))
     if not saved or not saved.get("name"):
         frappe.throw(_message("sheet_settings_required"), frappe.ValidationError)
+    _reject_stale_sheet(saved, base_revision)
     key = str(path_key or "").strip()
     if not key:
         frappe.throw(_message("path_reverse_unsupported"), frappe.ValidationError)
@@ -1257,17 +1320,28 @@ def set_cnc_path_direction(
             perimeter_join_mode=probe_join,
             cut_path_sequence=probe_sequence,
             perimeter_cut_early_confirmed=probe_early,
-            cnc_machine=saved.get("cnc_machine"),
-            offset_left_cm=saved.get("offset_left_cm"),
-            offset_bottom_cm=saved.get("offset_bottom_cm"),
+            cnc_machine=saved.get("cnc_machine") if cnc_machine is None else cnc_machine,
+            offset_left_cm=saved.get("offset_left_cm") if offset_left_cm is None else offset_left_cm,
+            offset_bottom_cm=saved.get("offset_bottom_cm") if offset_bottom_cm is None else offset_bottom_cm,
+            post_processor=post_processor,
             machine_catalog=list_cnc_machines(),
             plan_snapshot=approved_plan_snapshot(order),
             toolpath_snapshots=list(saved.get("toolpath_snapshots") or []),
             vector_associations=list(saved.get("vector_associations") or []),
             reversed_path_keys=records,
         )
-        save_sheet(str(saved.get("name") or ""), prepared)
-    except (OperationalFileError, ToolPresetError, PlacementError, MachiningSetupError) as exc:
+        save_sheet(
+            str(saved.get("name") or ""),
+            prepared,
+            expected_revision=_revision(base_revision),
+        )
+    except (
+        OperationalFileError,
+        ToolPresetError,
+        PlacementError,
+        MachiningSetupError,
+        PostProcessorError,
+    ) as exc:
         frappe.throw(_failure_message(exc), frappe.ValidationError)
     workspace = _workspace_for(order, can_prepare=True)
     workspace["reversed_path_key"] = key

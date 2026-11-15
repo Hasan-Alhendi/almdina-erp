@@ -3032,6 +3032,8 @@ An unexpected system error prevented completion. Contact support.,تعذر إك�
 Operational Files,الملفات التشغيلية
 CNC Tool Preset,إعداد تشغيل CNC
 CNC Operational File,ملف تشغيلي
+Settings Revision,إصدار إعدادات اللوح
+Monotonic revision of persisted sheet settings used for optimistic concurrency control.,إصدار متزايد لإعدادات اللوح المحفوظة يُستخدم للتحكم بالتزامن التفاؤلي.
 CNC Operational Operation,عملية تشغيل
 CNC Operational Path,مسار تشغيل
 CNC Operational Defaults,إعدادات التشغيل الافتراضية

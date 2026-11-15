@@ -362,6 +362,7 @@
             offsetLeftCm: Number(sheet.offset_left_cm || 0),
             offsetBottomCm: Number(sheet.offset_bottom_cm || 0),
             postProcessor: String(sheet.post_processor || ""),
+            settingsRevision: Number(sheet.settings_revision || 0),
             sheetWidthCm: sheet.sheet_width_cm == null ? null : Number(sheet.sheet_width_cm),
             sheetLengthCm: sheet.sheet_length_cm == null ? null : Number(sheet.sheet_length_cm),
             expanded: {},
@@ -397,6 +398,24 @@
             offsetBottomCm: Number(state.offsetBottomCm || 0),
             postProcessor: String(state.postProcessor || ""),
         });
+    }
+
+    function beginSheetMutation(state) {
+        if (!state || state.sheetMutationInFlight) return 0;
+        const request = Number(state.sheetMutationRequest || 0) + 1;
+        state.sheetMutationRequest = request;
+        state.sheetMutationInFlight = true;
+        return request;
+    }
+
+    function sheetMutationIsCurrent(state, request) {
+        return Boolean(state && request && Number(state.sheetMutationRequest) === Number(request));
+    }
+
+    function finishSheetMutation(state, request) {
+        if (!sheetMutationIsCurrent(state, request)) return false;
+        state.sheetMutationInFlight = false;
+        return true;
     }
 
     function findCncMachine(workspace, name) {
@@ -1323,13 +1342,15 @@
                 if (deleteAssociation && live.workspace.can_prepare) {
                     const id = deleteAssociation.getAttribute("data-delete-association");
                     if (!window.confirm(translate("Remove this association from the operation order?"))) return;
+                    const mutationRequest = beginSheetMutation(live.state);
+                    if (!mutationRequest) return;
                     frappe.call({
                         method: `${METHOD}.delete_cnc_association`,
                         args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
                             association_id: id,
-                            base_fingerprint: live.sheet.settings_fingerprint || "",
                         }),
                         callback(response) {
+                            if (!finishSheetMutation(live.state, mutationRequest)) return;
                             if (live.state.artcamForm && live.state.artcamForm.association_id === id) {
                                 live.state.artcamForm = null;
                                 live.state.vectorSelection = [];
@@ -1338,6 +1359,7 @@
                             if (typeof onWorkspace === "function") onWorkspace((response && response.message) || {});
                         },
                         error(error) {
+                            if (!finishSheetMutation(live.state, mutationRequest)) return;
                             showSheetIssueDialog(translate("The association could not be removed."), [{
                                 problem: serverErrorText(error) || translate("The association could not be removed."),
                                 target: id,
@@ -1359,6 +1381,8 @@
                         const next = rows.slice();
                         const [item] = next.splice(index, 1);
                         next.splice(targetIndex, 0, item);
+                        const mutationRequest = beginSheetMutation(live.state);
+                        if (!mutationRequest) return;
                         frappe.call({
                             method: `${METHOD}.save_cnc_operational_sheet`,
                             args: Object.assign({}, sheetGenerateArgs(live.frm, live.workspace, live.sheet, live.state), {
@@ -1366,8 +1390,12 @@
                                 vector_associations: next,
                             }),
                             callback(response) {
+                                if (!finishSheetMutation(live.state, mutationRequest)) return;
                                 const onWorkspace = dialog._almdinaOnWorkspace;
                                 if (typeof onWorkspace === "function") onWorkspace((response && response.message) || {});
+                            },
+                            error() {
+                                finishSheetMutation(live.state, mutationRequest);
                             },
                         });
                         return;
@@ -1701,6 +1729,7 @@
             offset_left_cm: Number(state.offsetLeftCm || 0),
             offset_bottom_cm: Number(state.offsetBottomCm || 0),
             post_processor: String(state.postProcessor || ""),
+            base_revision: Number(state.settingsRevision || sheet.settings_revision || 0),
         };
     }
 
@@ -1969,7 +1998,11 @@
             ui._almdinaSheet = { frm, workspace, sheet, state, board: null };
             ui._almdinaOnWorkspace = message => {
                 const saved = (message.sheets || []).find(item => Number(item.sheet_no) === Number(sheet.sheet_no));
-                if (saved) refreshSheetUi(frm, ui, message, saved, state);
+                if (!saved) return;
+                const incomingRevision = Number(saved.settings_revision || 0);
+                if (incomingRevision < Number(state.settingsRevision || 0)) return;
+                state.settingsRevision = incomingRevision;
+                refreshSheetUi(frm, ui, message, saved, state);
             };
             wrapper.innerHTML = dialogMarkup(workspace, sheet, state, { exportBar: ui.mode === "page" });
             const preview = wrapper.querySelector("[data-sheet-preview]");
@@ -1982,6 +2015,12 @@
                     state,
                     getArgs() {
                         return sheetGenerateArgs(frm, workspace, sheet, state);
+                    },
+                    beginMutation() {
+                        return beginSheetMutation(state);
+                    },
+                    finishMutation(request) {
+                        return finishSheetMutation(state, request);
                     },
                     refresh() {
                         refreshSheetUi(frm, ui, workspace, sheet, state);
@@ -2018,6 +2057,8 @@
             frappe.msgprint(translate(CONFLICT_MESSAGES[conflict]));
             return;
         }
+        const mutationRequest = beginSheetMutation(state);
+        if (!mutationRequest) return;
         const requestId = (frm.__almdinaOperationalFilesRequest || 0) + 1;
         frm.__almdinaOperationalFilesRequest = requestId;
         const identity = capture(frm);
@@ -2032,7 +2073,11 @@
             method: `${METHOD}.save_cnc_operational_sheet`,
             args: sheetGenerateArgs(frm, workspace, sheet, state),
             callback(response) {
-                if (frm.__almdinaOperationalFilesRequest !== requestId) return;
+                if (frm.__almdinaOperationalFilesRequest !== requestId) {
+                    finishSheetMutation(state, mutationRequest);
+                    return;
+                }
+                if (!finishSheetMutation(state, mutationRequest)) return;
                 if (ui.mode !== "page" && !stillCurrent(frm, identity)) return;
                 const message = (response && response.message) || {};
                 if (ui.mode !== "page") {
@@ -2055,6 +2100,7 @@
                     state.offsetLeftCm = next.offsetLeftCm;
                     state.offsetBottomCm = next.offsetBottomCm;
                     state.postProcessor = next.postProcessor;
+                    state.settingsRevision = next.settingsRevision;
                     state.sheetWidthCm = next.sheetWidthCm;
                     state.sheetLengthCm = next.sheetLengthCm;
                     baselineHolder.value = stateSnapshot(state);
@@ -2069,7 +2115,11 @@
                 }
             },
             error() {
-                if (frm.__almdinaOperationalFilesRequest !== requestId) return;
+                if (frm.__almdinaOperationalFilesRequest !== requestId) {
+                    finishSheetMutation(state, mutationRequest);
+                    return;
+                }
+                if (!finishSheetMutation(state, mutationRequest)) return;
                 if (saveButton) {
                     if (saveButton.prop) saveButton.prop("disabled", false);
                     else saveButton.disabled = false;
@@ -2481,6 +2531,8 @@
             path.path_key === pathKey && assigned.has(String(path.vector_id || ""))
         ));
         if (locked) return;
+        const mutationRequest = beginSheetMutation(state);
+        if (!mutationRequest) return;
         state.reverseBusy = pathKey;
         frappe.call({
             method: `${METHOD}.set_cnc_path_direction`,
@@ -2489,12 +2541,17 @@
                 shape_id: shapeId || "",
                 clear_saved: clearSaved ? 1 : 0,
             }),
-            callback() {
+            callback(response) {
+                if (!finishSheetMutation(state, mutationRequest)) return;
                 state.reverseBusy = "";
                 state.directionReport = pathKey;
-                requestSheetProgramPreview(frm, dialog, workspace, sheet, state);
+                const onWorkspace = dialog._almdinaOnWorkspace;
+                if (typeof onWorkspace === "function") {
+                    onWorkspace((response && response.message) || {});
+                }
             },
             error(error) {
+                if (!finishSheetMutation(state, mutationRequest)) return;
                 state.reverseBusy = "";
                 const problem = serverErrorText(error) || translate("This path cannot be reversed safely, so the NC file was not created.");
                 showSheetIssueDialog(translate("The path direction was not changed."), [{
@@ -4133,5 +4190,8 @@
         findCncMachine,
         placementPreviewPayload,
         validateSheetPlacementFits,
+        beginSheetMutation,
+        sheetMutationIsCurrent,
+        finishSheetMutation,
     });
 })();

@@ -19,6 +19,7 @@ from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import mm_per_min_from_sec
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
+    OperationalFileError,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import CNC_OPERATION_TYPES
 from almdina_erp.almdina_erp.domain.cutting.finished_piece_geometry import (
@@ -203,6 +204,10 @@ def saved_operational_files(order_name: str) -> list[dict[str, Any]]:
                 "sheet_no": cint(document.sheet_no),
                 "status": document.status,
                 "settings_fingerprint": str(document.settings_fingerprint or ""),
+                "settings_revision": max(
+                    1,
+                    cint(getattr(document, "settings_revision", 0)),
+                ),
                 "cut_path_early_confirmed": bool(cint(document.cut_path_early_confirmed)),
                 "perimeter_join_mode": str(getattr(document, "perimeter_join_mode", None) or "separate"),
                 "cut_path_sequence": _sequence_list(getattr(document, "cut_path_sequence", None)),
@@ -523,30 +528,133 @@ def update_machining_json(
     document.save()
 
 
-def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
+def _lock_existing_revision(name: str) -> int:
+    rows = frappe.db.sql(
+        """
+        select settings_revision
+        from `tabCNC Operational File`
+        where name = %s
+        for update
+        """,
+        (name,),
+        as_dict=True,
+    )
+    if not rows:
+        raise OperationalFileError("association_stale")
+    return max(1, cint(rows[0].get("settings_revision")))
+
+
+def _lock_new_sheet_identity(payload: Mapping[str, Any]) -> str:
+    """Serialize first insert for one order, then resolve a concurrent insert."""
+
+    order_name = str(payload.get("door_cutting_order") or "")
+    frappe.db.sql(
+        "select name from `tabDoor Cutting Order` where name = %s for update",
+        (order_name,),
+    )
+    identity_key = "::".join(
+        (
+            order_name,
+            str(payload.get("cutting_plan") or ""),
+            str(cint(payload.get("plan_revision"))),
+            str(cint(payload.get("sheet_no"))),
+        )
+    )
+    return str(
+        frappe.db.get_value(
+            "CNC Operational File",
+            {"identity_key": identity_key},
+            "name",
+        )
+        or ""
+    )
+
+
+_SHEET_SCALAR_FIELDS = (
+    "door_cutting_order",
+    "cutting_plan",
+    "plan_revision",
+    "plan_source_type",
+    "sheet_no",
+    "sheet_key",
+    "status",
+    "settings_fingerprint",
+    "cut_path_early_confirmed",
+    "perimeter_join_mode",
+    "perimeter_cut_early_confirmed",
+    "cnc_machine",
+    "offset_left_cm",
+    "offset_bottom_cm",
+    "post_processor",
+)
+
+
+def _settings_payload(document: Any) -> str:
+    """Canonical persisted settings only; metadata and revision are excluded."""
+
+    def scalar(field: str) -> Any:
+        value = document.get(field)
+        if field in {"plan_revision", "sheet_no"}:
+            return cint(value)
+        if field in {"cut_path_early_confirmed", "perimeter_cut_early_confirmed"}:
+            return bool(cint(value))
+        if field in {"offset_left_cm", "offset_bottom_cm"}:
+            return float(value or 0)
+        return str(value or "")
+
+    payload = {
+        "fields": {field: scalar(field) for field in _SHEET_SCALAR_FIELDS},
+        "cut_path_sequence": _sequence_list(document.get("cut_path_sequence")),
+        "reversed_path_keys": _object_list(document.get("reversed_path_keys")),
+        "operations": _child_rows(
+            document.get("operations"),
+            ("operation_key", "dxf_layer", "sequence", "tool_preset", "preset_source"),
+        ),
+        "paths": _child_rows(
+            document.get("paths"),
+            (
+                "path_key",
+                "operation_key",
+                "piece_instance_id",
+                "dxf_layer",
+                "sequence",
+                "tool_preset",
+            ),
+        ),
+        "machining_profiles": _object_list(document.get("machining_profiles_json")),
+        "vector_associations": _object_list(document.get("vector_associations_json")),
+        "toolpath_snapshots": _object_list(document.get("toolpath_snapshots_json")),
+    }
+    return json.dumps(payload, ensure_ascii=True, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def save_sheet(
+    existing_name: str,
+    payload: Mapping[str, Any],
+    *,
+    expected_revision: int | str | None = None,
+) -> str:
+    expected = None if expected_revision is None else cint(expected_revision)
+    if not existing_name and expected is not None:
+        existing_name = _lock_new_sheet_identity(payload)
+    current_revision = 0
     if existing_name:
+        if expected is not None:
+            current_revision = _lock_existing_revision(existing_name)
+            if current_revision != expected:
+                raise OperationalFileError("association_stale")
         document = _without_permission_check(
             lambda: frappe.get_doc("CNC Operational File", existing_name)
         )
+        if expected is None:
+            current_revision = max(1, cint(getattr(document, "settings_revision", 0)))
+        before = _settings_payload(document)
     else:
+        if expected not in (None, 0):
+            raise OperationalFileError("association_stale")
         document = frappe.new_doc("CNC Operational File")
-    for field in (
-        "door_cutting_order",
-        "cutting_plan",
-        "plan_revision",
-        "plan_source_type",
-        "sheet_no",
-        "sheet_key",
-        "status",
-        "settings_fingerprint",
-        "cut_path_early_confirmed",
-        "perimeter_join_mode",
-        "perimeter_cut_early_confirmed",
-        "cnc_machine",
-        "offset_left_cm",
-        "offset_bottom_cm",
-        "post_processor",
-    ):
+        before = ""
+    for field in _SHEET_SCALAR_FIELDS:
         document.set(field, payload.get(field))
     # Frappe JSON fields reject a raw Python list; persist one JSON string.
     document.set("cut_path_sequence", _sequence_json(payload.get("cut_path_sequence")))
@@ -579,6 +687,9 @@ def save_sheet(existing_name: str, payload: Mapping[str, Any]) -> str:
     ):
         if field in payload:
             document.set(field, _object_list_json(payload.get(field)))
+    if existing_name and _settings_payload(document) == before:
+        return str(document.name)
+    document.set("settings_revision", current_revision + 1)
     document.flags.ignore_permissions = True
     # Link targets are validated by the service layer's order/plan authorization.
     document.flags.ignore_links = True

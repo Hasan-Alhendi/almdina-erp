@@ -368,11 +368,13 @@ assert.ok(translations.includes("IMA-WH (*.nc),IMA-WH (*.nc)"));
 
 const restored = ux.sheetState({
     sheet_no: 1,
+    settings_revision: 12,
     post_processor: "ima_wh_ncstudio",
     operations: [],
     paths: [],
 });
 assert.equal(restored.postProcessor, "ima_wh_ncstudio");
+assert.equal(restored.settingsRevision, 12);
 const unset = ux.sheetState({ sheet_no: 1, operations: [], paths: [] });
 assert.equal(unset.postProcessor, "");
 const generateArgs = ux.sheetGenerateArgs(
@@ -382,6 +384,19 @@ const generateArgs = ux.sheetGenerateArgs(
     restored
 );
 assert.equal(generateArgs.post_processor, "ima_wh_ncstudio");
+assert.equal(generateArgs.base_revision, 12);
+
+const mutationState = {};
+const firstMutation = ux.beginSheetMutation(mutationState);
+assert.equal(firstMutation, 1);
+assert.equal(ux.beginSheetMutation(mutationState), 0);
+assert.equal(ux.sheetMutationIsCurrent(mutationState, firstMutation), true);
+assert.equal(ux.finishSheetMutation(mutationState, firstMutation + 1), false);
+assert.equal(mutationState.sheetMutationInFlight, true);
+assert.equal(ux.finishSheetMutation(mutationState, firstMutation), true);
+const secondMutation = ux.beginSheetMutation(mutationState);
+assert.equal(secondMutation, 2);
+assert.equal(ux.sheetMutationIsCurrent(mutationState, firstMutation), false);
 const pageMarkup = ux.dialogMarkup(
     {
         can_prepare: true,

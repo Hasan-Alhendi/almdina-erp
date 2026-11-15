@@ -31,6 +31,12 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 SERVICE = APP_ROOT / "almdina_erp" / "services" / "cnc_operational_file_service.py"
 REPO = APP_ROOT / "almdina_erp" / "infrastructure" / "frappe" / "cnc_operational_file_repository.py"
 UX = APP_ROOT / "public" / "js" / "door_cutting_order" / "cnc" / "door_cutting_order_operational_files_ux.js"
+PATCH = APP_ROOT / "patches" / "v1_0" / "backfill_cnc_operational_file_settings_revision.py"
+PATCHES = APP_ROOT / "patches.txt"
+OPERATIONAL_FILE_META = (
+    APP_ROOT / "almdina_erp" / "doctype" / "cnc_operational_file" / "cnc_operational_file.json"
+)
+AR_TRANSLATIONS = APP_ROOT / "translations" / "ar.csv"
 
 
 def test_cnc_modules_import_without_broken_names():
@@ -110,6 +116,37 @@ def test_generate_returns_content_without_saving_a_file_or_settings():
         "generation_snapshot_is_complete",
     ):
         assert retired not in repo
+
+
+def test_mutations_use_revision_while_fingerprint_stays_a_manufacturing_identity():
+    service = SERVICE.read_text(encoding="utf-8")
+    calculate = service.split("def calculate_cnc_association_toolpath", 1)[1].split(
+        "@frappe.whitelist()", 1
+    )[0]
+    assert "base_revision" in calculate
+    assert "post_processor" in calculate
+    assert "post_processor=post_processor" in calculate
+    assert "expected_revision=_revision(base_revision)" in calculate
+    assert "base_fingerprint" not in service
+    assert "_snapshot_for_request" in calculate
+
+    panel = UX.read_text(encoding="utf-8")
+    assert "base_revision" in panel
+    assert "beginSheetMutation" in panel
+    assert "sheetMutationIsCurrent" in panel
+    assert "base_fingerprint" not in panel
+
+
+def test_revision_backfill_is_registered_and_idempotent_by_predicate():
+    source = PATCH.read_text(encoding="utf-8")
+    patches = PATCHES.read_text(encoding="utf-8")
+    assert "where ifnull(settings_revision, 0) < 1" in source
+    assert source.count("set settings_revision = 1") == 1
+    assert patches.count("backfill_cnc_operational_file_settings_revision") == 1
+    meta = OPERATIONAL_FILE_META.read_text(encoding="utf-8")
+    translations = AR_TRANSLATIONS.read_text(encoding="utf-8")
+    assert '"fieldname": "settings_revision"' in meta
+    assert "Settings Revision,إصدار إعدادات اللوح" in translations
 
 
 def test_generate_path_imports_the_saved_direction_guard_it_calls():
