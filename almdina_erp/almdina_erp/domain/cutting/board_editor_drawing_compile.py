@@ -78,6 +78,10 @@ def compile_manufacturing_geometry(
         "points": checked["points"],
         "exact": True,
     }
+    # Full-span polygons stay on the historical contract. An interior contour
+    # keeps its offset and reserves the whole blank instead of the contour box.
+    if not checked["spans_blank"]:
+        geometry["reservation"] = "blank"
     return {
         "status": "ready",
         "code": "",
@@ -94,6 +98,7 @@ def manufacturing_fingerprint(geometry: Mapping[str, Any]) -> str:
         "points": geometry.get("points"),
         "blank_width_cm": geometry.get("blank_width_cm"),
         "blank_length_cm": geometry.get("blank_length_cm"),
+        "reservation": geometry.get("reservation") or "",
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
@@ -296,18 +301,17 @@ def _polygon(points, width_mm, length_mm, path_id):
         return _rejected("outside_blank", path_id)
     xs = [point[0] for point in compact]
     ys = [point[1] for point in compact]
-    if (
-        abs(min(xs)) > STORAGE_EPSILON_CM
-        or abs(max(xs) - width_cm) > STORAGE_EPSILON_CM
-        or abs(min(ys)) > STORAGE_EPSILON_CM
-        or abs(max(ys) - length_cm) > STORAGE_EPSILON_CM
-    ):
-        return _rejected("bounds_not_touched", path_id)
+    spans_blank = (
+        abs(min(xs)) <= STORAGE_EPSILON_CM
+        and abs(max(xs) - width_cm) <= STORAGE_EPSILON_CM
+        and abs(min(ys)) <= STORAGE_EPSILON_CM
+        and abs(max(ys) - length_cm) <= STORAGE_EPSILON_CM
+    )
     if _edges_cross(compact) or _edges_overlap(compact):
         return _rejected("self_intersection", path_id)
     if abs(_area(compact)) <= STORAGE_EPSILON_CM:
         return _rejected("invalid_area", path_id)
-    return {"status": "ready", "points": compact, "path_id": path_id}
+    return {"status": "ready", "points": compact, "path_id": path_id, "spans_blank": spans_blank}
 
 
 def _edges_cross(points: Sequence[Sequence[float]]) -> bool:

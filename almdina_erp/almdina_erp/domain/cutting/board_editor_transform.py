@@ -146,6 +146,11 @@ def apply_local_horizontal_mirror(piece: dict[str, Any]) -> None:
         piece.get("base_outline_mm"),
         center_x=center_x,
     )
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["base_reservation_mm"] = _reflect_points_horizontal(
+            piece["base_reservation_mm"],
+            center_x=center_x,
+        )
     if isinstance(piece.get("base_hole_mm"), list):
         piece["base_hole_mm"] = _reflect_points_horizontal(
             piece["base_hole_mm"],
@@ -192,6 +197,11 @@ def apply_local_flip_h(piece: dict[str, Any]) -> None:
         piece.get("base_outline_mm"),
         center_x=center_x,
     )
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["base_reservation_mm"] = _reflect_points_horizontal(
+            piece["base_reservation_mm"],
+            center_x=center_x,
+        )
     if isinstance(piece.get("base_hole_mm"), list):
         piece["base_hole_mm"] = _reflect_points_horizontal(
             piece["base_hole_mm"],
@@ -209,6 +219,11 @@ def apply_local_flip_v(piece: dict[str, Any]) -> None:
         piece.get("base_outline_mm"),
         center_y=center_y,
     )
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["base_reservation_mm"] = _reflect_points_vertical(
+            piece["base_reservation_mm"],
+            center_y=center_y,
+        )
     if isinstance(piece.get("base_hole_mm"), list):
         piece["base_hole_mm"] = _reflect_points_vertical(
             piece["base_hole_mm"],

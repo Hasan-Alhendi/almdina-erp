@@ -48,6 +48,7 @@ from almdina_erp.almdina_erp.domain.cutting.dxf_layer_catalog import (
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_topology import PartGeometry
 from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    geometry_reserves_blank,
     material_outline_cm,
 )
 from almdina_erp.almdina_erp.domain.cutting.liner_geometry import (
@@ -464,6 +465,13 @@ def _piece_identity(piece: Mapping[str, Any], *, sheet_no: int | None) -> dict[s
                 str(piece.get("piece_type") or "") == "Special"
                 and geometry_source == GEOMETRY_SOURCE_SPECIAL_JSON
             )
+        ),
+        "reserves_blank": geometry_reserves_blank(piece),
+        "blank_reservation_cm": (
+            deepcopy(piece.get("blank_reservation_cm"))
+            if geometry_reserves_blank(piece)
+            and isinstance(piece.get("blank_reservation_cm"), list)
+            else None
         ),
         "special_representation": (
             "exact_geometry"

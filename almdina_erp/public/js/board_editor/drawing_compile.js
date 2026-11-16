@@ -36,7 +36,7 @@
         if (flat && flat.status === "rejected") return flat;
         const checked = polygon(flat, width, length, path.id);
         if (checked.status !== "ready") return checked;
-        return {
+        const result = {
             status: "ready",
             code: "",
             pathId: String(path.id || ""),
@@ -52,6 +52,8 @@
                 exact: true,
             },
         };
+        if (!checked.spansBlank) result.geometry.reservation = "blank";
+        return result;
     }
 
     function rejected(code, pathId) {
@@ -237,12 +239,13 @@
         }
         const xs = compact.map((point) => point[0]);
         const ys = compact.map((point) => point[1]);
-        if (Math.abs(Math.min.apply(null, xs)) > STORAGE_EPSILON_CM || Math.abs(Math.max.apply(null, xs) - widthCm) > STORAGE_EPSILON_CM || Math.abs(Math.min.apply(null, ys)) > STORAGE_EPSILON_CM || Math.abs(Math.max.apply(null, ys) - lengthCm) > STORAGE_EPSILON_CM) {
-            return rejected("bounds_not_touched", pathId);
-        }
+        const spansBlank = Math.abs(Math.min.apply(null, xs)) <= STORAGE_EPSILON_CM
+            && Math.abs(Math.max.apply(null, xs) - widthCm) <= STORAGE_EPSILON_CM
+            && Math.abs(Math.min.apply(null, ys)) <= STORAGE_EPSILON_CM
+            && Math.abs(Math.max.apply(null, ys) - lengthCm) <= STORAGE_EPSILON_CM;
         if (edgesCross(compact)) return rejected("self_intersection", pathId);
         if (Math.abs(area(compact)) <= STORAGE_EPSILON_CM) return rejected("invalid_area", pathId);
-        return { status: "ready", points: compact };
+        return { status: "ready", points: compact, spansBlank };
     }
 
     function edgesCross(points) {

@@ -181,7 +181,10 @@ class DrawingCompileTests(unittest.TestCase):
             blank_width_mm=330,
             blank_length_mm=550,
         )
-        self.assertEqual(smaller["code"], "bounds_not_touched")
+        self.assertEqual(smaller["status"], "ready")
+        self.assertEqual(smaller["geometry"]["reservation"], "blank")
+        self.assertNotIn("reservation", ready["geometry"])
+        self.assertEqual(smaller["geometry"]["points"][0], [2.0, 2.0])
         outside = compile_manufacturing_geometry(
             _doc([_ring([(-5, 0), (330, 0), (330, 550), (0, 550)])], width=330, length=550),
             blank_width_mm=330,

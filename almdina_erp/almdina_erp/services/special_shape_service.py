@@ -344,9 +344,14 @@ def validate_special_shape_geometry(
         if _same_geometry_point(point, points[(index + 1) % len(points)]):
             frappe.throw(_("Special shape geometry has duplicate adjacent vertices."))
 
+    reservation = str(geometry.get("reservation") or "").strip()
+    if reservation not in {"", "blank"}:
+        frappe.throw(_("Special shape geometry contains an unsupported reservation."))
     xs = [point[0] for point in points]
     ys = [point[1] for point in points]
-    if (
+    # Missing reservation keeps the historical full-span contract. An explicit
+    # blank reservation is an interior contour whose offset must be preserved.
+    if reservation != "blank" and (
         abs(min(xs)) > GEOMETRY_EPSILON
         or abs(max(xs) - width) > GEOMETRY_EPSILON
         or abs(min(ys)) > GEOMETRY_EPSILON
@@ -370,6 +375,7 @@ def validate_special_shape_geometry(
         "blank_length_cm": round(length, 3),
         "points": points,
         "exact": True,
+        **({"reservation": "blank"} if reservation == "blank" else {}),
     }
 
 

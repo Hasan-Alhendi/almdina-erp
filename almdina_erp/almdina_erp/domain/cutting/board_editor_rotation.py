@@ -123,6 +123,10 @@ def pivot_from_piece(piece: Mapping[str, Any]) -> dict[str, float]:
     existing = piece.get("pivot_mm")
     if isinstance(existing, Mapping) and existing.get("x") is not None:
         return {"x": num(existing["x"]), "y": num(existing["y"])}
+    if piece.get("reserves_blank"):
+        reserved = piece.get("base_reservation_mm") or piece.get("reservation_mm")
+        if isinstance(reserved, list) and len(reserved) >= 3:
+            return aabb_center(reserved)
     base = piece.get("base_outline_mm")
     if isinstance(base, list) and len(base) >= 3:
         return aabb_center(base)
@@ -187,6 +191,8 @@ def rederive_outline(piece: dict[str, Any]) -> None:
     pivot = piece["pivot_mm"]
     base = piece["base_outline_mm"]
     piece["outline_mm"] = rotate_points(base, pivot, angle)
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["reservation_mm"] = rotate_points(piece["base_reservation_mm"], pivot, angle)
     base_hole = piece.get("base_hole_mm")
     if isinstance(base_hole, list) and len(base_hole) >= 3:
         piece["glass_hole_local_mm"] = rotate_points(base_hole, pivot, angle)
@@ -210,6 +216,8 @@ def translate_piece_geometry(piece: dict[str, Any], dx: float, dy: float) -> Non
         return [[num(p[0]) + dx, num(p[1]) + dy] for p in points]
 
     piece["base_outline_mm"] = _shift(piece.get("base_outline_mm"))
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["base_reservation_mm"] = _shift(piece["base_reservation_mm"])
     if isinstance(piece.get("base_hole_mm"), list):
         piece["base_hole_mm"] = _shift(piece["base_hole_mm"])
     pivot = piece.get("pivot_mm") or {}
@@ -338,6 +346,8 @@ def _rigid_rotate_piece_about(
     if angles_equivalent(delta, 0):
         return
     piece["base_outline_mm"] = rotate_points(piece["base_outline_mm"], host_pivot, delta)
+    if isinstance(piece.get("base_reservation_mm"), list):
+        piece["base_reservation_mm"] = rotate_points(piece["base_reservation_mm"], host_pivot, delta)
     if isinstance(piece.get("base_hole_mm"), list):
         piece["base_hole_mm"] = rotate_points(piece["base_hole_mm"], host_pivot, delta)
     old_pivot = [num(piece["pivot_mm"]["x"]), num(piece["pivot_mm"]["y"])]

@@ -14,7 +14,7 @@ assert.match(renderer, /lock-open/);
 assert.match(renderer, /data-abe-reference-upload/);
 assert.match(renderer, /data-abe-reference-action="calibrate"/);
 assert.match(renderer, /computePolylineHudPosition/);
-assert.match(page, /canvas_renderer\.js\?v=52/);
+assert.match(page, /canvas_renderer\.js\?v=53/);
 assert.match(page, /controller\.js\?v=50/);
 assert.match(page, /drawing_space\.js\?v=5/);
 assert.match(page, /board_editor\.css\?v=48/);

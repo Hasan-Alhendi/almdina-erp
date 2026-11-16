@@ -90,12 +90,27 @@ after.forEach((point, index) => {
 assert.equal(drawing.current().document.paths[0].segments.every((segment) => segment.kind === "line"), true);
 
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");
-assert.match(page, /drawing_compile\.js\?v=2/);
+assert.match(page, /drawing_compile\.js\?v=3/);
 assert.match(page, /controller\.js\?v=50/);
 const renderer = fs.readFileSync(path.join(root, "public/js/board_editor/canvas_renderer.js"), "utf8");
 assert.match(renderer, /Cut outline/);
 assert.match(renderer, /Clear cut outline/);
 assert.match(renderer, /Proposed cut/);
 assert.match(renderer, /#0b5fff/);
+assert.match(renderer, /reservation_mm/);
+assert.match(renderer, /stroke-dasharray="4 3"/);
+
+const inset = editor.DrawingCompile.compile(
+    ring([[50, 100], [250, 100], [250, 400], [50, 400]]),
+    330,
+    550
+);
+assert.equal(inset.status, "ready");
+assert.equal(inset.geometry.reservation, "blank");
+assert.equal(inset.geometry.points[0][0], 5);
+assert.equal(inset.geometry.points[0][1], 10);
+assert.equal(inset.geometry.blank_width_cm, 33);
+assert.equal(inset.geometry.blank_length_cm, 55);
+assert.equal(inset.messageKey, "The cut outline is valid for manufacturing.");
 
 console.log("manufacturing geometry UI contract passed");

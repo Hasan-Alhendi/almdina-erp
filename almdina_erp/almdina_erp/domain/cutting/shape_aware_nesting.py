@@ -23,7 +23,7 @@ from itertools import combinations
 from typing import Any, Mapping, Sequence
 
 from .dxf_geometry import point_in_polygon, polygon_distance, polygons_overlap
-from .glass_opening_nesting import material_outline_cm
+from .glass_opening_nesting import material_outline_cm, occupancy_outline_cm
 from .primitives import make_placed_piece, num
 
 _CORNER_TYPES = frozenset({"Clipped Corner", "L-Shaped Corner"})
@@ -782,7 +782,7 @@ def _interlock_pair(
     moved = _translate_pieces((anchor, other), origin[0], origin[1])
     if not _slot_pair_geometry(moved[0], moved[1], kerf_cm):
         return None
-    outlines = [material_outline_cm(piece) for piece in moved]
+    outlines = [occupancy_outline_cm(piece) for piece in moved]
     if any(outline is None for outline in outlines):
         return None
     proven = [outline for outline in outlines if outline is not None]
@@ -899,7 +899,7 @@ def _pair_inward_score(
     off an outer edge, or toward the nearer edge, is refused.
     """
 
-    notches = [_notch_bounds(material_outline_cm(piece)) for piece in pieces]
+    notches = [_notch_bounds(occupancy_outline_cm(piece)) for piece in pieces]
     if any(notch is None for notch in notches) or len(pieces) != 2:
         return None
     proven = [notch for notch in notches if notch is not None]
@@ -958,7 +958,7 @@ def _inward_single(
             if x_cm < -1e-6 or y_cm < -1e-6:
                 continue
             candidate = _translate_pieces([placed], x_cm, y_cm)[0]
-            outline = material_outline_cm(candidate)
+            outline = occupancy_outline_cm(candidate)
             if outline is None or not _inside_board(outline, board_w_cm, board_h_cm):
                 continue
             score = _inward_score(candidate, board_w_cm, board_h_cm)
@@ -976,7 +976,7 @@ def _inward_score(
     board_w_cm: float,
     board_h_cm: float,
 ) -> float | None:
-    outline = material_outline_cm(placed)
+    outline = occupancy_outline_cm(placed)
     notch = _notch_bounds(outline) if outline is not None else None
     if notch is None:
         return None
@@ -1030,7 +1030,7 @@ def _voids_for_block(
             return [usable]
         return []
     if kind == "pair" and len(pieces) == 2:
-        notches = [_notch_bounds(material_outline_cm(piece)) for piece in pieces]
+        notches = [_notch_bounds(occupancy_outline_cm(piece)) for piece in pieces]
         if any(notch is None for notch in notches):
             return []
         proven = [notch for notch in notches if notch is not None]
@@ -1048,7 +1048,7 @@ def _voids_for_block(
             return [usable]
         return []
     if kind == "single" and pieces:
-        notch = _notch_bounds(material_outline_cm(pieces[0]))
+        notch = _notch_bounds(occupancy_outline_cm(pieces[0]))
         if notch is None:
             return []
         usable = {
@@ -1130,7 +1130,7 @@ def _pieces_inside(
     board_h_cm: float,
 ) -> bool:
     for piece in pieces:
-        outline = material_outline_cm(piece)
+        outline = occupancy_outline_cm(piece)
         if outline is None or not _inside_board(outline, board_w_cm, board_h_cm):
             return False
     return True
@@ -1142,7 +1142,7 @@ def _pieces_clear(
     kerf_cm: float,
 ) -> bool:
     for piece in pieces:
-        outline = material_outline_cm(piece)
+        outline = occupancy_outline_cm(piece)
         if outline is None or not _clears(outline, others, kerf_cm):
             return False
     return True
@@ -1365,7 +1365,7 @@ def _place_in_voids(
         ):
             angled = _guest_in_clipped_void(
                 piece,
-                [outline for outline in (material_outline_cm(host) for host in block["pieces"]) if outline],
+                [outline for outline in (occupancy_outline_cm(host) for host in block["pieces"]) if outline],
                 num(block["pieces"][0].get("original_w") or block["pieces"][0].get("width_cm")),
                 num(block["pieces"][0].get("original_h") or block["pieces"][0].get("length_cm")),
                 num(block["pieces"][0].get("clipped_corner_width_cm")),
@@ -1419,7 +1419,7 @@ def _guest_in_rect(
             spots=list(dict.fromkeys([*spots,*((x,y) for y in ys for x in xs)]))
         for x_cm, y_cm in spots:
             guest = _guest_at(piece, x_cm, y_cm, width, height, mirrored, turns)
-            outline = material_outline_cm(guest)
+            outline = occupancy_outline_cm(guest)
             if outline is None or not _outline_inside_rect(outline, void):
                 continue
             if not _inside_board(outline, board_w_cm, board_h_cm):
@@ -2034,7 +2034,7 @@ def _fill_free_space(
         ):
             leftover.append(piece)
             continue
-        outline = material_outline_cm(guest)
+        outline = occupancy_outline_cm(guest)
         if (
             outline is None
             or not _inside_board(outline, width, height)
@@ -2061,7 +2061,7 @@ def _inner_guest(
     """Place one proven outline in the shared void. Score does not decide."""
 
     kind, width, height, cut_x, cut_y = key
-    outlines = [material_outline_cm(piece) for piece in corners]
+    outlines = [occupancy_outline_cm(piece) for piece in corners]
     if any(outline is None for outline in outlines):
         return None
     proven = [outline for outline in outlines if outline is not None]
@@ -2198,7 +2198,7 @@ def _clears(
     kerf_cm: float,
 ) -> bool:
     for corner in corners:
-        other = corner if isinstance(corner, (list, tuple)) else material_outline_cm(corner)
+        other = corner if isinstance(corner, (list, tuple)) else occupancy_outline_cm(corner)
         if other is None:
             return False
         if polygons_overlap(outline, other):

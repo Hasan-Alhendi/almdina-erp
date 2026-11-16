@@ -690,6 +690,7 @@ Special shape vertex {0} is outside the raw piece.,الزاوية رقم {0} خ�
 Special shape geometry needs at least three distinct vertices.,يحتاج المسار الهندسي إلى ثلاث زوايا مختلفة على الأقل.
 Special shape geometry has duplicate adjacent vertices.,يحتوي المسار الهندسي على زوايا متجاورة متطابقة.
 Special shape geometry must touch all four raw-piece bounds.,يجب أن يلامس المسار الهندسي حدود عرض الخام وطوله الأربعة.
+Special shape geometry contains an unsupported reservation.,هندسة الشكل الخاص تحتوي على حجز غير مدعوم.
 Special shape geometry area must be greater than zero.,يجب أن تكون مساحة المسار الهندسي أكبر من صفر.
 Special shape geometry edges cannot intersect.,لا يجوز أن تتقاطع أضلاع المسار الهندسي.
 Language,اللغة
@@ -3653,7 +3654,7 @@ Cut outline problem,مشكلة في محيط القص
 Proposed cut,قص مقترح
 "The cut outline is not closed. Close the path, then validate it again.",المسار غير مغلق. أغلقه ثم أعد التحقق.
 The cut outline crosses itself. Move the nodes so the edges no longer cross.,محيط القص يتقاطع مع نفسه. حرّك العقد حتى لا تتقاطع الأضلاع.
-The cut outline extends outside the door blank. Move the whole path inside the blank.,محيط القص خارج حدود الدرفة. انقل المسار كاملًا إلى داخل الخام.
+The cut outline extends outside the door blank. Move the whole path inside the blank.,محيط القص خارج حدود الدرفة. انقل المسار بالكامل إلى داخل الخام.
 The cut outline must touch all four edges of the door blank. Move it; it will not be scaled automatically.,يجب أن يلامس محيط القص حواف الخام الأربع. حرّكه، ولن يُغيَّر حجمه تلقائيًا.
 This door already has a cut outline. Clear the extra one before copying the plan.,يوجد أكثر من محيط قص لهذه الدرفة. ألغِ المحيط الزائد قبل نسخ الخطة.
 The cut outline does not enclose a usable area. Redraw a closed shape with area.,مساحة المحيط غير صالحة. أعد رسم شكل مغلق له مساحة.
@@ -3662,7 +3663,7 @@ The cut outline has a zero-length edge. Remove the duplicate node.,المحيط 
 This curve cannot be represented within 0.05 mm and the 64-corner manufacturing limit. Simplify it.,لا يمكن تمثيل هذا المنحنى ضمن دقة 0.05 مم وحد 64 رأسًا. بسّطه.
 The cut outline contains a value that is not a number. Edit the path and validate again.,المحيط يحتوي قيمة غير رقمية. عدّل المسار ثم أعد التحقق.
 The drawing could not be read. Reload the piece and try again.,تعذر قراءة الرسم. أعد تحميل الدرفة ثم حاول مرة أخرى.
-The cut outline is valid for manufacturing.,محيط القص صالح للتصنيع.
+The cut outline is valid for manufacturing.,محيط القص صالح.
 "Choose a guide line, a note, or one cut outline.",اختر خطًا إرشاديًا أو ملاحظة أو محيط قص واحدًا.
 Enter a numeric move in millimetres.,أدخل قيمة تحريك رقمية بالمليمتر.
 That move puts the path outside the drawing range.,هذا التحريك يخرج المسار عن مدى الرسم.

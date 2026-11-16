@@ -25,6 +25,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_draft_review import (
     trusted_model_from_projection,
 )
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry import polygon_area
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import geometry_reserves_blank
 from almdina_erp.almdina_erp.domain.cutting.dxf_geometry_snapshot import (
     serialize_geometry_mm,
     serialize_overlay_geometry_mm,
@@ -410,7 +411,17 @@ def _materialize_piece(
     if source_geometry is not None and isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
     elif piece_type == "Special":
-        promote_outline = False
+        # Interior contours bake the posed cut. The door-local polygon stays in
+        # special_shape_geometry_json and is not shifted to the origin.
+        promote_outline = geometry_reserves_blank(
+            {
+                "special_shape_geometry_json": (
+                    adopted_geometry
+                    if adopted_geometry not in (None, "")
+                    else source.get("special_shape_geometry_json")
+                )
+            }
+        ) and isinstance(outline, list) and len(outline) >= 3
     elif isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
 
@@ -425,8 +436,17 @@ def _materialize_piece(
                 ),
             )
         )
+    reserves_blank = geometry_reserves_blank(
+        {
+            "special_shape_geometry_json": (
+                adopted_geometry
+                if adopted_geometry not in (None, "")
+                else source.get("special_shape_geometry_json")
+            )
+        }
+    )
     area_m2 = _area_m2(outline, holes)
-    if area_m2 <= 0:
+    if reserves_blank or area_m2 <= 0:
         area_m2 = abs(width_mm * length_mm) / 1_000_000.0
 
     piece = {
@@ -477,6 +497,12 @@ def _materialize_piece(
             piece.pop("placement_outline_cm", None)
         elif source.get("special_shape_geometry_json") not in (None, ""):
             piece["special_shape_geometry_json"] = source.get("special_shape_geometry_json")
+        if geometry_reserves_blank(piece):
+            reservation = posed.get("reservation_mm")
+            if isinstance(reservation, list) and len(reservation) >= 3:
+                piece["blank_reservation_cm"] = [
+                    [num(point[0]) / 10.0, num(point[1]) / 10.0] for point in reservation
+                ]
         if geometry_source == "cnc_raw_rect" or (
             not exact_geometry
             and not source_geometry

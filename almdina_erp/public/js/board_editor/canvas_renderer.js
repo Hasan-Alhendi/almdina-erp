@@ -2324,8 +2324,20 @@
                 );
                 caption = pieceCaption(element, sessionPiece, storeView, boards, origin, scale);
             }
-            const html = (edges || caption)
-                ? `<g data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}" style="pointer-events:${pointer};opacity:${opacity}"><path d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke"/>${edges}${doubleEdgeMarkup(geometry && geometry.outer, (element.payload && element.payload.display_edges) || null)}${caption}</g>`
+            let reserved = "";
+            if (
+                element.kind === "finished_outline"
+                && sessionPiece
+                && sessionPiece.reserves_blank
+                && Array.isArray(sessionPiece.reservation_mm)
+                && sessionPiece.reservation_mm.length >= 3
+            ) {
+                const ring = sessionPointsToWorld(sessionPiece.reservation_mm, sessionPiece, boards);
+                const reservedPath = ring.map((point, index) => `${index ? "L" : "M"}${point[0]} ${point[1]}`).join(" ") + " Z";
+                reserved = `<path d="${esc(reservedPath)}" fill="none" stroke="#98a2b3" stroke-width="0.8" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+            }
+            const html = (edges || caption || reserved)
+                ? `<g data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}" style="pointer-events:${pointer};opacity:${opacity}">${reserved}<path d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke"/>${edges}${doubleEdgeMarkup(geometry && geometry.outer, (element.payload && element.payload.display_edges) || null)}${caption}</g>`
                 : `<path data-element-id="${esc(element.element_id)}"${pieceKeyAttr}${pieceIdAttr} data-fill-role="${esc(role)}" d="${esc(d)}" fill="${esc(fill)}" fill-rule="evenodd" stroke="${esc(stroke)}" stroke-width="${strokeWidth}"${dash} vector-effect="non-scaling-stroke" style="pointer-events:${pointer};opacity:${opacity}" class="abe-piece${selected ? " is-selected" : ""}${sessionPiece && !sessionPiece.editable ? " is-locked" : ""}"/>`;
             (sheetGroups[sheetKey] || sheetGroups.__outside).push(html);
         });

@@ -25,7 +25,10 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_plan_materialize import
     METHOD_LABEL,
     materialize_plan_snapshot,
 )
-from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import material_outline_cm
+from almdina_erp.almdina_erp.domain.cutting.glass_opening_nesting import (
+    geometry_reserves_blank,
+    material_outline_cm,
+)
 from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import (
     BOARD_EDITOR,
     DRAFT,
@@ -194,6 +197,16 @@ def projection_with_adopted_geometry(
                 detail={"piece_instance_id": instance, "reason": "outline_unplaced"},
             )
         outers[instance] = [[point[0] * 10.0, point[1] * 10.0] for point in outline]
+    for piece in patched.get("pieces") or []:
+        if not isinstance(piece, dict):
+            continue
+        instance = str(piece.get("piece_instance_id") or "")
+        if instance not in adopted:
+            continue
+        piece["special_shape_geometry_json"] = adopted[instance]
+        piece["piece_type"] = "Special"
+        piece["reserves_blank"] = geometry_reserves_blank(piece)
+        piece["exact_geometry"] = True
     for element in patched.get("elements") or []:
         instance = str(element.get("piece_instance_id") or "")
         if element.get("kind") != "finished_outline" or instance not in outers:
