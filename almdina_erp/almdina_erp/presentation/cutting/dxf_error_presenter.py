@@ -265,6 +265,12 @@ def _corner_copy_target(issue: DxfValidationIssue, fallback: str) -> str:
 def _action_for_context(action: str, context: str) -> str:
     if context == "upload":
         return action
+    if context == "save":
+        return (
+            action.replace("أعد رفع الملف", "أعد حفظ الخطة")
+            .replace("أعد رفع DXF", "أعد حفظ الخطة")
+            .replace("أعد الرفع", "أعد الحفظ")
+        )
     return (
         action.replace("أعد رفع الملف", "أعد تصدير DXF")
         .replace("أعد رفع DXF", "أعد تصدير DXF")
@@ -1759,15 +1765,15 @@ def render_error_cards_html(
     max_cards: int = 10,
 ) -> str:
     """Render RTL issue cards with a footer for upload or export context."""
-    if context not in {"upload", "export"}:
-        raise ValueError("DXF error-card context must be 'upload' or 'export'.")
+    if context not in {"upload", "save", "export"}:
+        raise ValueError("DXF error-card context must be 'upload', 'save' or 'export'.")
     presented = present_issues(issues)
     if not presented:
-        fallback_action = (
-            "أصلح المشكلة أو أعد حساب الخطة ثم أعد تصدير DXF."
-            if context == "export"
-            else "صحح الرسم ثم أعد رفع الملف."
-        )
+        fallback_action = {
+            "upload": "صحح الرسم ثم أعد رفع الملف.",
+            "save": "صحح توزيع القطع ثم أعد حفظ الخطة.",
+            "export": "أصلح المشكلة أو أعد حساب الخطة ثم أعد تصدير DXF.",
+        }[context]
         presented = [
             PresentedDxfError(
                 "تعذر التحقق من ملف DXF بسبب خطأ غير معروف.",
@@ -1847,11 +1853,11 @@ def render_error_cards_html(
                 + "</details>"
             ]
         )
-    footer = (
-        "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب."
-        if context == "upload"
-        else "أصلح المشكلة أعلاه أو أعد حساب الخطة، ثم أعد تصدير DXF."
-    )
+    footer = {
+        "upload": "صحح الرسم ثم أعد رفع الملف. لم يتم استبدال خطة DXF الحالية في الطلب.",
+        "save": "صحح توزيع القطع ثم أعد حفظ الخطة. لم يتم حفظ الخطة غير الصالحة.",
+        "export": "أصلح المشكلة أعلاه أو أعد حساب الخطة، ثم أعد تصدير DXF.",
+    }[context]
     return (
         "<div class='alm-dxf-error-dialog' style='direction:rtl;text-align:right;'>"
         f"{''.join(cards)}"
