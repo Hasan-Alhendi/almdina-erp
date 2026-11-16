@@ -13,12 +13,16 @@ from almdina_erp.almdina_erp.application.security.drawing_action_policy import (
     required_upload_capability,
     validate_assigned_drawing_action,
 )
+from almdina_erp.almdina_erp.domain.cutting.plan_lifecycle import DRAFT, UPLOADED_DXF
 from almdina_erp.almdina_erp.domain.security.authorization import Capability
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_authorization import (
     require_cutting_plan_capability,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
+    latest_plan,
+    manufacturing_plan_document,
     manufacturing_plan_settings,
+    plan_settings,
 )
 from almdina_erp.almdina_erp.infrastructure.frappe.order_tracking_repository import (
     get_order,
@@ -253,6 +257,14 @@ def mark_dxf_exported(order_name: str) -> dict[str, Any]:
     }
 
 
+def _uploaded_dxf_import_context(order_name: str) -> tuple[Any, Any | None]:
+    """Match import validation to the settings the Uploaded DXF draft will save."""
+    uploaded = latest_plan(order_name, source_type=UPLOADED_DXF, status=DRAFT)
+    if uploaded is not None:
+        return plan_settings(uploaded), uploaded
+    return manufacturing_plan_settings(order_name), manufacturing_plan_document(order_name)
+
+
 @frappe.whitelist()
 @record_unexpected_errors("dxf_upload")
 def upload_production_dxf(order_name: str, file_url: str, file_id: str | None = None) -> dict[str, Any]:
@@ -293,12 +305,7 @@ def upload_production_dxf(order_name: str, file_url: str, file_id: str | None = 
 
     try:
         from almdina_erp.almdina_erp.domain.cutting.tool_diameters import diameters_for_record
-        from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
-            manufacturing_plan_document,
-        )
-
-        settings = manufacturing_plan_settings(order.name)
-        plan_document = manufacturing_plan_document(order.name)
+        settings, plan_document = _uploaded_dxf_import_context(order.name)
         custom_snapshot = parse_production_dxf(
             normalized_url,
             order,
