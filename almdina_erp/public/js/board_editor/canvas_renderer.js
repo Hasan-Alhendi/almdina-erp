@@ -1373,8 +1373,31 @@
         return `<div class="abe-mode-switch" role="group" aria-label="${esc(__("Editor mode"))}">${button("board", "Board")}${button("drawing", "Drawing")}</div>`;
     }
 
-    function drawingToolControl(tool, label, pressed, enabled) {
-        return `<button type="button" class="abe-drawing-tool${pressed ? " is-active" : ""}" data-abe-drawing-tool="${tool}" aria-pressed="${pressed ? "true" : "false"}"${enabled ? "" : " disabled"}>${esc(__(label))}</button>`;
+    const DRAWING_TOOL_ICONS = {
+        select: "mouse-pointer-2",
+        polyline: "spline",
+        shapes: "shapes",
+        pen: "pen-tool",
+        node_edit: "waypoints",
+        snap: "magnet",
+        reference_image: "image",
+    };
+
+    function drawingToolControl(tool, label, pressed, enabled, extraAttrs) {
+        const translated = __(label);
+        const icon = frappeIcon(DRAWING_TOOL_ICONS[tool] || "circle");
+        if (!enabled && tool !== "select" && tool !== "polyline") {
+            return `<span class="abe-drawing-tool abe-tool-btn" aria-disabled="true" title="${esc(translated)}">${icon}</span>`;
+        }
+        const extras = extraAttrs || "";
+        const pressedAttr = extras.indexOf("aria-pressed=") >= 0 ? "" : ` aria-pressed="${pressed ? "true" : "false"}"`;
+        const toolAttr = extras.indexOf("data-abe-") >= 0 ? "" : ` data-abe-drawing-tool="${esc(tool)}"`;
+        return `<button type="button" class="alm-btn-secondary abe-drawing-tool abe-tool-btn${pressed ? " is-active" : ""}"${toolAttr}${pressedAttr}${enabled ? "" : " disabled"}${extras} title="${esc(translated)}" aria-label="${esc(translated)}">${icon}</button>`;
+    }
+
+    function iconAction(className, iconName, label, attrs, alreadyTranslated) {
+        const translated = alreadyTranslated ? label : __(label);
+        return `<button type="button" class="alm-btn-secondary abe-tool-btn ${className}"${attrs || ""} title="${esc(translated)}" aria-label="${esc(translated)}">${frappeIcon(iconName)}</button>`;
     }
 
     function cutProblemHtml(drawing) {
@@ -1413,6 +1436,11 @@
         const dirty = drawing.dirty
             ? `<span class="abe-drawing-dirty">${esc(__("Unsaved drawing"))}</span>`
             : "";
+        const historyHtml = `
+            <span class="abe-tool-sep" aria-hidden="true"></span>
+            ${iconAction("abe-drawing-history", "undo-2", "Undo", ` data-abe-drawing-history="undo"${drawing.canUndo ? "" : " disabled"}`)}
+            ${iconAction("abe-drawing-history", "redo-2", "Redo", ` data-abe-drawing-history="redo"${drawing.canRedo ? "" : " disabled"}`)}
+        `;
         const toolHtml = tools.map((tool) => {
             if (tool.id === "select" || tool.id === "polyline") {
                 return drawingToolControl(tool.id, tool.labelKey, activeTool === tool.id, enabled);
@@ -1424,13 +1452,13 @@
                 const settings = drawing.snapSettings || {};
                 const snapOn = settings.enabled !== false;
                 const menuOpen = drawing.snapMenuOpen === true;
-                return `<button type="button" class="abe-drawing-tool${menuOpen ? " is-active" : ""}" data-abe-snap-toggle="1" aria-pressed="${snapOn ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+                return drawingToolControl("snap", tool.labelKey, menuOpen, true, ` data-abe-snap-toggle="1" aria-pressed="${snapOn ? "true" : "false"}"`);
             }
             if (tool.id === "reference_image" && enabled) {
                 const menuOpen = drawing.referenceMenuOpen === true;
-                return `<button type="button" class="abe-drawing-tool${menuOpen ? " is-active" : ""}" data-abe-reference-toggle="1" aria-pressed="${menuOpen ? "true" : "false"}">${esc(__(tool.labelKey))}</button>`;
+                return drawingToolControl("reference_image", tool.labelKey, menuOpen, true, ` data-abe-reference-toggle="1"`);
             }
-            return `<span class="abe-drawing-tool" aria-disabled="true">${esc(__(tool.labelKey))}</span>`;
+            return drawingToolControl(tool.id, tool.labelKey, false, false);
         }).join("");
         const actions = enabled && activeTool === "polyline" ? `
             <div class="abe-drawing-actions">
@@ -1442,7 +1470,7 @@
         const problem = cutProblemHtml(drawing);
         return `<div class="abe-drawing-workspace" data-abe-drawing-workspace="1">
             <p class="abe-drawing-status" role="status">${name}${size}${dirty}<span>${esc(message)}</span></p>
-            <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}</div>
+            <div class="abe-drawing-tools" role="group" aria-label="${esc(__("Drawing tools"))}">${toolHtml}${historyHtml}</div>
             ${shapeMenuHtml(drawing)}
             ${penSettingsHtml(drawing, enabled)}
             ${snapMenuHtml(drawing, enabled)}
@@ -1570,15 +1598,16 @@
         if (!enabled || !drawing || drawing.referenceMenuOpen !== true) return "";
         const rows = (drawing.references || []).map((reference, index) => {
             const selected = reference.selected ? " is-active" : "";
+            const selectLabel = `${__("Reference image")} ${index + 1}`;
             return `<span class="abe-reference-row${selected}">
-                <button type="button" data-abe-reference-select="${esc(reference.id)}">${esc(__("Reference image"))} ${index + 1}</button>
-                <button type="button" data-abe-reference-action="hide" data-abe-reference-id="${esc(reference.id)}" title="${esc(__(reference.hidden ? "Show reference image" : "Hide reference image"))}">${esc(__(reference.hidden ? "Show" : "Hide"))}</button>
-                <button type="button" data-abe-reference-action="lock" data-abe-reference-id="${esc(reference.id)}" title="${esc(__(reference.locked ? "Unlock reference image" : "Lock reference image"))}">${esc(__(reference.locked ? "Unlock" : "Lock"))}</button>
-                <button type="button" data-abe-reference-action="delete" data-abe-reference-id="${esc(reference.id)}" title="${esc(__("Delete reference image"))}">${esc(__("Delete"))}</button>
+                ${iconAction("", "image", selectLabel, ` data-abe-reference-select="${esc(reference.id)}"`, true)}
+                ${iconAction("", reference.hidden ? "eye" : "eye-off", reference.hidden ? "Show reference image" : "Hide reference image", ` data-abe-reference-action="hide" data-abe-reference-id="${esc(reference.id)}"`)}
+                ${iconAction("", reference.locked ? "lock-open" : "lock", reference.locked ? "Unlock reference image" : "Lock reference image", ` data-abe-reference-action="lock" data-abe-reference-id="${esc(reference.id)}"`)}
+                ${iconAction("", "trash-2", "Delete reference image", ` data-abe-reference-action="delete" data-abe-reference-id="${esc(reference.id)}"`)}
             </span>`;
         }).join("");
         return `<div class="abe-reference-menu" data-abe-reference-menu="1" dir="${esc(pageDirection())}">
-            <button type="button" data-abe-reference-upload="1">${esc(__("Upload reference image"))}</button>
+            ${iconAction("", "upload", "Upload reference image", ` data-abe-reference-upload="1"`)}
             <input type="file" accept="image/*,.svg,.heic" data-abe-reference-file="1" hidden />
             ${rows}
         </div>`;
@@ -1587,24 +1616,24 @@
     function referenceFormHtml(drawing) {
         const form = drawing && drawing.referenceForm;
         if (!form) return "";
-        const field = (key, label, value) => `<label><span>${esc(__(label))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-reference-field="${esc(key)}" value="${esc(value)}" aria-label="${esc(__(label))}" /></label>`;
+        const field = (key, label, value) => `<label class="abe-metric"><span>${esc(__(label))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-reference-field="${esc(key)}" value="${esc(value)}" aria-label="${esc(__(label))}" /></label>`;
         const percent = Math.round(Number(form.opacity) * 1000) / 10;
         const calibration = form.calibration
             ? `<p class="abe-reference-note" data-abe-reference-calibration="1">${esc(__("Calibrated"))}: <span dir="ltr">${esc(form.calibration.known_distance_mm)} mm</span></p>`
             : (form.calibrating
                 ? `<p class="abe-reference-note">${esc(__(form.calibrationMessage || "Pick the first point on the image."))}${form.currentDistance != null ? ` <span dir="ltr">${esc(form.currentDistance)} mm</span>` : ""}</p>
                     <label><span>${esc(__("Known distance (mm)"))}</span><input type="text" inputmode="decimal" dir="ltr" data-abe-reference-known="1" value="${esc(form.knownText || "")}" /></label>
-                    <button type="button" data-abe-reference-action="apply-calibration">${esc(__("Apply calibration"))}</button>`
+                    ${iconAction("", "crosshair", "Apply calibration", ` data-abe-reference-action="apply-calibration"`)}`
                 : "");
         return `<div class="abe-reference-form" data-abe-reference-form="1" dir="${esc(pageDirection())}">
-            ${field("x_mm", "X (mm)", form.x_mm)}
-            ${field("y_mm", "Y (mm)", form.y_mm)}
+            ${field("x_mm", "Drawing X (mm)", form.x_mm)}
+            ${field("y_mm", "Drawing Y (mm)", form.y_mm)}
             ${field("width_mm", "Width (mm)", form.width_mm)}
             ${field("height_mm", "Height (mm)", form.height_mm)}
             ${field("rotation_deg", "Angle (°)", form.rotation_deg)}
             <label><span>${esc(__("Opacity (%)"))}</span><input type="range" min="0" max="100" step="1" dir="ltr" data-abe-reference-opacity="1" value="${esc(percent)}" aria-label="${esc(__("Opacity (%)"))}" /></label>
             <label><input type="checkbox" data-abe-reference-aspect="1"${form.aspectLocked !== false ? " checked" : ""} />${esc(__("Lock aspect ratio"))}</label>
-            <button type="button" data-abe-reference-action="calibrate">${esc(__("Calibrate"))}</button>
+            ${iconAction("", "crosshair", "Calibrate", ` data-abe-reference-action="calibrate"`)}
             ${calibration}
         </div>`;
     }
@@ -1635,9 +1664,9 @@
                 const options = corners.map(([value, label]) => (
                     `<option value="${esc(value)}"${String(field.value) === value ? " selected" : ""}>${esc(__(label))}</option>`
                 )).join("");
-                return `<label><span>${esc(__(field.labelKey))}</span><select data-abe-shape-field="${esc(field.key)}" aria-label="${esc(__(field.labelKey))}">${options}</select></label>`;
+                return `<label class="abe-metric"><span>${esc(__(field.labelKey))}</span><select data-abe-shape-field="${esc(field.key)}" aria-label="${esc(__(field.labelKey))}">${options}</select></label>`;
             }
-            return `<label><span>${esc(__(field.labelKey))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-shape-field="${esc(field.key)}" value="${esc(field.value == null ? "" : field.value)}" aria-label="${esc(__(field.labelKey))}" /></label>`;
+            return `<label class="abe-metric"><span>${esc(__(field.labelKey))}</span><input type="text" inputmode="decimal" dir="ltr" autocomplete="off" spellcheck="false" data-abe-shape-field="${esc(field.key)}" value="${esc(field.value == null ? "" : field.value)}" aria-label="${esc(__(field.labelKey))}" /></label>`;
         }).join("");
         const error = form.errorKey
             ? `<p class="abe-drawing-measure-error" data-abe-shape-error="1" role="alert">${esc(__(form.errorKey))}</p>`
@@ -1719,8 +1748,8 @@
             ${button("role-manufacturing", "Cut outline")}
             ${clear}
             ${validate}
-            <label>${esc(__("Move X (mm)"))}<input data-abe-path-dx="1" inputmode="decimal" value="0"></label>
-            <label>${esc(__("Move Y (mm)"))}<input data-abe-path-dy="1" inputmode="decimal" value="0"></label>
+            <label class="abe-metric">${esc(__("Move X (mm)"))}<input data-abe-path-dx="1" inputmode="decimal" dir="ltr" value="0"></label>
+            <label class="abe-metric">${esc(__("Move Y (mm)"))}<input data-abe-path-dy="1" inputmode="decimal" dir="ltr" value="0"></label>
             <button type="button" data-abe-drawing-action="move-path">${esc(__("Move path"))}</button>
         </div>`;
     }
@@ -2572,6 +2601,16 @@
                 if (button.disabled) return;
                 if (handlers && handlers.setDrawingTool) {
                     handlers.setDrawingTool(button.getAttribute("data-abe-drawing-tool"));
+                }
+            });
+        });
+        host.querySelectorAll("[data-abe-drawing-history]").forEach((button) => {
+            button.addEventListener("pointerdown", (event) => event.stopPropagation());
+            button.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (button.disabled) return;
+                if (handlers && handlers.drawingHistory) {
+                    handlers.drawingHistory(button.getAttribute("data-abe-drawing-history"));
                 }
             });
         });

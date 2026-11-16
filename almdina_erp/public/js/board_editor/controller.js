@@ -1527,8 +1527,8 @@
                 return {
                     mode: "node",
                     fields: [
-                        { key: "x_mm", labelKey: "X (mm)", value: shapeFieldValue("x_mm", { x_mm: node.x_mm }) },
-                        { key: "y_mm", labelKey: "Y (mm)", value: shapeFieldValue("y_mm", { y_mm: node.y_mm }) },
+                        { key: "x_mm", labelKey: "Drawing X (mm)", value: shapeFieldValue("x_mm", { x_mm: node.x_mm }) },
+                        { key: "y_mm", labelKey: "Drawing Y (mm)", value: shapeFieldValue("y_mm", { y_mm: node.y_mm }) },
                     ],
                     errorKey: record.measureError && record.measureError.messageKey,
                     actions: { copy: true, paste: Boolean(record.clipboard), remove: true, insert: true },
@@ -1613,6 +1613,8 @@
                 dragging: Boolean(vectorGesture),
                 ready: record.ready === true,
                 dirty: drawingSession.documentDirty(record),
+                canUndo: Boolean(record.past && record.past.length),
+                canRedo: Boolean(record.future && record.future.length),
                 messageKey: drawingPartialMessage || record.messageKey || "",
                 canFinish: Boolean(record.cursor && record.cursor.pathId),
                 canClose: Boolean(record.cursor && record.cursor.pathId),
@@ -2390,6 +2392,14 @@
             } finally {
                 committingMeasure = false;
             }
+        }
+
+        function applyDrawingHistory(direction) {
+            if (!drawingSession) return;
+            if (direction === "redo") drawingSession.redo();
+            else drawingSession.undo();
+            refreshCutValidation();
+            syncDrawing();
         }
 
         function drawingAction(action) {
@@ -3267,6 +3277,7 @@
                 },
                 commitShapeForm: () => commitShapeForm(),
                 drawingAction: (action) => drawingAction(action),
+                drawingHistory: (direction) => applyDrawingHistory(direction),
                 drawingPointerDown: (event) => drawingPointerDown(event),
                 commitDrawingHud: (lengthText, angleText, sourceField) => commitDrawingHud(lengthText, angleText, sourceField),
                 onDrawingMeasureInput: (field, value) => {
@@ -4008,10 +4019,7 @@
                 if (distributionKey) {
                     event.preventDefault();
                     if (undoKey && drawingSession) {
-                        if (event.shiftKey || keyName.toLowerCase() === "y") drawingSession.redo();
-                        else drawingSession.undo();
-                        refreshCutValidation();
-                        syncDrawing();
+                        applyDrawingHistory(event.shiftKey || keyName.toLowerCase() === "y" ? "redo" : "undo");
                     } else if ((keyName === "Delete" || keyName === "Backspace") && drawingSession && (drawingTool === "select" || drawingTool === "node_edit" || drawingTool === "shapes")) {
                         drawingSession.deleteSelection();
                         refreshCutValidation();

@@ -3551,7 +3551,6 @@ Ellipse,قطع ناقص
 Arc,قوس
 Polygon,مضلع
 L shape,شكل L
-Clipped corner,زاوية مقصوصة
 Bézier curve,منحنى بيزييه
 Width (mm),العرض (مم)
 Height (mm),الارتفاع (مم)
@@ -3569,14 +3568,8 @@ Cutout width (mm),عرض القصّة (مم)
 Cutout height (mm),ارتفاع القصّة (مم)
 Cut width (mm),عرض القص (مم)
 Cut height (mm),ارتفاع القص (مم)
-Corner,الزاوية
-Top left,أعلى اليسار
-Top right,أعلى اليمين
-Bottom left,أسفل اليسار
-Bottom right,أسفل اليمين
 End X (mm),نهاية X (مم)
 End Y (mm),نهاية Y (مم)
-Y (mm),Y (مم)
 Convert to path,تحويل إلى مسار
 Copy,نسخ
 Paste,لصق
@@ -3648,7 +3641,6 @@ Select one editable special piece before uploading a reference image.,اختر �
 This drawing already has the maximum number of reference images.,بلغ هذا الرسم الحد الأقصى لعدد الصور المرجعية.
 The reference image could not be placed.,تعذر وضع الصورة المرجعية.
 Guide line,خط إرشادي
-Note,ملاحظة
 Cut outline,محيط قص خارجي
 Clear cut outline,إلغاء محيط القص
 Validate cut outline,التحقق من محيط القص
@@ -3688,3 +3680,6 @@ Select the problem path,تحديد المسار المسبب للمشكلة
 Convert the shape into independent nodes and segments so its geometry can be edited.,تحويل الشكل إلى عقد ومقاطع مستقلة للتحكم في تفاصيله الهندسية.
 Unsaved edits are saved before the cutting plan is copied.,تُحفظ التعديلات غير المحفوظة قبل نسخ خطة القص.
 Save a door drawing or the board distribution before copying the cutting plan.,احفظ رسم الدرفة أو توزيع الألواح قبل نسخ خطة القص.
+Delete,حذف
+Drawing X (mm),X (مم)
+Drawing Y (mm),Y (مم)

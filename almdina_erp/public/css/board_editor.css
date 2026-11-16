@@ -1025,6 +1025,82 @@ button.abe-drawing-tool:disabled {
   opacity: 0.45;
 }
 
+.abe-drawing-tools {
+  gap: 2px;
+}
+
+.abe-drawing-workspace .abe-tool-btn,
+.abe-reference-menu .abe-tool-btn,
+.abe-reference-form .abe-tool-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--alm-text, #172033);
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.abe-drawing-workspace .abe-tool-btn svg,
+.abe-reference-menu .abe-tool-btn svg,
+.abe-reference-form .abe-tool-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.abe-drawing-workspace .abe-tool-btn.is-active,
+.abe-reference-row.is-active .abe-tool-btn {
+  background: #dbe7ff;
+  color: #0b5fff;
+}
+
+.abe-drawing-workspace .abe-tool-btn:hover:not(:disabled),
+.abe-reference-menu .abe-tool-btn:hover,
+.abe-reference-form .abe-tool-btn:hover {
+  background: var(--alm-secondary-hover-bg, #f2f4f7);
+}
+
+.abe-drawing-workspace .abe-tool-btn:disabled,
+.abe-drawing-tools .abe-tool-btn[aria-disabled="true"] {
+  color: var(--alm-text-muted, #98a2b3);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.abe-metric {
+  display: inline-grid;
+  grid-template-columns: auto 72px;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--alm-text-muted, #667085);
+}
+
+.abe-metric input,
+.abe-metric select,
+.abe-shape-form input[type="text"],
+.abe-reference-form input[type="text"] {
+  width: 72px;
+  min-height: 24px;
+  border: 1px solid var(--alm-border, #e5e9f1);
+  border-radius: 8px;
+  background: var(--alm-surface, #fff);
+  color: var(--alm-text, #172033);
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.abe-metric input:disabled,
+.abe-metric select:disabled {
+  opacity: 0.45;
+}
+
 .abe-drawing-dirty {
   color: #b54708;
   font-weight: 600;

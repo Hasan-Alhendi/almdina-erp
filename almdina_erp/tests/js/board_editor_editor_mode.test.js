@@ -327,12 +327,25 @@ assert.match(host.innerHTML, /Polyline/);
 assert.match(host.innerHTML, /data-abe-drawing-tool="polyline"[^>]*disabled/);
 assert.doesNotMatch(host.innerHTML, /<button[^>]*data-abe-drawing-tool="shapes"/);
 assert.match(host.innerHTML, /abe-undo[^>]*disabled/);
+assert.match(host.innerHTML, /data-abe-drawing-history="undo"[^>]*disabled/);
+assert.match(host.innerHTML, /data-abe-drawing-history="redo"[^>]*disabled/);
+assert.match(host.innerHTML, /#icon-undo-2/);
+assert.match(host.innerHTML, /#icon-redo-2/);
+assert.match(host.innerHTML, /title="Undo"/);
+assert.match(host.innerHTML, /title="Redo"/);
 assert.match(host.innerHTML, /abe-measure[^>]*disabled/);
 assert.doesNotMatch(host.innerHTML, /abe-zoom-in[^>]*disabled/);
 assert.equal(JSON.stringify(store.snapshot().viewport), cameraBefore);
 assert.doesNotMatch(host.innerHTML, /abe-float-tools[\s\S]*abe-save\b/);
 assert.doesNotMatch(host.innerHTML, /abe-float-tools[\s\S]*abe-review\b/);
 assert.doesNotMatch(host.innerHTML, /abe-float-tools[\s\S]*abe-create-plan\b/);
+
+const withHistory = store.snapshot();
+withHistory.drawingView = { ready: true, canUndo: true, canRedo: false, tool: "select", paths: [], shapes: [] };
+CanvasRenderer.render(host, withHistory, {});
+assert.match(host.innerHTML, /data-abe-drawing-history="undo"(?![^>]*disabled)/);
+assert.match(host.innerHTML, /data-abe-drawing-history="redo"[^>]*disabled/);
+assert.match(host.innerHTML, /abe-undo[^>]*disabled/);
 
 const controller = fs.readFileSync(path.join(root, "public/js/board_editor/controller.js"), "utf8");
 const page = fs.readFileSync(path.join(root, "almdina_erp/page/board_editor/board_editor.js"), "utf8");

@@ -256,10 +256,10 @@
 
     function shapeFieldDefs(kind) {
         const labels = {
-            x_mm: "X (mm)",
-            y_mm: "Y (mm)",
-            cx_mm: "X (mm)",
-            cy_mm: "Y (mm)",
+            x_mm: "Drawing X (mm)",
+            y_mm: "Drawing Y (mm)",
+            cx_mm: "Drawing X (mm)",
+            cy_mm: "Drawing Y (mm)",
             width_mm: kind === "l_shape" ? "Outer width (mm)" : "Width (mm)",
             height_mm: kind === "l_shape" ? "Outer height (mm)" : "Height (mm)",
             radius_mm: "Radius (mm)",
