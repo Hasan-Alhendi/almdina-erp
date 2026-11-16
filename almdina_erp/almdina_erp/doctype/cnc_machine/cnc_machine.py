@@ -19,6 +19,13 @@ _MESSAGES = {
     "cnc_machine_name_required": "CNC machine name is required.",
     "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
     "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
+    "offset_left_invalid": "The left stop must be zero or a positive number of centimetres.",
+    "offset_bottom_invalid": "The bottom stop must be zero or a positive number of centimetres.",
+    "cnc_machine_stops_unconfigured": (
+        "Set the work zero and both stops on this CNC machine once. "
+        "Saved sheet offsets are not copied onto the machine."
+    ),
+    "work_zero_invalid": "The selected work zero is not supported.",
 }
 
 
@@ -29,12 +36,18 @@ class CNCMachine(Document):
                 machine_name=self.machine_name,
                 width_cm=self.width_cm,
                 length_cm=self.length_cm,
+                work_zero_position=self.work_zero_position,
+                left_stop_cm=self.left_stop_cm,
+                bottom_stop_cm=self.bottom_stop_cm,
             )
         except PlacementError as exc:
             frappe.throw(_(_MESSAGES.get(exc.code, exc.code)), frappe.ValidationError)
         self.machine_name = normalized.name
         self.width_cm = normalized.width_cm
         self.length_cm = normalized.length_cm
+        self.work_zero_position = normalized.work_zero_position
+        self.left_stop_cm = normalized.left_stop_cm
+        self.bottom_stop_cm = normalized.bottom_stop_cm
         self.enabled = 1 if int(self.enabled or 0) else 0
 
     def on_update(self) -> None:

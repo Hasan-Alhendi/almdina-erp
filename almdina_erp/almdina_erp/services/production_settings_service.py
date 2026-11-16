@@ -1007,18 +1007,34 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
         return []
     rows = frappe.get_all(
         "CNC Machine",
-        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
+        fields=[
+            "name",
+            "machine_name",
+            "width_cm",
+            "length_cm",
+            "enabled",
+            "work_zero_position",
+            "left_stop_cm",
+            "bottom_stop_cm",
+        ],
         order_by="machine_name asc",
         limit_page_length=0,
     )
+    from almdina_erp.almdina_erp.domain.cnc.placement import public_cnc_machine
+
     return [
-        {
-            "name": row.name,
-            "machine_name": row.machine_name,
-            "width_cm": row.width_cm,
-            "length_cm": row.length_cm,
-            "enabled": bool(cint(row.enabled)),
-        }
+        public_cnc_machine(
+            {
+                "name": row.name,
+                "machine_name": row.machine_name,
+                "width_cm": row.width_cm,
+                "length_cm": row.length_cm,
+                "enabled": bool(cint(row.enabled)),
+                "work_zero_position": row.work_zero_position,
+                "left_stop_cm": row.left_stop_cm,
+                "bottom_stop_cm": row.bottom_stop_cm,
+            }
+        )
         for row in rows
     ]
 

@@ -8,6 +8,9 @@
     "machine_name",
     "width_cm",
     "length_cm",
+    "work_zero_position",
+    "left_stop_cm",
+    "bottom_stop_cm",
     "enabled"
   ],
   "fields": [
@@ -36,6 +39,33 @@
       "fieldtype": "Float",
       "in_list_view": 1,
       "label": "Machine Length (cm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "default": "Bottom Left",
+      "description": "G54 origin used when NC coordinates are written. It does not move the sheet, reverse the axes, or change path geometry.",
+      "fieldname": "work_zero_position",
+      "fieldtype": "Select",
+      "label": "Work Zero Position",
+      "options": "Bottom Left\nBottom Right\nTop Left\nTop Right\nCenter",
+      "reqd": 1
+    },
+    {
+      "description": "Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",
+      "fieldname": "left_stop_cm",
+      "fieldtype": "Float",
+      "label": "Left Stop (cm)",
+      "non_negative": 1,
+      "precision": "3",
+      "reqd": 1
+    },
+    {
+      "description": "Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",
+      "fieldname": "bottom_stop_cm",
+      "fieldtype": "Float",
+      "label": "Bottom Stop (cm)",
       "non_negative": 1,
       "precision": "3",
       "reqd": 1

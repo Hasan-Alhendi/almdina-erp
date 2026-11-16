@@ -38,7 +38,8 @@ def build_simulation_nc(
     """Return NC text plus an independent verification result.
 
     Sheet-local geometry stays unchanged on ``program``. When placement is
-    supplied, XY is translated once into machine coordinates for emit+verify.
+    supplied, XY is translated once into G54: physical stops, then the
+    work-zero origin. The post processor does not apply that shift again.
     """
 
     if not program.get("geometry_ready", program.get("ready")):

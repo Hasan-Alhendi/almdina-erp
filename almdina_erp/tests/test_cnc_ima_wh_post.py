@@ -30,15 +30,25 @@ def _machine(**overrides):
 
 
 def _placement(**overrides):
-    values = {
-        "machine": _machine(),
-        "sheet_width_cm": 122,
-        "sheet_length_cm": 244,
-        "offset_left_cm": 10,
-        "offset_bottom_cm": 5,
-    }
-    values.update(overrides)
-    return build_sheet_placement(**values)
+    machine = dict(overrides.pop("machine", _machine()))
+    sheet_width_cm = overrides.pop("sheet_width_cm", 122)
+    sheet_length_cm = overrides.pop("sheet_length_cm", 244)
+    if "offset_left_cm" in overrides:
+        machine["left_stop_cm"] = overrides.pop("offset_left_cm")
+    if "offset_bottom_cm" in overrides:
+        machine["bottom_stop_cm"] = overrides.pop("offset_bottom_cm")
+    if "work_zero_position" in overrides:
+        machine["work_zero_position"] = overrides.pop("work_zero_position")
+    machine.setdefault("left_stop_cm", 10)
+    machine.setdefault("bottom_stop_cm", 5)
+    machine.setdefault("work_zero_position", "Bottom Left")
+    if overrides:
+        raise AssertionError(sorted(overrides))
+    return build_sheet_placement(
+        machine=machine,
+        sheet_width_cm=sheet_width_cm,
+        sheet_length_cm=sheet_length_cm,
+    )
 
 
 def _path(points, motions, *, tool="T9", safe_z=20, home=(0, 2440, 120), feed_sec=170, plunge_sec=30):

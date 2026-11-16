@@ -359,8 +359,6 @@
             cutPathSequence: [],
             perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
             cncMachine: String(sheet.cnc_machine || ""),
-            offsetLeftCm: Number(sheet.offset_left_cm || 0),
-            offsetBottomCm: Number(sheet.offset_bottom_cm || 0),
             postProcessor: String(sheet.post_processor || ""),
             settingsRevision: Number(sheet.settings_revision || 0),
             sheetWidthCm: sheet.sheet_width_cm == null ? null : Number(sheet.sheet_width_cm),
@@ -394,8 +392,6 @@
             perimeterEarlyConfirmed: Boolean(state.perimeterEarlyConfirmed)
                 && sheetPerimeterPrecedesMilling(state.order),
             cncMachine: String(state.cncMachine || ""),
-            offsetLeftCm: Number(state.offsetLeftCm || 0),
-            offsetBottomCm: Number(state.offsetBottomCm || 0),
             postProcessor: String(state.postProcessor || ""),
         });
     }
@@ -423,25 +419,39 @@
         return (workspace.cnc_machines || []).find(item => String(item.name || "") === token) || null;
     }
 
+    function machineStops(machine) {
+        if (!machine || machine.left_stop_cm == null || machine.left_stop_cm === ""
+            || machine.bottom_stop_cm == null || machine.bottom_stop_cm === "") {
+            return null;
+        }
+        const left = Number(machine.left_stop_cm);
+        const bottom = Number(machine.bottom_stop_cm);
+        if (!Number.isFinite(left) || !Number.isFinite(bottom)) return null;
+        return { left, bottom };
+    }
+
     function placementPreviewPayload(workspace, state) {
         const machine = findCncMachine(workspace, state.cncMachine);
-        if (!machine) return null;
+        const stops = machineStops(machine);
+        if (!machine || !stops) return null;
         return {
             machine_name: String(machine.machine_name || machine.name || ""),
             machine_width_cm: Number(machine.width_cm || 0),
             machine_length_cm: Number(machine.length_cm || 0),
-            offset_left_cm: Number(state.offsetLeftCm || 0),
-            offset_bottom_cm: Number(state.offsetBottomCm || 0),
+            offset_left_cm: stops.left,
+            offset_bottom_cm: stops.bottom,
+            work_zero_position: String(machine.work_zero_position || "Bottom Left"),
             sheet_width_cm: state.sheetWidthCm == null ? null : Number(state.sheetWidthCm),
             sheet_length_cm: state.sheetLengthCm == null ? null : Number(state.sheetLengthCm),
         };
     }
 
     const PLACEMENT_MESSAGES = Object.freeze({
-        offset_left_invalid: "The distance from the left must be zero or a positive number of centimetres.",
-        offset_bottom_invalid: "The distance from the bottom must be zero or a positive number of centimetres.",
-        sheet_exceeds_machine_width: "The sheet plus the left offset exceeds the machine width.",
-        sheet_exceeds_machine_length: "The sheet plus the bottom offset exceeds the machine length.",
+        offset_left_invalid: "The left stop must be zero or a positive number of centimetres.",
+        offset_bottom_invalid: "The bottom stop must be zero or a positive number of centimetres.",
+        sheet_exceeds_machine_width: "The sheet plus the left stop exceeds the machine width.",
+        sheet_exceeds_machine_length: "The sheet plus the bottom stop exceeds the machine length.",
+        cnc_machine_stops_unconfigured: "Set the work zero and both stops on this CNC machine once. Saved sheet offsets are not copied onto the machine.",
         cnc_machine_required: "Choose a CNC machine before generating the NC file.",
         cnc_machine_disabled: "The selected CNC machine is disabled.",
         placement_incomplete: "Sheet placement on the CNC machine is incomplete.",
@@ -470,8 +480,16 @@
                 message: translate(PLACEMENT_MESSAGES.cnc_machine_disabled),
             };
         }
-        const left = Number(state.offsetLeftCm);
-        const bottom = Number(state.offsetBottomCm);
+        const stops = machineStops(machine);
+        if (!stops) {
+            return {
+                ok: false,
+                code: "cnc_machine_stops_unconfigured",
+                message: translate(PLACEMENT_MESSAGES.cnc_machine_stops_unconfigured),
+            };
+        }
+        const left = stops.left;
+        const bottom = stops.bottom;
         if (!Number.isFinite(left) || left < 0) {
             return {
                 ok: false,
@@ -539,22 +557,13 @@
                 Number(machine.width_cm || 0),
                 Number(machine.length_cm || 0),
             ]))}</p>`
-            : `<p class="dco-operational-sheet__note" data-machine-dims>${escapeHtml(translate("Select a machine to show bed size and placement offsets."))}</p>`;
-        const offsetsHidden = machine ? "" : " hidden";
+            : `<p class="dco-operational-sheet__note" data-machine-dims>${escapeHtml(translate("Select a machine to place the sheet with that machine's stops."))}</p>`;
         return `<section class="dco-operational-sheet__placement" data-sheet-placement>
             <h4>${escapeHtml(translate("Sheet placement on CNC machine"))}</h4>
             <label class="dco-operational-sheet__choice">${escapeHtml(translate("CNC machine"))}
                 <select data-cnc-machine${disabled}>${options.join("")}</select>
             </label>
             ${dims}
-            <div class="dco-operational-sheet__offsets" data-placement-offsets${offsetsHidden}>
-                <label>${escapeHtml(translate("Distance from left (cm)"))}
-                    <input type="number" min="0" step="0.001" inputmode="decimal" data-offset-left value="${escapeHtml(state.offsetLeftCm)}"${disabled}>
-                </label>
-                <label>${escapeHtml(translate("Distance from bottom (cm)"))}
-                    <input type="number" min="0" step="0.001" inputmode="decimal" data-offset-bottom value="${escapeHtml(state.offsetBottomCm)}"${disabled}>
-                </label>
-            </div>
         </section>`;
     }
 
@@ -1154,41 +1163,17 @@
                 }
                 if (target.hasAttribute("data-cnc-machine")) {
                     live.state.cncMachine = String(target.value || "");
-                    const offsets = body.querySelector("[data-placement-offsets]");
                     const dims = body.querySelector("[data-machine-dims]");
                     const machine = findCncMachine(live.workspace, live.state.cncMachine);
-                    if (offsets) offsets.hidden = !machine;
                     if (dims) {
                         dims.textContent = machine
                             ? translate("Machine size: {0} cm × {1} cm (width × length)", [
                                 Number(machine.width_cm || 0),
                                 Number(machine.length_cm || 0),
                             ])
-                            : translate("Select a machine to show bed size and placement offsets.");
+                            : translate("Select a machine to place the sheet with that machine's stops.");
                     }
-                    // Keep existing offsets; warn when they no longer fit the new bed.
                     if (machine) reportPlacementValidation(validateSheetPlacementFits(live.workspace, live.state));
-                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
-                    return;
-                }
-                if (target.hasAttribute("data-offset-left") || target.hasAttribute("data-offset-bottom")) {
-                    const leftInput = body.querySelector("[data-offset-left]");
-                    const bottomInput = body.querySelector("[data-offset-bottom]");
-                    live.state.offsetLeftCm = Number((leftInput && leftInput.value) || 0);
-                    live.state.offsetBottomCm = Number((bottomInput && bottomInput.value) || 0);
-                    reportPlacementValidation(validateSheetPlacementFits(live.workspace, live.state));
-                    requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
-                }
-            });
-            body.addEventListener("input", event => {
-                const live = liveContext();
-                const target = event.target;
-                if (!live || !live.state || !target || typeof target.getAttribute !== "function") return;
-                if (target.hasAttribute("data-offset-left") || target.hasAttribute("data-offset-bottom")) {
-                    const leftInput = body.querySelector("[data-offset-left]");
-                    const bottomInput = body.querySelector("[data-offset-bottom]");
-                    live.state.offsetLeftCm = Number((leftInput && leftInput.value) || 0);
-                    live.state.offsetBottomCm = Number((bottomInput && bottomInput.value) || 0);
                     requestSheetProgramPreview(live.frm, dialog, live.workspace, live.sheet, live.state);
                 }
             });
@@ -1726,8 +1711,6 @@
                 && sheetPerimeterPrecedesMilling(state.order)
                 && state.perimeterEarlyConfirmed ? 1 : 0,
             cnc_machine: String(state.cncMachine || ""),
-            offset_left_cm: Number(state.offsetLeftCm || 0),
-            offset_bottom_cm: Number(state.offsetBottomCm || 0),
             post_processor: String(state.postProcessor || ""),
             base_revision: Number(state.settingsRevision || sheet.settings_revision || 0),
         };
@@ -1755,6 +1738,7 @@
             cut_path_sequence_invalid: translate("Restore a valid CUT_PATH order that includes every cut path on this sheet."),
             perimeter_cut_early_unconfirmed: translate("Confirm the warning before cutting the sheet perimeter before liner, recessed handle, or rear groove."),
             cnc_machine_required: translate(PLACEMENT_MESSAGES.cnc_machine_required),
+            cnc_machine_stops_unconfigured: translate(PLACEMENT_MESSAGES.cnc_machine_stops_unconfigured),
             sheet_exceeds_machine_width: translate(PLACEMENT_MESSAGES.sheet_exceeds_machine_width),
             sheet_exceeds_machine_length: translate(PLACEMENT_MESSAGES.sheet_exceeds_machine_length),
             offset_left_invalid: translate(PLACEMENT_MESSAGES.offset_left_invalid),
@@ -2096,8 +2080,6 @@
                     state.cutPathSequence = next.cutPathSequence;
                     state.perimeterEarlyConfirmed = next.perimeterEarlyConfirmed;
                     state.cncMachine = next.cncMachine;
-                    state.offsetLeftCm = next.offsetLeftCm;
-                    state.offsetBottomCm = next.offsetBottomCm;
                     state.postProcessor = next.postProcessor;
                     state.settingsRevision = next.settingsRevision;
                     state.sheetWidthCm = next.sheetWidthCm;
@@ -3240,12 +3222,6 @@
         }).join("");
         const sheetW = sheetWidth > 0 ? sheetWidth : width;
         const sheetL = sheetLength > 0 ? sheetLength : length;
-        const leftDim = placement && offsetX > 0
-            ? `<div class="dco-cnc-cut-preview__dim dco-cnc-cut-preview__dim--left" style="inset-inline-start:0;inset-block-end:${(offsetY / length) * 50}%;inline-size:${(offsetX / width) * 100}%;">${escapeHtml(String(Number(placement.offset_left_cm || 0)))} ${escapeHtml(translate("cm"))}</div>`
-            : "";
-        const bottomDim = placement && offsetY > 0
-            ? `<div class="dco-cnc-cut-preview__dim dco-cnc-cut-preview__dim--bottom" style="inset-inline-start:${(offsetX / width) * 50}%;inset-block-end:0;inline-size:${(sheetW / width) * 100}%;block-size:${(offsetY / length) * 100}%;">${escapeHtml(String(Number(placement.offset_bottom_cm || 0)))} ${escapeHtml(translate("cm"))}</div>`
-            : "";
         const machineFrame = placement
             ? `<rect class="dco-cnc-cut-preview__machine" x="0" y="0" width="${width}" height="${length}" fill="#f3f4f6" stroke="#111827" stroke-width="1.5"/>
                 <rect class="dco-cnc-cut-preview__void" x="0" y="0" width="${Math.max(0, offsetX)}" height="${length}" fill="#e5e7eb"/>
@@ -3257,16 +3233,13 @@
             : "";
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
         const placementNote = placement
-            ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.", [
-                Number(placement.offset_left_cm || 0),
-                Number(placement.offset_bottom_cm || 0),
-            ]))}</p>`
+            ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("The sheet is placed with this machine's stops. Work zero is applied only in the NC file."))}</p>`
             : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">
             ${boardSurface({
                 aria: translate("Machining preview"),
-                extra: `<div class="dco-cnc-cut-preview__dims" aria-hidden="true">${leftDim}${bottomDim}</div>`,
+                extra: "",
                 body: `<defs>${markers}</defs>
                     <g transform="translate(0,${length}) scale(1,-1)">
                         ${machineFrame}

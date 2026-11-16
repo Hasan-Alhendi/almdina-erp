@@ -35,8 +35,27 @@ REMOVED_FIELDS = (
 def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
     metadata = json.loads(META.read_text(encoding="utf-8"))
     fieldnames = [row["fieldname"] for row in metadata["fields"]]
-    assert fieldnames == ["machine_name", "width_cm", "length_cm", "enabled"]
+    assert fieldnames == [
+        "machine_name",
+        "width_cm",
+        "length_cm",
+        "work_zero_position",
+        "left_stop_cm",
+        "bottom_stop_cm",
+        "enabled",
+    ]
+    assert metadata["field_order"] == fieldnames
+    assert metadata["quick_entry"] == 1
     fields = {row["fieldname"]: row for row in metadata["fields"]}
+    assert fields["work_zero_position"]["fieldtype"] == "Select"
+    assert fields["work_zero_position"]["options"] == "Bottom Left\nBottom Right\nTop Left\nTop Right\nCenter"
+    assert fields["work_zero_position"]["reqd"] == 1
+    assert fields["left_stop_cm"]["fieldtype"] == "Float"
+    assert fields["left_stop_cm"]["reqd"] == 1
+    assert fields["bottom_stop_cm"]["reqd"] == 1
+    assert "default" not in fields["left_stop_cm"]
+    assert "default" not in fields["bottom_stop_cm"]
+    assert all(row.get("fieldtype") not in {"Section Break", "Column Break"} for row in metadata["fields"])
     assert fields["width_cm"]["label"] == "Machine Width (cm)"
     assert "machine bed" in fields["width_cm"]["description"].lower()
     assert fields["length_cm"]["label"] == "Machine Length (cm)"

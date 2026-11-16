@@ -16,6 +16,7 @@ from frappe.utils import cint
 from almdina_erp.almdina_erp.domain.cnc.machine_profile import (
     machine_profile_for_workspace,
 )
+from almdina_erp.almdina_erp.domain.cnc.placement import public_cnc_machine
 from almdina_erp.almdina_erp.domain.cnc.tool_preset import mm_per_min_from_sec
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     ApprovedPlanRef,
@@ -445,18 +446,32 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
     rows = frappe.get_all(
         "CNC Machine",
         filters=filters,
-        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
+        fields=[
+            "name",
+            "machine_name",
+            "width_cm",
+            "length_cm",
+            "enabled",
+            "work_zero_position",
+            "left_stop_cm",
+            "bottom_stop_cm",
+        ],
         order_by="machine_name asc",
         ignore_permissions=True,
     )
     return [
-        {
-            "name": str(row.name),
-            "machine_name": str(row.machine_name or row.name),
-            "width_cm": float(row.width_cm or 0),
-            "length_cm": float(row.length_cm or 0),
-            "enabled": bool(cint(row.enabled)),
-        }
+        public_cnc_machine(
+            {
+                "name": row.name,
+                "machine_name": row.machine_name,
+                "width_cm": row.width_cm,
+                "length_cm": row.length_cm,
+                "enabled": bool(cint(row.enabled)),
+                "work_zero_position": row.work_zero_position,
+                "left_stop_cm": row.left_stop_cm,
+                "bottom_stop_cm": row.bottom_stop_cm,
+            }
+        )
         for row in rows
     ]
 
@@ -466,13 +481,18 @@ def get_cnc_machine(name: str) -> dict[str, Any] | None:
     if not token or not frappe.db.exists("CNC Machine", token):
         return None
     document = _without_permission_check(lambda: frappe.get_doc("CNC Machine", token))
-    return {
-        "name": str(document.name),
-        "machine_name": str(document.machine_name or document.name),
-        "width_cm": float(document.width_cm or 0),
-        "length_cm": float(document.length_cm or 0),
-        "enabled": bool(cint(document.enabled)),
-    }
+    return public_cnc_machine(
+        {
+            "name": document.name,
+            "machine_name": document.machine_name,
+            "width_cm": document.width_cm,
+            "length_cm": document.length_cm,
+            "enabled": bool(cint(document.enabled)),
+            "work_zero_position": getattr(document, "work_zero_position", None),
+            "left_stop_cm": getattr(document, "left_stop_cm", None),
+            "bottom_stop_cm": getattr(document, "bottom_stop_cm", None),
+        }
+    )
 
 
 def _dxf_disk_path(file_url: str) -> str | None:

@@ -115,11 +115,13 @@ def emit_nc(
         raise PostProcessorError("program_invalid")
     if not program.get("geometry_ready", program.get("ready")):
         raise PostProcessorError("geometry_not_ready")
+    from almdina_erp.almdina_erp.domain.cnc.placement import (
+        G54_COORDINATE_SPACE,
+        POSTABLE_COORDINATE_SPACES,
+    )
+
     coordinate_space = str(program.get("coordinate_space") or "")
-    if coordinate_space not in {
-        "sheet_bottom_left_y_up_mm",
-        "machine_bottom_left_y_up_mm",
-    }:
+    if coordinate_space not in POSTABLE_COORDINATE_SPACES:
         raise PostProcessorError("coordinate_space_unsupported")
     production_approved = bool(
         isinstance(machine_profile, Mapping)
@@ -233,7 +235,7 @@ def emit_nc(
     lines.append("M30")
     warnings.append("simulation_dialect_only")
     if machine_profile and not production_approved:
-        if coordinate_space == "machine_bottom_left_y_up_mm":
+        if coordinate_space in {"machine_bottom_left_y_up_mm", G54_COORDINATE_SPACE}:
             warnings.append("machine_origin_from_sheet_placement")
         else:
             warnings.append("machine_origin_not_established")

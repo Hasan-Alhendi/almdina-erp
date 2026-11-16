@@ -1,15 +1,17 @@
-"""Sheet placement on a CNC machine bed (origin bottom-left, X right, Y up).
+"""Sheet placement on a CNC machine bed.
 
-Sheet-local cutter geometry is never recomputed here. Offsets translate
-approved sheet XY into G54 work XY once. Profile home stays in G54 work
-coordinates and is not shifted again.
+Internal geometry stays bottom-left, X to the right, Y up, in millimetres.
+Machine stops move the sheet on that bed. Work zero then chooses the G54
+origin those coordinates are written against. The shift is applied once.
+It does not reverse axes, rotate the sheet, or change path shape.
 
-Machine width and length bound the sheet rectangle only. They are not
-mechanical limits for the cutter centre. Approved path geometry may leave
-the sheet and the bed, including negative coordinates from cutter-radius
-compensation or existing path extensions. This module does not clip those
-coordinates and does not invent axis-travel limits that the machine record
-does not contain.
+Profile home is already a G54 position and is not shifted again. G53
+machine coordinates are not produced here.
+
+Machine width and length bound the sheet rectangle after the stops. They
+are not mechanical limits for the cutter centre. Approved path geometry may
+leave the sheet and the bed, including negative coordinates. This module
+does not clip those coordinates and does not invent axis-travel limits.
 """
 
 from __future__ import annotations
@@ -21,6 +23,23 @@ from typing import Any
 
 PLACEMENT_TRANSFORM_VERSION = "placement-xy-v1"
 CM_TO_MM = 10.0
+WORK_ZERO_BOTTOM_LEFT = "Bottom Left"
+WORK_ZERO_POSITIONS = (
+    "Bottom Left",
+    "Bottom Right",
+    "Top Left",
+    "Top Right",
+    "Center",
+)
+SHEET_COORDINATE_SPACE = "sheet_bottom_left_y_up_mm"
+G54_COORDINATE_SPACE = "g54_work_zero_y_up_mm"
+POSTABLE_COORDINATE_SPACES = frozenset(
+    {
+        SHEET_COORDINATE_SPACE,
+        "machine_bottom_left_y_up_mm",
+        G54_COORDINATE_SPACE,
+    }
+)
 
 
 class PlacementError(ValueError):
@@ -34,6 +53,9 @@ class CncMachineSpec:
     name: str
     width_cm: float
     length_cm: float
+    work_zero_position: str
+    left_stop_cm: float
+    bottom_stop_cm: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +67,7 @@ class SheetPlacement:
     offset_bottom_cm: float
     sheet_width_cm: float
     sheet_length_cm: float
+    work_zero_position: str = WORK_ZERO_BOTTOM_LEFT
     transform_version: str = PLACEMENT_TRANSFORM_VERSION
 
     @property
@@ -89,18 +112,102 @@ def _finite_positive(value: Any, *, code: str) -> float:
     return number
 
 
+def _stop_cm(value: Any, *, invalid_code: str) -> float:
+    if value is None or (isinstance(value, str) and not str(value).strip()):
+        raise PlacementError("cnc_machine_stops_unconfigured")
+    return _finite_non_negative(value, code=invalid_code)
+
+
+def _work_zero_position(value: Any) -> str:
+    if value is None or (isinstance(value, str) and not str(value).strip()):
+        return WORK_ZERO_BOTTOM_LEFT
+    token = str(value).strip()
+    if token not in WORK_ZERO_POSITIONS:
+        raise PlacementError("work_zero_invalid")
+    return token
+
+
 def normalize_cnc_machine(
     *,
     machine_name: Any,
     width_cm: Any,
     length_cm: Any,
+    work_zero_position: Any = WORK_ZERO_BOTTOM_LEFT,
+    left_stop_cm: Any = 0,
+    bottom_stop_cm: Any = 0,
 ) -> CncMachineSpec:
     name = str(machine_name or "").strip()
     if not name:
         raise PlacementError("cnc_machine_name_required")
     width = _finite_positive(width_cm, code="cnc_machine_width_invalid")
     length = _finite_positive(length_cm, code="cnc_machine_length_invalid")
-    return CncMachineSpec(name=name, width_cm=width, length_cm=length)
+    return CncMachineSpec(
+        name=name,
+        width_cm=width,
+        length_cm=length,
+        work_zero_position=_work_zero_position(work_zero_position),
+        left_stop_cm=_stop_cm(left_stop_cm, invalid_code="offset_left_invalid"),
+        bottom_stop_cm=_stop_cm(bottom_stop_cm, invalid_code="offset_bottom_invalid"),
+    )
+
+
+def _spec_from_machine(machine: CncMachineSpec | Mapping[str, Any]) -> CncMachineSpec:
+    if isinstance(machine, CncMachineSpec):
+        return machine
+    left = 0 if "left_stop_cm" not in machine else machine.get("left_stop_cm")
+    bottom = 0 if "bottom_stop_cm" not in machine else machine.get("bottom_stop_cm")
+    return normalize_cnc_machine(
+        machine_name=machine.get("name") or machine.get("machine_name"),
+        width_cm=machine.get("width_cm"),
+        length_cm=machine.get("length_cm"),
+        work_zero_position=machine.get("work_zero_position", WORK_ZERO_BOTTOM_LEFT),
+        left_stop_cm=left,
+        bottom_stop_cm=bottom,
+    )
+
+
+def public_cnc_machine(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Catalog row. Null stops stay null so a legacy machine can be set once."""
+
+    def stop(key: str) -> float | None:
+        if key not in row:
+            return 0.0
+        value = row.get(key)
+        if value is None or value == "":
+            return None
+        return float(value)
+
+    return {
+        "name": str(row.get("name") or ""),
+        "machine_name": str(row.get("machine_name") or row.get("name") or ""),
+        "width_cm": float(row.get("width_cm") or 0),
+        "length_cm": float(row.get("length_cm") or 0),
+        "enabled": bool(row.get("enabled", True)),
+        "work_zero_position": _work_zero_position(row.get("work_zero_position")),
+        "left_stop_cm": stop("left_stop_cm"),
+        "bottom_stop_cm": stop("bottom_stop_cm"),
+    }
+
+
+def legacy_machine_stops_remain_unset(saved_offsets: Sequence[tuple[Any, Any]]) -> bool:
+    """True when saved sheet offsets must not be copied and must not become zero.
+
+    An empty history, or a history that is entirely zero, can stay at zero.
+    Any non-zero saved offset, including conflicting values, leaves the
+    machine unset so it is configured once.
+    """
+
+    for left, bottom in saved_offsets:
+        try:
+            left_value = 0.0 if left in (None, "") else float(left)
+            bottom_value = 0.0 if bottom in (None, "") else float(bottom)
+        except (TypeError, ValueError):
+            return True
+        if left_value != left_value or bottom_value != bottom_value:
+            return True
+        if left_value != 0 or bottom_value != 0:
+            return True
+    return False
 
 
 def sheet_to_machine_xy(
@@ -110,12 +217,55 @@ def sheet_to_machine_xy(
     offset_left_cm: float,
     offset_bottom_cm: float,
 ) -> tuple[float, float]:
-    """Translate one sheet-local point into machine coordinates."""
+    """Move one sheet-local point onto the machine bed. Stops are in centimetres."""
 
     return (
         float(sheet_x_mm) + float(offset_left_cm) * CM_TO_MM,
         float(sheet_y_mm) + float(offset_bottom_cm) * CM_TO_MM,
     )
+
+
+def work_zero_origin_mm(
+    position: str,
+    *,
+    machine_width_mm: float,
+    machine_length_mm: float,
+) -> tuple[float, float]:
+    """G54 origin on the machine bed. Axes stay X right and Y up."""
+
+    token = _work_zero_position(position)
+    width = float(machine_width_mm)
+    length = float(machine_length_mm)
+    if token == "Bottom Left":
+        return 0.0, 0.0
+    if token == "Bottom Right":
+        return width, 0.0
+    if token == "Top Left":
+        return 0.0, length
+    if token == "Top Right":
+        return width, length
+    return width / 2.0, length / 2.0
+
+
+def sheet_to_nc_xy(
+    sheet_x_mm: float,
+    sheet_y_mm: float,
+    placement: SheetPlacement,
+) -> tuple[float, float]:
+    """Apply the machine stops once, then subtract the work-zero origin once."""
+
+    physical_x, physical_y = sheet_to_machine_xy(
+        sheet_x_mm,
+        sheet_y_mm,
+        offset_left_cm=placement.offset_left_cm,
+        offset_bottom_cm=placement.offset_bottom_cm,
+    )
+    zero_x, zero_y = work_zero_origin_mm(
+        placement.work_zero_position,
+        machine_width_mm=placement.machine_width_mm,
+        machine_length_mm=placement.machine_length_mm,
+    )
+    return physical_x - zero_x, physical_y - zero_y
 
 
 def validate_sheet_fits_machine(
@@ -127,7 +277,7 @@ def validate_sheet_fits_machine(
     offset_left_cm: float,
     offset_bottom_cm: float,
 ) -> None:
-    """Reject negative offsets or a sheet rectangle that leaves the machine bed."""
+    """Reject negative stops or a sheet rectangle that leaves the machine bed."""
 
     machine_w = _finite_positive(machine_width_cm, code="cnc_machine_width_invalid")
     machine_l = _finite_positive(machine_length_cm, code="cnc_machine_length_invalid")
@@ -146,37 +296,34 @@ def build_sheet_placement(
     machine: CncMachineSpec | Mapping[str, Any],
     sheet_width_cm: Any,
     sheet_length_cm: Any,
-    offset_left_cm: Any,
-    offset_bottom_cm: Any,
 ) -> SheetPlacement:
-    if isinstance(machine, CncMachineSpec):
-        spec = machine
-    else:
-        spec = normalize_cnc_machine(
-            machine_name=machine.get("name") or machine.get("machine_name"),
-            width_cm=machine.get("width_cm"),
-            length_cm=machine.get("length_cm"),
-        )
+    """Place a sheet with the machine's own stops and work zero.
+
+    Callers cannot pass a different offset. Values named ``offset_left_cm``
+    on a mapping are ignored; ``left_stop_cm`` and ``bottom_stop_cm`` are
+    the only stop source.
+    """
+
+    spec = _spec_from_machine(machine)
     sheet_w = _finite_positive(sheet_width_cm, code="sheet_width_invalid")
     sheet_l = _finite_positive(sheet_length_cm, code="sheet_length_invalid")
-    left = _finite_non_negative(offset_left_cm, code="offset_left_invalid")
-    bottom = _finite_non_negative(offset_bottom_cm, code="offset_bottom_invalid")
     validate_sheet_fits_machine(
         machine_width_cm=spec.width_cm,
         machine_length_cm=spec.length_cm,
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
-        offset_left_cm=left,
-        offset_bottom_cm=bottom,
+        offset_left_cm=spec.left_stop_cm,
+        offset_bottom_cm=spec.bottom_stop_cm,
     )
     return SheetPlacement(
         machine_name=spec.name,
         machine_width_cm=spec.width_cm,
         machine_length_cm=spec.length_cm,
-        offset_left_cm=left,
-        offset_bottom_cm=bottom,
+        offset_left_cm=spec.left_stop_cm,
+        offset_bottom_cm=spec.bottom_stop_cm,
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
+        work_zero_position=spec.work_zero_position,
     )
 
 
@@ -189,20 +336,31 @@ def placement_fingerprint_payload(placement: SheetPlacement | None) -> dict[str,
         "machine_length_cm": placement.machine_length_cm,
         "offset_left_cm": placement.offset_left_cm,
         "offset_bottom_cm": placement.offset_bottom_cm,
+        "work_zero_position": placement.work_zero_position,
         "placement_transform_version": placement.transform_version,
     }
 
 
 def placement_snapshot_payload(placement: SheetPlacement) -> dict[str, Any]:
     payload = placement_fingerprint_payload(placement)
+    zero_x, zero_y = work_zero_origin_mm(
+        placement.work_zero_position,
+        machine_width_mm=placement.machine_width_mm,
+        machine_length_mm=placement.machine_length_mm,
+    )
     payload.update(
         {
+            "left_stop_cm": placement.offset_left_cm,
+            "bottom_stop_cm": placement.offset_bottom_cm,
             "offset_left_mm": placement.offset_left_mm,
             "offset_bottom_mm": placement.offset_bottom_mm,
+            "work_zero_x_mm": zero_x,
+            "work_zero_y_mm": zero_y,
             "machine_width_mm": placement.machine_width_mm,
             "machine_length_mm": placement.machine_length_mm,
             "sheet_width_cm": placement.sheet_width_cm,
             "sheet_length_cm": placement.sheet_length_cm,
+            "coordinate_space": G54_COORDINATE_SPACE,
         }
     )
     return payload
@@ -238,7 +396,7 @@ def validate_program_within_machine(
     Cutter-centre XY, including the rapid to the path start, is the approved
     machining geometry and is not compared with the bed. No unrecorded
     mechanical travel box is applied here, and the coordinates are not moved
-    or shortened.     Neighbouring-door collision, recorded profile-home range,
+    or shortened. Neighbouring-door collision, recorded profile-home range,
     Z safety, and the G53 parking check stay outside this function.
     """
 
@@ -249,16 +407,15 @@ def apply_placement_to_program(
     program: Mapping[str, Any],
     placement: SheetPlacement,
 ) -> dict[str, Any]:
-    """Return a deep-copied program whose cutter XY is in G54 work coordinates.
+    """Return a copied program whose cutter XY is in G54 work coordinates.
 
-    Z depths, profile home, and other non-path fields stay unchanged. Home is
-    already a G54 position and must not receive the sheet offset. The original
-    sheet program is not mutated.
+    Stops and work zero are applied together, once. Z depths, feeds, profile
+    home, and other non-path fields stay unchanged. Home is already G54 and
+    must not receive the stops or the work-zero shift. The original sheet
+    program is not mutated.
     """
 
     validate_program_within_machine(program, placement)
-    left = placement.offset_left_cm
-    bottom = placement.offset_bottom_cm
     operations: list[dict[str, Any]] = []
     for operation in program.get("operations") or ():
         toolpaths: list[dict[str, Any]] = []
@@ -268,20 +425,15 @@ def apply_placement_to_program(
                 if not isinstance(point, Sequence) or len(point) < 2:
                     points.append(point)
                     continue
-                mx, my = sheet_to_machine_xy(float(point[0]), float(point[1]), offset_left_cm=left, offset_bottom_cm=bottom)
-                points.append([mx, my])
+                nc_x, nc_y = sheet_to_nc_xy(float(point[0]), float(point[1]), placement)
+                points.append([nc_x, nc_y])
             motions = []
             for motion in path.get("motions") or ():
                 item = dict(motion)
                 if item.get("x_mm") is not None and item.get("y_mm") is not None:
-                    mx, my = sheet_to_machine_xy(
-                        float(item["x_mm"]),
-                        float(item["y_mm"]),
-                        offset_left_cm=left,
-                        offset_bottom_cm=bottom,
-                    )
-                    item["x_mm"] = mx
-                    item["y_mm"] = my
+                    nc_x, nc_y = sheet_to_nc_xy(float(item["x_mm"]), float(item["y_mm"]), placement)
+                    item["x_mm"] = nc_x
+                    item["y_mm"] = nc_y
                 motions.append(item)
             cloned = dict(path)
             cloned["points"] = points
@@ -292,8 +444,9 @@ def apply_placement_to_program(
         operations.append(cloned_op)
     payload = dict(program)
     payload["operations"] = operations
-    payload["coordinate_space"] = "machine_bottom_left_y_up_mm"
-    payload["sheet_coordinate_space"] = "sheet_bottom_left_y_up_mm"
+    payload["coordinate_space"] = G54_COORDINATE_SPACE
+    payload["sheet_coordinate_space"] = SHEET_COORDINATE_SPACE
+    payload["work_zero_position"] = placement.work_zero_position
     payload["placement"] = placement_snapshot_payload(placement)
     return payload
 
@@ -301,16 +454,25 @@ def apply_placement_to_program(
 __all__ = [
     "CM_TO_MM",
     "CncMachineSpec",
+    "G54_COORDINATE_SPACE",
     "PLACEMENT_TRANSFORM_VERSION",
+    "POSTABLE_COORDINATE_SPACES",
     "PlacementError",
+    "SHEET_COORDINATE_SPACE",
     "SheetPlacement",
+    "WORK_ZERO_BOTTOM_LEFT",
+    "WORK_ZERO_POSITIONS",
     "apply_placement_to_program",
     "build_sheet_placement",
     "iter_program_xy_mm",
+    "legacy_machine_stops_remain_unset",
     "normalize_cnc_machine",
     "placement_fingerprint_payload",
     "placement_snapshot_payload",
+    "public_cnc_machine",
     "sheet_to_machine_xy",
+    "sheet_to_nc_xy",
     "validate_program_within_machine",
     "validate_sheet_fits_machine",
+    "work_zero_origin_mm",
 ]

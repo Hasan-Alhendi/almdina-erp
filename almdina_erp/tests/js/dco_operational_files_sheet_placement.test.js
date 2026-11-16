@@ -27,8 +27,12 @@ assert.ok(panel.includes("dco-cnc-cut-preview__void"));
 assert.ok(panel.includes("dco-cnc-cut-preview__machine"));
 assert.ok(css.includes("dco-cnc-cut-preview__void") || css.includes("dco-operational-sheet__placement"));
 assert.ok(translations.includes("تموضع اللوح على ماكينة CNC"));
-assert.ok(translations.includes("البعد عن اليسار (سم)"));
-assert.ok(translations.includes("البعد عن الأسفل (سم)"));
+assert.ok(translations.includes("المصادم الأيسر (سم)"));
+assert.ok(translations.includes("المصادم السفلي (سم)"));
+assert.ok(translations.includes("موضع صفر العمل"));
+assert.ok(!panel.includes("data-offset-left"));
+assert.ok(!panel.includes("Distance from left (cm)"));
+assert.ok(!panel.includes("Distance from bottom (cm)"));
 assert.ok(translations.includes("ماكينات CNC"));
 
 const workspace = {
@@ -39,37 +43,66 @@ const workspace = {
             width_cm: 130,
             length_cm: 250,
             enabled: true,
+            work_zero_position: "Bottom Left",
+            left_stop_cm: 3,
+            bottom_stop_cm: 4,
         },
-        { name: "Router B", machine_name: "Router B", width_cm: 100, length_cm: 200, enabled: true },
+        {
+            name: "Router B",
+            machine_name: "Router B",
+            width_cm: 100,
+            length_cm: 200,
+            enabled: true,
+            work_zero_position: "Bottom Left",
+            left_stop_cm: 3,
+            bottom_stop_cm: 4,
+        },
+        {
+            name: "Router C",
+            machine_name: "Router C",
+            width_cm: 130,
+            length_cm: 250,
+            enabled: true,
+            work_zero_position: "Bottom Left",
+            left_stop_cm: null,
+            bottom_stop_cm: null,
+        },
     ],
 };
 
 const state = {
     cncMachine: "Router A",
-    offsetLeftCm: 3,
-    offsetBottomCm: 4,
     sheetWidthCm: 122,
     sheetLengthCm: 244,
 };
 
 assert.strictEqual(ux.validateSheetPlacementFits(workspace, state).ok, true);
 assert.strictEqual(
-    ux.validateSheetPlacementFits(workspace, { ...state, offsetLeftCm: 10 }).code,
+    ux.validateSheetPlacementFits(workspace, { ...state, cncMachine: "Router B" }).code,
     "sheet_exceeds_machine_width"
 );
+const negative = {
+    ...workspace,
+    cnc_machines: workspace.cnc_machines.map(item => (
+        item.name === "Router A" ? { ...item, bottom_stop_cm: -1 } : item
+    )),
+};
 assert.strictEqual(
-    ux.validateSheetPlacementFits(workspace, { ...state, offsetBottomCm: -1 }).code,
+    ux.validateSheetPlacementFits(negative, state).code,
     "offset_bottom_invalid"
+);
+assert.strictEqual(
+    ux.validateSheetPlacementFits(workspace, { ...state, cncMachine: "Router C" }).code,
+    "cnc_machine_stops_unconfigured"
 );
 assert.strictEqual(
     ux.validateSheetPlacementFits(workspace, { ...state, cncMachine: "" }, { requireMachine: true }).code,
     "cnc_machine_required"
 );
-// Changing to a smaller machine keeps offsets and reports overflow without rewriting them.
-const tight = { ...state, cncMachine: "Router B", offsetLeftCm: 3, offsetBottomCm: 4 };
+const tight = { ...state, cncMachine: "Router B" };
 assert.strictEqual(ux.validateSheetPlacementFits(workspace, tight).code, "sheet_exceeds_machine_width");
-assert.strictEqual(tight.offsetLeftCm, 3);
-assert.strictEqual(tight.offsetBottomCm, 4);
+assert.strictEqual(workspace.cnc_machines[1].left_stop_cm, 3);
+assert.strictEqual(workspace.cnc_machines[1].bottom_stop_cm, 4);
 
 const placement = ux.placementPreviewPayload(workspace, state);
 assert.strictEqual(placement.machine_width_cm, 130);
@@ -126,6 +159,8 @@ assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
 assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
 assert.ok(markup.includes('transform="translate(30,40)"'));
 assert.ok(markup.includes("data-placement-caption"));
+assert.ok(!markup.includes("dco-cnc-cut-preview__dim"));
+assert.ok(!markup.includes("Left offset"));
 // Path numbers stay on sheet-local geometry; geometry points are not rewritten in the program.
 assert.strictEqual(program.operations[0].toolpaths[0].motions[0].x_mm, -2.5);
 assert.ok(markup.includes("data-path-number=\"1\"") || markup.includes("data-path-number='1'") || /data-path-number="1"/.test(markup));

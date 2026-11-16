@@ -218,24 +218,24 @@ def emit_ima_wh(
 ) -> NcDocument:
     """Post one sheet program with the IMA-WH / NCStudio dialect.
 
-    ``program`` cutter XY must already be G54 work coordinates. The machine
-    bed limits the sheet, not the cutter centre, so path coordinates and the
-    rapid to the path start are posted as stored, including positions outside
-    the bed. Profile home XY is also posted as stored; its recorded numeric
-    range is enforced when the profile is saved. The IMA-WH parking move stays
-    G53 and is refused when it does not fit the selected machine. Z safety is
-    unchanged.
+    ``program`` cutter XY must already be G54 work coordinates. Stops and
+    work zero are not applied again here. The machine bed limits the sheet,
+    not the cutter centre, so path coordinates and the rapid to the path
+    start are posted as stored, including positions outside the bed. Profile
+    home XY is posted as stored because it is already G54. The IMA-WH parking
+    move stays the fixed G53 point and is refused when it does not fit the
+    selected machine. Choosing a work zero does not change that G53 move.
+    Z safety is unchanged.
     """
 
     if not isinstance(program, Mapping):
         raise PostProcessorError("program_invalid")
     if not program.get("geometry_ready", program.get("ready")):
         raise PostProcessorError("geometry_not_ready")
+    from almdina_erp.almdina_erp.domain.cnc.placement import POSTABLE_COORDINATE_SPACES
+
     coordinate_space = str(program.get("coordinate_space") or "")
-    if coordinate_space not in {
-        "sheet_bottom_left_y_up_mm",
-        "machine_bottom_left_y_up_mm",
-    }:
+    if coordinate_space not in POSTABLE_COORDINATE_SPACES:
         raise PostProcessorError("coordinate_space_unsupported")
     try:
         width_mm = float(machine_width_mm)

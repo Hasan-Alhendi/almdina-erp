@@ -207,12 +207,17 @@ _MESSAGES = {
     "cnc_machine_name_required": "CNC machine name is required.",
     "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
     "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
-    "offset_left_invalid": "The distance from the left must be zero or a positive number of centimetres.",
-    "offset_bottom_invalid": "The distance from the bottom must be zero or a positive number of centimetres.",
+    "offset_left_invalid": "The left stop must be zero or a positive number of centimetres.",
+    "offset_bottom_invalid": "The bottom stop must be zero or a positive number of centimetres.",
+    "cnc_machine_stops_unconfigured": (
+        "Set the work zero and both stops on this CNC machine once. "
+        "Saved sheet offsets are not copied onto the machine."
+    ),
+    "work_zero_invalid": "The selected work zero is not supported.",
     "sheet_width_invalid": "The approved sheet width is not valid.",
     "sheet_length_invalid": "The approved sheet length is not valid.",
-    "sheet_exceeds_machine_width": "The sheet plus the left offset exceeds the machine width.",
-    "sheet_exceeds_machine_length": "The sheet plus the bottom offset exceeds the machine length.",
+    "sheet_exceeds_machine_width": "The sheet plus the left stop exceeds the machine width.",
+    "sheet_exceeds_machine_length": "The sheet plus the bottom stop exceeds the machine length.",
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",
@@ -1587,8 +1592,6 @@ def generate_cnc_sheet_nc(
             machine=machine_row,
             sheet_width_cm=sheet_w,
             sheet_length_cm=sheet_l,
-            offset_left_cm=prepared.get("offset_left_cm"),
-            offset_bottom_cm=prepared.get("offset_bottom_cm"),
             require_machine=True,
         )
         package = build_post_processed_nc(

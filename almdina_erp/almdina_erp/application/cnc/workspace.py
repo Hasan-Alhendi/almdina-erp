@@ -34,8 +34,8 @@ from almdina_erp.almdina_erp.domain.cnc.post_processors import (
 from almdina_erp.almdina_erp.domain.cnc.placement import (
     PlacementError,
     build_sheet_placement,
-    normalize_cnc_machine,
     placement_fingerprint_payload,
+    public_cnc_machine,
 )
 
 
@@ -88,11 +88,13 @@ def resolve_sheet_placement(
     machine: Mapping[str, Any] | None,
     sheet_width_cm: float,
     sheet_length_cm: float,
-    offset_left_cm: Any,
-    offset_bottom_cm: Any,
     require_machine: bool = False,
 ):
-    """Validate optional/required placement against approved sheet size."""
+    """Validate placement using the machine's saved stops and work zero.
+
+    Client offsets are not an argument. A different value cannot replace
+    the stops stored on the CNC Machine.
+    """
 
     machine_name = str((machine or {}).get("name") or (machine or {}).get("machine_name") or "").strip()
     if not machine_name:
@@ -101,20 +103,11 @@ def resolve_sheet_placement(
         return None
     if not bool((machine or {}).get("enabled", True)):
         raise PlacementError("cnc_machine_disabled")
-    try:
-        return build_sheet_placement(
-            machine=normalize_cnc_machine(
-                machine_name=machine_name,
-                width_cm=(machine or {}).get("width_cm"),
-                length_cm=(machine or {}).get("length_cm"),
-            ),
-            sheet_width_cm=sheet_width_cm,
-            sheet_length_cm=sheet_length_cm,
-            offset_left_cm=0 if offset_left_cm in (None, "") else offset_left_cm,
-            offset_bottom_cm=0 if offset_bottom_cm in (None, "") else offset_bottom_cm,
-        )
-    except PlacementError:
-        raise
+    return build_sheet_placement(
+        machine=machine or {},
+        sheet_width_cm=sheet_width_cm,
+        sheet_length_cm=sheet_length_cm,
+    )
 
 
 def _saved_for(
@@ -390,6 +383,8 @@ def build_operational_workspace(
                 None,
             )
             placement_fp: dict[str, Any] = {}
+            effective_left = (saved or {}).get("offset_left_cm")
+            effective_bottom = (saved or {}).get("offset_bottom_cm")
             if machine_row is not None:
                 try:
                     sheet_w, sheet_l = approved_sheet_size_cm(plan_snapshot, sheet_no=sheet_no)
@@ -397,22 +392,19 @@ def build_operational_workspace(
                         machine=machine_row,
                         sheet_width_cm=sheet_w,
                         sheet_length_cm=sheet_l,
-                        offset_left_cm=(saved or {}).get("offset_left_cm"),
-                        offset_bottom_cm=(saved or {}).get("offset_bottom_cm"),
                     )
                     placement_fp = placement_fingerprint_payload(placement)
-                except (OperationalFileError, PlacementError):
+                    effective_left = placement.offset_left_cm
+                    effective_bottom = placement.offset_bottom_cm
+                except (OperationalFileError, PlacementError) as exc:
                     placement_fp = {
                         "cnc_machine": machine_name,
-                        "offset_left_cm": (saved or {}).get("offset_left_cm"),
-                        "offset_bottom_cm": (saved or {}).get("offset_bottom_cm"),
+                        "placement_error": getattr(exc, "code", "placement_incomplete"),
                         "machine_missing_or_invalid": True,
                     }
             elif machine_name:
                 placement_fp = {
                     "cnc_machine": machine_name,
-                    "offset_left_cm": (saved or {}).get("offset_left_cm"),
-                    "offset_bottom_cm": (saved or {}).get("offset_bottom_cm"),
                     "machine_missing_or_invalid": True,
                 }
             current_fingerprint = settings_fingerprint(
@@ -461,8 +453,8 @@ def build_operational_workspace(
                 "cut_path_sequence": list(sequence),
                 "perimeter_cut_early_confirmed": perimeter_early,
                 "cnc_machine": str((saved or {}).get("cnc_machine") or ""),
-                "offset_left_cm": float((saved or {}).get("offset_left_cm") or 0),
-                "offset_bottom_cm": float((saved or {}).get("offset_bottom_cm") or 0),
+                "offset_left_cm": float(effective_left or 0) if saved is not None else 0.0,
+                "offset_bottom_cm": float(effective_bottom or 0) if saved is not None else 0.0,
                 "post_processor": str((saved or {}).get("post_processor") or ""),
                 "reversed_path_keys": list((saved or {}).get("reversed_path_keys") or ()),
                 "sheet_width_cm": sheet_width_cm,
@@ -493,16 +485,7 @@ def build_operational_workspace(
         "can_prepare": can_prepare,
         "machine_profile_production_approved": profile_payload["production_approved"],
         "machine_profile_source": profile_payload["source_note"],
-        "cnc_machines": [
-            {
-                "name": str(row.get("name") or ""),
-                "machine_name": str(row.get("machine_name") or row.get("name") or ""),
-                "width_cm": float(row.get("width_cm") or 0),
-                "length_cm": float(row.get("length_cm") or 0),
-                "enabled": bool(row.get("enabled", True)),
-            }
-            for row in (cnc_machines or ())
-        ],
+        "cnc_machines": [public_cnc_machine(row) for row in (cnc_machines or ())],
         "presets": [
             {
                 "name": name,
@@ -638,14 +621,8 @@ def prepare_sheet_settings(
         machine_name = str((existing or {}).get("cnc_machine") or "").strip()
     else:
         machine_name = str(cnc_machine or "").strip()
-    if offset_left_cm is None:
-        left_cm = (existing or {}).get("offset_left_cm")
-    else:
-        left_cm = offset_left_cm
-    if offset_bottom_cm is None:
-        bottom_cm = (existing or {}).get("offset_bottom_cm")
-    else:
-        bottom_cm = offset_bottom_cm
+    # Sheet and RPC offsets cannot replace the stops saved on the machine.
+    del offset_left_cm, offset_bottom_cm
     machine_row = next(
         (
             row
@@ -665,8 +642,6 @@ def prepare_sheet_settings(
             machine=machine_row,
             sheet_width_cm=sheet_w,
             sheet_length_cm=sheet_l,
-            offset_left_cm=left_cm,
-            offset_bottom_cm=bottom_cm,
             require_machine=True,
         )
     profile_payload = dict(machine_profile.get("fingerprint_payload") or {})

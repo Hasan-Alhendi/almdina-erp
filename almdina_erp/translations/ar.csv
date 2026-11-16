@@ -3425,15 +3425,15 @@ Add a CNC machine,إضافة ماكينة CNC
 "{0} CNC machines are available in Desk.",يتوفر {0} من ماكينات CNC في Desk.
 No CNC machines have been created yet.,لم تُنشأ ماكينات CNC بعد.
 A factory settings manager must create the CNC machines.,يجب أن ينشئ مسؤول إعدادات المصنع ماكينات CNC.
-"Register each CNC machine bed by name, width (X), and length (Y). Origin is always bottom-left with X to the right and Y upward.",سجّل كل مساحة عمل لماكينة CNC بالاسم والعرض (X) والطول (Y). نقطة الصفر دائمًا أسفل اليسار وX إلى اليمين وY إلى الأعلى.
+"Register each CNC machine by name, bed width (X), and bed length (Y). Set the work zero and the left and bottom stops on the machine. Sheet geometry stays bottom-left, with X to the right and Y upward.",سجّل كل ماكينة CNC بالاسم وعرض السطح (X) وطول السطح (Y). اضبط صفر العمل والمصادم الأيسر والسفلي على الماكينة. هندسة اللوح تبقى أسفل اليسار، وX إلى اليمين وY إلى الأعلى.
 Sheet placement on CNC machine,تموضع اللوح على ماكينة CNC
 CNC machine,ماكينة CNC
 Choose a CNC machine,اختر ماكينة CNC
 "Machine size: {0} cm × {1} cm (width × length)",أبعاد الماكينة: {0} سم × {1} سم (عرض × طول)
-Select a machine to show bed size and placement offsets.,اختر ماكينة لإظهار أبعاد المساحة وإزاحات التموضع.
+Select a machine to place the sheet with that machine's stops.,اختر ماكينة لوضع اللوح بمصادمها.
 Distance from left (cm),البعد عن اليسار (سم)
 Distance from bottom (cm),البعد عن الأسفل (سم)
-"Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.",نقطة صفر الماكينة أسفل اليسار. إزاحة اليسار {0} سم · إزاحة الأسفل {1} سم.
+The sheet is placed with this machine's stops. Work zero is applied only in the NC file.,يوضع اللوح بمصادم هذه الماكينة. يُطبَّق صفر العمل في ملف NC فقط.
 Choose a CNC machine before generating the NC file.,اختر ماكينة CNC قبل توليد ملف NC.
 The selected CNC machine was not found.,ماكينة CNC المحددة غير موجودة.
 The selected CNC machine is disabled.,ماكينة CNC المحددة معطّلة.
@@ -3445,10 +3445,19 @@ Machine Width (cm),عرض سطح الماكينة (سم)
 Machine Length (cm),طول سطح الماكينة (سم)
 Usable machine bed width on the X axis. Entered in centimetres.,العرض المتاح لسطح الماكينة على المحور X. يُدخل بالسنتيمتر.
 Usable machine bed length on the Y axis. Entered in centimetres.,الطول المتاح لسطح الماكينة على المحور Y. يُدخل بالسنتيمتر.
-The distance from the left must be zero or a positive number of centimetres.,البعد عن اليسار يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
-The distance from the bottom must be zero or a positive number of centimetres.,البعد عن الأسفل يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
-The sheet plus the left offset exceeds the machine width.,اللوح مع البعد عن اليسار يتجاوز عرض الماكينة.
-The sheet plus the bottom offset exceeds the machine length.,اللوح مع البعد عن الأسفل يتجاوز طول الماكينة.
+The left stop must be zero or a positive number of centimetres.,المصادم الأيسر يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The bottom stop must be zero or a positive number of centimetres.,المصادم السفلي يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The sheet plus the left stop exceeds the machine width.,اللوح مع المصادم الأيسر يتجاوز عرض الماكينة.
+The sheet plus the bottom stop exceeds the machine length.,اللوح مع المصادم السفلي يتجاوز طول الماكينة.
+Set the work zero and both stops on this CNC machine once. Saved sheet offsets are not copied onto the machine.,اضبط صفر العمل والمصادمين على ماكينة CNC هذه مرة واحدة. لا تُنسخ إزاحات الألواح المحفوظة إلى الماكينة.
+The selected work zero is not supported.,موضع صفر العمل المحدد غير مدعوم.
+Work Zero Position,موضع صفر العمل
+Left Stop (cm),المصادم الأيسر (سم)
+Bottom Stop (cm),المصادم السفلي (سم)
+Center,الوسط
+"G54 origin used when NC coordinates are written. It does not move the sheet, reverse the axes, or change path geometry.",أصل G54 الذي تُنسب إليه إحداثيات ملف NC. لا يحرّك اللوح ولا يعكس المحاور ولا يغيّر هندسة المسار.
+"Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",المسافة من الحافة اليسرى للماكينة إلى الحافة اليسرى للوح، بالسنتيمتر. الصفر مقبول.
+"Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",المسافة من الحافة السفلية للماكينة إلى الحافة السفلية للوح، بالسنتيمتر. الصفر مقبول.
 Sheet placement on the CNC machine is incomplete.,تموضع اللوح على ماكينة CNC غير مكتمل.
 Board layout editor,محرر توزيع القطع على الألواح
 Open board editor,فتح محرر الألواح
