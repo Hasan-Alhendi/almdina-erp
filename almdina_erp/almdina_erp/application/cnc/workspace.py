@@ -107,6 +107,18 @@ def resolve_sheet_placement(
                 machine_name=machine_name,
                 width_cm=(machine or {}).get("width_cm"),
                 length_cm=(machine or {}).get("length_cm"),
+                cutter_travel_left_extension_mm=(machine or {}).get(
+                    "cutter_travel_left_extension_mm", 0
+                ),
+                cutter_travel_right_extension_mm=(machine or {}).get(
+                    "cutter_travel_right_extension_mm", 0
+                ),
+                cutter_travel_bottom_extension_mm=(machine or {}).get(
+                    "cutter_travel_bottom_extension_mm", 0
+                ),
+                cutter_travel_top_extension_mm=(machine or {}).get(
+                    "cutter_travel_top_extension_mm", 0
+                ),
             ),
             sheet_width_cm=sheet_width_cm,
             sheet_length_cm=sheet_length_cm,
@@ -499,6 +511,18 @@ def build_operational_workspace(
                 "machine_name": str(row.get("machine_name") or row.get("name") or ""),
                 "width_cm": float(row.get("width_cm") or 0),
                 "length_cm": float(row.get("length_cm") or 0),
+                "cutter_travel_left_extension_mm": float(
+                    row.get("cutter_travel_left_extension_mm") or 0
+                ),
+                "cutter_travel_right_extension_mm": float(
+                    row.get("cutter_travel_right_extension_mm") or 0
+                ),
+                "cutter_travel_bottom_extension_mm": float(
+                    row.get("cutter_travel_bottom_extension_mm") or 0
+                ),
+                "cutter_travel_top_extension_mm": float(
+                    row.get("cutter_travel_top_extension_mm") or 0
+                ),
                 "enabled": bool(row.get("enabled", True)),
             }
             for row in (cnc_machines or ())

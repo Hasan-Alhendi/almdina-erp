@@ -6,6 +6,7 @@ into one controller dialect. There is no implicit processor.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -210,17 +211,38 @@ def _within_machine(x_mm: float, y_mm: float, width_mm: float, length_mm: float)
     )
 
 
+def _within_work_travel(
+    x_mm: float,
+    y_mm: float,
+    *,
+    x_min_mm: float,
+    x_max_mm: float,
+    y_min_mm: float,
+    y_max_mm: float,
+) -> bool:
+    return (
+        x_mm >= x_min_mm - _AXIS_TOLERANCE_MM
+        and x_mm <= x_max_mm + _AXIS_TOLERANCE_MM
+        and y_mm >= y_min_mm - _AXIS_TOLERANCE_MM
+        and y_mm <= y_max_mm + _AXIS_TOLERANCE_MM
+    )
+
+
 def emit_ima_wh(
     program: Mapping[str, Any],
     *,
     machine_width_mm: float,
     machine_length_mm: float,
+    cutter_travel_x_min_mm: float | None = None,
+    cutter_travel_x_max_mm: float | None = None,
+    cutter_travel_y_min_mm: float | None = None,
+    cutter_travel_y_max_mm: float | None = None,
 ) -> NcDocument:
     """Post one sheet program with the IMA-WH / NCStudio dialect.
 
     ``program`` cutter XY must already be G54 work coordinates. Profile home
-    is used as stored. The IMA-WH parking move is G53 and is refused when it
-    does not fit the selected machine.
+    is checked in the explicit G54 cutter-travel bounds. The IMA-WH parking
+    move remains G53 and is checked against the machine bed dimensions only.
     """
 
     if not isinstance(program, Mapping):
@@ -242,6 +264,30 @@ def emit_ima_wh(
         raise PostProcessorError("machine_parking_unverified")
     if not _within_machine(IMA_WH_PARKING_X_MM, IMA_WH_PARKING_Y_MM, width_mm, length_mm):
         raise PostProcessorError("machine_parking_outside_limits")
+    try:
+        travel_x_min = (
+            0.0 if cutter_travel_x_min_mm is None else float(cutter_travel_x_min_mm)
+        )
+        travel_x_max = (
+            width_mm if cutter_travel_x_max_mm is None else float(cutter_travel_x_max_mm)
+        )
+        travel_y_min = (
+            0.0 if cutter_travel_y_min_mm is None else float(cutter_travel_y_min_mm)
+        )
+        travel_y_max = (
+            length_mm if cutter_travel_y_max_mm is None else float(cutter_travel_y_max_mm)
+        )
+    except (TypeError, ValueError) as exc:
+        raise PostProcessorError("machine_parking_unverified") from exc
+    if (
+        not all(
+            math.isfinite(value)
+            for value in (travel_x_min, travel_x_max, travel_y_min, travel_y_max)
+        )
+        or travel_x_min > travel_x_max
+        or travel_y_min > travel_y_max
+    ):
+        raise PostProcessorError("machine_parking_unverified")
 
     operations = program.get("operations") or []
     if not isinstance(operations, list) or not operations:
@@ -296,7 +342,14 @@ def emit_ima_wh(
 
     last = prepared[-1]
     home_x, home_y, home_z = _home(last["path"])
-    if not _within_machine(home_x, home_y, width_mm, length_mm):
+    if not _within_work_travel(
+        home_x,
+        home_y,
+        x_min_mm=travel_x_min,
+        x_max_mm=travel_x_max,
+        y_min_mm=travel_y_min,
+        y_max_mm=travel_y_max,
+    ):
         raise PostProcessorError("profile_home_outside_machine")
 
     writer = _ImaEmitter()

@@ -192,9 +192,10 @@ def test_reader_does_not_hide_unexpected_errors_or_hardcode_a_tool_number():
 def test_repair_patch_is_registered_once_at_the_end_and_uses_the_sample_rule():
     lines = [line.strip() for line in PATCHES.read_text(encoding="utf-8").splitlines() if line.strip()]
     patch_name = "almdina_erp.patches.v1_0.repair_missing_cnc_machine_profile_fields"
-    assert lines[-2:] == [
+    assert lines[-3:] == [
         "almdina_erp.patches.v1_0.migrate_cnc_operational_file_status",
         "almdina_erp.patches.v1_0.backfill_cnc_operational_file_settings_revision",
+        "almdina_erp.patches.v1_0.backfill_cnc_machine_travel_extensions",
     ]
     assert lines.count(patch_name) == 1
     assert lines.count("almdina_erp.patches.v1_0.migrate_cnc_operational_file_status") == 1

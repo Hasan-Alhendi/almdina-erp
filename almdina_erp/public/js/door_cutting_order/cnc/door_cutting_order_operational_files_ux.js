@@ -430,6 +430,10 @@
             machine_name: String(machine.machine_name || machine.name || ""),
             machine_width_cm: Number(machine.width_cm || 0),
             machine_length_cm: Number(machine.length_cm || 0),
+            cutter_travel_left_extension_mm: Number(machine.cutter_travel_left_extension_mm || 0),
+            cutter_travel_right_extension_mm: Number(machine.cutter_travel_right_extension_mm || 0),
+            cutter_travel_bottom_extension_mm: Number(machine.cutter_travel_bottom_extension_mm || 0),
+            cutter_travel_top_extension_mm: Number(machine.cutter_travel_top_extension_mm || 0),
             offset_left_cm: Number(state.offsetLeftCm || 0),
             offset_bottom_cm: Number(state.offsetBottomCm || 0),
             sheet_width_cm: state.sheetWidthCm == null ? null : Number(state.sheetWidthCm),
@@ -3085,7 +3089,7 @@
         return String(Math.round(number * 1000) / 1000);
     }
 
-    function cutPreviewViewBox(width, length, paths, offsetX, offsetY) {
+    function cutPreviewViewBox(width, length, paths, offsetX, offsetY, travelBounds = null) {
         let minX = 0;
         let minY = 0;
         let maxX = Number(width) || 0;
@@ -3104,6 +3108,18 @@
                 });
             });
         });
+        if (travelBounds) {
+            const travelXMin = Number(travelBounds.xMin);
+            const travelXMax = Number(travelBounds.xMax);
+            const travelYMin = Number(travelBounds.yMin);
+            const travelYMax = Number(travelBounds.yMax);
+            if ([travelXMin, travelXMax, travelYMin, travelYMax].every(Number.isFinite)) {
+                minX = Math.min(minX, travelXMin);
+                maxX = Math.max(maxX, travelXMax);
+                minY = Math.min(minY, Number(length) - travelYMax);
+                maxY = Math.max(maxY, Number(length) - travelYMin);
+            }
+        }
         const pad = radius + 2;
         minX -= pad;
         minY -= pad;
@@ -3147,6 +3163,19 @@
         const length = placement && Number(placement.machine_length_cm) > 0
             ? Number(placement.machine_length_cm) * 10
             : sheetLength;
+        const travelExtensions = placement ? {
+            left: Math.max(0, Number(placement.cutter_travel_left_extension_mm || 0)),
+            right: Math.max(0, Number(placement.cutter_travel_right_extension_mm || 0)),
+            bottom: Math.max(0, Number(placement.cutter_travel_bottom_extension_mm || 0)),
+            top: Math.max(0, Number(placement.cutter_travel_top_extension_mm || 0)),
+        } : { left: 0, right: 0, bottom: 0, top: 0 };
+        const hasTravelExtensions = Object.values(travelExtensions).some(value => value > 0);
+        const travelBounds = hasTravelExtensions ? {
+            xMin: -travelExtensions.left,
+            xMax: width + travelExtensions.right,
+            yMin: -travelExtensions.bottom,
+            yMax: length + travelExtensions.top,
+        } : null;
         const selectedExecutionPathId = String(options.selectedExecutionPathId || "");
         const selectedVectorIds = new Set((options.selectedVectorIds || []).map(String));
         const assignedVectorIds = new Set((options.assignedVectorIds || []).map(String));
@@ -3162,7 +3191,7 @@
             notes.push(translate("Cutting path preview is incomplete."));
         }
         const pageLayout = String(options.layout || "") === "page";
-        const frame = cutPreviewViewBox(width, length, physicalPaths, offsetX, offsetY);
+        const frame = cutPreviewViewBox(width, length, physicalPaths, offsetX, offsetY, travelBounds);
         const frameOptions = Object.assign({}, options, { frameWidth: frame.width, frameHeight: frame.height });
         const emptyMessage = translate("No machining paths are available for this sheet preview.");
         const boardSurface = (svgInner) => {
@@ -3247,6 +3276,9 @@
         const bottomDim = placement && offsetY > 0
             ? `<div class="dco-cnc-cut-preview__dim dco-cnc-cut-preview__dim--bottom" style="inset-inline-start:${(offsetX / width) * 50}%;inset-block-end:0;inline-size:${(sheetW / width) * 100}%;block-size:${(offsetY / length) * 100}%;">${escapeHtml(String(Number(placement.offset_bottom_cm || 0)))} ${escapeHtml(translate("cm"))}</div>`
             : "";
+        const travelFrame = travelBounds
+            ? `<rect class="dco-cnc-cut-preview__travel" x="${travelBounds.xMin}" y="${travelBounds.yMin}" width="${travelBounds.xMax - travelBounds.xMin}" height="${travelBounds.yMax - travelBounds.yMin}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="7 5"/>`
+            : "";
         const machineFrame = placement
             ? `<rect class="dco-cnc-cut-preview__machine" x="0" y="0" width="${width}" height="${length}" fill="#f3f4f6" stroke="#111827" stroke-width="1.5"/>
                 <rect class="dco-cnc-cut-preview__void" x="0" y="0" width="${Math.max(0, offsetX)}" height="${length}" fill="#e5e7eb"/>
@@ -3254,6 +3286,7 @@
                 <rect class="dco-cnc-cut-preview__void" x="${offsetX + sheetW}" y="0" width="${Math.max(0, width - offsetX - sheetW)}" height="${length}" fill="#e5e7eb"/>
                 <rect class="dco-cnc-cut-preview__void" x="0" y="${offsetY + sheetL}" width="${width}" height="${Math.max(0, length - offsetY - sheetL)}" fill="#e5e7eb"/>
                 <rect class="dco-cnc-cut-preview__sheet" x="${offsetX}" y="${offsetY}" width="${sheetW}" height="${sheetL}" fill="#fff7ed"/>
+                ${travelFrame}
                 <circle class="dco-cnc-cut-preview__origin" cx="0" cy="0" r="3" fill="#111827"/>`
             : "";
         const sheetGroup = `<g data-sheet-geometry transform="translate(${offsetX},${offsetY})">${strokes}<g data-path-markers></g></g>`;
@@ -3261,7 +3294,7 @@
             ? `<p class="dco-operational-files__note" data-placement-caption>${escapeHtml(translate("Machine origin at bottom-left. Left offset {0} cm · Bottom offset {1} cm.", [
                 Number(placement.offset_left_cm || 0),
                 Number(placement.offset_bottom_cm || 0),
-            ]))}</p>`
+            ]))}${hasTravelExtensions ? ` ${escapeHtml(translate("The dashed line shows the configured cutter travel bounds."))}` : ""}</p>`
             : "";
 
         return `<div class="dco-cnc-cut-preview" data-marker-scope="${escapeHtml(markerScope)}" style="${previewShellStyle}">

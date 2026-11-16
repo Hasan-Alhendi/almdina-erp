@@ -33,7 +33,17 @@ assert.ok(translations.includes("ماكينات CNC"));
 
 const workspace = {
     cnc_machines: [
-        { name: "Router A", machine_name: "Router A", width_cm: 130, length_cm: 250, enabled: true },
+        {
+            name: "Router A",
+            machine_name: "Router A",
+            width_cm: 130,
+            length_cm: 250,
+            cutter_travel_left_extension_mm: 5,
+            cutter_travel_right_extension_mm: 7,
+            cutter_travel_bottom_extension_mm: 3,
+            cutter_travel_top_extension_mm: 9,
+            enabled: true,
+        },
         { name: "Router B", machine_name: "Router B", width_cm: 100, length_cm: 200, enabled: true },
     ],
 };
@@ -67,6 +77,8 @@ assert.strictEqual(tight.offsetBottomCm, 4);
 
 const placement = ux.placementPreviewPayload(workspace, state);
 assert.strictEqual(placement.machine_width_cm, 130);
+assert.strictEqual(placement.cutter_travel_left_extension_mm, 5);
+assert.strictEqual(placement.cutter_travel_top_extension_mm, 9);
 assert.strictEqual(placement.offset_left_cm, 3);
 assert.strictEqual(placement.offset_bottom_cm, 4);
 
@@ -107,14 +119,19 @@ const markup = ux.cutPathPreviewMarkup(program, {
 const viewBox = markup.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number);
 assert.ok(viewBox[0] <= 0 && viewBox[1] <= 0, "machine origin stays inside the frame");
 assert.ok(viewBox[0] + viewBox[2] >= 1300 && viewBox[1] + viewBox[3] >= 2500, "machine far edges stay inside the frame");
+assert.ok(viewBox[0] <= -5, "left cutter travel extension stays inside the frame");
+assert.ok(viewBox[0] + viewBox[2] >= 1307, "right cutter travel extension stays inside the frame");
 assert.ok(markup.includes("100,200"));
 assert.ok(markup.includes("dco-cnc-cut-preview__void"));
 assert.ok(markup.includes("dco-cnc-cut-preview__machine"));
+assert.ok(markup.includes("dco-cnc-cut-preview__travel"));
+assert.ok(markup.includes('stroke-dasharray="7 5"'));
 assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
 assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
 assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
 assert.ok(markup.includes('transform="translate(30,40)"'));
 assert.ok(markup.includes("data-placement-caption"));
+assert.ok(markup.includes("The dashed line shows the configured cutter travel bounds."));
 // Path numbers stay on sheet-local geometry; geometry points are not rewritten in the program.
 assert.strictEqual(program.operations[0].toolpaths[0].motions[0].x_mm, 100);
 assert.ok(markup.includes("data-path-number=\"1\"") || markup.includes("data-path-number='1'") || /data-path-number="1"/.test(markup));

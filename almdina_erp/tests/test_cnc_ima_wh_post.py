@@ -199,6 +199,48 @@ def test_sheet_offset_is_applied_once_and_not_to_home_or_g53():
     assert text.count("Y2440.0000") == 1
 
 
+def test_negative_g54_coordinates_and_profile_home_are_allowed_inside_travel_extensions():
+    path = _path(
+        [(-2.5, 100), (20, 100)],
+        [
+            {"kind": "travel", "x_mm": -2.5, "y_mm": 100},
+            {"kind": "plunge", "x_mm": -2.5, "y_mm": 100, "depth_mm": 5},
+            {"kind": "cut", "x_mm": 20, "y_mm": 100, "depth_mm": 5},
+            {"kind": "retract", "x_mm": 20, "y_mm": 100},
+        ],
+        home=(-2.5, 100, 120),
+    )
+    placement = _placement(
+        machine=_machine(cutter_travel_left_extension_mm=5),
+        offset_left_cm=0,
+        offset_bottom_cm=0,
+    )
+    program = _program(path)
+    package = _export(program, placement)
+    assert "X-2.5000 Y100.0000" in package["text"]
+    assert package["verification"]["ok"] is True
+    assert package["sheet_placement"]["cutter_travel_x_min_mm"] == -5
+    assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == -2.5
+
+
+def test_g54_extensions_do_not_expand_the_g53_parking_limits():
+    placement = _placement(
+        machine=_machine(
+            width_cm=140,
+            length_cm=340,
+            cutter_travel_right_extension_mm=200,
+            cutter_travel_top_extension_mm=200,
+        ),
+        sheet_width_cm=100,
+        sheet_length_cm=200,
+        offset_left_cm=0,
+        offset_bottom_cm=0,
+    )
+    with pytest.raises(PostProcessorError) as parking:
+        _export(_reference_program(), placement)
+    assert parking.value.code == "machine_parking_outside_limits"
+
+
 def test_home_happens_once_and_not_between_stepdowns():
     program = _program(
         _path(

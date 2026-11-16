@@ -3426,6 +3426,7 @@ Add a CNC machine,إضافة ماكينة CNC
 No CNC machines have been created yet.,لم تُنشأ ماكينات CNC بعد.
 A factory settings manager must create the CNC machines.,يجب أن ينشئ مسؤول إعدادات المصنع ماكينات CNC.
 "Register each CNC machine bed by name, width (X), and length (Y). Origin is always bottom-left with X to the right and Y upward.",سجّل كل مساحة عمل لماكينة CNC بالاسم والعرض (X) والطول (Y). نقطة الصفر دائمًا أسفل اليسار وX إلى اليمين وY إلى الأعلى.
+"Register each CNC machine bed by name, width (X), and length (Y), then enter only its measured cutter travel extensions. Origin is always bottom-left with X to the right and Y upward.",سجّل سطح كل ماكينة CNC بالاسم والعرض (X) والطول (Y)، ثم أدخل فقط امتدادات حركة الريشة المقاسة. نقطة الصفر دائمًا أسفل اليسار وX إلى اليمين وY إلى الأعلى.
 Sheet placement on CNC machine,تموضع اللوح على ماكينة CNC
 CNC machine,ماكينة CNC
 Choose a CNC machine,اختر ماكينة CNC
@@ -3440,6 +3441,27 @@ The selected CNC machine is disabled.,ماكينة CNC المحددة معطّل
 CNC machine name is required.,اسم ماكينة CNC مطلوب.
 CNC machine width must be a positive number of centimetres.,عرض ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
 CNC machine length must be a positive number of centimetres.,طول ماكينة CNC يجب أن يكون رقمًا موجبًا بالسنتيمتر.
+Machine Name,اسم الماكينة
+Machine Width (cm),عرض سطح الماكينة (سم)
+Machine Length (cm),طول سطح الماكينة (سم)
+Usable machine bed width on the X axis. Entered in centimetres.,العرض المتاح لسطح الماكينة على المحور X. يُدخل بالسنتيمتر.
+Usable machine bed length on the Y axis. Entered in centimetres.,الطول المتاح لسطح الماكينة على المحور Y. يُدخل بالسنتيمتر.
+Cutter Travel Extensions,امتدادات حركة الريشة
+"Enter only the measured cutter-centre travel beyond the machine bed. Do not infer these values from the cutter diameter.",أدخل فقط حركة مركز الريشة المقاسة خارج سطح الماكينة. لا تستنتج هذه القيم من قطر الريشة.
+Left Extension (mm),الامتداد يسارًا (مم)
+Right Extension (mm),الامتداد يمينًا (مم)
+Bottom Extension (mm),الامتداد أسفلًا (مم)
+Top Extension (mm),الامتداد أعلى (مم)
+Measured cutter-centre travel beyond the left edge of the machine bed.,حركة مركز الريشة المقاسة خارج الحافة اليسرى لسطح الماكينة.
+Measured cutter-centre travel beyond the right edge of the machine bed.,حركة مركز الريشة المقاسة خارج الحافة اليمنى لسطح الماكينة.
+Measured cutter-centre travel beyond the bottom edge of the machine bed.,حركة مركز الريشة المقاسة خارج الحافة السفلية لسطح الماكينة.
+Measured cutter-centre travel beyond the top edge of the machine bed.,حركة مركز الريشة المقاسة خارج الحافة العلوية لسطح الماكينة.
+Left cutter travel extension must be between 0 and 10000 millimetres.,يجب أن يكون امتداد حركة الريشة يسارًا بين 0 و10000 مليمتر.
+Right cutter travel extension must be between 0 and 10000 millimetres.,يجب أن يكون امتداد حركة الريشة يمينًا بين 0 و10000 مليمتر.
+Bottom cutter travel extension must be between 0 and 10000 millimetres.,يجب أن يكون امتداد حركة الريشة أسفلًا بين 0 و10000 مليمتر.
+Top cutter travel extension must be between 0 and 10000 millimetres.,يجب أن يكون امتداد حركة الريشة أعلى بين 0 و10000 مليمتر.
+The dashed line shows the configured cutter travel bounds.,يمثل الخط المتقطع حدود حركة الريشة المضبوطة.
+"CNC machine {0}: path {1} exceeds the {2}-axis cutter travel at {3} mm; allowed range is {4} to {5} mm (over by {6} mm).",ماكينة CNC ‏{0}: المسار {1} يتجاوز حركة الريشة على المحور {2} عند {3} مم؛ المجال المسموح من {4} إلى {5} مم (مقدار التجاوز {6} مم).
 The distance from the left must be zero or a positive number of centimetres.,البعد عن اليسار يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
 The distance from the bottom must be zero or a positive number of centimetres.,البعد عن الأسفل يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
 The sheet plus the left offset exceeds the machine width.,اللوح مع البعد عن اليسار يتجاوز عرض الماكينة.

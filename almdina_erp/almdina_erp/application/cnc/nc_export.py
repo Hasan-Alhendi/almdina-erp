@@ -112,6 +112,10 @@ def build_post_processed_nc(
             emit_program,
             machine_width_mm=sheet_placement.machine_width_mm,
             machine_length_mm=sheet_placement.machine_length_mm,
+            cutter_travel_x_min_mm=sheet_placement.cutter_travel_x_min_mm,
+            cutter_travel_x_max_mm=sheet_placement.cutter_travel_x_max_mm,
+            cutter_travel_y_min_mm=sheet_placement.cutter_travel_y_min_mm,
+            cutter_travel_y_max_mm=sheet_placement.cutter_travel_y_max_mm,
         )
     else:
         raise PostProcessorError("post_processor_unsupported")

@@ -7,6 +7,7 @@ coordinates and is not shifted again.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -14,12 +15,15 @@ from typing import Any
 
 PLACEMENT_TRANSFORM_VERSION = "placement-xy-v1"
 CM_TO_MM = 10.0
+MAX_CUTTER_TRAVEL_EXTENSION_MM = 10_000.0
+_BOUNDS_TOLERANCE_MM = 1e-9
 
 
 class PlacementError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, *, details: Mapping[str, Any] | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.details = dict(details or {})
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +31,10 @@ class CncMachineSpec:
     name: str
     width_cm: float
     length_cm: float
+    cutter_travel_left_extension_mm: float = 0.0
+    cutter_travel_right_extension_mm: float = 0.0
+    cutter_travel_bottom_extension_mm: float = 0.0
+    cutter_travel_top_extension_mm: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +46,10 @@ class SheetPlacement:
     offset_bottom_cm: float
     sheet_width_cm: float
     sheet_length_cm: float
+    cutter_travel_left_extension_mm: float = 0.0
+    cutter_travel_right_extension_mm: float = 0.0
+    cutter_travel_bottom_extension_mm: float = 0.0
+    cutter_travel_top_extension_mm: float = 0.0
     transform_version: str = PLACEMENT_TRANSFORM_VERSION
 
     @property
@@ -57,6 +69,22 @@ class SheetPlacement:
         return float(self.machine_length_cm) * CM_TO_MM
 
     @property
+    def cutter_travel_x_min_mm(self) -> float:
+        return -float(self.cutter_travel_left_extension_mm)
+
+    @property
+    def cutter_travel_x_max_mm(self) -> float:
+        return self.machine_width_mm + float(self.cutter_travel_right_extension_mm)
+
+    @property
+    def cutter_travel_y_min_mm(self) -> float:
+        return -float(self.cutter_travel_bottom_extension_mm)
+
+    @property
+    def cutter_travel_y_max_mm(self) -> float:
+        return self.machine_length_mm + float(self.cutter_travel_top_extension_mm)
+
+    @property
     def sheet_width_mm(self) -> float:
         return float(self.sheet_width_cm) * CM_TO_MM
 
@@ -70,7 +98,7 @@ def _finite_non_negative(value: Any, *, code: str) -> float:
         number = float(value)
     except (TypeError, ValueError) as exc:
         raise PlacementError(code) from exc
-    if number != number or number < 0:  # NaN or negative
+    if not math.isfinite(number) or number < 0:
         raise PlacementError(code)
     return number
 
@@ -87,13 +115,45 @@ def normalize_cnc_machine(
     machine_name: Any,
     width_cm: Any,
     length_cm: Any,
+    cutter_travel_left_extension_mm: Any = 0,
+    cutter_travel_right_extension_mm: Any = 0,
+    cutter_travel_bottom_extension_mm: Any = 0,
+    cutter_travel_top_extension_mm: Any = 0,
 ) -> CncMachineSpec:
     name = str(machine_name or "").strip()
     if not name:
         raise PlacementError("cnc_machine_name_required")
     width = _finite_positive(width_cm, code="cnc_machine_width_invalid")
     length = _finite_positive(length_cm, code="cnc_machine_length_invalid")
-    return CncMachineSpec(name=name, width_cm=width, length_cm=length)
+    extension_values = (
+        (
+            "cutter_travel_left_extension_mm",
+            cutter_travel_left_extension_mm,
+            "cutter_travel_left_extension_invalid",
+        ),
+        (
+            "cutter_travel_right_extension_mm",
+            cutter_travel_right_extension_mm,
+            "cutter_travel_right_extension_invalid",
+        ),
+        (
+            "cutter_travel_bottom_extension_mm",
+            cutter_travel_bottom_extension_mm,
+            "cutter_travel_bottom_extension_invalid",
+        ),
+        (
+            "cutter_travel_top_extension_mm",
+            cutter_travel_top_extension_mm,
+            "cutter_travel_top_extension_invalid",
+        ),
+    )
+    extensions: dict[str, float] = {}
+    for fieldname, raw_value, code in extension_values:
+        value = _finite_non_negative(raw_value, code=code)
+        if value > MAX_CUTTER_TRAVEL_EXTENSION_MM:
+            raise PlacementError(code)
+        extensions[fieldname] = value
+    return CncMachineSpec(name=name, width_cm=width, length_cm=length, **extensions)
 
 
 def sheet_to_machine_xy(
@@ -149,6 +209,18 @@ def build_sheet_placement(
             machine_name=machine.get("name") or machine.get("machine_name"),
             width_cm=machine.get("width_cm"),
             length_cm=machine.get("length_cm"),
+            cutter_travel_left_extension_mm=machine.get(
+                "cutter_travel_left_extension_mm", 0
+            ),
+            cutter_travel_right_extension_mm=machine.get(
+                "cutter_travel_right_extension_mm", 0
+            ),
+            cutter_travel_bottom_extension_mm=machine.get(
+                "cutter_travel_bottom_extension_mm", 0
+            ),
+            cutter_travel_top_extension_mm=machine.get(
+                "cutter_travel_top_extension_mm", 0
+            ),
         )
     sheet_w = _finite_positive(sheet_width_cm, code="sheet_width_invalid")
     sheet_l = _finite_positive(sheet_length_cm, code="sheet_length_invalid")
@@ -170,6 +242,10 @@ def build_sheet_placement(
         offset_bottom_cm=bottom,
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
+        cutter_travel_left_extension_mm=spec.cutter_travel_left_extension_mm,
+        cutter_travel_right_extension_mm=spec.cutter_travel_right_extension_mm,
+        cutter_travel_bottom_extension_mm=spec.cutter_travel_bottom_extension_mm,
+        cutter_travel_top_extension_mm=spec.cutter_travel_top_extension_mm,
     )
 
 
@@ -180,6 +256,10 @@ def placement_fingerprint_payload(placement: SheetPlacement | None) -> dict[str,
         "cnc_machine": placement.machine_name,
         "machine_width_cm": placement.machine_width_cm,
         "machine_length_cm": placement.machine_length_cm,
+        "cutter_travel_left_extension_mm": placement.cutter_travel_left_extension_mm,
+        "cutter_travel_right_extension_mm": placement.cutter_travel_right_extension_mm,
+        "cutter_travel_bottom_extension_mm": placement.cutter_travel_bottom_extension_mm,
+        "cutter_travel_top_extension_mm": placement.cutter_travel_top_extension_mm,
         "offset_left_cm": placement.offset_left_cm,
         "offset_bottom_cm": placement.offset_bottom_cm,
         "placement_transform_version": placement.transform_version,
@@ -194,6 +274,10 @@ def placement_snapshot_payload(placement: SheetPlacement) -> dict[str, Any]:
             "offset_bottom_mm": placement.offset_bottom_mm,
             "machine_width_mm": placement.machine_width_mm,
             "machine_length_mm": placement.machine_length_mm,
+            "cutter_travel_x_min_mm": placement.cutter_travel_x_min_mm,
+            "cutter_travel_x_max_mm": placement.cutter_travel_x_max_mm,
+            "cutter_travel_y_min_mm": placement.cutter_travel_y_min_mm,
+            "cutter_travel_y_max_mm": placement.cutter_travel_y_max_mm,
             "sheet_width_cm": placement.sheet_width_cm,
             "sheet_length_cm": placement.sheet_length_cm,
         }
@@ -201,10 +285,14 @@ def placement_snapshot_payload(placement: SheetPlacement) -> dict[str, Any]:
     return payload
 
 
-def iter_program_xy_mm(program: Mapping[str, Any]) -> list[tuple[float, float]]:
-    points: list[tuple[float, float]] = []
-    for operation in program.get("operations") or ():
-        for path in operation.get("toolpaths") or ():
+def _iter_program_xy_details(
+    program: Mapping[str, Any],
+) -> list[tuple[str, float, float]]:
+    points: list[tuple[str, float, float]] = []
+    for operation_index, operation in enumerate(program.get("operations") or (), start=1):
+        operation_key = str(operation.get("operation_key") or f"operation:{operation_index}")
+        for path_index, path in enumerate(operation.get("toolpaths") or (), start=1):
+            path_key = str(path.get("path_key") or f"{operation_key}:path:{path_index}")
             for motion in path.get("motions") or ():
                 kind = str(motion.get("kind") or "")
                 if kind not in {"travel", "cut"}:
@@ -213,33 +301,55 @@ def iter_program_xy_mm(program: Mapping[str, Any]) -> list[tuple[float, float]]:
                 y = motion.get("y_mm")
                 if x is None or y is None:
                     continue
-                points.append((float(x), float(y)))
+                points.append((path_key, float(x), float(y)))
             for point in path.get("points") or ():
                 if not isinstance(point, Sequence) or len(point) < 2:
                     continue
-                points.append((float(point[0]), float(point[1])))
+                points.append((path_key, float(point[0]), float(point[1])))
     return points
+
+
+def iter_program_xy_mm(program: Mapping[str, Any]) -> list[tuple[float, float]]:
+    return [(x_mm, y_mm) for _path_key, x_mm, y_mm in _iter_program_xy_details(program)]
 
 
 def validate_program_within_machine(
     program: Mapping[str, Any],
     placement: SheetPlacement,
 ) -> None:
-    """Ensure every sheet XY after placement stays inside the machine travel box."""
+    """Ensure every placed cutter centre stays inside the configured G54 travel."""
 
-    for sheet_x, sheet_y in iter_program_xy_mm(program):
+    bounds = {
+        "X": (placement.cutter_travel_x_min_mm, placement.cutter_travel_x_max_mm),
+        "Y": (placement.cutter_travel_y_min_mm, placement.cutter_travel_y_max_mm),
+    }
+    for path_key, sheet_x, sheet_y in _iter_program_xy_details(program):
         machine_x, machine_y = sheet_to_machine_xy(
             sheet_x,
             sheet_y,
             offset_left_cm=placement.offset_left_cm,
             offset_bottom_cm=placement.offset_bottom_cm,
         )
-        if machine_x < -1e-9 or machine_y < -1e-9:
-            raise PlacementError("toolpath_exceeds_machine")
-        if machine_x - placement.machine_width_mm > 1e-9:
-            raise PlacementError("toolpath_exceeds_machine")
-        if machine_y - placement.machine_length_mm > 1e-9:
-            raise PlacementError("toolpath_exceeds_machine")
+        for axis, coordinate in (("X", machine_x), ("Y", machine_y)):
+            minimum, maximum = bounds[axis]
+            if coordinate < minimum - _BOUNDS_TOLERANCE_MM:
+                overrun = minimum - coordinate
+            elif coordinate > maximum + _BOUNDS_TOLERANCE_MM:
+                overrun = coordinate - maximum
+            else:
+                continue
+            raise PlacementError(
+                "toolpath_exceeds_machine",
+                details={
+                    "machine_name": placement.machine_name,
+                    "path_key": path_key,
+                    "axis": axis,
+                    "coordinate_mm": coordinate,
+                    "minimum_mm": minimum,
+                    "maximum_mm": maximum,
+                    "overrun_mm": overrun,
+                },
+            )
 
 
 def apply_placement_to_program(
@@ -298,6 +408,7 @@ def apply_placement_to_program(
 __all__ = [
     "CM_TO_MM",
     "CncMachineSpec",
+    "MAX_CUTTER_TRAVEL_EXTENSION_MM",
     "PLACEMENT_TRANSFORM_VERSION",
     "PlacementError",
     "SheetPlacement",
