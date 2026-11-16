@@ -286,6 +286,8 @@ const canvasSource = fs.readFileSync(path.join(root, "public/js/board_editor/can
 assert.match(canvasSource, /data-abe-magnet/);
 assert.match(canvasSource, /data-abe-guide/);
 assert.match(canvasSource, /data-abe-guide-kind/);
+assert.match(canvasSource, /isAlignment \? "#d92d20" : "#0b5fff"/);
+assert.match(canvasSource, /isAlignment \? "2" : "1\.25"/);
 assert.match(canvasSource, /vector-effect/);
 assert.doesNotMatch(canvasSource, /abe-tool-select/);
 
@@ -437,6 +439,196 @@ assert.doesNotMatch(canvasSource, /abe-tool-select/);
     assert.equal(proposal.ok, true);
     assert.equal(proposal.target_sheet_no, null);
     assert.equal(Math.round(proposal.local_y_mm), 105);
+}
+
+// Near-board-size doors stay near both sheets across the editor gap; magnet
+// must still target the dominant board's usable edge.
+{
+    const dual = {
+        boards: {
+            1: {
+                sheet_no: 1,
+                origin_x_mm: 0,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+            2: {
+                sheet_no: 2,
+                origin_x_mm: 1268,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+        },
+        pieces: {
+            "instance:wide": {
+                piece_key: "instance:wide",
+                piece_id: 10,
+                piece_instance_id: "wide",
+                sheet_no: 1,
+                local_x_mm: 20,
+                local_y_mm: 40,
+                placement_cm: { x: 2, y: 4, w: 118, h: 100 },
+                outline_mm: [[20, 40], [1200, 40], [1200, 1040], [20, 1040]],
+                editable: true,
+                glass_host_key: null,
+            },
+        },
+        kerf_mm: 4,
+        stale_cut_path_sheets: [],
+        stale_unbound_text_sheets: [],
+    };
+    // Mostly over board 2 (origin 1268) while still near board 1 across the gap.
+    const suggestion = SnapGeometry.suggestPieceSnap(dual, "instance:wide", 1275, 40, {
+        magnetEnabled: true,
+        thresholdMm: 40,
+    });
+    assert.equal(suggestion.ok, true);
+    assert.match(String(suggestion.source), /usable/);
+    const proposal = MoveGeometry.proposePieceDrop(
+        dual,
+        "instance:wide",
+        20 + suggestion.dx,
+        40 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(Number(proposal.target_sheet_no), 2);
+    assert.equal(Math.round(proposal.local_x_mm), 0);
+}
+
+// Near-full-board doors need a wider usable-edge capture than the screen-pixel
+// threshold; neighbour snaps must keep the normal threshold.
+{
+    const wideFit = {
+        boards: {
+            1: {
+                sheet_no: 1,
+                origin_x_mm: 0,
+                origin_y_mm: 0,
+                width_mm: 1220,
+                height_mm: 2440,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1220,
+                usable_length_mm: 2440,
+                title_band_mm: 36,
+            },
+        },
+        pieces: {
+            "instance:wide": {
+                piece_key: "instance:wide",
+                piece_id: 11,
+                piece_instance_id: "wide",
+                sheet_no: 1,
+                local_x_mm: 55,
+                local_y_mm: 40,
+                placement_cm: { x: 5.5, y: 4, w: 110, h: 100 },
+                outline_mm: [[55, 40], [1155, 40], [1155, 1040], [55, 1040]],
+                editable: true,
+                glass_host_key: null,
+            },
+        },
+        kerf_mm: 4,
+        stale_cut_path_sheets: [],
+        stale_unbound_text_sheets: [],
+    };
+    // Offset 55mm exceeds the 20mm screen threshold, but the widened usable
+    // threshold for near-full doors must still capture the left board edge.
+    const suggestion = SnapGeometry.suggestPieceSnap(wideFit, "instance:wide", 55, 40, {
+        magnetEnabled: true,
+        thresholdMm: 20,
+    });
+    assert.equal(suggestion.ok, true);
+    assert.match(String(suggestion.source), /usable/);
+    const proposal = MoveGeometry.proposePieceDrop(
+        wideFit,
+        "instance:wide",
+        55 + suggestion.dx,
+        40 + suggestion.dy
+    );
+    assert.equal(proposal.ok, true);
+    assert.equal(Math.round(proposal.local_x_mm), 0);
+}
+
+// A 980mm door on a 1210mm sheet used to jump the full 230mm slack once the
+// pointer left the widened 145mm board-edge radius. The neighbour alignment
+// 15mm from the pointer must win instead.
+{
+    const slack = 230;
+    const alignDx = -165;
+    const largeDoor = {
+        boards: {
+            1: {
+                sheet_no: 1,
+                origin_x_mm: 0,
+                origin_y_mm: 0,
+                width_mm: 1210,
+                height_mm: 2430,
+                trim_x_mm: 0,
+                trim_y_mm: 0,
+                usable_width_mm: 1210,
+                usable_length_mm: 2430,
+                title_band_mm: 36,
+            },
+        },
+        pieces: {
+            "instance:mover": {
+                piece_key: "instance:mover",
+                piece_id: 21,
+                piece_instance_id: "mover",
+                sheet_no: 1,
+                local_x_mm: slack,
+                local_y_mm: 600,
+                placement_cm: { x: 23, y: 60, w: 98, h: 50 },
+                outline_mm: [[230, 600], [1210, 600], [1210, 1100], [230, 1100]],
+                editable: true,
+                glass_host_key: null,
+            },
+            "instance:neighbour": {
+                piece_key: "instance:neighbour",
+                piece_id: 22,
+                piece_instance_id: "neighbour",
+                sheet_no: 1,
+                local_x_mm: slack + alignDx,
+                local_y_mm: 0,
+                placement_cm: { x: 6.5, y: 0, w: 98, h: 50 },
+                outline_mm: [[65, 0], [1045, 0], [1045, 500], [65, 500]],
+                editable: true,
+                glass_host_key: null,
+            },
+        },
+        kerf_mm: 0,
+        stale_cut_path_sheets: [],
+        stale_unbound_text_sheets: [],
+    };
+    const near = SnapGeometry.suggestPieceSnap(largeDoor, "instance:mover", slack - 40, 600, {
+        magnetEnabled: true,
+        thresholdMm: 15.9,
+    });
+    assert.equal(near.ok, true);
+    assert.equal(Math.round(near.dx), 0);
+    const towardNeighbour = SnapGeometry.suggestPieceSnap(
+        largeDoor,
+        "instance:mover",
+        slack - 150.8,
+        600,
+        { magnetEnabled: true, thresholdMm: 15.9 }
+    );
+    assert.equal(towardNeighbour.ok, true);
+    assert.equal(Math.round(towardNeighbour.dx), alignDx);
+    assert.match(String(towardNeighbour.source), /neighbour/);
+    assert.notEqual(Math.round(towardNeighbour.dx), -slack);
 }
 
 console.log("board_editor_snap.test.js: ok");

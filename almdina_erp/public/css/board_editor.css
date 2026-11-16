@@ -987,6 +987,19 @@
   user-select: none;
 }
 
+.abe-canvas-stage.is-marqueeing {
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.abe-marquee {
+  fill: rgba(11, 95, 255, 0.12);
+  stroke: #0b5fff;
+  stroke-width: 1.25;
+  pointer-events: none;
+}
+
 .abe-angle-field {
   display: inline-flex;
   align-items: center;

@@ -378,37 +378,70 @@ class BoardEditorAddBoardClassificationTests(unittest.TestCase):
         self.assertFalse(result["ready"])
         self.assertIn("mixed_full_board_offcut_source", [issue["code"] for issue in result["issues"]])
 
-    def test_review_rejects_unresolved_offcut(self):
+    def test_review_and_plan_copy_allow_unassigned_offcut_type(self):
         document = {
             "schema": 1,
             "boards": [
-                {"sheet_no": 1, "origin_x_mm": 0, "origin_y_mm": 36, "user_moved": False},
+                {
+                    "sheet_no": 3,
+                    "origin_x_mm": 0,
+                    "origin_y_mm": 36,
+                    "user_moved": False,
+                    "editor_origin": "full_board",
+                },
+                {
+                    "sheet_no": 4,
+                    "origin_x_mm": 1400,
+                    "origin_y_mm": 36,
+                    "user_moved": False,
+                    "editor_origin": "full_board",
+                },
             ],
             "pieces": [
+                layout_piece("pi-a", 3, resource_kind="FULL_BOARD"),
+                layout_piece("pi-b", 3, x=500, y=20, resource_kind="FULL_BOARD"),
                 layout_piece(
-                    "pi-a",
-                    1,
+                    "pi-c",
+                    4,
                     resource_kind="OFFCUT",
                     offcut_source_party="UNASSIGNED",
                     offcut_execution_party="UNASSIGNED",
                 ),
-                layout_piece("pi-b", None, resource_kind="FULL_BOARD"),
-                layout_piece("pi-c", None, resource_kind="FULL_BOARD"),
             ],
         }
         normalized = normalize_layout(document, catalog())
         trusted = trusted_model_from_projection(projection_for_review(), machine_type="CNC Router")
-        result = review_saved_draft(
-            {
-                "present": True,
-                "compatible": True,
-                "draft_version": 1,
-                "layout": normalized,
-            },
-            trusted,
+        draft = {
+            "present": True,
+            "compatible": True,
+            "draft_version": 1,
+            "layout": normalized,
+            "source_content_revision": "rev-1",
+            "source_input_fingerprint": "fp-1",
+            "distribution_fingerprint": "ignored",
+        }
+        result = review_saved_draft(draft, trusted)
+        self.assertTrue(result["ready"], result["issues"])
+        self.assertNotIn("offcut_unresolved", [issue["code"] for issue in result["issues"]])
+        snapshot = materialize_plan_snapshot(
+            draft=draft,
+            projection=projection_for_review(),
+            source_snapshot=source_snapshot(),
+            machine_type="CNC Router",
+            source_plan_name="PLAN-1",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
         )
-        self.assertFalse(result["ready"])
-        self.assertIn("offcut_unresolved", [issue["code"] for issue in result["issues"]])
+        offcut = next(
+            piece
+            for sheet in snapshot["sheets"]
+            for piece in sheet["pieces"]
+            if piece["piece_instance_id"] == "pi-c"
+        )
+        self.assertEqual(offcut["resource_kind"], "OFFCUT")
+        self.assertEqual(offcut["offcut_source_party"], "UNASSIGNED")
+        self.assertEqual(offcut["offcut_execution_party"], "UNASSIGNED")
 
     def test_review_accepts_editor_board_with_order_standard_dims(self):
         document = {

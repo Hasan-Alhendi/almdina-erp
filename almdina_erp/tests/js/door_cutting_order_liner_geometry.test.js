@@ -65,7 +65,84 @@ const jsonLiners = geometry.parseDoorLiners({
 });
 assert.equal(jsonLiners.widthCm, 1.8);
 assert.equal(jsonLiners.liners.length, 2);
+assert.equal(jsonLiners.face, null);
+assert.equal(geometry.doorLinerFace({
+    extra_liner: 1,
+    liner_specs_json: JSON.stringify({
+        width_cm: 1.8,
+        liners: [{ id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 40 }],
+    }),
+}), null);
 assert.equal(geometry.serializeDoorLiners(jsonLiners).includes("liner_2"), true);
+assert.equal(geometry.serializeDoorLiners(jsonLiners).includes("face"), false);
+
+const blankLiner = editor.draftFromRow({
+    piece_type: "Regular",
+    width_cm: 40,
+    length_cm: 60,
+}, "liner");
+assert.equal(blankLiner.face, null);
+const blankLinerHtml = editor.linerSetHtml(blankLiner);
+assert.equal(blankLinerHtml.includes(" checked"), false);
+assert.equal((blankLinerHtml.match(/type="radio"/g) || []).length, 2);
+assert.match(blankLinerHtml, /name="liner_face"/);
+assert.match(blankLinerHtml, /Liner face/);
+assert.match(blankLinerHtml, /Front face/);
+assert.match(blankLinerHtml, /Back face/);
+
+function facedPiece(face) {
+    const liners = [{
+        id: "liner_1",
+        side: "edge_width_top",
+        offsetCm: 2,
+        startCm: 0,
+        lengthCm: 40,
+    }];
+    return {
+        piece_type: "Regular",
+        width_cm: 40,
+        length_cm: 60,
+        x: 1,
+        y: 2,
+        w: 40,
+        h: 60,
+        extra_liner: 1,
+        liner_reference_side: "edge_width_top",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: 40,
+        liner_specs_json: face
+            ? geometry.serializeDoorLiners({ enabled: true, widthCm: 1.5, face, liners })
+            : geometry.serializeDoorLiners({ enabled: true, widthCm: 1.5, liners }),
+    };
+}
+const frontPiece = facedPiece("front");
+const backPiece = facedPiece("back");
+const unsetPiece = facedPiece(null);
+assert.equal(geometry.doorLinerFace(frontPiece), "front");
+assert.equal(geometry.doorLinerFace(backPiece), "back");
+assert.equal(geometry.doorLinerFace(unsetPiece), null);
+assert.equal(geometry.parseDoorLiners(frontPiece).liners[0].side, geometry.parseDoorLiners(backPiece).liners[0].side);
+assert.equal(geometry.parseDoorLiners(frontPiece).liners[0].offsetCm, 2);
+assert.equal(geometry.parseDoorLiners(backPiece).widthCm, 1.5);
+assert.deepEqual(
+    geometry.visualCenterline(frontPiece).geometry.path,
+    geometry.visualCenterline(backPiece).geometry.path,
+);
+assert.deepEqual(
+    geometry.visualCenterline(backPiece).geometry.path,
+    geometry.visualCenterline(unsetPiece).geometry.path,
+);
+const savedFront = editor.valuesFor("liner", editor.draftFromRow(frontPiece, "liner"), true);
+const savedBack = editor.valuesFor("liner", editor.draftFromRow(backPiece, "liner"), true);
+assert.equal(JSON.parse(savedFront.liner_specs_json).face, "front");
+assert.equal(JSON.parse(savedBack.liner_specs_json).face, "back");
+assert.equal(savedFront.liner_reference_side, savedBack.liner_reference_side);
+assert.equal(savedFront.liner_offset_cm, savedBack.liner_offset_cm);
+assert.equal(savedFront.liner_width_cm, savedBack.liner_width_cm);
+assert.equal(savedFront.liner_length_cm, savedBack.liner_length_cm);
+assert.equal(editor.draftFromRow(unsetPiece, "liner").face, null);
 
 assert.deepEqual(
     copy(geometry.availableSides("Regular")),

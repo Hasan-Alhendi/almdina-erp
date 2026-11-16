@@ -437,6 +437,44 @@ jobs:
           fi
           exit "$test_status"
 
+      - name: Verify restore on disposable CI site
+        if: github.event_name == 'pull_request'
+        env:
+          ALMADINA_DISPOSABLE_RESTORE_SITE: restore-ci.localhost
+        run: |
+          set -euo pipefail
+          if ! git diff --name-only '${{ github.event.pull_request.base.sha }}' HEAD -- almdina_erp \
+            | grep -Eq '^almdina_erp/(almdina_erp/(infrastructure/backups/|services/backup_restore_service.py)|tests/disposable_restore_check.py)'; then
+            echo 'Backup code unchanged; skipping disposable restore.'
+            exit 0
+          fi
+          cd "$RUNNER_TEMP/frappe-bench"
+          bench new-site "$ALMADINA_DISPOSABLE_RESTORE_SITE" \
+            --db-host 127.0.0.1 --db-root-username root --db-root-password root \
+            --admin-password admin --no-mariadb-socket
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" install-app erpnext
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" install-app almdina_erp
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" set-config allow_tests true
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" set-config mariadb_root_password root
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" execute almdina_erp.tests.disposable_restore_check.begin
+          status_file="$RUNNER_TEMP/frappe-bench/sites/$ALMADINA_DISPOSABLE_RESTORE_SITE/private/backup_restore_requests/state.json"
+          phase=''
+          for attempt in $(seq 1 180); do
+            phase="$(python -c 'import json,sys; from pathlib import Path; p=Path(sys.argv[1]); print(json.loads(p.read_text())["phase"] if p.exists() else "QUEUED")' "$status_file")"
+            if [[ "$phase" == 'COMPLETED' ]]; then break; fi
+            if [[ "$phase" == 'RECOVERED_AFTER_FAILURE' || "$phase" == 'MANUAL_INTERVENTION_REQUIRED' ]]; then
+              echo "Disposable restore failed: $phase"
+              exit 1
+            fi
+            sleep 2
+          done
+          if [[ "$phase" != 'COMPLETED' ]]; then
+            echo "Disposable restore did not finish: $phase"
+            exit 1
+          fi
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" execute almdina_erp.tests.disposable_restore_check.verify
+          bench --site "$ALMADINA_DISPOSABLE_RESTORE_SITE" set-config allow_tests false
+
       - name: Collect integration diagnostics
         if: failure()
         run: |

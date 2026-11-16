@@ -551,7 +551,7 @@ def _homogeneity_rules(placed: list[dict[str, Any]], issues: list[dict[str, Any]
             continue
         by_sheet.setdefault(int(sheet_no), []).append(piece)
         try:
-            decision = decision_from_piece(piece)
+            decision_from_piece(piece)
         except OffcutPolicyError:
             issues.append(
                 _issue(
@@ -562,15 +562,6 @@ def _homogeneity_rules(placed: list[dict[str, Any]], issues: list[dict[str, Any]
                 )
             )
             continue
-        if decision.is_offcut and not decision.is_resolved:
-            issues.append(
-                _issue(
-                    "offcut_unresolved",
-                    piece_instance_ids=[str(piece.get("piece_instance_id") or "")],
-                    piece_ids=_ids(piece),
-                    sheet_nos=[int(sheet_no)],
-                )
-            )
     sources = [{"pieces": group} for group in by_sheet.values()]
     try:
         validate_source_resource_homogeneity(sources)
@@ -994,9 +985,8 @@ def _placement_rules(
         except OffcutPolicyError:
             issues.append(_issue("unsupported_sheet_resource", piece_instance_ids=[piece["piece_instance_id"]], piece_ids=_ids(piece)))
             continue
-        if decision.is_offcut and not decision.is_resolved:
-            issues.append(_issue("offcut_unresolved", piece_instance_ids=[piece["piece_instance_id"]], piece_ids=_ids(piece)))
-            continue
+        # Offcut type is optional on save and on apply. An unresolved offcut is
+        # not factory work, so it does not have to sit inside a usable sheet.
         if decision.is_customer_executed:
             continue
         if not decision.requires_factory_execution and not decision.consumes_full_board:

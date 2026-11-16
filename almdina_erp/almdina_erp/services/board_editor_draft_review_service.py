@@ -140,4 +140,10 @@ def validate_board_editor_draft(order_name: str, plan_name: str) -> dict[str, An
     return result
 
 
-__all__ = ["validate_board_editor_draft"]
+__all__ = ["validate_board_editor_draft", "format_board_editor_review_issue"]
+
+
+def format_board_editor_review_issue(issue: Mapping[str, Any]) -> str:
+    """Public wrapper so apply/create can reuse the same review wording."""
+
+    return _issue_message(issue)

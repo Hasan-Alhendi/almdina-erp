@@ -14,7 +14,8 @@ from almdina_erp.almdina_erp.application.backups.management import (
     BackupArtifact,
     BackupBundle,
 )
-from almdina_erp.almdina_erp.domain.backups.policy import backup_group_identifier
+from almdina_erp.almdina_erp.domain.backups.policy import backup_artifact_kind, backup_group_identifier
+from almdina_erp.almdina_erp.infrastructure.backups import restore_state
 
 
 _ARTIFACTS = (
@@ -136,6 +137,8 @@ class FrappeLocalRetention:
         if limit < 1:
             raise ValueError("Local backup retention must be positive.")
         root = Path(get_backup_path()).resolve()
+        if restore_state.active(Path(frappe.get_site_path()).resolve()):
+            return
         if not root.is_dir():
             return
         site_slug = str(frappe.local.site).replace(".", "_")
@@ -157,12 +160,13 @@ class FrappeLocalRetention:
                 if not identifier or identifier in protected:
                     continue
                 grouped[identifier].append(path)
-                if "-database" in path.name:
-                    kinds[identifier].add("database")
+                kind = backup_artifact_kind(path.name)
+                if kind:
+                    kinds[identifier].add(kind)
             complete = {
                 identifier: paths
                 for identifier, paths in grouped.items()
-                if "database" in kinds[identifier]
+                if kinds[identifier] == {"database", "public_files", "private_files", "site_config"}
             }
             cleanup_old_backups(complete, limit)
 

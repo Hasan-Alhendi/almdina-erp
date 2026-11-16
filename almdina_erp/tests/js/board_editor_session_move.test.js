@@ -358,4 +358,351 @@ store.attachSession(History.create(session).get(), History.create(session));
 assert.equal(store.snapshot().tool, undefined);
 assert.equal(typeof store.setTool, "undefined");
 
+// ---------------------------------------------------------------------------
+// Cross-frame reframe contract: applyPieceMove without delta_* must still use
+// world-space deltas when crossing outside ↔ board or board ↔ board origins.
+// ---------------------------------------------------------------------------
+{
+    function approx(actual, expected, label) {
+        assert.ok(
+            Math.abs(Number(actual) - Number(expected)) < 0.01,
+            `${label}: ${actual} != ${expected}`
+        );
+    }
+
+    function footprintAligned(piece, label) {
+        const fp = MoveGeometry.footprint(piece);
+        approx(fp.bounds.x, piece.local_x_mm, `${label} outline.x`);
+        approx(fp.bounds.y, piece.local_y_mm, `${label} outline.y`);
+    }
+
+    const crossProjection = {
+        board: { kerf_cm: 0.4 },
+        sheets: [
+            {
+                sheet_no: 1,
+                full_width_cm: 100,
+                full_length_cm: 100,
+                applied_trim_width_cm: 0,
+                applied_trim_length_cm: 0,
+            },
+            {
+                sheet_no: 3,
+                full_width_cm: 100,
+                full_length_cm: 100,
+                applied_trim_width_cm: 0,
+                applied_trim_length_cm: 0,
+            },
+        ],
+        pieces: [
+            {
+                piece_id: 11,
+                piece_instance_id: "pi-cross",
+                label: "CROSS",
+                sheet_no: 1,
+                placement_cm: { x: 10, y: 10, w: 20, h: 20 },
+            },
+            {
+                piece_id: 12,
+                piece_instance_id: "pi-cross-host",
+                label: "CROSS-HOST",
+                sheet_no: 1,
+                placement_cm: { x: 40, y: 40, w: 40, h: 40 },
+                glass_hole_local_mm: [
+                    [50, 50],
+                    [250, 50],
+                    [250, 250],
+                    [50, 250],
+                ],
+            },
+            {
+                piece_id: 13,
+                piece_instance_id: "pi-cross-guest",
+                label: "CROSS-GUEST",
+                sheet_no: 1,
+                placement_cm: { x: 50, y: 50, w: 10, h: 10 },
+                glass_host_piece_id: 12,
+            },
+        ],
+        elements: [
+            {
+                element_id: "cx",
+                kind: "finished_outline",
+                piece_id: 11,
+                piece_instance_id: "pi-cross",
+                sheet_no: 1,
+                geometry: { outer: [[100, 100], [300, 100], [300, 300], [100, 300]] },
+            },
+            {
+                element_id: "ch",
+                kind: "finished_outline",
+                piece_id: 12,
+                piece_instance_id: "pi-cross-host",
+                sheet_no: 1,
+                geometry: {
+                    outer: [[400, 400], [800, 400], [800, 800], [400, 800]],
+                    holes: [[[450, 450], [650, 450], [650, 650], [450, 650]]],
+                },
+            },
+            {
+                element_id: "cg",
+                kind: "finished_outline",
+                piece_id: 13,
+                piece_instance_id: "pi-cross-guest",
+                sheet_no: 1,
+                geometry: { outer: [[500, 500], [600, 500], [600, 600], [500, 600]] },
+            },
+        ],
+    };
+    const crossLayout = {
+        positions: {
+            1: { originX: 0, originY: 36, widthMm: 1000, heightMm: 1000, trimX: 0, trimY: 0 },
+            3: { originX: 1400, originY: 80, widthMm: 1000, heightMm: 1000, trimX: 0, trimY: 0 },
+        },
+    };
+    let cross = SessionDocument.buildFromProjection(crossProjection, crossLayout);
+    cross.boards["1"].origin_x_mm = 0;
+    cross.boards["1"].origin_y_mm = 36;
+    cross.boards["3"].origin_x_mm = 1400;
+    cross.boards["3"].origin_y_mm = 80;
+    const crossKey = "instance:pi-cross";
+    const crossHost = "instance:pi-cross-host";
+    const crossGuest = "instance:pi-cross-guest";
+    const entryPivotBefore = {
+        x: cross.pieces[crossKey].entry_pivot_mm.x,
+        y: cross.pieces[crossKey].entry_pivot_mm.y,
+    };
+
+    // Park piece in world space first (with deltas), then apply without deltas.
+    const park = MoveGeometry.proposePieceDrop(cross, crossKey, 3200, 500);
+    assert.equal(park.ok, true, park.reason || "park outside");
+    cross = MoveGeometry.applyPieceMove(cross, park);
+    assert.equal(cross.pieces[crossKey].sheet_no, null);
+
+    // A) outside → board 3 without delta_*
+    const toBoard3 = MoveGeometry.applyPieceMove(cross, {
+        piece_key: crossKey,
+        target_sheet_no: 3,
+        local_x_mm: 120,
+        local_y_mm: 140,
+    });
+    assert.notEqual(toBoard3, cross, "outside→board3 must apply");
+    assert.equal(toBoard3.pieces[crossKey].sheet_no, 3);
+    approx(toBoard3.pieces[crossKey].local_x_mm, 120, "A local_x");
+    approx(toBoard3.pieces[crossKey].local_y_mm, 140, "A local_y");
+    footprintAligned(toBoard3.pieces[crossKey], "A");
+    const worldA = MoveGeometry.worldFootprint(toBoard3.pieces[crossKey], toBoard3.boards);
+    approx(worldA.bounds.x, 1400 + 120, "A world.x");
+    approx(worldA.bounds.y, 80 + 140, "A world.y");
+    approx(toBoard3.pieces[crossKey].pivot_mm.x, 120 + 100, "A pivot.x");
+    approx(toBoard3.pieces[crossKey].pivot_mm.y, 140 + 100, "A pivot.y");
+    assert.equal(toBoard3.pieces[crossKey].entry_pivot_mm.x, entryPivotBefore.x);
+    assert.equal(toBoard3.pieces[crossKey].entry_pivot_mm.y, entryPivotBefore.y);
+
+    // B) board 3 → outside without delta_*
+    const toOutside = MoveGeometry.applyPieceMove(toBoard3, {
+        piece_key: crossKey,
+        target_sheet_no: null,
+        local_x_mm: 3500,
+        local_y_mm: 600,
+    });
+    assert.equal(toOutside.pieces[crossKey].sheet_no, null);
+    approx(toOutside.pieces[crossKey].local_x_mm, 3500, "B local_x");
+    approx(toOutside.pieces[crossKey].local_y_mm, 600, "B local_y");
+    footprintAligned(toOutside.pieces[crossKey], "B");
+    const worldB = MoveGeometry.worldFootprint(toOutside.pieces[crossKey], toOutside.boards);
+    approx(worldB.bounds.x, 3500, "B world.x");
+    approx(worldB.bounds.y, 600, "B world.y");
+
+    // C) board 1 → board 3 without delta_*
+    let boardHop = SessionDocument.buildFromProjection(crossProjection, crossLayout);
+    boardHop.boards["1"].origin_x_mm = 0;
+    boardHop.boards["1"].origin_y_mm = 36;
+    boardHop.boards["3"].origin_x_mm = 1400;
+    boardHop.boards["3"].origin_y_mm = 80;
+    const hopC = MoveGeometry.applyPieceMove(boardHop, {
+        piece_key: crossKey,
+        target_sheet_no: 3,
+        local_x_mm: 80,
+        local_y_mm: 90,
+    });
+    assert.equal(hopC.pieces[crossKey].sheet_no, 3);
+    approx(hopC.pieces[crossKey].local_x_mm, 80, "C local_x");
+    approx(hopC.pieces[crossKey].local_y_mm, 90, "C local_y");
+    footprintAligned(hopC.pieces[crossKey], "C");
+    const worldC = MoveGeometry.worldFootprint(hopC.pieces[crossKey], hopC.boards);
+    approx(worldC.bounds.x, 1400 + 80, "C world.x");
+    approx(worldC.bounds.y, 80 + 90, "C world.y");
+
+    // D) board 3 → board 1 without delta_*
+    const hopD = MoveGeometry.applyPieceMove(hopC, {
+        piece_key: crossKey,
+        target_sheet_no: 1,
+        local_x_mm: 110,
+        local_y_mm: 130,
+    });
+    assert.equal(hopD.pieces[crossKey].sheet_no, 1);
+    approx(hopD.pieces[crossKey].local_x_mm, 110, "D local_x");
+    approx(hopD.pieces[crossKey].local_y_mm, 130, "D local_y");
+    footprintAligned(hopD.pieces[crossKey], "D");
+    const worldD = MoveGeometry.worldFootprint(hopD.pieces[crossKey], hopD.boards);
+    approx(worldD.bounds.x, 0 + 110, "D world.x");
+    approx(worldD.bounds.y, 36 + 130, "D world.y");
+
+    // E) same-board move without delta_*
+    const same = MoveGeometry.applyPieceMove(hopD, {
+        piece_key: crossKey,
+        target_sheet_no: 1,
+        local_x_mm: 200,
+        local_y_mm: 220,
+    });
+    assert.equal(same.pieces[crossKey].sheet_no, 1);
+    approx(same.pieces[crossKey].local_x_mm, 200, "E local_x");
+    approx(same.pieces[crossKey].local_y_mm, 220, "E local_y");
+    footprintAligned(same.pieces[crossKey], "E");
+    const worldE = MoveGeometry.worldFootprint(same.pieces[crossKey], same.boards);
+    approx(worldE.bounds.x, 200, "E world.x");
+    approx(worldE.bounds.y, 36 + 220, "E world.y");
+
+    // F) explicit delta_* wins and must not be recomputed away
+    const withDelta = MoveGeometry.proposePieceDrop(same, crossKey, 1400 + 160, 80 + 170);
+    assert.equal(withDelta.ok, true);
+    assert.equal(withDelta.target_sheet_no, 3);
+    const appliedDelta = MoveGeometry.applyPieceMove(same, {
+        piece_key: crossKey,
+        target_sheet_no: withDelta.target_sheet_no,
+        local_x_mm: withDelta.local_x_mm,
+        local_y_mm: withDelta.local_y_mm,
+        delta_x_mm: withDelta.delta_x_mm,
+        delta_y_mm: withDelta.delta_y_mm,
+    });
+    approx(appliedDelta.pieces[crossKey].local_x_mm, withDelta.local_x_mm, "F local_x");
+    approx(appliedDelta.pieces[crossKey].local_y_mm, withDelta.local_y_mm, "F local_y");
+    footprintAligned(appliedDelta.pieces[crossKey], "F");
+    const worldF = MoveGeometry.worldFootprint(appliedDelta.pieces[crossKey], appliedDelta.boards);
+    approx(worldF.bounds.x, 1400 + withDelta.local_x_mm, "F world.x");
+    approx(worldF.bounds.y, 80 + withDelta.local_y_mm, "F world.y");
+
+    // Invalid command fails closed (session unchanged).
+    const rejected = MoveGeometry.applyPieceMove(same, {
+        piece_key: crossKey,
+        target_sheet_no: 3,
+        local_x_mm: Number.NaN,
+        local_y_mm: 100,
+    });
+    assert.equal(rejected, same);
+
+    // Reject contracts: partial/non-finite deltas, invalid board origin, missing board.
+    {
+        function assertRejected(label, session, command) {
+            const before = JSON.stringify(session);
+            const after = MoveGeometry.applyPieceMove(session, command);
+            assert.equal(after, session, `${label}: must return same session object`);
+            assert.equal(JSON.stringify(after), before, `${label}: session must stay unchanged`);
+        }
+
+        assertRejected("partial delta x only", same, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+            delta_x_mm: 10,
+        });
+        assertRejected("partial delta y only", same, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+            delta_y_mm: 10,
+        });
+        assertRejected("delta NaN", same, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+            delta_x_mm: Number.NaN,
+            delta_y_mm: 10,
+        });
+        assertRejected("delta Infinity", same, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+            delta_x_mm: 10,
+            delta_y_mm: Number.POSITIVE_INFINITY,
+        });
+        assertRejected("missing command", same, null);
+        assertRejected("missing target board", same, {
+            piece_key: crossKey,
+            target_sheet_no: 99,
+            local_x_mm: 50,
+            local_y_mm: 60,
+        });
+
+        const badOrigin = JSON.parse(JSON.stringify(same));
+        badOrigin.boards["3"].origin_x_mm = "not-a-number";
+        assertRejected("invalid target origin", badOrigin, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+        });
+        assertRejected("invalid target origin with deltas", badOrigin, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+            delta_x_mm: 100,
+            delta_y_mm: 20,
+        });
+
+        const badSource = JSON.parse(JSON.stringify(same));
+        badSource.boards["1"].origin_y_mm = Number.NaN;
+        assertRejected("invalid source origin", badSource, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+        });
+
+        const badTrim = JSON.parse(JSON.stringify(same));
+        badTrim.boards["3"].trim_x_mm = Number.POSITIVE_INFINITY;
+        assertRejected("invalid target trim", badTrim, {
+            piece_key: crossKey,
+            target_sheet_no: 3,
+            local_x_mm: 50,
+            local_y_mm: 60,
+        });
+    }
+
+    // G) glass host+guest follow the same world delta without delta_*
+    let glass = SessionDocument.buildFromProjection(crossProjection, crossLayout);
+    glass.boards["1"].origin_x_mm = 0;
+    glass.boards["1"].origin_y_mm = 36;
+    glass.boards["3"].origin_x_mm = 1400;
+    glass.boards["3"].origin_y_mm = 80;
+    assert.equal(glass.pieces[crossGuest].glass_host_key, crossHost);
+    const hostBefore = MoveGeometry.pieceWorldOrigin(glass, crossHost);
+    const guestBefore = MoveGeometry.pieceWorldOrigin(glass, crossGuest);
+    const gapX = guestBefore.x - hostBefore.x;
+    const gapY = guestBefore.y - hostBefore.y;
+    const glassMoved = MoveGeometry.applyPieceMove(glass, {
+        piece_key: crossHost,
+        target_sheet_no: 3,
+        local_x_mm: 100,
+        local_y_mm: 110,
+    });
+    assert.equal(glassMoved.pieces[crossHost].sheet_no, 3);
+    assert.equal(glassMoved.pieces[crossGuest].sheet_no, 3);
+    assert.equal(glassMoved.pieces[crossGuest].glass_host_key, crossHost);
+    footprintAligned(glassMoved.pieces[crossHost], "G host");
+    footprintAligned(glassMoved.pieces[crossGuest], "G guest");
+    const hostAfter = MoveGeometry.pieceWorldOrigin(glassMoved, crossHost);
+    const guestAfter = MoveGeometry.pieceWorldOrigin(glassMoved, crossGuest);
+    approx(guestAfter.x - hostAfter.x, gapX, "G gap x");
+    approx(guestAfter.y - hostAfter.y, gapY, "G gap y");
+    approx(hostAfter.x, 1400 + 100, "G host world.x");
+    approx(hostAfter.y, 80 + 110, "G host world.y");
+}
+
 console.log("board_editor_session_move.test.js: ok");

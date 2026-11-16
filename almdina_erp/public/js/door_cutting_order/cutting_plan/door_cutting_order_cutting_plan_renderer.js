@@ -263,6 +263,54 @@
         return Boolean(piece && piece.apply_rotated_to_geometry === false);
     }
 
+    function cornerRingSignature(points) {
+        if (!Array.isArray(points) || points.length < 3) return "";
+        const coords = points.map((point) => [Number(point[0]), Number(point[1])]);
+        if (coords.some((point) => !Number.isFinite(point[0]) || !Number.isFinite(point[1]))) return "";
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        coords.forEach((point) => {
+            minX = Math.min(minX, point[0]);
+            minY = Math.min(minY, point[1]);
+            maxX = Math.max(maxX, point[0]);
+            maxY = Math.max(maxY, point[1]);
+        });
+        const spanX = maxX - minX;
+        const spanY = maxY - minY;
+        if (!(spanX > 1e-6) || !(spanY > 1e-6)) return "";
+        const edges = [];
+        for (let index = 0; index < coords.length; index += 1) {
+            const start = coords[index];
+            const end = coords[(index + 1) % coords.length];
+            const a = `${Math.round(((start[0] - minX) / spanX) * 1000)},${Math.round(((start[1] - minY) / spanY) * 1000)}`;
+            const b = `${Math.round(((end[0] - minX) / spanX) * 1000)},${Math.round(((end[1] - minY) / spanY) * 1000)}`;
+            edges.push(a < b ? `${a}|${b}` : `${b}|${a}`);
+        }
+        edges.sort();
+        return edges.join(";");
+    }
+
+    function posedOutlineMatchesRotatedCorner(piece) {
+        // System nesting bakes a 90° `rotated` swap into the Board Editor outline
+        // and then clears the flag. The saved contour still matches the rotated
+        // corner model drawn in the placed box; semantic flags do not.
+        const geometry = window.AlmdinaClippedCornerGeometry;
+        if (!geometry || typeof geometry.points !== "function" || typeof geometry.isCornerCut !== "function") return false;
+        if (!geometry.isCornerCut(piece)) return false;
+        const stored = piece && piece.geometry && piece.geometry.outer;
+        const widthMm = Math.max(0, (Number(piece && piece.w) || 0) * 10);
+        const heightMm = Math.max(0, (Number(piece && piece.h) || 0) * 10);
+        if (!(widthMm > 0) || !(heightMm > 0)) return false;
+        const storedSignature = cornerRingSignature(stored);
+        if (!storedSignature) return false;
+        const flatSignature = cornerRingSignature(geometry.points({ ...piece, rotated: false }, widthMm, heightMm));
+        const rotatedSignature = cornerRingSignature(geometry.points({ ...piece, rotated: true }, widthMm, heightMm));
+        if (!rotatedSignature || storedSignature === flatSignature) return false;
+        return storedSignature === rotatedSignature;
+    }
+
     function remapRotatedCornerEdgePiece(piece) {
         // Remap selection flags and type overrides together so style stays
         // bound to the same physical side after the 90° clockwise turn.
@@ -321,10 +369,30 @@
         if (piece && piece.rotated && !posed) {
             return remapRotatedCornerEdgePiece(piece);
         }
+        // Edited plans store the already-rotated contour and clear `rotated`.
+        // With no further session angle, bands use the same 90° model as the
+        // system plan. A non-zero session angle still spins semantic bands.
+        if (posed && !(Math.abs(Number(piece && piece.rotation_deg) || 0) > 1e-6)) {
+            const recordedTurns = Number(piece && piece.rotation_quarter_turns);
+            const bakedRightAngle = Number.isInteger(recordedTurns) && ((recordedTurns % 4) + 4) % 4 === 1;
+            if (bakedRightAngle || posedOutlineMatchesRotatedCorner(piece)) {
+                return remapRotatedCornerEdgePiece({ ...piece, rotated: true });
+            }
+        }
         return piece;
     }
 
     function posedCornerEdgeMarkup(piece, geometry, sideCustom) {
+        // A baked nesting rotation is already the system-plan corner model.
+        // Do not rebuild those bands in the unrotated frame.
+        if (piece && piece.rotated && !(Math.abs(Number(piece.rotation_deg) || 0) > 1e-6)) {
+            return geometry.edgeBandSvgMarkup(piece, 100, 100, {
+                inheritStroke: true,
+                sideCustom,
+                customColor: EDGE_BAND_CUSTOM_COLOR,
+                customDasharray: EDGE_BAND_CUSTOM_DASHARRAY,
+            });
+        }
         // Build bands in the unrotated manufacturing frame, then apply the same
         // session rotation that posed the usable-sheet outline — never twice.
         if (!geometry || typeof geometry.clippedEdgePaths !== "function") return "";
@@ -1439,6 +1507,53 @@
         return `<svg class="dco-extra-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible;pointer-events:none">${paths}</svg>`;
     }
 
+    function storedLinerFace(piece) {
+        if (!piece || !num(piece.extra_liner)) return null;
+        const raw = piece.liner_specs_json;
+        if (!raw || !String(raw).trim()) return null;
+        try {
+            const data = JSON.parse(raw);
+            const face = String(data && data.face || "").trim().toLowerCase();
+            return face === "front" || face === "back" ? face : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function doorLinerFace(piece) {
+        const liner = window.AlmdinaLinerGeometry;
+        if (liner && typeof liner.doorLinerFace === "function") return liner.doorLinerFace(piece);
+        return storedLinerFace(piece);
+    }
+
+    function backLinerNote(piece) {
+        if (doorLinerFace(piece) !== "back") return "";
+        const minCm = Math.min(num(piece && piece.w), num(piece && piece.h));
+        const compact = minCm > 0 && minCm < 18;
+        const fontSize = compact ? "7px" : "9px";
+        const padding = compact ? "0 3px" : "1px 6px";
+        const label = translate("Liner on the back");
+        const badge = [
+            "display:inline-block",
+            "width:auto",
+            "max-width:100%",
+            `padding:${padding}`,
+            "border:1px solid #1e3a8a",
+            "border-radius:999px",
+            "background:#1d4ed8",
+            "color:#fff",
+            "font-weight:700",
+            "line-height:1.15",
+            `font-size:${fontSize}`,
+            "white-space:nowrap",
+            "overflow:hidden",
+            "text-overflow:ellipsis",
+            "box-sizing:border-box",
+            "vertical-align:top",
+        ].join(";");
+        return `<span class="dco-piece-back-liner-line" style="display:block;width:auto;max-width:100%;margin-top:3px;text-align:center;line-height:1;"><span class="dco-piece-back-liner${compact ? " is-compact" : ""}" data-liner-face="back" title="${escape_html(label)}" style="${badge}">${escape_html(label)}</span></span>`;
+    }
+
     function render_piece_label(piece, geometryModel) {
         const exact_special = piece.piece_type === "Special"
             && geometryModel
@@ -1457,13 +1572,14 @@
         const piece_number = print_piece_number(piece.label);
         const labelStyle = geometryModel && geometryModel.vector
             ? `position:absolute;left:${geometryModel.labelPoint.xPercent}%;top:${geometryModel.labelPoint.yPercent}%;transform:translate(-50%,-50%);max-width:84%;`
-            : "position:relative;";
+            : "position:relative;max-width:100%;";
         return `
             <div class="dco-piece-label" style="${labelStyle}z-index:4;direction:ltr;text-align:center;">
                 ${invalidGeometry}${special}${clippedLabel}
                 <span class="dco-piece-size">${round(piece.original_w, 1)}*${round(piece.original_h, 1)}</span>
                 <span class="dco-piece-size-mm" style="display:none">${round(num(piece.original_w) * 10, 0)} × ${round(num(piece.original_h) * 10, 0)}</span>
                 <span class="dco-piece-number" style="display:none">${escape_html(piece_number)}</span>
+                ${backLinerNote(piece)}
             </div>
         `;
     }
@@ -1733,7 +1849,7 @@
                         ${edgeLines}
                         ${doubleEdgeLines}
                         ${render_piece_addon_marks(frm, manufacturingPiece)}
-                        ${render_piece_label(piece, geometryModel)}
+                        ${render_piece_label(manufacturingPiece, geometryModel)}
                     </div>
                 `;
             });
@@ -2214,6 +2330,35 @@ ${printHeaderCss()}
     font-size: 6.6pt !important;
     font-weight: 950 !important;
     line-height: 1 !important;
+}
+.dco-piece-back-liner-line {
+    display: block !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin-top: .4mm !important;
+    text-align: center !important;
+    line-height: 1 !important;
+}
+.dco-piece-back-liner {
+    display: inline-block !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: .15mm .9mm !important;
+    overflow: hidden !important;
+    border: 0.6pt solid #111 !important;
+    border-radius: 999px !important;
+    background: #dbeafe !important;
+    color: #111 !important;
+    font-size: 5.4pt !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    box-sizing: border-box !important;
+    vertical-align: top !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
 }
 .dco-edge-line {
     border-color: #e00000 !important;

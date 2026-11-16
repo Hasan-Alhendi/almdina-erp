@@ -198,6 +198,76 @@ function turnedGeometry(pieceType, turns) {
     assert.notEqual(turnMarkup[1], turnMarkup[3]);
 });
 
+function bakedEditedCorner(pieceType) {
+    const manufacturing = basePiece(pieceType);
+    const widthMm = manufacturing.original_w * 10;
+    const heightMm = manufacturing.original_h * 10;
+    const local = geometry.points({ ...manufacturing, rotated: false }, widthMm, heightMm);
+    const turned = rotateClockwise(local, widthMm, heightMm);
+    return {
+        ...manufacturing,
+        w: turned.width / 10,
+        h: turned.height / 10,
+        rotated: false,
+        rotation_deg: 0,
+        apply_rotated_to_geometry: false,
+        geometry: {
+            schema_version: 1,
+            unit: "mm",
+            coordinate_space: "usable_sheet",
+            outer: turned.points.map(([x, y]) => [x + 30, y + 40]),
+            holes: [],
+        },
+    };
+}
+
+const bakedRegular = {
+    id: "regular-baked",
+    x: 0,
+    y: 0,
+    w: 80,
+    h: 40,
+    original_w: 40,
+    original_h: 80,
+    label: "R.2",
+    piece_type: "Regular",
+    rotated: false,
+    rotation_deg: 0,
+    rotation_quarter_turns: 1,
+    apply_rotated_to_geometry: false,
+    edge_long_left: 1,
+    geometry: {
+        schema_version: 1,
+        unit: "mm",
+        coordinate_space: "usable_sheet",
+        outer: [[0, 0], [800, 0], [800, 400], [0, 400]],
+        holes: [],
+    },
+};
+const bakedRegularHtml = renderer.build(frm, planFor(bakedRegular));
+assert.match(
+    bakedRegularHtml,
+    /border-top:3px solid #d00000/,
+    "a posed regular door keeps the system plan's rotated edge band",
+);
+assert.doesNotMatch(bakedRegularHtml, /border-left:3px solid #d00000/);
+
+["Clipped Corner", "L-Shaped Corner"].forEach((pieceType) => {
+    const manufacturing = basePiece(pieceType);
+    const edited = bakedEditedCorner(pieceType);
+    const system = {
+        ...manufacturing,
+        w: edited.w,
+        h: edited.h,
+        rotated: true,
+    };
+    assert.deepEqual(
+        polylines(renderer.build(frm, planFor(edited))),
+        polylines(renderer.build(frm, planFor(system))),
+        `${pieceType} edited plan keeps the system plan's rotated edge bands`,
+    );
+});
+
 const systemPiece = { ...basePiece("L-Shaped Corner"), w: 80, h: 40, rotated: true };
 const systemBands = polylines(renderer.build(frm, planFor(systemPiece)));
 const mixedLDoublePiece = {

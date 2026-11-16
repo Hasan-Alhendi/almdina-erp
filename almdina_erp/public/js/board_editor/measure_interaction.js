@@ -307,13 +307,30 @@
                 geometryComputeCount += 1;
                 if (hoverKey) {
                     const between = MG.shortestClearanceBetweenPieces(snap.session, selectedKey, hoverKey);
-                    geomLines = between
-                        ? [{
-                            ...between,
-                            label: MG.formatDistanceMm(between.distance),
-                            style: "alt",
-                        }]
+                    const directional = typeof MG.directionalClearancesBetweenPieces === "function"
+                        ? MG.directionalClearancesBetweenPieces(snap.session, selectedKey, hoverKey)
                         : [];
+                    if (Array.isArray(directional) && directional.length) {
+                        // Meeting sides (e.g. L-pocket left+top): publish every axis hit.
+                        geomLines = directional.map((row) => ({
+                            ...row,
+                            label: MG.formatDistanceMm(row.distance),
+                            style: "alt",
+                        }));
+                    } else {
+                        geomLines = between
+                            ? [{
+                                ...between,
+                                label: MG.formatDistanceMm(between.distance),
+                                style: "alt",
+                            }]
+                            : [];
+                    }
+                    // #region agent log
+                    if (typeof fetch === "function") {
+                        fetch('http://127.0.0.1:7408/ingest/49ab0d3b-b599-4900-a22a-e493477757b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c4ee1e'},body:JSON.stringify({sessionId:'c4ee1e',runId:'post-fix',hypothesisId:'A',location:'measure_interaction.js:hoverClearance',message:'Alt piece hover clearance candidates',data:{selectedKey,hoverKey,shortestDist:between&&between.distance,shortestHasDirection:Boolean(between&&between.direction),publishedCount:Array.isArray(geomLines)?geomLines.length:0,directionalCount:Array.isArray(directional)?directional.length:0,directional:(Array.isArray(directional)?directional:[]).map((row)=>({direction:row.direction,distance:row.distance,start:row.start,end:row.end})),publishedDirs:(Array.isArray(geomLines)?geomLines:[]).map((row)=>({direction:row.direction,distance:row.distance,label:row.label}))},timestamp:Date.now()})}).catch(()=>{});
+                    }
+                    // #endregion
                 } else {
                     geomLines = MG.edgeClearances(snap.session, selectedKey).map((row) => ({
                         ...row,
@@ -331,6 +348,11 @@
             ) {
                 return;
             }
+            // #region agent log
+            if (hoverKey && typeof fetch === "function") {
+                fetch('http://127.0.0.1:7408/ingest/49ab0d3b-b599-4900-a22a-e493477757b9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c4ee1e'},body:JSON.stringify({sessionId:'c4ee1e',runId:'post-fix',hypothesisId:'E',location:'measure_interaction.js:publishPresented',message:'Alt overlay publish',data:{selectedKey,hoverKey,geomCount:Array.isArray(geomLines)?geomLines.length:0,presentedCount:Array.isArray(presented)?presented.length:0,presented:(Array.isArray(presented)?presented:[]).map((row)=>({kind:row&&row.kind,direction:row&&row.direction,distance:row&&row.distance,label:row&&row.label}))},timestamp:Date.now()})}).catch(()=>{});
+            }
+            // #endregion
             publishPresented(entryKey, presented);
         }
 

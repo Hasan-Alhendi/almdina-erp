@@ -760,27 +760,108 @@
         return Number(guest.sheet_no) === Number(host.sheet_no);
     }
 
+    function boardExists(boards, sheetNo) {
+        if (sheetNo == null || sheetNo === "") return true;
+        return Boolean(boards && boards[String(sheetNo)]);
+    }
+
+    // Move-path origin read: absent optional offsets stay 0; present non-finite values fail closed.
+    // Does not change sheetOriginMm() used by preview/hit-test paths.
+    function optionalBoardOffsetMm(value) {
+        if (value == null || value === "") return 0;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function usableSheetOriginMm(boards, sheetNo) {
+        if (sheetNo == null || sheetNo === "") return { x: 0, y: 0 };
+        if (!boardExists(boards, sheetNo)) return null;
+        const board = boards[String(sheetNo)];
+        const originX = optionalBoardOffsetMm(board.origin_x_mm);
+        const originY = optionalBoardOffsetMm(board.origin_y_mm);
+        const trimX = optionalBoardOffsetMm(board.trim_x_mm);
+        const trimY = optionalBoardOffsetMm(board.trim_y_mm);
+        if (originX == null || originY == null || trimX == null || trimY == null) return null;
+        return { x: originX + trimX, y: originY + trimY };
+    }
+
+    function worldDeltaForApply(piece, boards, previousSheet, targetSheet, command) {
+        // Prefer explicit world deltas from propose* paths. Fallback must also be
+        // world-space: outside locals are world mm, on-board locals are sheet mm.
+        if (!boardExists(boards, previousSheet) || !boardExists(boards, targetSheet)) {
+            return null;
+        }
+        const fromOrigin = usableSheetOriginMm(boards, previousSheet);
+        const toOrigin = usableSheetOriginMm(boards, targetSheet);
+        if (!fromOrigin || !toOrigin) return null;
+
+        const hasDx = command.delta_x_mm != null;
+        const hasDy = command.delta_y_mm != null;
+        if (hasDx !== hasDy) return null;
+        if (hasDx && hasDy) {
+            const dx = Number(command.delta_x_mm);
+            const dy = Number(command.delta_y_mm);
+            if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+            return { dx, dy };
+        }
+
+        if (command.local_x_mm == null || command.local_y_mm == null) return null;
+        if (piece.local_x_mm == null || piece.local_y_mm == null) return null;
+        const sourceLocalX = Number(piece.local_x_mm);
+        const sourceLocalY = Number(piece.local_y_mm);
+        const targetLocalX = Number(command.local_x_mm);
+        const targetLocalY = Number(command.local_y_mm);
+        if (![sourceLocalX, sourceLocalY, targetLocalX, targetLocalY].every(Number.isFinite)) {
+            return null;
+        }
+        // world_source = local_source + origin_source
+        // world_target = local_target + origin_target
+        // dx/dy = world_target - world_source
+        const worldDx = (targetLocalX + toOrigin.x) - (sourceLocalX + fromOrigin.x);
+        const worldDy = (targetLocalY + toOrigin.y) - (sourceLocalY + fromOrigin.y);
+        if (!Number.isFinite(worldDx) || !Number.isFinite(worldDy)) return null;
+        return { dx: worldDx, dy: worldDy };
+    }
+
     function applyPieceMove(session, command) {
-        const next = JSON.parse(JSON.stringify(session));
-        const pieceKey = resolvePieceKey(next, command.piece_key || command.piece_instance_id);
-        const piece = pieceKey && next.pieces[pieceKey];
-        if (!piece) return session;
-        const previousSheet = piece.sheet_no;
-        const dx = num(command.delta_x_mm != null
-            ? command.delta_x_mm
-            : (num(command.local_x_mm) - num(piece.local_x_mm)));
-        const dy = num(command.delta_y_mm != null
-            ? command.delta_y_mm
-            : (num(command.local_y_mm) - num(piece.local_y_mm)));
+        if (!session || !command) return session;
+        // Validate against the live session first: JSON clone collapses NaN/Infinity to null.
+        const pieceKey = resolvePieceKey(session, command.piece_key || command.piece_instance_id);
+        const sourcePiece = pieceKey && session.pieces[pieceKey];
+        if (!sourcePiece) return session;
+        const previousSheet = sourcePiece.sheet_no;
         const targetSheet = command.target_sheet_no !== undefined
             ? command.target_sheet_no
             : command.sheet_no;
+        if (command.local_x_mm == null || command.local_y_mm == null) return session;
+        const targetLocalX = Number(command.local_x_mm);
+        const targetLocalY = Number(command.local_y_mm);
+        if (!Number.isFinite(targetLocalX) || !Number.isFinite(targetLocalY)) return session;
+        const delta = worldDeltaForApply(
+            sourcePiece,
+            session.boards,
+            previousSheet,
+            targetSheet,
+            command
+        );
+        if (!delta) return session;
+        const sourceGuests = Object.values(session.pieces || {}).filter((guest) => (
+            guest.glass_host_key === pieceKey && guest.distribution !== "excluded"
+        ));
+        for (let i = 0; i < sourceGuests.length; i += 1) {
+            if (!usableSheetOriginMm(session.boards, sourceGuests[i].sheet_no)) return session;
+        }
+
+        const next = JSON.parse(JSON.stringify(session));
+        const piece = next.pieces[pieceKey];
+        const dx = delta.dx;
+        const dy = delta.dy;
         // World delta must be reframed when the usable-sheet origin changes
         // (board ↔ board or board ↔ outside). Same-sheet reduces to a plain translate.
         reframePieceGeometry(piece, next.boards, previousSheet, targetSheet, dx, dy);
         piece.sheet_no = targetSheet;
-        piece.local_x_mm = num(command.local_x_mm);
-        piece.local_y_mm = num(command.local_y_mm);
+        piece.local_x_mm = targetLocalX;
+        piece.local_y_mm = targetLocalY;
 
         Object.values(next.pieces).forEach((guest) => {
             if (guest.glass_host_key !== pieceKey) return;

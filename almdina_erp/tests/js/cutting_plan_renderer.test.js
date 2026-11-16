@@ -932,3 +932,202 @@ console.log("Cutting-plan renderer simulation passed");
     assert.match(html, /box-sizing:border-box/);
     assert.equal(JSON.stringify(physical), before);
 }
+
+function linerSpecs(face) {
+    const body = {
+        width_cm: 1.5,
+        liners: [
+            { id: "liner_1", side: "edge_width_top", offset_cm: 2, start_cm: 0, length_cm: 40 },
+        ],
+    };
+    if (face) body.face = face;
+    return JSON.stringify(body);
+}
+
+function planPiece(label, face, extra) {
+    return Object.assign({
+        id: label,
+        label,
+        source_piece_no: Number(String(label).split(".")[0]),
+        x: 0,
+        y: 0,
+        w: 40,
+        h: 60,
+        original_w: 40,
+        original_h: 60,
+        piece_type: "Regular",
+        rotated: false,
+        extra_liner: face === undefined ? 0 : 1,
+        liner_reference_side: face === undefined ? "" : "edge_width_top",
+        liner_offset_cm: face === undefined ? 0 : 2,
+        liner_width_cm: face === undefined ? 0 : 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: face === undefined ? 0 : 40,
+        liner_specs_json: face === undefined ? "" : linerSpecs(face),
+    }, extra || {});
+}
+
+function pieceBlocks(html) {
+    return html.split('<div class="dco-piece ').slice(1);
+}
+
+const facePlan = {
+    usable_board_width_cm: 122,
+    usable_board_length_cm: 244,
+    full_board_width_cm: 122,
+    full_board_length_cm: 244,
+    kerf_cm: 0.3,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [
+            planPiece("1.1", "back", { x: 0 }),
+            planPiece("2.1", "front", { x: 40, original_w: 30, original_h: 50, w: 30, h: 50 }),
+            planPiece("3.1", null, { x: 70, original_w: 20, original_h: 40, w: 20, h: 40 }),
+            planPiece("4.1", undefined, { x: 90, original_w: 15, original_h: 25, w: 15, h: 25 }),
+        ],
+    }],
+};
+const faceHtml = renderer.build({
+    doc: {
+        pieces: [
+            { width_cm: 40, length_cm: 60 },
+            { width_cm: 30, length_cm: 50 },
+            { width_cm: 20, length_cm: 40 },
+            { width_cm: 15, length_cm: 25 },
+        ],
+    },
+}, facePlan);
+const faceBlocks = pieceBlocks(faceHtml);
+assert.equal(faceBlocks.length, 4);
+assert.match(faceBlocks[0], /data-liner-face="back"/);
+assert.match(faceBlocks[0], /Liner on the back/);
+assert.match(faceBlocks[0], /40\*60/);
+assert.match(faceBlocks[0], /<span class="dco-piece-size">40\*60<\/span>[\s\S]*dco-piece-back-liner-line/);
+const badgeStyle = /class="dco-piece-back-liner(?:\s[^"]*)?"[^>]*style="([^"]*)"/;
+const englishBadge = faceBlocks[0].match(badgeStyle);
+assert.ok(englishBadge, "back-liner badge style");
+assert.match(englishBadge[1], /display:inline-block/);
+assert.match(englishBadge[1], /width:auto/);
+assert.match(englishBadge[1], /max-width:100%/);
+assert.match(englishBadge[1], /background:#1d4ed8/);
+assert.match(englishBadge[1], /color:#fff/);
+assert.match(englishBadge[1], /border-radius:999px/);
+assert.match(englishBadge[1], /text-overflow:ellipsis/);
+assert.doesNotMatch(englishBadge[1], /(?:^|;)width:100%/);
+assert.doesNotMatch(englishBadge[1], /(?:^|;)width:\d/);
+assert.doesNotMatch(faceBlocks[1], /Liner on the back/);
+assert.doesNotMatch(faceBlocks[1], /data-liner-face="back"/);
+assert.match(faceBlocks[1], /30\*50/);
+assert.doesNotMatch(faceBlocks[2], /Liner on the back/);
+assert.doesNotMatch(faceBlocks[3], /Liner on the back/);
+assert.equal((faceHtml.match(/data-liner-face="back"/g) || []).length, 1);
+assert.match(faceHtml, /data-overlay-kind="liner"/);
+
+const rotatedBack = renderer.build({ doc: { pieces: [{ width_cm: 40, length_cm: 60 }] } }, {
+    ...facePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [planPiece("1.1", "back", { rotated: true, w: 60, h: 40 })],
+    }],
+});
+const rotatedBlock = pieceBlocks(rotatedBack)[0];
+assert.match(rotatedBlock, /data-liner-face="back"/);
+assert.match(rotatedBlock, /width:49\.18032786885246%|width:49\.18/);
+assert.match(rotatedBlock, /dco-piece-back-liner/);
+
+const smallBack = renderer.build({ doc: { pieces: [{ width_cm: 8, length_cm: 8 }] } }, {
+    ...facePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [planPiece("1.1", "back", { w: 8, h: 8, original_w: 8, original_h: 8 })],
+    }],
+});
+assert.match(pieceBlocks(smallBack)[0], /dco-piece-back-liner is-compact/);
+assert.match(pieceBlocks(smallBack)[0], /font-size:7px/);
+assert.match(pieceBlocks(smallBack)[0], /overflow:hidden/);
+
+const legacySnapshot = renderer.build({
+    doc: {
+        pieces: [{
+            width_cm: 40,
+            length_cm: 60,
+            extra_liner: 1,
+            liner_reference_side: "edge_width_top",
+            liner_offset_cm: 2,
+            liner_width_cm: 1.5,
+            liner_start_cm: 0,
+            liner_length_cm: 40,
+            liner_specs_json: linerSpecs("back"),
+        }],
+    },
+}, {
+    ...facePlan,
+    sheets: [{
+        sheet_no: 1,
+        pieces: [{
+            id: 1,
+            label: "1.1",
+            x: 0,
+            y: 0,
+            w: 40,
+            h: 60,
+            original_w: 40,
+            original_h: 60,
+            piece_type: "Regular",
+        }],
+    }],
+});
+assert.match(pieceBlocks(legacySnapshot)[0], /Liner on the back/);
+
+const printStyles = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_cutting_plan_renderer.js"),
+    "utf8"
+);
+assert.match(printStyles, /\.dco-piece-back-liner-line \{[\s\S]*display: block !important;[\s\S]*text-align: center !important;/);
+assert.match(printStyles, /\.dco-piece-back-liner \{[\s\S]*display: inline-block !important;[\s\S]*width: auto !important;[\s\S]*border: 0\.6pt solid #111 !important;[\s\S]*color: #111 !important;[\s\S]*text-overflow: ellipsis !important;/);
+
+fakeWindow.AlmdinaLocale = {
+    translate(message) {
+        return message === "Liner on the back" ? "لاينر من الخلف" : message;
+    },
+};
+const arabicBadgeHtml = renderer.build({
+    doc: { pieces: [{ width_cm: 40, length_cm: 60 }] },
+}, {
+    ...facePlan,
+    sheets: [{ sheet_no: 1, pieces: [planPiece("1.1", "back")] }],
+});
+const arabicBlock = pieceBlocks(arabicBadgeHtml)[0];
+assert.match(arabicBlock, /لاينر من الخلف/);
+assert.doesNotMatch(arabicBlock, /Liner on the back/);
+const arabicBadge = arabicBlock.match(badgeStyle);
+assert.ok(arabicBadge);
+assert.match(arabicBadge[1], /width:auto/);
+assert.equal(arabicBadge[1].includes("width:"), englishBadge[1].includes("width:auto"));
+fakeWindow.AlmdinaLocale = {
+    translate(message) {
+        return message === "Liner on the back" ? "Back liner note for a much longer label" : message;
+    },
+};
+const longBadgeHtml = renderer.build({
+    doc: { pieces: [{ width_cm: 40, length_cm: 60 }] },
+}, {
+    ...facePlan,
+    sheets: [{ sheet_no: 1, pieces: [planPiece("1.1", "back")] }],
+});
+const longBadge = pieceBlocks(longBadgeHtml)[0].match(badgeStyle);
+assert.ok(longBadge);
+assert.equal(longBadge[1], arabicBadge[1]);
+assert.match(pieceBlocks(longBadgeHtml)[0], /Back liner note for a much longer label/);
+assert.doesNotMatch(longBadge[1], /width:\d+px/);
+delete fakeWindow.AlmdinaLocale;
+const presenter = fs.readFileSync(
+    path.resolve(__dirname, "../../public/js/door_cutting_order/cutting_plan/door_cutting_order_plan_board_presenter.js"),
+    "utf8"
+);
+assert.match(presenter, /cloneNode\(true\)/);
+const catalog = fs.readFileSync(path.resolve(__dirname, "../../translations/ar.csv"), "utf8");
+assert.match(catalog, /^Liner on the back,لاينر من الخلف$/m);
+assert.match(catalog, /^Liner face,اللاينر على الوجه$/m);
+assert.match(catalog, /^Front face,الوجه الأمامي$/m);
+assert.match(catalog, /^Back face,الوجه الخلفي$/m);

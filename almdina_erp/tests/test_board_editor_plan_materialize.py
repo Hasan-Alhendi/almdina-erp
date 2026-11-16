@@ -489,6 +489,37 @@ class BoardEditorMaterializeTests(unittest.TestCase):
             places=6,
         )
 
+    def test_nesting_rotation_is_kept_for_edge_bands_without_spinning_geometry(self):
+        pieces = [projection_piece("ROT", 2, 10, 20, 800, 400, original_w=40, original_h=80)]
+        proj = projection(pieces)
+        source = source_snapshot(pieces)
+        source["sheets"][0]["pieces"][0]["rotated"] = True
+        snapshot = materialize_plan_snapshot(
+            draft=draft_payload(layout_rows(pieces)),
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        piece = snapshot["sheets"][0]["pieces"][0]
+        self.assertFalse(piece["rotated"])
+        self.assertEqual(piece["rotation_quarter_turns"], 1)
+
+        turned = materialize_plan_snapshot(
+            draft=draft_payload(layout_rows(pieces, ROT={"rotation": 15})),
+            projection=proj,
+            source_snapshot=source,
+            machine_type="CNC Router",
+            source_plan_name="PLAN-SRC",
+            expected_draft_version=1,
+            source_content_revision="rev-1",
+            source_input_fingerprint="fp-1",
+        )
+        self.assertNotIn("rotation_quarter_turns", turned["sheets"][0]["pieces"][0])
+
     def test_manufacturing_actions_allowed_for_board_editor(self):
         self.assertTrue(manufacturing_actions_allowed(BOARD_EDITOR))
         self.assertTrue(manufacturing_actions_allowed("System"))
@@ -931,10 +962,30 @@ class BoardEditorPlanCreateApplicationTests(unittest.TestCase):
         self.assertIn('"create_failed"', service)
         self.assertIn("frappe.ValidationError", service)
         self.assertIn('result["prefer_plan_tab"] = "BoardEditor"', service)
+        self.assertIn("_format_not_ready_message", service)
+        self.assertIn("format_board_editor_review_issue", service)
         adapter = (
             APP / "infrastructure" / "frappe" / "board_editor_plan_create_adapter.py"
         ).read_text(encoding="utf-8")
         self.assertIn("def discard_incomplete_plan", adapter)
+
+    def test_not_ready_apply_message_includes_blocking_issue_detail(self):
+        from almdina_erp.almdina_erp.services import board_editor_plan_create_service as svc
+
+        review = {
+            "ready": False,
+            "issues": [
+                {
+                    "code": "offcut_unresolved",
+                    "severity": "error",
+                    "message": "An offcut piece has no resolved execution owner.",
+                }
+            ],
+        }
+        message = svc._error_message("not_ready", review)
+        self.assertIn("The saved distribution is not ready", message)
+        self.assertIn("An offcut piece has no resolved execution owner.", message)
+        self.assertIn("• ", message)
 
 
 if __name__ == "__main__":

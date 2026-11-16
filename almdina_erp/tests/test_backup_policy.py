@@ -8,6 +8,7 @@ from almdina_erp.almdina_erp.domain.backups.policy import (
     BackupSchedule,
     backup_group_identifier,
     due_schedule_key,
+    next_schedule_time,
     normalize_remote_path,
     retention_candidates,
 )
@@ -42,6 +43,13 @@ def test_schedule_is_not_due_outside_exact_minute_or_selected_day() -> None:
         BackupSchedule("Weekly", "03:15", weekday="Friday"),
         datetime(2026, 10, 8, 3, 15),
     ) is None
+
+
+def test_next_schedule_clamps_month_end_and_skips_current_minute() -> None:
+    assert next_schedule_time(BackupSchedule("Monthly", "02:00", day_of_month=31),
+                              datetime(2026, 2, 1, 10, 0)) == datetime(2026, 2, 28, 2, 0)
+    assert next_schedule_time(BackupSchedule("Daily", "02:00"),
+                              datetime(2026, 2, 28, 2, 0)) == datetime(2026, 3, 1, 2, 0)
 
 
 @pytest.mark.parametrize("value", ["", "relative/path", "/", "/srv/../root", "/srv/./backups"])

@@ -691,6 +691,11 @@ async function interactionChecks() {
     assert.match(css, /grid-area:\s*actions/);
     assert.match(css, /grid-area:\s*remove/);
     assert.match(css, /direction:\s*ltr/);
+    assert.match(css, /\.dco-liner-shared-grid \{[^}]*align-items:\s*end;/);
+    assert.match(css, /\.dco-liner-face-options \{[^}]*flex-direction:\s*row;[^}]*flex-wrap:\s*nowrap;[^}]*height:\s*calc\(var\(--alm-height-button,\s*42px\) \+ 2px\);/);
+    assert.match(css, /\.dco-liner-width-field \.dco-corner-input-shell \{[^}]*height:\s*calc\(var\(--alm-height-button,\s*42px\) \+ 2px\);/);
+    assert.match(css, /\.dco-liner-face-option \{[^}]*flex:\s*1 1 0;[^}]*height:\s*100%;/);
+    assert.match(css, /\.dco-liner-face-option:has\(input:checked\) \{[^}]*border-color:/);
 
     // A production/delivered viewer must never mutate persisted model values,
     // even if a hidden Apply action is invoked programmatically.
@@ -1371,6 +1376,114 @@ async function interactionChecks() {
     assert.equal(ui.root.querySelectorAll("[data-liner-item]").length, 2);
     assert.equal(ui.root.querySelector("[data-liner-width]").value, "12");
     ui.root.querySelector("[data-addons-cancel]").dispatch("click");
+
+    function faceRadios(root) {
+        return root.querySelectorAll("[data-liner-face-value]");
+    }
+
+    function checkedFaces(root) {
+        return faceRadios(root).filter((radio) => (
+            radio.checked === true
+            || (radio.checked !== false && radio.getAttribute("checked") != null)
+        )).map((radio) => radio.getAttribute("data-liner-face-value"));
+    }
+
+    function chooseFace(root, value) {
+        faceRadios(root).forEach((radio) => {
+            radio.checked = radio.getAttribute("data-liner-face-value") === value;
+        });
+        root.querySelector(`[data-liner-face-value="${value}"]`).dispatch("input");
+    }
+
+    const freshFace = blankRow({ name: "piece-face-new" });
+    dialog.open({ doc: { pieces: [freshFace] }, dirty() {} }, freshFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.equal(faceRadios(ui.root).length, 2);
+    assert.equal(ui.root.querySelectorAll("[data-liner-face]").length, 1);
+    assert.deepEqual(checkedFaces(ui.root), []);
+    assert.equal(faceRadios(ui.root).every((radio) => radio.getAttribute("type") === "radio"), true);
+    assert.equal(new Set(faceRadios(ui.root).map((radio) => radio.getAttribute("name"))).size, 1);
+    assert.match(ui.root.textContent, /Liner face/);
+    ui.root.querySelector('[data-liner-side="edge_width_top"]').dispatch("click");
+    chooseFace(ui.root, "front");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(JSON.parse(writes.at(-1).liner_specs_json).face, "front");
+    dialog.open({ doc: { pieces: [freshFace] }, dirty() {} }, freshFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.deepEqual(checkedFaces(ui.root), ["front"]);
+    chooseFace(ui.root, "back");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(JSON.parse(writes.at(-1).liner_specs_json).face, "back");
+    assert.equal(JSON.parse(writes.at(-1).liner_specs_json).liners[0].side, "edge_width_top");
+    dialog.open({ doc: { pieces: [freshFace] }, dirty() {} }, freshFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.deepEqual(checkedFaces(ui.root), ["back"]);
+
+    const legacyFace = blankRow({
+        name: "piece-face-legacy",
+        extra_liner: 1,
+        liner_reference_side: "edge_long_left",
+        liner_offset_cm: 2,
+        liner_width_cm: 1.5,
+        liner_start_cm: 0,
+        liner_length_cm: 40,
+    });
+    dialog.open({ doc: { pieces: [legacyFace] }, dirty() {} }, legacyFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.deepEqual(checkedFaces(ui.root), []);
+    const beforeLegacyFace = writes.length;
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    assert.equal(writes.length, beforeLegacyFace);
+    chooseFace(ui.root, "back");
+    ui.root.querySelector("[data-addons-apply]").dispatch("click");
+    await tick();
+    const legacySaved = JSON.parse(writes.at(-1).liner_specs_json);
+    assert.equal(legacySaved.face, "back");
+    assert.equal(legacySaved.width_cm, 1.5);
+    assert.equal(legacySaved.liners[0].side, "edge_long_left");
+    assert.equal(legacySaved.liners[0].offset_cm, 2);
+    assert.equal(legacySaved.liners[0].length_cm, 40);
+    ui.root.querySelector("[data-add-liner]").dispatch("click");
+    assert.equal(ui.root.querySelectorAll("[data-liner-face]").length, 1);
+    assert.deepEqual(checkedFaces(ui.root), ["back"]);
+
+    const identityTranslate = context.__;
+    const arabicLabels = {
+        "Liner face": "اللاينر على الوجه",
+        "Front face": "الوجه الأمامي",
+        "Back face": "الوجه الخلفي",
+    };
+    context.__ = (message, values) => arabicLabels[message] || identityTranslate(message, values);
+    dialog.open({ doc: { pieces: [freshFace] }, dirty() {} }, freshFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.match(ui.root.textContent, /اللاينر على الوجه/);
+    assert.match(ui.root.textContent, /الوجه الأمامي/);
+    assert.match(ui.root.textContent, /الوجه الخلفي/);
+    assert.doesNotMatch(ui.root.textContent, /Front face/);
+    assert.doesNotMatch(ui.root.textContent, /Back face/);
+    assert.doesNotMatch(ui.root.textContent, /Liner face/);
+    assert.deepEqual(faceRadios(ui.root).map((radio) => radio.getAttribute("value")), ["front", "back"]);
+    assert.deepEqual(checkedFaces(ui.root), ["back"]);
+    const options = ui.root.querySelector(".dco-liner-face-options");
+    assert.equal(options.children.length, 2);
+    assert.equal(options.parent.querySelector("legend").textContent, "اللاينر على الوجه");
+    context.__ = identityTranslate;
+    dialog.open({ doc: { pieces: [freshFace] }, dirty() {} }, freshFace);
+    ui = latest();
+    ui.root.querySelector('[data-addon-tab="extra_liner"]').dispatch("click");
+    assert.match(ui.root.textContent, /Liner face/);
+    assert.match(ui.root.textContent, /Front face/);
+    assert.match(ui.root.textContent, /Back face/);
+    assert.doesNotMatch(ui.root.textContent, /الوجه الأمامي/);
+    assert.deepEqual(faceRadios(ui.root).map((radio) => radio.getAttribute("value")), ["front", "back"]);
 
     const geometry = fakeWindow.AlmdinaLinerGeometry;
     const piece = geometry.pieceFromRow({ piece_type: "Regular", width_cm: 40, length_cm: 60 });
