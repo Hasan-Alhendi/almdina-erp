@@ -259,6 +259,22 @@ def test_error_card_footer_changes_with_explicit_context():
     assert "أعد الرفع" not in export
 
 
+def test_mandatory_trim_save_context_is_actionable_not_unexpected_error():
+    item = issue(
+        APPLIED_TRIM_OVERFLOW, CATEGORY_LAYOUT,
+        target=piece_target(source_piece_no=12, copy_no=1),
+        params={
+            "sheet_no": 3, "edge": "left",
+            "actual_margin_mm": 2.5, "required_trim_mm": 3.0,
+        },
+    )
+    html = render_error_cards_html([item], context="save")
+    assert "2.5" in html and "3" in html
+    assert "الدرفة 12" in html
+    assert "لم يتم حفظ الخطة غير الصالحة" in html
+    assert "أعد رفع الملف" not in html
+
+
 def test_error_cards_keep_three_arabic_questions_once_and_in_order():
     item = issue(CUT_INVALID_GEOMETRY, "CONTOUR", target=contour_target(4))
     for context in ("upload", "export"):

@@ -244,6 +244,7 @@ jobs:
             almdina_erp/tests/test_special_door_addon_dxf_matching.py \
             almdina_erp/tests/test_dxf_manufacturing_identity.py \
             almdina_erp/tests/test_dxf_original_upload_download.py \
+            almdina_erp/tests/test_dxf_upload_trim_settings_consistency.py \
             almdina_erp/tests/test_deferred_saw_center_paths.py \
             almdina_erp/tests/test_cutter_center_paths.py \
             almdina_erp/tests/test_corner_dxf_edge_binding.py \
