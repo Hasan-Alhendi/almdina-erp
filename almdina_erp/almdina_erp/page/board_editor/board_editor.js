@@ -30,7 +30,7 @@
         `${ASSET_ROOT}/editor_mode.js?v=1`,
         `${ASSET_ROOT}/drawing_space.js?v=5`,
         `${ASSET_ROOT}/drawing_model.js?v=8`,
-        `${ASSET_ROOT}/drawing_compile.js?v=3`,
+        `${ASSET_ROOT}/drawing_compile.js?v=4`,
         `${ASSET_ROOT}/drawing_snap.js?v=1`,
         `${ASSET_ROOT}/drawing_reference.js?v=1`,
         `${ASSET_ROOT}/store.js?v=23`,

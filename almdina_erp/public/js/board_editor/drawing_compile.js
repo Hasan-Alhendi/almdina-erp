@@ -5,6 +5,9 @@
     const CHORD_ERROR_MM = 0.05;
     const STORAGE_EPSILON_CM = 0.001;
     const MIN_SAMPLE_MM = 0.02;
+    const MAX_BEZIER_DEPTH = 16;
+    const LONG_CHORD_TOLERANCE_MM = 0.042;
+    const SHORT_CHORD_TOLERANCE_MM = 0.022;
     const MESSAGES = {
         path_open: "The cut outline is not closed. Close the path, then validate it again.",
         self_intersection: "The cut outline crosses itself. Move the nodes so the edges no longer cross.",
@@ -159,58 +162,71 @@
     }
 
     function flattenBezier(p0, c1, c2, p1) {
-        const samples = [0, 1].concat(bezierExtrema(p0, c1, c2, p1)).filter((value) => value >= 0 && value <= 1);
-        samples.sort((a, b) => a - b);
-        const unique = samples.filter((value, index) => index === 0 || Math.abs(value - samples[index - 1]) > 1e-6);
-        let points = [bezierPoint(p0, c1, c2, p1, unique[0])];
-        for (let index = 0; index < unique.length - 1; index += 1) {
-            const piece = adaptiveBezier(p0, c1, c2, p1, unique[index], unique[index + 1], 0);
-            if (!piece) return null;
-            points = points.concat(piece.slice(1));
+        return adaptiveBezier(p0, c1, c2, p1, 0, MAX_VERTICES);
+    }
+
+    function adaptiveBezier(p0, c1, c2, p1, depth, budget) {
+        if (![p0, c1, c2, p1].every((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]))) return null;
+        if (controlsWithinChord(p0, c1, c2, p1)) {
+            return budget < 2 ? null : [p0, p1];
         }
-        return points;
+        if (depth >= MAX_BEZIER_DEPTH || budget <= 2) return null;
+        const parts = splitBezier(p0, c1, c2, p1);
+        const left = adaptiveBezier(parts[0][0], parts[0][1], parts[0][2], parts[0][3], depth + 1, budget);
+        if (!left) return null;
+        const right = adaptiveBezier(
+            parts[1][0], parts[1][1], parts[1][2], parts[1][3],
+            depth + 1,
+            budget - left.length + 1
+        );
+        if (!right) return null;
+        return left.slice(0, -1).concat(right);
     }
 
-    function adaptiveBezier(p0, c1, c2, p1, left, right, depth) {
-        if (depth > 16) return null;
-        const start = bezierPoint(p0, c1, c2, p1, left);
-        const end = bezierPoint(p0, c1, c2, p1, right);
-        const midT = (left + right) / 2;
-        const mid = bezierPoint(p0, c1, c2, p1, midT);
-        if (chordGap(start, end, mid) <= CHORD_ERROR_MM) return [start, end];
-        const leftPart = adaptiveBezier(p0, c1, c2, p1, left, midT, depth + 1);
-        const rightPart = adaptiveBezier(p0, c1, c2, p1, midT, right, depth + 1);
-        if (!leftPart || !rightPart) return null;
-        return leftPart.slice(0, -1).concat(rightPart);
+    function splitBezier(p0, c1, c2, p1) {
+        function mid(a, b) {
+            return [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+        }
+        const a = mid(p0, c1);
+        const b = mid(c1, c2);
+        const c = mid(c2, p1);
+        const d = mid(a, b);
+        const e = mid(b, c);
+        const f = mid(d, e);
+        return [[p0, a, d, f], [f, e, c, p1]];
     }
 
-    function bezierPoint(p0, c1, c2, p1, t) {
-        const u = 1 - t;
-        return [
-            u * u * u * p0[0] + 3 * u * u * t * c1[0] + 3 * u * t * t * c2[0] + t * t * t * p1[0],
-            u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p1[1],
-        ];
+    function controlsWithinChord(p0, c1, c2, p1) {
+        const bound = chordDeviationBound(p0, c1, c2, p1);
+        if (bound <= SHORT_CHORD_TOLERANCE_MM) return true;
+        return bound <= LONG_CHORD_TOLERANCE_MM && distance(p0, p1) >= MIN_SAMPLE_MM;
     }
 
-    function bezierExtrema(p0, c1, c2, p1) {
-        const found = [];
-        [0, 1].forEach((axis) => {
-            const a = -p0[axis] + 3 * c1[axis] - 3 * c2[axis] + p1[axis];
-            const b = 2 * p0[axis] - 4 * c1[axis] + 2 * c2[axis];
-            const c = -p0[axis] + c1[axis];
-            quadraticRoots(a, b, c).forEach((value) => {
-                if (value > 0 && value < 1) found.push(value);
-            });
-        });
-        return found;
+    function chordDeviationBound(p0, c1, c2, p1) {
+        const dx = p1[0] - p0[0];
+        const dy = p1[1] - p0[1];
+        const length2 = dx * dx + dy * dy;
+        if (length2 <= 1e-18) return Math.max(distance(c1, p0), distance(c2, p0));
+        const length = Math.sqrt(length2);
+        const along = (point) => ((point[0] - p0[0]) * dx + (point[1] - p0[1]) * dy) / length;
+        const height = (point) => Math.abs((point[0] - p0[0]) * dy - (point[1] - p0[1]) * dx) / length;
+        const span1 = along(c1);
+        const span2 = along(c2);
+        if (span1 >= 0 && span1 <= length && span2 >= 0 && span2 <= length) {
+            return (4 / 9) * (height(c1) + height(c2));
+        }
+        return Math.max(distanceToSegment(c1, p0, p1), distanceToSegment(c2, p0, p1));
     }
 
-    function quadraticRoots(a, b, c) {
-        if (Math.abs(a) < 1e-12) return Math.abs(b) < 1e-12 ? [] : [-c / b];
-        const disc = b * b - 4 * a * c;
-        if (disc < 0) return [];
-        const root = Math.sqrt(disc);
-        return [(-b + root) / (2 * a), (-b - root) / (2 * a)];
+    function distanceToSegment(point, start, end) {
+        const dx = end[0] - start[0];
+        const dy = end[1] - start[1];
+        const length2 = dx * dx + dy * dy;
+        if (length2 <= 1e-18) return distance(point, start);
+        const ratio = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2;
+        if (ratio <= 0) return distance(point, start);
+        if (ratio >= 1) return distance(point, end);
+        return Math.hypot(point[0] - (start[0] + ratio * dx), point[1] - (start[1] + ratio * dy));
     }
 
     function polygon(points, widthMm, lengthMm, pathId) {
@@ -276,18 +292,21 @@
         return total / 2;
     }
 
-    function chordGap(start, end, mid) {
-        const length = distance(start, end);
-        if (length <= 1e-9) return distance(start, mid);
-        return Math.abs(turn(start, end, mid)) / length;
-    }
-
     function distance(a, b) {
         return Math.hypot(b[0] - a[0], b[1] - a[1]);
     }
 
     function roundCm(value) {
-        return Math.round(value * 1000) / 1000;
+        // Same half-even rule as Python round(value, 3). Half-up would store a
+        // different centimetre point and let the preview accept another outline.
+        const sign = value < 0 ? -1 : 1;
+        const scaled = Math.abs(value) * 1000;
+        const base = Math.floor(scaled);
+        const fraction = scaled - base;
+        let rounded = base;
+        if (fraction > 0.5) rounded = base + 1;
+        else if (fraction === 0.5) rounded = base % 2 === 0 ? base : base + 1;
+        return (sign * rounded) / 1000;
     }
 
     window.AlmdinaBoardEditor = window.AlmdinaBoardEditor || {};

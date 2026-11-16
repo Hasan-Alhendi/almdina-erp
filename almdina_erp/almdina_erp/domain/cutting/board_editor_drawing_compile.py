@@ -27,6 +27,11 @@ MAX_VERTICES = 64
 CHORD_ERROR_MM = 0.05
 STORAGE_EPSILON_CM = 0.001
 _MIN_SAMPLE_MM = 0.02
+_MAX_BEZIER_DEPTH = 16
+# 0.042 + 0.005*sqrt(2) rounding <= 0.05 for chords the 0.02 mm filter keeps.
+# 0.022 + 0.02 collapse + the same rounding <= 0.05 for shorter chords.
+_LONG_CHORD_TOLERANCE_MM = 0.042
+_SHORT_CHORD_TOLERANCE_MM = 0.022
 
 
 def compile_manufacturing_geometry(
@@ -211,62 +216,99 @@ def _axis_angles(theta: float, delta: float) -> list[float]:
 
 
 def _flatten_bezier(p0, c1, c2, p1) -> list[tuple[float, float]] | None:
-    samples = [0.0, 1.0]
-    samples.extend(_bezier_extrema(p0, c1, c2, p1))
-    samples = sorted(set(round(value, 6) for value in samples if 0.0 <= value <= 1.0))
-    points = [_bezier_point(p0, c1, c2, p1, samples[0])]
-    for left, right in zip(samples, samples[1:]):
-        piece = _adaptive_bezier(p0, c1, c2, p1, left, right, 0)
-        if piece is None:
+    """Adaptive De Casteljau subdivision. Endpoints stay exactly as drawn.
+
+    Acceptance uses ``_chord_deviation_bound``, which is an upper bound on the
+    distance from the cubic to its chord, not a midpoint sample. A long chord
+    may stop at 0.042 mm because rounding adds at most 0.005*sqrt(2) mm. A
+    chord shorter than the 0.02 mm sample filter must already be within 0.022 mm
+    so dropping it still leaves the stored polygon inside 0.05 mm.
+    """
+
+    return _adaptive_bezier(p0, c1, c2, p1, 0, MAX_VERTICES)
+
+
+def _adaptive_bezier(p0, c1, c2, p1, depth, budget):
+    if not all(math.isfinite(value) for point in (p0, c1, c2, p1) for value in point):
+        return None
+    if _controls_within_chord(p0, c1, c2, p1):
+        if budget < 2:
             return None
-        points.extend(piece[1:])
-    return points
-
-
-def _adaptive_bezier(p0, c1, c2, p1, left, right, depth):
-    if depth > 16:
+        return [p0, p1]
+    if depth >= _MAX_BEZIER_DEPTH or budget <= 2:
         return None
-    start = _bezier_point(p0, c1, c2, p1, left)
-    end = _bezier_point(p0, c1, c2, p1, right)
-    mid_t = (left + right) / 2.0
-    mid = _bezier_point(p0, c1, c2, p1, mid_t)
-    if _chord_gap(start, end, mid) <= CHORD_ERROR_MM:
-        return [start, end]
-    left_part = _adaptive_bezier(p0, c1, c2, p1, left, mid_t, depth + 1)
-    right_part = _adaptive_bezier(p0, c1, c2, p1, mid_t, right, depth + 1)
-    if left_part is None or right_part is None:
+    left, right = _split_bezier(p0, c1, c2, p1)
+    left_points = _adaptive_bezier(*left, depth + 1, budget)
+    if left_points is None:
         return None
-    return left_part[:-1] + right_part
+    right_budget = budget - len(left_points) + 1
+    right_points = _adaptive_bezier(*right, depth + 1, right_budget)
+    if right_points is None:
+        return None
+    return left_points[:-1] + right_points
 
 
-def _bezier_point(p0, c1, c2, p1, t):
-    u = 1.0 - t
-    return (
-        u ** 3 * p0[0] + 3 * u ** 2 * t * c1[0] + 3 * u * t ** 2 * c2[0] + t ** 3 * p1[0],
-        u ** 3 * p0[1] + 3 * u ** 2 * t * c1[1] + 3 * u * t ** 2 * c2[1] + t ** 3 * p1[1],
-    )
+def _split_bezier(p0, c1, c2, p1):
+    def mid(a, b):
+        return ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+
+    a = mid(p0, c1)
+    b = mid(c1, c2)
+    c = mid(c2, p1)
+    d = mid(a, b)
+    e = mid(b, c)
+    f = mid(d, e)
+    return (p0, a, d, f), (f, e, c, p1)
 
 
-def _bezier_extrema(p0, c1, c2, p1) -> list[float]:
-    found = []
-    for axis in (0, 1):
-        a = -p0[axis] + 3 * c1[axis] - 3 * c2[axis] + p1[axis]
-        b = 2 * p0[axis] - 4 * c1[axis] + 2 * c2[axis]
-        c = -p0[axis] + c1[axis]
-        found.extend(_quadratic_roots(a, b, c))
-    return [value for value in found if 0.0 < value < 1.0]
+def _controls_within_chord(p0, c1, c2, p1) -> bool:
+    bound = _chord_deviation_bound(p0, c1, c2, p1)
+    if bound <= _SHORT_CHORD_TOLERANCE_MM:
+        return True
+    return bound <= _LONG_CHORD_TOLERANCE_MM and _distance(p0, p1) >= _MIN_SAMPLE_MM
 
 
-def _quadratic_roots(a, b, c) -> list[float]:
-    if abs(a) < 1e-12:
-        if abs(b) < 1e-12:
-            return []
-        return [-c / b]
-    disc = b * b - 4 * a * c
-    if disc < 0:
-        return []
-    root = math.sqrt(disc)
-    return [(-b + root) / (2 * a), (-b - root) / (2 * a)]
+def _chord_deviation_bound(p0, c1, c2, p1) -> float:
+    """Upper bound on the distance from the cubic to its chord segment.
+
+    The Bernstein weights 3(1-t)^2 t and 3(1-t)t^2 each peak at 4/9. When both
+    controls project onto the chord, the curve does too, and its distance is at
+    most (4/9) times the sum of the control heights. Otherwise the convex-hull
+    distance to the segment remains the bound.
+    """
+
+    dx = p1[0] - p0[0]
+    dy = p1[1] - p0[1]
+    length2 = dx * dx + dy * dy
+    if length2 <= 1e-18:
+        return max(_distance(c1, p0), _distance(c2, p0))
+    length = math.sqrt(length2)
+
+    def along(point) -> float:
+        return ((point[0] - p0[0]) * dx + (point[1] - p0[1]) * dy) / length
+
+    def height(point) -> float:
+        return abs((point[0] - p0[0]) * dy - (point[1] - p0[1]) * dx) / length
+
+    span_1 = along(c1)
+    span_2 = along(c2)
+    if 0.0 <= span_1 <= length and 0.0 <= span_2 <= length:
+        return (4.0 / 9.0) * (height(c1) + height(c2))
+    return max(_distance_to_segment(c1, p0, p1), _distance_to_segment(c2, p0, p1))
+
+
+def _distance_to_segment(point, start, end) -> float:
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    length2 = dx * dx + dy * dy
+    if length2 <= 1e-18:
+        return _distance(point, start)
+    ratio = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2
+    if ratio <= 0.0:
+        return _distance(point, start)
+    if ratio >= 1.0:
+        return _distance(point, end)
+    return math.hypot(point[0] - (start[0] + ratio * dx), point[1] - (start[1] + ratio * dy))
 
 
 def _polygon(points, width_mm, length_mm, path_id):
@@ -362,14 +404,6 @@ def _area(points: Sequence[Sequence[float]]) -> float:
         nxt = points[(index + 1) % len(points)]
         total += point[0] * nxt[1] - nxt[0] * point[1]
     return total / 2.0
-
-
-def _chord_gap(start, end, mid) -> float:
-    length = _distance(start, end)
-    if length <= 1e-9:
-        return _distance(start, mid)
-    area = abs(_turn(start, end, mid))
-    return area / length
 
 
 def _distance(a, b) -> float:
