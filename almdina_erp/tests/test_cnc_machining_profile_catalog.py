@@ -20,16 +20,9 @@ def _doctype(name: str) -> dict:
 
 def _assert_english_required_fields(doctype: dict) -> None:
     for field in doctype["fields"]:
-        if field.get("fieldtype") == "Column Break":
-            assert not field.get("label"), field["fieldname"]
-            assert field.get("reqd") is None, field["fieldname"]
-            continue
         label = str(field.get("label") or "")
         assert label, field["fieldname"]
         assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
-        if field.get("fieldtype") == "Section Break":
-            assert field.get("reqd") is None, field["fieldname"]
-            continue
         assert field.get("reqd") == 1, field["fieldname"]
 
 

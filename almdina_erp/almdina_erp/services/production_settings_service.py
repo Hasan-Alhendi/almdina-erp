@@ -1007,17 +1007,7 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
         return []
     rows = frappe.get_all(
         "CNC Machine",
-        fields=[
-            "name",
-            "machine_name",
-            "width_cm",
-            "length_cm",
-            "cutter_travel_left_extension_mm",
-            "cutter_travel_right_extension_mm",
-            "cutter_travel_bottom_extension_mm",
-            "cutter_travel_top_extension_mm",
-            "enabled",
-        ],
+        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
         order_by="machine_name asc",
         limit_page_length=0,
     )
@@ -1027,10 +1017,6 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
             "machine_name": row.machine_name,
             "width_cm": row.width_cm,
             "length_cm": row.length_cm,
-            "cutter_travel_left_extension_mm": row.cutter_travel_left_extension_mm,
-            "cutter_travel_right_extension_mm": row.cutter_travel_right_extension_mm,
-            "cutter_travel_bottom_extension_mm": row.cutter_travel_bottom_extension_mm,
-            "cutter_travel_top_extension_mm": row.cutter_travel_top_extension_mm,
             "enabled": bool(cint(row.enabled)),
         }
         for row in rows

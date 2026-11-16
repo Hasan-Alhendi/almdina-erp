@@ -207,17 +207,12 @@ _MESSAGES = {
     "cnc_machine_name_required": "CNC machine name is required.",
     "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
     "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
-    "cutter_travel_left_extension_invalid": "Left cutter travel extension must be between 0 and 10000 millimetres.",
-    "cutter_travel_right_extension_invalid": "Right cutter travel extension must be between 0 and 10000 millimetres.",
-    "cutter_travel_bottom_extension_invalid": "Bottom cutter travel extension must be between 0 and 10000 millimetres.",
-    "cutter_travel_top_extension_invalid": "Top cutter travel extension must be between 0 and 10000 millimetres.",
     "offset_left_invalid": "The distance from the left must be zero or a positive number of centimetres.",
     "offset_bottom_invalid": "The distance from the bottom must be zero or a positive number of centimetres.",
     "sheet_width_invalid": "The approved sheet width is not valid.",
     "sheet_length_invalid": "The approved sheet length is not valid.",
     "sheet_exceeds_machine_width": "The sheet plus the left offset exceeds the machine width.",
     "sheet_exceeds_machine_length": "The sheet plus the bottom offset exceeds the machine length.",
-    "toolpath_exceeds_machine": "A cutter path would leave the machine travel area after placement.",
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",
@@ -292,32 +287,6 @@ def _diameter_program_message(program: Mapping[str, Any]) -> str:
 def _failure_message(exc: Exception) -> str:
     code = str(getattr(exc, "code", "") or "")
     detail = str(getattr(exc, "detail", "") or "")
-    if code == "toolpath_exceeds_machine":
-        cause = getattr(exc, "__cause__", None)
-        values = dict(
-            getattr(exc, "details", {})
-            or getattr(cause, "details", {})
-            or {}
-        )
-
-        def number(key: str) -> str:
-            try:
-                return f"{float(values.get(key)):.4f}".rstrip("0").rstrip(".")
-            except (TypeError, ValueError):
-                return "—"
-
-        return _(
-            "CNC machine {0}: path {1} exceeds the {2}-axis cutter travel at {3} mm; "
-            "allowed range is {4} to {5} mm (over by {6} mm)."
-        ).format(
-            str(values.get("machine_name") or "—"),
-            str(values.get("path_key") or "—"),
-            str(values.get("axis") or "—"),
-            number("coordinate_mm"),
-            number("minimum_mm"),
-            number("maximum_mm"),
-            number("overrun_mm"),
-        )
     if code in _DIAMETER_ISSUE_CODES and detail.count("|") >= 2:
         return _diameter_dialog_message(detail)
     template = _MESSAGES.get(code, "")

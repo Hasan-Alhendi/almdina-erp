@@ -158,10 +158,6 @@ html[dir="rtl"] .dco-operational-sheet-dialog .dco-operational-sheet__preview {
     vector-effect: non-scaling-stroke;
 }
 
-.dco-cnc-cut-preview__travel {
-    vector-effect: non-scaling-stroke;
-}
-
 .dco-cnc-cut-preview__void {
     opacity: 0.95;
 }
@@ -888,7 +884,6 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
     pointer-events: stroke;
 }
 .dco-operational-sheet .dco-cnc-cut-preview__machine,
-.dco-operational-sheet .dco-cnc-cut-preview__travel,
 .dco-operational-sheet .dco-cnc-cut-preview__void,
 .dco-operational-sheet .dco-cnc-cut-preview__sheet,
 .dco-operational-sheet .dco-cnc-cut-preview__frame,

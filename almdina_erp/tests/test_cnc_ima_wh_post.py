@@ -199,7 +199,63 @@ def test_sheet_offset_is_applied_once_and_not_to_home_or_g53():
     assert text.count("Y2440.0000") == 1
 
 
-def test_negative_g54_coordinates_and_profile_home_are_allowed_inside_travel_extensions():
+@pytest.mark.parametrize("diameter_mm", (5.0, 8.0, 12.0))
+@pytest.mark.parametrize(
+    ("axis", "sign"),
+    (
+        ("x", -1),
+        ("x", 1),
+        ("y", -1),
+        ("y", 1),
+    ),
+)
+def test_edge_cutter_centres_are_posted_without_clipping(diameter_mm, axis, sign):
+    machine_width_mm = 1600.0
+    machine_length_mm = 4000.0
+    radius = diameter_mm / 2.0
+    if axis == "x":
+        x_mm = -radius if sign < 0 else machine_width_mm + radius
+        y_mm = 100.0
+        end_x, end_y = x_mm + 20.0, y_mm
+    else:
+        x_mm = 100.0
+        y_mm = -radius if sign < 0 else machine_length_mm + radius
+        end_x, end_y = x_mm, y_mm + 20.0
+    path = _path(
+        [(x_mm, y_mm), (end_x, end_y)],
+        [
+            {"kind": "travel", "x_mm": x_mm, "y_mm": y_mm},
+            {"kind": "plunge", "x_mm": x_mm, "y_mm": y_mm, "depth_mm": 5},
+            {"kind": "cut", "x_mm": end_x, "y_mm": end_y, "depth_mm": 5},
+            {"kind": "retract", "x_mm": end_x, "y_mm": end_y},
+        ],
+        home=(0, 100, 120),
+    )
+    placement = _placement(
+        machine=_machine(width_cm=160, length_cm=400),
+        sheet_width_cm=160,
+        sheet_length_cm=400,
+        offset_left_cm=0,
+        offset_bottom_cm=0,
+    )
+    program = _program(path)
+    package = _export(program, placement)
+    text = package["text"]
+    assert f"G0 X{x_mm:.4f} Y{y_mm:.4f} Z20.0000" in text
+    assert (f"X{end_x:.4f}" if axis == "x" else f"Y{end_y:.4f}") in text
+    assert "G53 Z0" in text
+    assert "G53 X1500.0 Y3500.0 Z0" in text
+    assert package["verification"]["ok"] is True
+    assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == x_mm
+    assert program["operations"][0]["toolpaths"][0]["motions"][0]["y_mm"] == y_mm
+    assert "cutter_travel" not in package["sheet_placement"]
+    if diameter_mm == 5.0 and axis == "y" and sign < 0:
+        assert "Y-2.5000" in text
+    if diameter_mm == 5.0 and axis == "y" and sign > 0:
+        assert "Y4002.5000" in text
+
+
+def test_parking_stays_inside_the_bed_when_the_cutter_path_leaves_it():
     path = _path(
         [(-2.5, 100), (20, 100)],
         [
@@ -208,37 +264,31 @@ def test_negative_g54_coordinates_and_profile_home_are_allowed_inside_travel_ext
             {"kind": "cut", "x_mm": 20, "y_mm": 100, "depth_mm": 5},
             {"kind": "retract", "x_mm": 20, "y_mm": 100},
         ],
-        home=(-2.5, 100, 120),
     )
     placement = _placement(
-        machine=_machine(cutter_travel_left_extension_mm=5),
-        offset_left_cm=0,
-        offset_bottom_cm=0,
-    )
-    program = _program(path)
-    package = _export(program, placement)
-    assert "X-2.5000 Y100.0000" in package["text"]
-    assert package["verification"]["ok"] is True
-    assert package["sheet_placement"]["cutter_travel_x_min_mm"] == -5
-    assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == -2.5
-
-
-def test_g54_extensions_do_not_expand_the_g53_parking_limits():
-    placement = _placement(
-        machine=_machine(
-            width_cm=140,
-            length_cm=340,
-            cutter_travel_right_extension_mm=200,
-            cutter_travel_top_extension_mm=200,
-        ),
+        machine=_machine(width_cm=140, length_cm=340),
         sheet_width_cm=100,
         sheet_length_cm=200,
         offset_left_cm=0,
         offset_bottom_cm=0,
     )
     with pytest.raises(PostProcessorError) as parking:
-        _export(_reference_program(), placement)
+        _export(_program(path), placement)
     assert parking.value.code == "machine_parking_outside_limits"
+    unready = _program(path)
+    unready["geometry_ready"] = False
+    unready["ready"] = False
+    unready["nc_export_ready"] = False
+    legal_bed = _placement(
+        machine=_machine(width_cm=160, length_cm=400),
+        sheet_width_cm=160,
+        sheet_length_cm=400,
+        offset_left_cm=0,
+        offset_bottom_cm=0,
+    )
+    with pytest.raises(PostProcessorError) as rejected:
+        _export(unready, legal_bed)
+    assert rejected.value.code == "geometry_not_ready"
 
 
 def test_home_happens_once_and_not_between_stepdowns():

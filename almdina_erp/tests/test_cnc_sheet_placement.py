@@ -7,7 +7,6 @@ import pytest
 from almdina_erp.almdina_erp.application.cnc.nc_export import build_simulation_nc
 from almdina_erp.almdina_erp.domain.cnc.operational_file import settings_fingerprint
 from almdina_erp.almdina_erp.domain.cnc.placement import (
-    MAX_CUTTER_TRAVEL_EXTENSION_MM,
     PLACEMENT_TRANSFORM_VERSION,
     PlacementError,
     apply_placement_to_program,
@@ -18,6 +17,7 @@ from almdina_erp.almdina_erp.domain.cnc.placement import (
     validate_program_within_machine,
     validate_sheet_fits_machine,
 )
+from almdina_erp.almdina_erp.domain.cutting.liner_geometry import extension_conflict
 
 
 def _machine(**overrides):
@@ -72,25 +72,6 @@ def test_normalize_machine_rejects_non_positive_dimensions():
     with pytest.raises(PlacementError) as length:
         normalize_cnc_machine(machine_name="A", width_cm=130, length_cm=-1)
     assert length.value.code == "cnc_machine_length_invalid"
-
-
-def test_normalize_machine_rejects_invalid_travel_extensions():
-    with pytest.raises(PlacementError) as negative:
-        normalize_cnc_machine(
-            machine_name="A",
-            width_cm=130,
-            length_cm=250,
-            cutter_travel_left_extension_mm=-0.1,
-        )
-    assert negative.value.code == "cutter_travel_left_extension_invalid"
-    with pytest.raises(PlacementError) as excessive:
-        normalize_cnc_machine(
-            machine_name="A",
-            width_cm=130,
-            length_cm=250,
-            cutter_travel_top_extension_mm=MAX_CUTTER_TRAVEL_EXTENSION_MM + 0.1,
-        )
-    assert excessive.value.code == "cutter_travel_top_extension_invalid"
 
 
 def test_sheet_fit_accepts_zero_and_decimal_offsets():
@@ -174,75 +155,104 @@ def test_placement_does_not_mutate_sheet_program_and_applies_once():
     assert again["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 130
 
 
-def test_toolpath_near_machine_edge_with_cutter_overhang_rejected():
-    placement = build_sheet_placement(
-        machine=_machine(width_cm=130, length_cm=250),
-        sheet_width_cm=122,
-        sheet_length_cm=244,
-        offset_left_cm=8,
-        offset_bottom_cm=6,
-    )
-    # Sheet fits (8+122=130 cm, 6+244=250 cm). A cutter center past the sheet
-    # right edge exceeds the machine travel after the left offset.
-    program = _program_with_point(1220.1, 10)
-    with pytest.raises(PlacementError) as exc:
-        validate_program_within_machine(program, placement)
-    assert exc.value.code == "toolpath_exceeds_machine"
-
-
+@pytest.mark.parametrize("diameter_mm", (5.0, 8.0, 12.0))
 @pytest.mark.parametrize(
-    ("machine_overrides", "x_mm", "y_mm"),
+    ("axis", "sign"),
     (
-        ({"cutter_travel_left_extension_mm": 5}, -2.5, 100),
-        ({"cutter_travel_bottom_extension_mm": 5}, 100, -2.5),
-        ({"cutter_travel_right_extension_mm": 5}, 1212.5, 100),
-        ({"cutter_travel_top_extension_mm": 5}, 100, 2442.5),
+        ("x", -1),
+        ("x", 1),
+        ("y", -1),
+        ("y", 1),
     ),
 )
-def test_zero_margin_sheet_accepts_cutter_centres_inside_configured_travel(
-    machine_overrides,
-    x_mm,
-    y_mm,
-):
+def test_edge_cutter_centres_may_leave_the_bed_on_every_side(diameter_mm, axis, sign):
+    """A 4000 mm bed does not reject radius compensation past the sheet edge."""
+
+    machine_width_mm = 1600.0
+    machine_length_mm = 4000.0
+    radius = diameter_mm / 2.0
+    if axis == "x":
+        x_mm = -radius if sign < 0 else machine_width_mm + radius
+        y_mm = 100.0
+    else:
+        x_mm = 100.0
+        y_mm = -radius if sign < 0 else machine_length_mm + radius
     placement = build_sheet_placement(
-        machine=_machine(width_cm=122, length_cm=244, **machine_overrides),
-        sheet_width_cm=122,
-        sheet_length_cm=244,
+        machine=_machine(width_cm=machine_width_mm / 10.0, length_cm=machine_length_mm / 10.0),
+        sheet_width_cm=machine_width_mm / 10.0,
+        sheet_length_cm=machine_length_mm / 10.0,
         offset_left_cm=0,
         offset_bottom_cm=0,
     )
     program = _program_with_point(x_mm, y_mm)
+    original = program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"]
+    original_y = program["operations"][0]["toolpaths"][0]["motions"][0]["y_mm"]
     validate_program_within_machine(program, placement)
     placed = apply_placement_to_program(program, placement)
-    first = placed["operations"][0]["toolpaths"][0]["motions"][0]
-    assert first["x_mm"] == x_mm
-    assert first["y_mm"] == y_mm
+    travel = placed["operations"][0]["toolpaths"][0]["motions"][0]
+    cut = placed["operations"][0]["toolpaths"][0]["motions"][2]
+    assert travel["kind"] == "travel"
+    assert travel["x_mm"] == x_mm
+    assert travel["y_mm"] == y_mm
+    assert cut["x_mm"] == x_mm + 10
+    assert cut["y_mm"] == y_mm
+    assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == original
+    assert program["operations"][0]["toolpaths"][0]["motions"][0]["y_mm"] == original_y
+    if diameter_mm == 5.0 and axis == "y" and sign < 0:
+        assert y_mm == -2.5
+    if diameter_mm == 5.0 and axis == "y" and sign > 0:
+        assert y_mm == 4002.5
 
 
-def test_toolpath_exceeding_configured_travel_reports_machine_path_axis_and_overrun():
-    placement = build_sheet_placement(
-        machine=_machine(
-            width_cm=122,
-            length_cm=244,
-            cutter_travel_left_extension_mm=5,
-        ),
-        sheet_width_cm=122,
-        sheet_length_cm=244,
+def test_sheet_that_leaves_the_4000_mm_bed_is_rejected():
+    validate_sheet_fits_machine(
+        machine_width_cm=160,
+        machine_length_cm=400,
+        sheet_width_cm=160,
+        sheet_length_cm=400,
         offset_left_cm=0,
         offset_bottom_cm=0,
     )
-    with pytest.raises(PlacementError) as rejected:
-        validate_program_within_machine(_program_with_point(-5.25, 100), placement)
-    assert rejected.value.code == "toolpath_exceeds_machine"
-    assert rejected.value.details == {
-        "machine_name": "Router A",
-        "path_key": "cut_path:demo",
-        "axis": "X",
-        "coordinate_mm": -5.25,
-        "minimum_mm": -5.0,
-        "maximum_mm": 1220.0,
-        "overrun_mm": 0.25,
-    }
+    with pytest.raises(PlacementError) as length_overflow:
+        build_sheet_placement(
+            machine=_machine(width_cm=160, length_cm=400),
+            sheet_width_cm=160,
+            sheet_length_cm=400.1,
+            offset_left_cm=0,
+            offset_bottom_cm=0,
+        )
+    assert length_overflow.value.code == "sheet_exceeds_machine_length"
+    with pytest.raises(PlacementError) as width_overflow:
+        build_sheet_placement(
+            machine=_machine(width_cm=160, length_cm=400),
+            sheet_width_cm=160.1,
+            sheet_length_cm=400,
+            offset_left_cm=0,
+            offset_bottom_cm=0,
+        )
+    assert width_overflow.value.code == "sheet_exceeds_machine_width"
+
+
+def test_cutter_body_that_enters_an_adjacent_door_stays_rejected():
+    neighbor = {"polygon": [(20.0, 0.0), (220.0, 0.0), (220.0, 200.0), (20.0, 200.0)]}
+    for diameter_mm in (5.0, 8.0, 12.0):
+        radius = diameter_mm / 2.0
+        invading = [(0.0, 100.0), (20.0 + radius - 0.2, 100.0)]
+        clear = [(0.0, 100.0), (20.0 - radius, 100.0)]
+        assert extension_conflict(invading, diameter_mm, None, [neighbor]) == "liner_extension_hits_piece"
+        assert extension_conflict(clear, diameter_mm, None, [neighbor]) == ""
+        program = _program_with_point(invading[1][0], invading[1][1])
+        placement = build_sheet_placement(
+            machine=_machine(width_cm=160, length_cm=400),
+            sheet_width_cm=160,
+            sheet_length_cm=400,
+            offset_left_cm=0,
+            offset_bottom_cm=0,
+        )
+        placed = apply_placement_to_program(program, placement)
+        cut = placed["operations"][0]["toolpaths"][0]["motions"][2]
+        assert cut["x_mm"] == invading[1][0] + 10
+        assert cut["y_mm"] == invading[1][1]
 
 
 def test_fingerprint_changes_with_machine_or_offsets():
@@ -288,23 +298,19 @@ def test_fingerprint_changes_with_machine_or_offsets():
             )
         ),
     )
-    extended = settings_fingerprint(
-        operation_presets={"cut_path": "Finish"},
-        path_overrides={},
-        presets={"Finish": {"preset_name": "Finish", "tool_number": "T9"}},
-        sheet_placement=placement_fingerprint_payload(
+    assert base != moved
+    assert base != resized
+    assert "cutter_travel" not in str(
+        placement_fingerprint_payload(
             build_sheet_placement(
-                machine=_machine(cutter_travel_left_extension_mm=5),
+                machine=_machine(),
                 sheet_width_cm=122,
                 sheet_length_cm=244,
                 offset_left_cm=3,
                 offset_bottom_cm=4,
             )
-        ),
+        )
     )
-    assert base != moved
-    assert base != resized
-    assert base != extended
     assert PLACEMENT_TRANSFORM_VERSION in str(
         placement_fingerprint_payload(
             build_sheet_placement(

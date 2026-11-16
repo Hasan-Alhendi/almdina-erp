@@ -8,12 +8,6 @@
     "machine_name",
     "width_cm",
     "length_cm",
-    "cutter_travel_extensions_section",
-    "cutter_travel_left_extension_mm",
-    "cutter_travel_right_extension_mm",
-    "cutter_travel_extensions_column",
-    "cutter_travel_bottom_extension_mm",
-    "cutter_travel_top_extension_mm",
     "enabled"
   ],
   "fields": [
@@ -42,56 +36,6 @@
       "fieldtype": "Float",
       "in_list_view": 1,
       "label": "Machine Length (cm)",
-      "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
-    },
-    {
-      "description": "Enter only the measured cutter-centre travel beyond the machine bed. Do not infer these values from the cutter diameter.",
-      "fieldname": "cutter_travel_extensions_section",
-      "fieldtype": "Section Break",
-      "label": "Cutter Travel Extensions"
-    },
-    {
-      "default": "0",
-      "description": "Measured cutter-centre travel beyond the left edge of the machine bed.",
-      "fieldname": "cutter_travel_left_extension_mm",
-      "fieldtype": "Float",
-      "label": "Left Extension (mm)",
-      "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
-    },
-    {
-      "default": "0",
-      "description": "Measured cutter-centre travel beyond the right edge of the machine bed.",
-      "fieldname": "cutter_travel_right_extension_mm",
-      "fieldtype": "Float",
-      "label": "Right Extension (mm)",
-      "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
-    },
-    {
-      "fieldname": "cutter_travel_extensions_column",
-      "fieldtype": "Column Break"
-    },
-    {
-      "default": "0",
-      "description": "Measured cutter-centre travel beyond the bottom edge of the machine bed.",
-      "fieldname": "cutter_travel_bottom_extension_mm",
-      "fieldtype": "Float",
-      "label": "Bottom Extension (mm)",
-      "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
-    },
-    {
-      "default": "0",
-      "description": "Measured cutter-centre travel beyond the top edge of the machine bed.",
-      "fieldname": "cutter_travel_top_extension_mm",
-      "fieldtype": "Float",
-      "label": "Top Extension (mm)",
       "non_negative": 1,
       "precision": "3",
       "reqd": 1

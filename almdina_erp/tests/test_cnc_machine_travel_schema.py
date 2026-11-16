@@ -1,4 +1,4 @@
-"""CNC machine bed/travel schema and safe legacy initialization."""
+"""CNC machine bed stays a sheet surface, without cutter-travel extension fields."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 META = APP_ROOT / "almdina_erp" / "doctype" / "cnc_machine" / "cnc_machine.json"
-PATCH = APP_ROOT / "patches" / "v1_0" / "backfill_cnc_machine_travel_extensions.py"
+PATCH = APP_ROOT / "patches" / "v1_0" / "drop_cnc_machine_travel_extensions.py"
 PATCHES = APP_ROOT / "patches.txt"
 REPOSITORY = (
     APP_ROOT
@@ -19,72 +19,68 @@ REPOSITORY = (
 )
 SERVICE = APP_ROOT / "almdina_erp" / "services" / "cnc_operational_file_service.py"
 TRANSLATIONS = APP_ROOT / "translations" / "ar.csv"
+PLACEMENT = APP_ROOT / "almdina_erp" / "domain" / "cnc" / "placement.py"
+POST = APP_ROOT / "almdina_erp" / "domain" / "cnc" / "post_processors.py"
 
-
-FIELDS = (
+REMOVED_FIELDS = (
     "cutter_travel_left_extension_mm",
     "cutter_travel_right_extension_mm",
     "cutter_travel_bottom_extension_mm",
     "cutter_travel_top_extension_mm",
+    "cutter_travel_extensions_section",
+    "cutter_travel_extensions_column",
 )
 
 
-def test_cnc_machine_separates_bed_dimensions_from_mm_travel_extensions():
+def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
     metadata = json.loads(META.read_text(encoding="utf-8"))
+    fieldnames = [row["fieldname"] for row in metadata["fields"]]
+    assert fieldnames == ["machine_name", "width_cm", "length_cm", "enabled"]
     fields = {row["fieldname"]: row for row in metadata["fields"]}
     assert fields["width_cm"]["label"] == "Machine Width (cm)"
     assert "machine bed" in fields["width_cm"]["description"].lower()
     assert fields["length_cm"]["label"] == "Machine Length (cm)"
     assert "machine bed" in fields["length_cm"]["description"].lower()
-    assert fields["cutter_travel_extensions_section"]["label"] == "Cutter Travel Extensions"
-    for fieldname in FIELDS:
-        field = fields[fieldname]
-        assert field["fieldtype"] == "Float"
-        assert field["default"] == "0"
-        assert field["non_negative"] == 1
-        assert field["reqd"] == 1
-        assert field["label"].endswith("(mm)")
+    for fieldname in REMOVED_FIELDS:
+        assert fieldname not in fieldnames
+        assert fieldname not in metadata["field_order"]
 
 
-def test_legacy_extension_backfill_is_registered_and_idempotent():
+def test_travel_extension_columns_are_dropped_idempotently_and_not_backfilled():
     source = PATCH.read_text(encoding="utf-8")
     patches = PATCHES.read_text(encoding="utf-8")
-    assert patches.count("backfill_cnc_machine_travel_extensions") == 1
-    assert "where `{fieldname}` is null" in source
-    assert "set `{fieldname}` = 0" in source
+    assert patches.count("drop_cnc_machine_travel_extensions") == 1
+    assert "backfill_cnc_machine_travel_extensions" not in patches
+    assert "has_column" in source
+    assert "drop column" in source
     assert "width_cm" not in source
     assert "length_cm" not in source
     assert "CNC Operational File" not in source
+    for fieldname in REMOVED_FIELDS[:4]:
+        assert source.count(fieldname) == 1
 
 
-def test_machine_repository_and_arabic_catalog_include_all_travel_extensions():
+def test_machine_repository_and_catalog_do_not_ask_for_travel_extensions():
     repository = REPOSITORY.read_text(encoding="utf-8")
+    service = SERVICE.read_text(encoding="utf-8")
     translations = TRANSLATIONS.read_text(encoding="utf-8")
-    for fieldname in FIELDS:
-        assert repository.count(fieldname) >= 2
+    placement = PLACEMENT.read_text(encoding="utf-8")
+    post = POST.read_text(encoding="utf-8")
+    for fieldname in REMOVED_FIELDS:
+        assert fieldname not in repository
+        assert fieldname not in service
+        assert fieldname not in placement
+        assert fieldname not in post
     for key in (
-        "Cutter Travel Extensions,امتدادات حركة الريشة",
-        "Left Extension (mm),الامتداد يسارًا (مم)",
-        "Right Extension (mm),الامتداد يمينًا (مم)",
-        "Bottom Extension (mm),الامتداد أسفلًا (مم)",
-        "Top Extension (mm),الامتداد أعلى (مم)",
+        "Cutter Travel Extensions",
+        "Left Extension (mm)",
+        "Right Extension (mm)",
+        "Bottom Extension (mm)",
+        "Top Extension (mm)",
         "The dashed line shows the configured cutter travel bounds.",
     ):
-        assert key in translations
-
-
-def test_generation_error_formats_machine_path_axis_bounds_and_overrun():
-    source = SERVICE.read_text(encoding="utf-8")
-    formatter = source.split("def _failure_message", 1)[1].split("def _issue_message", 1)[0]
-    assert 'code == "toolpath_exceeds_machine"' in formatter
-    assert 'getattr(cause, "details", {})' in formatter
-    for key in (
-        "machine_name",
-        "path_key",
-        "axis",
-        "coordinate_mm",
-        "minimum_mm",
-        "maximum_mm",
-        "overrun_mm",
-    ):
-        assert key in formatter
+        assert key not in translations
+    assert "cutter_travel_x_min_mm" not in post
+    assert "profile_home_outside_machine" not in post
+    assert "machine_parking_outside_limits" in post
+    assert "home_move_unsafe" in post

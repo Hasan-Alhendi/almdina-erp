@@ -171,7 +171,7 @@
                             <div class="aps-section-titles">
                                 <span class="aps-section-kicker">${t("Operational files")}</span>
                                 <h3>${t("CNC Machines")}</h3>
-                                <div class="aps-section-desc">${t("Register each CNC machine bed by name, width (X), and length (Y), then enter only its measured cutter travel extensions. Origin is always bottom-left with X to the right and Y upward.")}</div>
+                                <div class="aps-section-desc">${t("Register each CNC machine bed by name, width (X), and length (Y). Origin is always bottom-left with X to the right and Y upward.")}</div>
                             </div>
                         </div>
                         <div class="aps-section-tools aps-cnc-presets__actions">${machineActions}</div>

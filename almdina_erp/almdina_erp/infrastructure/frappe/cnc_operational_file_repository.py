@@ -445,17 +445,7 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
     rows = frappe.get_all(
         "CNC Machine",
         filters=filters,
-        fields=[
-            "name",
-            "machine_name",
-            "width_cm",
-            "length_cm",
-            "cutter_travel_left_extension_mm",
-            "cutter_travel_right_extension_mm",
-            "cutter_travel_bottom_extension_mm",
-            "cutter_travel_top_extension_mm",
-            "enabled",
-        ],
+        fields=["name", "machine_name", "width_cm", "length_cm", "enabled"],
         order_by="machine_name asc",
         ignore_permissions=True,
     )
@@ -465,18 +455,6 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
             "machine_name": str(row.machine_name or row.name),
             "width_cm": float(row.width_cm or 0),
             "length_cm": float(row.length_cm or 0),
-            "cutter_travel_left_extension_mm": float(
-                row.cutter_travel_left_extension_mm or 0
-            ),
-            "cutter_travel_right_extension_mm": float(
-                row.cutter_travel_right_extension_mm or 0
-            ),
-            "cutter_travel_bottom_extension_mm": float(
-                row.cutter_travel_bottom_extension_mm or 0
-            ),
-            "cutter_travel_top_extension_mm": float(
-                row.cutter_travel_top_extension_mm or 0
-            ),
             "enabled": bool(cint(row.enabled)),
         }
         for row in rows
@@ -493,18 +471,6 @@ def get_cnc_machine(name: str) -> dict[str, Any] | None:
         "machine_name": str(document.machine_name or document.name),
         "width_cm": float(document.width_cm or 0),
         "length_cm": float(document.length_cm or 0),
-        "cutter_travel_left_extension_mm": float(
-            document.cutter_travel_left_extension_mm or 0
-        ),
-        "cutter_travel_right_extension_mm": float(
-            document.cutter_travel_right_extension_mm or 0
-        ),
-        "cutter_travel_bottom_extension_mm": float(
-            document.cutter_travel_bottom_extension_mm or 0
-        ),
-        "cutter_travel_top_extension_mm": float(
-            document.cutter_travel_top_extension_mm or 0
-        ),
         "enabled": bool(cint(document.enabled)),
     }
 

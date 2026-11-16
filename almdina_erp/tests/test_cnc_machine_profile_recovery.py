@@ -195,7 +195,7 @@ def test_repair_patch_is_registered_once_at_the_end_and_uses_the_sample_rule():
     assert lines[-3:] == [
         "almdina_erp.patches.v1_0.migrate_cnc_operational_file_status",
         "almdina_erp.patches.v1_0.backfill_cnc_operational_file_settings_revision",
-        "almdina_erp.patches.v1_0.backfill_cnc_machine_travel_extensions",
+        "almdina_erp.patches.v1_0.drop_cnc_machine_travel_extensions",
     ]
     assert lines.count(patch_name) == 1
     assert lines.count("almdina_erp.patches.v1_0.migrate_cnc_operational_file_status") == 1
