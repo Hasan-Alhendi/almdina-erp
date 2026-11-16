@@ -30,6 +30,7 @@ from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_costing_workspac
 from almdina_erp.almdina_erp.infrastructure.frappe.cutting_plan_runtime_repository import (
     plan_settings as read_plan_settings,
     seed_plan_settings,
+    manufacturing_plan_settings,
 )
 
 
@@ -308,7 +309,9 @@ class FrappeCuttingPlanCommandRepository:
             status=DRAFT,
             source_type=UPLOADED_DXF,
             based_on_plan=based_on,
-            settings=seed_plan_settings(order.name),
+            # The imported geometry is validated against the current manufacturing
+            # settings, not a cancelled Uploaded DXF revision's old trim.
+            settings=manufacturing_plan_settings(order.name),
         )
         return self.get_document(created.name)
 
