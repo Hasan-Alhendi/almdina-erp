@@ -454,7 +454,9 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
             "enabled",
             "work_zero_position",
             "left_stop_cm",
+            "right_stop_cm",
             "bottom_stop_cm",
+            "top_stop_cm",
         ],
         order_by="machine_name asc",
         ignore_permissions=True,
@@ -469,7 +471,9 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
                 "enabled": bool(cint(row.enabled)),
                 "work_zero_position": row.work_zero_position,
                 "left_stop_cm": row.left_stop_cm,
+                "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
+                "top_stop_cm": row.top_stop_cm,
             }
         )
         for row in rows
@@ -490,7 +494,9 @@ def get_cnc_machine(name: str) -> dict[str, Any] | None:
             "enabled": bool(cint(document.enabled)),
             "work_zero_position": getattr(document, "work_zero_position", None),
             "left_stop_cm": getattr(document, "left_stop_cm", None),
+            "right_stop_cm": getattr(document, "right_stop_cm", None),
             "bottom_stop_cm": getattr(document, "bottom_stop_cm", None),
+            "top_stop_cm": getattr(document, "top_stop_cm", None),
         }
     )
 

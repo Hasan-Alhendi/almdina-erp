@@ -8,7 +8,26 @@
         return String(message || "");
     }
 
-    function pinEnglishLabels(dialog) {
+    const TOOL_SETTING_FIELDS = new Set([
+        "tool_number",
+        "stepdown_mm",
+        "stepover_size_mm",
+        "feed_rate_mm_sec",
+        "plunge_rate_mm_sec",
+        "spindle_speed_rpm",
+    ]);
+
+    function displayLabel(df) {
+        const labels = window.AlmdinaCncLabels;
+        if (!df || !df.label) return "";
+        if (TOOL_SETTING_FIELDS.has(df.fieldname) && labels && typeof labels.toolLabel === "function") {
+            return labels.toolLabel(df.label);
+        }
+        if (labels && typeof labels.profileLabel === "function") return labels.profileLabel(df.label);
+        return translate(df.label);
+    }
+
+    function pinLabels(dialog) {
         (dialog.fields || []).forEach(df => {
             const field = dialog.fields_dict && dialog.fields_dict[df.fieldname];
             if (!field || !field.$wrapper) return;
@@ -19,14 +38,48 @@
                     return;
                 }
                 const caption = head.find("span").first();
-                if (caption.length) caption.text(translate(df.label));
-                else head.text(translate(df.label));
+                const text = displayLabel(df);
+                if (caption.length) caption.text(text);
+                else head.text(text);
                 return;
             }
-            if (df.label) field.$wrapper.find(".control-label").first().text(translate(df.label));
+            if (df.label) field.$wrapper.find(".control-label").first().text(displayLabel(df));
         });
         const button = typeof dialog.get_primary_btn === "function" ? dialog.get_primary_btn() : null;
         if (button && button.text) button.text(translate("Save profile"));
+        mountToolDisclosure(dialog);
+    }
+
+    function applyToolDisclosure(dialog) {
+        const open = dialog._toolSettingsOpen !== false;
+        TOOL_SETTING_FIELDS.forEach(name => {
+            if (typeof dialog.set_df_property === "function") dialog.set_df_property(name, "hidden", open ? 0 : 1);
+        });
+        const toggle = dialog.$wrapper && dialog.$wrapper.find("[data-tool-settings-toggle]");
+        if (toggle && toggle.attr) toggle.attr("aria-expanded", open ? "true" : "false");
+    }
+
+    function mountToolDisclosure(dialog) {
+        const field = dialog.fields_dict && dialog.fields_dict.tool_number;
+        const section = field && field.$wrapper && field.$wrapper.closest(".form-section");
+        if (!section || !section.length) return;
+        let head = section.children(".section-head").first();
+        if (!head.length) head = section.find(".section-head").first();
+        if (!head.length) return;
+        if (!dialog._toolDisclosureMounted) {
+            const labels = window.AlmdinaCncLabels;
+            const markup = labels && typeof labels.toolDisclosureButton === "function"
+                ? labels.toolDisclosureButton(translate("Editable tool settings"), dialog._toolSettingsOpen !== false)
+                : "";
+            head.empty().append(markup);
+            head.find("[data-tool-settings-toggle]").on("click", event => {
+                event.preventDefault();
+                dialog._toolSettingsOpen = dialog._toolSettingsOpen === false;
+                applyToolDisclosure(dialog);
+            });
+            dialog._toolDisclosureMounted = true;
+        }
+        applyToolDisclosure(dialog);
     }
 
     function toolChoices(presets) {
@@ -43,7 +96,7 @@
         input.innerHTML = "";
         const blank = document.createElement("option");
         blank.value = "";
-        blank.textContent = "Choose";
+        blank.textContent = translate("Choose");
         input.appendChild(blank);
         rows.forEach(row => {
             const option = document.createElement("option");
@@ -144,7 +197,7 @@
         const profile = options.profile || null;
         const presets = Array.isArray(options.presets) ? options.presets : [];
         const dialog = new ui.Dialog({
-            title: profile ? "Edit Profile" : "New Profile",
+            title: profile ? translate("Edit Profile") : translate("New Profile"),
             size: "large",
             fields: fieldsFor(),
             primary_action_label: "Save profile",
@@ -186,7 +239,7 @@
                 }
             }
             if (typeof originalChange === "function") originalChange.apply(this, arguments);
-            pinEnglishLabels(dialog);
+            pinLabels(dialog);
         };
         dialog.show();
         if (profile) {
@@ -208,7 +261,7 @@
             dialog.fields_dict.tool_preset.set_value(profile.tool_preset);
             writeSelect(dialog, "tool_preset", choices, profile.tool_preset);
         }
-        pinEnglishLabels(dialog);
+        pinLabels(dialog);
         return dialog;
     }
 

@@ -68,7 +68,14 @@ def test_tool_machine_and_profile_fields_are_required_english_labels():
         expected = 0 if field["fieldname"] == "notes" else 1
         assert field.get("reqd") == expected, field["fieldname"]
     assert tool["field_order"][-1] == "notes"
-    _assert_english_required_fields(machine)
+    for field in machine["fields"]:
+        label = str(field.get("label") or "")
+        assert label, field["fieldname"]
+        assert not any(_ARABIC.start <= ord(character) <= _ARABIC.stop - 1 for character in label)
+        if field["fieldname"] in {"left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"}:
+            assert field.get("reqd", 0) == 0, field["fieldname"]
+            continue
+        assert field.get("reqd") == 1, field["fieldname"]
     generated = {"profile_id", "tool_values_json"}
     for field in profile["fields"]:
         label = str(field.get("label") or "")

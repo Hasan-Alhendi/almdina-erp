@@ -20,12 +20,18 @@ _MESSAGES = {
     "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
     "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
     "offset_left_invalid": "The left stop must be zero or a positive number of centimetres.",
+    "offset_right_invalid": "The right stop must be zero or a positive number of centimetres.",
     "offset_bottom_invalid": "The bottom stop must be zero or a positive number of centimetres.",
+    "offset_top_invalid": "The top stop must be zero or a positive number of centimetres.",
     "cnc_machine_stops_unconfigured": (
-        "Set the work zero and both stops on this CNC machine once. "
-        "Saved sheet offsets are not copied onto the machine."
+        "Set the two stops for this work zero on the CNC machine. "
+        "A stop from another edge is not copied across."
     ),
     "work_zero_invalid": "The selected work zero is not supported.",
+    "work_zero_center_retired": (
+        "This CNC machine still uses Center as its work zero. "
+        "Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file."
+    ),
 }
 
 
@@ -38,7 +44,9 @@ class CNCMachine(Document):
                 length_cm=self.length_cm,
                 work_zero_position=self.work_zero_position,
                 left_stop_cm=self.left_stop_cm,
+                right_stop_cm=self.right_stop_cm,
                 bottom_stop_cm=self.bottom_stop_cm,
+                top_stop_cm=self.top_stop_cm,
             )
         except PlacementError as exc:
             frappe.throw(_(_MESSAGES.get(exc.code, exc.code)), frappe.ValidationError)
@@ -47,7 +55,9 @@ class CNCMachine(Document):
         self.length_cm = normalized.length_cm
         self.work_zero_position = normalized.work_zero_position
         self.left_stop_cm = normalized.left_stop_cm
+        self.right_stop_cm = normalized.right_stop_cm
         self.bottom_stop_cm = normalized.bottom_stop_cm
+        self.top_stop_cm = normalized.top_stop_cm
         self.enabled = 1 if int(self.enabled or 0) else 0
 
     def on_update(self) -> None:

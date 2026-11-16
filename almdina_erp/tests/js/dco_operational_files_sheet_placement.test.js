@@ -158,6 +158,32 @@ assert.ok(markup.includes("dco-cnc-cut-preview__sheet"));
 assert.ok(!/class="dco-cnc-cut-preview__sheet"[^>]*\bstroke=/.test(markup));
 assert.ok(!markup.includes("dco-cnc-cut-preview__frame"));
 assert.ok(markup.includes('transform="translate(30,40)"'));
+
+const cornerState = { cncMachine: "Router A", sheetWidthCm: 120, sheetLengthCm: 240 };
+const cornerWorkspace = {
+    cnc_machines: [{
+        name: "Router A",
+        machine_name: "Router A",
+        width_cm: 200,
+        length_cm: 400,
+        enabled: true,
+        work_zero_position: "Bottom Right",
+        left_stop_cm: 99,
+        right_stop_cm: 5,
+        bottom_stop_cm: 10,
+        top_stop_cm: 99,
+    }],
+};
+const cornerPlacement = ux.placementPreviewPayload(cornerWorkspace, cornerState);
+assert.strictEqual(cornerPlacement.offset_left_cm, 75);
+assert.strictEqual(cornerPlacement.offset_bottom_cm, 10);
+const cornerMarkup = ux.cutPathPreviewMarkup(program, { layout: "page", placement: cornerPlacement, zoom: 1 });
+assert.ok(cornerMarkup.includes('transform="translate(750,100)"'));
+assert.ok(!cornerMarkup.includes("Left Stop"));
+assert.ok(!cornerMarkup.includes("Right Stop"));
+assert.strictEqual(ux.validateSheetPlacementFits({
+    cnc_machines: [{ ...cornerWorkspace.cnc_machines[0], work_zero_position: "Center" }],
+}, cornerState).code, "work_zero_center_retired");
 assert.ok(markup.includes("data-placement-caption"));
 assert.ok(!markup.includes("dco-cnc-cut-preview__dim"));
 assert.ok(!markup.includes("Left offset"));

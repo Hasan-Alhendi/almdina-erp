@@ -8,7 +8,16 @@
         return tool[key];
     }
 
-    function pinEnglishLabels(dialog) {
+    function displayLabel(df) {
+        const labels = window.AlmdinaCncLabels;
+        if (!df || !df.label) return "";
+        const toolField = df.fieldtype === "Data" || df.fieldtype === "Float" || df.fieldtype === "Int" || df.fieldtype === "Small Text";
+        if (toolField && labels && typeof labels.toolLabel === "function") return labels.toolLabel(df.label);
+        if (labels && typeof labels.profileLabel === "function") return labels.profileLabel(df.label);
+        return df.label;
+    }
+
+    function pinLabels(dialog) {
         (dialog.fields || []).forEach(df => {
             const field = dialog.fields_dict && dialog.fields_dict[df.fieldname];
             if (!field || !field.$wrapper) return;
@@ -19,14 +28,15 @@
                     return;
                 }
                 const caption = head.find("span").first();
-                if (caption.length) caption.text(df.label);
-                else head.text(df.label);
+                const text = displayLabel(df);
+                if (caption.length) caption.text(text);
+                else head.text(text);
                 return;
             }
-            if (df.label) field.$wrapper.find(".control-label").first().text(df.label);
+            if (df.label) field.$wrapper.find(".control-label").first().text(displayLabel(df));
         });
         const button = typeof dialog.get_primary_btn === "function" ? dialog.get_primary_btn() : null;
-        if (button && button.text) button.text("Save tool");
+        if (button && button.text) button.text(displayLabel({ label: "Save tool", fieldtype: "Button" }));
     }
 
     function fieldsFor(tool) {
@@ -64,10 +74,10 @@
         if (!ui || typeof ui.Dialog !== "function") return null;
         const tool = options.tool || null;
         const dialog = new ui.Dialog({
-            title: tool && tool.name ? "Edit Tool" : "New Tool",
+            title: tool && tool.name ? displayLabel({ label: "Edit Tool", fieldtype: "Button" }) : displayLabel({ label: "New Tool", fieldtype: "Button" }),
             size: "large",
             fields: fieldsFor(tool),
-            primary_action_label: "Save tool",
+            primary_action_label: displayLabel({ label: "Save tool", fieldtype: "Button" }),
             primary_action(values) {
                 const payload = Object.assign({}, values, {
                     tool_type: "Ball Nose",
@@ -80,7 +90,7 @@
             },
         });
         dialog.show();
-        pinEnglishLabels(dialog);
+        pinLabels(dialog);
         return dialog;
     }
 

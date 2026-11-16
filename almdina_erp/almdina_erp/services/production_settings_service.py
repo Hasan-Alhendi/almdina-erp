@@ -1015,7 +1015,9 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
             "enabled",
             "work_zero_position",
             "left_stop_cm",
+            "right_stop_cm",
             "bottom_stop_cm",
+            "top_stop_cm",
         ],
         order_by="machine_name asc",
         limit_page_length=0,
@@ -1032,7 +1034,9 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
                 "enabled": bool(cint(row.enabled)),
                 "work_zero_position": row.work_zero_position,
                 "left_stop_cm": row.left_stop_cm,
+                "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
+                "top_stop_cm": row.top_stop_cm,
             }
         )
         for row in rows

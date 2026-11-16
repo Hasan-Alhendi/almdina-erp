@@ -449,25 +449,36 @@ def test_placement_applies_to_liner_handle_and_rear_groove_xy_only():
     assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 10
 
 
+REFERENCE_SHEET_CM = (120.0, 240.0)
 REFERENCE_NC = {
-    "Bottom Left": (250.0, 400.0),
-    "Bottom Right": (-1750.0, 400.0),
-    "Top Left": (250.0, -3600.0),
-    "Top Right": (-1750.0, -3600.0),
-    "Center": (-750.0, -1600.0),
+    "Bottom Left": ((50.0, 100.0), (250.0, 400.0)),
+    "Bottom Right": ((750.0, 100.0), (-1050.0, 400.0)),
+    "Top Left": ((50.0, 1500.0), (250.0, -2200.0)),
+    "Top Right": ((750.0, 1500.0), (-1050.0, -2200.0)),
 }
 
 
-def _reference_machine(position="Bottom Left"):
-    return {
+def _reference_machine(position="Bottom Left", *, hidden=0):
+    machine = {
         "name": "Reference",
         "width_cm": 200,
         "length_cm": 400,
-        "left_stop_cm": 5,
-        "bottom_stop_cm": 10,
+        "left_stop_cm": hidden,
+        "right_stop_cm": hidden,
+        "bottom_stop_cm": hidden,
+        "top_stop_cm": hidden,
         "work_zero_position": position,
         "enabled": True,
     }
+    if position in {"Bottom Left", "Top Left"}:
+        machine["left_stop_cm"] = 5
+    else:
+        machine["right_stop_cm"] = 5
+    if position in {"Bottom Left", "Bottom Right"}:
+        machine["bottom_stop_cm"] = 10
+    else:
+        machine["top_stop_cm"] = 10
+    return machine
 
 
 def _nc_program(points, *, tool="T9", feed_sec=170, home=(0, 100, 120)):
@@ -512,9 +523,11 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
         machine_name="Router A",
         width_cm=200,
         length_cm=400,
-        work_zero_position="Center",
+        work_zero_position="Bottom Right",
         left_stop_cm=5,
+        right_stop_cm=5,
         bottom_stop_cm=10,
+        top_stop_cm=8,
     )
     reloaded = normalize_cnc_machine(
         machine_name=created.name,
@@ -522,11 +535,15 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
         length_cm=created.length_cm,
         work_zero_position=created.work_zero_position,
         left_stop_cm=created.left_stop_cm,
+        right_stop_cm=created.right_stop_cm,
         bottom_stop_cm=created.bottom_stop_cm,
+        top_stop_cm=created.top_stop_cm,
     )
-    assert reloaded.work_zero_position == "Center"
-    assert reloaded.left_stop_cm == 5
+    assert reloaded.work_zero_position == "Bottom Right"
+    assert reloaded.right_stop_cm == 5
     assert reloaded.bottom_stop_cm == 10
+    assert reloaded.left_stop_cm == 5
+    assert reloaded.top_stop_cm == 8
     zero = normalize_cnc_machine(
         machine_name="Router A",
         width_cm=200,
@@ -559,17 +576,19 @@ def test_machine_settings_round_trip_and_reject_bad_stops():
 
 @pytest.mark.parametrize("position,expected", tuple(REFERENCE_NC.items()))
 def test_reference_work_zero_and_stops(position, expected):
+    origin_mm, nc_point = expected
     placement = build_sheet_placement(
-        machine=_reference_machine(position),
-        sheet_width_cm=100,
-        sheet_length_cm=200,
+        machine=_reference_machine(position, hidden=99),
+        sheet_width_cm=REFERENCE_SHEET_CM[0],
+        sheet_length_cm=REFERENCE_SHEET_CM[1],
     )
-    physical = sheet_to_machine_xy(200, 300, offset_left_cm=5, offset_bottom_cm=10)
-    assert physical == (250, 400)
-    assert sheet_to_nc_xy(200, 300, placement) == expected
+    assert (placement.offset_left_mm, placement.offset_bottom_mm) == origin_mm
+    assert sheet_to_nc_xy(200, 300, placement) == nc_point
     placed = apply_placement_to_program(_nc_program([(200, 300), (300, 300)]), placement)
     travel = placed["operations"][0]["toolpaths"][0]["motions"][0]
-    assert (travel["x_mm"], travel["y_mm"]) == expected
+    assert (travel["x_mm"], travel["y_mm"]) == nc_point
+    home = placed["operations"][0]["toolpaths"][0]["home"]
+    assert (home["x_mm"], home["y_mm"], home["z_mm"]) == (0, 100, 120)
     assert placed["coordinate_space"] == "g54_work_zero_y_up_mm"
     assert placed["work_zero_position"] == position
     package = build_post_processed_nc(
@@ -578,17 +597,80 @@ def test_reference_work_zero_and_stops(position, expected):
         sheet_placement=placement,
         sheet_no=1,
     )
-    assert f"X{expected[0]:.4f} Y{expected[1]:.4f}" in package["text"]
+    assert f"X{nc_point[0]:.4f} Y{nc_point[1]:.4f}" in package["text"]
     assert "G53 X1500.0 Y3500.0 Z0" in package["text"]
     assert "G53 Z0" in package["text"]
     assert "X0.0000 Y100.0000" in package["text"]
 
 
-def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
+def test_same_machine_places_a_different_sheet_without_reusing_hidden_stops():
     placement = build_sheet_placement(
-        machine=_reference_machine("Top Right"),
+        machine=_reference_machine("Top Left", hidden=40),
         sheet_width_cm=100,
         sheet_length_cm=200,
+    )
+    assert (placement.offset_left_mm, placement.offset_bottom_mm) == (50.0, 1900.0)
+    assert sheet_to_nc_xy(0, 0, placement) == (50.0, -2100.0)
+    assert placement.horizontal_stop_side == "left"
+    assert placement.vertical_stop_side == "top"
+    assert placement.horizontal_stop_cm == 5
+    assert placement.vertical_stop_cm == 10
+
+
+def test_center_and_missing_corner_stops_are_rejected_for_new_files():
+    with pytest.raises(PlacementError) as center:
+        build_sheet_placement(
+            machine={
+                "name": "Legacy",
+                "width_cm": 200,
+                "length_cm": 400,
+                "work_zero_position": "Center",
+                "left_stop_cm": 5,
+                "bottom_stop_cm": 10,
+            },
+            sheet_width_cm=120,
+            sheet_length_cm=240,
+        )
+    assert center.value.code == "work_zero_center_retired"
+    with pytest.raises(PlacementError) as copied:
+        build_sheet_placement(
+            machine={
+                "name": "Legacy",
+                "width_cm": 200,
+                "length_cm": 400,
+                "work_zero_position": "Bottom Right",
+                "left_stop_cm": 5,
+                "bottom_stop_cm": 10,
+                "right_stop_cm": None,
+            },
+            sheet_width_cm=120,
+            sheet_length_cm=240,
+        )
+    assert copied.value.code == "cnc_machine_stops_unconfigured"
+
+
+def test_edge_cut_keeps_its_geometry_without_an_added_margin():
+    placement = build_sheet_placement(
+        machine=_reference_machine("Bottom Left"),
+        sheet_width_cm=120,
+        sheet_length_cm=240,
+    )
+    assert sheet_to_nc_xy(0, 0, placement) == (50.0, 100.0)
+    outside = build_sheet_placement(
+        machine=_machine(width_cm=400, length_cm=400, left_stop_cm=0, bottom_stop_cm=0),
+        sheet_width_cm=400,
+        sheet_length_cm=400,
+    )
+    assert sheet_to_nc_xy(-2.5, 4002.5, outside) == (-2.5, 4002.5)
+    again = sheet_to_nc_xy(-2.5, 4002.5, outside)
+    assert again == (-2.5, 4002.5)
+
+
+def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
+    placement = build_sheet_placement(
+        machine=_reference_machine("Top Right", hidden=99),
+        sheet_width_cm=REFERENCE_SHEET_CM[0],
+        sheet_length_cm=REFERENCE_SHEET_CM[1],
     )
     program = _nc_program([(200, 300), (300, 450)])
     placed = apply_placement_to_program(program, placement)
@@ -596,14 +678,16 @@ def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
     second = placed["operations"][0]["toolpaths"][0]["motions"][2]
     assert second["x_mm"] - first["x_mm"] == 100
     assert second["y_mm"] - first["y_mm"] == 150
-    assert first["x_mm"] == -1750
+    assert first["x_mm"] == -1050
     again = apply_placement_to_program(program, placement)
     assert again["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == first["x_mm"]
+    doubled = apply_placement_to_program(placed, placement)
+    assert doubled["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] != first["x_mm"]
     assert program["operations"][0]["toolpaths"][0]["motions"][0]["x_mm"] == 200
     ignored = build_sheet_placement(
         machine={**_reference_machine("Bottom Left"), "offset_left_cm": 99, "offset_bottom_cm": 80},
-        sheet_width_cm=100,
-        sheet_length_cm=200,
+        sheet_width_cm=120,
+        sheet_length_cm=240,
     )
     assert ignored.offset_left_cm == 5
     assert ignored.offset_bottom_cm == 10
@@ -611,9 +695,9 @@ def test_stops_and_work_zero_are_applied_once_and_do_not_reverse_axes():
 
 def test_same_machine_stops_apply_to_different_tools():
     placement = build_sheet_placement(
-        machine=_reference_machine("Center"),
-        sheet_width_cm=100,
-        sheet_length_cm=200,
+        machine=_reference_machine("Bottom Right"),
+        sheet_width_cm=REFERENCE_SHEET_CM[0],
+        sheet_length_cm=REFERENCE_SHEET_CM[1],
     )
     texts = []
     for tool, feed in (("T9", 170), ("T4", 90)):
@@ -624,8 +708,8 @@ def test_same_machine_stops_apply_to_different_tools():
             sheet_no=1,
         )
         texts.append(package["text"])
-    assert "X-750.0000 Y-1600.0000" in texts[0]
-    assert "X-750.0000 Y-1600.0000" in texts[1]
+    assert "X-1050.0000 Y400.0000" in texts[0]
+    assert "X-1050.0000 Y400.0000" in texts[1]
     assert "T9" in texts[0]
     assert "T4" in texts[1]
     assert "F10200.0" in texts[0]
@@ -642,13 +726,13 @@ def test_fingerprint_changes_when_work_zero_changes():
     )
     moved = placement_fingerprint_payload(
         build_sheet_placement(
-            machine=_reference_machine("Center"),
-            sheet_width_cm=100,
-            sheet_length_cm=200,
+            machine=_reference_machine("Top Right"),
+            sheet_width_cm=REFERENCE_SHEET_CM[0],
+            sheet_length_cm=REFERENCE_SHEET_CM[1],
         )
     )
     assert base["work_zero_position"] == "Bottom Left"
-    assert moved["work_zero_position"] == "Center"
+    assert moved["work_zero_position"] == "Top Right"
     assert settings_fingerprint(
         operation_presets={},
         path_overrides={},

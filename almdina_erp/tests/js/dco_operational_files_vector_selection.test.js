@@ -358,7 +358,7 @@ const availablePerimeter = artcam.markup({}, {
             sheet_perimeter: { vector_id: "cut_path:sheet_perimeter", disabled: false },
         },
     },
-}, {});
+}, { perimeterJoinMode: "connected" });
 assert.ok(availablePerimeter.includes('value="sheet_perimeter"'));
 
 const retainedForm = artcam.formAfterCalculation({

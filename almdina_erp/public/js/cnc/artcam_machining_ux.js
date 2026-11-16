@@ -195,10 +195,11 @@
             options.push({ value: `layer:${layer.operation_key}`, label: layer.dxf_layer || layer.operation_key });
         });
         options.push({ value: "selected_vectors", label: "Selected Vectors" });
-        const ownsPerimeter = form && form.source === "sheet_perimeter";
         const perimeter = availability.sheet_perimeter;
-        const perimeterAvailable = Boolean(perimeter && !perimeter.disabled && !perimeterOwned);
-        if (perimeterAvailable || ownsPerimeter) {
+        const serverAvailable = Boolean(perimeter && !perimeter.disabled);
+        const ready = context.state ? context.state.perimeterGeometryReady : null;
+        const geometryOk = ready === true || (ready == null && serverAvailable);
+        if (perimeterMode(context) === "connected" && geometryOk && !perimeterOwned) {
             options.push({ value: "sheet_perimeter", label: "SHEET_PERIMETER" });
         }
         return options;
@@ -213,10 +214,63 @@
         return match ? (match.dxf_layer || layer) : layer;
     }
 
-    function input(name, label, value) {
-        return `<label class="dco-artcam-field">${escapeHtml(translate(label))}
+    function toolDisclosure(label, open) {
+        const labels = window.AlmdinaCncLabels;
+        if (labels && typeof labels.toolDisclosureButton === "function") {
+            return labels.toolDisclosureButton(label, open);
+        }
+        const expanded = open !== false;
+        return `<button type="button" class="dco-tool-disclosure" data-tool-settings-toggle aria-expanded="${expanded ? "true" : "false"}"><span class="dco-tool-disclosure__chevron" aria-hidden="true"></span><span class="dco-tool-disclosure__label">${escapeHtml(label)}</span></button>`;
+    }
+
+    function fieldLabel(kind, english) {
+        const labels = window.AlmdinaCncLabels;
+        if (kind === "tool" && labels && typeof labels.toolLabel === "function") return labels.toolLabel(english);
+        if (labels && typeof labels.profileLabel === "function") return labels.profileLabel(english);
+        return translate(english);
+    }
+
+    function input(name, label, value, kind) {
+        return `<label class="dco-artcam-field">${escapeHtml(fieldLabel(kind || "profile", label))}
             <input class="form-control" data-field="${escapeHtml(name)}" value="${escapeHtml(value == null ? "" : value)}">
         </label>`;
+    }
+
+    function perimeterMode(context) {
+        return context && context.state && context.state.perimeterJoinMode === "connected"
+            ? "connected"
+            : "disconnected";
+    }
+
+    function perimeterHeld(context, form) {
+        const editingId = String((form && form.association_id) || "");
+        return (machining(context.sheet).associations || []).some(row => {
+            if (!row || String(row.association_id || "") === editingId) return false;
+            if (row.selection && row.selection.kind === "sheet_perimeter") return true;
+            return (row.vector_ids || []).some(id => String(id) === "cut_path:sheet_perimeter");
+        });
+    }
+
+    function perimeterSourceNote(context, form) {
+        const mode = perimeterMode(context);
+        const ready = context.state ? context.state.perimeterGeometryReady : null;
+        const cleared = Boolean(form && form.perimeterSourceCleared);
+        const held = perimeterHeld(context, form);
+        if (mode !== "connected" && (cleared || held)) {
+            return translate("The sheet perimeter is disconnected, so it cannot be chosen as a vector source. Existing assignments keep their settings and their place in the operation order. Reconnect the perimeter, or edit the assignment and release the sheet perimeter.");
+        }
+        if (mode === "connected" && ready === false && (cleared || held)) {
+            return translate("The sheet perimeter is not valid for assignment. Existing assignments keep their settings. Fix the perimeter geometry before choosing it again.");
+        }
+        return "";
+    }
+
+    function clearEditingPerimeterSource(state) {
+        const form = state && state.artcamForm;
+        if (!form || form.source !== "sheet_perimeter") return false;
+        form.source = "";
+        form.perimeterSourceCleared = true;
+        return true;
     }
 
     function editorMarkup(context) {
@@ -239,16 +293,17 @@
                 <button type="button" class="btn btn-default btn-xs" data-artcam-cancel>${escapeHtml(translate("New association"))}</button>
             </p>` : ""}
             <div class="dco-artcam-row dco-artcam-row--main">
-                <label class="dco-artcam-field">${escapeHtml("Association Name")}
+                <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Association Name"))}
                     <input class="form-control" data-field="name" value="${escapeHtml(form.name || "")}">
                 </label>
-                <label class="dco-artcam-field">${escapeHtml("Vector Source")}
+                <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Vector Source"))}
                     <select class="form-control" data-field="source">
                         <option value="">${escapeHtml(translate("Choose"))}</option>
-                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+                        ${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === form.source ? " selected" : ""}>${escapeHtml(option.value === "sheet_perimeter" || option.value === "selected_vectors" ? translate(option.label) : option.label)}</option>`).join("")}
                     </select>
                 </label>
-                <label class="dco-artcam-field">${escapeHtml("Profile")}
+                <p class="dco-artcam-note" data-perimeter-source-note${perimeterSourceNote(context, form) ? "" : " hidden"}>${escapeHtml(perimeterSourceNote(context, form))}</p>
+                <label class="dco-artcam-field">${escapeHtml(fieldLabel("profile", "Profile"))}
                     <select class="form-control" data-field="profile_id">
                         <option value="">${escapeHtml(translate("Choose"))}</option>
                         ${profilesOf(context).map(row => `<option value="${escapeHtml(row.profile_id)}"${row.profile_id === form.profile_id ? " selected" : ""}>${escapeHtml(row.name || row.profile_id)}</option>`).join("")}
@@ -259,12 +314,12 @@
             <p class="dco-artcam-note" data-vector-hint${selected ? "" : " hidden"}>${escapeHtml(translate("Shift + Click to select vectors"))}</p>
             <p class="dco-artcam-note" data-vector-count${selected ? "" : " hidden"}>${escapeHtml(`${count} Vectors Selected`)}</p>
             ${profileChosen ? `<div class="dco-artcam-row dco-artcam-row--pair">
-                ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
+                ${PROFILE_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
             </div>
             <div class="dco-artcam-home">
-                <span>${escapeHtml("Home Position (mm)")}</span>
+                <span>${escapeHtml(fieldLabel("profile", "Home Position (mm)"))}</span>
                 <div class="dco-artcam-row dco-artcam-row--home">
-                    ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name])).join("")}
+                    ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
                 </div>
             </div>
             <label class="dco-artcam-field">${escapeHtml(translate("Tool"))}
@@ -275,13 +330,10 @@
             </label>
             <p class="dco-artcam-note" data-artcam-tool-summary>${escapeHtml(translate("Tool"))}: ${escapeHtml(tool.description || tool.tool_name || form.tool_preset || "")} · ${escapeHtml(translate("Diameter (mm)"))} ${escapeHtml(tool.diameter_mm == null ? "" : tool.diameter_mm)}</p>` : ""}
             ${toolChosen ? `<section class="dco-artcam-tool${form.toolOpen ? "" : " is-collapsed"}" data-artcam-tool>
-                <div class="dco-artcam-tool__bar">
-                    <span>${escapeHtml(translate("Editable tool settings"))}</span>
-                    <button type="button" class="dco-sheet-acc__toggle" data-artcam-tool-toggle aria-expanded="${form.toolOpen ? "true" : "false"}" aria-label="${escapeHtml(translate("Tool details"))}"></button>
-                </div>
+                ${toolDisclosure(fieldLabel("profile", "Editable tool settings"), form.toolOpen)}
                 <div class="dco-artcam-tool__body">
                     <div class="dco-artcam-row dco-artcam-row--tool">
-                        ${TOOL_FIELDS.concat(rateFields(tool)).map(([name, label]) => input(name, label, tool[name])).join("")}
+                        ${TOOL_FIELDS.concat(rateFields(tool)).map(([name, label]) => input(name, label, tool[name], "tool")).join("")}
                     </div>
                 </div>
             </section>` : ""}
@@ -506,7 +558,7 @@
             if (event.target.matches("[data-field=\"stepover_size_mm\"]")) readEditor(host, context.state);
         });
         host.addEventListener("click", event => {
-            const toggle = event.target.closest("[data-artcam-tool-toggle]");
+            const toggle = event.target.closest("[data-tool-settings-toggle]");
             if (toggle) {
                 const section = toggle.closest("[data-artcam-tool]");
                 const open = section.classList.contains("is-collapsed");
@@ -678,6 +730,38 @@
         });
     }
 
+    function syncPerimeterSource(host, context) {
+        const state = (context && context.state) || {};
+        const form = state.artcamForm || null;
+        const mode = perimeterMode(context);
+        const ready = state.perimeterGeometryReady;
+        if (form && form.source === "sheet_perimeter" && (mode !== "connected" || ready === false)) {
+            clearEditingPerimeterSource(state);
+        }
+        const options = sourceOptions(context, state.artcamForm || form);
+        const select = host && host.querySelector
+            ? host.querySelector('[data-artcam-editor] [data-field="source"]')
+            : null;
+        if (select) {
+            const current = String((state.artcamForm && state.artcamForm.source) || "");
+            select.innerHTML = `<option value="">${escapeHtml(translate("Choose"))}</option>${options.map(option => {
+                const label = option.value === "sheet_perimeter" || option.value === "selected_vectors"
+                    ? translate(option.label)
+                    : option.label;
+                return `<option value="${escapeHtml(option.value)}"${option.value === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
+            }).join("")}`;
+            select.value = options.some(option => option.value === current) ? current : "";
+            if (state.artcamForm && select.value !== current) state.artcamForm.source = select.value;
+        }
+        const note = host && host.querySelector ? host.querySelector("[data-perimeter-source-note]") : null;
+        const text = perimeterSourceNote(context, state.artcamForm || form);
+        if (note) {
+            note.hidden = !text;
+            note.textContent = text;
+        }
+        return options;
+    }
+
     window.AlmdinaArtcamMachining = Object.freeze({
         markup,
         bind,
@@ -685,5 +769,8 @@
         loadAssociation,
         formAfterCalculation,
         orderedAssociations,
+        sourceOptions,
+        syncPerimeterSource,
+        clearEditingPerimeterSource,
     });
 })();

@@ -10,7 +10,9 @@
     "length_cm",
     "work_zero_position",
     "left_stop_cm",
+    "right_stop_cm",
     "bottom_stop_cm",
+    "top_stop_cm",
     "enabled"
   ],
   "fields": [
@@ -49,26 +51,44 @@
       "fieldname": "work_zero_position",
       "fieldtype": "Select",
       "label": "Work Zero Position",
-      "options": "Bottom Left\nBottom Right\nTop Left\nTop Right\nCenter",
+      "options": "Bottom Left\nBottom Right\nTop Left\nTop Right",
       "reqd": 1
     },
     {
-      "description": "Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",
+      "allow_in_quick_entry": 1,
+      "description": "Used only for Bottom Left and Top Left. Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",
       "fieldname": "left_stop_cm",
       "fieldtype": "Float",
       "label": "Left Stop (cm)",
       "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
+      "precision": "3"
     },
     {
-      "description": "Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",
+      "allow_in_quick_entry": 1,
+      "description": "Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",
+      "fieldname": "right_stop_cm",
+      "fieldtype": "Float",
+      "label": "Right Stop (cm)",
+      "non_negative": 1,
+      "precision": "3"
+    },
+    {
+      "allow_in_quick_entry": 1,
+      "description": "Used only for Bottom Left and Bottom Right. Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",
       "fieldname": "bottom_stop_cm",
       "fieldtype": "Float",
       "label": "Bottom Stop (cm)",
       "non_negative": 1,
-      "precision": "3",
-      "reqd": 1
+      "precision": "3"
+    },
+    {
+      "allow_in_quick_entry": 1,
+      "description": "Used only for Top Left and Top Right. Distance from the machine top edge to the sheet top edge, in centimetres. Zero is valid.",
+      "fieldname": "top_stop_cm",
+      "fieldtype": "Float",
+      "label": "Top Stop (cm)",
+      "non_negative": 1,
+      "precision": "3"
     },
     {
       "default": "1",

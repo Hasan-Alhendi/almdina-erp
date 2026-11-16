@@ -1,9 +1,10 @@
 """Sheet placement on a CNC machine bed.
 
 Internal geometry stays bottom-left, X to the right, Y up, in millimetres.
-Machine stops move the sheet on that bed. Work zero then chooses the G54
-origin those coordinates are written against. The shift is applied once.
-It does not reverse axes, rotate the sheet, or change path shape.
+The two stops opposite the selected work-zero corner place the sheet on
+that bed. Work zero then chooses the G54 origin. The shift is applied once.
+It does not reverse axes, rotate the sheet, or change path shape. Hidden
+stops for the other two edges are not part of the offset.
 
 Profile home is already a G54 position and is not shifted again. G53
 machine coordinates are not produced here.
@@ -29,8 +30,13 @@ WORK_ZERO_POSITIONS = (
     "Bottom Right",
     "Top Left",
     "Top Right",
-    "Center",
 )
+_ACTIVE_STOPS = {
+    "Bottom Left": ("left", "bottom"),
+    "Bottom Right": ("right", "bottom"),
+    "Top Left": ("left", "top"),
+    "Top Right": ("right", "top"),
+}
 SHEET_COORDINATE_SPACE = "sheet_bottom_left_y_up_mm"
 G54_COORDINATE_SPACE = "g54_work_zero_y_up_mm"
 POSTABLE_COORDINATE_SPACES = frozenset(
@@ -54,8 +60,10 @@ class CncMachineSpec:
     width_cm: float
     length_cm: float
     work_zero_position: str
-    left_stop_cm: float
-    bottom_stop_cm: float
+    left_stop_cm: float | None
+    bottom_stop_cm: float | None
+    right_stop_cm: float | None = None
+    top_stop_cm: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +77,10 @@ class SheetPlacement:
     sheet_length_cm: float
     work_zero_position: str = WORK_ZERO_BOTTOM_LEFT
     transform_version: str = PLACEMENT_TRANSFORM_VERSION
+    horizontal_stop_cm: float = 0.0
+    vertical_stop_cm: float = 0.0
+    horizontal_stop_side: str = "left"
+    vertical_stop_side: str = "bottom"
 
     @property
     def offset_left_mm(self) -> float:
@@ -112,9 +124,15 @@ def _finite_positive(value: Any, *, code: str) -> float:
     return number
 
 
-def _stop_cm(value: Any, *, invalid_code: str) -> float:
-    if value is None or (isinstance(value, str) and not str(value).strip()):
-        raise PlacementError("cnc_machine_stops_unconfigured")
+def _blank_stop(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not str(value).strip())
+
+
+def _stored_stop(value: Any, *, invalid_code: str, required: bool) -> float | None:
+    if _blank_stop(value):
+        if required:
+            raise PlacementError("cnc_machine_stops_unconfigured")
+        return None
     return _finite_non_negative(value, code=invalid_code)
 
 
@@ -122,9 +140,16 @@ def _work_zero_position(value: Any) -> str:
     if value is None or (isinstance(value, str) and not str(value).strip()):
         return WORK_ZERO_BOTTOM_LEFT
     token = str(value).strip()
+    if token == "Center":
+        raise PlacementError("work_zero_center_retired")
     if token not in WORK_ZERO_POSITIONS:
         raise PlacementError("work_zero_invalid")
     return token
+
+
+def _public_work_zero(value: Any) -> str:
+    token = str(value or "").strip()
+    return token or WORK_ZERO_BOTTOM_LEFT
 
 
 def normalize_cnc_machine(
@@ -135,43 +160,82 @@ def normalize_cnc_machine(
     work_zero_position: Any = WORK_ZERO_BOTTOM_LEFT,
     left_stop_cm: Any = 0,
     bottom_stop_cm: Any = 0,
+    right_stop_cm: Any = None,
+    top_stop_cm: Any = None,
 ) -> CncMachineSpec:
     name = str(machine_name or "").strip()
     if not name:
         raise PlacementError("cnc_machine_name_required")
     width = _finite_positive(width_cm, code="cnc_machine_width_invalid")
     length = _finite_positive(length_cm, code="cnc_machine_length_invalid")
+    position = _work_zero_position(work_zero_position)
+    horizontal_side, vertical_side = _ACTIVE_STOPS[position]
+    stored = {
+        "left": _stored_stop(
+            left_stop_cm,
+            invalid_code="offset_left_invalid",
+            required=horizontal_side == "left",
+        ),
+        "right": _stored_stop(
+            right_stop_cm,
+            invalid_code="offset_right_invalid",
+            required=horizontal_side == "right",
+        ),
+        "bottom": _stored_stop(
+            bottom_stop_cm,
+            invalid_code="offset_bottom_invalid",
+            required=vertical_side == "bottom",
+        ),
+        "top": _stored_stop(
+            top_stop_cm,
+            invalid_code="offset_top_invalid",
+            required=vertical_side == "top",
+        ),
+    }
     return CncMachineSpec(
         name=name,
         width_cm=width,
         length_cm=length,
-        work_zero_position=_work_zero_position(work_zero_position),
-        left_stop_cm=_stop_cm(left_stop_cm, invalid_code="offset_left_invalid"),
-        bottom_stop_cm=_stop_cm(bottom_stop_cm, invalid_code="offset_bottom_invalid"),
+        work_zero_position=position,
+        left_stop_cm=stored["left"],
+        right_stop_cm=stored["right"],
+        bottom_stop_cm=stored["bottom"],
+        top_stop_cm=stored["top"],
     )
+
+
+def _mapping_stop(machine: Mapping[str, Any], key: str, *, missing: Any) -> Any:
+    if key not in machine:
+        return missing
+    return machine.get(key)
 
 
 def _spec_from_machine(machine: CncMachineSpec | Mapping[str, Any]) -> CncMachineSpec:
     if isinstance(machine, CncMachineSpec):
         return machine
-    left = 0 if "left_stop_cm" not in machine else machine.get("left_stop_cm")
-    bottom = 0 if "bottom_stop_cm" not in machine else machine.get("bottom_stop_cm")
     return normalize_cnc_machine(
         machine_name=machine.get("name") or machine.get("machine_name"),
         width_cm=machine.get("width_cm"),
         length_cm=machine.get("length_cm"),
         work_zero_position=machine.get("work_zero_position", WORK_ZERO_BOTTOM_LEFT),
-        left_stop_cm=left,
-        bottom_stop_cm=bottom,
+        left_stop_cm=_mapping_stop(machine, "left_stop_cm", missing=0),
+        right_stop_cm=_mapping_stop(machine, "right_stop_cm", missing=None),
+        bottom_stop_cm=_mapping_stop(machine, "bottom_stop_cm", missing=0),
+        top_stop_cm=_mapping_stop(machine, "top_stop_cm", missing=None),
     )
 
 
 def public_cnc_machine(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Catalog row. Null stops stay null so a legacy machine can be set once."""
+    """Catalog row. Null stops stay null so a legacy machine can be set once.
 
-    def stop(key: str) -> float | None:
+    A stored Center value is returned as stored. Generation rejects it until
+    the machine is given one of the four corners. A missing right or top stop
+    stays null and is not copied from the left or bottom stop.
+    """
+
+    def stop(key: str, *, missing: float | None) -> float | None:
         if key not in row:
-            return 0.0
+            return missing
         value = row.get(key)
         if value is None or value == "":
             return None
@@ -183,9 +247,11 @@ def public_cnc_machine(row: Mapping[str, Any]) -> dict[str, Any]:
         "width_cm": float(row.get("width_cm") or 0),
         "length_cm": float(row.get("length_cm") or 0),
         "enabled": bool(row.get("enabled", True)),
-        "work_zero_position": _work_zero_position(row.get("work_zero_position")),
-        "left_stop_cm": stop("left_stop_cm"),
-        "bottom_stop_cm": stop("bottom_stop_cm"),
+        "work_zero_position": _public_work_zero(row.get("work_zero_position")),
+        "left_stop_cm": stop("left_stop_cm", missing=0.0),
+        "right_stop_cm": stop("right_stop_cm", missing=None),
+        "bottom_stop_cm": stop("bottom_stop_cm", missing=0.0),
+        "top_stop_cm": stop("top_stop_cm", missing=None),
     }
 
 
@@ -217,7 +283,7 @@ def sheet_to_machine_xy(
     offset_left_cm: float,
     offset_bottom_cm: float,
 ) -> tuple[float, float]:
-    """Move one sheet-local point onto the machine bed. Stops are in centimetres."""
+    """Add the sheet's physical origin once. The offsets are already in centimetres."""
 
     return (
         float(sheet_x_mm) + float(offset_left_cm) * CM_TO_MM,
@@ -242,9 +308,51 @@ def work_zero_origin_mm(
         return width, 0.0
     if token == "Top Left":
         return 0.0, length
-    if token == "Top Right":
-        return width, length
-    return width / 2.0, length / 2.0
+    return width, length
+
+
+def sheet_origin_mm(
+    *,
+    machine_width_mm: float,
+    machine_length_mm: float,
+    sheet_width_mm: float,
+    sheet_length_mm: float,
+    work_zero_position: str,
+    left_stop_mm: float,
+    right_stop_mm: float,
+    bottom_stop_mm: float,
+    top_stop_mm: float,
+) -> tuple[float, float]:
+    """Bottom-left corner of the sheet on the machine bed.
+
+    Only the two stops for the selected corner are read. The other two
+    arguments are ignored so a stored hidden stop cannot move the sheet.
+    """
+
+    token = _work_zero_position(work_zero_position)
+    horizontal_side, vertical_side = _ACTIVE_STOPS[token]
+    width = float(machine_width_mm)
+    length = float(machine_length_mm)
+    sheet_w = float(sheet_width_mm)
+    sheet_l = float(sheet_length_mm)
+    origin_x = float(left_stop_mm) if horizontal_side == "left" else width - sheet_w - float(right_stop_mm)
+    origin_y = float(bottom_stop_mm) if vertical_side == "bottom" else length - sheet_l - float(top_stop_mm)
+    return origin_x, origin_y
+
+
+def _active_stop_mm(spec: CncMachineSpec) -> tuple[str, str, float, float]:
+    horizontal_side, vertical_side = _ACTIVE_STOPS[spec.work_zero_position]
+    values = {
+        "left": spec.left_stop_cm,
+        "right": spec.right_stop_cm,
+        "bottom": spec.bottom_stop_cm,
+        "top": spec.top_stop_cm,
+    }
+    horizontal = values[horizontal_side]
+    vertical = values[vertical_side]
+    if horizontal is None or vertical is None:
+        raise PlacementError("cnc_machine_stops_unconfigured")
+    return horizontal_side, vertical_side, float(horizontal) * CM_TO_MM, float(vertical) * CM_TO_MM
 
 
 def sheet_to_nc_xy(
@@ -252,7 +360,7 @@ def sheet_to_nc_xy(
     sheet_y_mm: float,
     placement: SheetPlacement,
 ) -> tuple[float, float]:
-    """Apply the machine stops once, then subtract the work-zero origin once."""
+    """Add the physical sheet origin once, then subtract the work-zero origin once."""
 
     physical_x, physical_y = sheet_to_machine_xy(
         sheet_x_mm,
@@ -268,6 +376,21 @@ def sheet_to_nc_xy(
     return physical_x - zero_x, physical_y - zero_y
 
 
+def _origin_inside_bed(
+    *,
+    machine_width_cm: float,
+    machine_length_cm: float,
+    sheet_width_cm: float,
+    sheet_length_cm: float,
+    origin_x_mm: float,
+    origin_y_mm: float,
+) -> None:
+    if origin_x_mm < -1e-6 or origin_x_mm + sheet_width_cm * CM_TO_MM > machine_width_cm * CM_TO_MM + 1e-6:
+        raise PlacementError("sheet_exceeds_machine_width")
+    if origin_y_mm < -1e-6 or origin_y_mm + sheet_length_cm * CM_TO_MM > machine_length_cm * CM_TO_MM + 1e-6:
+        raise PlacementError("sheet_exceeds_machine_length")
+
+
 def validate_sheet_fits_machine(
     *,
     machine_width_cm: float,
@@ -276,19 +399,62 @@ def validate_sheet_fits_machine(
     sheet_length_cm: float,
     offset_left_cm: float,
     offset_bottom_cm: float,
+    work_zero_position: str = WORK_ZERO_BOTTOM_LEFT,
+    right_stop_cm: Any = None,
+    top_stop_cm: Any = None,
 ) -> None:
-    """Reject negative stops or a sheet rectangle that leaves the machine bed."""
+    """Reject a sheet rectangle that leaves the machine bed.
+
+    ``offset_left_cm`` and ``offset_bottom_cm`` are the left and bottom stops.
+    With the default Bottom Left work zero they are the sheet origin. Other
+    corners use the matching stop and ignore the hidden pair.
+    """
 
     machine_w = _finite_positive(machine_width_cm, code="cnc_machine_width_invalid")
     machine_l = _finite_positive(machine_length_cm, code="cnc_machine_length_invalid")
     sheet_w = _finite_positive(sheet_width_cm, code="sheet_width_invalid")
     sheet_l = _finite_positive(sheet_length_cm, code="sheet_length_invalid")
-    left = _finite_non_negative(offset_left_cm, code="offset_left_invalid")
-    bottom = _finite_non_negative(offset_bottom_cm, code="offset_bottom_invalid")
-    if left + sheet_w > machine_w:
-        raise PlacementError("sheet_exceeds_machine_width")
-    if bottom + sheet_l > machine_l:
-        raise PlacementError("sheet_exceeds_machine_length")
+    position = _work_zero_position(work_zero_position)
+    horizontal_side, vertical_side = _ACTIVE_STOPS[position]
+    left = _stored_stop(
+        offset_left_cm,
+        invalid_code="offset_left_invalid",
+        required=horizontal_side == "left",
+    )
+    right = _stored_stop(
+        right_stop_cm,
+        invalid_code="offset_right_invalid",
+        required=horizontal_side == "right",
+    )
+    bottom = _stored_stop(
+        offset_bottom_cm,
+        invalid_code="offset_bottom_invalid",
+        required=vertical_side == "bottom",
+    )
+    top = _stored_stop(
+        top_stop_cm,
+        invalid_code="offset_top_invalid",
+        required=vertical_side == "top",
+    )
+    origin_x, origin_y = sheet_origin_mm(
+        machine_width_mm=machine_w * CM_TO_MM,
+        machine_length_mm=machine_l * CM_TO_MM,
+        sheet_width_mm=sheet_w * CM_TO_MM,
+        sheet_length_mm=sheet_l * CM_TO_MM,
+        work_zero_position=position,
+        left_stop_mm=float(left or 0) * CM_TO_MM,
+        right_stop_mm=float(right or 0) * CM_TO_MM,
+        bottom_stop_mm=float(bottom or 0) * CM_TO_MM,
+        top_stop_mm=float(top or 0) * CM_TO_MM,
+    )
+    _origin_inside_bed(
+        machine_width_cm=machine_w,
+        machine_length_cm=machine_l,
+        sheet_width_cm=sheet_w,
+        sheet_length_cm=sheet_l,
+        origin_x_mm=origin_x,
+        origin_y_mm=origin_y,
+    )
 
 
 def build_sheet_placement(
@@ -297,33 +463,49 @@ def build_sheet_placement(
     sheet_width_cm: Any,
     sheet_length_cm: Any,
 ) -> SheetPlacement:
-    """Place a sheet with the machine's own stops and work zero.
+    """Place a sheet from the machine corner and its two active stops.
 
     Callers cannot pass a different offset. Values named ``offset_left_cm``
-    on a mapping are ignored; ``left_stop_cm`` and ``bottom_stop_cm`` are
-    the only stop source.
+    on a mapping are ignored. A stored stop on a hidden edge is ignored too.
     """
 
     spec = _spec_from_machine(machine)
     sheet_w = _finite_positive(sheet_width_cm, code="sheet_width_invalid")
     sheet_l = _finite_positive(sheet_length_cm, code="sheet_length_invalid")
-    validate_sheet_fits_machine(
+    horizontal_side, vertical_side, horizontal_mm, vertical_mm = _active_stop_mm(spec)
+    origin_x, origin_y = sheet_origin_mm(
+        machine_width_mm=spec.width_cm * CM_TO_MM,
+        machine_length_mm=spec.length_cm * CM_TO_MM,
+        sheet_width_mm=sheet_w * CM_TO_MM,
+        sheet_length_mm=sheet_l * CM_TO_MM,
+        work_zero_position=spec.work_zero_position,
+        left_stop_mm=float(spec.left_stop_cm or 0) * CM_TO_MM,
+        right_stop_mm=float(spec.right_stop_cm or 0) * CM_TO_MM,
+        bottom_stop_mm=float(spec.bottom_stop_cm or 0) * CM_TO_MM,
+        top_stop_mm=float(spec.top_stop_cm or 0) * CM_TO_MM,
+    )
+    _origin_inside_bed(
         machine_width_cm=spec.width_cm,
         machine_length_cm=spec.length_cm,
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
-        offset_left_cm=spec.left_stop_cm,
-        offset_bottom_cm=spec.bottom_stop_cm,
+        origin_x_mm=origin_x,
+        origin_y_mm=origin_y,
     )
+    del horizontal_mm, vertical_mm
     return SheetPlacement(
         machine_name=spec.name,
         machine_width_cm=spec.width_cm,
         machine_length_cm=spec.length_cm,
-        offset_left_cm=spec.left_stop_cm,
-        offset_bottom_cm=spec.bottom_stop_cm,
+        offset_left_cm=origin_x / CM_TO_MM,
+        offset_bottom_cm=origin_y / CM_TO_MM,
         sheet_width_cm=sheet_w,
         sheet_length_cm=sheet_l,
         work_zero_position=spec.work_zero_position,
+        horizontal_stop_cm=float(spec.left_stop_cm if horizontal_side == "left" else spec.right_stop_cm),
+        vertical_stop_cm=float(spec.bottom_stop_cm if vertical_side == "bottom" else spec.top_stop_cm),
+        horizontal_stop_side=horizontal_side,
+        vertical_stop_side=vertical_side,
     )
 
 
@@ -350,8 +532,20 @@ def placement_snapshot_payload(placement: SheetPlacement) -> dict[str, Any]:
     )
     payload.update(
         {
-            "left_stop_cm": placement.offset_left_cm,
-            "bottom_stop_cm": placement.offset_bottom_cm,
+            "left_stop_cm": (
+                placement.horizontal_stop_cm if placement.horizontal_stop_side == "left" else None
+            ),
+            "right_stop_cm": (
+                placement.horizontal_stop_cm if placement.horizontal_stop_side == "right" else None
+            ),
+            "bottom_stop_cm": (
+                placement.vertical_stop_cm if placement.vertical_stop_side == "bottom" else None
+            ),
+            "top_stop_cm": (
+                placement.vertical_stop_cm if placement.vertical_stop_side == "top" else None
+            ),
+            "horizontal_stop_side": placement.horizontal_stop_side,
+            "vertical_stop_side": placement.vertical_stop_side,
             "offset_left_mm": placement.offset_left_mm,
             "offset_bottom_mm": placement.offset_bottom_mm,
             "work_zero_x_mm": zero_x,
@@ -470,6 +664,7 @@ __all__ = [
     "placement_fingerprint_payload",
     "placement_snapshot_payload",
     "public_cnc_machine",
+    "sheet_origin_mm",
     "sheet_to_machine_xy",
     "sheet_to_nc_xy",
     "validate_program_within_machine",

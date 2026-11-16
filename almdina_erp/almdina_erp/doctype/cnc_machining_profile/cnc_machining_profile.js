@@ -14,9 +14,10 @@ frappe.ui.form.on("CNC Machining Profile", {
         Object.entries(labels).forEach(([fieldname, label]) => {
             const field = frm.get_field(fieldname);
             if (!field) return;
-            frm.set_df_property(fieldname, "label", label);
-            field.df.label = label;
-            if (typeof field.set_label === "function") field.set_label(label);
+            const text = profile_label(label);
+            frm.set_df_property(fieldname, "label", text);
+            field.df.label = text;
+            if (typeof field.set_label === "function") field.set_label(text);
         });
         frm.set_df_property("profile_id", "reqd", 0);
         frm.set_df_property("tool_values_json", "hidden", 1);
@@ -48,6 +49,18 @@ const PROFILE_TOOL_FIELDS = [
 
 function translate_label(message) {
     return typeof __ === "function" ? __(message) : message;
+}
+
+function profile_label(message) {
+    const labelsApi = window.AlmdinaCncLabels;
+    if (labelsApi && typeof labelsApi.profileLabel === "function") return labelsApi.profileLabel(message);
+    return translate_label(message);
+}
+
+function tool_label(message) {
+    const labelsApi = window.AlmdinaCncLabels;
+    if (labelsApi && typeof labelsApi.toolLabel === "function") return labelsApi.toolLabel(message);
+    return translate_label(message);
 }
 
 function escape_text(value) {
@@ -102,23 +115,37 @@ function paint_profile_tool_editor(frm, force) {
     const tool = frm._profile_tool || stored_tool(frm);
     frm._profile_tool = tool;
     frm._profile_tool_name = frm.doc.tool_preset || tool.tool_preset || "";
+    const open = frm._profileToolOpen !== false;
     const name = tool.description || tool.tool_name || frm.doc.tool_preset || "";
     const diameter = tool_diameter(tool);
     const summary = name
-        ? `${translate_label("Tool")}: ${name} · ${translate_label("Tool Diameter (mm)")} ${diameter}`
-        : translate_label("Choose a tool to copy its protected properties.");
+        ? `${profile_label("Tool")}: ${name} · ${tool_label("Tool Diameter (mm)")} ${diameter}`
+        : profile_label("Choose a tool to copy its protected properties.");
+    const labelsApi = window.AlmdinaCncLabels;
+    const disclosure = labelsApi && typeof labelsApi.toolDisclosureButton === "function"
+        ? labelsApi.toolDisclosureButton(profile_label("Editable tool settings"), open)
+        : "";
     const inputs = PROFILE_TOOL_FIELDS.map(([fieldname, label]) => {
         const value = fieldname === "tool_number" ? display_tool_number(tool[fieldname]) : tool[fieldname];
         return `<div class="form-group col-sm-6">
-            <label class="control-label">${escape_text(translate_label(label))}</label>
+            <label class="control-label">${escape_text(tool_label(label))}</label>
             <input class="form-control" data-profile-tool="${fieldname}" value="${escape_text(value == null ? "" : value)}">
         </div>`;
     }).join("");
     box.html(
-        `<div class="form-section"><div class="section-head">${escape_text(translate_label("Editable tool settings"))}</div></div>
-        <p class="text-muted" data-tool-summary>${escape_text(summary)}</p>
-        <div class="row">${inputs}</div>`
+        `${disclosure}
+        <div data-profile-tool-body${open ? "" : " hidden"}>
+            <p class="text-muted" data-tool-summary>${escape_text(summary)}</p>
+            <div class="row">${inputs}</div>
+        </div>`
     );
+    box.find("[data-tool-settings-toggle]").on("click", event => {
+        event.preventDefault();
+        frm._profileToolOpen = frm._profileToolOpen === false;
+        const nextOpen = frm._profileToolOpen !== false;
+        box.find("[data-profile-tool-body]").prop("hidden", !nextOpen);
+        box.find("[data-tool-settings-toggle]").attr("aria-expanded", nextOpen ? "true" : "false");
+    });
 }
 
 function allowed_tool_overrides(frm) {

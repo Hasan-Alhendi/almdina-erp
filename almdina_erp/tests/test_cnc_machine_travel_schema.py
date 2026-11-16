@@ -41,20 +41,23 @@ def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
         "length_cm",
         "work_zero_position",
         "left_stop_cm",
+        "right_stop_cm",
         "bottom_stop_cm",
+        "top_stop_cm",
         "enabled",
     ]
     assert metadata["field_order"] == fieldnames
     assert metadata["quick_entry"] == 1
     fields = {row["fieldname"]: row for row in metadata["fields"]}
     assert fields["work_zero_position"]["fieldtype"] == "Select"
-    assert fields["work_zero_position"]["options"] == "Bottom Left\nBottom Right\nTop Left\nTop Right\nCenter"
+    assert fields["work_zero_position"]["options"] == "Bottom Left\nBottom Right\nTop Left\nTop Right"
+    assert "Center" not in fields["work_zero_position"]["options"]
     assert fields["work_zero_position"]["reqd"] == 1
-    assert fields["left_stop_cm"]["fieldtype"] == "Float"
-    assert fields["left_stop_cm"]["reqd"] == 1
-    assert fields["bottom_stop_cm"]["reqd"] == 1
-    assert "default" not in fields["left_stop_cm"]
-    assert "default" not in fields["bottom_stop_cm"]
+    for fieldname in ("left_stop_cm", "right_stop_cm", "bottom_stop_cm", "top_stop_cm"):
+        assert fields[fieldname]["fieldtype"] == "Float"
+        assert fields[fieldname].get("reqd", 0) == 0
+        assert "default" not in fields[fieldname]
+        assert fields[fieldname]["allow_in_quick_entry"] == 1
     assert all(row.get("fieldtype") not in {"Section Break", "Column Break"} for row in metadata["fields"])
     assert fields["width_cm"]["label"] == "Machine Width (cm)"
     assert "machine bed" in fields["width_cm"]["description"].lower()
@@ -103,3 +106,8 @@ def test_machine_repository_and_catalog_do_not_ask_for_travel_extensions():
     assert "profile_home_outside_machine" not in post
     assert "machine_parking_outside_limits" in post
     assert "home_move_unsafe" in post
+    corner_patch = (APP_ROOT / "patches" / "v1_0" / "configure_cnc_machine_corner_stops.py").read_text(encoding="utf-8")
+    assert "right_stop_cm = left_stop_cm" not in corner_patch
+    assert "top_stop_cm = bottom_stop_cm" not in corner_patch
+    assert "frappe.db.set_value" not in corner_patch
+    assert PATCHES.read_text(encoding="utf-8").count("configure_cnc_machine_corner_stops") == 1

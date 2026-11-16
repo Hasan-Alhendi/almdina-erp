@@ -208,16 +208,22 @@ _MESSAGES = {
     "cnc_machine_width_invalid": "CNC machine width must be a positive number of centimetres.",
     "cnc_machine_length_invalid": "CNC machine length must be a positive number of centimetres.",
     "offset_left_invalid": "The left stop must be zero or a positive number of centimetres.",
+    "offset_right_invalid": "The right stop must be zero or a positive number of centimetres.",
     "offset_bottom_invalid": "The bottom stop must be zero or a positive number of centimetres.",
+    "offset_top_invalid": "The top stop must be zero or a positive number of centimetres.",
     "cnc_machine_stops_unconfigured": (
-        "Set the work zero and both stops on this CNC machine once. "
-        "Saved sheet offsets are not copied onto the machine."
+        "Set the two stops for this work zero on the CNC machine. "
+        "A stop from another edge is not copied across."
     ),
     "work_zero_invalid": "The selected work zero is not supported.",
+    "work_zero_center_retired": (
+        "This CNC machine still uses Center as its work zero. "
+        "Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file."
+    ),
     "sheet_width_invalid": "The approved sheet width is not valid.",
     "sheet_length_invalid": "The approved sheet length is not valid.",
-    "sheet_exceeds_machine_width": "The sheet plus the left stop exceeds the machine width.",
-    "sheet_exceeds_machine_length": "The sheet plus the bottom stop exceeds the machine length.",
+    "sheet_exceeds_machine_width": "The sheet does not fit the machine width with the stops for this work zero.",
+    "sheet_exceeds_machine_length": "The sheet does not fit the machine length with the stops for this work zero.",
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",

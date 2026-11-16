@@ -3147,8 +3147,8 @@ Tool Number,رقم الريشة
 Tool Diameter (mm),قطر الريشة (مم)
 Final Depth (mm),العمق النهائي (مم)
 Spindle Speed (RPM),سرعة الدوران (دورة/دقيقة)
-Feed Rate (mm/min),سرعة القطع (مم/دقيقة)
-Plunge Rate (mm/min),سرعة النزول (مم/دقيقة)
+Feed Rate (mm/min),سرعة التغذية (مم/دقيقة)
+Plunge Rate (mm/min),سرعة الغطس (مم/دقيقة)
 Pass Depth (mm),عمق التمريرة (مم)
 Plan Revision,إصدار الخطة
 Plan Source Type,مصدر الخطة
@@ -3302,8 +3302,8 @@ Rear Groove,فرزة الظهر
 Tool settings,إعدادات الريشة
 Editable tool settings,إعدادات الريشة القابلة للتعديل
 Stepover Percent,نسبة التداخل
-Stepover Size,عرض التداخل
-Stepover Size (mm),عرض التداخل (مم)
+Stepover Size,مقدار التداخل
+Stepover Size (mm),مقدار التداخل (مم)
 Diameter (mm),قطر الريشة (مم)
 Choose a tool to copy its protected properties.,اختر ريشة لنسخ خصائصها المحمية.
 "CUT_PATH {0} was calculated for the approved kerf and does not match the selected tool diameter.",مسار CUT_PATH {0} حُسب لسماكة القص المعتمدة ولا يطابق قطر الريشة المختارة.
@@ -3884,14 +3884,14 @@ Edit Tool,تعديل الريشة
 Tool Type,نوع الريشة
 Tool Units,وحدات الريشة
 Rate Units,وحدات السرعة
-Diameter (D),القطر (D)
+Diameter (D),قطر الريشة (مم)
 Stepdown,عمق التمريرة
-Final Tool Offset,إزاحة الريشة النهائية
-Stepover size,عرض التداخل
-Stepover percent of D,نسبة التداخل من القطر
-Spindle Speed (rpm),سرعة الدوران (لفة/د)
+Final Tool Offset,الإزاحة النهائية للريشة
+Stepover size,مقدار التداخل
+Stepover percent of D,نسبة التداخل
+Spindle Speed (rpm),سرعة الدوران (دورة/دقيقة)
 Feed Rate (mm/sec),سرعة التغذية (مم/ث)
-Plunge Rate (mm/sec),سرعة النزول (مم/ث)
+Plunge Rate (mm/sec),سرعة الغطس (مم/ث)
 Already used,مستخدم مسبقًا
 Sheet Perimeter,محيط اللوح
 Profiles,البروفايلات
@@ -4082,3 +4082,33 @@ A local backup is already in progress.,توجد نسخة محلية قيد ال�
 The site database is unavailable. Restore has not started.,قاعدة بيانات الموقع غير متاحة. لم تبدأ الاستعادة.
 Selected backup is no longer compatible with this site.,النسخة المحددة لم تعد متوافقة مع هذا الموقع.
 Creating backup...,جاري إنشاء النسخة الاحتياطية...
+Stepdown (mm),عمق التمريرة (مم)
+Final Tool Offset (mm),الإزاحة النهائية للريشة (مم)
+Stepover Percent of D,نسبة التداخل
+Right Stop (cm),المصادم الأيمن (سم)
+Top Stop (cm),المصادم العلوي (سم)
+New Tool,ريشة جديدة
+New Profile,بروفايل جديد
+Edit Profile,تعديل البروفايل
+Profile Name,اسم البروفايل
+Association Name,اسم الربط
+Vector Source,مصدر المتجهات
+Home Position (mm),نقطة البداية (مم)
+Home X (mm),البداية X (مم)
+Home Y (mm),البداية Y (مم)
+Home Z (mm),البداية Z (مم)
+Safe Z (mm),ارتفاع الأمان (مم)
+SHEET_PERIMETER,محيط اللوح
+The right stop must be zero or a positive number of centimetres.,المصادم الأيمن يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The top stop must be zero or a positive number of centimetres.,المصادم العلوي يجب أن يكون صفرًا أو رقمًا موجبًا بالسنتيمتر.
+The sheet does not fit the machine width with the stops for this work zero.,اللوح لا يتسع لعرض الماكينة مع مصادم نقطة الصفر هذه.
+The sheet does not fit the machine length with the stops for this work zero.,اللوح لا يتسع لطول الماكينة مع مصادم نقطة الصفر هذه.
+"Set the two stops for this work zero on the CNC machine. A stop from another edge is not copied across.",اضبط مصادمي نقطة الصفر هذه على ماكينة CNC. لا يُنسخ مصادم من جهة أخرى.
+"This CNC machine still uses Center as its work zero. Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file.",هذه الماكينة ما زالت تستخدم الوسط كنقطة صفر. اختر أسفل اليسار أو أسفل اليمين أو أعلى اليسار أو أعلى اليمين قبل توليد ملف جديد.
+"The sheet perimeter is disconnected, so it cannot be chosen as a vector source. Existing assignments keep their settings and their place in the operation order. Reconnect the perimeter, or edit the assignment and release the sheet perimeter.",محيط اللوح غير متصل، لذلك لا يمكن اختياره كمصدر للمتجهات. الربط الحالي يحتفظ بإعداداته ومكانه في ترتيب العمليات. أعد اتصال المحيط، أو عدّل الربط وحرّر محيط اللوح.
+The sheet perimeter is not valid for assignment. Existing assignments keep their settings. Fix the perimeter geometry before choosing it again.,محيط اللوح غير صالح للتعيين. الربط الحالي يحتفظ بإعداداته. صحّح هندسة المحيط قبل اختياره مرة أخرى.
+"Register each CNC machine by name, bed width (X), and bed length (Y). Choose a corner work zero, then set the two stops for that corner. Sheet geometry stays bottom-left, with X to the right and Y upward.",سجّل كل ماكينة CNC بالاسم وعرض السطح (X) وطول السطح (Y). اختر نقطة صفر عند زاوية، ثم اضبط المصادمين الخاصين بها. هندسة اللوح تبقى أسفل اليسار، وX إلى اليمين وY إلى الأعلى.
+"Used only for Bottom Left and Top Left. Distance from the machine left edge to the sheet left edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليسار وأعلى اليسار. المسافة من الحافة اليسرى للماكينة إلى الحافة اليسرى للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليمين وأعلى اليمين. المسافة من الحافة اليمنى للماكينة إلى الحافة اليمنى للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Bottom Left and Bottom Right. Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليسار وأسفل اليمين. المسافة من الحافة السفلية للماكينة إلى الحافة السفلية للوح، بالسنتيمتر. الصفر مقبول.
+"Used only for Top Left and Top Right. Distance from the machine top edge to the sheet top edge, in centimetres. Zero is valid.",يُستخدم فقط لأعلى اليسار وأعلى اليمين. المسافة من الحافة العلوية للماكينة إلى الحافة العلوية للوح، بالسنتيمتر. الصفر مقبول.
