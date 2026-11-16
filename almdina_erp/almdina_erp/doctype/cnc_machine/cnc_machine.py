@@ -5,6 +5,8 @@ from frappe import _
 from frappe.model.document import Document
 
 from almdina_erp.almdina_erp.domain.cnc.placement import PlacementError, normalize_cnc_machine
+from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
+from almdina_erp.almdina_erp.domain.cnc.post_processors import resolve_post_processor
 from almdina_erp.almdina_erp.infrastructure.frappe.master_data_audit import (
     audit_deleted_document,
     audit_saved_document,
@@ -32,6 +34,10 @@ _MESSAGES = {
         "This CNC machine still uses Center as its work zero. "
         "Choose Bottom Left, Bottom Right, Top Left, or Top Right before generating a new file."
     ),
+    "cnc_machine_post_processor_unconfigured": (
+        "Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."
+    ),
+    "post_processor_unsupported": "The selected post processor is not supported.",
 }
 
 
@@ -58,6 +64,15 @@ class CNCMachine(Document):
         self.right_stop_cm = normalized.right_stop_cm
         self.bottom_stop_cm = normalized.bottom_stop_cm
         self.top_stop_cm = normalized.top_stop_cm
+        try:
+            self.post_processor = resolve_post_processor(self.post_processor, required=True)
+        except PostProcessorError as exc:
+            code = (
+                "cnc_machine_post_processor_unconfigured"
+                if exc.code in {"post_processor_required", "post_processor_unsupported"}
+                else exc.code
+            )
+            frappe.throw(_(_MESSAGES.get(code, code)), frappe.ValidationError)
         self.enabled = 1 if int(self.enabled or 0) else 0
 
     def on_update(self) -> None:

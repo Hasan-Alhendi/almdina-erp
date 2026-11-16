@@ -842,6 +842,80 @@ body.dco-cnc-sheet-settings-active .layout-main-section {
 [dir="rtl"] .dco-tool-disclosure[aria-expanded="false"] .dco-tool-disclosure__chevron {
     transform: rotate(90deg);
 }
+.dco-tool-picker {
+    position: relative;
+    min-width: 0;
+}
+.dco-tool-picker__caption {
+    display: block;
+    margin-bottom: 4px;
+}
+.dco-tool-picker__face {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: var(--border-radius, 8px);
+    background: var(--control-bg, #fff);
+    color: inherit;
+    font: inherit;
+    line-height: 1.3;
+    text-align: start;
+    cursor: pointer;
+}
+.dco-tool-picker__face:hover {
+    background: rgba(15, 23, 42, 0.04);
+}
+.dco-tool-picker__value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dco-tool-picker__chevron {
+    width: 0;
+    height: 0;
+    flex: 0 0 auto;
+    margin-inline-start: 8px;
+    border-inline-start: 5px solid transparent;
+    border-inline-end: 5px solid transparent;
+    border-top: 6px solid currentColor;
+}
+.dco-tool-picker__panel {
+    position: static;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color, #d1d8dd);
+    border-radius: var(--border-radius, 8px);
+    background: var(--card-bg, #fff);
+}
+.dco-tool-picker__change,
+.dco-tool-picker__setting {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+}
+.dco-tool-picker__settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+.dco-tool-picker__note {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+.dco-tool-picker-native {
+    display: none !important;
+}
+[dir="rtl"] .dco-tool-picker__face,
+[dir="ltr"] .dco-tool-picker__face {
+    text-align: start;
+}
 .dco-operational-sheet .dco-cnc-cut-preview__arrow {
     display: none;
 }

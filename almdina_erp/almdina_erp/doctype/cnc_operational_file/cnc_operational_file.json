@@ -54,7 +54,7 @@
     {"description": "CNC machine bed selected for this sheet. Coordinates stay bottom-left origin with X right and Y up.", "fieldname": "cnc_machine", "fieldtype": "Link", "in_list_view": 1, "label": "CNC Machine", "options": "CNC Machine", "read_only": 1},
     {"default": "0", "description": "Distance from the machine left edge to the sheet left edge, in centimetres.", "fieldname": "offset_left_cm", "fieldtype": "Float", "label": "Offset from Left (cm)", "non_negative": 1, "precision": "3", "read_only": 1},
     {"default": "0", "description": "Distance from the machine bottom edge to the sheet bottom edge, in centimetres.", "fieldname": "offset_bottom_cm", "fieldtype": "Float", "label": "Offset from Bottom (cm)", "non_negative": 1, "precision": "3", "read_only": 1},
-    {"description": "Post processor chosen for this sheet. Empty until the user selects one. NC generation refuses a missing or unknown value.", "fieldname": "post_processor", "fieldtype": "Data", "label": "Post Processor", "read_only": 1},
+    {"description": "Historical post processor used when this file was saved. New NC uses the post processor on the CNC machine.", "fieldname": "post_processor", "fieldtype": "Data", "label": "Post Processor", "read_only": 1},
     {"fieldname": "operations", "fieldtype": "Table", "label": "Operations", "options": "CNC Operational Operation"},
     {"fieldname": "paths", "fieldtype": "Table", "label": "Paths", "options": "CNC Operational Path"},
     {"description": "Independent profile copies. Editing one does not change the tool definition or another profile.", "fieldname": "machining_profiles_json", "fieldtype": "JSON", "label": "Machining Profiles", "read_only": 1},

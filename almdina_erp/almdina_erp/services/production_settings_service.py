@@ -1018,6 +1018,7 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
             "right_stop_cm",
             "bottom_stop_cm",
             "top_stop_cm",
+            "post_processor",
         ],
         order_by="machine_name asc",
         limit_page_length=0,
@@ -1037,6 +1038,7 @@ def _cnc_machine_catalog() -> list[dict[str, Any]]:
                 "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
                 "top_stop_cm": row.top_stop_cm,
+                "post_processor": row.post_processor,
             }
         )
         for row in rows

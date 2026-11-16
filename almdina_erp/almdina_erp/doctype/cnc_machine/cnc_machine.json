@@ -13,6 +13,7 @@
     "right_stop_cm",
     "bottom_stop_cm",
     "top_stop_cm",
+    "post_processor",
     "enabled"
   ],
   "fields": [
@@ -89,6 +90,15 @@
       "label": "Top Stop (cm)",
       "non_negative": 1,
       "precision": "3"
+    },
+    {
+      "default": "ima_wh_ncstudio",
+      "description": "NC dialect used when a new file is generated for this machine.",
+      "fieldname": "post_processor",
+      "fieldtype": "Select",
+      "label": "Post Processor",
+      "options": "ima_wh_ncstudio",
+      "reqd": 1
     },
     {
       "default": "1",

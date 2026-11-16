@@ -421,7 +421,7 @@ def build_operational_workspace(
                 toolpath_snapshots=list((saved or {}).get("toolpath_snapshots") or ()),
                 vector_associations=list((saved or {}).get("vector_associations") or ()),
                 reversed_path_keys=list((saved or {}).get("reversed_path_keys") or ()),
-                post_processor=str((saved or {}).get("post_processor") or ""),
+                post_processor=_fingerprint_post_processor(machine_row),
             )
             status = SETTINGS_SAVED
             operational_file = str(saved.get("name") or "")
@@ -517,6 +517,50 @@ def build_operational_workspace(
         "post_processors": list(list_post_processors()),
         "sheets": sheets,
     }
+
+
+def _fingerprint_post_processor(machine_row: Mapping[str, Any] | None) -> str:
+    """Processor used for staleness. It comes from the machine, never the sheet."""
+
+    if machine_row is None:
+        return ""
+    from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
+
+    try:
+        return resolve_post_processor(machine_row.get("post_processor"), required=False)
+    except PostProcessorError:
+        return ""
+
+
+def _generation_post_processor(
+    machine_row: Mapping[str, Any] | None,
+    requested: str | None,
+    *,
+    machine_selected: bool,
+) -> str:
+    """Resolve the processor for a new file from the CNC machine only.
+
+    A non-empty RPC value that is not the machine's processor is rejected.
+    An empty request uses the machine. A previous sheet value is not a source.
+    """
+
+    from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
+
+    requested_token = "" if requested is None else str(requested).strip()
+    if not machine_selected:
+        if requested_token:
+            raise PostProcessorError("post_processor_machine_mismatch")
+        return ""
+    try:
+        stored = resolve_post_processor(
+            None if machine_row is None else machine_row.get("post_processor"),
+            required=True,
+        )
+    except PostProcessorError as exc:
+        raise PostProcessorError("cnc_machine_post_processor_unconfigured") from exc
+    if requested_token and requested_token != stored:
+        raise PostProcessorError("post_processor_machine_mismatch")
+    return stored
 
 
 def prepare_sheet_settings(
@@ -634,9 +678,19 @@ def prepare_sheet_settings(
     placement = None
     if require_cnc_machine and not machine_name:
         raise PlacementError("cnc_machine_required")
+    if machine_name and machine_row is None:
+        raise PlacementError("cnc_machine_not_found")
+    chosen_processor = _generation_post_processor(
+        machine_row,
+        post_processor,
+        machine_selected=bool(machine_name),
+    )
+    stored_processor = (
+        chosen_processor
+        if machine_name
+        else str((existing or {}).get("post_processor") or "")
+    )
     if machine_name:
-        if machine_row is None:
-            raise PlacementError("cnc_machine_not_found")
         sheet_w, sheet_l = approved_sheet_size_cm(plan_snapshot, sheet_no=int(sheet_no))
         placement = resolve_sheet_placement(
             machine=machine_row,
@@ -666,10 +720,7 @@ def prepare_sheet_settings(
         reversed_path_keys=list((existing or {}).get("reversed_path_keys") or ())
         if reversed_path_keys is None
         else list(reversed_path_keys),
-        post_processor=resolve_post_processor(
-            str((existing or {}).get("post_processor") or "") if post_processor is None else post_processor,
-            required=False,
-        ),
+        post_processor=chosen_processor,
     )
     return {
         "door_cutting_order": order_name,
@@ -688,10 +739,7 @@ def prepare_sheet_settings(
         "cnc_machine": placement.machine_name if placement else "",
         "offset_left_cm": placement.offset_left_cm if placement else 0.0,
         "offset_bottom_cm": placement.offset_bottom_cm if placement else 0.0,
-        "post_processor": resolve_post_processor(
-            str((existing or {}).get("post_processor") or "") if post_processor is None else post_processor,
-            required=False,
-        ),
+        "post_processor": stored_processor,
         "reversed_path_keys": list((existing or {}).get("reversed_path_keys") or ())
         if reversed_path_keys is None
         else list(reversed_path_keys),

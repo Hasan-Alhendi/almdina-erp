@@ -24,7 +24,15 @@ frappe.ui.form.on("CNC Machining Profile", {
         frm.set_df_property("tool_values_json", "reqd", 0);
         frm._profile_tool_name = frm.doc.tool_preset || "";
         frm._profile_ready = true;
-        paint_profile_tool_editor(frm, false);
+        ensure_profile_tools(frm).then(rows => {
+            const host = profile_tool_host(frm);
+            const existing = host && host.data("picker");
+            if (existing) {
+                existing.setTools(tool_choices(rows, frm));
+                return;
+            }
+            paint_profile_tool_editor(frm, false);
+        });
     },
     tool_preset(frm) {
         if (!frm._profile_ready) return;
@@ -63,13 +71,6 @@ function tool_label(message) {
     return translate_label(message);
 }
 
-function escape_text(value) {
-    if (frappe.utils && typeof frappe.utils.escape_html === "function") {
-        return frappe.utils.escape_html(value == null ? "" : String(value));
-    }
-    return String(value == null ? "" : value);
-}
-
 function stored_tool(frm) {
     const raw = frm.doc.tool_values_json;
     if (raw && typeof raw === "object") return Object.assign({}, raw);
@@ -84,12 +85,6 @@ function stored_tool(frm) {
     return {};
 }
 
-function tool_diameter(tool) {
-    const value = tool && (tool.diameter_mm != null ? tool.diameter_mm : tool.tool_diameter_mm);
-    const number = Number(value);
-    return Number.isFinite(number) && number > 0 ? number : 0;
-}
-
 function display_tool_number(value) {
     if (value == null || value === "") return "";
     const raw = String(value).trim();
@@ -97,62 +92,89 @@ function display_tool_number(value) {
     return match ? match[1] : raw;
 }
 
-function editor_box(frm) {
+function profile_tool_host(frm) {
     const field = frm.fields_dict && frm.fields_dict.tool_preset;
     if (!field || !field.$wrapper) return null;
-    let box = field.$wrapper.parent().children("[data-profile-tool-editor]");
-    if (!box.length) {
-        box = $('<div class="frappe-control" data-profile-tool-editor></div>');
-        field.$wrapper.after(box);
+    const native = field.$wrapper.find(".control-input-wrapper, .control-input");
+    if (native && native.addClass) native.addClass("dco-tool-picker-native");
+    let host = field.$wrapper.children("[data-tool-picker-host]");
+    if (!host.length) {
+        host = $('<div data-tool-picker-host></div>');
+        field.$wrapper.append(host);
     }
-    return box;
+    return host;
+}
+
+function ensure_profile_tools(frm) {
+    if (Array.isArray(frm._profile_tool_choices)) return Promise.resolve(frm._profile_tool_choices);
+    const db = window.frappe && frappe.db;
+    if (!db || typeof db.get_list !== "function") return Promise.resolve([]);
+    return db.get_list("CNC Tool Preset", {
+        fields: ["name", "tool_name"],
+        filters: { enabled: 1 },
+        limit: 500,
+    }).then(rows => {
+        frm._profile_tool_choices = rows || [];
+        return frm._profile_tool_choices;
+    }).catch(() => []);
+}
+
+function tool_choices(rows, frm) {
+    const tool = frm._profile_tool || stored_tool(frm);
+    const selected = String(frm.doc.tool_preset || "");
+    const choices = (rows || []).map(row => ({
+        value: row.name,
+        label: row.tool_name || row.name,
+    }));
+    if (selected && !choices.some(row => row.value === selected)) {
+        choices.unshift({
+            value: selected,
+            label: tool.tool_name || tool.description || selected,
+        });
+    }
+    return choices;
 }
 
 function paint_profile_tool_editor(frm, force) {
-    const box = editor_box(frm);
-    if (!box) return;
-    if (!force && box.find("[data-profile-tool]").length) return;
+    const host = profile_tool_host(frm);
+    const pickerApi = window.AlmdinaCncToolPicker;
+    if (!host || !pickerApi || typeof pickerApi.mount !== "function") return;
+    if (!force && host.data("picker")) return;
     const tool = frm._profile_tool || stored_tool(frm);
     frm._profile_tool = tool;
-    frm._profile_tool_name = frm.doc.tool_preset || tool.tool_preset || "";
-    const open = frm._profileToolOpen !== false;
-    const name = tool.description || tool.tool_name || frm.doc.tool_preset || "";
-    const diameter = tool_diameter(tool);
-    const summary = name
-        ? `${profile_label("Tool")}: ${name} · ${tool_label("Tool Diameter (mm)")} ${diameter}`
-        : profile_label("Choose a tool to copy its protected properties.");
-    const labelsApi = window.AlmdinaCncLabels;
-    const disclosure = labelsApi && typeof labelsApi.toolDisclosureButton === "function"
-        ? labelsApi.toolDisclosureButton(profile_label("Editable tool settings"), open)
-        : "";
-    const inputs = PROFILE_TOOL_FIELDS.map(([fieldname, label]) => {
-        const value = fieldname === "tool_number" ? display_tool_number(tool[fieldname]) : tool[fieldname];
-        return `<div class="form-group col-sm-6">
-            <label class="control-label">${escape_text(tool_label(label))}</label>
-            <input class="form-control" data-profile-tool="${fieldname}" value="${escape_text(value == null ? "" : value)}">
-        </div>`;
-    }).join("");
-    box.html(
-        `${disclosure}
-        <div data-profile-tool-body${open ? "" : " hidden"}>
-            <p class="text-muted" data-tool-summary>${escape_text(summary)}</p>
-            <div class="row">${inputs}</div>
-        </div>`
-    );
-    box.find("[data-tool-settings-toggle]").on("click", event => {
-        event.preventDefault();
-        frm._profileToolOpen = frm._profileToolOpen === false;
-        const nextOpen = frm._profileToolOpen !== false;
-        box.find("[data-profile-tool-body]").prop("hidden", !nextOpen);
-        box.find("[data-tool-settings-toggle]").attr("aria-expanded", nextOpen ? "true" : "false");
+    const selected = String(frm.doc.tool_preset || "");
+    const picker = pickerApi.mount(host.get(0), {
+        showLabel: false,
+        label: profile_label("Tool"),
+        changeLabel: profile_label("Tool"),
+        emptyLabel: profile_label("Choose a tool"),
+        selected,
+        selectedLabel: tool.description || tool.tool_name || selected,
+        tools: tool_choices(frm._profile_tool_choices, frm),
+        settingAttribute: "data-profile-tool",
+        selectAttribute: "data-profile-tool-select",
+        fields: selected ? PROFILE_TOOL_FIELDS.map(([fieldname, label]) => ({
+            name: fieldname,
+            label: tool_label(label),
+            value: fieldname === "tool_number" ? display_tool_number(tool[fieldname]) : tool[fieldname],
+        })) : [],
+        onToolChange(value) {
+            if (!value || value === String(frm.doc.tool_preset || "")) return;
+            frm.set_value("tool_preset", value);
+        },
+        onFieldInput(fieldname, value) {
+            frm._profile_tool = frm._profile_tool || {};
+            frm._profile_tool[fieldname] = fieldname === "tool_number" || value === "" ? value : Number(value);
+        },
     });
+    host.data("picker", picker);
 }
 
 function allowed_tool_overrides(frm) {
-    const box = editor_box(frm);
+    const host = profile_tool_host(frm);
     const overrides = {};
     PROFILE_TOOL_FIELDS.forEach(([fieldname]) => {
-        const input = box && box.find(`[data-profile-tool="${fieldname}"]`);
+        const input = host && host.find(`[data-profile-tool="${fieldname}"]`);
         if (!input || !input.length || input.val() === "") return;
         overrides[fieldname] = fieldname === "tool_number" ? input.val() : Number(input.val());
     });

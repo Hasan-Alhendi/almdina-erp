@@ -4112,3 +4112,11 @@ The sheet perimeter is not valid for assignment. Existing assignments keep their
 "Used only for Bottom Right and Top Right. Distance from the machine right edge to the sheet right edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليمين وأعلى اليمين. المسافة من الحافة اليمنى للماكينة إلى الحافة اليمنى للوح، بالسنتيمتر. الصفر مقبول.
 "Used only for Bottom Left and Bottom Right. Distance from the machine bottom edge to the sheet bottom edge, in centimetres. Zero is valid.",يُستخدم فقط لأسفل اليسار وأسفل اليمين. المسافة من الحافة السفلية للماكينة إلى الحافة السفلية للوح، بالسنتيمتر. الصفر مقبول.
 "Used only for Top Left and Top Right. Distance from the machine top edge to the sheet top edge, in centimetres. Zero is valid.",يُستخدم فقط لأعلى اليسار وأعلى اليمين. المسافة من الحافة العلوية للماكينة إلى الحافة العلوية للوح، بالسنتيمتر. الصفر مقبول.
+Choose a tool,اختر ريشة
+NC dialect used when a new file is generated for this machine.,صيغة NC المستخدمة عند توليد ملف جديد لهذه الماكينة.
+Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file.,أكمل إعدادات ماكينة CNC. اختر صيغة الملف التشغيلي على الماكينة قبل توليد ملف NC جديد.
+The post processor is set on the CNC machine and cannot be overridden for this sheet.,صيغة الملف التشغيلي محفوظة على ماكينة CNC ولا يمكن استبدالها من إعدادات اللوح.
+Historical post processor used when this file was saved. New NC uses the post processor on the CNC machine.,صيغة الملف التشغيلي التي استُخدمت عند حفظ هذا الملف. التوليد الجديد يستخدم صيغة ماكينة CNC.
+Feed Rate,سرعة التغذية
+Plunge Rate,سرعة الغطس
+"Positive whole number, for example 9. One board file uses one tool number.",عدد صحيح موجب، مثلاً 9. ملف اللوح الواحد يستخدم رقم ريشة واحداً.

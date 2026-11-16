@@ -13,6 +13,11 @@ vm.runInNewContext(
     { filename: "door_cutting_order_operational_files_ux.js" }
 );
 vm.runInNewContext(
+    fs.readFileSync(path.join(root, "public/js/cnc/cnc_tool_picker.js"), "utf8"),
+    { window: windowObject },
+    { filename: "cnc_tool_picker.js" }
+);
+vm.runInNewContext(
     fs.readFileSync(path.join(root, "public/js/cnc/artcam_machining_ux.js"), "utf8"),
     { window: windowObject },
     { filename: "artcam_machining_ux.js" }
@@ -320,7 +325,7 @@ artcam.loadAssociation(state, {
 assert.deepEqual(state.vectorSelection, ["cut_path:shared"]);
 assert.equal(state.artcamForm.association_id, "b");
 assert.equal(state.artcamForm.source, "selected_vectors");
-assert.equal(state.artcamForm.toolOpen, true);
+assert.equal(state.artcamForm.toolOpen, false);
 assert.equal(state.artcamForm.tool.tool_number, "9", "legacy NC tokens are numeric in the editor");
 
 const blankEditor = artcam.markup({ presets: [] }, { machining: { profiles: [], associations: [] } }, {});

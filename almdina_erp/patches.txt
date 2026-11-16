@@ -43,3 +43,4 @@ almdina_erp.patches.v1_0.backfill_cnc_operational_file_settings_revision
 almdina_erp.patches.v1_0.drop_cnc_machine_travel_extensions
 almdina_erp.patches.v1_0.configure_cnc_machine_work_zero
 almdina_erp.patches.v1_0.configure_cnc_machine_corner_stops
+almdina_erp.patches.v1_0.configure_cnc_machine_post_processor

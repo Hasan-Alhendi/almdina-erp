@@ -150,7 +150,8 @@ def test_profile_editor_lives_on_the_operational_files_page_not_the_sheet_form()
 
 def test_profile_form_exposes_only_the_allowed_tool_overrides():
     form = _text(PACKAGE / "almdina_erp" / "doctype" / "cnc_machining_profile" / "cnc_machining_profile.js")
-    assert "data-profile-tool-editor" in form
+    assert 'settingAttribute: "data-profile-tool"' in form
+    assert "AlmdinaCncToolPicker" in form
     for fieldname in (
         "tool_number",
         "stepdown_mm",

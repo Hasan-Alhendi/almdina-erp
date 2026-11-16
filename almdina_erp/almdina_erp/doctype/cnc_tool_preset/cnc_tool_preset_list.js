@@ -1,5 +1,9 @@
 frappe.listview_settings["CNC Tool Preset"] = {
     onload(listview) {
+        const labelsApi = window.AlmdinaCncLabels;
+        if (labelsApi && typeof labelsApi.installQuickEntryForms === "function") {
+            labelsApi.installQuickEntryForms();
+        }
         const labels = {
             tool_name: "Tool Name",
             tool_number: "Tool Number",

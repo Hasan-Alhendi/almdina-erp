@@ -386,7 +386,6 @@
             cutPathSequence: [],
             perimeterEarlyConfirmed: Boolean(sheet.perimeter_cut_early_confirmed),
             cncMachine: String(sheet.cnc_machine || ""),
-            postProcessor: String(sheet.post_processor || ""),
             settingsRevision: Number(sheet.settings_revision || 0),
             sheetWidthCm: sheet.sheet_width_cm == null ? null : Number(sheet.sheet_width_cm),
             sheetLengthCm: sheet.sheet_length_cm == null ? null : Number(sheet.sheet_length_cm),
@@ -419,7 +418,6 @@
             perimeterEarlyConfirmed: Boolean(state.perimeterEarlyConfirmed)
                 && sheetPerimeterPrecedesMilling(state.order),
             cncMachine: String(state.cncMachine || ""),
-            postProcessor: String(state.postProcessor || ""),
         });
     }
 
@@ -967,25 +965,10 @@
         return "↓";
     }
 
-    function exportControlsMarkup(workspace, state) {
+    function exportControlsMarkup(workspace) {
         const canPrepare = Boolean(workspace && workspace.can_prepare);
-        const selected = String((state && state.postProcessor) || "");
-        const processors = workspace && Array.isArray(workspace.post_processors) && workspace.post_processors.length
-            ? workspace.post_processors
-            : [{ id: "ima_wh_ncstudio", label: "IMA-WH (*.nc)" }];
-        const options = [
-            `<option value=""${selected ? "" : " selected"}>${escapeHtml(translate("Select a post processor"))}</option>`,
-        ].concat(processors.map(item => {
-            const id = String(item.id || "");
-            const label = String(item.label || id);
-            return `<option value="${escapeHtml(id)}"${id === selected ? " selected" : ""}>${escapeHtml(translate(label))}</option>`;
-        })).join("");
         const control = generateNcControlState({ canPrepare });
         return `<div class="dco-operational-sheet__export" data-cnc-export-bar>
-            <label class="dco-operational-sheet__post-processor">
-                <span>${escapeHtml(translate("Post Processor"))}</span>
-                <select class="form-control" data-cnc-post-processor required${canPrepare ? "" : " disabled"}>${options}</select>
-            </label>
             <div class="dco-operational-sheet__export-actions">
                 <button type="button" class="btn btn-primary btn-sm" data-cnc-save-sheet${canPrepare ? "" : " disabled"}>${escapeHtml(translate("Save sheet settings"))}</button>
                 <button type="button" class="btn btn-default btn-sm" data-cnc-generate-nc data-cnc-page-action="generate"${control.disabled ? " disabled" : ""} title="${escapeHtml(control.reason || "")}">${escapeHtml(translate("Generate NC file"))}</button>
@@ -1226,10 +1209,6 @@
                 }
                 if (target.hasAttribute("data-cut-confirm")) {
                     live.state.confirmed = Boolean(target.checked);
-                    return;
-                }
-                if (target.hasAttribute("data-cnc-post-processor")) {
-                    live.state.postProcessor = String(target.value || "");
                     return;
                 }
                 if (target.hasAttribute("data-cnc-machine")) {
@@ -1782,7 +1761,6 @@
                 && sheetPerimeterPrecedesMilling(state.order)
                 && state.perimeterEarlyConfirmed ? 1 : 0,
             cnc_machine: String(state.cncMachine || ""),
-            post_processor: String(state.postProcessor || ""),
             base_revision: Number(state.settingsRevision || sheet.settings_revision || 0),
         };
     }
@@ -2151,7 +2129,6 @@
                     state.cutPathSequence = next.cutPathSequence;
                     state.perimeterEarlyConfirmed = next.perimeterEarlyConfirmed;
                     state.cncMachine = next.cncMachine;
-                    state.postProcessor = next.postProcessor;
                     state.settingsRevision = next.settingsRevision;
                     state.sheetWidthCm = next.sheetWidthCm;
                     state.sheetLengthCm = next.sheetLengthCm;
@@ -4088,8 +4065,9 @@
             )) {
                 return;
             }
-            if (!String(context.state.postProcessor || "").trim()) {
-                frappe.msgprint(translate("Choose a post processor before generating the NC file."));
+            const machine = findCncMachine(context.workspace, context.state.cncMachine);
+            if (!machine || !String(machine.post_processor || "").trim()) {
+                frappe.msgprint(translate("Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."));
                 return;
             }
             const request = (dialog._cncNcRequest || 0) + 1;

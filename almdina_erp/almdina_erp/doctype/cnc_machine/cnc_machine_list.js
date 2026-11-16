@@ -1,5 +1,9 @@
 frappe.listview_settings["CNC Machine"] = {
     onload(listview) {
+        const labelsApi = window.AlmdinaCncLabels;
+        if (labelsApi && typeof labelsApi.installQuickEntryForms === "function") {
+            labelsApi.installQuickEntryForms();
+        }
         const labels = {
             machine_name: "Machine Name",
             width_cm: "Machine Width (cm)",

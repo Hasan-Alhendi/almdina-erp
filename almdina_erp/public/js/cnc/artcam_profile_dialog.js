@@ -47,39 +47,19 @@
         });
         const button = typeof dialog.get_primary_btn === "function" ? dialog.get_primary_btn() : null;
         if (button && button.text) button.text(translate("Save profile"));
-        mountToolDisclosure(dialog);
+        hideSeparateToolFields(dialog);
     }
 
-    function applyToolDisclosure(dialog) {
-        const open = dialog._toolSettingsOpen !== false;
+    function hideSeparateToolFields(dialog) {
         TOOL_SETTING_FIELDS.forEach(name => {
-            if (typeof dialog.set_df_property === "function") dialog.set_df_property(name, "hidden", open ? 0 : 1);
+            const field = dialog.fields_dict && dialog.fields_dict[name];
+            if (field && field.$wrapper && field.$wrapper.addClass) field.$wrapper.addClass("dco-tool-picker-native");
         });
-        const toggle = dialog.$wrapper && dialog.$wrapper.find("[data-tool-settings-toggle]");
-        if (toggle && toggle.attr) toggle.attr("aria-expanded", open ? "true" : "false");
-    }
-
-    function mountToolDisclosure(dialog) {
-        const field = dialog.fields_dict && dialog.fields_dict.tool_number;
-        const section = field && field.$wrapper && field.$wrapper.closest(".form-section");
-        if (!section || !section.length) return;
-        let head = section.children(".section-head").first();
-        if (!head.length) head = section.find(".section-head").first();
-        if (!head.length) return;
-        if (!dialog._toolDisclosureMounted) {
-            const labels = window.AlmdinaCncLabels;
-            const markup = labels && typeof labels.toolDisclosureButton === "function"
-                ? labels.toolDisclosureButton(translate("Editable tool settings"), dialog._toolSettingsOpen !== false)
-                : "";
-            head.empty().append(markup);
-            head.find("[data-tool-settings-toggle]").on("click", event => {
-                event.preventDefault();
-                dialog._toolSettingsOpen = dialog._toolSettingsOpen === false;
-                applyToolDisclosure(dialog);
-            });
-            dialog._toolDisclosureMounted = true;
-        }
-        applyToolDisclosure(dialog);
+        const summary = dialog.fields_dict && dialog.fields_dict.tool_summary;
+        if (summary && summary.$wrapper && summary.$wrapper.addClass) summary.$wrapper.addClass("dco-tool-picker-native");
+        const toolField = dialog.fields_dict && dialog.fields_dict.tool_preset;
+        const native = toolField && toolField.$wrapper && toolField.$wrapper.find(".control-input-wrapper, .control-input");
+        if (native && native.addClass) native.addClass("dco-tool-picker-native");
     }
 
     function toolChoices(presets) {
@@ -151,7 +131,7 @@
             { fieldname: "profile_name", fieldtype: "Data", label: "Profile Name", reqd: 1 },
             { fieldname: "tool_preset", fieldtype: "Select", label: "Tool", reqd: 1, options: "\n" },
             { fieldname: "tool_summary", fieldtype: "HTML" },
-            { fieldtype: "Section Break", label: "Tool settings" },
+            { fieldtype: "Section Break" },
             { fieldname: "tool_number", fieldtype: "Int", label: "Tool Number", reqd: 1 },
             { fieldname: "stepdown_mm", fieldtype: "Float", label: "Stepdown", precision: 3, reqd: 1 },
             { fieldtype: "Column Break" },
@@ -180,15 +160,61 @@
         return Number.isFinite(number) && number > 0 ? number : 0;
     }
 
-    function writeSummary(dialog, source) {
-        const field = dialog.fields_dict && dialog.fields_dict.tool_summary;
-        if (!field || !field.$wrapper) return;
-        const name = (source && (source.description || source.tool_name || source.tool_preset)) || "";
-        const diameter = toolDiameter(source);
-        const text = name
-            ? `${translate("Tool")}: ${name} · ${translate("Diameter (mm)")} ${diameter}`
-            : translate("Choose a tool to copy its protected properties.");
-        field.$wrapper.html(`<p class="text-muted" data-tool-summary>${text}</p>`);
+    function pickerHost(dialog) {
+        const field = dialog.fields_dict && dialog.fields_dict.tool_preset;
+        if (!field || !field.$wrapper) return null;
+        let host = field.$wrapper.children("[data-tool-picker-host]");
+        if (!host.length) {
+            host = $("<div data-tool-picker-host></div>");
+            field.$wrapper.append(host);
+        }
+        return host;
+    }
+
+    function pickerState(dialog, presets) {
+        const selected = String(dialog._currentTool || "");
+        const preset = (presets || []).find(row => row && row.name === selected) || {};
+        const label = preset.description || preset.tool_name || selected;
+        const values = {};
+        TOOL_SETTING_FIELDS.forEach(name => {
+            const field = dialog.fields_dict && dialog.fields_dict[name];
+            values[name] = field && typeof field.get_value === "function" ? field.get_value() : "";
+        });
+        return { selected, label, values, preset };
+    }
+
+    function mountProfileToolPicker(dialog, presets) {
+        const pickerApi = window.AlmdinaCncToolPicker;
+        const host = pickerHost(dialog);
+        if (!pickerApi || !host) return;
+        const state = pickerState(dialog, presets);
+        const tools = toolChoices(presets);
+        dialog._toolPicker = pickerApi.mount(host.get(0), {
+            showLabel: false,
+            label: translate("Tool"),
+            changeLabel: translate("Tool"),
+            emptyLabel: translate("Choose a tool"),
+            selected: state.selected,
+            selectedLabel: state.label,
+            tools,
+            fields: state.selected ? Array.from(TOOL_SETTING_FIELDS).map(name => {
+                const field = dialog.fields_dict[name];
+                return {
+                    name,
+                    label: displayLabel(field && field.df),
+                    value: state.values[name],
+                };
+            }) : [],
+            onToolChange(value) {
+                if (!value || value === String(dialog._currentTool || "")) return;
+                const toolField = dialog.fields_dict.tool_preset;
+                if (toolField && typeof toolField.set_value === "function") toolField.set_value(value);
+            },
+            onFieldInput(name, value) {
+                const field = dialog.fields_dict && dialog.fields_dict[name];
+                if (field && typeof field.set_value === "function") field.set_value(value);
+            },
+        });
     }
 
     function open(options = {}) {
@@ -202,21 +228,26 @@
             fields: fieldsFor(),
             primary_action_label: "Save profile",
             primary_action(values) {
+                const picked = dialog._toolPicker && typeof dialog._toolPicker.getValues === "function"
+                    ? dialog._toolPicker.getValues()
+                    : null;
+                const edited = (picked && picked.fields) || {};
+                const toolValue = name => edited[name] !== "" && edited[name] != null ? edited[name] : values[name];
                 const payload = {
                     name: values.profile_name,
-                    tool_preset: values.tool_preset,
+                    tool_preset: (picked && picked.tool) || values.tool_preset,
                     final_depth_mm: values.final_depth_mm,
                     safe_z_mm: values.safe_z_mm,
                     home_x_mm: values.home_x_mm,
                     home_y_mm: values.home_y_mm,
                     home_z_mm: values.home_z_mm,
                     tool_values: {
-                        tool_number: values.tool_number,
-                        stepdown_mm: values.stepdown_mm,
-                        stepover_size_mm: values.stepover_size_mm,
-                        feed_rate_mm_sec: values.feed_rate_mm_sec,
-                        plunge_rate_mm_sec: values.plunge_rate_mm_sec,
-                        spindle_speed_rpm: values.spindle_speed_rpm,
+                        tool_number: toolValue("tool_number"),
+                        stepdown_mm: toolValue("stepdown_mm"),
+                        stepover_size_mm: toolValue("stepover_size_mm"),
+                        feed_rate_mm_sec: toolValue("feed_rate_mm_sec"),
+                        plunge_rate_mm_sec: toolValue("plunge_rate_mm_sec"),
+                        spindle_speed_rpm: toolValue("spindle_speed_rpm"),
                     },
                 };
                 if (profile && profile.profile_id) payload.profile_id = profile.profile_id;
@@ -235,11 +266,11 @@
                 if (preset) {
                     dialog._toolDiameter = toolDiameter(preset);
                     dialog.set_values(toolPayload(preset));
-                    writeSummary(dialog, preset);
                 }
             }
             if (typeof originalChange === "function") originalChange.apply(this, arguments);
             pinLabels(dialog);
+            mountProfileToolPicker(dialog, presets);
         };
         dialog.show();
         if (profile) {
@@ -253,7 +284,6 @@
                 home_y_mm: profile.home_y_mm,
                 home_z_mm: profile.home_z_mm,
             }, stored));
-            writeSummary(dialog, Object.assign({}, stored, { tool_preset: profile.tool_preset }));
         }
         const choices = toolChoices(presets);
         writeSelect(dialog, "tool_preset", choices, profile && profile.tool_preset);
@@ -262,6 +292,7 @@
             writeSelect(dialog, "tool_preset", choices, profile.tool_preset);
         }
         pinLabels(dialog);
+        mountProfileToolPicker(dialog, presets);
         return dialog;
     }
 

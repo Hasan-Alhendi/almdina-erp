@@ -25,6 +25,7 @@ const sandbox = {
 sandbox.window = sandbox;
 load("public/js/almdina_locale.js", sandbox);
 load("public/js/cnc/cnc_field_labels.js", sandbox);
+load("public/js/cnc/cnc_tool_picker.js", sandbox);
 load("public/js/cnc/artcam_machining_ux.js", sandbox);
 load("public/js/door_cutting_order/cnc/door_cutting_order_operational_files_ux.js", sandbox);
 
@@ -52,6 +53,8 @@ sandbox.__ = message => ({
     "Final Tool Offset": "الإزاحة النهائية للريشة",
     "Stepover Size": "مقدار التداخل",
     "Stepover Percent of D": "نسبة التداخل",
+    "Feed Rate": "سرعة التغذية",
+    "Plunge Rate": "سرعة الغطس",
     "Feed Rate (mm/sec)": "سرعة التغذية (مم/ث)",
     "Plunge Rate (mm/sec)": "سرعة الغطس (مم/ث)",
     "Notes": "الملاحظات",
@@ -63,10 +66,10 @@ assert.strictEqual(labels.toolLabel("Tool Diameter (mm)"), "قطر الريشة 
 assert.strictEqual(labels.toolLabel("Spindle Speed (RPM)"), "سرعة الدوران (دورة/دقيقة)");
 assert.strictEqual(labels.toolLabel("Stepdown"), "عمق التمريرة (Stepdown)");
 assert.strictEqual(labels.toolLabel("Final Tool Offset"), "الإزاحة النهائية للريشة (Final Tool Offset)");
-assert.strictEqual(labels.toolLabel("Stepover Size"), "مقدار التداخل (Stepover Size)");
-assert.strictEqual(labels.toolLabel("Stepover Percent of D"), "نسبة التداخل (Stepover Percent of D)");
-assert.strictEqual(labels.toolLabel("Feed Rate (mm/sec)"), "سرعة التغذية (مم/ث) (Feed Rate)");
-assert.strictEqual(labels.toolLabel("Plunge Rate (mm/sec)"), "سرعة الغطس (مم/ث) (Plunge Rate)");
+assert.strictEqual(labels.toolLabel("Stepover Size"), "مقدار التداخل (Stepover - mm)");
+assert.strictEqual(labels.toolLabel("Stepover Percent of D"), "نسبة التداخل (Stepover - %)");
+assert.strictEqual(labels.toolLabel("Feed Rate (mm/sec)"), "سرعة التغذية (Feed Rate)");
+assert.strictEqual(labels.toolLabel("Plunge Rate (mm/sec)"), "سرعة الغطس (Plunge Rate)");
 assert.strictEqual(labels.toolLabel("Notes"), "الملاحظات (Notes)");
 assert.strictEqual(labels.profileLabel("Profile Name"), "اسم البروفايل");
 assert.ok(!labels.profileLabel("Profile Name").includes("(Profile Name)"));
@@ -150,23 +153,26 @@ const toolState = {
 const markup = artcam.markup({}, {
     machining: { profiles: [{ profile_id: "profile-1", name: "Finish", enabled: true }], associations: [], availability: { layers: [], vectors: [] } },
 }, toolState);
-assert.ok(markup.includes("dco-tool-disclosure"));
+assert.ok(markup.includes("data-tool-picker"));
 assert.ok(markup.includes('aria-expanded="false"'));
+assert.ok(markup.includes("data-tool-picker-panel hidden"));
 assert.ok(markup.includes('data-field="stepdown_mm"'));
 assert.ok(markup.includes('value="3.5"'));
 assert.ok(markup.includes('value="12"'));
+assert.ok(markup.indexOf("data-tool-picker-select") < markup.indexOf("data-tool-picker-settings"));
+assert.equal(markup.includes("data-tool-settings-toggle"), false);
+assert.ok(css.includes(".dco-tool-picker__face"));
 assert.ok(css.includes("min-height: 32px"));
-assert.ok(css.includes("width: 18px"));
-assert.ok(css.includes('[dir="rtl"] .dco-tool-disclosure[aria-expanded="false"]'));
-assert.ok(profileForm.includes("data-tool-settings-toggle"));
-assert.ok(profileForm.includes("frm._profileToolOpen"));
+assert.equal(profileForm.includes("data-tool-settings-toggle"), false);
+assert.ok(profileForm.includes("AlmdinaCncToolPicker"));
 assert.ok(machineForm.includes("work_zero_position(frm)"));
 assert.ok(machineForm.includes("apply_corner_stops(frm)"));
 assert.ok(translations.includes("عمق التمريرة (مم)"));
 assert.ok(translations.includes("المصادم الأيمن (سم)"));
 assert.ok(translations.includes("المصادم العلوي (سم)"));
 assert.ok(translations.includes("اسم الربط"));
-assert.ok(machineForm.includes('work_zero_position === "Center"'));
+const labelsSource = fs.readFileSync(path.join(root, "public/js/cnc/cnc_field_labels.js"), "utf8");
+assert.ok(labelsSource.includes('position === "Center"'));
 const machineMeta = fs.readFileSync(path.join(root, "almdina_erp/doctype/cnc_machine/cnc_machine.json"), "utf8");
 assert.ok(!machineMeta.includes("Top Right\\nCenter"));
 

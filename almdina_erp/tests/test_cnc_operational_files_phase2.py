@@ -10,6 +10,7 @@ from almdina_erp.almdina_erp.application.cnc.workspace import (
     prepare_sheet_settings,
 )
 from almdina_erp.almdina_erp.domain.cnc.operations import DEFAULT_MACHINING_ORDER
+from almdina_erp.almdina_erp.domain.cnc.post_processor import PostProcessorError
 from almdina_erp.almdina_erp.domain.cnc.operational_file import (
     OperationalFileError,
     ApprovedPlanRef,
@@ -86,6 +87,9 @@ def _prepare(
     post_processor=None,
     toolpath_snapshots=None,
     vector_associations=None,
+    cnc_machine=None,
+    machine_catalog=None,
+    plan_snapshot=None,
 ):
     return prepare_sheet_settings(
         order_name="DCO-1",
@@ -109,7 +113,32 @@ def _prepare(
         post_processor=post_processor,
         toolpath_snapshots=toolpath_snapshots,
         vector_associations=vector_associations,
+        cnc_machine=cnc_machine,
+        machine_catalog=machine_catalog,
+        plan_snapshot=plan_snapshot,
     )
+
+
+def _machine(**overrides):
+    row = {
+        "name": "IMA",
+        "machine_name": "IMA",
+        "width_cm": 200,
+        "length_cm": 400,
+        "enabled": True,
+        "work_zero_position": "Bottom Left",
+        "left_stop_cm": 0,
+        "right_stop_cm": 0,
+        "bottom_stop_cm": 0,
+        "top_stop_cm": 0,
+        "post_processor": "ima_wh_ncstudio",
+    }
+    row.update(overrides)
+    return row
+
+
+def _sheet_snapshot():
+    return {"full_board_width_cm": 120, "full_board_length_cm": 240}
 
 
 def test_default_order_lists_only_operations_present_on_the_sheet():
@@ -193,27 +222,62 @@ def test_workspace_recomputes_manufacturing_fingerprint_without_changing_saved_r
     assert sheet["settings_revision"] == 7
 
 
-def test_association_calculation_settings_allow_empty_post_processor_and_preserve_a_choice():
+def test_new_nc_uses_the_machine_post_processor_and_rejects_an_override():
     piece = _piece("piece-a")
-    without_processor = _prepare(
+    without_machine = _prepare(
         [piece],
         presets={"cut_path": "Finish"},
         order=["cut_path"],
         post_processor="",
     )
-    assert without_processor["post_processor"] == ""
+    assert without_machine["post_processor"] == ""
 
+    with pytest.raises(PostProcessorError) as rejected:
+        _prepare(
+            [piece],
+            presets={"cut_path": "Finish"},
+            order=["cut_path"],
+            post_processor="ima_wh_ncstudio",
+        )
+    assert rejected.value.code == "post_processor_machine_mismatch"
+
+    historical = dict(without_machine, post_processor="ima_wh_ncstudio")
     chosen = _prepare(
         [piece],
-        existing=without_processor,
+        existing=historical,
         presets={"cut_path": "Finish"},
         order=["cut_path"],
-        post_processor="ima_wh_ncstudio",
+        cnc_machine="IMA",
+        machine_catalog=[_machine()],
+        plan_snapshot=_sheet_snapshot(),
         toolpath_snapshots=[{"snapshot_id": "snap-1", "association_id": "assoc-1"}],
         vector_associations=[{"association_id": "assoc-1", "toolpath_id": "snap-1"}],
     )
     assert chosen["post_processor"] == "ima_wh_ncstudio"
-    assert chosen["settings_fingerprint"] != without_processor["settings_fingerprint"]
+    assert chosen["settings_fingerprint"] != without_machine["settings_fingerprint"]
+
+    with pytest.raises(PostProcessorError) as mismatch:
+        _prepare(
+            [piece],
+            presets={"cut_path": "Finish"},
+            order=["cut_path"],
+            cnc_machine="IMA",
+            machine_catalog=[_machine()],
+            plan_snapshot=_sheet_snapshot(),
+            post_processor="other_processor",
+        )
+    assert mismatch.value.code == "post_processor_machine_mismatch"
+
+    with pytest.raises(PostProcessorError) as missing:
+        _prepare(
+            [piece],
+            presets={"cut_path": "Finish"},
+            order=["cut_path"],
+            cnc_machine="IMA",
+            machine_catalog=[_machine(post_processor="")],
+            plan_snapshot=_sheet_snapshot(),
+        )
+    assert missing.value.code == "cnc_machine_post_processor_unconfigured"
 
 
 def test_path_override_is_kept_when_the_layer_preset_changes_and_can_be_cleared():

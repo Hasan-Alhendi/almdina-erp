@@ -252,6 +252,7 @@ def public_cnc_machine(row: Mapping[str, Any]) -> dict[str, Any]:
         "right_stop_cm": stop("right_stop_cm", missing=None),
         "bottom_stop_cm": stop("bottom_stop_cm", missing=0.0),
         "top_stop_cm": stop("top_stop_cm", missing=None),
+        "post_processor": str(row.get("post_processor") or ""),
     }
 
 

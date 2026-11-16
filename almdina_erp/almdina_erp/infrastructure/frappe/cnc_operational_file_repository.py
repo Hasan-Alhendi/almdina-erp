@@ -457,6 +457,7 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
             "right_stop_cm",
             "bottom_stop_cm",
             "top_stop_cm",
+            "post_processor",
         ],
         order_by="machine_name asc",
         ignore_permissions=True,
@@ -474,6 +475,7 @@ def list_cnc_machines(*, enabled_only: bool = False) -> list[dict[str, Any]]:
                 "right_stop_cm": row.right_stop_cm,
                 "bottom_stop_cm": row.bottom_stop_cm,
                 "top_stop_cm": row.top_stop_cm,
+                "post_processor": row.post_processor,
             }
         )
         for row in rows
@@ -497,6 +499,7 @@ def get_cnc_machine(name: str) -> dict[str, Any] | None:
             "right_stop_cm": getattr(document, "right_stop_cm", None),
             "bottom_stop_cm": getattr(document, "bottom_stop_cm", None),
             "top_stop_cm": getattr(document, "top_stop_cm", None),
+            "post_processor": getattr(document, "post_processor", None),
         }
     )
 

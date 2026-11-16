@@ -44,11 +44,17 @@ def test_cnc_machine_bed_has_no_cutter_travel_extension_fields():
         "right_stop_cm",
         "bottom_stop_cm",
         "top_stop_cm",
+        "post_processor",
         "enabled",
     ]
     assert metadata["field_order"] == fieldnames
     assert metadata["quick_entry"] == 1
     fields = {row["fieldname"]: row for row in metadata["fields"]}
+    assert fields["post_processor"]["fieldtype"] == "Select"
+    assert fields["post_processor"]["reqd"] == 1
+    assert fields["post_processor"]["options"] == "ima_wh_ncstudio"
+    assert fields["post_processor"]["default"] == "ima_wh_ncstudio"
+    assert "Section Break" not in {row["fieldtype"] for row in metadata["fields"]}
     assert fields["work_zero_position"]["fieldtype"] == "Select"
     assert fields["work_zero_position"]["options"] == "Bottom Left\nBottom Right\nTop Left\nTop Right"
     assert "Center" not in fields["work_zero_position"]["options"]

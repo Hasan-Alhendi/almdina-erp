@@ -153,7 +153,7 @@
             tool_preset: current.tool_preset || "",
             fields: Object.assign({}, current.fields || {}),
             tool: Object.assign({}, current.tool || {}),
-            toolOpen: Boolean(current.tool_preset),
+            toolOpen: false,
         };
     }
 
@@ -214,13 +214,36 @@
         return match ? (match.dxf_layer || layer) : layer;
     }
 
-    function toolDisclosure(label, open) {
-        const labels = window.AlmdinaCncLabels;
-        if (labels && typeof labels.toolDisclosureButton === "function") {
-            return labels.toolDisclosureButton(label, open);
-        }
-        const expanded = open !== false;
-        return `<button type="button" class="dco-tool-disclosure" data-tool-settings-toggle aria-expanded="${expanded ? "true" : "false"}"><span class="dco-tool-disclosure__chevron" aria-hidden="true"></span><span class="dco-tool-disclosure__label">${escapeHtml(label)}</span></button>`;
+    function toolPickerMarkup(context, form) {
+        const picker = window.AlmdinaCncToolPicker;
+        const tool = form.tool || {};
+        const selected = String(form.tool_preset || "");
+        const rows = toolOptions(context, form).map(row => ({
+            value: row.name,
+            label: row.description || row.tool_name || row.name,
+        }));
+        const selectedRow = rows.find(row => row.value === selected);
+        const fields = selected ? TOOL_FIELDS.concat(rateFields(tool)).map(([name, label]) => ({
+            name,
+            label: fieldLabel("tool", label),
+            value: tool[name],
+        })) : [];
+        const spec = {
+            label: fieldLabel("profile", "Tool"),
+            changeLabel: fieldLabel("profile", "Tool"),
+            emptyLabel: translate("Choose a tool"),
+            selected,
+            selectedLabel: (selectedRow && selectedRow.label) || tool.description || tool.tool_name || selected,
+            tools: rows,
+            fields,
+            valueAttribute: "data-artcam-tool-summary",
+            readOnly: selected ? [{
+                label: fieldLabel("tool", "Diameter (mm)"),
+                value: tool.diameter_mm == null ? "" : tool.diameter_mm,
+            }] : [],
+        };
+        if (picker && typeof picker.markup === "function") return picker.markup(spec);
+        return "";
     }
 
     function fieldLabel(kind, english) {
@@ -275,9 +298,7 @@
 
     function editorMarkup(context) {
         const form = ensureForm(context.state);
-        const tool = form.tool || {};
         const profileChosen = Boolean(form.profile_id);
-        const toolChosen = profileChosen && Boolean(form.tool_preset);
         const count = (context.state.vectorSelection || []).length;
         const selected = form.source === "selected_vectors";
         const options = sourceOptions(context, form);
@@ -322,21 +343,7 @@
                     ${HOME_FIELDS.map(([name, label]) => input(name, label, form.fields[name], "profile")).join("")}
                 </div>
             </div>
-            <label class="dco-artcam-field">${escapeHtml(translate("Tool"))}
-                <select class="form-control" data-field="tool_preset">
-                    <option value="">${escapeHtml(translate("Choose"))}</option>
-                    ${toolOptions(context, form).map(row => `<option value="${escapeHtml(row.name)}"${row.name === form.tool_preset ? " selected" : ""}>${escapeHtml(row.description || row.tool_name || row.name)}</option>`).join("")}
-                </select>
-            </label>
-            <p class="dco-artcam-note" data-artcam-tool-summary>${escapeHtml(translate("Tool"))}: ${escapeHtml(tool.description || tool.tool_name || form.tool_preset || "")} · ${escapeHtml(translate("Diameter (mm)"))} ${escapeHtml(tool.diameter_mm == null ? "" : tool.diameter_mm)}</p>` : ""}
-            ${toolChosen ? `<section class="dco-artcam-tool${form.toolOpen ? "" : " is-collapsed"}" data-artcam-tool>
-                ${toolDisclosure(fieldLabel("profile", "Editable tool settings"), form.toolOpen)}
-                <div class="dco-artcam-tool__body">
-                    <div class="dco-artcam-row dco-artcam-row--tool">
-                        ${TOOL_FIELDS.concat(rateFields(tool)).map(([name, label]) => input(name, label, tool[name], "tool")).join("")}
-                    </div>
-                </div>
-            </section>` : ""}
+            ${toolPickerMarkup(context, form)}` : ""}
             <div class="dco-artcam-actions">
                 <button type="submit" class="btn btn-primary btn-sm" data-artcam-calculate>${escapeHtml(translate("Calculate Now"))}</button>
             </div>
@@ -362,7 +369,7 @@
                 home_z_mm: local.home_z_mm,
             },
             tool: toolPayload(local.tool_values || {}),
-            toolOpen: Boolean(row.profile_id || local.tool_preset),
+            toolOpen: false,
         };
         state.vectorSelection = (row.selection && row.selection.vector_ids) || row.vector_ids || [];
     }
@@ -395,8 +402,8 @@
         });
         const release = host.querySelector("[data-artcam-editor] [data-field=\"release_perimeter\"]");
         form.releasePerimeter = Boolean(release && release.checked);
-        const toolSection = host.querySelector("[data-artcam-tool]");
-        form.toolOpen = Boolean(toolSection && !toolSection.classList.contains("is-collapsed"));
+        const panel = host.querySelector("[data-tool-picker-panel]");
+        form.toolOpen = Boolean(panel && !panel.hidden);
         return form;
     }
 
@@ -446,7 +453,7 @@
     function fillFromProfile(form, profile) {
         form.profile_id = profile.profile_id;
         form.tool_preset = profile.tool_preset || "";
-        form.toolOpen = true;
+        form.toolOpen = false;
         form.fields = {
             final_depth_mm: profile.final_depth_mm,
             safe_z_mm: profile.safe_z_mm,
@@ -552,21 +559,14 @@
             if (event.target.matches("[data-field=\"tool_preset\"]") && form.tool_preset !== previousTool) {
                 const preset = toolsOf(context).find(row => row.name === form.tool_preset);
                 form.tool = preset ? toolPayload(preset) : {};
-                form.toolOpen = Boolean(form.tool_preset);
+                form.toolOpen = false;
                 if (typeof context.refresh === "function") context.refresh();
             }
             if (event.target.matches("[data-field=\"stepover_size_mm\"]")) readEditor(host, context.state);
         });
+        const pickerApi = window.AlmdinaCncToolPicker;
+        if (pickerApi && typeof pickerApi.bind === "function") pickerApi.bind(host);
         host.addEventListener("click", event => {
-            const toggle = event.target.closest("[data-tool-settings-toggle]");
-            if (toggle) {
-                const section = toggle.closest("[data-artcam-tool]");
-                const open = section.classList.contains("is-collapsed");
-                section.classList.toggle("is-collapsed", !open);
-                toggle.setAttribute("aria-expanded", open ? "true" : "false");
-                ensureForm(context.state).toolOpen = open;
-                return;
-            }
             const cancel = event.target.closest("[data-artcam-cancel]");
             if (cancel) {
                 context.state.artcamForm = blankForm();

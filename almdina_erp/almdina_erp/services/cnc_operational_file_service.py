@@ -227,6 +227,12 @@ _MESSAGES = {
     "placement_incomplete": "Sheet placement on the CNC machine is incomplete.",
     "post_processor_required": "Choose a post processor before generating the NC file.",
     "post_processor_unsupported": "The selected post processor is not supported.",
+    "cnc_machine_post_processor_unconfigured": (
+        "Complete the CNC machine settings. Choose the post processor on the machine before generating a new NC file."
+    ),
+    "post_processor_machine_mismatch": (
+        "The post processor is set on the CNC machine and cannot be overridden for this sheet."
+    ),
     "machine_parking_outside_limits": "The IMA-WH parking move is outside the selected machine.",
     "machine_parking_unverified": "The selected machine travel is not known, so the IMA-WH parking move was not posted.",
     "profile_home_missing": "The last machining profile has no home position.",
