@@ -411,16 +411,22 @@ def _materialize_piece(
     if source_geometry is not None and isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
     elif piece_type == "Special":
-        # Interior contours bake the posed cut. The door-local polygon stays in
-        # special_shape_geometry_json and is not shifted to the origin.
-        promote_outline = geometry_reserves_blank(
-            {
-                "special_shape_geometry_json": (
-                    adopted_geometry
-                    if adopted_geometry not in (None, "")
-                    else source.get("special_shape_geometry_json")
-                )
-            }
+        # An adopted drawing is posed once here, including a full-span contour
+        # whose source piece has no persisted geometry. The door-local polygon
+        # stays in special_shape_geometry_json. Historical specials without an
+        # adopted drawing still use that JSON unless they reserve the blank.
+        adopted = adopted_geometry not in (None, "")
+        promote_outline = (
+            adopted
+            or geometry_reserves_blank(
+                {
+                    "special_shape_geometry_json": (
+                        adopted_geometry
+                        if adopted
+                        else source.get("special_shape_geometry_json")
+                    )
+                }
+            )
         ) and isinstance(outline, list) and len(outline) >= 3
     elif isinstance(outline, list) and len(outline) >= 3:
         promote_outline = True
