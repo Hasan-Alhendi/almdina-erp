@@ -16,6 +16,7 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing_persistence imp
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 MAX_IMAGE_PIXELS = 16_000_000
 MAX_IMAGE_EDGE_PX = 8192
+MAX_PNG_BYTES = 12 * 1024 * 1024
 MAX_REFERENCE_MM = 100_000.0
 REFERENCE_DOCTYPE = "Board Editor Drawing Draft"
 REFERENCE_FIELD = "drawing_reference"

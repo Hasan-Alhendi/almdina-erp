@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import ast
+import base64
+import builtins
+import os
+import struct
+import tempfile
+import threading
 import unittest
+import warnings
+import zlib
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFile
 
 from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing import (
     document_fingerprint,
@@ -13,6 +21,10 @@ from almdina_erp.almdina_erp.domain.cutting.board_editor_drawing import (
     normalize_document,
 )
 from almdina_erp.almdina_erp.domain.cutting.board_editor_reference_image import (
+    MAX_IMAGE_EDGE_PX,
+    MAX_IMAGE_PIXELS,
+    MAX_PNG_BYTES,
+    MAX_UPLOAD_BYTES,
     apply_image_calibration,
     file_matches_reference_owner,
     initial_placement,
@@ -38,6 +50,37 @@ def _encoded(kind: str, width: int = 30, height: int = 20) -> bytes:
     output = BytesIO()
     image.save(output, format=kind)
     return output.getvalue()
+
+
+def _png_header(width: int, height: int) -> bytes:
+    """A PNG signature and size, with no pixel data."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        checksum = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", checksum)
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IEND", b"")
+
+
+class _LoadSpy:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, int]] = []
+        self._original = ImageFile.ImageFile.load
+
+    def __enter__(self) -> "_LoadSpy":
+        calls = self.calls
+        original = self._original
+
+        def wrapped(image, *args, **kwargs):
+            calls.append((int(image.width), int(image.height)))
+            return original(image, *args, **kwargs)
+
+        ImageFile.ImageFile.load = wrapped
+        return self
+
+    def __exit__(self, *_args) -> None:
+        ImageFile.ImageFile.load = self._original
 
 
 def _reference(**overrides):
@@ -267,6 +310,227 @@ class TestBoardEditorReferenceImage(unittest.TestCase):
         self.assertNotIn("board_editor_reference", plan_create)
         self.assertIn("content_base64", adapter)
         self.assertNotIn("/private/files/", adapter.split("content_base64", 1)[1])
+        decode = adapter.split("def decode_reference_image", 1)[1].split("\ndef ", 1)[0]
+        self.assertNotIn("save_file", decode)
+        self.assertNotIn("Image.MAX_IMAGE_PIXELS", decode)
+
+    def test_contract_limits_are_unchanged(self) -> None:
+        self.assertEqual(MAX_UPLOAD_BYTES, 8 * 1024 * 1024)
+        self.assertEqual(MAX_IMAGE_PIXELS, 16_000_000)
+        self.assertEqual(MAX_IMAGE_EDGE_PX, 8192)
+        self.assertEqual(MAX_PNG_BYTES, 12 * 1024 * 1024)
+
+    def test_supported_rasters_decode_to_png(self) -> None:
+        samples = {
+            "png": _png(30, 20),
+            "jpeg": _encoded("JPEG"),
+            "gif": _encoded("GIF"),
+            "bmp": _encoded("BMP"),
+            "webp": _encoded("WEBP"),
+            "tiff": _encoded("TIFF"),
+        }
+        for kind, payload in samples.items():
+            with self.subTest(kind=kind):
+                decoded = files.decode_reference_image(payload)
+                self.assertTrue(decoded["ok"], decoded)
+                self.assertEqual(decoded["format"], kind)
+                self.assertTrue(decoded["png"].startswith(b"\x89PNG\r\n\x1a\n"))
+                self.assertEqual((decoded["width_px"], decoded["height_px"]), (30, 20))
+                self.assertLessEqual(len(decoded["png"]), MAX_PNG_BYTES)
+
+    def test_oversize_file_is_rejected_before_pixel_decode(self) -> None:
+        huge = b"\x89PNG\r\n\x1a\n" + (b"x" * MAX_UPLOAD_BYTES)
+        with _LoadSpy() as spy:
+            decoded = files.decode_reference_image(huge)
+        self.assertEqual(decoded["code"], "image_too_large")
+        self.assertNotIn("png", decoded)
+        self.assertEqual(spy.calls, [])
+
+    def test_header_dimensions_are_rejected_without_loading_pixels(self) -> None:
+        cases = {
+            "width": _png_header(MAX_IMAGE_EDGE_PX + 1, 1),
+            "height": _png_header(1, MAX_IMAGE_EDGE_PX + 1),
+            "pixels": _png_header(4000, 4001),
+            "small_file_huge_edge": _png_header(9000, 2),
+            "decompression_warning": _png_header(10000, 10000),
+            "decompression_error": _png_header(20000, 9000),
+            "real_wide_png": _png(MAX_IMAGE_EDGE_PX + 1, 1),
+        }
+        self.assertEqual(4000 * 4001, 16_004_000)
+        self.assertLess(len(_png_header(10000, 10000)), 128)
+        for name, payload in cases.items():
+            with self.subTest(name=name):
+                with _LoadSpy() as spy:
+                    decoded = files.decode_reference_image(payload)
+                self.assertEqual(decoded["code"], "image_too_many_pixels")
+                self.assertNotIn("png", decoded)
+                self.assertEqual(spy.calls, [])
+
+    def test_corrupt_svg_and_unknown_payloads_store_nothing(self) -> None:
+        samples = {
+            "corrupt": (b"\x89PNG\r\n\x1a\nbroken", "image_corrupt"),
+            "svg": (b'<svg xmlns="http://www.w3.org/2000/svg"></svg>', "svg_not_supported"),
+            "unsafe_svg": (b"<svg><script>bad()</script></svg>", "unsafe_svg"),
+            "heic": (b"\x00\x00\x00\x18ftypheic" + b"\x00" * 16, "unsupported_image"),
+            "text": (b"not-an-image", "unsupported_image"),
+        }
+        for name, (payload, code) in samples.items():
+            with self.subTest(name=name):
+                with _LoadSpy() as spy:
+                    decoded = files.decode_reference_image(payload)
+                self.assertEqual(decoded["code"], code)
+                self.assertNotIn("png", decoded)
+                self.assertEqual(spy.calls, [])
+
+    def test_output_png_over_the_cap_is_not_returned(self) -> None:
+        original = Image.Image.save
+
+        def oversized(self, target, format=None, **kwargs):
+            target.write(b"\x00" * (MAX_PNG_BYTES + 1))
+
+        Image.Image.save = oversized
+        try:
+            decoded = files.decode_reference_image(_png(8, 8))
+        finally:
+            Image.Image.save = original
+        self.assertEqual(decoded["code"], "image_too_large")
+        self.assertNotIn("png", decoded)
+
+    def test_multiframe_image_keeps_only_the_first_frame(self) -> None:
+        first = Image.new("RGB", (12, 9), (255, 0, 0))
+        second = Image.new("RGB", (12, 9), (0, 0, 255))
+        payload = BytesIO()
+        first.save(payload, format="GIF", save_all=True, append_images=[second], duration=80, loop=0)
+        source = Image.open(BytesIO(payload.getvalue()))
+        self.assertGreaterEqual(getattr(source, "n_frames", 1), 2)
+        source.close()
+        decoded = files.decode_reference_image(payload.getvalue())
+        self.assertTrue(decoded["ok"], decoded)
+        self.assertEqual((decoded["width_px"], decoded["height_px"]), (12, 9))
+        stored = Image.open(BytesIO(decoded["png"]))
+        self.assertEqual(getattr(stored, "n_frames", 1), 1)
+        red, _green, blue, *_rest = stored.convert("RGBA").getpixel((0, 0))
+        stored.close()
+        self.assertGreater(red, 200)
+        self.assertLess(blue, 40)
+
+    def test_pillow_process_limit_is_unchanged_across_requests(self) -> None:
+        before = Image.MAX_IMAGE_PIXELS
+        filters = list(warnings.filters)
+        seen: list[int | None] = []
+        stop = threading.Event()
+
+        def watch() -> None:
+            while not stop.is_set():
+                seen.append(Image.MAX_IMAGE_PIXELS)
+
+        watcher = threading.Thread(target=watch)
+        watcher.start()
+        try:
+            self.assertTrue(files.decode_reference_image(_png(6, 4))["ok"])
+            rejected = files.decode_reference_image(_png_header(9000, 2))
+        finally:
+            stop.set()
+            watcher.join(timeout=2)
+        self.assertEqual(rejected["code"], "image_too_many_pixels")
+        self.assertEqual(Image.MAX_IMAGE_PIXELS, before)
+        self.assertEqual(list(warnings.filters), filters)
+        self.assertTrue(seen)
+        self.assertTrue(all(value == before for value in seen))
+
+    def test_read_rejects_another_plan_without_opening_the_file(self) -> None:
+        calls: list[str] = []
+        original_size = files.os.path.getsize
+        original_open = builtins.open
+
+        def refuse_size(path):
+            calls.append("size")
+            return original_size(path)
+
+        def refuse_open(path, *args, **kwargs):
+            calls.append("open")
+            return original_open(path, *args, **kwargs)
+
+        class Database:
+            def get_value(self, *_args, **_kwargs):
+                return {
+                    "name": "FILE-OTHER",
+                    "is_private": 1,
+                    "file_url": "/private/files/secret.png",
+                    "attached_to_doctype": "Board Editor Drawing Draft",
+                    "attached_to_name": reference_owner_name("ORD-2", "PLAN-2", "piece:b"),
+                    "attached_to_field": "drawing_reference",
+                }
+
+        original_db = files.frappe.db
+        files.frappe.db = Database()
+        files.os.path.getsize = refuse_size
+        builtins.open = refuse_open
+        try:
+            result = files.read_reference_png("ORD-1", "PLAN-1", "piece:a", "FILE-OTHER")
+        finally:
+            files.frappe.db = original_db
+            files.os.path.getsize = original_size
+            builtins.open = original_open
+        self.assertEqual(result, {"ok": False, "code": "reference_unavailable"})
+        self.assertEqual(calls, [])
+
+    def test_read_checks_the_file_size_before_reading_bytes(self) -> None:
+        payload = _png(4, 3)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = os.path.join(temporary, "ref.png")
+            with open(path, "wb") as handle:
+                handle.write(payload)
+            opened: list[str] = []
+            original_db = files.frappe.db
+            original_site = files.frappe.get_site_path
+            original_size = files.os.path.getsize
+            original_open = builtins.open
+
+            class Database:
+                def get_value(self, *_args, **_kwargs):
+                    return {
+                        "name": "FILE-1",
+                        "is_private": 1,
+                        "file_url": "/private/files/ref.png",
+                        "attached_to_doctype": "Board Editor Drawing Draft",
+                        "attached_to_name": reference_owner_name("ORD-1", "PLAN-1", "piece:a"),
+                        "attached_to_field": "drawing_reference",
+                    }
+
+            def tracking_open(target, *args, **kwargs):
+                opened.append(os.fspath(target))
+                return original_open(target, *args, **kwargs)
+
+            files.frappe.db = Database()
+            files.frappe.get_site_path = lambda *_parts: path
+            files.os.path.getsize = lambda target: MAX_PNG_BYTES + 1
+            builtins.open = tracking_open
+            try:
+                rejected = files.read_reference_png("ORD-1", "PLAN-1", "piece:a", "FILE-1")
+            finally:
+                files.os.path.getsize = original_size
+                builtins.open = original_open
+            self.assertEqual(rejected, {"ok": False, "code": "reference_unavailable"})
+            self.assertFalse(any(item == path for item in opened))
+
+            files.os.path.getsize = original_size
+            try:
+                accepted = files.read_reference_png("ORD-1", "PLAN-1", "piece:a", "FILE-1")
+            finally:
+                files.frappe.db = original_db
+                files.frappe.get_site_path = original_site
+            self.assertTrue(accepted["ok"], accepted)
+            self.assertEqual(base64.b64decode(accepted["content_base64"]), payload)
+            self.assertNotIn("file_url", accepted)
+
+    def test_failed_validation_does_not_reach_storage(self) -> None:
+        service = (APP / "services" / "board_editor_drawing_service.py").read_text(encoding="utf-8")
+        upload = service.split("def upload_board_editor_reference_image", 1)[1].split("\ndef ", 1)[0]
+        self.assertLess(upload.index('if not decoded.get("ok")'), upload.index("store_reference_png"))
+        rejected = files.decode_reference_image(_png_header(MAX_IMAGE_EDGE_PX + 1, 2))
+        self.assertEqual(rejected["code"], "image_too_many_pixels")
+        self.assertNotIn("png", rejected)
 
 
 if __name__ == "__main__":
