@@ -186,6 +186,18 @@ async function run() {
     assert.equal(await e, false);
     assert.equal(preview.isReady(frm), false);
     assert.ok(events.length);
+
+    const server = JSON.stringify([JSON.stringify({ message: "The corner door orientation could not be proven, so no manufacturing-valid cutting plan was found." })]);
+    assert.equal(
+        preview.publicCalculationError({ responseJSON: { exc_type: "ValidationError", _server_messages: server } }),
+        "The corner door orientation could not be proven, so no manufacturing-valid cutting plan was found.",
+    );
+    assert.equal(
+        preview.publicCalculationError({ message: "Could not prepare the cutting plan service. Reload the page and try again." }),
+        "No manufacturing-valid cutting plan was found.",
+    );
+    assert.equal(preview.publicCalculationError(new Error("Cutting-plan preview settings do not match the requested settings")),
+        "Cutting-plan preview settings do not match the requested settings");
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

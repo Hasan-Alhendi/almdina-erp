@@ -3789,6 +3789,14 @@ Smart Search,بحث ذكي
 The cutting plan preview expired. Create a new preview.,انتهت صلاحية معاينة خطة القص. أنشئ معاينة جديدة.
 Invalid cutting plan candidate.,الخطة البديلة المحددة غير صالحة.
 No manufacturing-valid cutting plan was found.,لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door orientation could not be proven, so no manufacturing-valid cutting plan was found.",تعذر إثبات اتجاه درفة الزاوية، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door outline does not match its saved shape, so no manufacturing-valid cutting plan was found.",محيط درفة الزاوية لا يطابق شكلها المحفوظ، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door shape is not valid, so no manufacturing-valid cutting plan was found.",شكل درفة الزاوية غير صالح، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door outline is missing, so no manufacturing-valid cutting plan was found.",محيط درفة الزاوية مفقود، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The corner door orientation does not match its edge bands, so no manufacturing-valid cutting plan was found.",اتجاه درفة الزاوية لا يطابق أشرطة القشاط، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The cutting plan uses a rotation that cannot be manufactured, so no manufacturing-valid cutting plan was found.",خطة القص تستخدم دورانًا لا يمكن تصنيعه، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"A nested glass piece cannot carry liner, back groove, or handle machining, so no manufacturing-valid cutting plan was found.",قطعة الزجاج المتداخلة لا يمكن أن تحمل لاينر أو فرزة ظهر أو مسكة غطس، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
+"The cutting plan failed placement checks, so no manufacturing-valid cutting plan was found.",فشلت خطة القص في فحوص التموضع، لذلك لم يُعثر على خطة قص تجتاز فحوص التصنيع.
 The search batch limit was reached. Create a new preview.,وصلت إلى الحد المسموح لدفعات البحث. أنشئ معاينة جديدة.
 Plan {0},الخطة {0}
 {0} boards,{0} ألواح

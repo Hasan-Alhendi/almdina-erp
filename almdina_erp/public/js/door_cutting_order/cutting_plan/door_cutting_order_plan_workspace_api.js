@@ -45,6 +45,7 @@
             args,
             freeze: Boolean(options.freeze),
             freeze_message: options.freezeMessage || undefined,
+            silent: Boolean(options.silent),
         });
         return response && response.message !== undefined ? response.message : null;
     }
@@ -125,6 +126,7 @@
             {
                 freeze: true,
                 freezeMessage: translateCopy(FREEZE_PREVIEW),
+                silent: true,
             }
         );
     }

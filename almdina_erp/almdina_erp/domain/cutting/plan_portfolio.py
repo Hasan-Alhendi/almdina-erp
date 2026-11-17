@@ -125,6 +125,46 @@ def supports_manufacturing_rotation(plan):
                for sheet in plan.get('sheets') or [] for p in sheet.get('pieces') or [])
 
 
+MANUFACTURING_FAILURE = "No manufacturing-valid cutting plan was found."
+MANUFACTURING_REJECTION_SENTENCES = {
+    "corner_machining_orientation_ambiguous": (
+        "The corner door orientation could not be proven, so no manufacturing-valid cutting plan was found."
+    ),
+    "corner_machining_orientation_none": (
+        "The corner door outline does not match its saved shape, so no manufacturing-valid cutting plan was found."
+    ),
+    "corner_machining_orientation_invalid": (
+        "The corner door shape is not valid, so no manufacturing-valid cutting plan was found."
+    ),
+    "corner_machining_unknown_outline": (
+        "The corner door outline is missing, so no manufacturing-valid cutting plan was found."
+    ),
+    "corner_machining_semantic_orientation": (
+        "The corner door orientation does not match its edge bands, so no manufacturing-valid cutting plan was found."
+    ),
+    "unsupported_rotation": (
+        "The cutting plan uses a rotation that cannot be manufactured, so no manufacturing-valid cutting plan was found."
+    ),
+    "glass_guest_machining_identity": (
+        "A nested glass piece cannot carry liner, back groove, or handle machining, so no manufacturing-valid cutting plan was found."
+    ),
+    "validation_or_permission": (
+        "The cutting plan failed placement checks, so no manufacturing-valid cutting plan was found."
+    ),
+}
+
+
+def manufacturing_failure_sentences(rejections) -> tuple[str, ...]:
+    """One user-facing sentence per recorded plan rejection, without duplicates."""
+
+    found: list[str] = []
+    for code in rejections or ():
+        sentence = MANUFACTURING_REJECTION_SENTENCES.get(str(code))
+        if sentence and sentence not in found:
+            found.append(sentence)
+    return tuple(found) or (MANUFACTURING_FAILURE,)
+
+
 def manufacturing_export_rejection(plan):
     """Known unsupported identity paths; validators/export contracts stay intact."""
     if not supports_manufacturing_rotation(plan):
@@ -159,11 +199,29 @@ def manufacturing_export_rejection(plan):
                 notch='break' if p.get('edge_break') else ('break-only' if p.get('edge_break_only')
                     and p['piece_type']=='Clipped Corner' else 'open')
                 tokens.update(inner_horizontal=notch,inner_vertical=notch,chord=notch)
-            match=match_corner_contour([(x*10,y*10) for x,y in outline],piece_type=p['piece_type'],
-                position=p.get('clipped_corner_position') or '',width_cm=float(p.get('original_w') or p.get('width_cm') or 0),
-                length_cm=float(p.get('original_h') or p.get('length_cm') or 0),
-                cut_width_cm=float(p.get('clipped_corner_width_cm') or 0),
-                cut_length_cm=float(p.get('clipped_corner_length_cm') or 0),edge_bands=tokens)
+            width_cm=float(p.get('original_w') or p.get('width_cm') or 0)
+            length_cm=float(p.get('original_h') or p.get('length_cm') or 0)
+            cut_width_cm=float(p.get('clipped_corner_width_cm') or 0)
+            cut_length_cm=float(p.get('clipped_corner_length_cm') or 0)
+            outline_mm=[(x*10,y*10) for x,y in outline]
+            match=match_corner_contour(outline_mm,piece_type=p['piece_type'],
+                position=p.get('clipped_corner_position') or '',width_cm=width_cm,
+                length_cm=length_cm,cut_width_cm=cut_width_cm,
+                cut_length_cm=cut_length_cm,edge_bands=tokens)
+            if match.quarter_turns is None and match.reason == 'ambiguous':
+                # Several transforms can share one symmetric outline. The
+                # placement record is the orientation that drew it. Accept
+                # that record when it reproduces the outline and its edge
+                # roles; do not invent a different one.
+                from .corner_contour_rotation import orientation_explains_corner_contour
+                from .placement_orientation import resolve_placement_orientation
+                recorded=resolve_placement_orientation(p)
+                if orientation_explains_corner_contour(outline_mm,mirrored=recorded.mirrored,
+                        quarter_turns=recorded.quarter_turns,piece_type=p['piece_type'],
+                        position=p.get('clipped_corner_position') or '',width_cm=width_cm,
+                        length_cm=length_cm,cut_width_cm=cut_width_cm,
+                        cut_length_cm=cut_length_cm,edge_bands=tokens):
+                    continue
             if match.quarter_turns is None:
                 return 'corner_machining_orientation_'+match.reason
             if banded:

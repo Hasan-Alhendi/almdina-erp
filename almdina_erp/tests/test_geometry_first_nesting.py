@@ -58,7 +58,7 @@ def test_existing_rigid_anchors_miss_a_valid_contact_inside_overlapping_boxes():
     assert best_rigid_translation(dict(w=45.3,h=45.3,pieces=[fixed]),[moving],.3,45.3,45.3) is None
 
 
-@pytest.mark.parametrize('name',[n for n in CASES if n!='P5-addon-ambiguous'])
+@pytest.mark.parametrize('name', list(CASES))
 def test_nonidentical_portfolio_reloads_native_rebuild_exports_and_strict_imports(name,tmp_path):
     import json
     from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
@@ -194,16 +194,18 @@ def test_portfolio_reserves_meaningful_shape_beside_better_rectangular_coordinat
     assert shaped in selected and len(selected)==5
 
 
-def test_ambiguous_corner_machining_cannot_be_certified_even_when_no_safe_baseline_exists():
+def test_recorded_orientation_certifies_a_symmetric_corner_with_machining():
     from almdina_erp.almdina_erp.application.cutting.optimize_order_plan import (
         BoardGeometry,OptimizeOrderPlanCommand,OptimizerOptions,optimize_order_plan)
+    from almdina_erp.almdina_erp.domain.cutting.plan_portfolio import manufacturing_export_rejection
     from almdina_erp.almdina_erp.infrastructure.cutting.domain_engine import domain_cutting_engine
     outcome=optimize_order_plan(OptimizeOrderPlanCommand(engine_version='p5-guard',input_fingerprint='p5-guard',
         board=BoardGeometry(45.3,45.3,0,.3),optimizer=OptimizerOptions('smart','CNC Router',1,20,30,30,.09),
         piece_rows=tuple(source_rows('P5-addon-ambiguous'))),engine=domain_cutting_engine)
-    assert not outcome.snapshot['validation']['is_valid']
-    assert not outcome.candidate_snapshots
-    assert len(outcome.snapshot['unplaced'])==len(outcome.expanded_pieces)
+    assert outcome.snapshot['validation']['is_valid']
+    assert manufacturing_export_rejection(outcome.snapshot) == ''
+    assert outcome.snapshot['unplaced'] == []
+    assert len(outcome.snapshot['sheets']) == 1
 
 
 def test_internal_counters_distinguish_proven_area_rejection_from_enumeration_limit():
